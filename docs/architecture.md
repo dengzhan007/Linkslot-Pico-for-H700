@@ -10,21 +10,19 @@ GammaOS Pico 参考树面向 MT6785，不能原样作为 RG34XX 的 SoC/板级�
 
 ## 2. 启动方式
 
-目标为 RG34XX / Allwinner H700。BaseOS-MultiFrontend 已提供该机型可运行的 SD 启动系统及大量固件调查资料。现有 vendor 链包含 Allwinner Boot0（eGON.BT0）、TOC1、vendor monitor 和 32-bit AArch32 U-Boot 2018.05；后续进入 AArch64 Linux 时经过 monitor 交接。裸机 payload 的 EL、寄存器 ABI 和入口仍未验证，不能直接把 Linux entry address 当成裸机入口。
+目标为 RG34XX / Allwinner H700。当前可确认的原厂 SD 启动链为 Allwinner Boot ROM → eGON.BT0 Boot0 → TOC1 → vendor monitor 与 AArch32 U-Boot → AArch64 Linux。Boot0 负责 DRAM training；AArch32 U-Boot 并不是一个可直接跳转到任意 AArch64 程序的通用入口。BaseOS 的 U-Boot 模拟 trace 中 `0x40080000` 和 `0x44000000` 分别是 Linux Image 与 FDT 的研究地址，不是 Linkslot payload 的入口或已确认可用内存。
 
-目标设备无 eMMC，本项目只考虑从 SD 卡启动，不设计 eMMC 安装、双系统选择或自动回退到原 Linux/BaseOS 的流程。
+BaseOS-MultiFrontend 还包含一条更深入的 H700 原生启动研究路线：AArch64 mainline SPL 负责 SD、PMIC、DRAM 和预加载；保留 vendor monitor；由 monitor 进入 RAM 中的 AArch32 SVC BL33 适配器；适配器再经厂商 SMC 进入 AArch64。这个路线说明 A32 过渡层与 monitor 可能是实现 AArch64 payload 的可行桥接点，但厂商 SMC 的已验证目标是 Linux 启动契约，不等于通用裸机 ABI。具体证据、地址限制和覆盖范围见 [RG34XX 启动交接审计](rg34xx-boot-handoff-audit.md)。
 
-- 保留设备可用的 Boot ROM / SPL / U-Boot 启动链，优先从 SD 卡加载独立 AArch64 裸机 payload。
-- 不写入不存在的 eMMC，也不把旧系统回退作为运行时安全机制。
-- 启动入口必须经过已验证的 vendor monitor handoff；不能因 U-Boot 有 `bootelf`/`bootm` 命令就假设 AArch32 U-Boot 能直接以 AArch64 ABI 启动裸机 payload。具体交接方式由 M1 实机审计确定。
-- 启动失败后的恢复方式是通过电脑重新写入/修复 SD 卡，或使用设备实际提供的 Boot ROM/USB 烧录入口；不承诺设备自行回到 Linux。
-- 冷启动到第一帧、进入可操作游戏库的耗时必须实测。
+本项目不预先决定直接沿用原厂 U-Boot，还是采用 A64 SPL + A32 BL33 的方案。需要先完成 RG34XX 非 SP 的现场只读 inventory，再以最小 A32 handoff adapter + AArch64 freestanding payload 验证入口。入口验收必须覆盖 CurrentEL、SPSR/参数寄存器、栈、异常向量、GIC、MMU/cache/TLB、DTB/FDT 和可用/保留内存；不能只验证 payload 能被读入或代码能编译。
+
+目标设备无 eMMC，本项目只考虑从 SD 卡启动，不设计 eMMC 安装、双系统选择或自动回退到原 Linux/BaseOS 的产品流程。启动失败后的恢复按项目约定通过电脑重写/修复 SD 卡，或使用经确认的实际 Boot ROM/USB 烧录入口；不把其他设备的自动恢复测试当作 RG34XX 已具备的功能。冷启动到第一帧、进入可操作游戏库的耗时必须实测。
 
 ## 3. 分层
 
 | 层 | 职责 | 设计约束 |
 |---|---|---|
-| Boot handoff | U-Boot 加载、内存交接 | 只考虑 SD 卡启动；不设计 eMMC 安装或旧系统回退 |
+| Boot handoff | U-Boot / SPL 装载、A32 适配器与 A64 payload 交接 | 只考虑 SD 卡启动；入口契约必须实机验证 |
 | H700 HAL | 时钟、计时器、MMU/cache、GPIO、PMIC、背光、显示、音频、SD、USB、Wi-Fi | 所有寄存器与时序按 Allwinner H700 和 RG34XX 具体板型重新确认 |
 | Runtime | 任务/线程、锁、事件、内存分配、日志、文件系统封装 | 提供 Linkslot 实际需要的服务；不为兼容 Linux 而建设完整 POSIX 模拟层 |
 | Emulator Host | GB/GBC/GBA Core ABI、帧调度、输入、音频、视频、持久化 | 模拟器核心与 Linkslot UI 解耦，核心可替换 |
@@ -85,7 +83,7 @@ Web Server 默认不强制密码，但仅绑定 Wi-Fi 私网地址，不监听 W
 
 首期兼容 Linkslot 的卡根目录语义，至少保留：
 
-```text
+```
 Games/GB/
 Games/GBC/
 Games/GBA/
