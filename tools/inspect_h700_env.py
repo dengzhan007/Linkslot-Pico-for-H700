@@ -146,7 +146,7 @@ def inspect_env(data: bytes, source: str = "") -> dict[str, Any]:
             "Do not treat the extracted variables as a verified active U-Boot environment."
         ),
         "header_format_candidate": header_format,
-        "flags_byte_candidate": flag,
+        "first_data_byte": {"hex": f"0x{flag:02x}", "is_nul": flag == 0},
         "variables_data_offset": data_offset,
         "variable_count": len(variables),
         "variables": variables,
