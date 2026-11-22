@@ -1,6 +1,6 @@
 # Linkslot Pico for H700
 
-面向 Anbernic H700 系列掌机的低功耗裸机游戏平台。
+面向 Anbernic H700 系列掌机的低功耗裸机游戏平台，首台目标设备为 **Anbernic RG34XX（非 SP）**。
 
 本项目以 GammaOS Pico / LK 的裸机运行架构为底层技术参考，以 [linkSlot](https://github.com/luguiyi/linkslot) 作为唯一前端和用户功能来源；不完整移植 GammaOS Pico 的前端，也不把现有 Linux Linkslot 二进制直接搬进 LK。
 
@@ -16,19 +16,20 @@
 
 ## 当前开发基线
 
-- 首台目标设备：Anbernic RG34XX（非 RG34XX SP）；SoC 为 Allwinner H700，四核 Cortex-A53，1 GB LPDDR4，720×480 屏幕，无 eMMC。详见 [RG34XX 硬件基线](docs/rg34xx-hardware-profile.md)。
-
+- **首台目标设备：** Anbernic RG34XX（非 RG34XX SP）。
+- **硬件平台：** Allwinner H700，四核 Cortex-A53，Mali-G31 MP2，1 GB LPDDR4，720×480 屏幕，无 eMMC。
+- **启动介质：** 只考虑 SD 卡启动；不设计 eMMC 安装或回退到原 Linux/BaseOS 的启动流程。
+- **硬件证据：** [RG34XX 硬件基线](docs/rg34xx-hardware-profile.md)，其中区分了 BaseOS 已验证行为、固件分析结果和仍待裸机验证的项目。
 - UI / 用户功能来源：[luguiyi/linkslot](https://github.com/luguiyi/linkslot)
 - 裸机 / LK 参考：[TheGammaSqueeze/lk-mt6785](https://github.com/TheGammaSqueeze/lk-mt6785)
 - 首期平台：GB、GBC、GBA。
 - 核心建议：GB/GBC 优先 Gambatte；mGBA 保留为 GB/GBC 可选核心。GBA 优先 mGBA，gpSP 作为备选；armGBA-pico 暂列实验候选，待 mGBA 存档兼容验证后再决定是否进入正式候选。
 - Web 管理仅面向家庭 LAN，默认不强制密码；预留简单易用的可选密码/访问令牌设置。服务不得监听 WAN 或公网接口。
-- 目标设备无 eMMC，只考虑 SD 卡启动；不设计 eMMC 安装或回退到原 Linux/BaseOS 的启动流程。
 
 ## 当前工程进展
 
-- 已建立 RG34XX Allwinner H700 Cortex-A53 / AArch64 freestanding 编译检查及 GitHub Actions。
-- 当前检查只生成并验证 AArch64 目标文件，不是可启动 payload；加载地址、入口、栈和 U-Boot 交接将在实机启动链确认后确定。
+- 已建立 RG34XX / Allwinner H700 / Cortex-A53 的 AArch64 freestanding 编译检查及 GitHub Actions。
+- 当前检查只生成并验证 C11、C++17 和 AArch64 汇编目标文件，不是可启动 payload；加载地址、入口、EL、栈和 AArch32-to-AArch64 交接仍待启动链审计。
 - Linkslot 即将发布大版本，暂缓导入/同步上游源码和逐 crate 复用审计，避免对即将过时的版本重复适配。
 
 本地运行 AArch64 编译检查：
@@ -51,7 +52,6 @@ bash scripts/build-h700-objects.sh
 ## 重要设计文档
 
 - [RG34XX 硬件基线](docs/rg34xx-hardware-profile.md)
-
 - [总体架构与硬件边界](docs/architecture.md)
 - [已确认的设计决策](docs/decisions.md)
 - [模拟器与存档兼容性](docs/emulator-save-compatibility.md)
@@ -61,11 +61,11 @@ bash scripts/build-h700-objects.sh
 
 ## 项目状态
 
-目前为设计与硬件可行性验证阶段，尚无可刷写固件。任何构建产物在完成 H700 实机验证之前都不得标记为可用发行版。
+目前为设计与硬件可行性验证阶段，尚无可刷写固件。任何构建产物在完成 RG34XX 实机验证之前都不得标记为可用发行版。
 
 ## 原则
 
-1. 先验证 H700 SD 启动、显示、输入、SD 读写和完全关机路径，再接入完整 Linkslot UI。
+1. 先验证 RG34XX SD 启动、显示、输入、SD 读写和完全关机路径，再接入完整 Linkslot UI。
 2. 数据格式优先兼容 Linkslot；不得无必要改变 Games / Saves / States / Cheats / linkSlot 目录语义。
 3. 任何自动存档、同步和关机行为必须遵守 `docs/decisions.md`。
 4. 首期目标是 RG34XX / Allwinner H700 / Cortex-A53；不能将 MT6785/MTK 特有驱动或其他 SoC 的寄存器、DMA 参数直接用于 H700。
