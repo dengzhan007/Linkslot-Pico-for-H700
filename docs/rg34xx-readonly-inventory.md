@@ -99,4 +99,4 @@ LBA 16、512、32800 和 TOC1 长度 0x140000 来自 BaseOS-MultiFrontend 的 H7
 
 ## 验证
 
-主机 CI 对采集脚本运行 sh -n，静态检查所有 dd 输出都指向报告目录，并用纯合成数据测试 Boot0 checksum/DRAM 候选解析和 TOC1 的有效包、Allwinner checksum、错误 magic、项目数、重复名称、越界、重叠、非法名称及 IIE; 尾标记处理。它不需要真实设备固件，也不会向硬件写入。
+主机 CI 对采集脚本运行 sh -n，Windows runner 进行 PowerShell 语法检查；静态检查所有 dd 输出都指向报告目录，并用纯合成数据测试 Boot0 checksum/DRAM 候选解析、TOC1 容器边界与 checksum，以及 FDT 的内存/reserved-memory/面板/PMIC/USB/bootargs 解析和损坏输入拒绝。它不需要真实设备固件，也不会向硬件写入。
