@@ -94,6 +94,32 @@ class MemoryMapInspectorTests(unittest.TestCase):
         self.assertEqual(report["memblock"], {"memory": [], "reserved": []})
         self.assertEqual(report["debugfs_presence"]["/sys/kernel/debug/cma"], "not_present")
 
+    def test_parses_rg34xx_comma_size_memblock_format(self):
+        snapshot = """== memblock debugfs ==
+[memory]
+   0: 0x0000000040000000..0x000000007fffffff, size:1048576K
+[reserved]
+   4: 0x0000000048000000..0x0000000048ffffff, size:16384K
+   5: 0x0000000077c00000..0x000000007bbfffff, size:65536K
+   6: 0x000000007ec00000..0x000000007fbfffff, size:16384K
+"""
+        parsed = MODULE._parse_debugfs(snapshot)
+        memory = parsed["memblock"]["memory"][0]
+        reserved = parsed["memblock"]["reserved"]
+
+        self.assertEqual(memory["start"], "0x40000000")
+        self.assertEqual(memory["end_exclusive"], "0x80000000")
+        self.assertEqual(memory["size_bytes"], 1024 * 1024 * 1024)
+        self.assertEqual(memory["reported_size"]["bytes"], 1024 * 1024 * 1024)
+        self.assertEqual(len(reserved), 3)
+        self.assertEqual(reserved[0]["start"], "0x48000000")
+        self.assertEqual(reserved[0]["end_exclusive"], "0x49000000")
+        self.assertEqual(reserved[1]["start"], "0x77c00000")
+        self.assertEqual(reserved[1]["end_exclusive"], "0x7bc00000")
+        self.assertEqual(reserved[1]["size_bytes"], 64 * 1024 * 1024)
+        self.assertEqual(reserved[1]["reported_size"]["bytes"], 64 * 1024 * 1024)
+        self.assertEqual(reserved[2]["end_exclusive"], "0x7fc00000")
+
     def test_parses_memblock_when_page_size_is_unavailable(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
