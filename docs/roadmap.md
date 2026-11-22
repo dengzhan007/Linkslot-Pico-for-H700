@@ -9,7 +9,7 @@
 - [x] 确认首期只做 GB/GBC/GBA。
 - [x] 固化关机、手动电池存档、手动云同步、家庭 LAN Web 和调试规则。
 - [x] 确认目标设备无 eMMC，只设计 SD 卡启动，不做旧系统自动回退。
-- [x] 建立 H700 Cortex-A55 / AArch64 freestanding 编译检查和 CI。
+- [x] 建立 H700 Cortex-A55 / AArch64 freestanding C、C++ 与汇编编译检查和 CI。
 - [ ] 等待 Linkslot 即将发布的大版本后，重新锁定上游 commit 并完成逐 crate 复用审计。
 - [ ] 完成目标设备清单，锁定第一台 H700 实机及其屏幕/音频/Wi-Fi/USB 型号。
 
