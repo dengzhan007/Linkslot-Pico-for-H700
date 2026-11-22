@@ -111,7 +111,7 @@ BaseOS 的 manifest/kernel-gzip.json 中 RG34XX 的 6c380adb6e4f16aa535da25f6657
 
 这些字符串能说明当前 U-Boot 二进制包含通用 distro boot 默认项和 sunxi sprite 维护路径，但不能证明启动时实际采用哪组环境。持久化 env 可以覆盖编译默认值；本轮尚未读取 env 分区。也没有从字符串扫描中恢复出完整 distro_bootcmd 子命令链，因此不能据此确认 mmc 设备号、分区号、镜像文件名或实际 load address。下一轮仍须先读取并解析 env。
 
-## 6. 分区表与启动参数不一致
+## 6. 分区表、逻辑分区别名与运行时挂载
 
 本次 sysfs 和 GPT 工具输出一致，当前 GPT 为：
 
@@ -125,11 +125,30 @@ BaseOS 的 manifest/kernel-gzip.json 中 RG34XX 的 6c380adb6e4f16aa535da25f6657
 | p6 | UDISK | 2531328 | 262144 | 128 MiB |
 | p7 | primary | 2793472 | 27582461 | 约 13.1 GiB |
 
-但当前 /proc/cmdline 的 partitions= 字符串仍写着 appfs@mmcblk0p6 和 UDISK@mmcblk0p7，与 GPT/sysfs 读出的 p6=UDISK、p7=primary 不一致。root=/dev/mmcblk0p5 与当前 p5=rootfs 一致。该差异需要结合 U-Boot environment、启动参数生成路径及用户空间挂载配置调查，不能仅凭 partitions= 字符串推断 GPT 被损坏。
+/proc/cmdline 的 partitions= 字符串把逻辑别名 appfs 映射到 mmcblk0p6、把 UDISK 映射到 mmcblk0p7；运行时挂载表显示 p6 是 ext4 并挂载到 /data，p7 是 vfat 并挂载到 /mnt/sdcard。这个运行时用途与 appfs/UDISK 逻辑分工相符。GPT 的 PARTNAME 字段则分别是 p6=UDISK、p7=primary；GPT 分区名元数据与内核 bootargs 中的逻辑别名并非同一个命名来源，因此不能把这两个字符串的差异直接判定为分区错位或 GPT 损坏。当前 root=/dev/mmcblk0p5 与 p5=rootfs 一致。
 
 fdisk 输出的磁盘容量文字为 2544M，与块设备 sysfs 的 30,375,936 sectors（约 14.5 GiB）明显不符；分区 sector 范围与 sysfs 一致。后续容量判断应使用块设备 sector 数和 sysfs，而不要采信这条 fdisk 容量文字。
 
-此次没有生成 env-partition-first64k.bin：原采集器只检查 /dev/disk/by-partlabel/env，而当前系统没有该目录/链接；但 sysfs 的 mmcblk0p3/uevent 明确标记 PARTNAME=env。已修复采集器，下一次将通过精确 GPT PARTNAME 在 sysfs 中发现 env 分区、校验大小后读取首 64 KiB，不会假设它一定是 p3。
+第二轮已通过 sysfs 的 PARTNAME=env 成功采集 p3 的首 64 KiB，文件 SHA-256 为 0cbb51563bc7dd94827392f42295a7f1623cf87254e056eee9469617a6c27e36。片段中有 4 字节 CRC 头字段、一个值为 0 的 flags 候选字节，以及可读的环境变量；但该文件只是 16 MiB env 分区的 64 KiB 前缀，不能据此验证完整 CRC，也不能据此断言 U-Boot 实际选中了这份环境。已更新采集器为按 PARTNAME=env 读取完整分区（设置 64 MiB 上限），并加入 CRC/变量解析器。
+
+### 6.1 第二轮 env 前缀解析（2026-11-22 18:56:51）
+
+第二轮采集成功发现 GPT 的 `PARTNAME=env` 并读取了首 64 KiB。环境区片段以 little-endian 头字段 `0xe3b6e401` 开始，后面有 0x00 flags 候选字节和双 NUL 终止的 key=value 字符串。提取到的变量包括：
+
+- `mmc_root=/dev/mmcblk0p5`、`nand_root=/dev/nand0p4`；
+- `setargs_mmc`：以 `mmc_root` 生成 bootargs，包含 `rootwait quiet splash`；
+- `setargs_nand`：以 `nand_root` 生成 bootargs；
+- `boot_normal=sunxi_flash read 45000000 boot;bootm 45000000`；
+- `boot_recovery=sunxi_flash read 45000000 recovery;bootm 45000000`；
+- `boot_fastboot=fastboot`；
+- `bootdelay=0`；
+- `bootcmd=run setargs_nand boot_normal`。
+
+现场 Linux `/proc/cmdline` 的 root、rootwait、quiet、splash 与 `setargs_mmc` 展开结果一致，而非 `setargs_nand`。这与 Allwinner vendor U-Boot 的常见 `sunxi_update_bootcmd()` 行为一致：当启动介质为 SD/eMMC 时，将 bootcmd 中的 `setargs_nand` 替换为 `setargs_mmc`。Allwinner Brandy 2.0 的参考实现见 [board_helper.c 行为说明](https://manuals.plus/m/35d20341b018e9f5bc7541f9a23512fbf0ebe3a5ee5a064ecb8dd1b44dee8317.pdf)；H700 固件环境变量与 `mkenvimage -s 0x1000000` 的示例见 [KNULLI H700 firmware extraction](https://knulli.org/guides/firmware-extraction/h700-firmware-extract/)。这两份资料提供平台参考；目前还没有从本机 U-Boot 源码/运行时 trace 直接确认该函数实际执行，因此结论为高度吻合的解释，而不是本机代码级证明。
+
+`boot_normal` 中的 `0x45000000` 是把名为 `boot` 的启动分区读入 RAM 后交给 `bootm` 处理的 Android boot image 暂存地址，不是 Linkslot 裸机 payload 的入口地址。当前分区 p4 的 GPT PARTNAME 为 boot；不能把这个 staging 地址改作裸机入口。
+
+KNULLI 的 H700 固件说明示例将 env image 构建为 16 MiB（`mkenvimage -s 0x1000000`）。本机 GPT 的 env 分区也正好是 16 MiB，但此次只采集了前 64 KiB。因此当前解析只证明前缀中存在上述变量文本，CRC 尚未得到验证，不能把它当成有效活动环境。第二轮完整 env 文件将在下一次只读采集后由 `inspect_h700_env.py` 自动尝试识别 CRC 覆盖范围与 header offset。
 
 ## 7. 对启动路线的影响
 
@@ -137,7 +156,7 @@ fdisk 输出的磁盘容量文字为 2544M，与块设备 sysfs 的 30,375,936 s
 2. 当前 U-Boot 带有 BaseOS gzip 优化特征，但不是已知精确 pinned U-Boot hash。不要对它盲目应用基于固定二进制偏移的补丁，也不要假定其环境变量与 prepared profile 一致。
 3. 当前两份 Boot0 在长度、debug 状态和主体内容上存在区别。必须弄清 BROM 使用哪个副本及其选择规则，再决定是否保留厂商链或接管 SPL。
 4. runtime FDT 证明内核可见 1 GiB RAM，但没有提供 monitor/secure/DMA 等完整 carveout。不能把 0x40000000–0x7fffffff 整段当作裸机可用内存。
-5. 目前仍没有实机证据证明 AArch32 BL33 如何进入任意 AArch64 payload，或厂商 Linux SMC 可被安全地重新定向。Issue #2 的 payload 地址和入口 ABI 继续保持未定，不构建猜地址的 dummy payload。
+5. 当前已知 U-Boot 的 boot 分区读取/bootm 路径，但仍没有实机证据证明 AArch32 BL33 如何进入任意 AArch64 payload，或厂商 Linux SMC 可被安全地重新定向。Issue #2 的 payload 地址和入口 ABI 继续保持未定，不构建猜地址的 dummy payload。
 
 ## 8. 下一步
 
