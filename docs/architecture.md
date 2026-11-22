@@ -16,7 +16,7 @@ GammaOS Pico 参考树面向 MT6785，不能原样作为 RG34XX 的 SoC/板级�
 
 - 保留设备可用的 Boot ROM / SPL / U-Boot 启动链，优先从 SD 卡加载独立 AArch64 裸机 payload。
 - 不写入不存在的 eMMC，也不把旧系统回退作为运行时安全机制。
-- 启动入口最终采用 U-Boot 已验证可用的加载方式；具体是 `bootelf`、自定义命令还是 kernel-like Image handoff，须先检查目标机 U-Boot 配置与可用命令后确定。
+- 启动入口必须经过已验证的 vendor monitor handoff；不能因 U-Boot 有 `bootelf`/`bootm` 命令就假设 AArch32 U-Boot 能直接以 AArch64 ABI 启动裸机 payload。具体交接方式由 M1 实机审计确定。
 - 启动失败后的恢复方式是通过电脑重新写入/修复 SD 卡，或使用设备实际提供的 Boot ROM/USB 烧录入口；不承诺设备自行回到 Linux。
 - 冷启动到第一帧、进入可操作游戏库的耗时必须实测。
 
@@ -105,11 +105,11 @@ linkSlot/mods/
 
 其他 Linkslot 目录（BIOS、Guides、Wallpapers、Music 等）可以继续保留，但不为未支持的平台创建模拟器入口。
 
-## 9. 硬件差异与设备 profile
+## 10. 硬件差异与设备 profile
 
 H700 设备不能只用一个屏幕分辨率或一套按键定义。至少建立设备 profile，记录板型、屏幕型号/时序、GPIO 按键、音频 codec/功放、PMIC、Wi-Fi 芯片/总线、USB 端口用途和电源域。一个 profile 通过实机验证后才能标记为受支持。
 
-## 10. 目标机型
+## 9. 目标机型
 
 首期只支持 Anbernic RG34XX（非 SP）。其 CPU 是 Cortex-A53，因此所有 H700 C/C++/汇编和模拟器核心交叉编译均使用 AArch64 Cortex-A53 target。不能将 RG34XX SP 的 2 GB LPDDR4、`rg34xxsp_v1` 面板驱动或 Boot0 DRAM 参数套用到 RG34XX。
 
