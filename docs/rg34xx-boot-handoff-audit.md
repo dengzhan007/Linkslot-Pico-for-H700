@@ -127,15 +127,15 @@ BaseOS 的 native SPL / monitor / A32 loader 是当前最有价值的技术参�
 
 ## 8. 对 Linkslot Pico 的实施建议
 
-1. 先对用户当前 RG34XX 做只读 inventory：完整 SD 镜像/GPT、Boot0 两份副本、TOC1、U-Boot、monitor、env、live FDT、`/proc/iomem`、`/proc/cmdline`、DRAM 容量与设备树保留区。输出文件和 SHA-256，不写入任何启动区域。
-2. 对比 live 读回与 `manifest/prepared/rg34xx.json`、`manifest/kernel-gzip.json`、`compatibility.json`。先解释每个允许变化字段，再判断能否复用 BaseOS 固件证据。
+1. 首轮 RG34XX 非 SP 只读 inventory 已完成，见[现场报告](rg34xx-live-inventory-2026-11-22.md)。下一轮只补采通过 GPT PARTNAME=env 定位的 env 分区首 64 KiB，并解析 bootcmd、镜像加载路径和启动配置；不写入任何启动区域。
+2. 首轮已完成 TOC1、U-Boot、monitor、DTB 和 Boot0 的组件/镜像指纹对比。继续解释现场包与 BaseOS 固定输入不一致的来源，并结合 env、Boot0 两个位置的实际选择及运行时 FDT 完成差异闭环。
 3. 对比两种入口方案：保留原厂链并修改/替换 A32 BL33，或采用 BaseOS 的 A64 SPL + 原厂 monitor + A32 BL33。前者改动面可能更小；后者对 SD/DRAM/恢复路径控制更强，但会接管 Boot0/SPL 职责，验证和恢复复杂度更高。
 4. 不论选择哪条路径，先建立一个最小 A32 handoff adapter 和纯 AArch64 payload。payload 只输出早期日志、CurrentEL、寄存器参数和安全范围内的内存信息；不启动 Linkslot、模拟器、Wi-Fi、音频或显示驱动。
 5. 先在目标 RG34XX 验证重复冷启动、失败恢复及完整入口契约，再开始 H700 HAL。不得把编译探针、Unicorn 模拟或其他机型的成功记录当成这一步的通过条件。
 
 ## 9. 安全边界
 
-本次审查为只读，不涉及刷写或现场设备访问。后续首轮实机审计仍只读；在完成备份、地址冲突证明、入口状态分析和明确恢复方案前，不得试写 Boot0、TOC1、U-Boot 或 monitor。设备无 eMMC，本项目只设计 SD 启动；失败恢复按项目约定通过电脑重写/修复 SD 卡，不能把自动回退到 Linux 当作产品前提。
+本轮公开源码审计与 RG34XX 实机采集均为只读，没有写入 SD 卡、Boot0、TOC1、U-Boot 或 monitor。后续仍须先完成备份、地址冲突证明、入口状态分析和明确恢复方案；在这些条件满足前，不得试写任何启动区域。设备无 eMMC，本项目只设计 SD 启动；失败恢复按项目约定通过电脑重写/修复 SD 卡，不能把自动回退到 Linux 当作产品前提。
 
 
 ## 10. RG34XX 非 SP 首轮实机只读 Inventory（2026-11-22）
