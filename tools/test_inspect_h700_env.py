@@ -22,7 +22,7 @@ def make_env(size=4096, redundant=True, leading_nul=False):
         b"bootdelay=0\0\0"
     )
     if leading_nul:
-        variables = b"\\0" + variables
+        variables = b"\0" + variables
     header_bytes = 5 if redundant else 4
     if len(variables) > size - header_bytes:
         raise ValueError("test environment is too small")
