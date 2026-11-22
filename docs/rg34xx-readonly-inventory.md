@@ -16,7 +16,7 @@
 | env-partition.bin | 可选：通过 sysfs 的精确 GPT PARTNAME=env 动态发现后读取完整分区（最大 64 MiB），不假设固定分区号 |
 | live-fdt.dtb | 内核提供 /sys/firmware/fdt 时保存的 live FDT |
 | live-fdt.json / toc1-extracted/dtb-report.json | 自动解析 live FDT 与 TOC1 静态 DTB 的 RAM、reserved-memory、面板、PMIC、USB 状态、bootargs、display framebuffer 的 boot_fb0 物理范围及 hash |
-| env-report.json | 若完整 env 分区已采集，解析 key=value 变量并扫描 CRC32 头偏移/sector-aligned 环境长度；CRC 不匹配时仍只报告变量候选，不宣称其有效或处于活动状态 |
+| env-report.json | 解析 key=value 变量并扫描 CRC32 头偏移/sector-aligned 环境长度；报告 CRC 覆盖长度与实际 GPT 分区大小。CRC 有效证明该映像内部一致，但不单独证明 U-Boot 已选中它 |
 | cmdline.txt / cpuinfo.txt / meminfo.txt | 运行时内核启动参数、CPU 与内存信息 |
 | iomem.txt / interrupts.txt | 内存资源范围与中断状态 |
 | partitions.txt / mounts.txt | 块设备分区及挂载状态 |
@@ -86,7 +86,7 @@ LBA 16、512、32800 和 TOC1 长度 0x140000 来自 BaseOS-MultiFrontend 的 H7
 
 1. TOC1 整包及内部 u-boot、monitor、dtb、dtbo 的 SHA-256 与 BaseOS 准备固件清单比对。
 2. Boot0 的 primary/secondary 副本不要简单要求整段逐字节相同。BaseOS 研究记录指出 Boot0 会在启动时改写训练相关头部字段和 checksum；需要按 Boot0 的已知可变区域解释差异，同时核对可执行主体。
-3. env 采集按 GPT PARTNAME=env 动态定位并读取完整分区（最多 64 MiB）；解析器只在标准 CRC32 与候选头偏移/sector-aligned 环境长度匹配时标记 CRC valid，变量字符串可读不等于该份环境已被 U-Boot 选中。
+3. env 采集按 GPT PARTNAME=env 动态定位并读取完整分区（最多 64 MiB）；解析器只在标准 CRC32 与候选头偏移/sector-aligned 环境长度匹配时标记 CRC valid。注意 GPT env 分区大小不必等于 CRC 有效环境映像长度；本机实测为 16 MiB p3 内含 128 KiB CRC 有效映像。CRC 有效也不单独证明 U-Boot 已选中它。
 4. live FDT、/proc/iomem、/proc/meminfo、boot_fb0/display reserve 和设备树保留区共同用于判断安全 RAM 区域。解析器会比较 boot_fb0 的 base/stride/height 计算范围与 disp_reserve=size,base 参数；不得把 framebuffer 当作 payload 可用内存，也不得只凭某个 Linux 入口地址推定空闲内存。
 5. 当前 prepared hashes 是仓库准备输入指纹，不是本次测试机 live readback。只有采集报告与这些指纹完成差异解释后，才能更新目标机启动链基线。
 
