@@ -1,0 +1,52 @@
+name: Temporary RG34XX report archive inspection
+
+on:
+  push:
+    branches:
+      - "audit/inspect-rg34xx-report-20261122"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout audit branch
+        uses: actions/checkout@v4
+
+      - name: Checkout field reports
+        uses: actions/checkout@v4
+        with:
+          ref: reports
+          path: reports
+
+      - name: Extract archive and print hardware log
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="reports/reports/rg34xx-inventory-20261122-195053.zip"
+          echo "ARCHIVE_SHA256"
+          sha256sum "$archive"
+          mkdir -p /tmp/rg34xx-inventory
+          unzip -q "$archive" -d /tmp/rg34xx-inventory
+          echo "ARCHIVE_FILES"
+          find /tmp/rg34xx-inventory -type f -printf '%P (%s bytes)\\n' | sort
+          log="$(find /tmp/rg34xx-inventory -type f -name 'dmesg-hardware-lines.txt' -print -quit)"
+          if [[ -n "$log" ]]; then
+            echo "===== dmesg-hardware-lines.txt BEGIN ====="
+            cat "$log"
+            echo "===== dmesg-hardware-lines.txt END ====="
+          else
+            echo "EXACT_LOG_NOT_FOUND"
+            while IFS= read -r candidate; do
+              case "$candidate" in
+                *.txt|*.log)
+                  if grep -Eiq 'CMA:|cma:|reserved memory|reserved-memory|BL31|ATF|TEE|OP-TEE|carveout|framebuffer|dma-contiguous' "$candidate"; then
+                    echo "===== CANDIDATE: $candidate ====="
+                    grep -Ein -C 2 'CMA:|cma:|reserved memory|reserved-memory|BL31|ATF|TEE|OP-TEE|carveout|framebuffer|dma-contiguous' "$candidate" || true
+                  fi
+                  ;;
+              esac
+            done < <(find /tmp/rg34xx-inventory -type f | sort)
+          fi
