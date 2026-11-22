@@ -131,6 +131,28 @@ class UbootSmcAuditTests(unittest.TestCase):
         sites = audit.find_thumb_smc_sites(bytes(image))
         self.assertEqual([site["file_offset"] for site in sites], ["0x42", "0x70"])
         self.assertEqual([site["immediate"] for site in sites], [0, 5])
+    def test_traces_thumb1_ldr_literal_reference_to_boot_address(self):
+        image = bytearray(128)
+        instruction = 0x20
+        literal = 0x40
+        encoded = 0x4800 | ((literal - ((instruction + 4) & ~3)) // 4)
+        struct.pack_into("<H", image, instruction, encoded)
+        struct.pack_into("<I", image, literal, 0x44000000)
+        refs = audit.find_thumb_ldr_literal_refs_to_value(bytes(image), 0x44000000)
+        self.assertEqual(refs[0]["instruction_offset"], "0x20")
+        self.assertEqual(refs[0]["literal_offset"], "0x40")
+
+    def test_traces_thumb2_ldr_literal_reference_to_boot_address(self):
+        image = bytearray(128)
+        instruction = 0x20
+        literal = 0x40
+        base = (instruction + 4) & ~3
+        immediate = literal - base
+        struct.pack_into("<HH", image, instruction, 0xF8DF, 0x0000 | immediate)
+        struct.pack_into("<I", image, literal, 0x40080000)
+        refs = audit.find_thumb_ldr_literal_refs_to_value(bytes(image), 0x40080000)
+        self.assertEqual(refs[0]["instruction_offset"], "0x20")
+        self.assertEqual(refs[0]["literal_offset"], "0x40")
     def test_reads_toc1_from_inventory_zip(self):
         package = make_toc1()
         with tempfile.TemporaryDirectory() as tmp:
