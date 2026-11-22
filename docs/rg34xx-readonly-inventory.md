@@ -19,6 +19,7 @@
 | env-report.json | 解析 key=value 变量并扫描 CRC32 头偏移/sector-aligned 环境长度；报告 CRC 覆盖长度与实际 GPT 分区大小。CRC 有效证明该映像内部一致，但不单独证明 U-Boot 已选中它 |
 | cmdline.txt / cpuinfo.txt / meminfo.txt | 运行时内核启动参数、CPU 与内存信息 |
 | iomem.txt / interrupts.txt | 内存资源范围与中断状态 |
+| debugfs-memory-reservations.txt | 若内核导出 debugfs CMA/memblock 节点，只读采集 CMA base_pfn/count/order_per_bit 与 memblock memory/reserved；不触碰 alloc/free 控制节点 |
 | partitions.txt / mounts.txt | 块设备分区及挂载状态 |
 | device-and-block-layout.txt | 设备树 model/compatible、块设备 sysfs 与分区标签 |
 | gpt-sfdisk.txt 或 gpt-fdisk.txt | 系统提供 sfdisk 或 fdisk 时生成分区表文本 |
@@ -102,4 +103,4 @@ LBA 16、512、32800 和 TOC1 长度 0x140000 来自 BaseOS-MultiFrontend 的 H7
 
 ## 验证
 
-主机 CI 对采集脚本运行 sh -n，Windows runner 进行 PowerShell 语法检查；静态检查所有 dd 输出都指向报告目录，并用纯合成数据测试 Boot0 checksum/DRAM 候选解析、TOC1 容器边界与 checksum、FDT 的内存/reserved-memory/面板/PMIC/USB/bootargs 解析，以及 U-Boot env 的 key=value 提取、CRC 覆盖范围识别和损坏 CRC 拒绝。它不需要真实设备固件，也不会向硬件写入。
+主机 CI 对采集脚本运行 sh -n，Windows runner 进行 PowerShell 语法检查；静态检查所有 dd 输出都指向报告目录，并用纯合成数据测试 Boot0 checksum/DRAM 候选解析、TOC1 容器边界与 checksum、FDT 的内存/reserved-memory/面板/PMIC/USB/bootargs 解析，U-Boot env 的 key=value 提取、CRC 覆盖范围识别和损坏 CRC 拒绝，以及 CMA/memblock debugfs 采集只读边界检查。它不需要真实设备固件，也不会向硬件写入。
