@@ -297,32 +297,57 @@ BaseOS-MultiFrontend 的 `experiments/h700-boot-speed/DESIGN.md` 将下列地址
 
 这套 native SPL / monitor / A32 loader 的物理试验覆盖 BaseOS 实验记录中的 RG34XX SP（2 GiB LPDDR4）和 RG40XX V（1 GiB LPDDR3）；这些结果不能替代本目标 RG34XX 非 SP（1 GiB LPDDR4）的冷启动与 handoff 验收。该项目的目标机地址、入口 EL、栈、cache/MMU/TLB、GIC 和 secure carveout 仍须以本机证据验证。
 
-### 7.2 第四轮已捕获 memblock 节点，但仍需解析具体地址
+### 7.2 第四轮 memblock 物理范围已读出
 
-第三轮 ZIP 的 `mounts.txt` 显示 debugfs 已挂载在 `/sys/kernel/debug`，但当时归档没有 `debugfs-memory-reservations.txt`。因此第三轮只能确认 `CmaTotal=65536 kB`、`CmaFree=60360 kB`，没有 CMA `base_pfn/count` 或 memblock `memory/reserved` 物理区间。
+第四轮采集归档和独立文本见 [reports 分支的原始 memblock 快照](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/debugfs-memory-reservations.txt)。该文件 SHA-256 为 `6d256713f030dd6093c6f04770cf20a9561b93db76f288c01f2da179f1603ced`。它报告 CMA debugfs 不存在，但导出了 memblock `memory/reserved`。
 
-第四轮采集已归档在 [reports 分支的 `rg34xx-inventory-20261122-195053.zip`](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261122-195053.zip)，采集时间为 2026-11-22 19:50:53（UTC+8），采集器基线为 `acc5e09`。归档 SHA-256 为：
+**memblock.memory** 只有一段：
 
 ```text
-bbfa065e590ecd7f8394f9b251d15468d63ed6c93bbe192e4272a65a700ab5e2
+[0x40000000, 0x80000000) = 1 GiB
 ```
 
-该轮报告索引确认：
+**memblock.reserved** 共 46 条。前 9 条较大的连续区间换算为半开区间如下（原文件 end 地址是闭区间，以下 end-exclusive = 原 end + 1）：
 
-- Boot0 两份副本仍为有效 `eGON.BT0`，头部声明长度与 128 KiB 采集长度一致；摘要 hash 与前几轮相同。
-- TOC1 SHA-256 仍为 `e6c20e3a…aa4604`，包含 u-boot、monitor、dtbo、dtb 四项。
-- 完整 16 MiB env 分区 CRC 仍有效（`0xe3b6e401`），25 个变量。
-- live FDT 的 framebuffer 仍为 `[0x7bf24800,0x7c076000)`，720×480×32bpp，与 `disp_reserve` 一致。
-- `/sys/kernel/debug/cma` 未导出；`/sys/kernel/debug/memblock` 已导出并被采集。CMA 节点缺失不能解释为没有 CMA/保留区；memblock 内容必须按实际 `memory/reserved` 条目读取。
-- `getconf` 不可用，因此该轮 `page-size.txt` 为 NOT_PRESENT，归档保留原始 debugfs 快照，未将 CMA PFN 换算为物理字节区间。
+| 索引 | 半开物理区间 | 精确长度 | 解释状态 |
+|---:|---|---:|---|
+| 0 | `[0x40080000, 0x411b5000)` | 17,620 KiB | 与 `/proc/iomem` 的 kernel code/data 范围相符 |
+| 1 | `[0x411b6000, 0x411b8000)` | 8 KiB | 紧邻 kernel 区域的小型保留项，具体用途未确认 |
+| 2 | `[0x42000000, 0x42001000)` | 4 KiB | 地址与 BaseOS 实验的 initrd 起始地址相同，但仅凭一页大小不能认定为 initrd |
+| 3 | `[0x44000000, 0x44023240)` | 143,936 bytes | 起始地址与 BaseOS 实验最终 FDT 地址相同，疑似 FDT/启动数据；当前没有对象级标记 |
+| 4 | `[0x48000000, 0x49000000)` | 16 MiB | 与 BaseOS native SPL 设计中的 vendor monitor 起始地址及 16 MiB 窗口一致；强烈支持 monitor 在该区域保留，但仍应通过目标 monitor/loader 的实际访问范围做最终核对 |
+| 5 | `[0x77c00000, 0x7bc00000)` | 64 MiB | 唯一一段恰好 64 MiB 的连续保留区，与 `CmaTotal=65536 kB` 完全相等；当前最高可信 CMA 物理区间候选 |
+| 6 | `[0x7ec00000, 0x7fc00000)` | 16 MiB | 高地址连续保留区，来源/用途未知，必须排除 |
+| 7 | `[0x7fd4a000, 0x7fd4b000)` | 4 KiB | 小型高地址保留项，用途未知 |
+| 8 | `[0x7fd65000, 0x7ff49000)` | 1,982,464 bytes | 高地址保留区，约 1.89 MiB，来源/用途未知 |
 
-目前从报告索引能够确认 memblock 节点已采集，但尚未把 ZIP 内 `debugfs-memory-reservations.txt` 的具体条目读入本报告，所以**还不能列出该机 memblock 的具体 reserved ranges，也不能据此批准 payload RAM 区间**。memblock 条目自身已经是物理 byte 地址，不依赖 PAGE_SIZE；只有 CMA 的 PFN/count 换算需要内核页大小。
+索引 9–45 还有 37 条彼此分离的小型保留区，分布在 `0x7ff49a00` 至 `0x7ffffffe` 之间。它们不是一个连续 42 KiB 区间，不能将其中的空隙合并后当作某个经证明可用的载荷区。原文件的 `size:...K` 是整数 KiB 显示；例如 FDT 候选区的精确长度为 140.5625 KiB，文件显示 `140K`。地址端点才是精确计算区间的依据。
 
-为避免再次丢失这部分有效信息，采集解析工具已修正：debugfs 快照存在时，即使 PAGE_SIZE 缺失，也会继续生成 `memory-map-report.json` 并解析 memblock；CMA PFN 在缺页大小时只保留原始值。设备侧采集器现在优先用 `getconf`，不可用时再尝试从 `/proc/self/smaps` 的 `KernelPageSize` 获取页大小，并将来源写入 `page-size-source.txt`。这些修复位于 main 后续提交中，第四轮归档仍是修复前的采集版本。
+#### CMA 区间判断
+
+启动参数含 `cma=64M`，`/proc/meminfo` 的 `CmaTotal=65536 kB`；memblock.reserved 中恰有一段 64 MiB 的连续区间 `[0x77c00000, 0x7bc00000)`。Linux CMA 的标准初始化路径会从早期内存分配器（memblock/bootmem）保留连续区域；这与本机观测到的“CMA 总量 64 MiB + 唯一 64 MiB memblock reserved 区间”相吻合。参见 Linux DMA contiguous CMA 的早期保留流程说明：[dma-contiguous.c](https://cos.googlesource.com/third_party/kernel/%2B/c570b82c5e6ac78be35b4e72594c0f1b1888fce1/drivers/base/dma-contiguous.c)。
+
+因此现在可以把 `[0x77c00000, 0x7bc00000)` 作为**高置信 CMA 候选物理范围**纳入保守内存排除表；但本机没有导出 `/sys/kernel/debug/cma` 的 `base_pfn/count`，memblock 条目本身也没有区域名称，尚不能把“64 MiB 数量完全吻合”提升为 CMA base 的直接接口确认。CMA 页面在 Linux 内核中可能用于可迁移页并供 DMA 连续分配，不能因为它属于 CMA 就视为 Linkslot loader 可随意覆盖的 RAM。
+
+#### 与 framebuffer 的关系
+
+此前 live FDT 的 `boot_fb0` 和 bootargs `disp_reserve` 已独立确认 framebuffer 为 `[0x7bf24800, 0x7c076000)`，长度 1,382,400 bytes。它**没有出现在本次 memblock.reserved 的 46 条记录中**。这不是解除 framebuffer 排除的理由：FDT/bootargs 已经给出明确显示缓冲区范围，应继续无条件排除。
+
+framebuffer 起点比 64 MiB CMA 候选区末端 `0x7bc00000` 高 `0x324800`（3,291,136 bytes），两者不重叠；framebuffer 也不与高地址 16 MiB 区间 `[0x7ec00000,0x7fc00000)` 重叠。这个不重叠关系只描述地址几何，不说明两者之间的空隙可安全用于 payload。
+
+#### 对 payload 内存布局的影响
+
+- `[0x48000000, 0x49000000)` 必须视为 vendor monitor 保留区；不得把 `0x48000000` 或其内部地址用作 payload。
+- `[0x77c00000, 0x7bc00000)` 暂按 CMA 候选保留，不能用于 payload。
+- `[0x7ec00000, 0x7fc00000)`、索引 7–45 的高地址区间全部保持排除，等待归属确认。
+- kernel 区域、FDT/启动数据候选范围以及 framebuffer 继续排除。
+- memblock.reserved 未列出 framebuffer，且用户态运行阶段的驱动/DMA 分配不一定完整反映在这份早期 memblock 表里。因此，`memblock.memory - memblock.reserved` **不能直接作为裸机可用内存清单**。
+
+本轮已从“没有物理 reservation 数据”推进到“已读出并确认若干实际保留区间”；但 16 MiB 高地址区、top-of-RAM 碎片区、monitor 的实际访问上界、secure world、DMA/显示控制器缓冲及 loader 自身使用范围仍未全部归属。还没有任何 Linkslot payload load/entry address 获得批准。
 
 
 ## 8. 下一步
 
-完整 env 分区已读回且 CRC/hash 验证通过；第四轮已确认 memblock debugfs 节点存在并已采集，但具体 reserved ranges 尚待解析。下一阶段重点是读出 memblock 原始条目、补齐页大小以换算 CMA PFN（若内核可提供）、获取 Boot0 当前选择/DRAM training 证据，以及收敛 monitor/secure/DMA 内存范围；在此之前不批准任何 payload 地址或 A32→A64 handoff 实现，继续只读。
+完整 env 分区已读回且 CRC/hash 验证通过；第四轮已读出 46 条 memblock reserved entries，并得到一个 64 MiB CMA 高置信候选和一个与 BaseOS monitor 地址匹配的 16 MiB 保留区。下一阶段重点是归属未知的高地址保留区/secure/DMA 范围、核对 monitor 实际读写边界，并获取 Boot0 当前选择/DRAM training 证据；在此之前不批准任何 payload 地址或 A32→A64 handoff 实现，继续只读。
 
 在 U-Boot environment 和 monitor/DRAM 安全边界审查完成前，不修改 Boot0、TOC1、U-Boot、monitor 或 GPT，不试刷 AArch64 payload。设备没有 eMMC；失败恢复仍按项目设计由电脑重写/修复 SD 卡，不依赖回退到旧 Linux/BaseOS。
