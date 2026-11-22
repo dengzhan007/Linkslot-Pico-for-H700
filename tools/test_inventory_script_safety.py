@@ -44,6 +44,21 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         offenders = [line for line in self.lines if forbidden.search(line)]
         self.assertEqual(offenders, [])
 
+
+    def test_windows_wrapper_only_runs_the_read_only_collector(self):
+        runner = SCRIPT.parent / "run-rg34xx-inventory.ps1"
+        source = runner.read_text(encoding="utf-8")
+        self.assertIn("& adb @adbPrefix push $Collector $remoteScript", source)
+        self.assertIn("& adb @adbPrefix shell sh $remoteScript $BlockDevice $remoteOutput", source)
+        self.assertIn("& adb @adbPrefix pull $remoteOutput $OutputDirectory", source)
+        forbidden = re.compile(
+            r"^\\s*&\\s*adb\\b.*\\bshell\\s+(?:reboot|poweroff|fw_setenv|"
+            r"flashcp|flash_erase|nandwrite|sunxi-fel)\\b",
+            re.IGNORECASE,
+        )
+        offenders = [line for line in source.splitlines() if forbidden.search(line)]
+        self.assertEqual(offenders, [])
+
     def test_device_is_never_used_as_dd_output(self):
         self.assertNotIn('of="$DISK"', self.source)
         self.assertNotIn("of=$DISK", self.source)
