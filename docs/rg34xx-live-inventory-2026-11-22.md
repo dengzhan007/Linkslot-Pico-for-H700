@@ -125,7 +125,7 @@ BaseOS 的 manifest/kernel-gzip.json 中 RG34XX 的 6c380adb6e4f16aa535da25f6657
 | p6 | UDISK | 2531328 | 262144 | 128 MiB |
 | p7 | primary | 2793472 | 27582461 | 约 13.1 GiB |
 
-/proc/cmdline 的 partitions= 字符串把逻辑别名 appfs 映射到 mmcblk0p6、把 UDISK 映射到 mmcblk0p7；运行时挂载表显示 p6 是 ext4 并挂载到 /data，p7 是 vfat 并挂载到 /mnt/sdcard。这个运行时用途与 appfs/UDISK 逻辑分工相符。GPT 的 PARTNAME 字段则分别是 p6=UDISK、p7=primary；GPT 分区名元数据与内核 bootargs 中的逻辑别名并非同一个命名来源，因此不能把这两个字符串的差异直接判定为分区错位或 GPT 损坏。当前 root=/dev/mmcblk0p5 与 p5=rootfs 一致。
+/proc/cmdline 的 partitions= 字符串把逻辑别名 appfs 映射到 mmcblk0p6、把 UDISK 映射到 mmcblk0p7；运行时挂载表显示 p6 是 ext4 并挂载到 /data，p7 是 vfat 并挂载到 /mnt/sdcard。这个运行时用途与 appfs/UDISK 逻辑分工相符。GPT 的 PARTNAME 字段则分别是 p6=UDISK、p7=primary；GPT 分区名元数据与内核 bootargs 中的逻辑别名并非同一个命名来源，因此不能把这两个字符串的差异直接判定为分区错位或 GPT 损坏。当前 root=/dev/mmcblk0p5 与 p5=rootfs 一致。 Allwinner Brandy 2.0 参考函数 `sunxi_update_partinfo()` 根据启动分区表的 `info.name` 和实际分区索引生成 `partitions=`，并设置 `mmc_root`；这说明逻辑别名是 U-Boot 的分区映射结果，不等同于 GPT header 的 PARTNAME。参考代码见 [board_helper.c 环境与分区更新说明](https://manuals.plus/m/35d20341b018e9f5bc7541f9a23512fbf0ebe3a5ee5a064ecb8dd1b44dee8317.pdf)。该文档对应 T113 Brandy 2.0 SDK，作为同一厂商 BSP 代码路径的参考，不直接证明 RG34XX binary 的每个函数版本。
 
 fdisk 输出的磁盘容量文字为 2544M，与块设备 sysfs 的 30,375,936 sectors（约 14.5 GiB）明显不符；分区 sector 范围与 sysfs 一致。后续容量判断应使用块设备 sector 数和 sysfs，而不要采信这条 fdisk 容量文字。
 
