@@ -111,6 +111,37 @@ BaseOS 的 manifest/kernel-gzip.json 中 RG34XX 的 6c380adb6e4f16aa535da25f6657
 
 这些字符串能说明当前 U-Boot 二进制包含通用 distro boot 默认项和 sunxi sprite 维护路径，但不能证明启动时实际采用哪组环境。持久化 env 可以覆盖编译默认值；第二轮已从 env 分区前缀读到持久化变量，完整 CRC/ENV_SIZE 仍待验证。也没有从字符串扫描中恢复出完整 distro_bootcmd 子命令链，因此不能据此确认该 fallback 路径实际被采用。
 
+### 5.6 目标 U-Boot 中的启动介质/分区更新函数线索
+
+对本轮实际读回的 U-Boot 组件（1 MiB，SHA-256 `4d60a22ff13eac00dba89e0ee7df52a49852c0d9d856bec545ce40126191d127`）再次按 NUL 终止 ASCII 字符串扫描，发现以下目标二进制自身的字符串（偏移为 U-Boot 组件内偏移）：
+
+| 偏移 | 字符串 |
+|---:|---|
+| 0x9a814 | `bootcmd` |
+| 0x9a81c | `setargs_mmc` |
+| 0x9a828 | `setargs_nand` |
+| 0x9a835 | `setargs_nor` |
+| 0x9a841 | `update bootcmd` |
+| 0x9a851 | `can't find valid mmc %d` |
+| 0x9a8d9 | `root_partition` |
+| 0x9a90a | `nand0p%d` |
+| 0x9a913 | `mtdblock%d` |
+| 0x9a91e | `mmcblk0p%d` |
+| 0x9a929 | `partition_sets is too long, please reduces partition name` |
+| 0x9a964 | `%s@%s:` |
+| 0x9a96b | `/dev/%s` |
+| 0x9a973 | `set root to %s` |
+| 0x9a996 | `mmc_root` |
+| 0x9a99f | `update part info` |
+| 0x9bb65 | `run setargs_mmc boot_normal` |
+| 0x9bb81 | `run setargs_nand boot_normal` |
+
+其中 `update bootcmd`、两套 setargs 字符串和 mmc 存储识别字符串与 Allwinner Brandy 2.0 的 `sunxi_update_bootcmd()` 路径吻合；`partition_sets is too long`、`%s@%s:`、`set root to %s`、`mmc_root` 和 `update part info` 与 `sunxi_update_partinfo()` 的动态别名/root 分区生成路径吻合。目标 U-Boot 的这些字符串比仅引用其他板型的参考代码更直接，说明相关更新逻辑极可能被编译进本机 U-Boot。
+
+结合本机 env 前缀中的 `bootcmd=run setargs_nand boot_normal`、`setargs_mmc` 定义，以及 Linux runtime `root=/dev/mmcblk0p5`、`partitions=...appfs@mmcblk0p6:UDISK@mmcblk0p7`，可以形成一致解释：U-Boot 在 SD 启动时执行启动介质适配，将 `setargs_nand` 路径切换到 `setargs_mmc`，并根据其分区元数据动态构造 root 设备和 `partitions=` 逻辑别名。
+
+**证据边界：** 字符串扫描能证明目标 binary 含有与这些函数相匹配的代码路径/诊断常量，但没有反汇编调用图或串口执行日志证明该次冷启动确实调用了函数。env CRC/ENV_SIZE 也尚未验证。因此这是“目标 binary 静态特征 + runtime cmdline 相符”的强支持证据，不应写成已经捕获到函数执行 trace。
+
 ## 6. 分区表、逻辑分区别名与运行时挂载
 
 本次 sysfs 和 GPT 工具输出一致，当前 GPT 为：
