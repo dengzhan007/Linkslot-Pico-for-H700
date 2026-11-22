@@ -183,6 +183,30 @@ def find_direct_callers(data: bytes, target: int) -> list[int]:
     return callers
 
 
+
+def find_a32_ldr_literal_refs(data: bytes, target: int) -> list[dict[str, Any]]:
+    """Find A32 LDR (literal) instructions whose PC-relative address equals target."""
+    references = []
+    for offset in range(0, len(data) - 3, 4):
+        word = struct.unpack_from("<I", data, offset)[0]
+        if (word & 0x0F7F0000) != 0x051F0000:
+            continue
+        immediate = word & 0xFFF
+        up = bool(word & 0x00800000)
+        effective = offset + 8 + (immediate if up else -immediate)
+        if effective == target:
+            references.append({
+                "instruction_offset": f"0x{offset:x}",
+                "literal_offset": f"0x{effective:x}",
+                "disassembly": disassemble_window(data, offset, 0x20),
+            })
+    return references
+
+
+def find_word_pointer_refs(data: bytes, value: int) -> list[str]:
+    return [f"0x{x:x}" for x in occurrences(data, struct.pack("<I", value))]
+
+
 def find_movw_movt_smc_id(data: bytes) -> list[dict[str, str]]:
     """Find A32 MOVW/MOVT pairs that construct 0x8000ff04."""
     instructions = []
@@ -252,6 +276,14 @@ def scan_uboot(uboot: bytes, context_bytes: int = 0x50) -> dict[str, Any]:
         "provisional_smc_wrapper_entries": [f"0x{x:x}" for x in wrapper_entries],
         "direct_callers_of_smc_wrappers": wrapper_callers,
         "movw_movt_constructed_linux_smc_id": find_movw_movt_smc_id(uboot),
+        "ldr_literal_refs_to_linux_smc_id": {
+            offset: find_a32_ldr_literal_refs(uboot, offset)
+            for offset in occurrences(uboot, CONSTANTS["vendor_linux_smc_0x8000ff04"])
+        },
+        "possible_pointer_refs_at_base_0x4a000000": {
+            f"0x{entry:x}": find_word_pointer_refs(uboot, 0x4A000000 + entry)
+            for entry in wrapper_entries
+        },
         "constant_occurrences": constant_offsets,
         "analysis_limit": (
             "Raw A32 instruction-pattern inventory only. A match does not prove "
