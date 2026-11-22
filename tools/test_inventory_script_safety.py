@@ -75,6 +75,17 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertNotIn("env-partition-first64k.bin", self.source)
         self.assertNotIn("/dev/mmcblk0p3", self.source)
 
+    def test_cma_and_memblock_debugfs_capture_is_read_only(self):
+        self.assertIn('/sys/kernel/debug/cma', self.source)
+        self.assertIn('/sys/kernel/debug/memblock/memory', self.source)
+        self.assertIn('/sys/kernel/debug/memblock/reserved', self.source)
+        self.assertIn('cat "$node/$attr"', self.source)
+        self.assertIn('cat "$file"', self.source)
+        self.assertIn('> "$OUTDIR/debugfs-memory-reservations.txt"', self.source)
+        self.assertNotRegex(self.source, r">\s*/sys/kernel/debug/")
+        self.assertNotIn('/alloc"', self.source)
+        self.assertNotIn('/free"', self.source)
+
     def test_device_is_never_used_as_dd_output(self):
         self.assertNotIn('of="$DISK"', self.source)
         self.assertNotIn("of=$DISK", self.source)
