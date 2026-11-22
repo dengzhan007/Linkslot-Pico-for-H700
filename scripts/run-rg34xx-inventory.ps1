@@ -179,23 +179,30 @@ $memorySnapshot = Join-Path $OutputDirectory "debugfs-memory-reservations.txt"
 $pageSizeFile = Join-Path $OutputDirectory "page-size.txt"
 $liveFdtJson = Join-Path $OutputDirectory "live-fdt.json"
 $meminfoFile = Join-Path $OutputDirectory "meminfo.txt"
-if ((Test-Path -LiteralPath $memorySnapshot -PathType Leaf) -and
-    (Test-Path -LiteralPath $pageSizeFile -PathType Leaf)) {
-    $pageSizeText = (Get-Content -LiteralPath $pageSizeFile -Raw).Trim()
-    if ($pageSizeText -match '^[0-9]+$') {
-        $memoryMapArgs = @($MemoryMapInspector, $memorySnapshot, "--page-size", $pageSizeFile, "--meminfo", $meminfoFile)
-        if (Test-Path -LiteralPath $liveFdtJson -PathType Leaf) {
-            $memoryMapArgs += @("--fdt-json", $liveFdtJson)
+if (Test-Path -LiteralPath $memorySnapshot -PathType Leaf) {
+    $memoryMapArgs = @($MemoryMapInspector, $memorySnapshot)
+    if (Test-Path -LiteralPath $pageSizeFile -PathType Leaf) {
+        $pageSizeText = (Get-Content -LiteralPath $pageSizeFile -Raw).Trim()
+        if ($pageSizeText -match '^[0-9]+$') {
+            $memoryMapArgs += @("--page-size", $pageSizeFile)
+        } else {
+            Write-Warning "Page size was not exported; CMA PFNs will remain raw while memblock byte ranges are still parsed."
         }
-        $memoryMapArgs += @("-o", (Join-Path $OutputDirectory "memory-map-report.json"))
-        $memoryMapCommandArgs = @()
-        $memoryMapCommandArgs += $pythonArgs
-        $memoryMapCommandArgs += $memoryMapArgs
-        & $pythonExe @memoryMapCommandArgs
-        if ($LASTEXITCODE -ne 0) { throw "CMA/memblock memory map inspection failed." }
     } else {
-        Write-Warning "Page size was not exported; raw debugfs memory snapshot is retained without PFN-to-byte conversion."
+        Write-Warning "Page-size file is missing; CMA PFNs will remain raw while memblock byte ranges are still parsed."
     }
+    if (Test-Path -LiteralPath $meminfoFile -PathType Leaf) {
+        $memoryMapArgs += @("--meminfo", $meminfoFile)
+    }
+    if (Test-Path -LiteralPath $liveFdtJson -PathType Leaf) {
+        $memoryMapArgs += @("--fdt-json", $liveFdtJson)
+    }
+    $memoryMapArgs += @("-o", (Join-Path $OutputDirectory "memory-map-report.json"))
+    $memoryMapCommandArgs = @()
+    $memoryMapCommandArgs += $pythonArgs
+    $memoryMapCommandArgs += $memoryMapArgs
+    & $pythonExe @memoryMapCommandArgs
+    if ($LASTEXITCODE -ne 0) { throw "CMA/memblock memory map inspection failed." }
 }
 
 Write-Host ""
