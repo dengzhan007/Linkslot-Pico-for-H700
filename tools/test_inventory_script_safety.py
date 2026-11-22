@@ -51,6 +51,9 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertIn("& adb @adbPrefix push $Collector $remoteScript", source)
         self.assertIn("& adb @adbPrefix shell sh $remoteScript $BlockDevice $remoteOutput", source)
         self.assertIn("& adb @adbPrefix pull $remoteOutput $OutputDirectory", source)
+        self.assertIn('$FdtInspector = Join-Path $RepoRoot "tools\\inspect_h700_fdt.py"', source)
+        self.assertIn("& $pythonExe @pythonArgs $FdtInspector $liveFdt", source)
+        self.assertIn("& $pythonExe @pythonArgs $FdtInspector $packageDtb", source)
         forbidden = re.compile(
             r"^\\s*&\\s*adb\\b.*\\bshell\\s+(?:reboot|poweroff|fw_setenv|"
             r"flashcp|flash_erase|nandwrite|sunxi-fel)\\b",
