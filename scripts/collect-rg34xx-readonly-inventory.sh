@@ -9,24 +9,24 @@ usage() {
     exit 2
 }
 
-if [ "\${1:-}" = "-h" ] || [ "\${1:-}" = "--help" ]; then
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
     usage
 fi
 
-DISK="\${1:-}"
-OUTDIR="\${2:-}"
+DISK="${1:-}"
+OUTDIR="${2:-}"
 ROOTDEV=""
 
 if [ -z "$DISK" ]; then
     for arg in $(cat /proc/cmdline 2>/dev/null || true); do
         case "$arg" in
-            root=/dev/*) ROOTDEV="\${arg#root=}" ;;
+            root=/dev/*) ROOTDEV="${arg#root=}" ;;
         esac
     done
     case "$ROOTDEV" in
-        /dev/mmcblk*p[0-9]*) DISK="\${ROOTDEV%p*}" ;;
-        /dev/nvme*n*p[0-9]*) DISK="\${ROOTDEV%p*}" ;;
-        /dev/sd[a-z][0-9]*) DISK="\${ROOTDEV%[0-9]*}" ;;
+        /dev/mmcblk*p[0-9]*) DISK="${ROOTDEV%p*}" ;;
+        /dev/nvme*n*p[0-9]*) DISK="${ROOTDEV%p*}" ;;
+        /dev/sd[a-z][0-9]*) DISK="${ROOTDEV%[0-9]*}" ;;
         *)
             echo "error: cannot derive the SD block device from root=$ROOTDEV" >&2
             echo "Pass the whole-disk device explicitly, for example /dev/mmcblk0." >&2
@@ -53,7 +53,7 @@ fi
 }
 mkdir -p "$OUTDIR"
 
-BASE="\${DISK##*/}"
+BASE="${DISK##*/}"
 {
     echo "collector=rg34xx-readonly-inventory-v1"
     echo "disk=$DISK"
