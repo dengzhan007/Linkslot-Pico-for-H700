@@ -192,7 +192,10 @@ Write-Host "The device-side collector only reads the source block device; output
             $memoryMapArgs += @("--fdt-json", $liveFdtJson)
         }
         $memoryMapArgs += @("-o", (Join-Path $OutputDirectory "memory-map-report.json"))
-        & $pythonExe @pythonArgs @memoryMapArgs
+        $memoryMapCommandArgs = @()
+        $memoryMapCommandArgs += $pythonArgs
+        $memoryMapCommandArgs += $memoryMapArgs
+        & $pythonExe @memoryMapCommandArgs
         if ($LASTEXITCODE -ne 0) { throw "CMA/memblock memory map inspection failed." }
     } else {
         Write-Warning "Page size was not exported; raw debugfs memory snapshot is retained without PFN-to-byte conversion."
