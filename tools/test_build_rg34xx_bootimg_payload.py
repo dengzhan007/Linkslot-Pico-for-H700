@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import gzip
+import random
 import struct
 import unittest
 
@@ -88,7 +89,7 @@ class KernelSlotBuilderTests(unittest.TestCase):
         original, _ = make_partition()
         # High-entropy, slot-sized input cannot fit inside the original
         # Android component area; the builder must not consume unused p4 tail.
-        payload = bytearray(256 * 1024)
+        payload = bytearray(random.Random(7).randbytes(256 * 1024))
         payload[:64] = make_arm64_image()[:64]
         payload[0x38:0x3C] = b"ARM\x64"
         struct.pack_into("<Q", payload, 8, 0x80000)
