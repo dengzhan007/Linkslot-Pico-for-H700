@@ -262,12 +262,17 @@ def main() -> None:
     parser.add_argument("--report", type=Path)
     args = parser.parse_args()
 
-    if args.original_partition.resolve() == args.output_partition.resolve():
-        raise PayloadBuildError("output partition path must differ from input")
-    if args.report and args.report.resolve() in (
-        args.original_partition.resolve(), args.payload_image.resolve(),
-    ):
-        raise PayloadBuildError("report path must differ from both input files")
+    input_paths = {args.original_partition.resolve(), args.payload_image.resolve()}
+    output_paths = {args.output_partition.resolve()}
+    if args.report:
+        output_paths.add(args.report.resolve())
+    if len(output_paths) != (2 if args.report else 1):
+        raise PayloadBuildError("output partition and report paths must be distinct")
+    if input_paths & output_paths:
+        raise PayloadBuildError("output/report paths must differ from both input files")
+    existing = [str(path) for path in output_paths if path.exists()]
+    if existing:
+        raise PayloadBuildError("refusing to overwrite existing output(s): " + ", ".join(existing))
 
     original = args.original_partition.read_bytes()
     payload = args.payload_image.read_bytes()
