@@ -92,6 +92,23 @@ class UbootSmcAuditTests(unittest.TestCase):
         self.assertEqual(len(refs), 1)
         self.assertEqual(refs[0]["instruction_offset"], "0x520")
 
+    def test_traces_adr_reference_to_linux_smc_id_constant(self):
+        image = bytearray(0x1600)
+        instruction = 0x14F8
+        target = 0x1510
+        struct.pack_into("<I", image, instruction, 0xE28F0000 | (target - instruction - 8))
+        refs = audit.find_a32_adr_refs(bytes(image), target)
+        self.assertEqual(refs[0]["instruction_offset"], "0x14f8")
+
+    def test_traces_ldr_literal_by_loaded_value(self):
+        image = bytearray(0x1600)
+        instruction = 0x520
+        target = 0x1510
+        immediate = target - instruction - 8
+        struct.pack_into("<I", image, instruction, 0xE59F0000 | immediate)
+        struct.pack_into("<I", image, target, 0x8000FF04)
+        refs = audit.find_a32_ldr_literal_refs_to_value(bytes(image), 0x8000FF04)
+        self.assertEqual(refs[0]["literal_offset"], "0x1510")
     def test_finds_movw_movt_pair_for_linux_smc_id(self):
         image = bytearray(64)
         movw = 0xE3000000 | (0xF << 16) | 0xF04
