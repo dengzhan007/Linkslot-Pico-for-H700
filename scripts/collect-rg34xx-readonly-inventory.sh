@@ -157,6 +157,16 @@ fi
                     cat "$node/$attr"
                 fi
             done
+            for range in "$node"/ranges/*; do
+                [ -d "$range" ] || continue
+                echo "-- $range --"
+                for attr in base_pfn count; do
+                    if [ -r "$range/$attr" ]; then
+                        echo "[$attr]"
+                        cat "$range/$attr"
+                    fi
+                done
+            done
         done
     else
         echo "NOT_PRESENT: /sys/kernel/debug/cma"
