@@ -41,7 +41,6 @@ fi
 }
 command -v dd >/dev/null 2>&1 || { echo "error: dd not found" >&2; exit 1; }
 command -v sha256sum >/dev/null 2>&1 || { echo "error: sha256sum not found" >&2; exit 1; }
-command -v od >/dev/null 2>&1 || { echo "error: od not found" >&2; exit 1; }
 
 if [ -z "$OUTDIR" ]; then
     STAMP="$(date +%Y%m%d-%H%M%S 2>/dev/null || echo run)"
