@@ -20,6 +20,8 @@ CHECKSUM_STAMP = 0x5F0A6C39
 ITEM_TABLE_OFFSET = 64
 ITEM_SIZE = 368
 A32_SMC0 = struct.pack("<I", 0xE1600070)
+THUMB_SMC_T1_PREFIX = 0xF7F0
+THUMB_SMC_T1_SECOND = 0x8000
 CONSTANTS = {
     "vendor_linux_smc_0x8000ff04": struct.pack("<I", 0x8000FF04),
     "kernel_entry_0x40080000": struct.pack("<I", 0x40080000),
@@ -307,6 +309,68 @@ def find_movw_movt_smc_id(data: bytes) -> list[dict[str, str]]:
     return matches
 
 
+
+def find_thumb_smc_sites(data: bytes) -> list[dict[str, Any]]:
+    """Find Thumb-2 SMC T1 encodings: first halfword F7F[imm4], second 8000."""
+    sites = []
+    for offset in range(0, len(data) - 3, 2):
+        first, second = struct.unpack_from("<HH", data, offset)
+        if (first & 0xFFF0) == THUMB_SMC_T1_PREFIX and second == THUMB_SMC_T1_SECOND:
+            sites.append({
+                "file_offset": f"0x{offset:x}",
+                "immediate": first & 0xF,
+                "bytes": data[offset:offset + 4].hex(),
+                "disassembly": disassemble_thumb_window(data, offset, 0x20),
+            })
+    return sites
+
+
+def disassemble_thumb_window(data: bytes, offset: int, radius: int = 0x20) -> list[dict[str, Any]]:
+    start = max(0, offset - radius)
+    start -= start % 2
+    end = min(len(data), offset + radius + 4)
+    end -= (end - start) % 2
+    try:
+        from capstone import Cs, CS_ARCH_ARM, CS_MODE_THUMB
+    except ImportError:
+        return [{"capstone": "not-installed", "raw_hex": data[start:end].hex(),
+                 "window_offset": f"0x{start:x}"}]
+    engine = Cs(CS_ARCH_ARM, CS_MODE_THUMB)
+    return [{
+        "offset": f"0x{ins.address:x}",
+        "bytes": ins.bytes.hex(),
+        "mnemonic": ins.mnemonic,
+        "operands": ins.op_str,
+    } for ins in engine.disasm(data[start:end], start)]
+
+
+def find_thumb_callers_to_targets(data: bytes, targets: list[int]) -> dict[str, list[dict[str, Any]]]:
+    """Decode Thumb-2 BL/BLX candidates at each halfword and retain target matches."""
+    result = {f"0x{target:x}": [] for target in targets}
+    try:
+        from capstone import Cs, CS_ARCH_ARM, CS_MODE_THUMB
+    except ImportError:
+        return {"capstone": []}
+    engine = Cs(CS_ARCH_ARM, CS_MODE_THUMB)
+    for offset in range(0, len(data) - 3, 2):
+        for ins in engine.disasm(data[offset:offset + 4], offset, count=1):
+            if ins.mnemonic not in ("bl", "blx"):
+                break
+            try:
+                operand = ins.op_str.strip().lstrip("#")
+                target = int(operand, 0)
+            except ValueError:
+                break
+            if target in targets:
+                result[f"0x{target:x}"].append({
+                    "callsite": f"0x{offset:x}",
+                    "mnemonic": ins.mnemonic,
+                    "disassembly": disassemble_thumb_window(data, offset, 0x20),
+                })
+            break
+    return result
+
+
 def scan_uboot(uboot: bytes, context_bytes: int = 0x50) -> dict[str, Any]:
     smc_offsets = occurrences(uboot, A32_SMC0)
     constant_offsets = {
@@ -346,6 +410,8 @@ def scan_uboot(uboot: bytes, context_bytes: int = 0x50) -> dict[str, Any]:
         "uboot_bytes": len(uboot),
         "uboot_sha256": sha256(uboot),
         "a32_smc0_sites": sites,
+        "thumb2_smc_t1_sites": find_thumb_smc_sites(uboot),
+        "thumb2_direct_callers_of_smc_wrappers": find_thumb_callers_to_targets(uboot, wrapper_entries),
         "provisional_smc_wrapper_entries": [f"0x{x:x}" for x in wrapper_entries],
         "direct_callers_of_smc_wrappers": wrapper_callers,
         "movw_movt_constructed_linux_smc_id": find_movw_movt_smc_id(uboot),
