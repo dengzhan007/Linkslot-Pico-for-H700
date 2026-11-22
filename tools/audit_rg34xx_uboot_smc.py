@@ -469,6 +469,10 @@ def scan_uboot(uboot: bytes, context_bytes: int = 0x50) -> dict[str, Any]:
             f"0x{x:x}": disassemble_thumb_range(uboot, x, 0x180)
             for x in (0xBF8, 0xC3E, 0x3C340, 0x3F6C8, 0x1600, 0x181C, 0x195A, 0xB7A, 0xB8E, 0x18D6, 0xB64, 0xB7E, 0x18C4, 0x1E04, 0x3C284)
         },
+        "handoff_cache_arm_wrappers": {
+            f"0x{x:x}": disassemble_arm_window(uboot, x, 0x60)
+            for x in (0xA5C, 0xB08)
+        },
         "handoff_gate_0x27dc": disassemble_thumb_range(uboot, 0x27DC, 0x20),
         "thumb2_handoff_related_constant_refs": {
             "kernel_entry_literals": {
