@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Parse and extract the H700 TOC1 layout used by the BaseOS boot-chain audit."""
+"""Parse and extract the Allwinner H700 TOC1 package used by RG34XX."""
 
 from __future__ import annotations
 
@@ -15,8 +15,12 @@ from typing import Any
 HEADER_BYTES = 64
 ITEM_BYTES = 368
 ITEM_NAME_BYTES = 64
-ITEM_LIMIT = 16
+ITEM_COUNT = 4
 TOC1_BYTES = 0x140000
+TOC1_MAGIC = b"sunxi-package\0\0\0"
+TOC1_MAGIC_WORD = 0x89119800
+CHECKSUM_STAMP = 0x5F0A6C39
+ITEM_NAMES = {"u-boot", "monitor", "dtbo", "dtb"}
 SAFE_NAME = re.compile(r"^[A-Za-z0-9_.+-]+$")
 
 
@@ -28,28 +32,52 @@ def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def parse_toc1(data: bytes) -> dict[str, Any]:
-    """Validate the TOC1 directory and return item metadata and bytes.
+def allwinner_checksum(data: bytes) -> int:
+    """Return the Allwinner package checksum with checksum word at byte 20."""
+    if len(data) % 4:
+        raise Toc1Error("TOC1 package length is not 4-byte aligned")
+    words = struct.unpack(f"<{len(data) // 4}I", data)
+    return (sum(words) - words[5] + CHECKSUM_STAMP) & 0xFFFFFFFF
 
-    The offsets and item stride follow the parser used in
-    BaseOS-MultiFrontend/experiments/h700-boot-speed/spl/vendor-handoff.c:
-    item table at 64, stride 368, item offset/size at +64/+68.
+
+def parse_toc1(data: bytes) -> dict[str, Any]:
+    """Validate the Allwinner TOC1 header, directory, item ranges and checksum.
+
+    Layout follows BaseOS-MultiFrontend/tools/kernel_gzip.py and
+    experiments/h700-boot-speed/spl/vendor-handoff.c:
+    64-byte header; four 368-byte items at byte 64; item start/size and
+    encryption/type words at item offsets +64/+68/+72/+76.
     """
     if len(data) < HEADER_BYTES:
         raise Toc1Error(f"input is shorter than the {HEADER_BYTES}-byte header")
+    if len(data) > TOC1_BYTES:
+        raise Toc1Error(
+            f"input size 0x{len(data):x} exceeds the audited 0x{TOC1_BYTES:x}-byte package"
+        )
+    if data[:16] != TOC1_MAGIC:
+        raise Toc1Error("invalid Allwinner TOC1 package magic")
+    magic_word = struct.unpack_from("<I", data, 16)[0]
+    if magic_word != TOC1_MAGIC_WORD:
+        raise Toc1Error(f"unexpected TOC1 magic word 0x{magic_word:08x}")
+
+    stored_checksum, = struct.unpack_from("<I", data, 20)
+    calculated_checksum = allwinner_checksum(data)
+    if stored_checksum != calculated_checksum:
+        raise Toc1Error(
+            f"TOC1 checksum mismatch: stored 0x{stored_checksum:08x}, "
+            f"calculated 0x{calculated_checksum:08x}"
+        )
 
     count, declared_size = struct.unpack_from("<II", data, 32)
-    if count < 1 or count > ITEM_LIMIT:
-        raise Toc1Error(f"item count {count} is outside 1..{ITEM_LIMIT}")
+    if count != ITEM_COUNT:
+        raise Toc1Error(f"expected {ITEM_COUNT} TOC1 items, found {count}")
     if declared_size != len(data):
         raise Toc1Error(
             f"declared package size 0x{declared_size:x} does not match "
             f"input size 0x{len(data):x}"
         )
-    if declared_size > TOC1_BYTES:
-        raise Toc1Error(
-            f"package size 0x{declared_size:x} exceeds the audited 0x{TOC1_BYTES:x}-byte window"
-        )
+    if data[60:64] != b"MIE;":
+        raise Toc1Error("missing TOC1 MIE; table marker")
 
     table_end = HEADER_BYTES + count * ITEM_BYTES
     if table_end > declared_size:
@@ -75,10 +103,16 @@ def parse_toc1(data: bytes) -> dict[str, Any]:
             raise Toc1Error(f"duplicate item name: {name}")
         names.add(name)
 
-        offset, size = struct.unpack_from("<II", item_header, ITEM_NAME_BYTES)
+        offset, size, encryption, kind = struct.unpack_from("<4I", item_header, ITEM_NAME_BYTES)
         end = offset + size
         if size == 0:
             raise Toc1Error(f"item {name} has zero length")
+        if encryption != 0 or kind != 3:
+            raise Toc1Error(
+                f"item {name} has unsupported encryption/type values {encryption}/{kind}"
+            )
+        if item_header[364:368] != b"IIE;":
+            raise Toc1Error(f"item {name} is missing its IIE; footer")
         if offset < table_end:
             raise Toc1Error(f"item {name} overlaps the TOC1 header/table")
         if end > declared_size or end < offset:
@@ -98,6 +132,11 @@ def parse_toc1(data: bytes) -> dict[str, Any]:
             }
         )
 
+    if names != ITEM_NAMES:
+        raise Toc1Error(
+            "unexpected TOC1 components: " + ", ".join(sorted(names))
+        )
+
     ranges.sort()
     for previous, current in zip(ranges, ranges[1:]):
         if current[0] < previous[1]:
@@ -109,6 +148,7 @@ def parse_toc1(data: bytes) -> dict[str, Any]:
         "package_bytes": len(data),
         "package_sha256": sha256(data),
         "declared_item_count": count,
+        "stored_checksum": f"0x{stored_checksum:08x}",
         "items": items,
     }
 
@@ -139,16 +179,17 @@ def extract_toc1(input_path: Path, output_dir: Path) -> dict[str, Any]:
         )
 
     manifest = {
-        "format": "BaseOS H700 TOC1 item directory layout",
+        "format": "Allwinner H700 TOC1 item directory",
         "source_file": input_path.name,
         "package_bytes": parsed["package_bytes"],
         "package_sha256": parsed["package_sha256"],
+        "stored_checksum": parsed["stored_checksum"],
         "declared_item_count": parsed["declared_item_count"],
         "items": manifest_items,
         "limitations": [
-            "This parses the TOC1 item directory layout used by the audited BaseOS H700 code.",
-            "It does not authenticate signatures, validate Boot0, or prove a live handoff ABI.",
-            "The package hash is an input fingerprint, not a per-boot hardware attestation.",
+            "This validates the known RG34XX H700 TOC1 container layout and checksum.",
+            "It does not authenticate a vendor signature, parse Boot0 DRAM training, or prove a live handoff ABI.",
+            "The package hash is a byte-level fingerprint, not a per-boot hardware attestation.",
         ],
     }
     (output_dir / "manifest.json").write_text(
@@ -177,6 +218,7 @@ def main() -> int:
         return 1
 
     print(f"TOC1 SHA-256: {manifest['package_sha256']}")
+    print(f"TOC1 checksum: {manifest['stored_checksum']}")
     print(f"Items: {manifest['declared_item_count']}")
     for item in manifest["items"]:
         print(
