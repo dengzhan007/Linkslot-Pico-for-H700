@@ -16,13 +16,20 @@ fi
 DISK="${1:-}"
 OUTDIR="${2:-}"
 ROOTDEV=""
+ROOTARG=""
+
+# Always record the root= argument, even when the whole-disk device was
+# supplied explicitly by the Windows ADB wrapper.
+for arg in $(cat /proc/cmdline 2>/dev/null || true); do
+    case "$arg" in
+        root=*) ROOTARG="${arg#root=}" ;;
+    esac
+done
+case "$ROOTARG" in
+    /dev/*) ROOTDEV="$ROOTARG" ;;
+esac
 
 if [ -z "$DISK" ]; then
-    for arg in $(cat /proc/cmdline 2>/dev/null || true); do
-        case "$arg" in
-            root=/dev/*) ROOTDEV="${arg#root=}" ;;
-        esac
-    done
     case "$ROOTDEV" in
         /dev/mmcblk*p[0-9]*) DISK="${ROOTDEV%p*}" ;;
         /dev/nvme*n*p[0-9]*) DISK="${ROOTDEV%p*}" ;;
@@ -56,6 +63,7 @@ BASE="${DISK##*/}"
 {
     echo "collector=rg34xx-readonly-inventory-v1"
     echo "disk=$DISK"
+    echo "root_argument_from_cmdline=$ROOTARG"
     echo "root_device_from_cmdline=$ROOTDEV"
     echo "captured_at=$(date 2>/dev/null || echo unknown)"
     echo "block_device_bytes:"
