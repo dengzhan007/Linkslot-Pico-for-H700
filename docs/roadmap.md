@@ -32,7 +32,7 @@
 - [x] 审查 BaseOS 已提交的 Boot0/TOC1/U-Boot/monitor 结构、AArch32 BL33 返回状态及 A32→A64 Linux SMC 交接；形成[启动交接审计报告](rg34xx-boot-handoff-audit.md)。该项是源代码/模拟证据审计，不代表目标掌机已验证。
 - [x] 建立[目标机只读 inventory 脚本](../scripts/collect-rg34xx-readonly-inventory.sh)、Boot0 eGON/checksum/DRAM 候选解析器、Allwinner TOC1 校验/提取器、H700 FDT/RAM/reserved-memory 解析器及静态只读安全回归；主机合成测试覆盖 Boot0、TOC1、FDT。
 - [x] 在 RG34XX 非 SP 实机运行首轮[只读采集流程](rg34xx-readonly-inventory.md)，完成 Boot0/TOC1 checksum、组件提取与 hash、live FDT、GPT、/proc/iomem 和 meminfo 检查；现场结论见[实机 Inventory 报告](rg34xx-live-inventory-2026-11-22.md)。
-- [ ] 取得 U-Boot env 分区内容并解释 GPT p6/p7 与 /proc/cmdline partitions= 字符串不一致；确认 bootcmd、镜像加载路径和当前启动配置。
+- [ ] 读取完整 U-Boot env 分区并验证 CRC/ENV_SIZE；结合目标机实际 U-Boot 路径确认 bootcmd 的存储介质自动改写行为及启动镜像加载流程。
 - [ ] 确认 BROM 当前选择的 Boot0 副本、DRAM training 选择结果，以及 monitor/secure world、framebuffer、CMA、DMA 和 loader 的完整保留内存范围；live FDT 显示 1 GiB 不等于整段 RAM 可供 payload 使用。
 - [ ] 选定保留原厂 U-Boot 还是采用 A64 SPL + vendor monitor + A32 BL33；先完成入口/恢复设计评审，不试写启动区域。
 - [ ] 建立最小 A32 handoff adapter + AArch64 payload；实机验证 CurrentEL、SPSR、参数寄存器、栈、异常向量、GIC、MMU/cache/TLB 与 FDT/内存边界。
