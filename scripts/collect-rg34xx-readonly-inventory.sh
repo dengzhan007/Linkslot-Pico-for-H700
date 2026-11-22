@@ -139,9 +139,44 @@ else
 fi
 
 if command -v dmesg >/dev/null 2>&1; then
-    dmesg 2>/dev/null | grep -iE 'sunxi|dram|memory|lcd|panel|backlight|axp|pmic|mmc|boot|uart|serial|reserved' \
+    dmesg 2>/dev/null | grep -iE 'sunxi|dram|memory|lcd|panel|backlight|axp|pmic|mmc|boot|uart|serial|reserved|cma|memblock|framebuffer|boot_fb|disp_reserve|secure|tee|bl31' \
         > "$OUTDIR/dmesg-hardware-lines.txt" || true
 fi
+
+# Capture physical CMA/memblock layout when the running kernel exposes it via
+# debugfs. These are reads only; do not touch the CMA alloc/free control files.
+{
+    echo "== CMA debugfs =="
+    if [ -d /sys/kernel/debug/cma ]; then
+        for node in /sys/kernel/debug/cma/*; do
+            [ -d "$node" ] || continue
+            echo "-- $node --"
+            for attr in base_pfn count order_per_bit used; do
+                if [ -r "$node/$attr" ]; then
+                    echo "[$attr]"
+                    cat "$node/$attr"
+                fi
+            done
+        done
+    else
+        echo "NOT_PRESENT: /sys/kernel/debug/cma"
+    fi
+    echo
+    echo "== memblock debugfs =="
+    if [ -d /sys/kernel/debug/memblock ]; then
+        for name in memory reserved; do
+            file="/sys/kernel/debug/memblock/$name"
+            if [ -r "$file" ]; then
+                echo "[$name]"
+                cat "$file"
+            else
+                echo "NOT_PRESENT: $file"
+            fi
+        done
+    else
+        echo "NOT_PRESENT: /sys/kernel/debug/memblock"
+    fi
+} > "$OUTDIR/debugfs-memory-reservations.txt"
 
 # Read-only source offsets used by the BaseOS H700 firmware investigation:
 # Boot0 copies at LBA 16 and 512; TOC1 at LBA 32800.
