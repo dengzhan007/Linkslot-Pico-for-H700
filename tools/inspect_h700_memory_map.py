@@ -179,26 +179,36 @@ def _normalize_cma(areas: list[dict[str, Any]], page_size: int) -> list[dict[str
     return normalized
 
 
-def inspect_snapshot(debugfs_path: Path, page_size_path: Path,
+def inspect_snapshot(debugfs_path: Path, page_size_path: Path | None = None,
                      fdt_path: Path | None = None,
                      meminfo_path: Path | None = None) -> dict[str, Any]:
     if not debugfs_path.is_file():
         raise MemoryMapError(f"debugfs snapshot not found: {debugfs_path}")
-    page_size = _read_integer(page_size_path)
-    if page_size is None or page_size <= 0:
-        raise MemoryMapError(f"page size is missing or invalid: {page_size_path}")
+    page_size = _read_integer(page_size_path) if page_size_path else None
+    if page_size is not None and page_size <= 0:
+        page_size = None
 
     parsed = _parse_debugfs(debugfs_path.read_text(encoding="utf-8", errors="replace"))
+    limitations = [
+        "CMA PFN ranges identify CMA-managed physical pages; they do not by themselves describe every secure-world or device-specific reservation.",
+        "memblock data can be absent after boot on kernels that do not preserve memblock arrays; absence is not proof that no reserved regions exist.",
+        "This report is based only on the captured read-only debugfs snapshot.",
+    ]
+    if page_size is None:
+        limitations.append(
+            "PAGE_SIZE is unavailable: CMA PFNs are retained as raw PFN/count values and are not converted to physical byte ranges. "
+            "Memblock ranges are already physical byte addresses and are still parsed."
+        )
     report: dict[str, Any] = {
         "page_size_bytes": page_size,
-        "cma_areas": _normalize_cma(parsed["cma_areas"], page_size),
+        "cma_pfns_normalized": page_size is not None,
+        "cma_areas": (
+            _normalize_cma(parsed["cma_areas"], page_size)
+            if page_size is not None else parsed["cma_areas"]
+        ),
         "memblock": parsed["memblock"],
         "debugfs_presence": parsed["presence"],
-        "limitations": [
-            "CMA PFN ranges identify CMA-managed physical pages; they do not by themselves describe every secure-world or device-specific reservation.",
-            "memblock data can be absent after boot on kernels that do not preserve memblock arrays; absence is not proof that no reserved regions exist.",
-            "This report is based only on the captured read-only debugfs snapshot.",
-        ],
+        "limitations": limitations,
     }
     if fdt_path and fdt_path.is_file():
         fdt = json.loads(fdt_path.read_text(encoding="utf-8"))
@@ -220,7 +230,7 @@ def inspect_snapshot(debugfs_path: Path, page_size_path: Path,
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("debugfs_snapshot", type=Path)
-    parser.add_argument("--page-size", type=Path, required=True)
+    parser.add_argument("--page-size", type=Path)
     parser.add_argument("--fdt-json", type=Path)
     parser.add_argument("--meminfo", type=Path)
     parser.add_argument("-o", "--output", type=Path)
