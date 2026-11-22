@@ -124,6 +124,13 @@ class UbootSmcAuditTests(unittest.TestCase):
             audit.find_word_pointer_refs(bytes(image), 0x4A000B18),
             ["0x20"],
         )
+    def test_finds_thumb2_smc_t1_encoding(self):
+        image = bytearray(128)
+        struct.pack_into("<HH", image, 0x42, 0xF7F0, 0x8000)
+        struct.pack_into("<HH", image, 0x70, 0xF7F5, 0x8000)
+        sites = audit.find_thumb_smc_sites(bytes(image))
+        self.assertEqual([site["file_offset"] for site in sites], ["0x42", "0x70"])
+        self.assertEqual([site["immediate"] for site in sites], [0, 5])
     def test_reads_toc1_from_inventory_zip(self):
         package = make_toc1()
         with tempfile.TemporaryDirectory() as tmp:
