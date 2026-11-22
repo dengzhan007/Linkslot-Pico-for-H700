@@ -18,7 +18,7 @@ mkdir -p "$OUT_DIR"
 
 COMMON_FLAGS=(
     --target=aarch64-none-elf
-    -mcpu=cortex-a55
+    -mcpu=cortex-a53
     -mgeneral-regs-only
     -ffreestanding
     -fno-builtin
