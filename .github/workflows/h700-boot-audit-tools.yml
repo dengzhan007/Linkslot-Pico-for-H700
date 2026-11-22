@@ -1,0 +1,34 @@
+name: H700 boot audit tools
+
+on:
+  push:
+    paths:
+      - "scripts/collect-rg34xx-readonly-inventory.sh"
+      - "tools/**"
+      - "docs/rg34xx-boot-handoff-audit.md"
+      - "docs/rg34xx-readonly-inventory.md"
+      - ".github/workflows/h700-boot-audit-tools.yml"
+  pull_request:
+    paths:
+      - "scripts/collect-rg34xx-readonly-inventory.sh"
+      - "tools/**"
+      - "docs/rg34xx-boot-handoff-audit.md"
+      - "docs/rg34xx-readonly-inventory.md"
+      - ".github/workflows/h700-boot-audit-tools.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  host-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate shell syntax
+        run: sh -n scripts/collect-rg34xx-readonly-inventory.sh
+
+      - name: Run TOC1 parser tests
+        run: python3 -m unittest discover -s tools -p "test_*.py" -v
