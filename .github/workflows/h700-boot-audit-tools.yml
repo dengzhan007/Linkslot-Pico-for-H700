@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "scripts/collect-rg34xx-readonly-inventory.sh"
+      - "scripts/run-rg34xx-inventory.ps1"
       - "tools/**"
       - "docs/rg34xx-boot-handoff-audit.md"
       - "docs/rg34xx-readonly-inventory.md"
@@ -32,3 +33,21 @@ jobs:
 
       - name: Run TOC1 parser tests
         run: python3 -m unittest discover -s tools -p "test_*.py" -v
+
+  windows-powershell:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Windows inventory wrapper syntax
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          $path = (Resolve-Path "scripts/run-rg34xx-inventory.ps1").Path
+          [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | Format-List | Out-String | Write-Error
+            exit 1
+          }
