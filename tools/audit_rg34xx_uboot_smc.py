@@ -569,6 +569,13 @@ def scan_uboot(uboot: bytes, context_bytes: int = 0x50) -> dict[str, Any]:
             "thumb": disassemble_thumb_range(uboot, 0xF680, 0x90),
             "arm": disassemble_arm_window(uboot, 0xF698, 0x40),
         },
+        "vendor_android_kernel_loader_helpers": {
+            f"0x{x:x}": disassemble_thumb_range(uboot, x, 0x100)
+            for x in (0x123D4, 0x12500, 0x125C0, 0x12300, 0xF5AC, 0xF7B8, 0xF7C0, 0xF7F6)
+        },
+        "vendor_android_kernel_loader_helper_callers": find_thumb_callers_to_targets(
+            uboot, [0x123D4, 0x12500, 0x125C0, 0x12300]
+        ),
         "thumb_literal_refs_to_boot_addresses": {
             f"0x{value:x}": find_thumb_ldr_literal_refs_to_value(uboot, value)
             for value in (0x40080000, 0x42000000, 0x44000000)
