@@ -52,6 +52,8 @@ bash scripts/build-h700-objects.sh
 ## 重要设计文档
 
 - [RG34XX 硬件基线](docs/rg34xx-hardware-profile.md)
+- [RG34XX 启动交接审计](docs/rg34xx-boot-handoff-audit.md)
+- [RG34XX 首轮实机只读 Inventory](docs/rg34xx-live-inventory-2026-11-22.md)
 - [总体架构与硬件边界](docs/architecture.md)
 - [已确认的设计决策](docs/decisions.md)
 - [模拟器与存档兼容性](docs/emulator-save-compatibility.md)
