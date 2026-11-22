@@ -419,3 +419,25 @@ live FDT 还声明了三类 Allwinner ION heap：
 148 行硬件日志中没有 CMA base、memblock owner、BL31/ATF carveout 或 secure-memory 范围的直接输出；这是对该筛选日志文件的结论，不是对整个内核所有日志通道的否定。framebuffer `[0x7bf24800,0x7c076000)` 仍须独立排除。
 
 **当前没有批准任何 Linkslot payload load/entry address。**下一步应优先获取设备上的 ION heap/debug 接口（若该内核实际导出）、TEE 设备节点和更完整的启动日志，并审查 monitor 的 SMC/内存访问边界；对未知 16 MiB 段和 top-of-RAM 碎片继续按保留区处理。
+
+### 9.6 同版本 Allwinner ION 驱动揭示的独立 DRM SMC 路径（比较性源码证据）
+
+本机 uname 报告 Linux 4.9.170，平台为 allwinner,h616 / sun50iw9p1。公开的 Allwinner T507/H700 系列参考树 qiaoweibiao/T507_Kernel 的 Makefile 同样是 Linux 4.9.170，且包含 sun50iw9p1 配置和 Allwinner ION/OP-TEE 代码。它是与本机版本/平台相符的比较性源码参考，尚未证明就是 RG34XX 当前内核的精确构建源码。
+
+在该参考树中：
+- drivers/staging/android/ion/sunxi/sunxi_ion.c 的 sunxi_ion_probe() 在 CONFIG_TEE 条件下遇到 ION_HEAP_TYPE_SECURE 时，会调用 optee_probe_drm_configure()，把返回值写入 secure heap 的 base/size，并保存 tee_base。
+- drivers/tee/optee/core.c 中的 optee_probe_drm_configure() 是独立于标准 OP-TEE API UID 检查的 vendor SMC 路径：它调用 OPTEE_SMC_GET_DRM_INFO，成功时取 res.a1/a2/a3 作为 drm_base/drm_size/tee_base，并通过 printk 输出这些数值；失败则输出 drm config service not available。
+- 同一份 core.c 的标准 OP-TEE optee_probe() 会先调用 OPTEE_SMC_CALLS_UID，UID 不匹配即返回 -EINVAL。因此日志中的 api uid mismatch 只证明标准 OP-TEE 驱动 probe 没有继续；它不能单独证明另一条由 ION 驱动触发的 vendor GET_DRM_INFO SMC 也必然失败。
+- ion_secure_heap.c 会使用提供的 base/size 创建 gen_pool。FDT 中的 heap-base=0/heap-size=0 可能只是平台 heap parser 初始化时的初始值；在启用上述 CONFIG_TEE ION 路径并且 sunxi_ion driver probe 成功时，实际值可能再由 vendor SMC 填入。此处只是依据比较性源码说明一种可能的数据流，不表示本机已经走到该路径。
+
+参考源码（均固定在同一公开源码 commit）：
+- [sunxi_ion.c：secure heap 的 CONFIG_TEE/DRM 查询](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/staging/android/ion/sunxi/sunxi_ion.c)
+- [optee core.c：GET_DRM_INFO 与标准 OP-TEE UID probe](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/tee/optee/core.c)
+- [ion_secure_heap.c：base/size 建立 gen_pool](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/staging/android/ion/ion_secure_heap.c)
+- [sun50iw9p1 defconfig](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/arch/arm64/configs/sun50iw9p1smp_defconfig)：默认配置中 CONFIG_TEE 未开启；但该文件是通用 defconfig，不是本机运行内核 config，不能据此断言本机未启用 TEE。
+
+第四轮 /proc/iomem 只把 [0x40000000,0x80000000) 标成 System RAM，并将 kernel code/data 标出；没有给 [0x7ec00000,0x7fc00000) 标注 owner。归档中也没有 /proc/config.gz、ION debugfs、ION platform driver 信息或完整 dmesg；筛选日志中未出现 drm_base、drm_size、tee_base。因此未知 16 MiB 与 vendor DRM/secure heap 的关联现在是值得优先验证的假设，而不是归属结论。
+
+为下一轮采集，scripts/collect-rg34xx-readonly-inventory.sh 已新增 tee-ion-runtime.txt，只读检查 config export、/dev/ion、TEE 设备节点、/sys/kernel/debug/ion/heaps/{sys_user,cma,secure}、ion-sunxi platform driver 绑定、/proc/modules 和相关 dmesg。它不会调用 GET_DRM_INFO、ION ioctl 或写入 debugfs。需要真实设备下一轮报告来判断：ION driver 是否绑定、secure heap 是否创建、vendor SMC 是否成功及返回的物理范围。
+
+当前仍不把 [0x7ec00000,0x7fc00000) 标成 secure/DRM heap，也不释放、不使用；payload load/entry 依旧没有批准。
