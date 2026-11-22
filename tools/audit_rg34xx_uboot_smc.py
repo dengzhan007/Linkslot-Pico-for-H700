@@ -412,6 +412,16 @@ def scan_uboot(uboot: bytes, context_bytes: int = 0x50) -> dict[str, Any]:
         "a32_smc0_sites": sites,
         "thumb2_smc_t1_sites": find_thumb_smc_sites(uboot),
         "thumb2_direct_callers_of_smc_wrappers": find_thumb_callers_to_targets(uboot, wrapper_entries),
+        "thumb2_handoff_windows": {
+            f"0x{x:x}": disassemble_thumb_window(uboot, x, 0x100)
+            for x in (0x1080, 0x1474, 0x14E4)
+        },
+        "thumb2_handoff_related_constant_refs": {
+            "kernel_entry_literals": {
+                f"0x{x:x}": find_a32_ldr_literal_refs_to_value(uboot, 0x40080000)
+                for x in occurrences(uboot, CONSTANTS["kernel_entry_0x40080000"])
+            },
+        },
         "provisional_smc_wrapper_entries": [f"0x{x:x}" for x in wrapper_entries],
         "direct_callers_of_smc_wrappers": wrapper_callers,
         "movw_movt_constructed_linux_smc_id": find_movw_movt_smc_id(uboot),
