@@ -34,7 +34,7 @@ jobs:
         run: python3 -m pip install --quiet capstone
 
       - name: Run host tests
-        run: python3 -m unittest tools.test_audit_rg34xx_uboot_smc -v
+        run: python3 -m unittest discover -s tools -p "test_audit_rg34xx_uboot_smc.py" -v
 
       - name: Scan the current RG34XX TOC1 U-Boot
         run: |
