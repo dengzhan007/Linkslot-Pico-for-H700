@@ -52,7 +52,15 @@ LBA 16、512、32800 和 TOC1 长度 0x140000 来自 BaseOS-MultiFrontend 的 H7
 
 如果不提供第一个参数，脚本会尝试从 /proc/cmdline 的 root=/dev/... 推导整盘设备；若系统使用 PARTUUID 等 root 形式，必须显式传入整盘设备，且先人工确认它确实是当前 RG34XX 启动 SD 卡。
 
-## 在电脑上解析 TOC1
+## 在电脑上解析 Boot0 与 TOC1
+
+分别检查两份 Boot0 副本：
+
+    python3 tools/inspect_h700_boot0.py ./rg34xx-readonly-inventory/boot0-primary.bin -o ./rg34xx-readonly-inventory/boot0-primary.json
+    python3 tools/inspect_h700_boot0.py ./rg34xx-readonly-inventory/boot0-secondary.bin -o ./rg34xx-readonly-inventory/boot0-secondary.json
+
+工具会验证 64 KiB eGON.BT0 标记、镜像长度及 Allwinner checksum，并输出 0x38、0x9f4、0xa74 三组 32-word DRAM 参数候选。0x38 主候选位于 Boot0 第一扇区，可能在 DRAM training 时变化，因此同时报告整段 SHA-256、第一扇区 SHA-256 和第一扇区之后的主体 SHA-256。它不会仅凭参数内容断言实际训练成功，也不会据此自动生成 DRAM 设置。
+
 
 在项目仓库根目录执行：
 
@@ -80,4 +88,4 @@ LBA 16、512、32800 和 TOC1 长度 0x140000 来自 BaseOS-MultiFrontend 的 H7
 
 ## 验证
 
-主机 CI 对采集脚本运行 sh -n，并用纯合成 TOC1 数据测试解析器的有效包、Allwinner checksum、错误 magic、项目数、重复名称、越界、重叠、非法名称和 IIE; 尾标记处理。它不需要真实设备固件，也不会向硬件写入。
+主机 CI 对采集脚本运行 sh -n，静态检查所有 dd 输出都指向报告目录，并用纯合成数据测试 Boot0 checksum/DRAM 候选解析和 TOC1 的有效包、Allwinner checksum、错误 magic、项目数、重复名称、越界、重叠、非法名称及 IIE; 尾标记处理。它不需要真实设备固件，也不会向硬件写入。
