@@ -1,0 +1,32 @@
+name: H700 AArch64 compile check
+
+on:
+  push:
+    paths:
+      - "platform/h700/**"
+      - "scripts/build-h700-objects.sh"
+      - ".github/workflows/h700-arch-check.yml"
+  pull_request:
+    paths:
+      - "platform/h700/**"
+      - "scripts/build-h700-objects.sh"
+      - ".github/workflows/h700-arch-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile-aarch64-objects:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install LLVM toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm
+
+      - name: Compile freestanding AArch64 objects
+        run: bash scripts/build-h700-objects.sh
