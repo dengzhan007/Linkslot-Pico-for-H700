@@ -6,8 +6,7 @@ on:
       - "scripts/collect-rg34xx-readonly-inventory.sh"
       - "scripts/run-rg34xx-inventory.ps1"
       - "tools/**"
-      - "docs/rg34xx-boot-handoff-audit.md"
-      - "docs/rg34xx-readonly-inventory.md"
+      - "docs/**"
       - ".github/workflows/h700-boot-audit-tools.yml"
   pull_request:
     paths:
