@@ -54,6 +54,8 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertIn('$FdtInspector = Join-Path $RepoRoot "tools\\inspect_h700_fdt.py"', source)
         self.assertIn("& $pythonExe @pythonArgs $FdtInspector $liveFdt", source)
         self.assertIn("& $pythonExe @pythonArgs $FdtInspector $packageDtb", source)
+        self.assertIn('$EnvInspector = Join-Path $RepoRoot "tools\\inspect_h700_env.py"', source)
+        self.assertIn("& $pythonExe @pythonArgs $EnvInspector $envImage", source)
         forbidden = re.compile(
             r"^\\s*&\\s*adb\\b.*\\bshell\\s+(?:reboot|poweroff|fw_setenv|"
             r"flashcp|flash_erase|nandwrite|sunxi-fel)\\b",
@@ -66,7 +68,11 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertIn('for node in /sys/class/block/"$BASE"p*', self.source)
         self.assertIn("grep -qx 'PARTNAME=env' \"$node/uevent\"", self.source)
         self.assertIn('ENV_PART="/dev/$ENV_DEVNAME"', self.source)
-        self.assertIn('of="$OUTDIR/env-partition-first64k.bin"', self.source)
+        self.assertIn('ENV_MAX_SECTORS=131072', self.source)
+        self.assertIn('ENV_BYTES=$((ENV_PART_SIZE * 512))', self.source)
+        self.assertIn('of="$OUTDIR/env-partition.bin"', self.source)
+        self.assertIn('count="$ENV_PART_SIZE"', self.source)
+        self.assertNotIn("env-partition-first64k.bin", self.source)
         self.assertNotIn("/dev/mmcblk0p3", self.source)
 
     def test_device_is_never_used_as_dd_output(self):
