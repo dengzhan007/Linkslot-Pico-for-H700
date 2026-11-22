@@ -192,7 +192,7 @@ def inspect_fdt(path: Path) -> dict[str, Any]:
     chosen = nodes.get("/chosen", {})
     chosen_bootargs = (_strings(chosen.get("bootargs")) or [None])[0]
     disp_reserve_match = re.search(
-        r"(?:^|\\s)disp_reserve=([0-9]+),(0x[0-9a-fA-F]+)(?:\\s|$)",
+        r"(?:^|\s)disp_reserve=([0-9]+),(0x[0-9a-fA-F]+)(?:\s|$)",
         chosen_bootargs or "",
     )
     disp_reserve = None
