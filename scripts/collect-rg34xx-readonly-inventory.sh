@@ -207,7 +207,7 @@ fi
                 fi
                 ;;
             *)
-                grep -E '^(CONFIG_(TEE|OPTEE|SUNXI_ION|ION|CMA|DMA_CMA|OF_RESERVED_MEM)=|# CONFIG_(TEE|OPTEE|SUNXI_ION|ION|CMA|DMA_CMA|OF_RESERVED_MEM) is not set)' "$config" || true
+                grep -E '^(CONFIG_(TEE|OPTEE|ION|ION_SUNXI|ION_OF|CMA|DMA_CMA|OF_RESERVED_MEM)=|# CONFIG_(TEE|OPTEE|ION|ION_SUNXI|ION_OF|CMA|DMA_CMA|OF_RESERVED_MEM) is not set)' "$config" || true
                 CONFIG_CAPTURED=1
                 ;;
         esac
