@@ -31,12 +31,14 @@
 | /proc/iomem | System RAM 0x40000000–0x7fffffff（1 GiB） |
 | /proc/meminfo | MemTotal 996700 kB；MemFree 927436 kB；MemAvailable 941056 kB |
 | CMA | cma=64M；CmaTotal 65536 kB，CmaFree 64416 kB |
-| 显示预留参数 | bootargs 含 disp_reserve=1382400,0x7bf24800 |
-| FDT reserved-memory | live FDT 与 TOC1 静态 DTB 均未发现 /reserved-memory 节点 |
+| 显示预留参数 | bootargs 含 `disp_reserve=1382400,0x7bf24800` |
+| Live FDT boot_fb0 | `/soc@03000000/disp@01000000` 节点值 `7bf24800,2d0,1e0,20,b40,0,0,2d0,1e0`，即 base 0x7bf24800、720×480、32 bpp、stride 2880 bytes |
+| 显示 framebuffer 物理范围 | stride × height = 1,382,400 bytes = 0x151800；范围 `[0x7bf24800, 0x7c076000)`，与 `disp_reserve=size,base` 参数完全吻合 |
+| FDT reserved-memory | live FDT 与 TOC1 静态 DTB 均未发现标准 `/reserved-memory` 节点；但 live FDT 的 `boot_fb0` 和 bootargs 已明确给出显示 framebuffer 保留区 |
 
 静态 TOC1 DTB 与 live FDT 的 RAM size 不同；live FDT、/proc/iomem 和 MemTotal 相互印证 1 GiB 运行时容量。可以确认内核阶段看到的是 1 GiB RAM，但目前没有证据定位是哪一个启动阶段把静态 DTB 的 512 MiB 修改为 1 GiB。
 
-这不是可直接使用的裸机 RAM map。display reserve、CMA、内核占用、monitor/secure world、DMA、framebuffer 和 SPL/loader 自身空间仍需进一步确认；没有 /reserved-memory 节点也不代表这些区域不存在。任何 payload 链接地址都必须等到完整占用图和 monitor 约束查明后再确定。
+这不是可直接使用的裸机 RAM map。现在已能明确排除 live FDT 标记的 framebuffer 区间 `[0x7bf24800, 0x7c076000)`，以及 64 MiB CMA、内核自身占用；但 monitor/secure world、其他 DMA/carveout 和 SPL/loader 自身空间仍未完整确认。没有标准 `/reserved-memory` 节点也不代表这些区域不存在。任何 payload 链接地址都必须等到完整占用图和 monitor 约束查明后再确定。
 
 ## 4. Boot0 两个位置的现场读回
 
