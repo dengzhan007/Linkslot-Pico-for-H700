@@ -150,4 +150,4 @@ BaseOS 的 native SPL / monitor / A32 loader 是当前最有价值的技术参�
 - TOC1 中 monitor 与 BaseOS RG34XX 固定指纹完全一致；U-Boot/DTB 呈现 gzip 优化特征，但现场 TOC1 和 U-Boot 都不匹配固定输入包/组件指纹。
 - GPT p6=UDISK、p7=primary 与 /proc/cmdline 的 appfs@p6、UDISK@p7 使用不同命名层；运行时 p6 ext4=/data、p7 vfat=/mnt/sdcard，逻辑用途与 bootargs 相符，不构成已证实的分区错位。第二轮已读取 env 前缀并提取 bootcmd/boot_normal/setargs_mmc 等变量；CRC/ENV_SIZE 尚待完整 16 MiB env 采集验证。采集器现按 PARTNAME=env 读取完整分区，并新增 env CRC/变量解析器。FDT 检查器已接入 Windows runner。
 
-**当前阶段判断：** 首轮设备信息采集已完成，但启动链安全边界和入口 ABI 审查没有完成。Issue #2 仍不得据猜测地址构建或启动 payload；在取得 env、明确 Boot0 选择及 monitor/DRAM 占用前，不触碰启动区域。
+**当前阶段判断：** 首轮设备信息采集与第二轮 env 前缀解析已完成，但完整 env CRC/ENV_SIZE、启动链安全边界和入口 ABI 审查尚未完成。Issue #2 仍不得据猜测地址构建或启动 payload；在验证完整 env、明确 Boot0 选择及 monitor/DRAM 占用前，不触碰启动区域。
