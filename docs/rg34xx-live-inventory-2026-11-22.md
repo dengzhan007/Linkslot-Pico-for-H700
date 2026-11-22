@@ -68,13 +68,25 @@ KNULLI 的 H700 固件提取说明也记载 stock Boot0 位于 8 KiB，而 256 K
 
 据此，现场 LBA 16 的 128 KiB Boot0 是**最可能的正常启动候选**，LBA 512 的 64 KiB Boot0 是 H616 BROM 高位候选位置上的另一份有效映像。两份 checksum 均通过，且头部声明长度/主体 hash 不同；公开 BROM 资料和偏移吻合提高了这个判断的可信度，但本轮没有 BootROM 读取轨迹或启动阶段串口记录，因此仍将“本次启动实际选择 LBA 16”标记为高置信推断而非直接观测。
 
-### 4.1 BROM 的 SD Boot0 候选位置
+### 4.2 与 BaseOS RG34XX 固定 DRAM profile 的逐 word 比较
 
-现场两个有效 Boot0 恰好位于 LBA 16（8 KiB）与 LBA 512（256 KiB）。H616-specific U-Boot SPL 修复记录说明，Allwinner H616 BROM 会检查 SD/eMMC 的 sector 16，也会检查 sector 512（256 KiB）；较早 SoC 的高位候选才是 sector 256（128 KiB）。该代码变更专门针对 `CONFIG_MACH_SUN50I_H616`，与现场 DT compatible 的 `allwinner,h616` 家族标识相符，见 [U-Boot H616 high MMC offset patch](https://lists.denx.de/pipermail/u-boot/2024-May/553283.html)。
+将现场 Boot0 JSON 中的三组 32×32-bit 参数，逐项与 BaseOS-MultiFrontend `experiments/h700-boot-speed/evidence/compatibility.json` 的 `targets.rg34xx.dram_candidates` 比较：
 
-KNULLI 的 H700 固件提取说明也记载 stock Boot0 位于 8 KiB，而 256 KiB 是另一种常见位置；其页面覆盖 RG35XX Plus/H/2024，而不是本机型，故作为 H700/H616 位置参考而非 RG34XX 本机源代码证据，见 [H700 firmware extraction](https://knulli.org/guides/firmware-extraction/h700-firmware-extract/)。
+| 现场位置 | 比较对象 | 匹配结果 |
+|---|---|---|
+| LBA 16，0x38 | RG34XX prepared 主 LPDDR4/672 MHz | **32/32 words 完全一致** |
+| LBA 512，0x38 | RG34XX prepared 主 LPDDR4/672 MHz | 30/32 一致；仅 word[26]、word[29] 不同 |
+| LBA 512，0x9f4 | RG34XX prepared 备用 LPDDR3/672 MHz | **32/32 words 完全一致** |
+| LBA 512，0xa74 | RG34XX prepared 备用 LPDDR4/672 MHz | **32/32 words 完全一致** |
 
-据此，现场 LBA 16 的 128 KiB Boot0 是**最可能的正常启动候选**，LBA 512 的 64 KiB Boot0 是 H616 BROM 高位候选位置上的另一份有效映像。两份 checksum 均通过，且头部声明长度/主体 hash 不同；公开 BROM 资料和偏移吻合提高了这个判断的可信度，但本轮没有 BootROM 读取轨迹或启动阶段串口记录，因此仍将“本次启动实际选择 LBA 16”标记为高置信推断而非直接观测。
+LBA 512 的主参数块与 prepared 主参数块仅有两处差异：
+
+- word[26]：现场 `0x40808080`，prepared `0x3e808080`。
+- word[29]：现场 `0x06070707`，prepared `0x06070706`。
+
+这比只判断 LPDDR 类型更有信息量：LBA 16 的主参数块与 RG34XX 固定 profile 完全一致；LBA 512 则保留了两组与该 profile 完全一致的 LPDDR3/LPDDR4 备用 bank，但自身主块的两个 tuning word 不同。结合 H616 BROM 对 LBA 16、LBA 512 的候选搜索位置，LBA 16 作为本机 stock 启动 Boot0 的判断得到进一步支持。
+
+证据边界不变：逐 word 相同证明参数块内容匹配，不直接证明 BROM 这次实际读取了哪份，也不证明 training 最终采用的 bank、rank/width/size 或可供裸机使用的 RAM 边界。目标机启动时的 Boot0 读取轨迹仍未采集。
 
 ## 5. TOC1 与组件指纹
 
@@ -258,8 +270,37 @@ live GPT 在 p4 结束 sector 434175 与 p5 开始 sector 1482752 之间没有 G
 4. runtime FDT 证明内核可见 1 GiB RAM，但没有提供 monitor/secure/DMA 等完整 carveout。不能把 0x40000000–0x7fffffff 整段当作裸机可用内存。
 5. 当前已知 U-Boot 的 boot 分区读取/bootm 路径，但仍没有实机证据证明 AArch32 BL33 如何进入任意 AArch64 payload，或厂商 Linux SMC 可被安全地重新定向。Issue #2 的 payload 地址和入口 ABI 继续保持未定，不构建猜地址的 dummy payload。
 
+### 7.1 BaseOS native SPL 研究布局与本机 1 GiB RAM 的关系
+
+BaseOS-MultiFrontend 的 `experiments/h700-boot-speed/DESIGN.md` 将下列地址定义为其 H700 native SPL / A32 BL33 / Linux loader 的固定研究布局：
+
+| 地址 | BaseOS 实验用途 | 对 Linkslot payload 的结论 |
+|---:|---|---|
+| `0x40080000` | AArch64 Linux Image | Linux handoff 地址，不是 Linkslot 入口 |
+| `0x42000000` | initrd | 由该实验链使用，不可当作空闲区 |
+| `0x44000000` | 最终 FDT | Linux 参数区，不是 payload 入口 |
+| `0x45000000` | 暂存 Android boot image | 与本机 env 的 `boot_normal` 读入/bootm 路径相对应的 staging 语义，不是裸机入口 |
+| `0x48000000` | vendor monitor | BL31/secure monitor 占用 |
+| `0x4a000000` | AArch32 SVC BL33 loader，预留 1 MiB slot | 含该 loader 自己的 stack/A32 tables |
+| `0x4a100000` | DTBO | 实验链预加载数据 |
+| `0x4a200000` | monitor DTB | 实验链预加载数据 |
+| `0x4a300000` | handoff data record | 实验链记录区 |
+| `0x4a400000` | EL3 临时页表（实验范围至 `0x4a403000`） | secure/EL3 实验占用 |
+
+本机 live FDT 与 `/proc/iomem` 显示的 DRAM 窗口为 `[0x40000000,0x80000000)`。表中地址从数值上都落在这 1 GiB DRAM 窗口内；这只是边界检查，不表示它们对 Linkslot 可分配。它们在 BaseOS 方案中已有明确所有者/用途，不能因当前运行的是 Linux、或者某一范围未出现在简化的 `/proc/iomem` 输出中，就把它认作可复用 payload 区域。
+
+本机 framebuffer 已明确占用 `[0x7bf24800,0x7c076000)`，与上表低地址区间没有数值重叠；但 CMA 的物理 base、monitor/secure world 其余 carveout、DMA 缓冲及 loader 生命周期仍未知。因此目前没有任何 Linkslot payload load address 或 entry address 获得批准。BaseOS 实验设计本身也要求逐项证明不与 monitor 实际读写和保留区重叠，并明确警告不要假设 `0x49000000` 可用。
+
+这套 native SPL / monitor / A32 loader 的物理试验覆盖 BaseOS 实验记录中的 RG34XX SP（2 GiB LPDDR4）和 RG40XX V（1 GiB LPDDR3）；这些结果不能替代本目标 RG34XX 非 SP（1 GiB LPDDR4）的冷启动与 handoff 验收。该项目的目标机地址、入口 EL、栈、cache/MMU/TLB、GIC 和 secure carveout 仍须以本机证据验证。
+
+### 7.2 本轮尚未取得 CMA / memblock 物理区间
+
+第三轮 ZIP 的 `mounts.txt` 显示 debugfs 已挂载在 `/sys/kernel/debug`，但该 ZIP 没有 `debugfs-memory-reservations.txt`。所以本轮只能确认 `CmaTotal=65536 kB`、`CmaFree=60360 kB`，没有 CMA `base_pfn/count` 或 memblock `memory/reserved` 物理区间。当前 `/proc/iomem` 仅显示 System RAM、kernel code 和 kernel data 子范围，不能补足 secure/CMA 保留布局。
+
+已在最新只读采集器中加入 CMA debugfs（含多 range 的 `base_pfn/count`）及 memblock `memory/reserved` 读取。它只读取这些描述节点，不触碰 CMA 的 `alloc/free` 控制文件。第三轮 ZIP 生成时间早于这一改动；下一轮采集应包含 `debugfs-memory-reservations.txt`，若文件明确记录 NOT_PRESENT，也请保留原文件供我们判断内核是否导出该接口。
+
 ## 8. 下一步
 
-完整 env 分区已读回且 CRC 验证通过。下一阶段转向 Boot0 副本选择与 DRAM training 证据、monitor/secure/DMA 内存范围以及可行的 A32→A64 handoff ABI；继续只读，不试写启动区。
+完整 env 分区已读回且 CRC/hash 验证通过。下一阶段重点是 CMA/memblock 物理区间、Boot0 当前选择/DRAM training 证据，以及 monitor/secure/DMA 内存范围；在此之前不批准任何 payload 地址或 A32→A64 handoff 实现，继续只读。
 
 在 U-Boot environment 和 monitor/DRAM 安全边界审查完成前，不修改 Boot0、TOC1、U-Boot、monitor 或 GPT，不试刷 AArch64 payload。设备没有 eMMC；失败恢复仍按项目设计由电脑重写/修复 SD 卡，不依赖回退到旧 Linux/BaseOS。
