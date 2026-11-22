@@ -21,48 +21,26 @@ jobs:
           ref: reports
           path: reports
 
-      - name: Inspect FDT and OP-TEE references
+      - name: Decompile live FDT and inspect secure nodes
         shell: bash
         run: |
           set -euo pipefail
-          archive="reports/reports/rg34xx-inventory-20261122-195053.zip"
-          python3 - "$archive" <<'PY'
-          import json
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq device-tree-compiler
+          python3 - <<'PY'
           import pathlib
-          import sys
           import zipfile
 
-          with zipfile.ZipFile(pathlib.Path(sys.argv[1])) as zf:
-              for name in ("live-fdt.json", "toc1-extracted/dtb-report.json"):
-                  info = next(
-                      (x for x in zf.infolist()
-                       if x.filename.replace("\\\\", "/").replace("\\", "/").endswith(name)),
-                      None,
-                  )
-                  if not info:
-                      print(f"MISSING: {name}")
-                      continue
-                  raw = zf.read(info).decode("utf-8", "replace")
-                  print(f"===== {name} RAW JSON =====")
-                  print(raw)
-                  try:
-                      obj = json.loads(raw)
-                  except Exception as exc:
-                      print(f"JSON_PARSE_ERROR: {exc}")
-                      continue
-                  print(f"===== {name} FILTERED REFERENCES =====")
-                  def walk(value, path="$"):
-                      if isinstance(value, dict):
-                          for key, child in value.items():
-                              p = f"{path}.{key}"
-                              if any(word in str(key).lower() for word in (
-                                  "tee", "optee", "secure", "reserved", "memory", "firmware",
-                                  "monitor", "dram", "cma"
-                              )):
-                                  print(f"{p}: {child!r}")
-                              walk(child, p)
-                      elif isinstance(value, list):
-                          for index, child in enumerate(value):
-                              walk(child, f"{path}[{index}]")
-                  walk(obj)
+          archive = pathlib.Path("reports/reports/rg34xx-inventory-20261122-195053.zip")
+          with zipfile.ZipFile(archive) as zf:
+              info = next(
+                  x for x in zf.infolist()
+                  if x.filename.replace("\\\\", "/").replace("\\", "/").endswith("live-fdt.dtb")
+              )
+              pathlib.Path("/tmp/live-fdt.dtb").write_bytes(zf.read(info))
           PY
+          dtc -I dtb -O dts /tmp/live-fdt.dtb -o /tmp/live-fdt.dts
+          echo "===== SECURE / TEE / RESERVED / MEMORY NODES ====="
+          grep -Ein -C 8 'optee|tee|reserved-memory|secure|memory@|firmware|monitor|scp|dram' /tmp/live-fdt.dts || true
+          echo "===== ALL NODE PATHS OF INTEREST ====="
+          grep -Ein '^([[:space:]]*[[:alnum:]_@,.-]+[[:space:]]*\{|[[:space:]]*compatible[[:space:]]*=|[[:space:]]*method[[:space:]]*=|[[:space:]]*reg[[:space:]]*=|[[:space:]]*no-map)' /tmp/live-fdt.dts | grep -Ei 'optee|tee|reserved|secure|firmware|monitor|memory|reg|no-map|method' | head -n 200
