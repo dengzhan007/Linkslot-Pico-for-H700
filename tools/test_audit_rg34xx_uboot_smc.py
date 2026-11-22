@@ -81,6 +81,32 @@ class UbootSmcAuditTests(unittest.TestCase):
             "0x8000ff04",
         )
 
+    def test_traces_ldr_literal_reference_to_linux_smc_id(self):
+        image = bytearray(0x1600)
+        target = 0x1510
+        instruction = 0x520
+        immediate = target - (instruction + 8)
+        struct.pack_into("<I", image, instruction, 0xE59F0000 | immediate)
+        struct.pack_into("<I", image, target, 0x8000FF04)
+        refs = audit.find_a32_ldr_literal_refs(bytes(image), target)
+        self.assertEqual(len(refs), 1)
+        self.assertEqual(refs[0]["instruction_offset"], "0x520")
+
+    def test_finds_movw_movt_pair_for_linux_smc_id(self):
+        image = bytearray(64)
+        movw = 0xE3000000 | (0xF << 16) | 0xF04
+        movt = 0xE3400000 | (0x8 << 16)
+        struct.pack_into("<II", image, 0x10, movw, movt)
+        matches = audit.find_movw_movt_smc_id(bytes(image))
+        self.assertEqual(matches[0]["value"], "0x8000ff04")
+
+    def test_finds_pointer_to_wrapper_at_reference_load_base(self):
+        image = bytearray(64)
+        struct.pack_into("<I", image, 0x20, 0x4A000B18)
+        self.assertEqual(
+            audit.find_word_pointer_refs(bytes(image), 0x4A000B18),
+            ["0x20"],
+        )
     def test_reads_toc1_from_inventory_zip(self):
         package = make_toc1()
         with tempfile.TemporaryDirectory() as tmp:
