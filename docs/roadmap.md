@@ -30,7 +30,8 @@
 
 - [x] 从 BaseOS-MultiFrontend 固件审计确认 RG34XX 型号、Allwinner H700、Cortex-A53、1 GB LPDDR4 和 `rg34xx_v1` 面板驱动。
 - [x] 审查 BaseOS 已提交的 Boot0/TOC1/U-Boot/monitor 结构、AArch32 BL33 返回状态及 A32→A64 Linux SMC 交接；形成[启动交接审计报告](rg34xx-boot-handoff-audit.md)。该项是源代码/模拟证据审计，不代表目标掌机已验证。
-- [ ] 从实际 RG34XX 测试机只读确认主板 revision、当前 Boot0/TOC1/U-Boot/monitor 的 SHA-256、版本及 Boot0 允许变化字段。
+- [x] 建立[目标机只读 inventory 脚本](../scripts/collect-rg34xx-readonly-inventory.sh)、Allwinner TOC1 校验/提取器和纯合成数据测试；GitHub Actions 主机检查通过。仅工具链准备，不代表已采集目标掌机。
+- [ ] 运行[只读采集流程](rg34xx-readonly-inventory.md)，从实际 RG34XX 测试机确认主板 revision、当前 Boot0/TOC1/U-Boot/monitor 的 SHA-256、版本及 Boot0 允许变化字段。
 - [ ] 只读获取目标机 U-Boot 环境、SD 加载能力、live FDT、DRAM map、reserved-memory、framebuffer 和启动参数。
 - [ ] 选定保留原厂 U-Boot 还是采用 A64 SPL + vendor monitor + A32 BL33；先完成入口/恢复设计评审，不试写启动区域。
 - [ ] 建立最小 A32 handoff adapter + AArch64 payload；实机验证 CurrentEL、SPSR、参数寄存器、栈、异常向量、GIC、MMU/cache/TLB 与 FDT/内存边界。
