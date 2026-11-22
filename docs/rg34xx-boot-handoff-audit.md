@@ -184,6 +184,6 @@ BaseOS 的 native SPL / monitor / A32 loader 是当前最有价值的技术参�
 
 live FDT 同时具有 `/firmware/optee`，`compatible="linaro,optee-tz"`、`method="smc"`；bootargs 则包含 `androidboot.secure_os_exist=0`。现场 dmesg 的 OP-TEE probe 随后记录 `api uid mismatch`。Linux OP-TEE 驱动在这一检查失败时返回 `-EINVAL`，不会继续完成 OP-TEE 版本/capability/共享内存/TEE 设备注册流程（见 [Linux OP-TEE core.c](https://code.googlesource.com/linux/torvalds/linux/+/c6e169bc146a76d5ccbf4d3825f705414352bd03/drivers/tee/optee/core.c)）。因此只能说本次 Linux 没有成功建立 OP-TEE 驱动接口；不能据此宣布 BL31、EL3 或安全世界完全不存在。
 
-FDT 的 Allwinner ION heap 声明包括 `ion_cma` 和 `ion_secure`，但两者的 `heap-base/heap-size` 都是零，没有给出固定物理范围；FDT 也没有标准 `/reserved-memory` 节点。故未知区间 `[0x7ec00000,0x7fc00000)` 不能因为存在名为 secure 的 ION heap 就自动归类为 secure carveout，必须继续排除直至找到 owner/访问证据。硬件日志筛选没有提供 CMA、BL31 或 secure carveout 的地址证据。
+FDT 的 Allwinner ION heap 声明包括 `ion_system`（`sys_user`）、`ion_cma` 和 `ion_secure` 三类节点；三者的 `heap-base/heap-size` 都是零，没有给出固定物理范围；FDT 也没有标准 `/reserved-memory` 节点。故未知区间 `[0x7ec00000,0x7fc00000)` 不能因为存在名为 secure 的 ION heap 就自动归类为 secure carveout，必须继续排除直至找到 owner/访问证据。硬件日志筛选没有提供 CMA、BL31 或 secure carveout 的地址证据。
 
 对应的 FDT 解析器已扩充为输出 `initrd`、`firmware_nodes` 和 `ion_heaps`，合成测试覆盖 initrd 边界、OP-TEE conduit 和零尺寸 ION heap。**本轮交叉分析仍未批准 payload 地址或入口。**
