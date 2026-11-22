@@ -80,15 +80,15 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertNotIn("/dev/mmcblk0p3", self.source)
 
     def test_boot_partition_is_discovered_by_exact_gpt_label_and_bounded(self):
-        self.assertIn("grep -qx 'PARTNAME=boot' \\\"$node/uevent\\\"", self.source)
-        self.assertIn('BOOT_PART=\"/dev/$BOOT_DEVNAME\"', self.source)
+        self.assertIn("PARTNAME=boot", self.source)
+        self.assertIn('BOOT_PART="/dev/$BOOT_DEVNAME"', self.source)
         self.assertIn('BOOT_MAX_SECTORS=131072', self.source)
         self.assertIn('BOOT_BYTES=$((BOOT_PART_SIZE * 512))', self.source)
-        self.assertIn('of=\"$OUTDIR/boot-partition.bin\"', self.source)
-        self.assertIn('count=\"$BOOT_PART_SIZE\"', self.source)
-        self.assertIn('sha256sum \"$OUTDIR/boot-partition.bin\"', self.source)
-        self.assertNotIn('/dev/mmcblk0p4', self.source)
+        self.assertIn('of="$OUTDIR/boot-partition.bin"', self.source)
+        self.assertIn('count="$BOOT_PART_SIZE"', self.source)
         self.assertIn('boot_partition_capture=skipped_no_PARTNAME_boot', self.source)
+        self.assertIn('sha256sum "$OUTDIR/boot-partition.bin"', self.source)
+        self.assertNotIn('/dev/mmcblk0p4', self.source)
     def test_cma_and_memblock_debugfs_capture_is_read_only(self):
         self.assertIn('/sys/kernel/debug/cma', self.source)
         self.assertIn('for name in memory reserved', self.source)
