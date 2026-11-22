@@ -245,3 +245,27 @@ ION debugfs 的当前分配为：
 ### 13.2 内存安全状态
 
 `[0x7ec00000,0x7fc00000)` 仍是 16 MiB 未知保留区；本轮没有新的 owner 或物理地址证据。CMA `[0x77c00000,0x7bc00000)`、framebuffer `[0x7bf24800,0x7c076000)`、monitor 区 `[0x48000000,0x49000000)` 继续按已知用途排除。其余无 owner 的保留区和 RAM 顶部碎片也继续排除。当前没有批准的 payload RAM 区间或入口地址。
+
+## 14. 21:20 ION 配置与目标内核符号确认（2026-11-22）
+
+[21:20:49 只读采集报告](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261122-212049/ION-symbol-finding.md) 修复了前一轮配置过滤符号名错误，并给出以下现场证据：
+
+- /proc/config.gz 明确包含 CONFIG_ION_SUNXI=y、CONFIG_ION_OF=y、CONFIG_ION=y、CONFIG_TEE=y、CONFIG_OPTEE=y、CONFIG_CMA=y 和 CONFIG_DMA_CMA=y。
+- /proc/kallsyms 中存在 sunxi_ion_probe、optee_probe_drm_configure、ion_secure_heap_create 三个函数符号。采集器只输出符号名，不输出内核地址。
+- /sys/bus/platform/drivers/ion-sunxi/ion 仍是已绑定设备的 sysfs 链接；ION debugfs 的 sys_user、cma、secure 三个 heap 节点均存在。
+- /dev/ion 存在；/dev/tee0 与 /dev/teepriv0 不存在；标准 OP-TEE probe 仍记录 api uid mismatch。
+- secure heap 当前分配为 0；live FDT 的 secure heap base/size 仍为 0。
+
+这证明目标 #19 内核编入了 Allwinner ION/TEE 相关配置与三个关键函数，且 ION platform device 已绑定；它不证明 optee_probe_drm_configure() 已在 probe 中执行，也不证明 vendor SMC 成功或失败。21:20 的 dmesg 过滤仍未捕获 drm_base、drm_size、tee_base 或 drm config service not available。不得把缺少这两类日志改写成“SMC 没执行”或“SMC 失败”。
+
+同系列参考实现的 [sunxi_ion.c](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/staging/android/ion/sunxi/sunxi_ion.c) 在 secure heap 路径调用 [optee_probe_drm_configure()](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/tee/optee/core.c)；参考函数使用 OPTEE_SMC_GET_DRM_INFO，非成功返回时 printk drm config service not available，成功时打印 DRM/TEE base 和 size。但该参考树并未证明与 RG34XX #19 二进制逐字节匹配，控制流只能用作反汇编比对的假设。
+
+### 14.1 下一步：取得当前设备的 boot 分区镜像
+
+现场 GPT/启动参数将 PARTNAME=boot 对应到 p4；已记录分区范围为起始 LBA 303104、131072 sectors（64 MiB）。下一步应从当前测试卡只读提取 /dev/mmcblk0p4，验证 Android boot image header（ANDROID!），再解析其 kernel payload，并检查内嵌版本标识是否为 Linux version 4.9.170 ... #19 ...。以当前卡的 GPT PARTNAME 为依据，不得使用其他机型文档中固定的 raw image offset。
+
+[KNULLI 的 RG34XX 开发说明](https://knulli.org/devices/anbernic/rg34xx/)明确指出 Anbernic 未发布该设备的 kernel/U-Boot 源码，开发者需要从 stock SD/固件提取二进制。取得匹配的 kernel payload 后，后续只做静态检查：反汇编 sunxi_ion_probe 与 optee_probe_drm_configure 的实际目标代码、确认调用条件及返回路径，并检查日志字符串是否存在。暂不为获取返回值而重新绑定 driver、触发 ION heap 重建、主动调用 SMC 或改变启动参数。
+
+### 14.2 内存安全状态不变
+
+未知区间 [0x7ec00000,0x7fc00000) 仍无 owner 证据；当前没有任何 payload RAM 区间或入口地址获批。CMA、monitor、framebuffer、内核/FDT/启动数据以及 RAM 顶部离散 reserved entries 继续排除。
