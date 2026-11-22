@@ -181,7 +181,7 @@ fdisk 输出的磁盘容量文字为 2544M，与块设备 sysfs 的 30,375,936 s
 
 `boot_normal` 中的 `0x45000000` 是把名为 `boot` 的启动分区读入 RAM 后交给 `bootm` 处理的 Android boot image 暂存地址，不是 Linkslot 裸机 payload 的入口地址。当前分区 p4 的 GPT PARTNAME 为 boot；不能把这个 staging 地址改作裸机入口。
 
-KNULLI 页面中的 16 MiB 是其示例生成的 env.img 尺寸；本机 p3 的 16 MiB 是 GPT 分区尺寸。第三轮完整读回表明两者不能等同：本机 CRC 只在 data offset 4、总映像长度 0x20000（128 KiB）时匹配。
+KNULLI 页面中的 `mkenvimage -s 0x1000000` 是该页面所列 RG35XX Plus/H/2024 机型的 16 MiB env.img 构建示例；该页面没有列出 RG34XX，不能将其当作 RG34XX 的 ENV_SIZE 证据。本机 p3 的 16 MiB 是 GPT 分区尺寸。第三轮完整读回表明两者不能等同：本机 CRC 只在 data offset 4、总映像长度 0x20000（128 KiB）时匹配。
 
 本次采集的 GPT p6 PARTNAME=UDISK、p7 PARTNAME=primary；但 /proc/cmdline partitions= 将逻辑别名 appfs 指向 p6、UDISK 指向 p7。运行时 p6 是 ext4 并挂载 /data，p7 是 vfat 并挂载 /mnt/sdcard，实际用途与 appfs/UDISK 分工相符。GPT PARTNAME 与 U-Boot 生成的逻辑别名不是同一命名字段，因此这不是已经证实的分区错位或 GPT 损坏。Allwinner Brandy 2.0 的参考代码会按分区信息生成 partitions= 逻辑名称，见同一份 [board_helper.c 说明](https://manuals.plus/m/35d20341b018e9f5bc7541f9a23512fbf0ebe3a5ee5a064ecb8dd1b44dee8317.pdf)。
 
@@ -231,6 +231,30 @@ live GPT 在 p4 结束 sector 434175 与 p5 开始 sector 1482752 之间没有 G
 完整 p3 分区 SHA-256 与 BaseOS-MultiFrontend 的 [manifest/prepared/rg34xx.json](https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/main/manifest/prepared/rg34xx.json) 中 `preserved_regions.env.sha256` 完全一致；该 manifest 对应的 env 区域同样从 LBA 270336 开始、长度 32768 sectors（16 MiB）。因此，**本机整个 env 分区与 BaseOS 已固定的 RG34XX prepared env 分区逐字节一致**，不是只比较了其中的变量文本。
 
 分区中的 CRC 有效环境变量与第二轮前缀解析一致：`mmc_root=/dev/mmcblk0p5`、`nand_root=/dev/nand0p4`、`setargs_mmc`、`setargs_nand`、`boot_normal`、`boot_recovery`、`boot_fastboot`、`bootdelay=0`、`bootcmd=run setargs_nand boot_normal` 等共 25 项。当前 runtime cmdline 与 `setargs_mmc` 结果一致；结合目标 U-Boot 中的 `update bootcmd` / `update part info` 字符串，SD 介质自动切换解释得到进一步支持。仍需注意：有效 CRC 和 prepared hash 只能证明 p3 内容一致且内部校验有效，不能单独证明本次 U-Boot 确实选择并导入了这个环境副本。
+
+分区剩余区域的字节分布也已检查：`[0x20000,0x400000)` 为全零，`[0x400000,0x1000000)` 为全 `0xff`。这只是现场原始内容描述，不据此推断额外启动功能。
+
+### 6.3 第三轮完整 env 解析（2026-11-22 19:19:42）
+
+第三轮采集器通过 sysfs 中精确的 `PARTNAME=env` 定位到 `/dev/mmcblk0p3`，成功读取整个 GPT 分区：
+
+| 项目 | 结果 |
+|---|---|
+| GPT 分区 | p3，起始 LBA 270336，32768 sectors |
+| 分区总大小 | 16,777,216 bytes（16 MiB） |
+| 完整分区 SHA-256 | `8dd964ef0d525071626040d7cdce6c16925aaa6108d35558a0a5f032592b78a2` |
+| CRC32 little-endian 头字段 | `0xe3b6e401` |
+| 唯一 CRC 匹配数据偏移 | 4 |
+| CRC 匹配的环境映像总长度 | 131,072 bytes（128 KiB，`0x20000`） |
+| CRC 输入数据长度 | 131,068 bytes（`0x1fffc`） |
+| 环境变量数量 | 25 |
+| 解析警告 | 0 |
+
+解析器在整个 16 MiB 分区中只找到一个 CRC 匹配：从数据偏移 4 开始，对 131,068 bytes 计算 CRC32，得到 `0xe3b6e401`。偏移 4 的首字节为 `0x00`，它属于 CRC 覆盖的数据本身；偏移 5 没有 CRC 匹配。因此本次现场数据表现为 CRC32 header + data-at-offset-4 的 128 KiB 环境映像，不能把首字节误称为独立的 redundant-env flags。U-Boot 标准 `env_t` 结构中，CRC 覆盖 data；只有启用 `CONFIG_SYS_REDUNDAND_ENVIRONMENT` 时才另有 flags 字段，参见 [U-Boot environment.h](https://github.com/ARM-software/u-boot/blob/master/include/environment.h)。
+
+完整 p3 分区 SHA-256 与 BaseOS-MultiFrontend 的 [manifest/prepared/rg34xx.json](https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/main/manifest/prepared/rg34xx.json) 中 `preserved_regions.env.sha256` 完全一致；该 manifest 对应的 env 区域同样从 LBA 270336 开始、长度 32768 sectors（16 MiB）。因此，**本机整个 env 分区与 BaseOS 已固定的 RG34XX prepared env 分区逐字节一致**，不是只比较了其中的变量文本。
+
+CRC 有效环境变量与第二轮前缀解析一致：`mmc_root=/dev/mmcblk0p5`、`nand_root=/dev/nand0p4`、`setargs_mmc`、`setargs_nand`、`boot_normal`、`boot_recovery`、`boot_fastboot`、`bootdelay=0`、`bootcmd=run setargs_nand boot_normal` 等共 25 项。当前 runtime cmdline 与 `setargs_mmc` 结果一致；结合目标 U-Boot 中的 `update bootcmd` / `update part info` 字符串，SD 介质自动切换解释得到进一步支持。仍需注意：有效 CRC 和 prepared hash 只能证明 p3 内容一致且内部校验有效，不能单独证明本次 U-Boot 确实选择并导入了这个环境副本。
 
 分区剩余区域的字节分布也已检查：`[0x20000,0x400000)` 为全零，`[0x400000,0x1000000)` 为全 `0xff`。这只是现场原始内容描述，不据此推断额外启动功能。
 
