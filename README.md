@@ -29,7 +29,7 @@
 ## 当前工程进展
 
 - 已建立 RG34XX / Allwinner H700 / Cortex-A53 的 AArch64 freestanding C/C++/汇编编译检查及 GitHub Actions。
-- 已新增只用于静态审查的 8 KiB AArch64 Image entry probe 构建：私有栈和入口记录区均位于 Image 内；CI 验证 `ARM\x64` header、`code0` 分支、`text_offset=0x80000` 和 Image size。尚未在设备上执行，也没有写入 p4。
+- 已新增只用于静态审查的 8 KiB AArch64 Image entry probe 构建：私有栈和入口记录区均位于 Image 内；入口先检查 `SCTLR_EL1.M/C`，若 MMU 或 D-cache 仍开启则不写内存而停机。CI 验证 `ARM\x64` header、`code0` 分支、`text_offset=0x80000` 和 Image size。尚未在设备上执行，也没有写入 p4。
 - 当前 stock boot.img kernel-slot 路线是首选候选：现场 U-Boot 已确认 gzip selector、`0x40080000` kernel load/entry 与 `0x8000FF04` monitor handoff；FDT 来源和 monitor ERET 实机状态仍待最终确认。
 - Linkslot 即将发布大版本，暂缓导入/同步上游源码和逐 crate 复用审计，避免对即将过时的版本重复适配。
 
