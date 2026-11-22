@@ -56,6 +56,9 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertIn("& $pythonExe @pythonArgs $FdtInspector $packageDtb", source)
         self.assertIn('$EnvInspector = Join-Path $RepoRoot "tools\\inspect_h700_env.py"', source)
         self.assertIn("& $pythonExe @pythonArgs $EnvInspector $envImage", source)
+        self.assertIn('$MemoryMapInspector = Join-Path $RepoRoot "tools\\inspect_h700_memory_map.py"', source)
+        self.assertIn("& $pythonExe @pythonArgs @memoryMapArgs", source)
+        self.assertIn('memory-map-report.json', source)
         forbidden = re.compile(
             r"^\\s*&\\s*adb\\b.*\\bshell\\s+(?:reboot|poweroff|fw_setenv|"
             r"flashcp|flash_erase|nandwrite|sunxi-fel)\\b",
@@ -83,6 +86,8 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertIn('for range in "$node"/ranges/*', self.source)
         self.assertIn('cat "$range/$attr"', self.source)
         self.assertIn('cat "$file"', self.source)
+        self.assertIn('getconf PAGESIZE', self.source)
+        self.assertIn('> "$OUTDIR/page-size.txt"', self.source)
         self.assertIn('> "$OUTDIR/debugfs-memory-reservations.txt"', self.source)
         self.assertNotRegex(self.source, r">\s*/sys/kernel/debug/")
         self.assertNotIn('/alloc"', self.source)
