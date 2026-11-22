@@ -58,10 +58,10 @@ _start:
     str     x11, [x10, #0x68]
 
     /* Publish the record only after all fields have been written. */
-    movz    x11, #0x4252
-    movk    x11, #0x4850, lsl #16
-    movk    x11, #0x3031, lsl #32
-    movk    x11, #0x5052, lsl #48
+    movz    x11, #0x3748
+    movk    x11, #0x3030, lsl #16
+    movk    x11, #0x5250, lsl #32
+    movk    x11, #0x3142, lsl #48
     str     x11, [x10, #0x70]
     dsb     sy
 
