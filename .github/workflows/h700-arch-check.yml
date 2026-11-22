@@ -12,6 +12,9 @@ on:
   pull_request:
     paths:
       - "platform/h700/**"
+      - "tools/pack_aarch64_image.py"
+      - "tools/build_rg34xx_bootimg_payload.py"
+      - "tools/test_pack_aarch64_image.py"
       - "scripts/build-h700-objects.sh"
       - ".github/workflows/h700-arch-check.yml"
   workflow_dispatch:
