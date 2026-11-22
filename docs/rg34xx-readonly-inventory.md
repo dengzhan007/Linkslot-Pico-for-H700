@@ -13,7 +13,7 @@
 | boot0-primary.bin | 原始 SD LBA 16 起采集的 128 KiB Boot0 区域；解析器按头部声明的 64/128 KiB 镜像长度截取 |
 | boot0-secondary.bin | 原始 SD LBA 512 起采集的 128 KiB Boot0 区域；解析器按头部声明的 64/128 KiB 镜像长度截取 |
 | toc1-package.bin | 原始 SD LBA 32800 起的 0x140000 字节 TOC1 包 |
-| env-partition-first64k.bin | 可选：GPT 分区标签为 env 的分区起始 64 KiB |
+| env-partition-first64k.bin | 可选：通过 sysfs 的精确 GPT PARTNAME=env 动态发现后读取分区起始 64 KiB，不假设固定分区号 |
 | live-fdt.dtb | 内核提供 /sys/firmware/fdt 时保存的 live FDT |
 | cmdline.txt / cpuinfo.txt / meminfo.txt | 运行时内核启动参数、CPU 与内存信息 |
 | iomem.txt / interrupts.txt | 内存资源范围与中断状态 |
@@ -28,9 +28,9 @@ LBA 16、512、32800 和 TOC1 长度 0x140000 来自 BaseOS-MultiFrontend 的 H7
 需要特别区分两种已记录的 TOC1 指纹：
 
 - RG34XX 原始厂商包：BaseOS 的兼容性调查记录 SHA-256 为 56371d984e29e74db63009ce27f829eb0a55ce9007ee5e40c52479b22418af3。这个值对应 BaseOS H700 native-handoff/compatibility 研究中的厂商 TOC1 输入。
-- BaseOS gzip 启动包：manifest/kernel-gzip.json 记录 SHA-256 为 6c380adb6e4f16aa535da25f665706b0a6118b542947859aad5931f4baa9ac28。它不是原始厂商包的另一个别名；kernel_gzip.py 会修改 U-Boot 的 Android 压缩选择指令、TOC1 checksum，以及 DTB 中的 debug_mode 和 USB controller status，并要求 boot package 与 boot image 配套安装。
+- BaseOS RG34XX gzip 启动优化的输入 TOC1：manifest/kernel-gzip.json 中的 package_sha256 为 6c380adb6e4f16aa535da25f665706b0a6118b542947859aad5931f4baa9ac28。该值是 tools/kernel_gzip.py 在任何修改之前要求匹配的原始输入包 hash，不是脚本生成的 gzip-patched 输出包 hash。脚本随后会修改 U-Boot 的 Android 压缩选择指令、相关 checksum，以及 DTB 中的 debug_mode 和五个 USB controller status；生成的包必须与对应 boot image 配套安装。
 
-因此，现场 hash 应先与设备当前安装的 BaseOS 启动方案比对。仅仅不匹配其中一个值不能判定损坏；更高版本或其他启动方案可能有独立指纹。具体修改边界见 BaseOS 的 docs/12-kernel-gzip.md 和 tools/kernel_gzip.py。
+因此，现场 hash 应先与设备当前安装的 BaseOS 启动方案比对。仅仅不匹配其中一个值不能判定损坏；更高版本或其他启动方案可能有独立指纹。2026-11-22 首轮 RG34XX 实机采集结果和组件级解释见 [现场只读 Inventory 报告](rg34xx-live-inventory-2026-11-22.md)。具体修改边界见 BaseOS 的 tools/kernel_gzip.py。
 
 ## Windows 一键采集
 
@@ -38,7 +38,7 @@ LBA 16、512、32800 和 TOC1 长度 0x140000 来自 BaseOS-MultiFrontend 的 H7
 
     powershell -ExecutionPolicy Bypass -File .\scripts\run-rg34xx-inventory.ps1
 
-脚本会确认只连接了一台已授权的 ADB 设备、确认 ADB shell 为 root、读取 /proc/cmdline 并校验整盘设备与 root 分区一致，然后自动 push 采集器、运行只读采集、pull 报告、解析两份 Boot0 并解包 TOC1。默认结果保存在 build/rg34xx-inventory-时间戳/。多个 ADB 设备同时连接时用 -DeviceSerial 指定；root 参数不是 /dev 块设备时，在确认真实启动 SD 整盘后用 -BlockDevice 显式指定。
+脚本会确认只连接了一台已授权的 ADB 设备、确认 ADB shell 为 root、读取 /proc/cmdline 并校验整盘设备与 root 分区一致，然后自动 push 采集器、运行只读采集、pull 报告、解析两份 Boot0 并解包 TOC1。采集器会优先通过 sysfs 中的精确 PARTNAME=env 查找环境分区并读取首 64 KiB，不硬编码 p3；若找不到且存在 by-partlabel/env 链接，才使用该链接作为兼容回退。默认结果保存在 build/rg34xx-inventory-时间戳/。多个 ADB 设备同时连接时用 -DeviceSerial 指定；root 参数不是 /dev 块设备时，在确认真实启动 SD 整盘后用 -BlockDevice 显式指定。
 
 该快捷脚本要求 Windows PowerShell 5.1 或 PowerShell 7、Android platform-tools 和 Python 3。ADB shell 必须为 root；若设备 ADB 不是 root，请按下方方法在 root SSH shell 执行采集器。
 
