@@ -226,7 +226,6 @@ if [ -n "$ENV_PART" ]; then
         echo "error: short read from $ENV_PART" >&2
         exit 1
     }
-    sha256sum "$OUTDIR/env-partition-first64k.bin" >> "$OUTDIR/raw-sha256.txt" 2>/dev/null || true
     echo "env_partition_capture=first_64KiB source=$ENV_SOURCE device=${ENV_PART##*/}" >> "$OUTDIR/summary.txt"
 else
     echo "env_partition_capture=skipped_no_PARTNAME_env" >> "$OUTDIR/summary.txt"
