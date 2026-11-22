@@ -81,8 +81,8 @@ class InventoryScriptSafetyTests(unittest.TestCase):
 
     def test_cma_and_memblock_debugfs_capture_is_read_only(self):
         self.assertIn('/sys/kernel/debug/cma', self.source)
-        self.assertIn('/sys/kernel/debug/memblock/memory', self.source)
-        self.assertIn('/sys/kernel/debug/memblock/reserved', self.source)
+        self.assertIn('for name in memory reserved', self.source)
+        self.assertIn('file="/sys/kernel/debug/memblock/$name"', self.source)
         self.assertIn('cat "$node/$attr"', self.source)
         self.assertIn('for range in "$node"/ranges/*', self.source)
         self.assertIn('cat "$range/$attr"', self.source)
