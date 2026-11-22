@@ -60,6 +60,14 @@ LBA 512 的文件在磁盘上仍是 128 KiB 原始采集；其头部只声明 64
 
 两份镜像都能通过自身 checksum，0x38 参数的 DRAM 类型与频率相同；但 debug byte、有效长度、首扇区 tuning words 和首扇区之后的主体 hash 均不同。尤其主体 hash 不同，因此不能把两份读回简单解释成“只有 Boot0 training 改写了第一扇区”。LBA 512 的备用候选参数块有有效内容，而 LBA 16 的对应位置为零。尚未证明 BROM 在当前启动中选择了哪一个位置，也不能仅凭候选块推断 active DRAM profile 或训练成功状态。
 
+### 4.1 BROM 的 SD Boot0 候选位置
+
+现场两个有效 Boot0 恰好位于 LBA 16（8 KiB）与 LBA 512（256 KiB）。H616-specific U-Boot SPL 修复记录说明，Allwinner H616 BROM 会检查 SD/eMMC 的 sector 16，也会检查 sector 512（256 KiB）；较早 SoC 的高位候选才是 sector 256（128 KiB）。该代码变更专门针对 `CONFIG_MACH_SUN50I_H616`，与现场 DT compatible 的 `allwinner,h616` 家族标识相符，见 [U-Boot H616 high MMC offset patch](https://lists.denx.de/pipermail/u-boot/2024-May/553283.html)。
+
+KNULLI 的 H700 固件提取说明也记载 stock Boot0 位于 8 KiB，而 256 KiB 是另一种常见位置；其页面覆盖 RG35XX Plus/H/2024，而不是本机型，故作为 H700/H616 位置参考而非 RG34XX 本机源代码证据，见 [H700 firmware extraction](https://knulli.org/guides/firmware-extraction/h700-firmware-extract/)。
+
+据此，现场 LBA 16 的 128 KiB Boot0 是**最可能的正常启动候选**，LBA 512 的 64 KiB Boot0 是 H616 BROM 高位候选位置上的另一份有效映像。两份 checksum 均通过，且头部声明长度/主体 hash 不同；公开 BROM 资料和偏移吻合提高了这个判断的可信度，但本轮没有 BootROM 读取轨迹或启动阶段串口记录，因此仍将“本次启动实际选择 LBA 16”标记为高置信推断而非直接观测。
+
 ## 5. TOC1 与组件指纹
 
 现场 TOC1 位于 LBA 32800，大小 0x140000（1,310,720 bytes），Allwinner checksum 与四项目录边界校验通过。
@@ -262,7 +270,7 @@ CRC 有效环境变量与第二轮前缀解析一致：`mmc_root=/dev/mmcblk0p5`
 
 1. 原厂 monitor 看起来可复用，且与已知 RG34XX monitor 输入完全相同；仍需在后续入口审计中确认 monitor 的实际加载地址、保留内存、SMC 服务与安全世界访问范围。
 2. 当前 U-Boot 带有 BaseOS gzip 优化特征，但不是已知精确 pinned U-Boot hash。不要对它盲目应用基于固定二进制偏移的补丁；当前 p3 env 分区则已与 BaseOS prepared RG34XX env 区域完整 hash 匹配。
-3. 当前两份 Boot0 在长度、debug 状态和主体内容上存在区别。必须弄清 BROM 使用哪个副本及其选择规则，再决定是否保留厂商链或接管 SPL。
+3. 当前两份 Boot0 在长度、debug 状态和主体内容上存在区别。H616 BROM 公开资料显示它检查 LBA 16 与 LBA 512；结合现场偏移，LBA 16 是最可能的正常启动副本，LBA 512 是高位候选。仍需目标机启动轨迹确认本次实际选择，并核验 DRAM training 结果，再决定是否保留厂商链或接管 SPL。
 4. runtime FDT 证明内核可见 1 GiB RAM，但没有提供 monitor/secure/DMA 等完整 carveout。不能把 0x40000000–0x7fffffff 整段当作裸机可用内存。
 5. 当前已知 U-Boot 的 boot 分区读取/bootm 路径，但仍没有实机证据证明 AArch32 BL33 如何进入任意 AArch64 payload，或厂商 Linux SMC 可被安全地重新定向。Issue #2 的 payload 地址和入口 ABI 继续保持未定，不构建猜地址的 dummy payload。
 
