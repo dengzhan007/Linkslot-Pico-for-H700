@@ -13,8 +13,9 @@ $Collector = Join-Path $PSScriptRoot "collect-rg34xx-readonly-inventory.sh"
 $Boot0Inspector = Join-Path $RepoRoot "tools\inspect_h700_boot0.py"
 $Toc1Parser = Join-Path $RepoRoot "tools\parse_h700_toc1.py"
 $FdtInspector = Join-Path $RepoRoot "tools\inspect_h700_fdt.py"
+$EnvInspector = Join-Path $RepoRoot "tools\inspect_h700_env.py"
 
-foreach ($path in @($Collector, $Boot0Inspector, $Toc1Parser, $FdtInspector)) {
+foreach ($path in @($Collector, $Boot0Inspector, $Toc1Parser, $FdtInspector, $EnvInspector)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         throw "Required project file not found: $path"
     }
@@ -165,6 +166,12 @@ $packageDtb = Join-Path $OutputDirectory "toc1-extracted\items\dtb.bin"
 if (Test-Path -LiteralPath $packageDtb -PathType Leaf) {
     & $pythonExe @pythonArgs $FdtInspector $packageDtb -o (Join-Path $OutputDirectory "toc1-extracted\dtb-report.json")
     if ($LASTEXITCODE -ne 0) { throw "TOC1 DTB inspection failed." }
+}
+
+$envImage = Join-Path $OutputDirectory "env-partition.bin"
+if (Test-Path -LiteralPath $envImage -PathType Leaf) {
+    & $pythonExe @pythonArgs $EnvInspector $envImage -o (Join-Path $OutputDirectory "env-report.json")
+    if ($LASTEXITCODE -ne 0) { throw "U-Boot environment inspection failed." }
 }
 
 Write-Host ""
