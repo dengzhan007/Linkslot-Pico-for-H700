@@ -59,8 +59,8 @@ All 24 unit tests pass:
 python -m unittest discover -s tools -p 'test_*.py'
 ```
 
-A full read-only inventory run succeeded against device `<serial-redacted>`
-on `/dev/mmcblk0` at `2026-11-22 18:17 UTC`, output:
+A full read-only inventory run succeeded against the connected ADB device
+on `/dev/mmcblk0` at `2026-11-22 18:17:13 UTC+08:00` (10:17:13 UTC), output:
 
 `build/rg34xx-inventory-20261122-181713`
 
@@ -71,13 +71,23 @@ Results:
 * Boot0 secondary: checksum valid, SHA-256
   `4701a85e4db7e8339b91b92f691a83cc954ec63a09369087c2e41d80eafa9f5d`
 * The primary parameter block at `0x38` reports LPDDR4 / 672 MHz on both
-  copies. The alternate blocks at `0x9f4` and `0xa74` differ between copies,
-  consistent with documented training/header mutation; no DRAM map conclusion
-  is drawn from raw words alone.
+  copies, consistent with the RG34XX prepared profile.
+* The candidate blocks at `0x9f4` and `0xa74` are reported as differing between
+  copies. These offsets are beyond the first 512-byte sector, so the difference
+  must not be attributed automatically to the known mutable first-sector fields.
+  The committed summary does not include their raw words or the two stable-body
+  hashes; those values still need review from the generated JSON reports.
+  No DRAM training result or RAM map is inferred from the candidate words alone.
 * TOC1: checksum valid, SHA-256
   `e6c20e3a54c51b9336c798e3a4fa1ca6c45b28c6f70456e2db9c252aa4ba4604`,
   four items (`u-boot`, `monitor`, `dtbo`, `dtb`) extracted to
-  `toc1-extracted/`.
+  `toc1-extracted/`. This package hash matches neither the known stock vendor
+  package (`56371d984e29e74db63009ce27f829eb0a55ce9007ee5e40c52479b22418af3`)
+  nor the known BaseOS gzip-patched package
+  (`6c380adb6e4f16aa535da25f665706b0a6118b542947859aad5931f4baa9ac28`).
+  It is therefore an additional live fingerprint, not evidence of corruption.
+  The four extracted component hashes and the live FDT/partition/runtime files
+  must be reviewed before selecting or reusing a monitor/U-Boot handoff.
 
 ## Operational notes
 
