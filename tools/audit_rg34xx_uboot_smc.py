@@ -440,6 +440,14 @@ def scan_uboot(uboot: bytes, context_bytes: int = 0x50) -> dict[str, Any]:
             "thumb": disassemble_thumb_window(uboot, 0x1080, 0x40),
             "arm": disassemble_arm_window(uboot, 0x1080, 0x40),
         },
+        "handoff_preparation_call_targets": {
+            f"0x{x:x}": {
+                "raw_bytes": uboot[max(0, x - 8):min(len(uboot), x + 0x80)].hex(),
+                "thumb": disassemble_thumb_window(uboot, x, 0x60),
+                "arm": disassemble_arm_window(uboot, x, 0x60),
+            }
+            for x in (0xE8F8, 0x6A0E0, 0x69F94, 0xEA8C, 0x69F28, 0x2BC0, 0xC7C, 0x27DC)
+        },
         "thumb2_handoff_related_constant_refs": {
             "kernel_entry_literals": {
                 f"0x{x:x}": find_a32_ldr_literal_refs_to_value(uboot, 0x40080000)
