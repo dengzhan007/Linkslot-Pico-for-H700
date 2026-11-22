@@ -91,6 +91,17 @@ BaseOS 的 manifest/kernel-gzip.json 中 RG34XX 的 6c380adb6e4f16aa535da25f6657
 
 另一个历史记录中的 56371d984e29e74db63009ce27f829eb0a55ce9007ee5e40c52479b22418af3，是 BaseOS 兼容性/原始 vendor package 记录中的指纹。现场 TOC1 的 e6c20... 与这两个 hash 都不相同。现场包 checksum 有效且组件结构完整；指纹不匹配只能说明它是另一份现场固件组合，不能据此判定损坏。
 
+### 5.5 U-Boot 二进制中的默认/维护模式字符串
+
+对提取的 1 MiB U-Boot flat binary 执行只读 strings 扫描，找到以下内嵌字符串（偏移为组件文件内偏移）：
+
+- 0x7df4f：`bootcmd=run distro_bootcmd`
+- 0x7df6a：`bootdelay=2`
+- 紧邻默认串还出现 `baudrate=115200`
+- 0x99fd3 起出现另一组维护/刷机测试相关字符串：`bootdelay=0`、`bootcmd=run sunxi_sprite_test`、`sunxi_sprite_test=sprite_test read`，其上下文包含 sunxi sprite、BOOTPKG、UBOOT 更新/校验提示。
+
+这些字符串能说明当前 U-Boot 二进制包含通用 distro boot 默认项和 sunxi sprite 维护路径，但不能证明启动时实际采用哪组环境。持久化 env 可以覆盖编译默认值；本轮尚未读取 env 分区。也没有从字符串扫描中恢复出完整 distro_bootcmd 子命令链，因此不能据此确认 mmc 设备号、分区号、镜像文件名或实际 load address。下一轮仍须先读取并解析 env。
+
 ## 6. 分区表与启动参数不一致
 
 本次 sysfs 和 GPT 工具输出一致，当前 GPT 为：
