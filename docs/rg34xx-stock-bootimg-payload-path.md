@@ -72,9 +72,13 @@ Boot ROM
 - 另一个 AArch32 fallback 分支通过 `BLX r6` 进入 kernel，且传入 `(r0=0, r1=machine-id, r2=FDT)`；这独立确认 `r6` 是 kernel entry、`r5` 保存 FDT 目标地址。
 - U-Boot 2018.05 `bootm_headers_t` 的 `ep`、`ft_addr`、`ft_len` 字段顺序与目标二进制 `+0x60/+0x6c/+0x70` 的访问吻合。现场 `ep` 与 Android header `kernel_addr=0x40080000` 对应是强证据；还需核对实际 decompressor/load path 来最终确认运行时 entry。
 
-所以当前已找到原厂启动链使用的真实 A32→A64 monitor handoff 服务和参数布局。保留 Boot0/TOC1/monitor/U-Boot、只替换 p4 kernel component 是当前首选移植路径，不再与重写 SPL 方案并列为同等优先级。
+SMC 分支前的 CPU/cache 清理也已在现场 binary 中拆开：`0x14D0 -> 0x0C7C` 以 `r0=3` 进入 cache helper；该路径屏蔽 IRQ/FIQ、执行 D-cache set/way clean、失效 I-cache 与 branch predictor 后恢复 I-cache。它没有走另一条会清 SCTLR.M/C 的分支，因此不能把它描述为关闭 MMU/D-cache。`0x14D6 -> 0x27DC` 检查全局 byte `0x4A000000+0x4E9` 是否等于 1：条件成立走 vendor SMC，条件不成立走 AArch32 fallback；`flag & 0x200` 是 U-Boot `BOOTM_STATE_OS_FAKE_GO`，会跳过实际 handoff。逐条 raw offset 与指令见 audit 文档 Section 2.4/2.5。
 
-尚未完成的两项不是 handoff 服务号本身，而是：实际 `images.ep`/kernel decompressor 的最终落点核验；`images.ft_addr` 最初来自哪份 DTB，以及它如何从旧的 512 MiB appended tree 变成 Linux 收到的 1 GiB live FDT。
+所以当前已找到原厂启动链使用的真实 A32→A64 monitor handoff 服务、参数布局、SMC/A32 fallback 条件和主要 cache-maintenance 路径。保留 Boot0/TOC1/monitor/U-Boot、只替换 p4 kernel component 是当前首选移植路径，不再与重写 SPL 方案并列为同等优先级。
+
+BaseOS-MultiFrontend 中与现场 monitor SHA-256 相同的 vendor monitor 已在 Unicorn verifier 中走过真实 SMC dispatch/ERET 指令，仿真结果为 `ELR=0x40080000`、`SPSR=0x3c5`、`x0=0x44000000`、`x1..x3=0`。这是使用实际 monitor 指令的仿真证据，不是 RG34XX 实机寄存器捕获；此外 verifier 注入了 SMC 异常上下文，`SCTLR_EL1` 输入来自 BaseOS 自有 A32 loader proof，不能直接当作现场 stock U-Boot 的 `SCTLR_EL1` 数值。
+
+尚未完成的关键门槛仍是：实际 `images.ep`/gzip decompressor 的最终落点核验；`images.ft_addr` 最初来自哪份 DTB，以及它如何从旧的 512 MiB appended tree 变成 Linux 收到的 1 GiB live FDT；并把现场 U-Boot cache-maintenance 结束状态与相同 monitor 的 ERET 行为完整衔接。
 
 ### 4.2 已有主机侧 kernel-slot 构建器（不刷写）
 
