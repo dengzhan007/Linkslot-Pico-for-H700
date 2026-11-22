@@ -109,7 +109,7 @@ BaseOS 的 manifest/kernel-gzip.json 中 RG34XX 的 6c380adb6e4f16aa535da25f6657
 - 紧邻默认串还出现 `baudrate=115200`
 - 0x99fd3 起出现另一组维护/刷机测试相关字符串：`bootdelay=0`、`bootcmd=run sunxi_sprite_test`、`sunxi_sprite_test=sprite_test read`，其上下文包含 sunxi sprite、BOOTPKG、UBOOT 更新/校验提示。
 
-这些字符串能说明当前 U-Boot 二进制包含通用 distro boot 默认项和 sunxi sprite 维护路径，但不能证明启动时实际采用哪组环境。持久化 env 可以覆盖编译默认值；本轮尚未读取 env 分区。也没有从字符串扫描中恢复出完整 distro_bootcmd 子命令链，因此不能据此确认 mmc 设备号、分区号、镜像文件名或实际 load address。下一轮仍须先读取并解析 env。
+这些字符串能说明当前 U-Boot 二进制包含通用 distro boot 默认项和 sunxi sprite 维护路径，但不能证明启动时实际采用哪组环境。持久化 env 可以覆盖编译默认值；第二轮已从 env 分区前缀读到持久化变量，完整 CRC/ENV_SIZE 仍待验证。也没有从字符串扫描中恢复出完整 distro_bootcmd 子命令链，因此不能据此确认该 fallback 路径实际被采用。
 
 ## 6. 分区表、逻辑分区别名与运行时挂载
 
@@ -150,6 +150,8 @@ fdisk 输出的磁盘容量文字为 2544M，与块设备 sysfs 的 30,375,936 s
 
 KNULLI 的 H700 固件说明示例将 env image 构建为 16 MiB（`mkenvimage -s 0x1000000`）。本机 GPT 的 env 分区也正好是 16 MiB，但此次只采集了前 64 KiB。因此当前解析只证明前缀中存在上述变量文本，CRC 尚未得到验证，不能把它当成有效活动环境。第二轮完整 env 文件将在下一次只读采集后由 `inspect_h700_env.py` 自动尝试识别 CRC 覆盖范围与 header offset。
 
+本次采集的 GPT p6 PARTNAME=UDISK、p7 PARTNAME=primary；但 /proc/cmdline partitions= 将逻辑别名 appfs 指向 p6、UDISK 指向 p7。运行时 p6 是 ext4 并挂载 /data，p7 是 vfat 并挂载 /mnt/sdcard，实际用途与 appfs/UDISK 分工相符。GPT PARTNAME 与 U-Boot 生成的逻辑别名不是同一命名字段，因此这不是已经证实的分区错位或 GPT 损坏。Allwinner Brandy 2.0 的参考代码会按分区信息生成 partitions= 逻辑名称，见同一份 [board_helper.c 说明](https://manuals.plus/m/35d20341b018e9f5bc7541f9a23512fbf0ebe3a5ee5a064ecb8dd1b44dee8317.pdf)。
+
 ## 7. 对启动路线的影响
 
 1. 原厂 monitor 看起来可复用，且与已知 RG34XX monitor 输入完全相同；仍需在后续入口审计中确认 monitor 的实际加载地址、保留内存、SMC 服务与安全世界访问范围。
@@ -160,6 +162,6 @@ KNULLI 的 H700 固件说明示例将 env image 构建为 16 MiB（`mkenvimage -
 
 ## 8. 下一步
 
-下一次只读采集的重点是 p3 环境分区首 64 KiB。新采集器按 GPT PARTNAME=env 动态发现分区，不硬编码分区号；采集后需要解析环境变量，重点确认 bootcmd、启动介质/分区、镜像加载路径和是否存在自定义 handoff。之后再把当前 TOC1 组件、live FDT、分区布局与 BaseOS 原生 SPL 的实际使用范围逐项对照。
+下一次只读采集的重点是完整 env 分区。新采集器按 GPT PARTNAME=env 动态发现并读取整个分区，不硬编码分区号；env-report.json 将尝试验证 CRC/ENV_SIZE，随后继续对照持久化 bootcmd 与 U-Boot 按 SD 介质改写后的实际命令。
 
 在 U-Boot environment 和 monitor/DRAM 安全边界审查完成前，不修改 Boot0、TOC1、U-Boot、monitor 或 GPT，不试刷 AArch64 payload。设备没有 eMMC；失败恢复仍按项目设计由电脑重写/修复 SD 卡，不依赖回退到旧 Linux/BaseOS。
