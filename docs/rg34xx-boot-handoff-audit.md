@@ -148,6 +148,6 @@ BaseOS 的 native SPL / monitor / A32 loader 是当前最有价值的技术参�
 - live FDT、/proc/iomem 与 MemTotal 一致显示内核可见 1 GiB RAM；TOC1 内静态 DTB 仍声明 512 MiB。没有 /reserved-memory 节点，不能据此认定 monitor、secure world、显示或 DMA carveout 不存在。
 - LBA 16 位置 Boot0 头部声明 128 KiB，LBA 512 位置头部声明 64 KiB；两者 checksum 均通过，但主体 hash 不同。不能将差异简单归因于首扇区训练改写，也没有证明当前 BROM 使用哪份。
 - TOC1 中 monitor 与 BaseOS RG34XX 固定指纹完全一致；U-Boot/DTB 呈现 gzip 优化特征，但现场 TOC1 和 U-Boot 都不匹配固定输入包/组件指纹。
-- 当前 GPT p6=UDISK、p7=primary，与 /proc/cmdline 的 appfs@p6、UDISK@p7 不一致。首轮未取得 env 分区内容；已修复采集器，按精确 PARTNAME=env 查找而不假设分区号。
+- 当前 GPT p6=UDISK、p7=primary，与 /proc/cmdline 的 appfs@p6、UDISK@p7 不一致。首轮未取得 env 分区内容；已修复采集器，按精确 PARTNAME=env 查找而不假设分区号。新增 FDT 检查器并接入 Windows runner，自动生成 live FDT 与 TOC1 静态 DTB 的 JSON 报告。
 
 **当前阶段判断：** 首轮设备信息采集已完成，但启动链安全边界和入口 ABI 审查没有完成。Issue #2 仍不得据猜测地址构建或启动 payload；在取得 env、明确 Boot0 选择及 monitor/DRAM 占用前，不触碰启动区域。
