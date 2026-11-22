@@ -66,7 +66,7 @@ class UbootSmcAuditTests(unittest.TestCase):
         self.assertEqual(report["a32_smc0_sites"][0]["file_offset"], "0x80")
         self.assertEqual(
             report["constant_occurrences"]["vendor_linux_smc_0x8000ff04"],
-            ["0x40"],
+            {"count": 1, "first_64_offsets": ["0x40"]},
         )
         self.assertEqual(
             report["direct_callers_of_smc_wrappers"]["0xb18"][0]["callsite"],
