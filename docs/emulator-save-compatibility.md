@@ -16,9 +16,9 @@ Libretro 文档将 Gambatte 描述为 accuracy-focused，并列出 GB Colorizati
 | 项目 | mGBA | armGBA-pico |
 |---|---|---|
 | 代码来源 | Linkslot 当前已经使用的 GBA 核心 | armGBA 上游的裸机加载核心；其 README 说明其渲染器、总线/I/O、save chips 等借用了 mGBA 的相关实现 |
-| 运行方式 | 当前 Linkslot 的 Linux/Libretro 构建；本项目需要移植/编译为 H700 Core ABI | GammaOS Pico 已做成固定地址加载的 32-bit ARM core blob，具有 A32 dynarec 和 Cortex-A55 优化 |
+| 运行方式 | 当前 Linkslot 的 Linux/Libretro 构建；本项目需要移植/编译为 H700 Core ABI | GammaOS Pico 已做成固定地址加载的 32-bit ARM core blob，具有 A32 dynarec 和 Cortex-A53 优化 |
 | 优势 | 与 Linkslot 现有配置、核心设置和用户习惯衔接最直接；通用核心生态成熟 | 针对无 OS 的运行环境设计；A32 recompiler、NEON renderer、LCD ghosting、run-ahead 与 host save-state 接口已专门适配 |
-| 限制 | Linux/Libretro 版本不能原样加载到裸机；要重新实现 host services | 现成 blob 针对 32-bit ARM/LK 固定内存布局，不能直接放进 RK3566 AArch64 host；需要移植、重编译或设计 AArch32 core boundary |
+| 限制 | Linux/Libretro 版本不能原样加载到裸机；要重新实现 host services | 现成 blob 针对 32-bit ARM/LK 固定内存布局，不能直接放进 Allwinner H700 AArch64 host；需要移植、重编译或设计 AArch32 core boundary |
 | 电池存档 | 项目当前 mGBA 文件格式/长度需实测并记录 | armGBA-pico 明确声明与 gpSP 共用 `/saves/gba` 下 128 KiB 电池存档缓冲区 |
 | 即时存档 | 与 mGBA 自身版本绑定 | 与 gpSP 不兼容，armGBA 使用独立 `/states/armgba` |
 
