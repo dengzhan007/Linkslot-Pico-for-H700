@@ -96,6 +96,31 @@ BaseOS 原生 SPL 研究中出现过以下实验地址：
 
 以上是 BaseOS 某代实验构建使用的布局，不是 RG34XX 非 SP 的内存安全证明。真正采用前，必须结合目标机 live FDT、reserved-memory、monitor 实际访问、framebuffer、SPL 自身使用区和 1 GiB RAM 上界重新计算并进行冲突检查。尤其不能仅凭地址落在 DRAM 范围内就认定它未被 secure world、显示引擎或其他 DMA 使用。
 
+
+### 5.1 RG34XX 非 SP 实机 memblock reserved 读回（2026-11-22）
+
+第四轮现场文件 [debugfs-memory-reservations.txt](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/debugfs-memory-reservations.txt) 已直接提供 memblock 地址表。`memblock.memory` 为 `[0x40000000,0x80000000)`（1 GiB）；`memblock.reserved` 共 46 条。较大的区间为：
+
+| 区间（半开） | 长度 | 审计结论 |
+|---|---:|---|
+| `[0x40080000,0x411b5000)` | 17,620 KiB | 与 Linux kernel code/data 的物理范围相符 |
+| `[0x411b6000,0x411b8000)` | 8 KiB | 邻近 kernel 的小型保留项，来源未明 |
+| `[0x42000000,0x42001000)` | 4 KiB | 与 BaseOS 实验 initrd 起始地址相同，但不能仅凭此认定为 initrd |
+| `[0x44000000,0x44023240)` | 143,936 bytes | 与 BaseOS 最终 FDT 起始地址相同，疑似 FDT/启动数据 |
+| `[0x48000000,0x49000000)` | 16 MiB | 与 BaseOS vendor monitor 的研究装载地址及 16 MiB 区域吻合；必须视为 monitor 保留区 |
+| `[0x77c00000,0x7bc00000)` | 64 MiB | 与 `CmaTotal=65536 kB` 数量完全相等，为高置信 CMA 物理候选区 |
+| `[0x7ec00000,0x7fc00000)` | 16 MiB | 用途未知，必须排除 |
+| `[0x7fd4a000,0x7fd4b000)` | 4 KiB | 用途未知，必须排除 |
+| `[0x7fd65000,0x7ff49000)` | 1,982,464 bytes | 用途未知，必须排除 |
+
+索引 9–45 另有 37 条离散小型保留项，位于 RAM 顶部 `0x7ff49a00` 至 `0x7ffffffe`；它们不可合并为空闲连续区。memblock 文件未提供这些区域的名称/owner，所以未知范围一律按保留处理。
+
+CMA 判断仍属于高置信推断而非直接标注：设备 bootargs 有 `cma=64M`，meminfo 显示 `CmaTotal=65536 kB`，memblock 又恰好有唯一 64 MiB 连续 reserved 段。Linux CMA 的常规初始化会从早期 memblock/bootmem allocator 保留一段连续区域，机制与此吻合（参考 [Linux DMA contiguous CMA reserve path](https://cos.googlesource.com/third_party/kernel/%2B/c570b82c5e6ac78be35b4e72594c0f1b1888fce1/drivers/base/dma-contiguous.c)）。但目标内核未导出 CMA debugfs 的 `base_pfn/count`，reserved 项无名称，因此先将 `[0x77c00000,0x7bc00000)` 标作 CMA candidate，不把推断写成直接观测。
+
+live FDT 的 framebuffer `[0x7bf24800,0x7c076000)` 不在这 46 条 memblock reserved entries 中；但 `boot_fb0` 与 `disp_reserve` 已独立证明其为显示缓冲区，仍必须排除。它与 CMA 候选区不重叠，起点比 CMA 候选区末端高 `0x324800` 字节。memblock 表也不能代表 Linux 运行阶段所有驱动/DMA 动态分配，因此不能把 `memblock.memory - memblock.reserved` 作为裸机可用 RAM 清单。
+
+**对启动设计的结论：** BaseOS monitor 区域现在获得目标机 memblock 现场范围支持；CMA 区域获得高置信物理位置候选；但 `0x7ec00000–0x7fc00000`、top-of-RAM 碎片、secure world、DMA/display 与 loader 的完整 owner 仍未收敛。当前仍没有批准的 Linkslot payload 地址或 entry address。
+
 ## 6. RG34XX 非 SP 的 DRAM 与固件输入差异
 
 BaseOS 的 `compatibility.json` 为 `rg34xx` 单独记录了以下 Boot0 候选：
