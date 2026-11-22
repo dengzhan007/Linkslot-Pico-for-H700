@@ -57,7 +57,8 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertIn('$EnvInspector = Join-Path $RepoRoot "tools\\inspect_h700_env.py"', source)
         self.assertIn("& $pythonExe @pythonArgs $EnvInspector $envImage", source)
         self.assertIn('$MemoryMapInspector = Join-Path $RepoRoot "tools\\inspect_h700_memory_map.py"', source)
-        self.assertIn("& $pythonExe @pythonArgs @memoryMapArgs", source)
+        self.assertIn("$memoryMapCommandArgs += $memoryMapArgs", source)
+        self.assertIn("& $pythonExe @memoryMapCommandArgs", source)
         self.assertIn('memory-map-report.json', source)
         forbidden = re.compile(
             r"^\\s*&\\s*adb\\b.*\\bshell\\s+(?:reboot|poweroff|fw_setenv|"
