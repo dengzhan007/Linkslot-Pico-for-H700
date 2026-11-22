@@ -100,13 +100,34 @@ boot_normal = sunxi_flash read 0x45000000 boot; bootm 0x45000000
 
 `images.ep` 从 `bootm_headers` 的字段位置及后续 A32 fallback 直接调用关系确定为 kernel entry 字段；当前 p4 header 的 kernel address 是 `0x40080000`，与 Linux Image `text_offset=0x80000` 相符。因此 `0x40080000` 是 stock kernel-slot 路线的强候选入口地址，不是从空闲 RAM 推导出来的猜测地址。实际 decompressor destination / `images.ep` 值仍需通过目标 U-Boot load path 或入口 trace 做最后验证。
 
+### 3.1 Android kernel compression selector 与真实 load/entry 地址
+
+现场 U-Boot 的 Android kernel handler 在文件偏移 `0xF698` 有如下 Thumb-2 序列：
+
+```asm
+0xF698  movw    r3, #0x0201
+0xF69E  strh.w  r3, [r4, #0x5c]
+0xF6A2  movs    r3, #5
+0xF6A4  strb.w  r3, [r4, #0x5e]
+```
+
+这组字节与 BaseOS 固定固件工具 `tools/kernel_gzip.py` 的 selector patch 完全相同：它把原 selector bytes `4f f4 00 73` 替换为 `40 f2 01 23`；脚本注释明确说明原 vendor Android handler 强制 raw Image，patch 将 compression selector 改为 gzip。当前 RG34XX 现场 U-Boot 在 `0xF698` 已是 patched bytes `40 f2 01 23`。结合 U-Boot v2018.05 `include/image.h` 的 enum：`IH_COMP_GZIP=1`、`IH_TYPE_KERNEL=2`、`IH_OS_LINUX=5`，`0x0201` 加随后 byte `5` 对应 GZIP/KERNEL/LINUX。参考：[BaseOS kernel_gzip.py](https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/main/tools/kernel_gzip.py)、[U-Boot image.h](https://github.com/u-boot/u-boot/blob/v2018.05/include/image.h)。
+
+在 U-Boot v2018.05 `common/bootm.c` 的 Android image 分支，`images.os.load = android_image_get_kload(os_hdr)`，并 `images.ep = images.os.load`；`android_image_get_kload()` 返回 Android header 的 `kernel_addr`（仅在 Android 默认占位地址时才改用 kernel 数据位置）。`bootm_load_os()` 再以 `images.os.load` 作为解压目标；`bootm_decomp_image()` 对 `IH_COMP_GZIP` 调用 `gunzip(load_buf, unc_len, image_buf, image_len)`。参考：[common/bootm.c](https://github.com/u-boot/u-boot/blob/v2018.05/common/bootm.c)、[common/image-android.c](https://github.com/u-boot/u-boot/blob/v2018.05/common/image-android.c)。
+
+现场 p4 Android v2 header 的 `kernel_addr=0x40080000`，与该 `images.os.load → images.ep` 路径相符；现场 handoff 函数又将 `images.ep` 读取到 `r6`，随后传入 `0x8000FF04`。因此现在可把 `0x40080000` 定为**原厂 kernel component 的解压目标与 handoff entry**，而不只是地址候选。
+
+解压 buffer 的精确上限（目标编译时 `CONFIG_SYS_BOOTM_LEN`）尚未从当前 U-Boot config/二进制恢复。已知现场原厂 gzip kernel 成功解压为 17,461,256 bytes，因此当前 stock loader 的实际输出能力至少覆盖该长度；还不能据此宣称上限恰好为某个 32 MiB 常量。
+
+主机侧 payload builder 现保守限制新 Image 文件长度不得超过这份已成功启动原厂 kernel 的 17,461,256-byte 解压长度，且 Image header `image_size` 不超过原厂值 `0x1138000`。只有确认 `CONFIG_SYS_BOOTM_LEN` 后，才可考虑放宽这两个保守限制。
+
 ## 4. 对裸机移植路线的影响
 
 当前证据支持**优先保留 Boot ROM、Boot0、TOC1、vendor monitor、AArch32 U-Boot、env 和 GPT，只替换 p4 Android boot image 的 kernel component**。第一份 payload 只需要满足现有 U-Boot kernel-slot / gzip / AArch64 Image 入口契约；暂时没有理由为第一份入口诊断 payload 先重写 Boot0 或引入 A64 SPL。
 
 这仍不是可刷写方案。还需要：
 
-1. 静态确认当前 U-Boot 的 Android gzip 解压写入目标和输出长度限制，核实 `images.ep` 实值为 `0x40080000`。
+1. 已通过目标 U-Boot 的 selector bytes、Android header、`bootm` 数据流确定 gzip 解压目标和 `images.ep` 为 `0x40080000`；仍需恢复精确 `CONFIG_SYS_BOOTM_LEN`，当前 builder 先把新 payload 限制在已成功启动的原 kernel 解压长度内。
 2. 确认 `images.ft_addr` 的原始 FDT 来源，以及 TOC1 DTB、p4 appended DTB、live FDT 的具体 fixup 顺序。p4 appended DTB 声明 512 MiB，live FDT 声明 1 GiB；不得用 p4 里的旧树替代 live 树。
 3. 用当前相同 hash 的 monitor binary 检查 `0x8000FF04` 服务的实际 ERET 状态、目标 EL/SPSR、cache/MMU/TLB、DAIF 和 x0..x3。BaseOS 的 monitor verifier 以实际 vendor monitor 指令完成了仿真 ERET：`ELR=0x40080000`、`SPSR=0x3c5`、`x0=0x44000000`、`x1..x3=0`；该结果是 emulation/model evidence，不是 RG34XX 现场硬件寄存器捕获，也不能替代当前 U-Boot 最终 CPU 状态核对。
 4. 主机侧构建一个带同样 ARM64 Image header、`text_offset=0x80000`、gzip 压缩的入口诊断 payload；仅重建 Android v2 kernel component 和必要的 size/image ID，保留 ramdisk、second、recovery_dtbo、appended DTB、cmdline 与 p4 未使用尾部。
