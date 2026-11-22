@@ -18,7 +18,7 @@
 本地运行：
 
 ```sh
-sudo apt install clang llvm
+sudo apt install clang lld llvm
 bash scripts/build-h700-objects.sh
 ```
 
@@ -44,11 +44,11 @@ bash scripts/build-h700-objects.sh
 
 ## 后续扩展顺序
 
-1. 核实 RG34XX 实机主板 revision 与当前固件版本。
-2. 获取 U-Boot 版本、启动环境、SD 读取命令和 DRAM map。
-3. 依据实际 handoff ABI 增加 startup/entry 和 linker script。
-4. 验证 C/C++ 所需的 freestanding runtime、内存分配、异常/静态构造策略；核心实际需要的功能再逐步启用。
-5. 先完成串口/异常/内存最小验证，再逐项增加 MMU、定时器和 GPIO。
-6. 把每个硬件功能放在独立驱动与可读诊断结果中，避免把未验证的寄存器假设带入上层。
+1. **已完成现场基线与入口静态构建：** RG34XX 非 SP 的 U-Boot/kernel/FDT handoff 已做只读审查；主机 CI 已生成 8 KiB 的被动 AArch64 Image entry probe（`code0=B +0x40`、`text_offset=0x80000`、`image_size=0x2000`），但没有执行。
+2. **当前门槛：** 在任何实机试验前，确认同 hash vendor monitor 的 ERET 目标 EL/SPSR/系统寄存器状态，并由本地三份 DTB 属性对比确定 `images.ft_addr` 来源和 fixup；精确 `CONFIG_SYS_BOOTM_LEN` 仍待恢复。
+3. **入口探针实机验收：** 通过单独的测试卡方案评审后，验证 entry record 中的 CurrentEL、x0..x3、原始 SP、DAIF、SCTLR_EL1、TTBR/TCR/MAIR/VBAR 与 FDT；探针只使用 Image 内部栈/记录，不使用 Image 外 RAM。
+4. **HAL bring-up：** 入口状态和恢复方案通过后，再逐项探测 UART/log、timer、GPIO/input、SD/filesystem、display/backlight、audio、PMIC full poweroff；每个接口独立验证。
+5. **Runtime / emulator：** 再完善 allocator、任务/同步、文件系统封装和 GB/GBC/GBA 核心依赖；没有经过内存 owner 审计的范围不得交给 allocator 或 DMA。
+6. **上层集成：** 等 Linkslot 大版本发布后再锁定上游 commit，按 crate 复用审计逐步集成，避免提前适配旧 API。
 
 该编译检查刻意不依赖 Linkslot 上游，因此 Linkslot 即将发布的大版本不会使本阶段成果过时。
