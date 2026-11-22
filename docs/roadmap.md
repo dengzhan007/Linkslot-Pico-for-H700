@@ -9,9 +9,10 @@
 - [x] 确认首期只做 GB/GBC/GBA。
 - [x] 固化关机、手动电池存档、手动云同步、家庭 LAN Web 和调试规则。
 - [x] 确认目标设备无 eMMC，只设计 SD 卡启动，不做旧系统自动回退。
-- [x] 建立 H700 Cortex-A55 / AArch64 freestanding C、C++ 与汇编编译检查和 CI。
+- [x] 建立 RG34XX / Allwinner H700 Cortex-A53 的 AArch64 freestanding C、C++ 与汇编编译检查和 CI。
 - [ ] 等待 Linkslot 即将发布的大版本后，重新锁定上游 commit 并完成逐 crate 复用审计。
-- [ ] 完成目标设备清单，锁定第一台 H700 实机及其屏幕/音频/Wi-Fi/USB 型号。
+- [x] 确认目标 SoC 是 Allwinner H700，不是 Rockchip RK3566；AArch64 编译 CPU target 已修正为 Cortex-A53。
+- [ ] [x] 锁定第一台实机为 Anbernic RG34XX（非 SP），建立 Allwinner H700 / Cortex-A53 硬件基线。
 
 ## 当前工作：不依赖 Linkslot 上游版本的准备
 
@@ -23,7 +24,7 @@
 - [ ] 增加统一构建参数与工具链版本记录。
 - [ ] 明确调试日志输出方式和目标 ELF/镜像的检查规则。
 
-### B. H700 启动链与设备识别
+### B. RG34XX / Allwinner H700 启动链与设备识别
 
 交付：目标设备 SD 启动链调查报告和最小裸机入口规范。
 
@@ -33,7 +34,7 @@
 - 建立冷启动测量方案；不设计 eMMC 安装或旧系统自动回退。
 - 通过电脑重写 SD 卡或设备真实存在的 Boot ROM/USB 烧录入口恢复。
 
-### C. H700 基础 HAL
+### C. Allwinner H700 基础 HAL
 
 依赖 B 完成后再实现：
 
@@ -53,7 +54,7 @@
 - 审查 Gambatte、mGBA、gpSP 的 AArch64 构建和 ABI；
 - 比较 Pico Core ABI 与当前核心上游接口；
 - 建立 ROM、视频帧、音频采样、输入、即时状态、电池存档的核心测试夹具；
-- 确认 GB/GBC/GBA 核心在 Cortex-A55 上的优化选项和内存需求；
+- 确认 GB/GBC/GBA 核心在 Cortex-A53 上的优化选项和内存需求；
 - 存档兼容性以真实文件测试，不根据扩展名推断。
 
 ## Linkslot 大版本发布后
