@@ -14,11 +14,11 @@ Linkslot 上游即将有一版较大的更新，因此当前**暂不导入 subtr
 
 ## 1. 推荐仓库结构
 
-采用 Git subtree 将 Linkslot 上游源码保留在仓库的固定子目录；H700 工程代码放在 subtree 之外：
+采用 Git subtree 将 Linkslot 上游源码保留在仓库的固定子目录；H700 / RG34XX 工程代码放在 subtree 之外：
 
 ```text
 third_party/linkslot/       # Linkslot 上游镜像，由 subtree 同步
-platform/h700/              # RK3566/H700 专属 HAL 与板级驱动
+platform/h700/              # Allwinner H700 / RG34XX 专属 HAL 与板级驱动
 runtime/lk/                 # LK 运行时适配：任务、锁、时钟、文件、网络等
 integration/linkslot/       # Linkslot 与 H700 的集成入口、配置和适配器
 cores/                      # Gambatte / mGBA / gpSP 等核心及其适配
