@@ -215,7 +215,7 @@ fi
     [ "$CONFIG_CAPTURED" -eq 1 ] || echo "NOT_PRESENT: no readable kernel config export"
     echo
     echo "== ION device and runtime debugfs =="
-    for path in /dev/ion /sys/class/misc/ion /sys/kernel/debug/ion /sys/kernel/debug/ion/heaps /sys/kernel/debug/ion/clients /sys/bus/platform/drivers/ion-sunxi; do
+    for path in /dev/ion /dev/tee0 /dev/teepriv0 /sys/class/misc/ion /sys/class/tee /sys/kernel/debug/ion /sys/kernel/debug/ion/heaps /sys/kernel/debug/ion/clients /sys/bus/platform/drivers/ion-sunxi; do
         if [ -e "$path" ]; then
             ls -ld "$path" 2>&1 || true
         else
