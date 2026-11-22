@@ -521,6 +521,18 @@ def scan_uboot(uboot: bytes, context_bytes: int = 0x50) -> dict[str, Any]:
         "possible_pointer_refs_at_base_0x4a000000": {            f"0x{entry:x}": find_word_pointer_refs(uboot, 0x4A000000 + entry)
             for entry in wrapper_entries
         },
+        "boot_address_constant_contexts": {
+            name: [
+                {
+                    "offset": f"0x{offset:x}",
+                    "raw_bytes": uboot[max(0, offset - 0x20):min(len(uboot), offset + 0x24)].hex(),
+                    "thumb": disassemble_thumb_window(uboot, offset, 0x30),
+                    "arm": disassemble_arm_window(uboot, offset, 0x30),
+                }
+                for offset in occurrences(uboot, needle)
+            ]
+            for name, needle in CONSTANTS.items()
+        },
         "constant_occurrences": constant_offsets,
         "analysis_limit": (
             "Raw A32 instruction-pattern inventory only. A match does not prove "
