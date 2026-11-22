@@ -105,11 +105,11 @@ def inspect_env(data: bytes, source: str = "") -> dict[str, Any]:
     # evidence than byte-shape heuristics. Otherwise report a parse candidate.
     offset4_vars, offset4_warnings = _parse_variables(data, 4)
     offset5_vars, offset5_warnings = _parse_variables(data, 5)
-    flag = data[4]
+    first_data_byte = data[4]
     matched_offsets = {item["data_offset"] for item in matches}
     if len(matched_offsets) == 1:
         data_offset = next(iter(matched_offsets))
-    elif flag in (0, 1) and len(offset5_vars) >= len(offset4_vars):
+    elif first_data_byte in (0, 1) and len(offset5_vars) >= len(offset4_vars):
         data_offset = 5
     else:
         data_offset = 4
@@ -146,7 +146,7 @@ def inspect_env(data: bytes, source: str = "") -> dict[str, Any]:
             "Do not treat the extracted variables as a verified active U-Boot environment."
         ),
         "header_format_candidate": header_format,
-        "first_data_byte": {"hex": f"0x{flag:02x}", "is_nul": flag == 0},
+        "first_data_byte": {"hex": f"0x{first_data_byte:02x}", "is_nul": first_data_byte == 0},
         "variables_data_offset": data_offset,
         "variable_count": len(variables),
         "variables": variables,
