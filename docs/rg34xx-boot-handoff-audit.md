@@ -127,7 +127,7 @@ BaseOS 的 native SPL / monitor / A32 loader 是当前最有价值的技术参�
 
 ## 8. 对 Linkslot Pico 的实施建议
 
-1. 首轮 RG34XX 非 SP 只读 inventory 已完成，见[现场报告](rg34xx-live-inventory-2026-11-22.md)。下一轮只补采通过 GPT PARTNAME=env 定位的 env 分区首 64 KiB，并解析 bootcmd、镜像加载路径和启动配置；不写入任何启动区域。
+1. RG34XX 非 SP 首轮及第二轮前缀采集已完成，见[现场报告](rg34xx-live-inventory-2026-11-22.md)。下一轮通过 GPT PARTNAME=env 读取完整 env 分区并验证 CRC/ENV_SIZE，再解析 bootcmd、镜像加载路径和启动配置；不写入任何启动区域。
 2. 首轮已完成 TOC1、U-Boot、monitor、DTB 和 Boot0 的组件/镜像指纹对比。继续解释现场包与 BaseOS 固定输入不一致的来源，并结合 env、Boot0 两个位置的实际选择及运行时 FDT 完成差异闭环。
 3. 对比两种入口方案：保留原厂链并修改/替换 A32 BL33，或采用 BaseOS 的 A64 SPL + 原厂 monitor + A32 BL33。前者改动面可能更小；后者对 SD/DRAM/恢复路径控制更强，但会接管 Boot0/SPL 职责，验证和恢复复杂度更高。
 4. 不论选择哪条路径，先建立一个最小 A32 handoff adapter 和纯 AArch64 payload。payload 只输出早期日志、CurrentEL、寄存器参数和安全范围内的内存信息；不启动 Linkslot、模拟器、Wi-Fi、音频或显示驱动。
@@ -148,6 +148,6 @@ BaseOS 的 native SPL / monitor / A32 loader 是当前最有价值的技术参�
 - live FDT、/proc/iomem 与 MemTotal 一致显示内核可见 1 GiB RAM；TOC1 内静态 DTB 仍声明 512 MiB。没有 /reserved-memory 节点，不能据此认定 monitor、secure world、显示或 DMA carveout 不存在。
 - LBA 16 位置 Boot0 头部声明 128 KiB，LBA 512 位置头部声明 64 KiB；两者 checksum 均通过，但主体 hash 不同。不能将差异简单归因于首扇区训练改写，也没有证明当前 BROM 使用哪份。
 - TOC1 中 monitor 与 BaseOS RG34XX 固定指纹完全一致；U-Boot/DTB 呈现 gzip 优化特征，但现场 TOC1 和 U-Boot 都不匹配固定输入包/组件指纹。
-- 当前 GPT p6=UDISK、p7=primary，与 /proc/cmdline 的 appfs@p6、UDISK@p7 不一致。首轮未取得 env 分区内容；已修复采集器，按精确 PARTNAME=env 查找而不假设分区号。新增 FDT 检查器并接入 Windows runner，自动生成 live FDT 与 TOC1 静态 DTB 的 JSON 报告。
+- GPT p6=UDISK、p7=primary 与 /proc/cmdline 的 appfs@p6、UDISK@p7 使用不同命名层；运行时 p6 ext4=/data、p7 vfat=/mnt/sdcard，逻辑用途与 bootargs 相符，不构成已证实的分区错位。第二轮已读取 env 前缀并提取 bootcmd/boot_normal/setargs_mmc 等变量；CRC/ENV_SIZE 尚待完整 16 MiB env 采集验证。采集器现按 PARTNAME=env 读取完整分区，并新增 env CRC/变量解析器。FDT 检查器已接入 Windows runner。
 
 **当前阶段判断：** 首轮设备信息采集已完成，但启动链安全边界和入口 ABI 审查没有完成。Issue #2 仍不得据猜测地址构建或启动 payload；在取得 env、明确 Boot0 选择及 monitor/DRAM 占用前，不触碰启动区域。
