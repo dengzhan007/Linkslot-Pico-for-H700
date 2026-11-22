@@ -1,5 +1,11 @@
 # Linkslot 上游同步与移植边界
 
+## 当前状态：等待即将发布的大版本
+
+Linkslot 上游即将有一版较大的更新，因此当前**暂不导入 subtree、不对现有旧版逐 crate 做完整复用审计，也不开始针对旧版做大规模适配**。当前研究快照只用于理解项目结构。等新版本正式发布后，以新 release 对应的 commit SHA 重新执行审计和导入，避免重复工作。
+
+等待期间优先推进独立于 Linkslot API 的 H700 AArch64 工具链、SD 启动链、板级硬件识别、基础 HAL 探测和模拟器核心构建研究。
+
 ## 目标
 
 本项目只有一个前端：Linkslot。当前不建设多前端框架、前端插件加载器或通用 Frontend ABI。
@@ -64,20 +70,22 @@ H700 侧提供稳定的适配接口，不让 Linkslot 业务模块直接访问 S
 
 ## 5. 上游更新流程
 
-将 Linkslot 上游 remote 命名为 `linkslot-upstream`，首次导入到 `third_party/linkslot`。后续同步时：
+等大版本发布并选定正式基线后，再将 Linkslot 上游 remote 命名为 `linkslot-upstream`，首次导入到 `third_party/linkslot`。以下为届时使用的流程示意，当前不要执行：
 
 ```sh
 git remote add linkslot-upstream https://github.com/luguiyi/linkslot.git
+git fetch linkslot-upstream --tags
 
-# 首次导入（仅在尚未导入 subtree 时执行）
-git subtree add --prefix=third_party/linkslot linkslot-upstream main --squash
+# 首次导入：使用确认过的 release tag，而不是浮动的 main
+# 将 <release-tag> 替换为实际版本标签
+git subtree add --prefix=third_party/linkslot linkslot-upstream <release-tag> --squash
 
-# 后续更新
-git fetch linkslot-upstream
-git subtree pull --prefix=third_party/linkslot linkslot-upstream main --squash
+# 后续更新：先确认新 tag 对应的 commit SHA，再用固定 SHA 同步
+git fetch linkslot-upstream --tags
+git subtree pull --prefix=third_party/linkslot linkslot-upstream <new-commit-sha> --squash
 ```
 
-实际首次导入前先确认仓库目录和已有文件，不得覆盖本项目工程文件。同步时记录新旧上游 commit，固定到具体 SHA；不要让正式构建直接追踪 `main`。
+首次导入前确认目标目录不存在或为空，不得覆盖本项目工程文件。每次同步均记录新旧上游 commit SHA 和 tag；正式构建不直接追踪浮动的 `main`。
 
 每次同步必须经过：
 
