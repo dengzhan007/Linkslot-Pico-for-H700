@@ -220,13 +220,22 @@ if [ -n "$ENV_PART" ]; then
         echo "error: env partition is smaller than 64 KiB or its size is unknown" >&2
         exit 1
     }
-    dd if="$ENV_PART" of="$OUTDIR/env-partition-first64k.bin" bs=512 count=128 2>"$OUTDIR/env-dd.txt"
-    actual="$(wc -c < "$OUTDIR/env-partition-first64k.bin" | tr -d ' ')"
-    [ "$actual" -eq 65536 ] || {
-        echo "error: short read from $ENV_PART" >&2
+    # Capture the complete environment partition. H700 firmware commonly
+    # builds env images at 16 MiB; a 64 KiB prefix is not enough to validate
+    # the CRC or establish the exact environment image size.
+    ENV_MAX_SECTORS=131072
+    [ "$ENV_PART_SIZE" -le "$ENV_MAX_SECTORS" ] || {
+        echo "error: env partition is larger than the 64 MiB safety limit: $ENV_PART_SIZE sectors" >&2
         exit 1
     }
-    echo "env_partition_capture=first_64KiB source=$ENV_SOURCE device=${ENV_PART##*/}" >> "$OUTDIR/summary.txt"
+    ENV_BYTES=$((ENV_PART_SIZE * 512))
+    dd if="$ENV_PART" of="$OUTDIR/env-partition.bin" bs=512 count="$ENV_PART_SIZE" 2>"$OUTDIR/env-dd.txt"
+    actual="$(wc -c < "$OUTDIR/env-partition.bin" | tr -d ' ')"
+    [ "$actual" -eq "$ENV_BYTES" ] || {
+        echo "error: short read from $ENV_PART: got $actual bytes, expected $ENV_BYTES" >&2
+        exit 1
+    }
+    echo "env_partition_capture=complete source=$ENV_SOURCE device=${ENV_PART##*/} bytes=$ENV_BYTES sectors=$ENV_PART_SIZE" >> "$OUTDIR/summary.txt"
 else
     echo "env_partition_capture=skipped_no_PARTNAME_env" >> "$OUTDIR/summary.txt"
 fi
@@ -234,8 +243,8 @@ fi
 {
     echo "== SHA-256 of raw boot-chain captures =="
     sha256sum "$OUTDIR"/boot0-primary.bin "$OUTDIR"/boot0-secondary.bin "$OUTDIR"/toc1-package.bin
-    if [ -f "$OUTDIR/env-partition-first64k.bin" ]; then
-        sha256sum "$OUTDIR/env-partition-first64k.bin"
+    if [ -f "$OUTDIR/env-partition.bin" ]; then
+        sha256sum "$OUTDIR/env-partition.bin"
     fi
     if [ -f "$OUTDIR/live-fdt.dtb" ]; then
         sha256sum "$OUTDIR/live-fdt.dtb"
