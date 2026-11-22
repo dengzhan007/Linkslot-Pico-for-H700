@@ -40,18 +40,27 @@ def allwinner_checksum(data: bytes, checksum_offset: int = CHECKSUM_OFFSET) -> i
 
 
 def parse_boot0(data: bytes) -> dict[str, Any]:
-    if len(data) != BOOT0_BYTES:
+    captured_bytes = len(data)
+    if captured_bytes < BOOT0_BYTES:
         raise Boot0Error(
-            f"expected a {BOOT0_BYTES}-byte Boot0 image, received {len(data)} bytes"
+            f"expected a {BOOT0_BYTES}-byte Boot0 image or larger, "
+            f"received {captured_bytes} bytes"
         )
     if data[4:12] != b"eGON.BT0":
         raise Boot0Error("missing eGON.BT0 signature")
 
     image_size = struct.unpack_from("<I", data, IMAGE_SIZE_OFFSET)[0]
-    if image_size != BOOT0_BYTES:
+    if (
+        image_size < BOOT0_BYTES
+        or image_size > captured_bytes
+        or image_size % 512
+    ):
         raise Boot0Error(
-            f"Boot0 header declares 0x{image_size:x} bytes, expected 0x{BOOT0_BYTES:x}"
+            f"Boot0 header declares 0x{image_size:x} bytes, expected a "
+            f"512-byte-aligned size between 0x{BOOT0_BYTES:x} and "
+            f"0x{captured_bytes:x}"
         )
+    data = data[:image_size]
 
     stored_checksum = struct.unpack_from("<I", data, CHECKSUM_OFFSET)[0]
     calculated_checksum = allwinner_checksum(data)
@@ -83,6 +92,7 @@ def parse_boot0(data: bytes) -> dict[str, Any]:
     return {
         "format": "Allwinner eGON.BT0",
         "bytes": len(data),
+        "captured_bytes": captured_bytes,
         "image_size": image_size,
         "stored_checksum": f"0x{stored_checksum:08x}",
         "checksum_valid": True,
@@ -101,7 +111,9 @@ def parse_boot0(data: bytes) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("boot0", type=Path, help="64 KiB Boot0 copy from the inventory collector")
+    parser.add_argument(
+        "boot0", type=Path, help="Boot0 copy from the inventory collector (64 KiB or larger)"
+    )
     parser.add_argument("-o", "--output", type=Path, help="optional JSON output path")
     args = parser.parse_args()
 

@@ -28,8 +28,8 @@ class InventoryScriptSafetyTests(unittest.TestCase):
 
     def test_expected_boot_regions_are_read_with_fixed_lengths(self):
         required = [
-            'read_exact "boot0-primary" 16 128 "boot0-primary.bin"',
-            'read_exact "boot0-secondary" 512 128 "boot0-secondary.bin"',
+            'read_exact "boot0-primary" 16 256 "boot0-primary.bin"',
+            'read_exact "boot0-secondary" 512 256 "boot0-secondary.bin"',
             'read_exact "toc1-package" 32800 2560 "toc1-package.bin"',
         ]
         for statement in required:

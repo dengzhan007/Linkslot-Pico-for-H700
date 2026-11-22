@@ -145,6 +145,9 @@ fi
 
 # Read-only source offsets used by the BaseOS H700 firmware investigation:
 # Boot0 copies at LBA 16 and 512; TOC1 at LBA 32800.
+# Capture 128 KiB for each Boot0 copy: some H700 cards declare 0x10000 bytes,
+# while others declare 0x20000. The inspector crops to the header-declared
+# size before validating the checksum, so the extra tail is harmless.
 read_exact() {
     label="$1"
     lba="$2"
@@ -159,8 +162,8 @@ read_exact() {
     }
 }
 
-read_exact "boot0-primary" 16 128 "boot0-primary.bin"
-read_exact "boot0-secondary" 512 128 "boot0-secondary.bin"
+read_exact "boot0-primary" 16 256 "boot0-primary.bin"
+read_exact "boot0-secondary" 512 256 "boot0-secondary.bin"
 read_exact "toc1-package" 32800 2560 "toc1-package.bin"
 
 # The U-Boot environment is a separate GPT partition on BaseOS cards. Capture
