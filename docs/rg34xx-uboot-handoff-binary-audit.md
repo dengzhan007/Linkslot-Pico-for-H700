@@ -80,6 +80,19 @@ handoff 函数在真正选择 SMC/A32 分支前还执行了 `0x14D0 -> 0x0C7C`�
 
 上述 `BOOTM_STATE_OS_FAKE_GO` 数值对照来自 [U-Boot v2018.05 include/image.h](https://github.com/u-boot/u-boot/blob/v2018.05/include/image.h)，其中 `BOOTM_STATE_OS_FAKE_GO=0x00000200`。
 
+### 2.6 `gd->fdt_blob`、`working_fdt` 与 `bootm` 的 FDT 数据流
+
+对当前现场 U-Boot 二进制追加的 FDT 函数窗口显示：
+
+- `0xEF5C` 首先从 `sb + 0x5c` 读取一个全局 FDT blob 指针；空指针则跳过。非空时，从 FDT header `+4` 读取 big-endian `totalsize`，计算 `(totalsize + 0x101f) & ~0x1f`，即为原树预留约 4 KiB 并按 32-byte 对齐；随后更新 U-Boot 全局 data 中保存的 FDT size/地址状态，并调用 `0x66380` 的 FDT 扩容/复制 helper。此代码位于现场 U-Boot，属于目标二进制证据。
+- `0x8680` 的函数将传入 `r0` 写入一个全局指针槽；BaseOS-MultiFrontend 的同一 U-Boot trace 将该槽命名为 `working_fdt`，并将此函数标记为 `set_working_fdt_addr`。目标 binary 的实际指令与该模型窗口一致。
+- `0x7F10` 的 `bootm` 代码从一个全局指针槽读取 FDT 指针，然后调用 `0xFDA4` 的 FDT/initrd 处理路径；后续 FDT chosen 处理路径也接收这棵工作树。`boot_jump_linux` 最终从 `images.ft_addr` 读取地址，将内容复制到 `0x44000000`。
+- BaseOS `experiments/h700-boot-speed/uboot-trace.py` 的初始化模型把 `working_fdt` 指向 TOC1 package DTB；其注释记录真实设备启动阶段会由 `0xEF5C` 相关代码先为 control FDT 增加 4096 bytes spare space。BaseOS trace 是静态/模拟器模型，不是这台 RG34XX 的现场指针捕获，但它与目标 U-Boot 的 `0xEF5C`、`0x8680` 和 `0x7F10` 指令窗口相互吻合。
+
+**当前最强来源判断：** `images.ft_addr` 来自 U-Boot 全局 `working_fdt`，该 working tree 最可能是 TOC1 package DTB 经 bootloader 扩容及 `bootm` fixup 后的结果；不是优先取 p4 Android appended DTB。p4 Android header 的 `dtb_addr=0x44000000` 与最终 copy destination 相同，不能据此认定它就是源树地址。
+
+**剩余证据边界：** 本次静态审计未直接观察运行时 `gd+0x5c`、`working_fdt` 和 `images.ft_addr` 的数值，也未捕获 `0x66380` 调用后的完整目的缓冲指针。因此将 TOC1 DTB 标为高置信来源候选，而不是已取得现场指针级证明。仍需本地 p4/TOC1/live FDT 属性比较，并在后续受控入口探针中核对最终 FDT 的 magic、totalsize、memory 和 chosen 属性。
+
 ## 3. 与当前 p4 Android boot image 对应
 
 用户上传的当前 p4 boot partition SHA-256 为 `41cfaa8f9ade4a5e05a89188abb7db154243e38b8e19c53b730f0a45ff325516`。其 Android v2 header 字段 `kernel_addr=0x40080000`，`ramdisk_addr=0x42000000`，`dtb_addr=0x44000000`。压缩 kernel 解压后为 `ARM\x64` AArch64 Image，`text_offset=0x80000`，版本为 Linux 4.9.170 `#19`，与现场 runtime 完全匹配。
