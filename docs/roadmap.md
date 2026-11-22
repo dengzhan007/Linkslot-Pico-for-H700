@@ -12,14 +12,14 @@
 - [x] 建立 RG34XX / Allwinner H700 Cortex-A53 的 AArch64 freestanding C、C++ 与汇编编译检查和 CI。
 - [ ] 等待 Linkslot 即将发布的大版本后，重新锁定上游 commit 并完成逐 crate 复用审计。
 - [x] 确认目标 SoC 是 Allwinner H700，不是 Rockchip RK3566；AArch64 编译 CPU target 已修正为 Cortex-A53。
-- [ ] [x] 锁定第一台实机为 Anbernic RG34XX（非 SP），建立 Allwinner H700 / Cortex-A53 硬件基线。
+- [x] 锁定第一台实机为 Anbernic RG34XX（非 SP），建立 Allwinner H700 / Cortex-A53 硬件基线。
 
 ## 当前工作：不依赖 Linkslot 上游版本的准备
 
 ### A. 工具链与工程基础（已开始）
 
-- [x] AArch64 freestanding C/汇编编译探针。
-- [x] 检查产物确实为 AArch64 ELF relocatable objects。
+- [x] AArch64 freestanding C、C++ 和汇编编译探针。
+- [x] 检查 C、C++ 和汇编产物确实为 AArch64 ELF relocatable objects。
 - [x] GitHub Actions 自动编译检查。
 - [ ] 增加统一构建参数与工具链版本记录。
 - [ ] 明确调试日志输出方式和目标 ELF/镜像的检查规则。
@@ -28,8 +28,9 @@
 
 交付：目标设备 SD 启动链调查报告和最小裸机入口规范。
 
-- 识别第一台设备型号、主板版本和 U-Boot 版本。
-- 只读获取 U-Boot 环境、SD 加载能力、DRAM map 和启动参数。
+- [x] 从 BaseOS-MultiFrontend 固件审计确认 RG34XX 型号、Allwinner H700、Cortex-A53、1 GB LPDDR4 和 `rg34xx_v1` 面板驱动。
+- [ ] 从实际测试机确认主板 revision、当前 Boot0/TOC1/U-Boot/monitor 的 SHA-256 和运行时版本。
+- [ ] 只读获取 U-Boot 环境、SD 加载能力、DRAM map 和启动参数；重点验证 AArch32 U-Boot 经 vendor monitor 进入 AArch64 payload 的路径。
 - 确认 payload 加载地址、入口、栈、异常向量和 DTB/参数交接。
 - 建立冷启动测量方案；不设计 eMMC 安装或旧系统自动回退。
 - 通过电脑重写 SD 卡或设备真实存在的 Boot ROM/USB 烧录入口恢复。
