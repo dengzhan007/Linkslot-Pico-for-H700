@@ -176,3 +176,14 @@ BaseOS 的 native SPL / monitor / A32 loader 是当前最有价值的技术参�
 - GPT p6=UDISK、p7=primary 与 /proc/cmdline 的 appfs@p6、UDISK@p7 使用不同命名层；运行时 p6 ext4=/data、p7 vfat=/mnt/sdcard，逻辑用途与 bootargs 相符。第三轮完整 p3 env CRC 唯一匹配 128 KiB 映像，25 个变量解析无警告，完整 16 MiB p3 hash 与 BaseOS prepared env 区域完全一致。H616-specific BROM 资料支持 LBA 16/LBA 512 为两处候选位置，LBA 16 最可能为本次正常启动来源。目标 U-Boot 含 update bootcmd/part info 路径字符串，runtime cmdline 与 setargs_mmc 相符；尚无实际函数执行 trace。FDT 检查器已解析 framebuffer `[0x7bf24800,0x7c076000)`。
 
 **当前阶段判断：** 三轮现场采集和完整 env CRC/hash 验证已完成；启动链安全边界、Boot0 当前选择及入口 ABI 审查尚未完成。Issue #2 仍不得据猜测地址构建或启动 payload；在明确 Boot0 选择及 monitor/DRAM 占用前，不触碰启动区域。
+
+
+## 11. live FDT / initrd / ION / OP-TEE 的实机交叉证据（2026-11-22）
+
+第四轮现场 ZIP 反编译的 live DTB 明确声明 `/chosen/linux,initrd-start=0x42000000`、`linux,initrd-end=0x42000200`；memblock `[0x42000000,0x42001000)` 是覆盖这 512-byte initrd 的 4 KiB 页，因此这条 reservation 现有高置信对象归属。live FDT 总长度与文件长度都是 143,936 bytes，memblock `[0x44000000,0x44023240)` 同样长 143,936 bytes，且起点与 BaseOS 实验 FDT 基址相同；这是高置信 live FDT blob 匹配，但 memblock 输出没有 owner 名称或 U-Boot FDT 指针 trace。
+
+live FDT 同时具有 `/firmware/optee`，`compatible="linaro,optee-tz"`、`method="smc"`；bootargs 则包含 `androidboot.secure_os_exist=0`。现场 dmesg 的 OP-TEE probe 随后记录 `api uid mismatch`。Linux OP-TEE 驱动在这一检查失败时返回 `-EINVAL`，不会继续完成 OP-TEE 版本/capability/共享内存/TEE 设备注册流程（见 [Linux OP-TEE core.c](https://code.googlesource.com/linux/torvalds/linux/+/c6e169bc146a76d5ccbf4d3825f705414352bd03/drivers/tee/optee/core.c)）。因此只能说本次 Linux 没有成功建立 OP-TEE 驱动接口；不能据此宣布 BL31、EL3 或安全世界完全不存在。
+
+FDT 的 Allwinner ION heap 声明包括 `ion_cma` 和 `ion_secure`，但两者的 `heap-base/heap-size` 都是零，没有给出固定物理范围；FDT 也没有标准 `/reserved-memory` 节点。故未知区间 `[0x7ec00000,0x7fc00000)` 不能因为存在名为 secure 的 ION heap 就自动归类为 secure carveout，必须继续排除直至找到 owner/访问证据。硬件日志筛选没有提供 CMA、BL31 或 secure carveout 的地址证据。
+
+对应的 FDT 解析器已扩充为输出 `initrd`、`firmware_nodes` 和 `ion_heaps`，合成测试覆盖 initrd 边界、OP-TEE conduit 和零尺寸 ION heap。**本轮交叉分析仍未批准 payload 地址或入口。**
