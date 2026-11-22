@@ -182,11 +182,7 @@ $meminfoFile = Join-Path $OutputDirectory "meminfo.txt"
 if ((Test-Path -LiteralPath $memorySnapshot -PathType Leaf) -and
     (Test-Path -LiteralPath $pageSizeFile -PathType Leaf)) {
     $pageSizeText = (Get-Content -LiteralPath $pageSizeFile -Raw).Trim()
-    if ($pageSizeText -match '^\d+
-Write-Host "Inventory collected and parsed successfully."
-Write-Host "Review: $OutputDirectory"
-Write-Host "The device-side collector only reads the source block device; output files were written under /tmp."
-) {
+    if ($pageSizeText -match '^[0-9]+$') {
         $memoryMapArgs = @($MemoryMapInspector, $memorySnapshot, "--page-size", $pageSizeFile, "--meminfo", $meminfoFile)
         if (Test-Path -LiteralPath $liveFdtJson -PathType Leaf) {
             $memoryMapArgs += @("--fdt-json", $liveFdtJson)
