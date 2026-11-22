@@ -6,7 +6,7 @@
 |---|---|---|
 | 定位 | 专用 GB/GBC 核心，准确性导向 | 多平台核心，支持 GB/GBC/GBA |
 | 优势 | 专用 GB/GBC 核心，官方文档强调其准确性取向；提供丰富的 GB Colorization、DMG/GBC/SGB 调色板、GBC LCD 色彩校正和 LCD 帧混合选项 | 一个核心覆盖 GB/GBC/GBA；有 GB 硬件型号选择、SGB 边框、性能相关选项；有利于统一跨平台设置与配置 |
-| 代价 | 不支持 Game Boy Camera；主要围绕 GB/GBC | GB/GBC 专属的调色板工作流不如 Gambatte 细致；mGBA 项目本身的 GB Camera 能力不能直接当作当前 Libretro core / H700 host 已支持的能力（当前 Libretro core feature 表也未宣称 Camera 支持） |
+| 代价 | 不支持 Game Boy Camera；主要围绕 GB/GBC | GB/GBC 专属调色板和 LCD 色彩校正选项不如 Gambatte 细致；当前 Libretro core 文档没有宣称 Camera 支持，不能把 mGBA 上游项目的其他平台能力直接当作 H700 host 已支持的功能 |
 | 建议 | GB/GBC 默认核心 | 可选核心，给需要 Camera 或希望统一核心的用户 |
 
 Libretro 文档将 Gambatte 描述为 accuracy-focused，并列出 GB Colorization、custom palettes、GBC color correction 和 LCD frame mixing；mGBA 文档列出 GB/GBC/GBA 支持、硬件型号选择、SGB borders 和性能相关选项。两者的 Libretro 核心文档都使用 `.srm` 作为 cartridge battery save 文件扩展名。扩展名相同不等于所有 ROM/核心版本的保存数据必然逐字节兼容，项目仍须对实际 dump 长度、RTC 附加数据和原始字节做测试。
