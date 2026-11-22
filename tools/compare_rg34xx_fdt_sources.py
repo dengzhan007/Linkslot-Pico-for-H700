@@ -56,12 +56,19 @@ def _source_report(label: str, raw: bytes) -> tuple[dict[str, Any], dict[str, di
     for node_path, properties in nodes.items():
         device_type = fdt._strings(properties.get("device_type"))
         if device_type == ["memory"] or node_path.rsplit("/", 1)[-1].startswith("memory@"):
-            memory.extend(
-                {"node": node_path, **entry}
-                for entry in fdt._reg_ranges(
-                    properties.get("reg"), address_cells, size_cells
+            raw_reg = properties.get("reg")
+            try:
+                memory.extend(
+                    {"node": node_path, **entry}
+                    for entry in fdt._reg_ranges(raw_reg, address_cells, size_cells)
                 )
-            )
+            except fdt.FdtError as exc:
+                memory.append({
+                    "node": node_path,
+                    "reg_bytes": len(raw_reg) if raw_reg is not None else 0,
+                    "reg_sha256": sha256(raw_reg) if raw_reg is not None else None,
+                    "parse_error": str(exc),
+                })
     report = {
         "label": label,
         "component_bytes": len(raw),
