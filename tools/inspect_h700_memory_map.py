@@ -118,6 +118,14 @@ def _parse_debugfs(text: str) -> dict[str, Any]:
                 if end_inclusive < start:
                     raise MemoryMapError(f"memblock region end precedes start: {line}")
                 suffix = (match.group(4) or "").strip()
+                # Standard memblock debugfs output may place an NUMA node
+                # column ("x" when no node is assigned) before the region
+                # flags. Strip only that sentinel; target vendor output may
+                # instead provide a trailing "size:NNNK" field.
+                if suffix == "x":
+                    suffix = ""
+                elif suffix.startswith("x "):
+                    suffix = suffix[2:].strip()
                 size_match = REPORTED_SIZE_RE.search(suffix)
                 reported_size = None
                 if size_match:
