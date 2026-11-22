@@ -351,3 +351,70 @@ framebuffer 起点比 64 MiB CMA 候选区末端 `0x7bc00000` 高 `0x324800`（3
 完整 env 分区已读回且 CRC/hash 验证通过；第四轮已读出 46 条 memblock reserved entries，并得到一个 64 MiB CMA 高置信候选和一个与 BaseOS monitor 地址匹配的 16 MiB 保留区。下一阶段重点是归属未知的高地址保留区/secure/DMA 范围、核对 monitor 实际读写边界，并获取 Boot0 当前选择/DRAM training 证据；在此之前不批准任何 payload 地址或 A32→A64 handoff 实现，继续只读。
 
 在 U-Boot environment 和 monitor/DRAM 安全边界审查完成前，不修改 Boot0、TOC1、U-Boot、monitor 或 GPT，不试刷 AArch64 payload。设备没有 eMMC；失败恢复仍按项目设计由电脑重写/修复 SD 卡，不依赖回退到旧 Linux/BaseOS。
+
+
+## 9. 第四轮 live FDT、initrd、ION / OP-TEE 与 memblock 交叉复核
+
+第四轮归档仍为 [reports 分支 ZIP](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261122-195053.zip)，SHA-256：`bbfa065e590ecd7f8394f9b251d15468d63ed6c93bbe192e4272a65a700ab5e2`。本节使用归档内的 `live-fdt.dtb`、`dmesg-hardware-lines.txt` 和独立 memblock 文本交叉判断；没有对设备或 SD 卡执行写入。
+
+### 9.1 initrd 保留页得到对象级关联
+
+反编译 live FDT 后，`/chosen` 明确给出：
+
+```text
+linux,initrd-start = <0x00 0x42000000>;
+linux,initrd-end   = <0x00 0x42000200>;
+```
+
+按 FDT 的 end-exclusive 语义，initrd 区间为 `[0x42000000,0x42000200)`，长度 512 bytes。第四轮 memblock 的第 2 条是 `[0x42000000,0x42001000)`，恰好覆盖该 initrd 数据所在的 4 KiB 页。因此原先“与 initrd 实验基址相同但 owner 未明”的判断已升级为：**该 4 KiB memblock reservation 与 live FDT 声明的 initrd 页高度吻合**。不要把这页当作空闲地址；initrd 的实际内容和用途仍应单独分析。
+
+### 9.2 FDT blob 与 0x44000000 保留段高度吻合
+
+本次 live FDT 文件：
+- SHA-256：`dbe276ea70afff2a57e29b62c29cec8fa0db5a0c4d94986168f9dc37b14d06d5`
+- `totalsize/file_bytes = 143,936` bytes
+
+memblock 第 3 条为 `[0x44000000,0x44023240)`，长度同样是 143,936 bytes；其起点又与 BaseOS native SPL 研究中的最终 FDT 基址 `0x44000000` 相同。**地址起点、精确字节长度和 BaseOS 研究布局三者同时吻合，强烈支持该 reservation 就是交给 Linux 的 live FDT blob。**但 memblock 输出没有 owner 标签，也没有直接捕获 U-Boot 传入的 FDT 指针，因此文档仍将它标为“高置信 FDT 区间匹配”，而不是声称已经获得指针级 trace。
+
+### 9.3 OP-TEE 节点存在，但 SMC 身份校验失败
+
+live FDT 反编译得到：
+```dts
+/firmware/optee {
+    compatible = "linaro,optee-tz";
+    method = "smc";
+};
+```
+
+同一份 live FDT 的 bootargs 包含 `androidboot.secure_os_exist=0`。第四轮 `dmesg-hardware-lines.txt` 共 148 行，其中 OP-TEE 相关日志为：
+```text
+[0.981049] optee: probing for conduit method from DT.
+[0.981060] optee: api uid mismatch
+```
+
+Linux OP-TEE 驱动在通过 DT 选择 SMC conduit 后，会调用 OP-TEE API UID 检查；UID 不匹配时直接以 `-EINVAL` 退出 probe，尚未走到版本、capabilities、共享内存池和 TEE 设备注册阶段（参考 [Linux OP-TEE core.c](https://code.googlesource.com/linux/torvalds/linux/+/c6e169bc146a76d5ccbf4d3825f705414352bd03/drivers/tee/optee/core.c)）。
+
+因此当前准确结论是：**设备树声明了 OP-TEE SMC conduit，但本次 Linux 启动没有通过 OP-TEE API UID 身份校验；vendor bootargs 同时声明 secure OS 不存在。**这不等于 BL31/vendor monitor 未运行，也不能证明 CPU 安全世界完全不存在，或某些地址没有被 EL3/固件保留。OP-TEE 驱动的身份校验失败不能被改写成“没有 secure world”。
+
+### 9.4 ION heap 声明没有给出固定物理范围
+
+live FDT 还声明了 Allwinner ION heap：
+- `/ion/heap_cma@0`：`compatible="allwinner,cma"`，`heap-name="cma"`，`heap-base=0`，`heap-size=0`，`heap-type="ion_cma"`。
+- `/ion/heap_secure@0`：`compatible="allwinner,secure"`，`heap-name="secure"`，`heap-base=0`，`heap-size=0`，`heap-type="ion_secure"`。
+
+这两个节点是 heap 类型/名称声明，但 base 和 size 都为零；它们没有提供可据以绘制的固定物理区间。尤其不能仅凭 `heap-name="secure"` 就把 memblock 的 `[0x7ec00000,0x7fc00000)`（16 MiB）指定为 secure heap。live FDT 也没有标准根节点 `/reserved-memory`。这只说明 DT 没有通过标准 reserved-memory 子节点列出 carveout，不说明所有固件/monitor/DMA 保留都不存在。
+
+### 9.5 对 memblock 表的修订与剩余边界
+
+| 区间（半开） | 本轮交叉证据 | 当前归属 |
+|---|---|---|
+| `[0x42000000,0x42001000)` | live FDT initrd `[0x42000000,0x42000200)` 被该 4 KiB 页覆盖 | 高置信 initrd backing/reservation |
+| `[0x44000000,0x44023240)` | live FDT blob 长度恰为 143,936 bytes，起点吻合 | 高置信 live FDT blob reservation |
+| `[0x48000000,0x49000000)` | 16 MiB 范围与 BaseOS vendor monitor 研究窗口一致 | monitor 保留区，仍需核对实际访问上界 |
+| `[0x77c00000,0x7bc00000)` | `cma=64M`、`CmaTotal=65536 kB` 与唯一 64 MiB memblock reservation 相符 | 高置信 CMA 候选，未获 CMA debugfs base_pfn/count 直接确认 |
+| `[0x7ec00000,0x7fc00000)` | ION secure heap 节点 base/size 均为零；OP-TEE probe UID mismatch；secure_os_exist=0 | **仍未知，不能标注为 secure heap，也不能释放** |
+| 顶部 37 条碎片 | 本轮 FDT/dmesg 未提供 owner 对应关系 | 全部继续排除 |
+
+148 行硬件日志中没有 CMA base、memblock owner、BL31/ATF carveout 或 secure-memory 范围的直接输出；这是对该筛选日志文件的结论，不是对整个内核所有日志通道的否定。framebuffer `[0x7bf24800,0x7c076000)` 仍须独立排除。
+
+**当前没有批准任何 Linkslot payload load/entry address。**下一步应优先获取设备上的 ION heap/debug 接口（若该内核实际导出）、TEE 设备节点和更完整的启动日志，并审查 monitor 的 SMC/内存访问边界；对未知 16 MiB 段和 top-of-RAM 碎片继续按保留区处理。
