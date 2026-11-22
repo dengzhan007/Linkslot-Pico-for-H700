@@ -92,7 +92,7 @@ BaseOS-MultiFrontend 中与现场 monitor SHA-256 相同的 vendor monitor 已�
 
 - 当前 RG34XX 头部地址为 kernel `0x40080000`、ramdisk `0x42000000`、FDT `0x44000000`；
 
-- 新 Image 必须有 `ARM\x64` magic、有效 AArch64 branch header、`text_offset=0x80000`、非零 `image_size`，且 `image_size` 不与 ramdisk 槽重叠；
+- 新 Image 必须有 `ARM\x64` magic、有效 AArch64 branch header、`text_offset=0x80000`、非零 `image_size`，且 `image_size` 不与 ramdisk 槽重叠；在 `CONFIG_SYS_BOOTM_LEN` 尚未恢复前，新 Image 文件长度不得超过当前成功启动的 stock kernel 解压长度 17,461,256 bytes，`image_size` 不得超过原厂 `0x1138000`；
 
 - 输出 kernel component 使用 gzip；只更新 Android header 的 kernel size 和 SHA-1 image ID；
 
@@ -102,7 +102,7 @@ BaseOS-MultiFrontend 中与现场 monitor SHA-256 相同的 vendor monitor 已�
 
 
 
-对应测试 `tools/test_build_rg34xx_bootimg_payload.py` 使用合成 Android v2 image 验证 round-trip、non-kernel component hash、p4 tail 保留、错误 Image header、错误 text_offset、slot 超限与组件区越界。该工具当前没有生成真实 payload，也没有被用于用户的设备镜像；任何输出都只是 host-side candidate，不是可刷写发行包。
+对应测试 `tools/test_build_rg34xx_bootimg_payload.py` 使用合成 Android v2 image 验证 round-trip、non-kernel component hash、p4 tail 保留、错误 Image header、错误 text_offset、slot 超限和保守解压输出上限。builder 同时保留原始组件区边界检查。该工具当前没有生成真实 payload，也没有被用于用户的设备镜像；任何输出都只是 host-side candidate，不是可刷写发行包。
 
 ## 5. 第一份 payload 的边界
 
