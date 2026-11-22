@@ -187,3 +187,31 @@ live FDT 同时具有 `/firmware/optee`，`compatible="linaro,optee-tz"`、`meth
 FDT 的 Allwinner ION heap 声明包括 `ion_system`（`sys_user`）、`ion_cma` 和 `ion_secure` 三类节点；三者的 `heap-base/heap-size` 都是零，没有给出固定物理范围；FDT 也没有标准 `/reserved-memory` 节点。故未知区间 `[0x7ec00000,0x7fc00000)` 不能因为存在名为 secure 的 ION heap 就自动归类为 secure carveout，必须继续排除直至找到 owner/访问证据。硬件日志筛选没有提供 CMA、BL31 或 secure carveout 的地址证据。
 
 对应的 FDT 解析器已扩充为输出 `initrd`、`firmware_nodes` 和 `ion_heaps`，合成测试覆盖 initrd 边界、OP-TEE conduit 和零尺寸 ION heap。**本轮交叉分析仍未批准 payload 地址或入口。**
+
+
+## 12. ION / TEE runtime 与 Allwinner DRM-info SMC（2026-11-22 20:47）
+
+20:47:42 的只读现场采集见 [runtime 报告](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261122-204742)。运行内核为 Linux 4.9.170 AArch64；导出的配置包含 `CONFIG_ION=y`、`CONFIG_TEE=y`、`CONFIG_OPTEE=y`、`CONFIG_CMA=y` 和 `CONFIG_DMA_CMA=y`。现场有 `/dev/ion`，`ion-sunxi` 平台驱动已注册；`/dev/tee0`、`/dev/teepriv0` 不存在。标准 OP-TEE 探测日志为 `optee: api uid mismatch`。
+
+ION debugfs 的当前分配为：
+
+- `sys_user`：总计 7,397,376 bytes，其中 `ion_disp2` 为 7,372,800 bytes，另有六项各 4,096 bytes 的 `ion_vin` 分配；orphaned allocations 为 0。
+- `cma`：`nextui.elf` 当前分配 4,153,344 bytes；对应 CMA 区域为 `[0x77c00000,0x7bc00000)`，总量 64 MiB，空闲 60,360 KiB，与 `/proc/meminfo` 的 `CmaTotal/CmaFree` 相符。
+- `secure`：heap 节点存在，但当前分配为 0，orphaned allocations 为 0。该 debugfs 输出不报告 heap 的 base/size，因此不能据此推断该堆容量或物理区间。
+
+### 12.1 标准 OP-TEE API 与 Allwinner DRM-info 是不同的 SMC 路径
+
+对照 [Allwinner 4.9.170 参考树的 Makefile](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/Makefile)，以及其 [OP-TEE core.c](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/tee/optee/core.c)、[sunxi_ion.c](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/staging/android/ion/sunxi/sunxi_ion.c) 和 [optee_smc.h](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/tee/optee/optee_smc.h)，该参考实现具有以下行为：
+
+1. 标准 OP-TEE driver 先调用 UID 检查；UID 不匹配时会中止标准 TEE driver 初始化，因而没有标准 `/dev/tee0` 接口。
+2. Allwinner `ion-sunxi` 在创建 `ION_HEAP_TYPE_SECURE` heap 时，另行调用 `optee_probe_drm_configure()`。该函数发出 `OPTEE_SMC_GET_DRM_INFO`（function ID 15）厂商扩展 SMC，成功时返回 `drm_base`、`drm_size`、`tee_base` 并写入内核日志；失败时日志为 `drm config service not available: <status>`。
+3. 该 vendor SMC 不等于标准 OP-TEE UID / revision / capabilities 握手。故现场 `api uid mismatch` 只证明标准 Linux OP-TEE driver 没有初始化，**不能单独证明** Allwinner DRM-info SMC 也失败。
+4. 参考实现的 `ion-sunxi` 调用处没有用返回值阻止后续 heap 创建；若 SMC 失败且 DT heap base/size 初始为零，仍不能把 debugfs 中出现的空 `secure` heap 当作安全内存已经配置成功。
+
+这棵参考树的 Makefile 版本为 4.9.170，且采用 `sun50iw9p1` Allwinner 设备树；它是与现场内核版本及 SoC 家族匹配的比较源码，不是已证明与 RG34XX `#19` 二进制逐字节对应的完整源代码。因此上述调用流程需要结合本机日志验证，不能直接视为目标二进制的已证事实。
+
+### 12.2 对 16 MiB 未知保留区的处理
+
+现场 `memblock` 区间 `[0x7ec00000,0x7fc00000)`（16 MiB）仍没有可直接观测的 owner。它可能与 Allwinner DRM/TEE carveout 有关，但当前报告没有 `drm_base/drm_size/tee_base`，也没有 `drm config service not available` 结果；因此目前既不能确认匹配，也不能确认 vendor SMC 失败。该 16 MiB 区间、其余未知 reserved entries 和 RAM 顶部离散碎片继续整体排除，不得用于 payload、heap 或 loader。
+
+只读 collector 的 dmesg 筛选已补充 `drm config service`、`drm_base`、`drm_size`、`tee_base` 关键词。下一轮重新运行后，若出现成功日志，需比较返回的 `drm_base/drm_size` 是否与上述 16 MiB 区间吻合，并核对 `tee_base`；若出现失败日志，保留十六进制返回状态；若两类日志都没有，则需检查目标内核是否包含此 vendor 调用路径，不能推断为零尺寸或 SMC 失败。此项完成前，不批准任何 payload 地址或入口。
