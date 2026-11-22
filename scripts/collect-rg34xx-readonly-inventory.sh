@@ -97,15 +97,37 @@ capture_proc "mounts.txt" "/proc/mounts"
 capture_proc "interrupts.txt" "/proc/interrupts"
 
 # Capture the kernel page size so CMA PFNs can be converted to byte ranges.
+# getconf is preferred; older Android userspaces may omit it, so fall back to
+# the KernelPageSize reported for this process in /proc/self/smaps.
+PAGE_SIZE=""
+PAGE_SIZE_SOURCE=""
 if command -v getconf >/dev/null 2>&1; then
     PAGE_SIZE="$(getconf PAGESIZE 2>/dev/null || getconf PAGE_SIZE 2>/dev/null || true)"
     case "$PAGE_SIZE" in
-        ''|*[!0-9]*) echo "NOT_PRESENT: getconf page size unavailable" > "$OUTDIR/page-size.txt" ;;
-        *) echo "$PAGE_SIZE" > "$OUTDIR/page-size.txt" ;;
+        ''|*[!0-9]*) PAGE_SIZE="" ;;
+        *) PAGE_SIZE_SOURCE="getconf" ;;
     esac
-else
-    echo "NOT_PRESENT: getconf unavailable" > "$OUTDIR/page-size.txt"
 fi
+if [ -z "$PAGE_SIZE" ] && [ -r /proc/self/smaps ]; then
+    PAGE_SIZE_KB="$(awk '/^KernelPageSize:/ { print $2; exit }' /proc/self/smaps 2>/dev/null || true)"
+    case "$PAGE_SIZE_KB" in
+        ''|*[!0-9]*) PAGE_SIZE="" ;;
+        *)
+            PAGE_SIZE=$((PAGE_SIZE_KB * 1024))
+            PAGE_SIZE_SOURCE="proc-self-smaps"
+            ;;
+    esac
+fi
+case "$PAGE_SIZE" in
+    ''|*[!0-9]*)
+        echo "NOT_PRESENT: getconf and /proc/self/smaps unavailable" > "$OUTDIR/page-size.txt"
+        echo "not-present" > "$OUTDIR/page-size-source.txt"
+        ;;
+    *)
+        echo "$PAGE_SIZE" > "$OUTDIR/page-size.txt"
+        echo "$PAGE_SIZE_SOURCE" > "$OUTDIR/page-size-source.txt"
+        ;;
+esac
 
 {
     echo "== kernel =="
