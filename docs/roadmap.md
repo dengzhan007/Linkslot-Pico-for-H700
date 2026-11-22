@@ -35,7 +35,7 @@
 - [x] 从 live FDT 的 `boot_fb0` 与 bootargs `disp_reserve` 交叉确认 framebuffer 物理范围 `[0x7bf24800, 0x7c076000)`（720×480×32bpp，1,382,400 bytes）；新增 FDT parser JSON 字段及合成测试。
 - [x] 读取完整 16 MiB U-Boot env GPT 分区：CRC 唯一匹配到 128 KiB 环境映像（data offset 4），25 个变量无解析警告；完整分区 hash 与 BaseOS prepared RG34XX env 区域一致。目标 U-Boot 静态字符串与 SD 自动切换路径相符，现场报告记录了证据边界。
 - [x] 将两份现场 Boot0 的 32-word DRAM 参数与 BaseOS RG34XX profile 对照：LBA16 主 LPDDR4 块 32/32 匹配；LBA512 的 LPDDR3/LPDDR4 备用块也各自 32/32 匹配；LBA512 主块仅 word[26]/word[29] 不同。H616 BROM 公开搜索位置与 LBA16/LBA512 对应，LBA16 为高置信正常启动候选，但尚无直接读取轨迹。
-- [ ] 获取 debugfs CMA/memblock 物理区间，确认 monitor/secure world、其他 DMA 和 loader 的剩余保留内存；framebuffer `[0x7bf24800, 0x7c076000)` 已明确排除，live FDT 的 1 GiB 仍不等于整段 RAM 可供 payload 使用。
+- [ ] 解析 debugfs CMA/memblock 物理区间并确认 monitor/secure world、其他 DMA 和 loader 的剩余保留内存；第四轮已确认 CMA debugfs 节点未导出、memblock 节点已采集，但具体 `memory/reserved` 条目尚待读取；`getconf` 不可用，采集器现已增加 `/proc/self/smaps` 页大小回退，解析器可在没有 PAGE_SIZE 时继续解析 memblock。framebuffer `[0x7bf24800, 0x7c076000)` 已明确排除，live FDT 的 1 GiB 仍不等于整段 RAM 可供 payload 使用。
 - [ ] 选定保留原厂 U-Boot 还是采用 A64 SPL + vendor monitor + A32 BL33；先完成入口/恢复设计评审，不试写启动区域。
 - [ ] 建立最小 A32 handoff adapter + AArch64 payload；实机验证 CurrentEL、SPSR、参数寄存器、栈、异常向量、GIC、MMU/cache/TLB 与 FDT/内存边界。
 - [ ] 完成重复冷启动、第一帧/日志时间戳和失败恢复测试；恢复方式按电脑重写/修复 SD 卡，不依赖旧 Linux 自动回退。
