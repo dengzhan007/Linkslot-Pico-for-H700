@@ -4,11 +4,17 @@ on:
   push:
     paths:
       - "platform/h700/**"
+      - "tools/pack_aarch64_image.py"
+      - "tools/build_rg34xx_bootimg_payload.py"
+      - "tools/test_pack_aarch64_image.py"
       - "scripts/build-h700-objects.sh"
       - ".github/workflows/h700-arch-check.yml"
   pull_request:
     paths:
       - "platform/h700/**"
+      - "tools/pack_aarch64_image.py"
+      - "tools/build_rg34xx_bootimg_payload.py"
+      - "tools/test_pack_aarch64_image.py"
       - "scripts/build-h700-objects.sh"
       - ".github/workflows/h700-arch-check.yml"
   workflow_dispatch:
@@ -26,7 +32,7 @@ jobs:
       - name: Install LLVM toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang llvm
+          sudo apt-get install -y clang lld llvm
 
       - name: Compile freestanding AArch64 objects
         run: bash scripts/build-h700-objects.sh

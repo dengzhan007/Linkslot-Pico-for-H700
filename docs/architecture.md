@@ -14,7 +14,11 @@ GammaOS Pico 参考树面向 MT6785，不能原样作为 RG34XX 的 SoC/板级�
 
 BaseOS-MultiFrontend 还包含一条更深入的 H700 原生启动研究路线：AArch64 mainline SPL 负责 SD、PMIC、DRAM 和预加载；保留 vendor monitor；由 monitor 进入 RAM 中的 AArch32 SVC BL33 适配器；适配器再经厂商 SMC 进入 AArch64。这个路线说明 A32 过渡层与 monitor 可能是实现 AArch64 payload 的可行桥接点，但厂商 SMC 的已验证目标是 Linux 启动契约，不等于通用裸机 ABI。具体证据、地址限制和覆盖范围见 [RG34XX 启动交接审计](rg34xx-boot-handoff-audit.md)。现场只读采集命令与 TOC1 解析步骤见 [RG34XX 只读启动链信息采集](rg34xx-readonly-inventory.md)。
 
-本项目不预先决定直接沿用原厂 U-Boot，还是采用 A64 SPL + A32 BL33 的方案。需要先完成 RG34XX 非 SP 的现场只读 inventory，再以最小 A32 handoff adapter + AArch64 freestanding payload 验证入口。入口验收必须覆盖 CurrentEL、SPSR/参数寄存器、栈、异常向量、GIC、MMU/cache/TLB、DTB/FDT 和可用/保留内存；不能只验证 payload 能被读入或代码能编译。
+**当前优先路径：保留原厂 Boot ROM、Boot0、TOC1、vendor monitor、AArch32 U-Boot、env 和 GPT，只在主机侧研究替换 p4 Android boot image 的 kernel component。** 现场 inventory 已完成；对当前设备实际 U-Boot binary 的反汇编已找到 `0x8000FF04` → `SMC #0` handoff、`images.ep`/FDT 参数流、AArch32 fallback，以及 Android gzip kernel selector。当前 p4 的 `kernel_addr=0x40080000` 已与 U-Boot `bootm` 解压目标和 `images.ep` 对应。证据和未决边界见[原厂 boot.img kernel-slot 路径评估](rg34xx-stock-bootimg-payload-path.md)与[现场 U-Boot handoff 二进制审计](rg34xx-uboot-handoff-binary-audit.md)。
+
+第一份 payload 不建设通用 allocator：使用 AArch64 Image header，入口自行建立只落在该 Image 已装载范围内的私有栈和诊断记录；不访问 MMIO、不启用设备驱动、不分配 Image 之外的 RAM，不执行 Linux 初始化代码。首要验收是确认 monitor ERET 的目标 EL/SPSR、x0..x3、DAIF、`SCTLR_EL1`/MMU/cache 状态，以及 FDT 指针与内容。当前 monitor 的 `SPSR=0x3c5` 等结果来自实际 vendor 指令的仿真，并非 RG34XX 实机寄存器捕获；必须保留此证据边界。
+
+未知 reserved region（特别是 `[0x7ec00000,0x7fc00000)`）、CMA、monitor、framebuffer 和 top-of-RAM 碎片继续排除。它们的 owner 审计**不阻止第一份完全位于 kernel Image 自身范围内的入口探针**，但在归属明确前，绝不建立通用 allocator、SD DMA、显示双缓冲或其他 Image 外部内存用户。若 stock `0x8000FF04` handoff 无法安全进入 freestanding A64 payload，再回退到 A32 BL33 adapter；只有该路线也不可行时才评估自有 A64 SPL。
 
 目标设备无 eMMC，本项目只考虑从 SD 卡启动，不设计 eMMC 安装、双系统选择或自动回退到原 Linux/BaseOS 的产品流程。启动失败后的恢复按项目约定通过电脑重写/修复 SD 卡，或使用经确认的实际 Boot ROM/USB 烧录入口；不把其他设备的自动恢复测试当作 RG34XX 已具备的功能。冷启动到第一帧、进入可操作游戏库的耗时必须实测。
 

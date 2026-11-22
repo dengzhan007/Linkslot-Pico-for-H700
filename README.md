@@ -28,14 +28,15 @@
 
 ## 当前工程进展
 
-- 已建立 RG34XX / Allwinner H700 / Cortex-A53 的 AArch64 freestanding 编译检查及 GitHub Actions。
-- 当前检查只生成并验证 C11、C++17 和 AArch64 汇编目标文件，不是可启动 payload；加载地址、入口、EL、栈和 AArch32-to-AArch64 交接仍待启动链审计。
+- 已建立 RG34XX / Allwinner H700 / Cortex-A53 的 AArch64 freestanding C/C++/汇编编译检查及 GitHub Actions。
+- 已新增只用于静态审查的 8 KiB AArch64 Image entry probe 构建：私有栈和入口记录区均位于 Image 内；入口先检查 `SCTLR_EL1.M/C`，若 MMU 或 D-cache 仍开启则不写内存而停机。CI 验证 `ARM\x64` header、`code0` 分支、`text_offset=0x80000` 和 Image size。尚未在设备上执行，也没有写入 p4。
+- 当前 stock boot.img kernel-slot 路线是首选候选：现场 U-Boot 已确认 gzip selector、`0x40080000` kernel load/entry、`0x8000FF04` monitor handoff，并将 TOC1 package DTB → `working_fdt` → bootm fixup → `images.ft_addr` 识别为高置信 FDT 来源链；本地三份 FDT 属性比对和 monitor ERET 状态仍待最终确认。
 - Linkslot 即将发布大版本，暂缓导入/同步上游源码和逐 crate 复用审计，避免对即将过时的版本重复适配。
 
 本地运行 AArch64 编译检查：
 
 ```sh
-sudo apt install clang llvm
+sudo apt install clang lld llvm
 bash scripts/build-h700-objects.sh
 ```
 
@@ -53,6 +54,8 @@ bash scripts/build-h700-objects.sh
 
 - [RG34XX 硬件基线](docs/rg34xx-hardware-profile.md)
 - [RG34XX 启动交接审计](docs/rg34xx-boot-handoff-audit.md)
+- [RG34XX 原厂 boot.img 内核槽位裸机 payload 路径评估](docs/rg34xx-stock-bootimg-payload-path.md)
+- [RG34XX 现场 U-Boot AArch32 → AArch64 handoff 二进制审计](docs/rg34xx-uboot-handoff-binary-audit.md)
 - [RG34XX 首轮实机只读 Inventory](docs/rg34xx-live-inventory-2026-11-22.md)
 - [总体架构与硬件边界](docs/architecture.md)
 - [已确认的设计决策](docs/decisions.md)

@@ -1,0 +1,644 @@
+#!/usr/bin/env python3
+"""Extract and statically inventory an A32 U-Boot image from an RG34XX TOC1.
+
+Input may be a raw TOC1 package, inventory ZIP, or directory tree containing
+toc1-package.bin. Reports offsets and optional Capstone disassembly only; it
+never executes firmware or changes boot media.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import struct
+import zipfile
+from pathlib import Path
+from typing import Any
+
+PACKAGE_MAGIC = b"sunxi-package\0\0\0"
+CHECKSUM_STAMP = 0x5F0A6C39
+ITEM_TABLE_OFFSET = 64
+ITEM_SIZE = 368
+A32_SMC0 = struct.pack("<I", 0xE1600070)
+THUMB_SMC_T1_PREFIX = 0xF7F0
+THUMB_SMC_T1_SECOND = 0x8000
+CONSTANTS = {
+    "vendor_linux_smc_0x8000ff04": struct.pack("<I", 0x8000FF04),
+    "kernel_entry_0x40080000": struct.pack("<I", 0x40080000),
+    "fdt_address_0x44000000": struct.pack("<I", 0x44000000),
+}
+
+
+class AuditError(ValueError):
+    pass
+
+
+def sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def occurrences(data: bytes, needle: bytes) -> list[int]:
+    result, start = [], 0
+    while True:
+        pos = data.find(needle, start)
+        if pos < 0:
+            return result
+        result.append(pos)
+        start = pos + 1
+
+
+def extract_toc1_items(package: bytes) -> dict[str, bytes]:
+    if len(package) < ITEM_TABLE_OFFSET + ITEM_SIZE * 4:
+        raise AuditError("TOC1 package is too short for four item descriptors")
+    if package[:16] != PACKAGE_MAGIC:
+        raise AuditError("missing Allwinner sunxi-package magic")
+    item_count = struct.unpack_from("<I", package, 32)[0]
+    declared_size = struct.unpack_from("<I", package, 36)[0]
+    if item_count != 4:
+        raise AuditError(f"expected four TOC1 items, found {item_count}")
+    if declared_size != len(package):
+        raise AuditError(
+            f"TOC1 declared length {declared_size} differs from input length {len(package)}"
+        )
+    if len(package) % 4:
+        raise AuditError("TOC1 package length is not word-aligned")
+    if package[60:64] != b"MIE;":
+        raise AuditError("TOC1 item table marker is missing")
+    stored = struct.unpack_from("<I", package, 20)[0]
+    words = struct.unpack(f"<{len(package) // 4}I", package)
+    calculated = (sum(words) - stored + CHECKSUM_STAMP) & 0xFFFFFFFF
+    if calculated != stored:
+        raise AuditError("TOC1 checksum mismatch")
+
+    items: dict[str, bytes] = {}
+    intervals: list[tuple[int, int, str]] = []
+    for index in range(item_count):
+        at = ITEM_TABLE_OFFSET + ITEM_SIZE * index
+        name = package[at:at + 64].split(b"\0", 1)[0].decode("ascii", errors="strict")
+        offset, size, encryption, kind = struct.unpack_from("<4I", package, at + 64)
+        if not name or name in items:
+            raise AuditError(f"invalid or duplicate TOC1 item name: {name!r}")
+        if encryption != 0 or kind != 3:
+            raise AuditError(f"unsupported TOC1 item flags for {name}: {encryption}/{kind}")
+        if offset + size > len(package):
+            raise AuditError(f"TOC1 item {name} exceeds package bounds")
+        if package[at + ITEM_SIZE - 4:at + ITEM_SIZE] != b"IIE;":
+            raise AuditError(f"TOC1 item {name} footer is invalid")
+        items[name] = package[offset:offset + size]
+        intervals.append((offset, offset + size, name))
+    intervals.sort()
+    for previous, current in zip(intervals, intervals[1:]):
+        if previous[1] > current[0]:
+            raise AuditError(f"TOC1 items overlap: {previous[2]} / {current[2]}")
+    if set(items) != {"u-boot", "monitor", "dtbo", "dtb"}:
+        raise AuditError(f"unexpected TOC1 items: {sorted(items)}")
+    return items
+
+
+def find_toc1(source: Path) -> tuple[bytes, str]:
+    if source.is_file():
+        raw = source.read_bytes()
+        if raw.startswith(PACKAGE_MAGIC):
+            return raw, str(source)
+        if source.suffix.lower() != ".zip":
+            raise AuditError("input file is neither a TOC1 package nor an inventory ZIP")
+        archives = [source]
+    elif source.is_dir():
+        direct = list(source.rglob("toc1-package.bin"))
+        if direct:
+            if len(direct) != 1:
+                raise AuditError(f"found {len(direct)} toc1-package.bin files under {source}")
+            return direct[0].read_bytes(), str(direct[0])
+        archives = list(source.rglob("*.zip"))
+    else:
+        raise AuditError(f"input does not exist: {source}")
+
+    matches: list[tuple[bytes, str]] = []
+    for archive_path in archives:
+        try:
+            with zipfile.ZipFile(archive_path) as archive:
+                names = [name for name in archive.namelist()
+                         if Path(name).name == "toc1-package.bin"]
+                for name in names:
+                    matches.append((archive.read(name), f"{archive_path}!/{name}"))
+        except zipfile.BadZipFile:
+            continue
+    if len(matches) != 1:
+        raise AuditError(f"expected one toc1-package.bin in input; found {len(matches)}")
+    return matches[0]
+
+
+def disassemble_window(data: bytes, offset: int, radius: int) -> list[dict[str, Any]]:
+    start = max(0, offset - radius)
+    start -= start % 4
+    end = min(len(data), offset + radius + 4)
+    end -= (end - start) % 4
+    code = data[start:end]
+    try:
+        from capstone import Cs, CS_ARCH_ARM, CS_MODE_ARM
+    except ImportError:
+        return [{"capstone": "not-installed", "raw_hex": code.hex(),
+                 "window_offset": f"0x{start:x}"}]
+    engine = Cs(CS_ARCH_ARM, CS_MODE_ARM)
+    return [{
+        "offset": f"0x{ins.address:x}",
+        "bytes": ins.bytes.hex(),
+        "mnemonic": ins.mnemonic,
+        "operands": ins.op_str,
+    } for ins in engine.disasm(code, start)]
+
+
+
+def a32_bl_target(data: bytes, offset: int) -> int | None:
+    """Decode one little-endian A32 BL immediate instruction."""
+    if offset < 0 or offset + 4 > len(data) or offset % 4:
+        return None
+    word = struct.unpack_from("<I", data, offset)[0]
+    if (word & 0x0F000000) != 0x0B000000:
+        return None
+    immediate = word & 0x00FFFFFF
+    if immediate & 0x00800000:
+        immediate -= 0x01000000
+    return offset + 8 + (immediate << 2)
+
+
+def a32_blx_target(data: bytes, offset: int) -> int | None:
+    """Decode one little-endian A32 BLX-immediate instruction."""
+    if offset < 0 or offset + 4 > len(data) or offset % 4:
+        return None
+    word = struct.unpack_from("<I", data, offset)[0]
+    if (word & 0xFE000000) != 0xFA000000:
+        return None
+    immediate = ((word & 0x00FFFFFF) << 2) | ((word >> 23) & 0x2)
+    if immediate & 0x02000000:
+        immediate -= 0x04000000
+    return offset + 8 + immediate
+
+
+def find_direct_callers(data: bytes, target: int) -> list[int]:
+    callers = []
+    for offset in range(0, len(data) - 3, 4):
+        if a32_bl_target(data, offset) == target:
+            callers.append(offset)
+        elif a32_blx_target(data, offset) == target:
+            callers.append(offset)
+    return callers
+
+
+
+
+def a32_rotated_immediate(word: int) -> int:
+    value = word & 0xFF
+    rotation = ((word >> 8) & 0xF) * 2
+    return ((value >> rotation) | (value << (32 - rotation))) & 0xFFFFFFFF if rotation else value
+
+
+
+def find_a32_ldr_literal_refs_to_value(data: bytes, value: int) -> list[dict[str, Any]]:
+    """Find A32 LDR-literal sites whose literal-pool word equals value."""
+    references = []
+    for offset in range(0, len(data) - 3, 4):
+        word = struct.unpack_from("<I", data, offset)[0]
+        if (word & 0x0F7F0000) != 0x051F0000:
+            continue
+        immediate = word & 0xFFF
+        up = bool(word & 0x00800000)
+        effective = offset + 8 + (immediate if up else -immediate)
+        if effective < 0 or effective + 4 > len(data):
+            continue
+        literal = struct.unpack_from("<I", data, effective)[0]
+        if literal == value:
+            references.append({
+                "instruction_offset": f"0x{offset:x}",
+                "literal_offset": f"0x{effective:x}",
+                "value": f"0x{literal:x}",
+                "disassembly": disassemble_window(data, offset, 0x20),
+            })
+    return references
+
+
+
+def find_thumb_ldr_literal_refs_to_value(data: bytes, value: int) -> list[dict[str, Any]]:
+    """Find Thumb-1/Thumb-2 LDR-literal instructions whose pool word equals value."""
+    references = []
+    for offset in range(0, len(data) - 1, 2):
+        half = struct.unpack_from("<H", data, offset)[0]
+        literal_offset = None
+        if (half & 0xF800) == 0x4800:  # Thumb-1 LDR Rt, [PC, #imm8*4]
+            literal_offset = ((offset + 4) & ~3) + ((half & 0xFF) << 2)
+        elif offset + 4 <= len(data):
+            second = struct.unpack_from("<H", data, offset + 2)[0]
+            if (half & 0xFF7F) == 0xF85F:  # Thumb-2 LDR literal, +/- imm12
+                immediate = second & 0x0FFF
+                base = (offset + 4) & ~3
+                literal_offset = base + immediate if (half & 0x80) else base - immediate
+        if literal_offset is None or literal_offset < 0 or literal_offset + 4 > len(data):
+            continue
+        literal = struct.unpack_from("<I", data, literal_offset)[0]
+        if literal == value:
+            references.append({
+                "instruction_offset": f"0x{offset:x}",
+                "literal_offset": f"0x{literal_offset:x}",
+                "value": f"0x{literal:x}",
+                "disassembly": disassemble_thumb_window(data, offset, 0x20),
+            })
+    return references
+
+
+def find_a32_adr_refs(data: bytes, target: int) -> list[dict[str, Any]]:
+    """Find ADD/SUB immediate instructions using PC as base and resolving to target."""
+    references = []
+    for offset in range(0, len(data) - 3, 4):
+        word = struct.unpack_from("<I", data, offset)[0]
+        if not (word & 0x02000000):  # immediate operand
+            continue
+        if ((word >> 16) & 0xF) != 0xF:  # Rn must be PC
+            continue
+        opcode = (word >> 21) & 0xF
+        if opcode not in (2, 4):  # SUB or ADD
+            continue
+        immediate = a32_rotated_immediate(word)
+        pc = offset + 8
+        effective = pc - immediate if opcode == 2 else pc + immediate
+        if effective == target:
+            references.append({
+                "instruction_offset": f"0x{offset:x}",
+                "target_offset": f"0x{effective:x}",
+                "disassembly": disassemble_window(data, offset, 0x20),
+            })
+    return references
+
+
+def find_a32_blx_register_sites(data: bytes, limit: int = 256) -> list[dict[str, str]]:
+    """Inventory A32 BLX-register instruction offsets; raw data can cause false positives."""
+    sites = []
+    for offset in range(0, len(data) - 3, 4):
+        word = struct.unpack_from("<I", data, offset)[0]
+        if (word & 0x0FFFFFF0) == 0x012FFF30:
+            sites.append({
+                "offset": f"0x{offset:x}",
+                "register": f"r{word & 0xF}",
+            })
+            if len(sites) >= limit:
+                break
+    return sites
+
+
+def find_a32_ldr_literal_refs(data: bytes, target: int) -> list[dict[str, Any]]:
+    """Find A32 LDR (literal) instructions whose PC-relative address equals target."""
+    references = []
+    for offset in range(0, len(data) - 3, 4):
+        word = struct.unpack_from("<I", data, offset)[0]
+        if (word & 0x0F7F0000) != 0x051F0000:
+            continue
+        immediate = word & 0xFFF
+        up = bool(word & 0x00800000)
+        effective = offset + 8 + (immediate if up else -immediate)
+        if effective == target:
+            references.append({
+                "instruction_offset": f"0x{offset:x}",
+                "literal_offset": f"0x{effective:x}",
+                "disassembly": disassemble_window(data, offset, 0x20),
+            })
+    return references
+
+
+def find_word_pointer_refs(data: bytes, value: int) -> list[str]:
+    return [f"0x{x:x}" for x in occurrences(data, struct.pack("<I", value))]
+
+
+def find_movw_movt_smc_id(data: bytes) -> list[dict[str, str]]:
+    """Find A32 MOVW/MOVT pairs that construct 0x8000ff04."""
+    instructions = []
+    for offset in range(0, len(data) - 3, 4):
+        word = struct.unpack_from("<I", data, offset)[0]
+        opcode = word & 0x0FF00000
+        if opcode not in (0x03000000, 0x03400000):
+            continue
+        register = (word >> 12) & 0xF
+        immediate = (((word >> 4) & 0xF000) | (word & 0x0FFF))
+        kind = "movw" if opcode == 0x03000000 else "movt"
+        instructions.append((offset, kind, register, immediate))
+    matches = []
+    for index, first in enumerate(instructions):
+        off1, kind1, reg1, imm1 = first
+        if kind1 != "movw" or imm1 != 0xFF04:
+            continue
+        for off2, kind2, reg2, imm2 in instructions[index + 1:index + 9]:
+            if off2 - off1 > 32:
+                break
+            if kind2 == "movt" and reg2 == reg1 and imm2 == 0x8000:
+                matches.append({
+                    "movw_offset": f"0x{off1:x}",
+                    "movt_offset": f"0x{off2:x}",
+                    "register": f"r{reg1}",
+                    "value": "0x8000ff04",
+                })
+    return matches
+
+
+
+def find_thumb_smc_sites(data: bytes) -> list[dict[str, Any]]:
+    """Find Thumb-2 SMC T1 encodings: first halfword F7F[imm4], second 8000."""
+    sites = []
+    for offset in range(0, len(data) - 3, 2):
+        first, second = struct.unpack_from("<HH", data, offset)
+        if (first & 0xFFF0) == THUMB_SMC_T1_PREFIX and second == THUMB_SMC_T1_SECOND:
+            sites.append({
+                "file_offset": f"0x{offset:x}",
+                "immediate": first & 0xF,
+                "bytes": data[offset:offset + 4].hex(),
+                "disassembly": disassemble_thumb_window(data, offset, 0x80),
+            })
+    return sites
+
+
+
+
+def disassemble_thumb_range(data: bytes, start: int, length: int) -> list[dict[str, Any]]:
+    start = max(0, start - (start % 2))
+    end = min(len(data), start + length)
+    end -= (end - start) % 2
+    try:
+        from capstone import Cs, CS_ARCH_ARM, CS_MODE_THUMB
+    except ImportError:
+        return [{"capstone": "not-installed", "raw_hex": data[start:end].hex(),
+                 "window_offset": f"0x{start:x}"}]
+    engine = Cs(CS_ARCH_ARM, CS_MODE_THUMB)
+    return [{
+        "offset": f"0x{ins.address:x}",
+        "bytes": ins.bytes.hex(),
+        "mnemonic": ins.mnemonic,
+        "operands": ins.op_str,
+    } for ins in engine.disasm(data[start:end], start)]
+
+def disassemble_arm_window(data: bytes, offset: int, radius: int = 0x20) -> list[dict[str, Any]]:
+    start = max(0, offset - radius)
+    start -= start % 4
+    end = min(len(data), offset + radius + 4)
+    end -= (end - start) % 4
+    try:
+        from capstone import Cs, CS_ARCH_ARM, CS_MODE_ARM
+    except ImportError:
+        return [{"capstone": "not-installed", "raw_hex": data[start:end].hex(),
+                 "window_offset": f"0x{start:x}"}]
+    engine = Cs(CS_ARCH_ARM, CS_MODE_ARM)
+    return [{
+        "offset": f"0x{ins.address:x}",
+        "bytes": ins.bytes.hex(),
+        "mnemonic": ins.mnemonic,
+        "operands": ins.op_str,
+    } for ins in engine.disasm(data[start:end], start)]
+
+def disassemble_thumb_window(data: bytes, offset: int, radius: int = 0x20) -> list[dict[str, Any]]:
+    start = max(0, offset - radius)
+    start -= start % 2
+    end = min(len(data), offset + radius + 4)
+    end -= (end - start) % 2
+    try:
+        from capstone import Cs, CS_ARCH_ARM, CS_MODE_THUMB
+    except ImportError:
+        return [{"capstone": "not-installed", "raw_hex": data[start:end].hex(),
+                 "window_offset": f"0x{start:x}"}]
+    engine = Cs(CS_ARCH_ARM, CS_MODE_THUMB)
+    return [{
+        "offset": f"0x{ins.address:x}",
+        "bytes": ins.bytes.hex(),
+        "mnemonic": ins.mnemonic,
+        "operands": ins.op_str,
+    } for ins in engine.disasm(data[start:end], start)]
+
+
+def find_thumb_callers_to_targets(data: bytes, targets: list[int]) -> dict[str, list[dict[str, Any]]]:
+    """Decode Thumb-2 BL/BLX candidates at each halfword and retain target matches."""
+    result = {f"0x{target:x}": [] for target in targets}
+    try:
+        from capstone import Cs, CS_ARCH_ARM, CS_MODE_THUMB
+    except ImportError:
+        return {"capstone": []}
+    engine = Cs(CS_ARCH_ARM, CS_MODE_THUMB)
+    for offset in range(0, len(data) - 3, 2):
+        for ins in engine.disasm(data[offset:offset + 4], offset, count=1):
+            if ins.mnemonic not in ("bl", "blx"):
+                break
+            try:
+                operand = ins.op_str.strip().lstrip("#")
+                target = int(operand, 0)
+            except ValueError:
+                break
+            if target in targets:
+                result[f"0x{target:x}"].append({
+                    "callsite": f"0x{offset:x}",
+                    "mnemonic": ins.mnemonic,
+                    "disassembly": disassemble_thumb_window(data, offset, 0x100),
+                })
+            break
+    return result
+
+
+def scan_uboot(uboot: bytes, context_bytes: int = 0x50) -> dict[str, Any]:
+    smc_offsets = occurrences(uboot, A32_SMC0)
+    constant_offsets = {
+        name: {
+            "count": len(occurrences(uboot, needle)),
+            "first_64_offsets": [f"0x{x:x}" for x in occurrences(uboot, needle)[:64]],
+        }
+        for name, needle in CONSTANTS.items()
+    }
+    sites = []
+    # Provisional function entries inferred from the wrapper instruction shapes.
+    wrapper_entries = [0xB18, 0xB58]
+    wrapper_callers = {
+        f"0x{entry:x}": [
+            {
+                "callsite": f"0x{callsite:x}",
+                "disassembly": disassemble_window(uboot, callsite, context_bytes),
+            }
+            for callsite in find_direct_callers(uboot, entry)
+        ]
+        for entry in wrapper_entries
+    }
+    for offset in smc_offsets:
+        nearby = {}
+        for name, needle in CONSTANTS.items():
+            nearby[name] = [
+                f"0x{x:x}" for x in occurrences(uboot, needle)
+                if abs(x - offset) <= context_bytes
+            ]
+        sites.append({
+            "file_offset": f"0x{offset:x}",
+            "bytes": uboot[offset:offset + 4].hex(),
+            "nearby_known_constants": nearby,
+            "disassembly": disassemble_window(uboot, offset, context_bytes),
+        })
+    return {
+        "uboot_bytes": len(uboot),
+        "uboot_sha256": sha256(uboot),
+        "a32_smc0_sites": sites,
+        "thumb2_smc_t1_sites": find_thumb_smc_sites(uboot),
+        "thumb2_direct_callers_of_smc_wrappers": find_thumb_callers_to_targets(uboot, wrapper_entries),
+        "thumb2_handoff_windows": {
+            f"0x{x:x}": disassemble_thumb_window(uboot, x, 0x100)
+            for x in (0x1080, 0x1474, 0x14E4)
+        },
+        "handoff_helper_0x1080": {
+            "raw_bytes": uboot[0x1080:0x10C0].hex(),
+            "thumb": disassemble_thumb_window(uboot, 0x1080, 0x40),
+            "arm": disassemble_arm_window(uboot, 0x1080, 0x40),
+        },
+        "handoff_preparation_call_targets": {
+            f"0x{x:x}": {
+                "raw_bytes": uboot[x:min(len(uboot), x + 0x100)].hex(),
+                "thumb_from_entry": disassemble_thumb_range(uboot, x, 0x100),
+            }
+            for x in (0xE8F8, 0x6A0E0, 0x69F94, 0xEA8C, 0x69F28, 0x2BC0, 0xC7C, 0x27DC, 0xBF8, 0xC3E, 0x3C340, 0x3F6C8, 0x1600, 0xEF5C, 0x7F10, 0x8680, 0x5734, 0x3738, 0xF43C, 0xF982, 0xFDA4, 0xFED8, 0xF35C, 0x1400)
+        },
+        "handoff_cache_and_platform_helpers": {
+            f"0x{x:x}": disassemble_thumb_range(uboot, x, 0x180)
+            for x in (0xBF8, 0xC3E, 0x3C340, 0x3F6C8, 0x1600, 0x181C, 0x195A, 0xB7A, 0xB8E, 0x18D6, 0xB64, 0xB7E, 0x18C4, 0x1E04, 0x3C284, 0xEF5C, 0x7F10, 0x8680, 0x5734, 0x3738, 0xF43C, 0xF982, 0xFDA4, 0xFED8, 0xF35C, 0x1400)
+        },
+        "handoff_cache_arm_wrappers": {
+            f"0x{x:x}": disassemble_arm_window(uboot, x, 0x60)
+            for x in (0xA5C, 0xB08)
+        },
+        "fdt_source_and_bootm_helpers": {
+            f"0x{x:x}": disassemble_thumb_range(uboot, x, length)
+            for x, length in (
+                (0xEF5C, 0x240),
+                (0x8680, 0x80),
+                (0x7F10, 0x180),
+                (0x66380, 0x180),
+                (0x3738, 0x240),
+                (0xF35C, 0x180),
+                (0xFED8, 0x180),
+                (0xFDA4, 0x180),
+            )
+        },
+
+        "handoff_gate_0x27dc": disassemble_thumb_range(uboot, 0x27DC, 0x20),
+        "thumb2_handoff_related_constant_refs": {
+            "kernel_entry_literals": {
+                f"0x{x:x}": find_a32_ldr_literal_refs_to_value(uboot, 0x40080000)
+                for x in occurrences(uboot, CONSTANTS["kernel_entry_0x40080000"])
+            },
+        },
+        "provisional_smc_wrapper_entries": [f"0x{x:x}" for x in wrapper_entries],
+        "direct_callers_of_smc_wrappers": wrapper_callers,
+        "movw_movt_constructed_linux_smc_id": find_movw_movt_smc_id(uboot),
+        "ldr_literal_refs_to_linux_smc_id": {
+            offset: find_a32_ldr_literal_refs(uboot, offset)
+            for offset in occurrences(uboot, CONSTANTS["vendor_linux_smc_0x8000ff04"])
+        },
+        "smc_id_reference_scan": {
+            "literal_ldr": {
+                f"0x{x:x}": find_a32_ldr_literal_refs(uboot, x)
+                for x in occurrences(uboot, CONSTANTS["vendor_linux_smc_0x8000ff04"])
+            },
+            "adr_pc_relative": {
+                f"0x{x:x}": find_a32_adr_refs(uboot, x)
+                for x in occurrences(uboot, CONSTANTS["vendor_linux_smc_0x8000ff04"])
+            },
+            "literal_ldr_of_value": {
+                f"0x{value:x}": find_a32_ldr_literal_refs_to_value(uboot, value)
+                for value in (0x8000FF04, 0x4A000B18, 0x4A000B58, 0xB18, 0xB58)
+            },
+            "wrapper_address_refs": {
+                f"0x{entry:x}": {
+                    "relative_offset_word_refs": find_word_pointer_refs(uboot, entry),
+                    "base_0x4a000000_word_refs": find_word_pointer_refs(uboot, 0x4A000000 + entry),
+                    "adr_pc_relative_refs": find_a32_adr_refs(uboot, entry),
+                }
+                for entry in wrapper_entries
+            },
+            "constant_context": [
+                {
+                    "offset": f"0x{x:x}",
+                    "bytes": uboot[max(0, x - 0x20):min(len(uboot), x + 0x24)].hex(),
+                    "disassembly": disassemble_window(uboot, x, 0x30),
+                }
+                for x in occurrences(uboot, CONSTANTS["vendor_linux_smc_0x8000ff04"])
+            ],
+        },
+        "a32_blx_register_sites_first_256": find_a32_blx_register_sites(uboot),
+        "possible_pointer_refs_at_base_0x4a000000": {            f"0x{entry:x}": find_word_pointer_refs(uboot, 0x4A000000 + entry)
+            for entry in wrapper_entries
+        },
+        "vendor_android_kernel_loader_selector": {
+            "offset": "0xf698",
+            "raw_bytes": uboot[0xF680:0xF710].hex(),
+            "thumb": disassemble_thumb_range(uboot, 0xF680, 0x90),
+            "arm": disassemble_arm_window(uboot, 0xF698, 0x40),
+        },
+        "vendor_android_kernel_loader_helpers": {
+            f"0x{x:x}": disassemble_thumb_range(uboot, x, 0x100)
+            for x in (0x123D4, 0x12500, 0x125C0, 0x12300, 0xF5AC, 0xF7B8, 0xF7C0, 0xF7F6, 0xF374, 0xF348, 0x65EE8, 0x12180)
+        },
+        "vendor_android_kernel_loader_helper_callers": find_thumb_callers_to_targets(
+            uboot, [0x123D4, 0x12500, 0x125C0, 0x12300]
+        ),
+        "vendor_android_kernel_loader_decompressor_callers": find_thumb_callers_to_targets(
+            uboot, [0xF374, 0xF348, 0xF5AC, 0xF7F6, 0x65EE8]
+        ),
+        "thumb_literal_refs_to_boot_addresses": {
+            f"0x{value:x}": find_thumb_ldr_literal_refs_to_value(uboot, value)
+            for value in (0x40080000, 0x42000000, 0x44000000)
+        },
+        "a32_literal_refs_to_boot_addresses": {
+            f"0x{value:x}": find_a32_ldr_literal_refs_to_value(uboot, value)
+            for value in (0x40080000, 0x42000000, 0x44000000)
+        },
+        "boot_address_constant_contexts": {
+            name: [
+                {
+                    "offset": f"0x{offset:x}",
+                    "raw_bytes": uboot[max(0, offset - 0x20):min(len(uboot), offset + 0x24)].hex(),
+                    "thumb": disassemble_thumb_window(uboot, offset, 0x30),
+                    "arm": disassemble_arm_window(uboot, offset, 0x30),
+                }
+                for offset in occurrences(uboot, needle)
+            ]
+            for name, needle in CONSTANTS.items()
+        },
+        "constant_occurrences": constant_offsets,
+        "analysis_limit": (
+            "Raw A32 instruction-pattern inventory only. A match does not prove "
+            "reachability or call-chain execution; absence of this byte pattern "
+            "does not rule out a different SMC encoding or wrapper."
+        ),
+    }
+
+
+def audit(source: Path, context_bytes: int = 0x50) -> dict[str, Any]:
+    package, package_source = find_toc1(source)
+    items = extract_toc1_items(package)
+    return {
+        "source": package_source,
+        "toc1_bytes": len(package),
+        "toc1_sha256": sha256(package),
+        "components": {
+            name: {"bytes": len(data), "sha256": sha256(data)}
+            for name, data in items.items()
+        },
+        "u_boot": scan_uboot(items["u-boot"], context_bytes),
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("input", type=Path, help="raw TOC1, inventory ZIP, or directory")
+    parser.add_argument("-o", "--output", type=Path, help="write JSON report to this path")
+    parser.add_argument("--context-bytes", type=lambda value: int(value, 0), default=0x50)
+    args = parser.parse_args()
+    report = audit(args.input, args.context_bytes)
+    encoded = json.dumps(report, indent=2) + "\n"
+    if args.output:
+        args.output.write_text(encoded, encoding="utf-8")
+    else:
+        print(encoded, end="")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, AuditError, zipfile.BadZipFile) as exc:
+        raise SystemExit(f"error: {exc}")

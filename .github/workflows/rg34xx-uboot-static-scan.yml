@@ -1,0 +1,46 @@
+name: RG34XX vendor U-Boot static scan
+
+on:
+  push:
+    paths:
+      - "tools/audit_rg34xx_uboot_smc.py"
+      - "tools/test_audit_rg34xx_uboot_smc.py"
+      - ".github/workflows/rg34xx-uboot-static-scan.yml"
+  pull_request:
+    paths:
+      - "tools/audit_rg34xx_uboot_smc.py"
+      - "tools/test_audit_rg34xx_uboot_smc.py"
+      - ".github/workflows/rg34xx-uboot-static-scan.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout project branch
+        uses: actions/checkout@v4
+
+      - name: Checkout reports branch
+        uses: actions/checkout@v4
+        with:
+          ref: reports
+          path: field-reports
+          persist-credentials: false
+
+      - name: Install static disassembler
+        run: python3 -m pip install --quiet capstone
+
+      - name: Run host tests
+        run: python3 -m unittest discover -s tools -p "test_audit_rg34xx_uboot_smc.py" -v
+
+      - name: Scan the current RG34XX TOC1 U-Boot
+        run: |
+          mkdir -p build
+          python3 tools/audit_rg34xx_uboot_smc.py \
+            field-reports/reports/rg34xx-inventory-20261122-195053.zip \
+            --output build/rg34xx-uboot-scan.json
+          cat build/rg34xx-uboot-scan.json >> "$GITHUB_STEP_SUMMARY"
+          cat build/rg34xx-uboot-scan.json
