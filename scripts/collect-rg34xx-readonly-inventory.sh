@@ -425,11 +425,74 @@ else
     echo "env_partition_capture=skipped_no_PARTNAME_env" >> "$OUTDIR/summary.txt"
 fi
 
+# Find and capture the Android boot partition by its exact GPT PARTNAME.
+# Do not assume p4: partition numbering may differ between images.
+BOOT_PART=""
+BOOT_PART_SIZE=0
+BOOT_MATCHES=0
+for node in /sys/class/block/"$BASE"p*; do
+    [ -r "$node/uevent" ] || continue
+    if grep -qx 'PARTNAME=boot' "$node/uevent"; then
+        BOOT_MATCHES=$((BOOT_MATCHES + 1))
+        BOOT_DEVNAME="$(sed -n 's/^DEVNAME=//p' "$node/uevent")"
+        BOOT_PART_SIZE="$(cat "$node/size" 2>/dev/null || echo 0)"
+        case "$BOOT_DEVNAME" in
+            "$BASE"p[0-9]*) ;;
+            *)
+                echo "error: boot PARTNAME resolved to an unexpected device: $BOOT_DEVNAME" >&2
+                exit 1
+                ;;
+        esac
+        BOOT_PART="/dev/$BOOT_DEVNAME"
+    fi
+done
+
+[ "$BOOT_MATCHES" -le 1 ] || {
+    echo "error: multiple partitions advertise PARTNAME=boot" >&2
+    exit 1
+}
+
+if [ -n "$BOOT_PART" ]; then
+    [ -b "$BOOT_PART" ] || {
+        echo "error: discovered boot partition is not a block device: $BOOT_PART" >&2
+        exit 1
+    }
+    case "$BOOT_PART_SIZE" in
+        ''|*[!0-9]*)
+            echo "error: invalid boot partition size: $BOOT_PART_SIZE sectors" >&2
+            exit 1
+            ;;
+    esac
+    [ "$BOOT_PART_SIZE" -ge 1 ] || {
+        echo "error: boot partition size is empty or unknown" >&2
+        exit 1
+    }
+    # A 64 MiB ceiling covers the observed RG34XX boot partition while
+    # preventing an unexpectedly large PARTNAME=boot from consuming space.
+    BOOT_MAX_SECTORS=131072
+    [ "$BOOT_PART_SIZE" -le "$BOOT_MAX_SECTORS" ] || {
+        echo "error: boot partition exceeds the 64 MiB capture limit: $BOOT_PART_SIZE sectors" >&2
+        exit 1
+    }
+    BOOT_BYTES=$((BOOT_PART_SIZE * 512))
+    dd if="$BOOT_PART" of="$OUTDIR/boot-partition.bin" bs=512 count="$BOOT_PART_SIZE" 2>"$OUTDIR/boot-partition-dd.txt"
+    actual="$(wc -c < "$OUTDIR/boot-partition.bin" | tr -d ' ')"
+    [ "$actual" -eq "$BOOT_BYTES" ] || {
+        echo "error: short read from $BOOT_PART: got $actual bytes, expected $BOOT_BYTES" >&2
+        exit 1
+    }
+    echo "boot_partition_capture=complete source=sysfs PARTNAME=boot device=${BOOT_PART##*/} bytes=$BOOT_BYTES sectors=$BOOT_PART_SIZE" >> "$OUTDIR/summary.txt"
+else
+    echo "boot_partition_capture=skipped_no_PARTNAME_boot" >> "$OUTDIR/summary.txt"
+fi
 {
     echo "== SHA-256 of raw boot-chain captures =="
     sha256sum "$OUTDIR"/boot0-primary.bin "$OUTDIR"/boot0-secondary.bin "$OUTDIR"/toc1-package.bin
     if [ -f "$OUTDIR/env-partition.bin" ]; then
         sha256sum "$OUTDIR/env-partition.bin"
+    fi
+    if [ -f "$OUTDIR/boot-partition.bin" ]; then
+        sha256sum "$OUTDIR/boot-partition.bin"
     fi
     if [ -f "$OUTDIR/live-fdt.dtb" ]; then
         sha256sum "$OUTDIR/live-fdt.dtb"
