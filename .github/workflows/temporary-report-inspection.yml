@@ -21,32 +21,79 @@ jobs:
           ref: reports
           path: reports
 
-      - name: Extract archive and print hardware log
+      - name: Inspect archive with Python zipfile
         shell: bash
         run: |
           set -euo pipefail
           archive="reports/reports/rg34xx-inventory-20261122-195053.zip"
-          echo "ARCHIVE_SHA256"
           sha256sum "$archive"
-          mkdir -p /tmp/rg34xx-inventory
-          unzip -q "$archive" -d /tmp/rg34xx-inventory
-          echo "ARCHIVE_FILES"
-          find /tmp/rg34xx-inventory -type f -printf '%P (%s bytes)\\n' | sort
-          log="$(find /tmp/rg34xx-inventory -type f -name 'dmesg-hardware-lines.txt' -print -quit)"
-          if [[ -n "$log" ]]; then
-            echo "===== dmesg-hardware-lines.txt BEGIN ====="
-            cat "$log"
-            echo "===== dmesg-hardware-lines.txt END ====="
-          else
-            echo "EXACT_LOG_NOT_FOUND"
-            while IFS= read -r candidate; do
-              case "$candidate" in
-                *.txt|*.log)
-                  if grep -Eiq 'CMA:|cma:|reserved memory|reserved-memory|BL31|ATF|TEE|OP-TEE|carveout|framebuffer|dma-contiguous' "$candidate"; then
-                    echo "===== CANDIDATE: $candidate ====="
-                    grep -Ein -C 2 'CMA:|cma:|reserved memory|reserved-memory|BL31|ATF|TEE|OP-TEE|carveout|framebuffer|dma-contiguous' "$candidate" || true
-                  fi
-                  ;;
-              esac
-            done < <(find /tmp/rg34xx-inventory -type f | sort)
-          fi
+          python3 - "$archive" <<'PY'
+          import pathlib
+          import re
+          import sys
+          import zipfile
+
+          archive = pathlib.Path(sys.argv[1])
+          pattern = re.compile(
+              r"CMA:|cma:|reserved memory|reserved-memory|BL31|ATF|TEE|OP-TEE|"
+              r"carveout|framebuffer|dma-contiguous|secure memory|secure-world",
+              re.IGNORECASE,
+          )
+
+          with zipfile.ZipFile(archive) as zf:
+              entries = [info for info in zf.infolist() if not info.is_dir()]
+              normalized = {
+                  info.filename: info.filename.replace("\\\\", "/").replace("\\", "/")
+                  for info in entries
+              }
+              print("ARCHIVE_FILES_BEGIN")
+              for info in entries:
+                  print(f"{normalized[info.filename]} ({info.file_size} bytes)")
+              print("ARCHIVE_FILES_END")
+
+              exact = [
+                  info for info in entries
+                  if pathlib.PurePosixPath(normalized[info.filename]).name.lower()
+                  == "dmesg-hardware-lines.txt"
+              ]
+              candidates = exact or [
+                  info for info in entries
+                  if "dmesg" in pathlib.PurePosixPath(
+                      normalized[info.filename]
+                  ).name.lower()
+                  and pathlib.PurePosixPath(normalized[info.filename]).suffix.lower()
+                  in {".txt", ".log"}
+              ]
+
+              if exact:
+                  for info in exact:
+                      print(f"===== EXACT HARDWARE LOG: {normalized[info.filename]} BEGIN =====")
+                      print(zf.read(info).decode("utf-8", "replace"))
+                      print(f"===== EXACT HARDWARE LOG: {normalized[info.filename]} END =====")
+              elif candidates:
+                  for info in candidates:
+                      content = zf.read(info).decode("utf-8", "replace")
+                      lines = content.splitlines()
+                      print(f"===== DMESG CANDIDATE: {normalized[info.filename]} ({len(lines)} lines) =====")
+                      matched = set()
+                      for index, line in enumerate(lines):
+                          if pattern.search(line):
+                              matched.update(range(max(0, index - 2), min(len(lines), index + 3)))
+                      for index in sorted(matched):
+                          print(f"{index + 1}: {lines[index]}")
+              else:
+                  print("NO_DMESG_TEXT_FILE_FOUND")
+                  for info in entries:
+                      name = pathlib.PurePosixPath(normalized[info.filename]).name.lower()
+                      if name.endswith((".txt", ".log")):
+                          raw = zf.read(info)
+                          decoded = raw.decode("utf-8", "replace")
+                          hits = [
+                              (i, line) for i, line in enumerate(decoded.splitlines(), 1)
+                              if pattern.search(line)
+                          ]
+                          if hits:
+                              print(f"===== MATCHING TEXT: {normalized[info.filename]} =====")
+                              for i, line in hits:
+                                  print(f"{i}: {line}")
+          PY
