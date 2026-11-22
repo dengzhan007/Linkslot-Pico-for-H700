@@ -5,7 +5,7 @@
 本阶段建立可重复的 AArch64 freestanding 编译检查：
 
 - 目标 triple：`aarch64-none-elf`
-- CPU：Cortex-A55（RK3566/H700 CPU 核心）
+- CPU：Cortex-A53（Allwinner H700 / RG34XX）
 - ABI：AArch64 默认 LP64
 - 编译 C11、C++17 和 AArch64 汇编探针
 - 编译约束：`-ffreestanding`、`-fno-builtin`、`-fno-stack-protector`，早期代码使用 `-mgeneral-regs-only`
@@ -33,9 +33,11 @@ bash scripts/build-h700-objects.sh
 - 没有链接 libc、libc++、C++ ABI runtime、异常 unwinder 或 Rust runtime；
 - 没有证明目标设备可以执行该对象文件。
 
-这一步只证明当前工具链可以为 Cortex-A55 生成 freestanding AArch64 C、C++ 和汇编目标文件。它没有证明 Gambatte、mGBA 或 gpSP 已经能够构建，也没有证明 LK 与 Linkslot Rust 代码可以链接。
+这一步只证明当前工具链可以为 Cortex-A53 生成 freestanding AArch64 C、C++ 和汇编目标文件。它没有证明 Gambatte、mGBA 或 gpSP 已经能够构建，也没有证明 LK 与 Linkslot Rust 代码可以链接。
 
 这些事项依赖目标掌机实际使用的 U-Boot 版本、内存布局、板级硬件以及最终运行时方案。取得只读启动链日志和板型资料后，才能确定下一阶段的 payload linker script、加载地址和入口约定。
+
+目标机型和已知硬件边界见 [RG34XX 硬件基线](rg34xx-hardware-profile.md)。
 
 ## 后续扩展顺序
 
