@@ -4,16 +4,15 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="${OUT_DIR:-$ROOT/build/h700-arch-check}"
 CC="${AARCH64_CC:-clang}"
+CXX="${AARCH64_CXX:-clang++}"
 OBJDUMP="${LLVM_OBJDUMP:-llvm-objdump}"
 
-if ! command -v "$CC" >/dev/null 2>&1; then
-    echo "error: AArch64 compiler '$CC' not found" >&2
-    exit 1
-fi
-if ! command -v "$OBJDUMP" >/dev/null 2>&1; then
-    echo "error: LLVM objdump '$OBJDUMP' not found" >&2
-    exit 1
-fi
+for tool in "$CC" "$CXX" "$OBJDUMP"; do
+    if ! command -v "$tool" >/dev/null 2>&1; then
+        echo "error: required tool '$tool' not found" >&2
+        exit 1
+    fi
+done
 
 mkdir -p "$OUT_DIR"
 
@@ -41,7 +40,12 @@ COMMON_FLAGS=(
     "$ROOT/platform/h700/arch/compile_probe.S" \
     -o "$OUT_DIR/compile_probe_asm.o"
 
-for object in "$OUT_DIR/compile_probe.o" "$OUT_DIR/compile_probe_asm.o"; do
+"$CXX" "${COMMON_FLAGS[@]}" -nostdinc++ -fno-exceptions -fno-rtti \
+    -fno-threadsafe-statics -fno-use-cxa-atexit -std=c++17 \
+    -c "$ROOT/platform/h700/arch/compile_probe.cpp" \
+    -o "$OUT_DIR/compile_probe_cpp.o"
+
+for object in "$OUT_DIR/compile_probe.o" "$OUT_DIR/compile_probe_asm.o" "$OUT_DIR/compile_probe_cpp.o"; do
     format="$("$OBJDUMP" -f "$object")"
     if ! grep -q "architecture: aarch64" <<<"$format"; then
         echo "error: $object is not an AArch64 object" >&2
@@ -52,4 +56,4 @@ for object in "$OUT_DIR/compile_probe.o" "$OUT_DIR/compile_probe_asm.o"; do
 done
 
 echo "H700 compile-only architecture check passed."
-echo "Note: this does not produce a bootable payload or validate a U-Boot handoff."
+echo "Note: this does not provide a C/C++ runtime, produce a bootable payload, or validate a U-Boot handoff."
