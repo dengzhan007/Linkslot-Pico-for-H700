@@ -83,7 +83,7 @@ Boot ROM
 
 该候选的核心 handoff 调用点和参数布局已在现场 U-Boot binary 中确认；剩余门槛为：
 
-1. 已由现场 selector `0xF698` 的 patched bytes、Android header 与 U-Boot v2018.05 `bootm` 数据流确认：kernel 使用 gzip，解压目标及 `images.ep` 均为 p4 header `kernel_addr=0x40080000`。当前原厂 kernel 解压长度 17,461,256 bytes 是可证明的输出能力下限；精确 `CONFIG_SYS_BOOTM_LEN` 仍需恢复，builder 在此之前保守限制 payload 不超过原 kernel 解压长度及 `image_size=0x1138000`。
+1. 已由现场 selector `0xF698` 的 patched bytes 确认 kernel compression selector 为 gzip；Android header 声明 `kernel_addr=0x40080000`，handoff 函数从 `images+0x60` 取 `images.ep`。Thumb literal 扫描没有发现硬编码 `0x40080000`，与地址由 header 动态解析相符；但现场 vendor handler 的 header 字段到 `images.ep` 的完整数据流仍需闭合。U-Boot v2018.05 通用 `bootm` 数据流可作交叉参考，不能单独当作 vendor binary 证明。另在现场 `0xF7F6` 解压参数准备路径看到 `mov.w r2,#0x02000000`，该 32 MiB 值写入传给 `0xF374` 的栈参数区；`0xF374` gzip 分支再将上限传给 decoder 调用。它是现场 vendor loader 的 32 MiB decompression-cap 参数证据；仍需确认 helper ABI 后才将其正式命名为 `CONFIG_SYS_BOOTM_LEN`。builder 暂时继续保守限制 payload 不超过已启动原厂 kernel 解压长度 17,461,256 bytes，`image_size` 不超过 `0x1138000`。
 2. 对与现场相同 hash 的 vendor monitor 检查 `0x8000FF04` 服务的 ERET 行为：CurrentEL、SPSR_EL3/ELR_EL3、x0..x3、DAIF、中断、MMU/cache/TLB 和 FDT 指针。
 3. 确认 `images.ft_addr` 的原始 FDT 来源与 fixup 顺序，解释 p4 appended DTB（512 MiB）、TOC1 DTB 和 live FDT（1 GiB）之间的关系。
 4. 在上述静态门槛通过后，才生成一个不调用 Linux、不访问未知 RAM 的 AArch64 entry probe；模拟结果不能替代 RG34XX 非 SP 实机验收。
@@ -121,7 +121,7 @@ BaseOS-MultiFrontend 中与现场 monitor SHA-256 相同的 vendor monitor 已�
 
 证据边界仍须保留：目前没有运行时读取 `gd+0x5c`、`working_fdt` 或 `images.ft_addr` 的数值，也未在设备上捕获 FDT 指针。因此 TOC1 DTB 是高置信来源候选，不是指针级实机证明。下一步仍需本地三份 FDT 属性比较，并在后续入口探针中校验 FDT magic、totalsize、memory 与 chosen 属性。
 
-尚未完成的关键门槛仍是：恢复精确 `CONFIG_SYS_BOOTM_LEN`；用本地属性比较确认 live FDT 与 TOC1 DTB / p4 appended DTB 的差异和 fixup；并把现场 U-Boot cache-maintenance 结束状态与相同 monitor 的 ERET 行为完整衔接。
+尚未完成的关键门槛仍是：确认 `0xF374` / gzip decoder 的参数 ABI，将现场 32 MiB decompression-cap 与 `CONFIG_SYS_BOOTM_LEN` 语义对应；用本地属性比较确认 live FDT 与 TOC1 DTB / p4 appended DTB 的差异和 fixup；并把现场 U-Boot cache-maintenance 结束状态与相同 monitor 的 ERET 行为完整衔接。
 
 ### 4.2 已有主机侧 kernel-slot 构建器（不刷写）
 
