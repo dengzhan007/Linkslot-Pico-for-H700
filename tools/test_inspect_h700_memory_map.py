@@ -98,10 +98,8 @@ class MemoryMapInspectorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             debugfs = root / "debugfs.txt"
-            pagesize = root / "page-size.txt"
             debugfs.write_text(SNAPSHOT, encoding="utf-8")
-            pagesize.write_text("NOT_PRESENT\\n", encoding="ascii")
-            report = MODULE.inspect_snapshot(debugfs, pagesize)
+            report = MODULE.inspect_snapshot(debugfs)
 
         self.assertIsNone(report["page_size_bytes"])
         self.assertFalse(report["cma_pfns_normalized"])
