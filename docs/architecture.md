@@ -12,7 +12,7 @@ GammaOS Pico 参考树面向 MT6785，不能原样作为 RG34XX 的 SoC/板级�
 
 目标为 RG34XX / Allwinner H700。当前可确认的原厂 SD 启动链为 Allwinner Boot ROM → eGON.BT0 Boot0 → TOC1 → vendor monitor 与 AArch32 U-Boot → AArch64 Linux。Boot0 负责 DRAM training；AArch32 U-Boot 并不是一个可直接跳转到任意 AArch64 程序的通用入口。BaseOS 的 U-Boot 模拟 trace 中 `0x40080000` 和 `0x44000000` 分别是 Linux Image 与 FDT 的研究地址，不是 Linkslot payload 的入口或已确认可用内存。
 
-BaseOS-MultiFrontend 还包含一条更深入的 H700 原生启动研究路线：AArch64 mainline SPL 负责 SD、PMIC、DRAM 和预加载；保留 vendor monitor；由 monitor 进入 RAM 中的 AArch32 SVC BL33 适配器；适配器再经厂商 SMC 进入 AArch64。这个路线说明 A32 过渡层与 monitor 可能是实现 AArch64 payload 的可行桥接点，但厂商 SMC 的已验证目标是 Linux 启动契约，不等于通用裸机 ABI。具体证据、地址限制和覆盖范围见 [RG34XX 启动交接审计](rg34xx-boot-handoff-audit.md)。
+BaseOS-MultiFrontend 还包含一条更深入的 H700 原生启动研究路线：AArch64 mainline SPL 负责 SD、PMIC、DRAM 和预加载；保留 vendor monitor；由 monitor 进入 RAM 中的 AArch32 SVC BL33 适配器；适配器再经厂商 SMC 进入 AArch64。这个路线说明 A32 过渡层与 monitor 可能是实现 AArch64 payload 的可行桥接点，但厂商 SMC 的已验证目标是 Linux 启动契约，不等于通用裸机 ABI。具体证据、地址限制和覆盖范围见 [RG34XX 启动交接审计](rg34xx-boot-handoff-audit.md)。现场只读采集命令与 TOC1 解析步骤见 [RG34XX 只读启动链信息采集](rg34xx-readonly-inventory.md)。
 
 本项目不预先决定直接沿用原厂 U-Boot，还是采用 A64 SPL + A32 BL33 的方案。需要先完成 RG34XX 非 SP 的现场只读 inventory，再以最小 A32 handoff adapter + AArch64 freestanding payload 验证入口。入口验收必须覆盖 CurrentEL、SPSR/参数寄存器、栈、异常向量、GIC、MMU/cache/TLB、DTB/FDT 和可用/保留内存；不能只验证 payload 能被读入或代码能编译。
 
