@@ -152,6 +152,31 @@ KNULLI 的 H700 固件说明示例将 env image 构建为 16 MiB（`mkenvimage -
 
 本次采集的 GPT p6 PARTNAME=UDISK、p7 PARTNAME=primary；但 /proc/cmdline partitions= 将逻辑别名 appfs 指向 p6、UDISK 指向 p7。运行时 p6 是 ext4 并挂载 /data，p7 是 vfat 并挂载 /mnt/sdcard，实际用途与 appfs/UDISK 分工相符。GPT PARTNAME 与 U-Boot 生成的逻辑别名不是同一命名字段，因此这不是已经证实的分区错位或 GPT 损坏。Allwinner Brandy 2.0 的参考代码会按分区信息生成 partitions= 逻辑名称，见同一份 [board_helper.c 说明](https://manuals.plus/m/35d20341b018e9f5bc7541f9a23512fbf0ebe3a5ee5a064ecb8dd1b44dee8317.pdf)。
 
+### 6.2 /proc/partitions 单位与 BaseOS prepared GPT 对照
+
+需要区分两种容量单位：
+
+- `/sys/class/block/mmcblk0pN/size` 和 GPT 的 sector 数以 512-byte sector 计数。
+- `/proc/partitions` 的 `#blocks` 以 1 KiB block 计数。
+
+因此，`/proc/partitions` 中 p6 的 131072 blocks 对应 262144 个 512-byte sectors，即 128 MiB；这与 GPT fdisk 和 sysfs 读数一致，并非 64 MiB。当前 GPT 表中的 p6 数值为 262144 sectors / 128 MiB。
+
+将本轮 live GPT 与 BaseOS-MultiFrontend 的 [manifest/prepared/rg34xx.json](https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/main/manifest/prepared/rg34xx.json) 对照，p1–p4 的起始位置和长度完全相同，但 p5–p7 几何明显不同：
+
+| 分区 | prepared 起始 sector | prepared sector 数 | live 起始 sector | live sector 数 | live 大小 |
+|---|---:|---:|---:|---:|---:|
+| p1 special | 73728 | 131072 | 73728 | 131072 | 64 MiB |
+| p2 boot-resource | 204800 | 65536 | 204800 | 65536 | 32 MiB |
+| p3 env | 270336 | 32768 | 270336 | 32768 | 16 MiB |
+| p4 boot | 303104 | 131072 | 303104 | 131072 | 64 MiB |
+| p5 rootfs | 434176 | 14673920 | 1482752 | 1048576 | 512 MiB |
+| p6 appfs / GPT UDISK | 15108096 | 8388608 | 2531328 | 262144 | 128 MiB |
+| p7 UDISK / GPT primary | 23496704 | 1048576 | 2793472 | 27582461 | 约 13.1 GiB |
+
+live GPT 在 p4 结束 sector 434175 与 p5 开始 sector 1482752 之间没有 GPT partition entry，间隔 1048576 sectors（512 MiB）。本次 inventory 没有读取或解释该间隔的原始内容，因此不能称它为安全可用的空闲 RAM/磁盘区域，也不能推断它由哪个阶段使用。
+
+这说明当前设备的前四个启动相关 GPT 分区与 prepared RG34XX 基线相同，但后续 rootfs/data/SD 大分区已经采用另一套几何布局。不能把 prepared manifest 的 p5/p6/p7 起始位置或大小直接套到当前卡；后续任何分区读取/写入/镜像定位都必须以现场 GPT 为准，并保持本阶段只读。该布局差异本身不是损坏证据：当前 p5 rootfs、p6 ext4 /data、p7 vfat /mnt/sdcard 均有对应的 sysfs 与运行时挂载证据。
+
 ## 7. 对启动路线的影响
 
 1. 原厂 monitor 看起来可复用，且与已知 RG34XX monitor 输入完全相同；仍需在后续入口审计中确认 monitor 的实际加载地址、保留内存、SMC 服务与安全世界访问范围。
