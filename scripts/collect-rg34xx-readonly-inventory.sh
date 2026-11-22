@@ -88,6 +88,17 @@ capture_proc "partitions.txt" "/proc/partitions"
 capture_proc "mounts.txt" "/proc/mounts"
 capture_proc "interrupts.txt" "/proc/interrupts"
 
+# Capture the kernel page size so CMA PFNs can be converted to byte ranges.
+if command -v getconf >/dev/null 2>&1; then
+    PAGE_SIZE="$(getconf PAGESIZE 2>/dev/null || getconf PAGE_SIZE 2>/dev/null || true)"
+    case "$PAGE_SIZE" in
+        ''|*[!0-9]*) echo "NOT_PRESENT: getconf page size unavailable" > "$OUTDIR/page-size.txt" ;;
+        *) echo "$PAGE_SIZE" > "$OUTDIR/page-size.txt" ;;
+    esac
+else
+    echo "NOT_PRESENT: getconf unavailable" > "$OUTDIR/page-size.txt"
+fi
+
 {
     echo "== kernel =="
     uname -a 2>&1 || true
