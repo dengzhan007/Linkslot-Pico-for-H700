@@ -1,0 +1,76 @@
+# RG34XX 只读启动链信息采集
+
+## 用途
+
+这个采集器为 Anbernic RG34XX（非 SP）收集现场启动链证据，供后续核对 BaseOS 的准备固件和启动交接研究。它不改写启动区，不安装 loader，不改变 U-Boot 环境，也不重启设备。
+
+默认输出放在设备的 /tmp，避免把采集文件写进用于启动的 FAT 分区。输出目录可以通过第二个参数指定；指定其他目录会在该文件系统创建普通报告文件。
+
+## 采集内容
+
+| 文件 | 内容 |
+|---|---|
+| boot0-primary.bin | 原始 SD LBA 16 起的 64 KiB Boot0 副本 |
+| boot0-secondary.bin | 原始 SD LBA 512 起的 64 KiB Boot0 副本 |
+| toc1-package.bin | 原始 SD LBA 32800 起的 0x140000 字节 TOC1 包 |
+| env-partition-first64k.bin | 可选：GPT 分区标签为 env 的分区起始 64 KiB |
+| live-fdt.dtb | 内核提供 /sys/firmware/fdt 时保存的 live FDT |
+| cmdline.txt / cpuinfo.txt / meminfo.txt | 运行时内核启动参数、CPU 与内存信息 |
+| iomem.txt / interrupts.txt | 内存资源范围与中断状态 |
+| partitions.txt / mounts.txt | 块设备分区及挂载状态 |
+| device-and-block-layout.txt | 设备树 model/compatible、块设备 sysfs 与分区标签 |
+| gpt-sfdisk.txt 或 gpt-fdisk.txt | 系统提供 sfdisk 或 fdisk 时生成分区表文本 |
+| dmesg-hardware-lines.txt | 与 DRAM、面板、PMIC、MMC、串口、保留内存相关的内核日志行 |
+| raw-sha256.txt | 原始启动区文件 SHA-256 与两份 Boot0 比较结果 |
+
+LBA 16、512、32800 和 TOC1 长度 0x140000 来自 BaseOS-MultiFrontend 的 H700 启动链采集/装载代码。采集器只适用于与这些布局一致的 RG34XX/BaseOS SD 镜像；如果现场读取结果和固件清单不一致，应先解释布局差异，不要直接把镜像视为损坏。
+
+## 在设备上运行
+
+优先使用 ADB 把脚本临时传入 /tmp：
+
+    adb push scripts/collect-rg34xx-readonly-inventory.sh /tmp/rg34xx-inventory.sh
+
+设备 ADB shell 具有 root 权限时：
+
+    adb shell "sh /tmp/rg34xx-inventory.sh /dev/mmcblk0 /tmp/rg34xx-readonly-inventory"
+
+然后把整个输出目录拉回电脑：
+
+    adb pull /tmp/rg34xx-readonly-inventory ./rg34xx-readonly-inventory
+
+也可以从 root SSH shell 运行同一脚本：
+
+    sh /tmp/rg34xx-inventory.sh /dev/mmcblk0 /tmp/rg34xx-readonly-inventory
+
+如果不提供第一个参数，脚本会尝试从 /proc/cmdline 的 root=/dev/... 推导整盘设备；若系统使用 PARTUUID 等 root 形式，必须显式传入整盘设备，且先人工确认它确实是当前 RG34XX 启动 SD 卡。
+
+## 在电脑上解析 TOC1
+
+在项目仓库根目录执行：
+
+    python3 tools/parse_h700_toc1.py ./rg34xx-readonly-inventory/toc1-package.bin -o ./rg34xx-readonly-inventory/toc1-extracted
+
+程序会验证 TOC1 item 数量、表格边界、名称、偏移、长度、重叠与整体 SHA-256，并在 items/ 下提取各组件。manifest.json 会记录整个包与每个组件的 SHA-256。当前解析器复现 BaseOS 已提交的表结构：64 字节包头、从偏移 64 开始的 item 表、每项 368 字节、名称 64 字节、数据 offset/size 位于项内偏移 +64/+68。
+
+它不验证厂商签名、不解析 Boot0 DRAM training 的语义，也不证明 payload handoff ABI。提取成功只表示容器布局通过边界检查。
+
+## 对比与解释规则
+
+1. TOC1 整包及内部 u-boot、monitor、dtb、dtbo 的 SHA-256 与 BaseOS 准备固件清单比对。
+2. Boot0 的 primary/secondary 副本不要简单要求整段逐字节相同。BaseOS 研究记录指出 Boot0 会在启动时改写训练相关头部字段和 checksum；需要按 Boot0 的已知可变区域解释差异，同时核对可执行主体。
+3. env 采集仅包含标签为 env 的分区起始 64 KiB，不代表完整分区镜像。后续如需更完整的环境分析，应先从 GPT 证据确定实际分区边界，再另行制定只读采集范围。
+4. live FDT、/proc/iomem、/proc/meminfo 和设备树内存保留区共同用于判断安全 RAM 区域。不得只凭某个 Linux 入口地址推定空闲内存。
+5. 当前 prepared hashes 是仓库准备输入指纹，不是本次测试机 live readback。只有采集报告与这些指纹完成差异解释后，才能更新目标机启动链基线。
+
+## 安全边界
+
+- 对启动 SD 的原始块设备只使用 dd if=... of=报告文件；不会向块设备发起写命令。
+- 不执行 fw_setenv、flashcp、nand、sunxi-fel、reboot、poweroff 或任何 Boot0/TOC1/U-Boot 写入。
+- 不尝试进入 Boot ROM 下载模式，也不改变设备环境变量。
+- 脚本会在报告输出目录创建文件。默认 /tmp；不要把输出目录指定到 boot 分区或其他只读/重要分区。
+- 若任何原始区间短读或输出路径已存在，脚本会报错退出，不会自动猜测替代偏移。
+
+## 验证
+
+主机 CI 对采集脚本运行 sh -n，并用纯合成 TOC1 数据测试解析器的有效包、重复名称、越界、重叠和非法名称处理。它不需要真实设备固件，也不会向硬件写入。
