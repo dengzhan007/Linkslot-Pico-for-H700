@@ -191,6 +191,21 @@ def inspect_fdt(path: Path) -> dict[str, Any]:
     compatible = _strings(root.get("compatible"))
     chosen = nodes.get("/chosen", {})
     chosen_bootargs = (_strings(chosen.get("bootargs")) or [None])[0]
+    initrd_start = _number(chosen.get("linux,initrd-start"))
+    initrd_end = _number(chosen.get("linux,initrd-end"))
+    initrd = None
+    if initrd_start is not None or initrd_end is not None:
+        valid_initrd = (
+            initrd_start is not None
+            and initrd_end is not None
+            and initrd_end >= initrd_start
+        )
+        initrd = {
+            "start": f"0x{initrd_start:x}" if initrd_start is not None else None,
+            "end_exclusive": f"0x{initrd_end:x}" if initrd_end is not None else None,
+            "size_bytes": initrd_end - initrd_start if valid_initrd else None,
+            "range_valid": valid_initrd,
+        }
     disp_reserve_match = re.search(
         r"(?:^|\s)disp_reserve=([0-9]+),(0x[0-9a-fA-F]+)(?:\s|$)",
         chosen_bootargs or "",
@@ -229,6 +244,8 @@ def inspect_fdt(path: Path) -> dict[str, Any]:
     usb = []
     debug_modes = []
     boot_framebuffers = []
+    firmware_nodes = []
+    ion_heaps = []
     for node_path, props in nodes.items():
         if "lcd_driver_name" in props:
             panels.append({
@@ -239,6 +256,26 @@ def inspect_fdt(path: Path) -> dict[str, Any]:
                 "status": (_strings(props.get("status")) or ["okay"])[0],
             })
         comp = _strings(props.get("compatible"))
+        if node_path.startswith("/firmware/") and comp:
+            firmware_nodes.append({
+                "node": node_path,
+                "compatible": comp,
+                "method": (_strings(props.get("method")) or [None])[0],
+                "status": (_strings(props.get("status")) or ["okay"])[0],
+            })
+        if "heap-name" in props:
+            heap_base = _number(props.get("heap-base"))
+            heap_size = _number(props.get("heap-size"))
+            ion_heaps.append({
+                "node": node_path,
+                "compatible": comp,
+                "name": (_strings(props.get("heap-name")) or [""])[0],
+                "id": _number(props.get("heap-id")),
+                "base": f"0x{heap_base:x}" if heap_base is not None else None,
+                "size_bytes": heap_size,
+                "type": (_strings(props.get("heap-type")) or [None])[0],
+                "status": (_strings(props.get("status")) or ["okay"])[0],
+            })
         if any("axp2202" in item.lower() for item in comp):
             pmics.append({"node": node_path, "compatible": comp,
                           "status": (_strings(props.get("status")) or ["okay"])[0]})
@@ -288,6 +325,9 @@ def inspect_fdt(path: Path) -> dict[str, Any]:
         "model": model,
         "compatible": compatible,
         "chosen_bootargs": chosen_bootargs,
+        "initrd": initrd,
+        "firmware_nodes": firmware_nodes,
+        "ion_heaps": ion_heaps,
         "disp_reserve_bootarg": ({
             "size_bytes": disp_reserve["size_bytes"],
             "base": f"0x{disp_reserve['base']:x}",
