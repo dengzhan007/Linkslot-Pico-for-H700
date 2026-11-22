@@ -13,6 +13,7 @@
 | boot0-primary.bin | 原始 SD LBA 16 起采集的 128 KiB Boot0 区域；解析器按头部声明的 64/128 KiB 镜像长度截取 |
 | boot0-secondary.bin | 原始 SD LBA 512 起采集的 128 KiB Boot0 区域；解析器按头部声明的 64/128 KiB 镜像长度截取 |
 | toc1-package.bin | 原始 SD LBA 32800 起的 0x140000 字节 TOC1 包 |
+| boot-partition.bin | 可选：通过 sysfs 的精确 GPT PARTNAME=boot 动态发现并读取整个 boot 分区（最大 64 MiB）；不假定固定分区号，超出上限时报错，不截断读取 |
 | env-partition.bin | 可选：通过 sysfs 的精确 GPT PARTNAME=env 动态发现后读取完整分区（最大 64 MiB），不假设固定分区号 |
 | live-fdt.dtb | 内核提供 /sys/firmware/fdt 时保存的 live FDT |
 | live-fdt.json / toc1-extracted/dtb-report.json | 自动解析 live FDT 与 TOC1 静态 DTB 的 RAM、reserved-memory、面板、PMIC、USB 状态、bootargs、display framebuffer 的 boot_fb0 物理范围及 hash |
@@ -27,7 +28,7 @@
 | gpt-sfdisk.txt 或 gpt-fdisk.txt | 系统提供 sfdisk 或 fdisk 时生成分区表文本 |
 | dmesg-hardware-lines.txt | 与 DRAM、面板、PMIC、MMC、串口、保留内存相关的内核日志行 |
 | tee-ion-runtime.txt | 只读采集运行内核 identity/config（若导出）、ION/TEE 设备节点、ION debugfs heaps、ion-sunxi platform driver 绑定、/proc/modules 及 ION/TEE/DRM/CMA 相关 dmesg；不会调用 ION ioctl、SMC 或写 debugfs 控制节点 |
-| raw-sha256.txt | 原始启动区文件 SHA-256 与两份 Boot0 比较结果 |
+| raw-sha256.txt | Boot0、TOC1、env 和 boot 分区原始文件 SHA-256 与两份 Boot0 比较结果 |
 
 LBA 16、512、32800 和 TOC1 长度 0x140000 来自 BaseOS-MultiFrontend 的 H700 启动链采集/装载代码。采集器只适用于与这些布局一致的 RG34XX/BaseOS SD 镜像；如果现场读取结果和固件清单不一致，应先解释布局差异，不要直接把镜像视为损坏。
 
@@ -44,7 +45,7 @@ LBA 16、512、32800 和 TOC1 长度 0x140000 来自 BaseOS-MultiFrontend 的 H7
 
     powershell -ExecutionPolicy Bypass -File .\scripts\run-rg34xx-inventory.ps1
 
-脚本会确认只连接了一台已授权的 ADB 设备、确认 ADB shell 为 root、读取 /proc/cmdline 并校验整盘设备与 root 分区一致，然后自动 push 采集器、运行只读采集、pull 报告、解析两份 Boot0、解包 TOC1，并用 FDT 检查器分别输出 live-fdt.json 与 TOC1 内 dtb-report.json。采集器会优先通过 sysfs 中的精确 PARTNAME=env 查找环境分区并读取完整分区（限制 64 MiB），不硬编码 p3；若找不到且存在 by-partlabel/env 链接，才使用该链接作为兼容回退。Windows runner 会自动运行 env 解析器并输出 env-report.json；只要 debugfs 快照存在就运行 memory map parser 输出 memory-map-report.json。PAGE_SIZE 可用时将 CMA PFN/count 换算为 byte range；PAGE_SIZE 缺失时仍解析 memblock（其地址本身是 byte address），CMA 仅保留原始 PFN/count。 新增的 tee-ion-runtime.txt 会检查运行内核 config 导出、ION/TEE 设备节点、ION heaps debugfs 与 ion-sunxi driver 绑定，并筛选 vendor DRM/TEE SMC 日志；该步骤只读文件/节点，不触发 ION ioctl 或任何 SMC。默认结果保存在 build/rg34xx-inventory-时间戳/。多个 ADB 设备同时连接时用 -DeviceSerial 指定；root 参数不是 /dev 块设备时，在确认真实启动 SD 整盘后用 -BlockDevice 显式指定。
+脚本会确认只连接了一台已授权的 ADB 设备、确认 ADB shell 为 root、读取 /proc/cmdline 并校验整盘设备与 root 分区一致，然后自动 push 采集器、运行只读采集、pull 报告、解析两份 Boot0、解包 TOC1，并用 FDT 检查器分别输出 live-fdt.json 与 TOC1 内 dtb-report.json。采集器会通过 sysfs 的精确 PARTNAME=boot 动态识别并读取整个 boot 分区（最大 64 MiB），不硬编码 p4；这份 boot-partition.bin 用于后续确认 Android boot image 头部并提取匹配的 #19 kernel。采集器也会通过 sysfs 中的精确 PARTNAME=env 查找环境分区并读取完整分区（限制 64 MiB），不硬编码 p3；若找不到且存在 by-partlabel/env 链接，才使用该链接作为兼容回退。Windows runner 会自动运行 env 解析器并输出 env-report.json；只要 debugfs 快照存在就运行 memory map parser 输出 memory-map-report.json。PAGE_SIZE 可用时将 CMA PFN/count 换算为 byte range；PAGE_SIZE 缺失时仍解析 memblock（其地址本身是 byte address），CMA 仅保留原始 PFN/count。 新增的 tee-ion-runtime.txt 会检查运行内核 config 导出、ION/TEE 设备节点、ION heaps debugfs 与 ion-sunxi driver 绑定，并筛选 vendor DRM/TEE SMC 日志；该步骤只读文件/节点，不触发 ION ioctl 或任何 SMC。默认结果保存在 build/rg34xx-inventory-时间戳/。多个 ADB 设备同时连接时用 -DeviceSerial 指定；root 参数不是 /dev 块设备时，在确认真实启动 SD 整盘后用 -BlockDevice 显式指定。
 
 该快捷脚本要求 Windows PowerShell 5.1 或 PowerShell 7、Android platform-tools 和 Python 3。ADB shell 必须为 root；若设备 ADB 不是 root，请按下方方法在 root SSH shell 执行采集器。
 
@@ -96,7 +97,7 @@ LBA 16、512、32800 和 TOC1 长度 0x140000 来自 BaseOS-MultiFrontend 的 H7
 
 ## 安全边界
 
-采集报告中的 /proc/cmdline、live FDT bootargs 和 env-partition.bin 可能包含设备序列号、MAC 地址、私有启动变量或其他设备专属信息。默认只保存在本机 build/ 目录；不要将原始 env/FDT/命令行文件直接提交到公开仓库或公开 Issue。需要公开分享时先检查并脱敏，原始数据仅在可信的私有渠道传递。
+采集报告中的 /proc/cmdline、live FDT bootargs、env-partition.bin 和 boot-partition.bin 可能包含设备序列号、MAC 地址、私有启动变量、固件组件或其他设备专属信息。默认只保存在本机 build/ 目录；不要将原始 env/FDT/命令行文件或完整 boot 分区镜像直接提交到公开仓库或公开 Issue。需要公开分享时先检查并脱敏，优先分享 hash、解析结果和必要的非敏感片段，原始数据仅在可信的私有渠道传递。
 
 - 对启动 SD 的原始块设备只使用 dd if=... of=报告文件；不会向块设备发起写命令。
 - 不执行 fw_setenv、flashcp、nand、sunxi-fel、reboot、poweroff 或任何 Boot0/TOC1/U-Boot 写入。

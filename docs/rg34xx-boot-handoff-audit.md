@@ -187,3 +187,102 @@ live FDT 同时具有 `/firmware/optee`，`compatible="linaro,optee-tz"`、`meth
 FDT 的 Allwinner ION heap 声明包括 `ion_system`（`sys_user`）、`ion_cma` 和 `ion_secure` 三类节点；三者的 `heap-base/heap-size` 都是零，没有给出固定物理范围；FDT 也没有标准 `/reserved-memory` 节点。故未知区间 `[0x7ec00000,0x7fc00000)` 不能因为存在名为 secure 的 ION heap 就自动归类为 secure carveout，必须继续排除直至找到 owner/访问证据。硬件日志筛选没有提供 CMA、BL31 或 secure carveout 的地址证据。
 
 对应的 FDT 解析器已扩充为输出 `initrd`、`firmware_nodes` 和 `ion_heaps`，合成测试覆盖 initrd 边界、OP-TEE conduit 和零尺寸 ION heap。**本轮交叉分析仍未批准 payload 地址或入口。**
+
+
+## 12. ION / TEE runtime 与 Allwinner DRM-info SMC（2026-11-22 20:47）
+
+20:47:42 的只读现场采集见 [runtime 报告](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261122-204742)。运行内核为 Linux 4.9.170 AArch64；导出的配置包含 `CONFIG_ION=y`、`CONFIG_TEE=y`、`CONFIG_OPTEE=y`、`CONFIG_CMA=y` 和 `CONFIG_DMA_CMA=y`。现场有 `/dev/ion`，`ion-sunxi` 平台驱动已注册；`/dev/tee0`、`/dev/teepriv0` 不存在。标准 OP-TEE 探测日志为 `optee: api uid mismatch`。
+
+ION debugfs 的当前分配为：
+
+- `sys_user`：总计 7,397,376 bytes，其中 `ion_disp2` 为 7,372,800 bytes，另有六项各 4,096 bytes 的 `ion_vin` 分配；orphaned allocations 为 0。
+- `cma`：`nextui.elf` 当前分配 4,153,344 bytes；对应 CMA 区域为 `[0x77c00000,0x7bc00000)`，总量 64 MiB，空闲 60,360 KiB，与 `/proc/meminfo` 的 `CmaTotal/CmaFree` 相符。
+- `secure`：heap 节点存在，但当前分配为 0，orphaned allocations 为 0。该 debugfs 输出不报告 heap 的 base/size，因此不能据此推断该堆容量或物理区间。
+
+### 12.1 标准 OP-TEE API 与 Allwinner DRM-info 是不同的 SMC 路径
+
+对照 [Allwinner 4.9.170 参考树的 Makefile](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/Makefile)，以及其 [OP-TEE core.c](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/tee/optee/core.c)、[sunxi_ion.c](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/staging/android/ion/sunxi/sunxi_ion.c) 和 [optee_smc.h](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/tee/optee/optee_smc.h)，该参考实现具有以下行为：
+
+1. 标准 OP-TEE driver 先调用 UID 检查；UID 不匹配时会中止标准 TEE driver 初始化，因而没有标准 `/dev/tee0` 接口。
+2. Allwinner `ion-sunxi` 在创建 `ION_HEAP_TYPE_SECURE` heap 时，另行调用 `optee_probe_drm_configure()`。该函数发出 `OPTEE_SMC_GET_DRM_INFO`（function ID 15）厂商扩展 SMC，成功时返回 `drm_base`、`drm_size`、`tee_base` 并写入内核日志；失败时日志为 `drm config service not available: <status>`。
+3. 该 vendor SMC 不等于标准 OP-TEE UID / revision / capabilities 握手。故现场 `api uid mismatch` 只证明标准 Linux OP-TEE driver 没有初始化，**不能单独证明** Allwinner DRM-info SMC 也失败。
+4. 参考实现的 `ion-sunxi` 调用处没有用返回值阻止后续 heap 创建；若 SMC 失败且 DT heap base/size 初始为零，仍不能把 debugfs 中出现的空 `secure` heap 当作安全内存已经配置成功。
+
+这棵参考树的 Makefile 版本为 4.9.170，且采用 `sun50iw9p1` Allwinner 设备树；它是与现场内核版本及 SoC 家族匹配的比较源码，不是已证明与 RG34XX `#19` 二进制逐字节对应的完整源代码。因此上述调用流程需要结合本机日志验证，不能直接视为目标二进制的已证事实。
+
+### 12.2 对 16 MiB 未知保留区的处理
+
+现场 `memblock` 区间 `[0x7ec00000,0x7fc00000)`（16 MiB）仍没有可直接观测的 owner。它可能与 Allwinner DRM/TEE carveout 有关，但当前报告没有 `drm_base/drm_size/tee_base`，也没有 `drm config service not available` 结果；因此目前既不能确认匹配，也不能确认 vendor SMC 失败。该 16 MiB 区间、其余未知 reserved entries 和 RAM 顶部离散碎片继续整体排除，不得用于 payload、heap 或 loader。
+
+只读 collector 的 dmesg 筛选已补充 `drm config service`、`drm_base`、`drm_size`、`tee_base` 关键词。下一轮重新运行后，若出现成功日志，需比较返回的 `drm_base/drm_size` 是否与上述 16 MiB 区间吻合，并核对 `tee_base`；若出现失败日志，保留十六进制返回状态；若两类日志都没有，则需检查目标内核是否包含此 vendor 调用路径，不能推断为零尺寸或 SMC 失败。此项完成前，不批准任何 payload 地址或入口。
+
+
+## 13. 21:03 DRM-info SMC 复采与下一步判定（2026-11-22）
+
+[21:03 只读复采报告](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261122-210352/DRM-SMC-finding.md) 未捕获 `drm_base/drm_size/tee_base` 成功日志，也未捕获 `drm config service not available` 失败日志。因此它没有给出 `GET_DRM_INFO` 的返回值，不能据此认定 SMC 未执行、成功或失败。
+
+该轮同时确认：
+
+- `/sys/bus/platform/drivers/ion-sunxi/ion` 是已绑定设备的 sysfs 链接，而不仅是 driver 目录存在；
+- live FDT 中 `allwinner,secure` heap 节点状态为 `okay`，ID 6，base/size 均为零；
+- ION debugfs 导出 `secure` heap，但分配总量为零；
+- `/dev/tee0` / `/dev/teepriv0` 仍不存在，标准 OP-TEE UID 检查仍失败。
+
+### 13.1 纠正配置符号检查
+
+此前采集器 grep 使用了 `CONFIG_SUNXI_ION`，但同系列 Allwinner 4.9.170 参考树的 [ION Kconfig](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/staging/android/ion/Kconfig)、[ION Makefile](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/staging/android/ion/Makefile) 和 [sunxi 子目录 Makefile](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/staging/android/ion/sunxi/Makefile) 使用的符号实际是 `CONFIG_ION_SUNXI`，设备树解析选项为 `CONFIG_ION_OF`。故 21:03 报告中“config grep 未显示 CONFIG_SUNXI_ION”的说法是采集器过滤错误造成的，不能用作驱动未编入的证据。
+
+采集器现查询 `CONFIG_ION_SUNXI` 与 `CONFIG_ION_OF`，并在 `/proc/kallsyms` 可读时只输出以下相关符号名称（不保留内核地址）：
+
+- `sunxi_ion_probe`
+- `optee_probe_drm_configure`
+- `ion_secure_heap_create`
+
+同系列参考源码显示，若目标二进制确实包含相同实现，且 CONFIG_TEE 编译分支启用、secure heap DT 节点被解析为 secure 类型，那么 `sunxi_ion_probe()` 创建该 heap 前会调用 `optee_probe_drm_configure()`。当前观察到驱动绑定及 secure heap 节点，使这条路径值得直接核验；但目标 #19 二进制并未与参考源逐字节对应，不能把参考源码的控制流直接当成本机事实。
+
+下一轮采集需要先核对正确的 config 符号及 kallsyms 符号。若函数符号存在但日志仍缺失，后续应取得与 Linux `#19` 对应的源码/配置或内核镜像，核对该函数是否实际调用、日志级别/输出路径以及 secure heap 创建顺序。不得为获得返回值而从 userspace 主动发 SMC，也不得触碰 unknown reserved memory。
+
+### 13.2 内存安全状态
+
+`[0x7ec00000,0x7fc00000)` 仍是 16 MiB 未知保留区；本轮没有新的 owner 或物理地址证据。CMA `[0x77c00000,0x7bc00000)`、framebuffer `[0x7bf24800,0x7c076000)`、monitor 区 `[0x48000000,0x49000000)` 继续按已知用途排除。其余无 owner 的保留区和 RAM 顶部碎片也继续排除。当前没有批准的 payload RAM 区间或入口地址。
+
+## 14. 21:20 ION 配置与目标内核符号确认（2026-11-22）
+
+[21:20:49 只读采集报告](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261122-212049/ION-symbol-finding.md) 修复了前一轮配置过滤符号名错误，并给出以下现场证据：
+
+- /proc/config.gz 明确包含 CONFIG_ION_SUNXI=y、CONFIG_ION_OF=y、CONFIG_ION=y、CONFIG_TEE=y、CONFIG_OPTEE=y、CONFIG_CMA=y 和 CONFIG_DMA_CMA=y。
+- /proc/kallsyms 中存在 sunxi_ion_probe、optee_probe_drm_configure、ion_secure_heap_create 三个函数符号。采集器只输出符号名，不输出内核地址。
+- /sys/bus/platform/drivers/ion-sunxi/ion 仍是已绑定设备的 sysfs 链接；ION debugfs 的 sys_user、cma、secure 三个 heap 节点均存在。
+- /dev/ion 存在；/dev/tee0 与 /dev/teepriv0 不存在；标准 OP-TEE probe 仍记录 api uid mismatch。
+- secure heap 当前分配为 0；live FDT 的 secure heap base/size 仍为 0。
+
+这证明目标 #19 内核编入了 Allwinner ION/TEE 相关配置与三个关键函数，且 ION platform device 已绑定；它不证明 optee_probe_drm_configure() 已在 probe 中执行，也不证明 vendor SMC 成功或失败。21:20 的 dmesg 过滤仍未捕获 drm_base、drm_size、tee_base 或 drm config service not available。不得把缺少这两类日志改写成“SMC 没执行”或“SMC 失败”。
+
+同系列参考实现的 [sunxi_ion.c](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/staging/android/ion/sunxi/sunxi_ion.c) 在 secure heap 路径调用 [optee_probe_drm_configure()](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/tee/optee/core.c)；参考函数使用 OPTEE_SMC_GET_DRM_INFO，非成功返回时 printk drm config service not available，成功时打印 DRM/TEE base 和 size。但该参考树并未证明与 RG34XX #19 二进制逐字节匹配，控制流只能用作反汇编比对的假设。
+
+### 14.1 下一步：取得当前设备的 boot 分区镜像
+
+现场 GPT/启动参数将 PARTNAME=boot 对应到 p4；已记录分区范围为起始 LBA 303104、131072 sectors（64 MiB）。collector 现通过 sysfs 精确匹配 PARTNAME=boot，动态发现对应 block node 并读取完整分区至报告目录的 boot-partition.bin（最大 64 MiB），同时计算 SHA-256；不硬编码 /dev/mmcblk0p4 或固定 raw offset。若 PARTNAME 缺失则记录 skipped，不猜分区号；若分区超过上限或出现重复标签则报错退出。下一轮从采集文件验证 Android boot image header（ANDROID!），解析 kernel payload，并检查内嵌版本标识是否为 Linux version 4.9.170 ... #19 ...。该读取只从设备分区读出数据，不执行 SD/Boot0/TOC1/U-Boot 写入。
+
+[KNULLI 的 RG34XX 开发说明](https://knulli.org/devices/anbernic/rg34xx/)明确指出 Anbernic 未发布该设备的 kernel/U-Boot 源码，开发者需要从 stock SD/固件提取二进制。取得匹配的 kernel payload 后，后续只做静态检查：反汇编 sunxi_ion_probe 与 optee_probe_drm_configure 的实际目标代码、确认调用条件及返回路径，并检查日志字符串是否存在。暂不为获取返回值而重新绑定 driver、触发 ION heap 重建、主动调用 SMC 或改变启动参数。
+
+另一个可用的比对来源是 [Anbernic 官方 RG34XX 下载页](https://win.anbernic.com/download/514.html)：页面列出独立的 RG34XX-V1.0.6-EN16GB-260526 与 RG34XXSP-V1.0.6-EN16GB-260526 下载项。现场 U-Boot bootargs 中的构建时间为 2026-05-26 13:55:09，Linux #19 的构建时间为 2026-05-26 13:58:08；两者与 260526 日期吻合，因此 RG34XX 非 SP 的 V1.0.6 包是一个高优先级候选，可先抽取其 boot.img kernel 并与当前 p4 提取物的 hash/版本/关键字符串比较。日期吻合不是二进制相同的证明，且不得误取 SP 包。
+
+### 14.2 内存安全状态不变
+
+未知区间 [0x7ec00000,0x7fc00000) 仍无 owner 证据；当前没有任何 payload RAM 区间或入口地址获批。CMA、monitor、framebuffer、内核/FDT/启动数据以及 RAM 顶部离散 reserved entries 继续排除。
+## 15. 目标 #19 内核 DRM-info SMC 静态调用链（2026-11-22）
+
+用户上传的当前设备完整 boot 分区 SHA-256 为 `41cfaa8f9ade4a5e05a89188abb7db154243e38b8e19c53b730f0a45ff325516`。其中 gzip kernel 解压后的版本字符串与现场 runtime 精确匹配 Linux 4.9.170 `#19`（2026-05-26 13:58:08 CST）。因此反汇编针对当前设备的内核 Image。
+
+**修正上一版偏移记录：** 经过重新扫描原始 Image 并直接计算 AArch64 `BL` 目标，之前写入的 caller `0x666244`、compare `0x66636c`、call `0x666380`、wrapper `0x675098` 均不正确。正确的解压后 Image 文件偏移为：ION heap 初始化/遍历例程 `0x661244`；type 比较 `0x66136c`；直接 `BL` `0x661380`；DRM helper `0x67663c`；SMC wrapper `0x676098`；实际 `SMC #0` 指令 `0x010120`。这些是**文件偏移**，不可直接称为运行时地址或 Kallsyms 地址；raw Image 到链接虚拟地址仍需 section-aware ELF 映射。
+
+`0x661244` 处的代码序列与同系列 Allwinner 4.9.170 `sunxi_ion_probe()` 的 probe/heap 初始化结构吻合：创建 ION device、解析 DT heap 列表、分配 heap 数组、遍历 heap 记录并创建/登记 heap。在循环中，`0x661368` 载入 heap 类型，`0x66136c` 执行 `cmp w1,#6`，非 6 则跳过；类型 6 时准备 base/size/tee_base 三个输出指针，并在 `0x661380` 直接调用 `0x67663c`。该调用返回后，代码继续 heap 创建路径，没有检查 helper 的返回值。
+
+DRM helper 构造 `x0=0xB200000F`，经 `0x676098` wrapper 执行 `0x010120` 的 `SMC #0`。helper 根据返回 `a0` 选择成功/失败路径：非零时引用 `drm config service not available` 并返回 `-EINVAL`；零时把 `a1/a2/a3` 分别写入 drm_base/drm_size/tee_base，并引用三个成功格式串。字符串位于 Image 偏移 `0xbf1bbb`、`0xbf1be0`、`0xbf1bef`、`0xbf1bfe`。
+
+现场 FDT `/ion/heap_secure@0` 为 `compatible=allwinner,secure`、ID 6、类型 `ion_secure`；`CONFIG_ION_SUNXI=y`、`CONFIG_ION_OF=y`，ion-sunxi 设备已绑定，debugfs secure heap 存在。这些现场条件与上述 type-6 调用分支一致，使其成为当前 ION/TEE 调查的关键调用路径。参考代码见 [sunxi_ion.c](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/staging/android/ion/sunxi/sunxi_ion.c) 和 [uapi/ion.h](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/staging/android/uapi/ion.h)。该树为同系列比较源，不宣称与目标 #19 源码逐字节相同。
+
+21:20 现场 dmesg 仍没有成功输出 `drm_base/drm_size/tee_base`，也没有失败输出 `drm config service not available`。所以目前可确认的是目标 Image 包含 type-6 条件调用和完整 SMC helper；**本次启动是否实际执行该分支、SMC 返回状态和 carveout 地址仍未知**。空 secure heap 不区分成功/失败，因为调用者不检查 helper 返回值，仍继续创建 heap。
+
+此 vendor SMC 与标准 OP-TEE API UID probe 独立；`optee: api uid mismatch` 不能充当 `GET_DRM_INFO` 返回状态。DRM 审计只服务于后续 RAM ownership 判断，不应把项目目标缩减为 TEE 逆向。当前未知保留区 `[0x7ec00000,0x7fc00000)` 继续排除。

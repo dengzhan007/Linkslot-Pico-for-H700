@@ -180,7 +180,7 @@ else
 fi
 
 if command -v dmesg >/dev/null 2>&1; then
-    dmesg 2>/dev/null | grep -iE 'sunxi|dram|memory|lcd|panel|backlight|axp|pmic|mmc|boot|uart|serial|reserved|cma|memblock|framebuffer|boot_fb|disp_reserve|secure|tee|bl31' \
+    dmesg 2>/dev/null | grep -iE 'sunxi|dram|memory|lcd|panel|backlight|axp|pmic|mmc|boot|uart|serial|reserved|cma|memblock|framebuffer|boot_fb|disp_reserve|drm config service|drm_base|drm_size|tee_base|secure|tee|bl31' \
         > "$OUTDIR/dmesg-hardware-lines.txt" || true
 fi
 
@@ -200,19 +200,48 @@ fi
         case "$config" in
             *.gz)
                 if command -v gzip >/dev/null 2>&1; then
-                    gzip -dc "$config" 2>/dev/null | grep -E '^(CONFIG_(TEE|OPTEE|SUNXI_ION|ION|CMA|DMA_CMA|OF_RESERVED_MEM)=|# CONFIG_(TEE|OPTEE|SUNXI_ION|ION|CMA|DMA_CMA|OF_RESERVED_MEM) is not set)' || true
+                    gzip -dc "$config" 2>/dev/null | grep -E '^(CONFIG_(TEE|OPTEE|ION|ION_SUNXI|ION_OF|CMA|DMA_CMA|OF_RESERVED_MEM)=|# CONFIG_(TEE|OPTEE|ION|ION_SUNXI|ION_OF|CMA|DMA_CMA|OF_RESERVED_MEM) is not set)' || true
                     CONFIG_CAPTURED=1
                 else
                     echo "gzip utility unavailable; config not decoded"
                 fi
                 ;;
             *)
-                grep -E '^(CONFIG_(TEE|OPTEE|SUNXI_ION|ION|CMA|DMA_CMA|OF_RESERVED_MEM)=|# CONFIG_(TEE|OPTEE|SUNXI_ION|ION|CMA|DMA_CMA|OF_RESERVED_MEM) is not set)' "$config" || true
+                grep -E '^(CONFIG_(TEE|OPTEE|ION|ION_SUNXI|ION_OF|CMA|DMA_CMA|OF_RESERVED_MEM)=|# CONFIG_(TEE|OPTEE|ION|ION_SUNXI|ION_OF|CMA|DMA_CMA|OF_RESERVED_MEM) is not set)' "$config" || true
                 CONFIG_CAPTURED=1
                 ;;
         esac
     done
     [ "$CONFIG_CAPTURED" -eq 1 ] || echo "NOT_PRESENT: no readable kernel config export"
+    echo
+    echo "== relevant built-in ION / DRM symbols (names only) =="
+    if [ -r /proc/kallsyms ]; then
+        awk '
+            $3 == "sunxi_ion_probe" ||
+            $3 == "optee_probe_drm_configure" ||
+            $3 == "ion_secure_heap_create" {
+                print "[address redacted] " $3
+                found[$3] = 1
+            }
+            END {
+                if (!found["sunxi_ion_probe"])
+                    print "NOT_FOUND_OR_HIDDEN: sunxi_ion_probe"
+                if (!found["optee_probe_drm_configure"])
+                    print "NOT_FOUND_OR_HIDDEN: optee_probe_drm_configure"
+                if (!found["ion_secure_heap_create"])
+                    print "NOT_FOUND_OR_HIDDEN: ion_secure_heap_create"
+            }
+        ' /proc/kallsyms
+    else
+        echo "NOT_PRESENT: /proc/kallsyms"
+    fi
+    for module in ion_sunxi optee; do
+        if [ -d "/sys/module/$module" ]; then
+            echo "MODULE_SYSFS_PRESENT: $module"
+        else
+            echo "MODULE_SYSFS_NOT_PRESENT: $module"
+        fi
+    done
     echo
     echo "== ION device and runtime debugfs =="
     for path in /dev/ion /dev/tee0 /dev/teepriv0 /sys/class/misc/ion /sys/class/tee /sys/kernel/debug/ion /sys/kernel/debug/ion/heaps /sys/kernel/debug/ion/clients /sys/bus/platform/drivers/ion-sunxi; do
@@ -248,7 +277,7 @@ fi
     echo
     echo "== ION / TEE / DRM / secure / CMA kernel log lines =="
     if command -v dmesg >/dev/null 2>&1; then
-        dmesg 2>/dev/null | grep -iE 'Ion:|ion[-_ ]|drm_base|drm_size|tee_base|optee|secure|cma|reserved|BL31|ATF|trusted|api uid' || true
+        dmesg 2>/dev/null | grep -iE 'Ion:|ion[-_ ]|drm config service|drm_base|drm_size|tee_base|optee|secure|cma|reserved|BL31|ATF|trusted|api uid' || true
     else
         echo "NOT_PRESENT: dmesg utility"
     fi
@@ -396,11 +425,74 @@ else
     echo "env_partition_capture=skipped_no_PARTNAME_env" >> "$OUTDIR/summary.txt"
 fi
 
+# Find and capture the Android boot partition by its exact GPT PARTNAME.
+# Do not assume p4: partition numbering may differ between images.
+BOOT_PART=""
+BOOT_PART_SIZE=0
+BOOT_MATCHES=0
+for node in /sys/class/block/"$BASE"p*; do
+    [ -r "$node/uevent" ] || continue
+    if grep -qx 'PARTNAME=boot' "$node/uevent"; then
+        BOOT_MATCHES=$((BOOT_MATCHES + 1))
+        BOOT_DEVNAME="$(sed -n 's/^DEVNAME=//p' "$node/uevent")"
+        BOOT_PART_SIZE="$(cat "$node/size" 2>/dev/null || echo 0)"
+        case "$BOOT_DEVNAME" in
+            "$BASE"p[0-9]*) ;;
+            *)
+                echo "error: boot PARTNAME resolved to an unexpected device: $BOOT_DEVNAME" >&2
+                exit 1
+                ;;
+        esac
+        BOOT_PART="/dev/$BOOT_DEVNAME"
+    fi
+done
+
+[ "$BOOT_MATCHES" -le 1 ] || {
+    echo "error: multiple partitions advertise PARTNAME=boot" >&2
+    exit 1
+}
+
+if [ -n "$BOOT_PART" ]; then
+    [ -b "$BOOT_PART" ] || {
+        echo "error: discovered boot partition is not a block device: $BOOT_PART" >&2
+        exit 1
+    }
+    case "$BOOT_PART_SIZE" in
+        ''|*[!0-9]*)
+            echo "error: invalid boot partition size: $BOOT_PART_SIZE sectors" >&2
+            exit 1
+            ;;
+    esac
+    [ "$BOOT_PART_SIZE" -ge 1 ] || {
+        echo "error: boot partition size is empty or unknown" >&2
+        exit 1
+    }
+    # A 64 MiB ceiling covers the observed RG34XX boot partition while
+    # preventing an unexpectedly large PARTNAME=boot from consuming space.
+    BOOT_MAX_SECTORS=131072
+    [ "$BOOT_PART_SIZE" -le "$BOOT_MAX_SECTORS" ] || {
+        echo "error: boot partition exceeds the 64 MiB capture limit: $BOOT_PART_SIZE sectors" >&2
+        exit 1
+    }
+    BOOT_BYTES=$((BOOT_PART_SIZE * 512))
+    dd if="$BOOT_PART" of="$OUTDIR/boot-partition.bin" bs=512 count="$BOOT_PART_SIZE" 2>"$OUTDIR/boot-partition-dd.txt"
+    actual="$(wc -c < "$OUTDIR/boot-partition.bin" | tr -d ' ')"
+    [ "$actual" -eq "$BOOT_BYTES" ] || {
+        echo "error: short read from $BOOT_PART: got $actual bytes, expected $BOOT_BYTES" >&2
+        exit 1
+    }
+    echo "boot_partition_capture=complete source=sysfs PARTNAME=boot device=${BOOT_PART##*/} bytes=$BOOT_BYTES sectors=$BOOT_PART_SIZE" >> "$OUTDIR/summary.txt"
+else
+    echo "boot_partition_capture=skipped_no_PARTNAME_boot" >> "$OUTDIR/summary.txt"
+fi
 {
     echo "== SHA-256 of raw boot-chain captures =="
     sha256sum "$OUTDIR"/boot0-primary.bin "$OUTDIR"/boot0-secondary.bin "$OUTDIR"/toc1-package.bin
     if [ -f "$OUTDIR/env-partition.bin" ]; then
         sha256sum "$OUTDIR/env-partition.bin"
+    fi
+    if [ -f "$OUTDIR/boot-partition.bin" ]; then
+        sha256sum "$OUTDIR/boot-partition.bin"
     fi
     if [ -f "$OUTDIR/live-fdt.dtb" ]; then
         sha256sum "$OUTDIR/live-fdt.dtb"

@@ -79,6 +79,16 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertNotIn("env-partition-first64k.bin", self.source)
         self.assertNotIn("/dev/mmcblk0p3", self.source)
 
+    def test_boot_partition_is_discovered_by_exact_gpt_label_and_bounded(self):
+        self.assertIn("PARTNAME=boot", self.source)
+        self.assertIn('BOOT_PART="/dev/$BOOT_DEVNAME"', self.source)
+        self.assertIn('BOOT_MAX_SECTORS=131072', self.source)
+        self.assertIn('BOOT_BYTES=$((BOOT_PART_SIZE * 512))', self.source)
+        self.assertIn('of="$OUTDIR/boot-partition.bin"', self.source)
+        self.assertIn('count="$BOOT_PART_SIZE"', self.source)
+        self.assertIn('boot_partition_capture=skipped_no_PARTNAME_boot', self.source)
+        self.assertIn('sha256sum "$OUTDIR/boot-partition.bin"', self.source)
+        self.assertNotIn('/dev/mmcblk0p4', self.source)
     def test_cma_and_memblock_debugfs_capture_is_read_only(self):
         self.assertIn('/sys/kernel/debug/cma', self.source)
         self.assertIn('for name in memory reserved', self.source)
@@ -100,7 +110,12 @@ class InventoryScriptSafetyTests(unittest.TestCase):
     def test_tee_ion_runtime_capture_is_read_only(self):
         self.assertIn('> "$OUTDIR/tee-ion-runtime.txt"', self.source)
         self.assertIn('/proc/config.gz', self.source)
-        self.assertIn('CONFIG_(TEE|OPTEE|SUNXI_ION|ION|CMA|DMA_CMA|OF_RESERVED_MEM)', self.source)
+        self.assertIn('CONFIG_(TEE|OPTEE|ION|ION_SUNXI|ION_OF|CMA|DMA_CMA|OF_RESERVED_MEM)', self.source)
+        self.assertNotIn('CONFIG_SUNXI_ION', self.source)
+        self.assertIn('/proc/kallsyms', self.source)
+        self.assertIn('[address redacted]', self.source)
+        for symbol in ('sunxi_ion_probe', 'optee_probe_drm_configure', 'ion_secure_heap_create'):
+            self.assertIn(symbol, self.source)
         self.assertIn('/dev/ion', self.source)
         self.assertIn('/sys/kernel/debug/ion/heaps/$heap', self.source)
         self.assertIn('drm_base|drm_size|tee_base', self.source)
