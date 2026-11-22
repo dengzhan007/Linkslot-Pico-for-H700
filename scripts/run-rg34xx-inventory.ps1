@@ -12,8 +12,9 @@ $RepoRoot = Split-Path -Parent $PSScriptRoot
 $Collector = Join-Path $PSScriptRoot "collect-rg34xx-readonly-inventory.sh"
 $Boot0Inspector = Join-Path $RepoRoot "tools\inspect_h700_boot0.py"
 $Toc1Parser = Join-Path $RepoRoot "tools\parse_h700_toc1.py"
+$FdtInspector = Join-Path $RepoRoot "tools\inspect_h700_fdt.py"
 
-foreach ($path in @($Collector, $Boot0Inspector, $Toc1Parser)) {
+foreach ($path in @($Collector, $Boot0Inspector, $Toc1Parser, $FdtInspector)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         throw "Required project file not found: $path"
     }
@@ -153,6 +154,18 @@ if ($LASTEXITCODE -ne 0) { throw "Secondary Boot0 inspection failed." }
 
 & $pythonExe @pythonArgs $Toc1Parser $toc1 -o (Join-Path $OutputDirectory "toc1-extracted")
 if ($LASTEXITCODE -ne 0) { throw "TOC1 validation/extraction failed." }
+
+$liveFdt = Join-Path $OutputDirectory "live-fdt.dtb"
+if (Test-Path -LiteralPath $liveFdt -PathType Leaf) {
+    & $pythonExe @pythonArgs $FdtInspector $liveFdt -o (Join-Path $OutputDirectory "live-fdt.json")
+    if ($LASTEXITCODE -ne 0) { throw "Live FDT inspection failed." }
+}
+
+$packageDtb = Join-Path $OutputDirectory "toc1-extracted\items\dtb.bin"
+if (Test-Path -LiteralPath $packageDtb -PathType Leaf) {
+    & $pythonExe @pythonArgs $FdtInspector $packageDtb -o (Join-Path $OutputDirectory "toc1-extracted\dtb-report.json")
+    if ($LASTEXITCODE -ne 0) { throw "TOC1 DTB inspection failed." }
+}
 
 Write-Host ""
 Write-Host "Inventory collected and parsed successfully."
