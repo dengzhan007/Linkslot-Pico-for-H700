@@ -15,6 +15,7 @@
 | toc1-package.bin | 原始 SD LBA 32800 起的 0x140000 字节 TOC1 包 |
 | env-partition-first64k.bin | 可选：通过 sysfs 的精确 GPT PARTNAME=env 动态发现后读取分区起始 64 KiB，不假设固定分区号 |
 | live-fdt.dtb | 内核提供 /sys/firmware/fdt 时保存的 live FDT |
+| live-fdt.json / toc1-extracted/dtb-report.json | 自动解析 live FDT 与 TOC1 静态 DTB 的 RAM、reserved-memory、面板、PMIC、USB 状态、bootargs 和 hash |
 | cmdline.txt / cpuinfo.txt / meminfo.txt | 运行时内核启动参数、CPU 与内存信息 |
 | iomem.txt / interrupts.txt | 内存资源范围与中断状态 |
 | partitions.txt / mounts.txt | 块设备分区及挂载状态 |
@@ -38,7 +39,7 @@ LBA 16、512、32800 和 TOC1 长度 0x140000 来自 BaseOS-MultiFrontend 的 H7
 
     powershell -ExecutionPolicy Bypass -File .\scripts\run-rg34xx-inventory.ps1
 
-脚本会确认只连接了一台已授权的 ADB 设备、确认 ADB shell 为 root、读取 /proc/cmdline 并校验整盘设备与 root 分区一致，然后自动 push 采集器、运行只读采集、pull 报告、解析两份 Boot0 并解包 TOC1。采集器会优先通过 sysfs 中的精确 PARTNAME=env 查找环境分区并读取首 64 KiB，不硬编码 p3；若找不到且存在 by-partlabel/env 链接，才使用该链接作为兼容回退。默认结果保存在 build/rg34xx-inventory-时间戳/。多个 ADB 设备同时连接时用 -DeviceSerial 指定；root 参数不是 /dev 块设备时，在确认真实启动 SD 整盘后用 -BlockDevice 显式指定。
+脚本会确认只连接了一台已授权的 ADB 设备、确认 ADB shell 为 root、读取 /proc/cmdline 并校验整盘设备与 root 分区一致，然后自动 push 采集器、运行只读采集、pull 报告、解析两份 Boot0、解包 TOC1，并用 FDT 检查器分别输出 live-fdt.json 与 TOC1 内 dtb-report.json。采集器会优先通过 sysfs 中的精确 PARTNAME=env 查找环境分区并读取首 64 KiB，不硬编码 p3；若找不到且存在 by-partlabel/env 链接，才使用该链接作为兼容回退。默认结果保存在 build/rg34xx-inventory-时间戳/。多个 ADB 设备同时连接时用 -DeviceSerial 指定；root 参数不是 /dev 块设备时，在确认真实启动 SD 整盘后用 -BlockDevice 显式指定。
 
 该快捷脚本要求 Windows PowerShell 5.1 或 PowerShell 7、Android platform-tools 和 Python 3。ADB shell 必须为 root；若设备 ADB 不是 root，请按下方方法在 root SSH shell 执行采集器。
 
