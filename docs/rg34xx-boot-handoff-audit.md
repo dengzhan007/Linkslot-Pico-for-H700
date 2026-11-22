@@ -128,7 +128,7 @@ BaseOS 的 native SPL / monitor / A32 loader 是当前最有价值的技术参�
 ## 8. 对 Linkslot Pico 的实施建议
 
 1. RG34XX 非 SP 三轮只读采集已完成，见[现场报告](rg34xx-live-inventory-2026-11-22.md)。完整 16 MiB env 分区已读取；其中 128 KiB 环境映像 CRC 有效，25 个变量解析无警告，完整 p3 hash 与 BaseOS prepared env 区域一致。
-2. 首轮已完成 TOC1、U-Boot、monitor、DTB 和 Boot0 的组件/镜像指纹对比。继续解释现场包与 BaseOS 固定输入不一致的来源，并结合 env、Boot0 两个位置的实际选择及运行时 FDT 完成差异闭环。
+2. 已完成 TOC1、U-Boot、monitor、DTB 和 Boot0 的组件/镜像指纹对比，并将现场 Boot0 三组 DRAM 参数与 BaseOS RG34XX profile 逐 word 对照；LBA16 主块与 LBA512 两个备用块均全量匹配。继续确认 BROM 实际选择及 DRAM training 结果。
 3. 对比两种入口方案：保留原厂链并修改/替换 A32 BL33，或采用 BaseOS 的 A64 SPL + 原厂 monitor + A32 BL33。前者改动面可能更小；后者对 SD/DRAM/恢复路径控制更强，但会接管 Boot0/SPL 职责，验证和恢复复杂度更高。
 4. 不论选择哪条路径，先建立一个最小 A32 handoff adapter 和纯 AArch64 payload。payload 只输出早期日志、CurrentEL、寄存器参数和安全范围内的内存信息；不启动 Linkslot、模拟器、Wi-Fi、音频或显示驱动。
 5. 先在目标 RG34XX 验证重复冷启动、失败恢复及完整入口契约，再开始 H700 HAL。不得把编译探针、Unicorn 模拟或其他机型的成功记录当成这一步的通过条件。
@@ -145,8 +145,8 @@ BaseOS 的 native SPL / monitor / A32 loader 是当前最有价值的技术参�
 本轮关键更新：
 
 - 现场 FDT 的 rg34xx_v1 面板节点与 720×480 分辨率支持目标是 RG34XX 非 SP；root compatible 的 allwinner,h616 / sun50iw9p1 仍是通用家族标识，不能单独作为 SKU 证明。
-- live FDT、/proc/iomem 与 MemTotal 一致显示内核可见 1 GiB RAM；TOC1 内静态 DTB 仍声明 512 MiB。live FDT 的 boot_disp/boot_fb0 与 bootargs disp_reserve 精确给出 framebuffer 区间 `[0x7bf24800, 0x7c076000)`；没有标准 /reserved-memory 节点仍不能据此认定 monitor、secure world 或其他 DMA carveout 不存在。
-- LBA 16 位置 Boot0 头部声明 128 KiB，LBA 512 位置头部声明 64 KiB；两者 checksum 均通过，但主体 hash 不同。不能将差异简单归因于首扇区训练改写，也没有证明当前 BROM 使用哪份。
+- live FDT、/proc/iomem 与 MemTotal 一致显示内核可见 1 GiB RAM；TOC1 内静态 DTB 仍声明 512 MiB。live FDT 的 boot_disp/boot_fb0 与 bootargs disp_reserve 精确给出 framebuffer 区间 `[0x7bf24800, 0x7c076000)`。debugfs 已挂载，但第三轮 ZIP 尚未包含 CMA/memblock 物理布局；新采集器已加入只读抓取。没有标准 /reserved-memory 节点仍不能据此认定 monitor、secure world 或其他 DMA carveout 不存在。
+- LBA 16 位置 Boot0 头部声明 128 KiB，LBA 512 位置头部声明 64 KiB；两者 checksum 均通过，但主体 hash 不同。BaseOS 固定 RG34XX profile 逐 word 对照显示 LBA16 主 0x38 块 32/32 匹配，LBA512 的 0x9f4/0xa74 两个备用块也分别 32/32 匹配，LBA512 主块仅 word[26]/[29] 不同。H616 BROM 会检查 LBA16 和 LBA512，故 LBA16 是高置信正常候选，但未获取本机 BROM 读取轨迹。
 - TOC1 中 monitor 与 BaseOS RG34XX 固定指纹完全一致；U-Boot/DTB 呈现 gzip 优化特征，但现场 TOC1 和 U-Boot 都不匹配固定输入包/组件指纹。
 - GPT p6=UDISK、p7=primary 与 /proc/cmdline 的 appfs@p6、UDISK@p7 使用不同命名层；运行时 p6 ext4=/data、p7 vfat=/mnt/sdcard，逻辑用途与 bootargs 相符。第三轮完整 p3 env CRC 唯一匹配 128 KiB 映像，25 个变量解析无警告，完整 16 MiB p3 hash 与 BaseOS prepared env 区域完全一致。H616-specific BROM 资料支持 LBA 16/LBA 512 为两处候选位置，LBA 16 最可能为本次正常启动来源。目标 U-Boot 含 update bootcmd/part info 路径字符串，runtime cmdline 与 setargs_mmc 相符；尚无实际函数执行 trace。FDT 检查器已解析 framebuffer `[0x7bf24800,0x7c076000)`。
 
