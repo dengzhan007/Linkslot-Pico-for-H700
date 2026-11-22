@@ -217,6 +217,34 @@ def find_a32_ldr_literal_refs_to_value(data: bytes, value: int) -> list[dict[str
     return references
 
 
+
+def find_thumb_ldr_literal_refs_to_value(data: bytes, value: int) -> list[dict[str, Any]]:
+    """Find Thumb-1/Thumb-2 LDR-literal instructions whose pool word equals value."""
+    references = []
+    for offset in range(0, len(data) - 1, 2):
+        half = struct.unpack_from("<H", data, offset)[0]
+        literal_offset = None
+        if (half & 0xF800) == 0x4800:  # Thumb-1 LDR Rt, [PC, #imm8*4]
+            literal_offset = ((offset + 4) & ~3) + ((half & 0xFF) << 2)
+        elif offset + 4 <= len(data):
+            second = struct.unpack_from("<H", data, offset + 2)[0]
+            if (half & 0xFF7F) == 0xF85F:  # Thumb-2 LDR literal, +/- imm12
+                immediate = second & 0x0FFF
+                base = (offset + 4) & ~3
+                literal_offset = base + immediate if (half & 0x80) else base - immediate
+        if literal_offset is None or literal_offset < 0 or literal_offset + 4 > len(data):
+            continue
+        literal = struct.unpack_from("<I", data, literal_offset)[0]
+        if literal == value:
+            references.append({
+                "instruction_offset": f"0x{offset:x}",
+                "literal_offset": f"0x{literal_offset:x}",
+                "value": f"0x{literal:x}",
+                "disassembly": disassemble_thumb_window(data, offset, 0x20),
+            })
+    return references
+
+
 def find_a32_adr_refs(data: bytes, target: int) -> list[dict[str, Any]]:
     """Find ADD/SUB immediate instructions using PC as base and resolving to target."""
     references = []
@@ -520,6 +548,20 @@ def scan_uboot(uboot: bytes, context_bytes: int = 0x50) -> dict[str, Any]:
         "a32_blx_register_sites_first_256": find_a32_blx_register_sites(uboot),
         "possible_pointer_refs_at_base_0x4a000000": {            f"0x{entry:x}": find_word_pointer_refs(uboot, 0x4A000000 + entry)
             for entry in wrapper_entries
+        },
+        "vendor_android_kernel_loader_selector": {
+            "offset": "0xf698",
+            "raw_bytes": uboot[0xF680:0xF710].hex(),
+            "thumb": disassemble_thumb_range(uboot, 0xF680, 0x90),
+            "arm": disassemble_arm_window(uboot, 0xF698, 0x40),
+        },
+        "thumb_literal_refs_to_boot_addresses": {
+            f"0x{value:x}": find_thumb_ldr_literal_refs_to_value(uboot, value)
+            for value in (0x40080000, 0x42000000, 0x44000000)
+        },
+        "a32_literal_refs_to_boot_addresses": {
+            f"0x{value:x}": find_a32_ldr_literal_refs_to_value(uboot, value)
+            for value in (0x40080000, 0x42000000, 0x44000000)
         },
         "boot_address_constant_contexts": {
             name: [
