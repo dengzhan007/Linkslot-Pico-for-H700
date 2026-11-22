@@ -38,6 +38,7 @@ jobs:
 
       - name: Scan the current RG34XX TOC1 U-Boot
         run: |
+          mkdir -p build
           python3 tools/audit_rg34xx_uboot_smc.py \
             field-reports/reports/rg34xx-inventory-20261122-195053.zip \
             --output build/rg34xx-uboot-scan.json
