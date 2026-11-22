@@ -26,7 +26,8 @@ def make_fdt():
     property_names = (
         "#address-cells", "#size-cells", "model", "compatible", "bootargs",
         "device_type", "reg", "lcd_driver_name", "lcd_x", "lcd_y", "status", "boot_fb0",
-        "no-map", "debug_mode", "ranges",
+        "no-map", "debug_mode", "ranges", "linux,initrd-start", "linux,initrd-end",
+        "method", "heap-name", "heap-id", "heap-base", "heap-size", "heap-type",
     )
     strings = bytearray()
     name_offsets = {}
@@ -76,6 +77,24 @@ def make_fdt():
     begin("framebuffer@7bf24800")
     prop("reg", cells(0, 0x7bf24800, 0, 1382400))
     prop("no-map", b"")
+    end()
+    end()
+
+    begin("firmware")
+    begin("optee")
+    prop("compatible", b"linaro,optee-tz\\0")
+    prop("method", b"smc\\0")
+    end()
+    end()
+
+    begin("ion")
+    begin("heap_secure@0")
+    prop("compatible", b"allwinner,secure\\0")
+    prop("heap-name", b"secure\\0")
+    prop("heap-id", be32(6))
+    prop("heap-base", be32(0))
+    prop("heap-size", be32(0))
+    prop("heap-type", b"ion_secure\\0")
     end()
     end()
 
@@ -144,6 +163,28 @@ class FdtInspectorTests(unittest.TestCase):
         self.assertEqual([x["status"] for x in report["usb_controllers"]], ["okay", "late"])
         self.assertEqual(report["debug_modes"][0]["value"], 0)
         self.assertEqual(report["chosen_bootargs"], "root=/dev/mmcblk0p5 cma=64M disp_reserve=1382400,0x7bf24800")
+        self.assertEqual(report["initrd"], {
+            "start": "0x42000000",
+            "end_exclusive": "0x42000200",
+            "size_bytes": 512,
+            "range_valid": True,
+        })
+        self.assertEqual(report["firmware_nodes"], [{
+            "node": "/firmware/optee",
+            "compatible": ["linaro,optee-tz"],
+            "method": "smc",
+            "status": "okay",
+        }])
+        self.assertEqual(report["ion_heaps"], [{
+            "node": "/ion/heap_secure@0",
+            "compatible": ["allwinner,secure"],
+            "name": "secure",
+            "id": 6,
+            "base": "0x0",
+            "size_bytes": 0,
+            "type": "ion_secure",
+            "status": "okay",
+        }])
         self.assertEqual(report["disp_reserve_bootarg"], {"size_bytes": 1382400, "base": "0x7bf24800"})
         framebuffer = report["boot_framebuffers"][0]
         self.assertEqual(framebuffer["base"], "0x7bf24800")
