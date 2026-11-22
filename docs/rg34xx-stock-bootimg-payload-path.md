@@ -49,14 +49,14 @@ Boot ROM
   -> AArch64 freestanding payload
 ```
 
-当前环境中已读到 `boot_normal=sunxi_flash read 45000000 boot;bootm 45000000`。BaseOS 的 H700 U-Boot Unicorn trace 在各目标 profile 上到达 `boot_jump_linux`，记录 entry `0x40080000`、FDT `0x44000000`；但 trace 在最终 kernel-jump hook 停止，且其文档说明没有执行到 monitor SMC。因此这只能证明 loader 的预期参数，不能单独证明本机 monitor ERET 或寄存器状态。
+当前现场环境为 `boot_normal=sunxi_flash read 45000000 boot;bootm 45000000`。更重要的是，已经从当前 RG34XX TOC1 内的 U-Boot binary 找到 `0x8000FF04` → `SMC #0` 的实际调用点及其寄存器准备路径，详见[现场 U-Boot handoff 二进制审计](rg34xx-uboot-handoff-binary-audit.md)。这比 BaseOS prepared U-Boot 的 Unicorn trace 更直接；但 monitor 的最终 ERET 状态、`images.ep` 的实际数值与 FDT 原始来源仍待进一步核验。
 
-该候选要求验证：
+该候选的核心 handoff 调用点和参数布局已在现场 U-Boot binary 中确认；剩余门槛为：
 
-1. 当前 RG34XX `#19` 所配 U-Boot 的实际 binary 确实识别 p4 Android v2、按当前 gzip selector 解压 kernel，并以 `0x40080000` 为 Image 入口。
-2. 当前 U-Boot 在最终跳转前的 A32 指令/调用链，明确进入 vendor monitor 的服务号、寄存器参数和 cache/MMU 状态；不得只引用其他 H700 build 的 Unicorn trace。
-3. monitor 对 A64 目标的实际 ERET 状态，包括 CurrentEL、SPSR_EL3/ELR_EL3 的来源、x0..x3、DAIF、中断、MMU/cache/TLB 和 FDT 指针。
-4. 原厂 U-Boot 最终传入的 FDT 是否来自 TOC1 DTB，并解释从 TOC1 static DTB 到 143,936-byte live FDT 的改动来源。
+1. 静态追踪当前 U-Boot 的 Android gzip 解压路径，确认输出目标、输出长度限制，并将 `images.ep` 实值与 p4 header `kernel_addr=0x40080000` 对应起来。
+2. 对与现场相同 hash 的 vendor monitor 检查 `0x8000FF04` 服务的 ERET 行为：CurrentEL、SPSR_EL3/ELR_EL3、x0..x3、DAIF、中断、MMU/cache/TLB 和 FDT 指针。
+3. 确认 `images.ft_addr` 的原始 FDT 来源与 fixup 顺序，解释 p4 appended DTB（512 MiB）、TOC1 DTB 和 live FDT（1 GiB）之间的关系。
+4. 在上述静态门槛通过后，才生成一个不调用 Linux、不访问未知 RAM 的 AArch64 entry probe；模拟结果不能替代 RG34XX 非 SP 实机验收。
 
 
 ### 4.1 现场 U-Boot 的 vendor A64 handoff 已直接定位
@@ -76,6 +76,30 @@ Boot ROM
 
 尚未完成的两项不是 handoff 服务号本身，而是：实际 `images.ep`/kernel decompressor 的最终落点核验；`images.ft_addr` 最初来自哪份 DTB，以及它如何从旧的 512 MiB appended tree 变成 Linux 收到的 1 GiB live FDT。
 
+### 4.2 已有主机侧 kernel-slot 构建器（不刷写）
+
+
+
+项目现在包含 `tools/build_rg34xx_bootimg_payload.py`。它只在主机上读取一个原始 p4 分区镜像和一个未压缩的 AArch64 Image，并生成**另一个新文件**作为离线候选分区。当前实现强制检查：
+
+
+
+- 输入是 Android boot image v2，page size 2048，原 kernel component 为 gzip；
+
+- 当前 RG34XX 头部地址为 kernel `0x40080000`、ramdisk `0x42000000`、FDT `0x44000000`；
+
+- 新 Image 必须有 `ARM\x64` magic、有效 AArch64 branch header、`text_offset=0x80000`、非零 `image_size`，且 `image_size` 不与 ramdisk 槽重叠；
+
+- 输出 kernel component 使用 gzip；只更新 Android header 的 kernel size 和 SHA-1 image ID；
+
+- ramdisk、second、recovery_dtbo、appended DTB 必须逐字节不变；新组件不得越过原始 Android component 区域；原 p4 未使用尾部必须逐字节保留；
+
+- 不能覆盖输入文件，也不能覆盖已存在的输出路径；候选 p4 分区长度必须与原分区相同。
+
+
+
+对应测试 `tools/test_build_rg34xx_bootimg_payload.py` 使用合成 Android v2 image 验证 round-trip、non-kernel component hash、p4 tail 保留、错误 Image header、错误 text_offset、slot 超限与组件区越界。该工具当前没有生成真实 payload，也没有被用于用户的设备镜像；任何输出都只是 host-side candidate，不是可刷写发行包。
+
 ## 5. 第一份 payload 的边界
 
 当前 U-Boot 已确认存在 vendor SMC handoff 调用点和参数准备路径；但 monitor 的 ERET 状态、现场 `images.ep` 实值及 FDT 来源仍待核验。在这些最后门槛完成前，不生成可刷写镜像。之后第一份 payload 只做入口诊断，不实现 allocator、文件系统、HAL 或 Linkslot：
@@ -92,9 +116,9 @@ Boot ROM
 ## 6. 实现与验收顺序
 
 1. **离线镜像检查（已完成第一轮）：** 验证 Android v2 header、组件布局、image ID、kernel gzip、AArch64 Image header、appended DTB；工具与合成测试不得涉及设备。
-2. **当前 U-Boot handoff 静态审计（已定位核心调用）：** 现场 U-Boot 已找到 `0x8000FF04` → `SMC #0` 的直接调用链，并确认 `images.ep` 与 FDT 的参数流；BaseOS prepared U-Boot 与现场 hash 不同，所有现场偏移均来自目标 TOC1 U-Boot。仍需验证 gzip decompressor 的输出地址、`images.ft_addr` 来源与 FDT fixups，并静态核对 monitor ERET 状态。
-3. **主机侧 payload builder：** 只在第 2 步确认后实现，重建 Android v2 image 时仅变更 kernel component 与必需的尺寸/image ID；ramdisk、second、recovery_dtbo、appended DTB、cmdline 及未使用 p4 尾部必须逐字节保持或按明确规则保留，并通过 round-trip/hash/边界测试。
-4. **入口模拟：** 把实际 U-Boot handoff 和 vendor monitor 交接模型接到 payload，断言真实入口寄存器、EL、异常屏蔽、栈和 FDT。模拟结果不能替代 RG34XX 非 SP 实机验收。
+2. **当前 U-Boot handoff 静态审计（核心调用已找到）：** 现场 U-Boot 的 `0x8000FF04` → `SMC #0` 路径、`images.ep` 与 FDT 参数准备已定位；仍需核实 gzip decompressor 输出地址、FDT 原始来源及 monitor ERET 状态。
+3. **主机侧 payload builder（第一版已完成）：** `tools/build_rg34xx_bootimg_payload.py` 只生成独立候选分区文件，验证 Image header 和 kernel slot 边界，保持非 kernel 组件及 p4 尾部；通过主机合成测试。还没有真实 AArch64 payload。
+4. **入口 probe 与模拟：** 静态门槛通过后，构建最小 AArch64 Image 诊断程序，检查入口参数、EL、异常屏蔽、栈和 FDT。模拟结果不能替代 RG34XX 非 SP 实机验收。
 5. **硬件试验评审：** 只有前四步通过后，才单独制作测试卡镜像；原始整卡/Boot0/TOC1/U-Boot 必须有经校验备份，试验不覆盖用户日常卡。此项需要用户明确批准后才执行。
 6. **后续移植：** payload 能稳定冷启动并记录入口状态后，再做早期日志、timer/GPIO/input、display/backlight、SD/filesystem、audio、PMIC full poweroff；之后才是 core ABI 和 Linkslot 大版本同步。
 
