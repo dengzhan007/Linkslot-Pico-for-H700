@@ -61,7 +61,7 @@ def make_fdt():
     prop("compatible", b"allwinner,h616\0arm,sun50iw9p1\0")
 
     begin("chosen")
-    prop("bootargs", b"root=/dev/mmcblk0p5 cma=64M\0")
+    prop("bootargs", b"root=/dev/mmcblk0p5 cma=64M disp_reserve=1382400,0x7bf00000\0")
     end()
 
     begin("memory@40000000")
@@ -102,7 +102,7 @@ def make_fdt():
     end()
 
     begin("disp@01000000")
-    prop("boot_fb0", b"7bf00000,2d0,1e0,20,b40,0,0,2d0,1e0\\0")
+    prop("boot_fb0", b"7bf00000,2d0,1e0,20,b40,0,0,2d0,1e0\0")
     end()
 
     begin("platform")
