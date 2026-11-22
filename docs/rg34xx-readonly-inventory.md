@@ -92,7 +92,7 @@ LBA 16、512、32800 和 TOC1 长度 0x140000 来自 BaseOS-MultiFrontend 的 H7
 
 ## 安全边界
 
-采集报告中的 /proc/cmdline、live FDT bootargs 和 env-partition-first64k.bin 可能包含设备序列号、MAC 地址、私有启动变量或其他设备专属信息。默认只保存在本机 build/ 目录；不要将原始 env/FDT/命令行文件直接提交到公开仓库或公开 Issue。需要公开分享时先检查并脱敏，原始数据仅在可信的私有渠道传递。
+采集报告中的 /proc/cmdline、live FDT bootargs 和 env-partition.bin 可能包含设备序列号、MAC 地址、私有启动变量或其他设备专属信息。默认只保存在本机 build/ 目录；不要将原始 env/FDT/命令行文件直接提交到公开仓库或公开 Issue。需要公开分享时先检查并脱敏，原始数据仅在可信的私有渠道传递。
 
 - 对启动 SD 的原始块设备只使用 dd if=... of=报告文件；不会向块设备发起写命令。
 - 不执行 fw_setenv、flashcp、nand、sunxi-fel、reboot、poweroff 或任何 Boot0/TOC1/U-Boot 写入。
