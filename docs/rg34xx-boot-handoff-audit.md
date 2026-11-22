@@ -266,6 +266,8 @@ ION debugfs 的当前分配为：
 
 [KNULLI 的 RG34XX 开发说明](https://knulli.org/devices/anbernic/rg34xx/)明确指出 Anbernic 未发布该设备的 kernel/U-Boot 源码，开发者需要从 stock SD/固件提取二进制。取得匹配的 kernel payload 后，后续只做静态检查：反汇编 sunxi_ion_probe 与 optee_probe_drm_configure 的实际目标代码、确认调用条件及返回路径，并检查日志字符串是否存在。暂不为获取返回值而重新绑定 driver、触发 ION heap 重建、主动调用 SMC 或改变启动参数。
 
+另一个可用的比对来源是 [Anbernic 官方 RG34XX 下载页](https://win.anbernic.com/download/514.html)：页面列出独立的 RG34XX-V1.0.6-EN16GB-260526 与 RG34XXSP-V1.0.6-EN16GB-260526 下载项。现场 U-Boot bootargs 中的构建时间为 2026-05-26 13:55:09，Linux #19 的构建时间为 2026-05-26 13:58:08；两者与 260526 日期吻合，因此 RG34XX 非 SP 的 V1.0.6 包是一个高优先级候选，可先抽取其 boot.img kernel 并与当前 p4 提取物的 hash/版本/关键字符串比较。日期吻合不是二进制相同的证明，且不得误取 SP 包。
+
 ### 14.2 内存安全状态不变
 
 未知区间 [0x7ec00000,0x7fc00000) 仍无 owner 证据；当前没有任何 payload RAM 区间或入口地址获批。CMA、monitor、framebuffer、内核/FDT/启动数据以及 RAM 顶部离散 reserved entries 继续排除。
