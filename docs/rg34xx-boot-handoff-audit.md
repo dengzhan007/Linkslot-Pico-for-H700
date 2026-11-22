@@ -271,3 +271,16 @@ ION debugfs 的当前分配为：
 ### 14.2 内存安全状态不变
 
 未知区间 [0x7ec00000,0x7fc00000) 仍无 owner 证据；当前没有任何 payload RAM 区间或入口地址获批。CMA、monitor、framebuffer、内核/FDT/启动数据以及 RAM 顶部离散 reserved entries 继续排除。
+## 15. 目标 #19 内核 DRM-info SMC 静态调用链（2026-11-22）
+
+用户上传的当前设备完整 boot 分区 SHA-256 为 `41cfaa8f9ade4a5e05a89188abb7db154243e38b8e19c53b730f0a45ff325516`。其中 gzip kernel 解压后的版本字符串与现场 runtime 精确匹配 Linux 4.9.170 `#19`（2026-05-26 13:58:08 CST）。因此以下反汇编针对当前设备实际运行的内核，不是其他 H700 型号的替代映像。
+
+在该 Image 中已找到 ION platform initialization/heap creation 循环：它遍历 DT 解析得到的 heaps，在 heap type 等于 6 时执行一条直接 BL 到 DRM-info helper 的调用。对应原始 Image 文件偏移：调用方例程 `0x666244`，type 比较 `0x66636c`，直接 BL `0x666380`，DRM helper `0x67663c`，wrapper `0x675098`，实际 `SMC #0` stub `0x010120`。这些是解压后 Image 的**文件偏移**；临时 ELF 的 VMA 只是反汇编工具映射，不是运行时虚拟地址或 payload 入口。完整指令语义、输入 hash 和运行时对照见 [目标 #19 DRM SMC 二进制审计](rg34xx-drm-smc-binary-audit.md)。
+
+helper 构造 `x0=0xB200000F`，调用 SMC wrapper，并根据 `a0` 返回状态分支：失败时 printk `drm config service not available` 并返回 `-EINVAL`；成功时把 `a1/a2/a3` 分别写入 drm_base/drm_size/tee_base 并打印三项数值。调用方在 helper 返回后不检查其返回码，而是继续创建 ION heap。因此 debugfs 中 `secure` heap 存在且当前无分配，并不能证明 helper 成功，也不能证明 SMC 失败。
+
+现场 live FDT 的 `/ion/heap_secure@0` 为 `compatible=allwinner,secure`、ID 6、类型 `ion_secure`；运行时 ION debugfs 的 `secure` heap 存在，platform device 也已绑定。对照 Allwinner 4.9.170 参考源码，`allwinner,secure` 对应 `ION_HEAP_TYPE_SECURE`，枚举值为 6。结合目标二进制的 type==6 直接调用分支，**强烈支持 probe 时应已调用 vendor DRM-info helper**。
+
+但 21:20 现场 dmesg 依旧没有成功分支的 `drm_base/drm_size/tee_base`，也没有失败分支的 `drm config service not available`。因此目前能给出的最强结论是：目标 #19 内核包含该 SMC helper，ION 初始化代码有 secure heap 条件下的直接调用点，现场设备也创建了对应 secure heap；**SMC 的实际返回状态、DRM base/size 和 tee_base 仍未取得**。缺少 printk 与静态控制流/heap 状态之间的矛盾尚待解释，不可擅自推断为 SMC 成功、失败或 carveout size=0。
+
+这一 vendor SMC 与标准 OP-TEE API UID probe 相互独立；`optee: api uid mismatch` 不能充当 `GET_DRM_INFO` 的返回状态。未知保留区 `[0x7ec00000,0x7fc00000)` 继续排除，当前仍没有批准的 payload RAM 区间或入口地址。
