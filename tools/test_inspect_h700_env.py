@@ -36,7 +36,7 @@ class H700EnvInspectorTests(unittest.TestCase):
         self.assertTrue(report["crc_valid"])
         self.assertEqual(report["flags_byte_candidate"], 0)
         self.assertEqual(report["variables_data_offset"], 5)
-        self.assertEqual(report["variable_count"], 3)
+        self.assertEqual(report["variable_count"], 4)
         variables = {item["name"]: item["value"] for item in report["variables"]}
         self.assertEqual(variables["bootcmd"], "run setargs_nand boot_normal")
         self.assertEqual(variables["mmc_root"], "/dev/mmcblk0p5")
@@ -46,7 +46,7 @@ class H700EnvInspectorTests(unittest.TestCase):
         report = MODULE.inspect_env(make_env(redundant=False))
         self.assertTrue(report["crc_valid"])
         self.assertEqual(report["variables_data_offset"], 4)
-        self.assertEqual(report["variable_count"], 3)
+        self.assertEqual(report["variable_count"], 4)
 
     def test_bad_crc_does_not_prevent_read_only_variable_extraction(self):
         image = bytearray(make_env())
@@ -54,7 +54,7 @@ class H700EnvInspectorTests(unittest.TestCase):
         report = MODULE.inspect_env(bytes(image))
         self.assertFalse(report["crc_valid"])
         self.assertIn("Do not treat", report["crc_note"])
-        self.assertGreaterEqual(report["variable_count"], 3)
+        self.assertGreaterEqual(report["variable_count"], 4)
 
     def test_rejects_short_input(self):
         with self.assertRaisesRegex(MODULE.EnvError, "too short"):
