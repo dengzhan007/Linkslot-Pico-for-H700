@@ -109,13 +109,13 @@ linkSlot/mods/
 
 H700 设备不能只用一个屏幕分辨率或一套按键定义。至少建立设备 profile，记录板型、屏幕型号/时序、GPIO 按键、音频 codec/功放、PMIC、Wi-Fi 芯片/总线、USB 端口用途和电源域。一个 profile 通过实机验证后才能标记为受支持。
 
-## 9. 目标机型
+## 11. 目标机型
 
 首期只支持 Anbernic RG34XX（非 SP）。其 CPU 是 Cortex-A53，因此所有 H700 C/C++/汇编和模拟器核心交叉编译均使用 AArch64 Cortex-A53 target。不能将 RG34XX SP 的 2 GB LPDDR4、`rg34xxsp_v1` 面板驱动或 Boot0 DRAM 参数套用到 RG34XX。
 
 详细硬件基线及证据见 [RG34XX 硬件基线](rg34xx-hardware-profile.md)。
 
-## 11. 参考代码
+## 12. 参考代码
 
 - [GammaOS Pico LK branch](https://github.com/TheGammaSqueeze/lk-mt6785/tree/lk-gba-emu-sd-card-kpa)
 - [Pico network stack](https://github.com/TheGammaSqueeze/lk-mt6785/tree/lk-gba-emu-sd-card-kpa/platform/common/pico)
