@@ -26,7 +26,7 @@ Libretro 文档将 Gambatte 描述为 accuracy-focused，并列出 GB Colorizati
 
 ## 3. 本项目的初始选择
 
-RG34XX 使用 Cortex-A53。所有核心必须以 AArch64/A53 目标重新构建或进行独立 A32 ABI 适配；不能将针对其他 CPU 的预编译 blob、NEON 假设或编译参数直接视为适用于 RG34XX。应分别测量 A53 上的帧率、音频和内存占用。
+RG34XX 使用 Cortex-A53。裸机 Host、Runtime 和 AArch64 核心以 `aarch64-none-elf` / `-mcpu=cortex-a53` 构建；若采用上游 A32 核心，则必须另行验证 AArch32 执行边界和 A53 优化选项。不能将针对其他 CPU 的预编译 blob、NEON 假设或编译参数直接视为适用于 RG34XX。应分别测量 A53 上的帧率、音频和内存占用。
 
 - GB/GBC：Gambatte 默认，mGBA 可选。
 - GBA：mGBA 默认，gpSP 备选。
