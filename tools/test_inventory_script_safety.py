@@ -100,7 +100,12 @@ class InventoryScriptSafetyTests(unittest.TestCase):
     def test_tee_ion_runtime_capture_is_read_only(self):
         self.assertIn('> "$OUTDIR/tee-ion-runtime.txt"', self.source)
         self.assertIn('/proc/config.gz', self.source)
-        self.assertIn('CONFIG_(TEE|OPTEE|SUNXI_ION|ION|CMA|DMA_CMA|OF_RESERVED_MEM)', self.source)
+        self.assertIn('CONFIG_(TEE|OPTEE|ION|ION_SUNXI|ION_OF|CMA|DMA_CMA|OF_RESERVED_MEM)', self.source)
+        self.assertNotIn('CONFIG_SUNXI_ION', self.source)
+        self.assertIn('/proc/kallsyms', self.source)
+        self.assertIn('[address redacted]', self.source)
+        for symbol in ('sunxi_ion_probe', 'optee_probe_drm_configure', 'ion_secure_heap_create'):
+            self.assertIn(symbol, self.source)
         self.assertIn('/dev/ion', self.source)
         self.assertIn('/sys/kernel/debug/ion/heaps/$heap', self.source)
         self.assertIn('drm_base|drm_size|tee_base', self.source)
