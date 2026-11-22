@@ -34,6 +34,36 @@
 
 BaseOS-MultiFrontend 的 `tools/kernel_gzip.py` 明确按 Android v2 五组件顺序解析 p4 image，并保留其中原有 DTB；同时它单独解析、修改 TOC1 `dtb`，注释说明 U-Boot 从 package DTB 读取早期启动配置。其 boot chain 文档也记录 U-Boot 从 p4 boot image 取 kernel/ramdisk、从环境与 GPT 构造 bootargs。该设计是“TOC1 DTB 是 U-Boot 工作树、boot.img appended DTB 不一定是最终 FDT”的强线索，但并非对本机当前 U-Boot 二进制的直接执行证明。
 
+现有两份已上传 JSON 还给出一个来源线索，但还不能定案：TOC1 DTB 和 Linux live FDT 都有 573 个节点，`compatible`、面板 `rg34xx_v1`、PMIC 和 USB controller 节点布局一致；TOC1 FDT totalsize 为 139,822 bytes，live FDT 为 143,936 bytes。TOC1 树的 memory 为 `[0x40000000,0x60000000)`（512 MiB），live FDT 为 `[0x40000000,0x80000000)`（1 GiB）；live `/chosen/bootargs` 还包含动态 root/GPT、`cma=64M`、initrd/disp_reserve/bootreason 等运行时字段。这个相似度支持“live FDT 是在原有完整 H700 树上由 U-Boot fixup 得到”的判断，但不能仅凭节点数相同，认定其源 blob 就是 TOC1 DTB。
+
+
+
+p4 appended DTB 的 raw bytes 与 TOC1 / live FDT raw bytes 均留在用户本地 inventory 目录，没有上传仓库。项目新增 [compare_rg34xx_fdt_sources.py](../tools/compare_rg34xx_fdt_sources.py)，可在本地只读比较三份树的每个 node/property：报告每个源的 totalsize/hash、节点数、memory ranges，以及属性键和值是否逐字节相同。对属性只输出长度和 SHA-256，不输出 bootargs、序列号或 MAC 原文。
+
+
+
+在 Windows PowerShell、项目根目录执行：
+
+
+
+```powershell
+
+python .\tools\compare_rg34xx_fdt_sources.py `
+
+  .\build\rg34xx-inventory-20261122-214708\boot-partition.bin `
+
+  .\build\rg34xx-inventory-20261122-214708\toc1-package.bin `
+
+  .\build\rg34xx-inventory-20261122-214708\live-fdt.dtb `
+
+  --output .\build\rg34xx-fdt-source-comparison.json
+
+```
+
+
+
+该命令只读三份本地文件，结果是新的 JSON 文件；不访问设备、不写卡，也不要求上传原始固件。下一步应只将生成的 `rg34xx-fdt-source-comparison.json` 放入 `reports` 分支，便可用共有/差异属性确定 live FDT 更接近哪份源树。
+
 因此：任何替换 boot image 的构建器必须按原样保留 appended DTB、ramdisk、header cmdline 和未知组件；payload 不应自行构造一个新的 FDT，也不能假定 Linux 原来接收的是 appended DTB。先静态确定当前 U-Boot 实际使用的 FDT 来源。
 
 ## 4. 低改动候选启动流程
