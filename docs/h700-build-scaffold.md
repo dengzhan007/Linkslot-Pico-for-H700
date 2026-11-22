@@ -9,7 +9,7 @@
 - ABI：AArch64 默认 LP64
 - 保留 C11、C++17 和 AArch64 汇编目标文件检查
 - 新增 `platform/h700/bootprobe/entry.S` 与 `payload.ld`，建立 AArch64 Image header 后的 `_start`、Image 内私有 stack 和 entry record
-- 入口代码先保存 x0..x3、原始 SP、CurrentEL、DAIF，再屏蔽异常并读取 `SCTLR_EL1`、TTBR0/1、TCR、MAIR、VBAR、MPIDR；最后写入 Image 内记录区并 `WFE` 停机
+- 入口先保存 x0..x3、原始 SP、CurrentEL、初始 DAIF，再屏蔽异常；读取 `SCTLR_EL1` 后检查 M/C 位，若 MMU 或 D-cache 仍开启，则不建立栈、不写记录区，直接 `WFE` 停机；仅当两者都关闭时才建立 Image 内私有栈、读取 TTBR0/1、TCR、MAIR、VBAR、MPIDR 并写入 Image 内记录区
 - 不调用 C/C++ runtime，不使用 Linux 代码、不访问 MMIO、不调用 SMC、不分配 Image 外 RAM
 - `tools/pack_aarch64_image.py` 生成标准 64-byte AArch64 Image header：`code0` 分支指向 `_start`，`text_offset=0x80000`，`image_size` 对齐并受 `0x1138000` 上限约束
 - 输出 ELF、map、raw body 和 `entry-probe.Image` 到 `build/h700-arch-check/`；不生成 Android p4、不执行、不刷写
