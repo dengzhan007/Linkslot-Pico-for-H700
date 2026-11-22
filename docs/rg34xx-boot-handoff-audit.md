@@ -14,7 +14,7 @@
 
 1. **RG34XX 型号固件静态证据**：来自 BaseOS-MultiFrontend 固定的 `rg34xx` prepared 输入、兼容性清单、U-Boot/Boot0 静态分析和模拟器执行。
 2. **其他 H700 实验机的实机证据**：BaseOS 原生 SPL 项目记录了 RG34XX SP（2 GiB LPDDR4）及 RG40XX V（1 GiB LPDDR3）实验。它能证明某些共享 H700 monitor/启动机制可工作，但不能代替 RG34XX 非 SP 的 1 GiB LPDDR4 验收。
-3. **本项目 RG34XX 现场证据**：已读回本机 Boot0/TOC1/U-Boot/monitor、live FDT、GPT、内存映射和分区信息；已从 boot_fb0 与 disp_reserve 交叉确认 framebuffer 物理范围。Boot0 副本选择、完整 env CRC/ENV_SIZE、DRAM training 的完整语义、monitor/secure/DMA 剩余内存约束、入口寄存器状态及最小 AArch64 payload 冷启动仍待验证。
+3. **本项目 RG34XX 现场证据**：已读回本机 Boot0/TOC1/U-Boot/monitor、完整 env、live FDT、GPT、内存映射和分区信息；已验证 p3 内 128 KiB U-Boot env CRC 和完整 p3 prepared hash，亦已从 boot_fb0 与 disp_reserve 交叉确认 framebuffer 物理范围。Boot0 副本选择、DRAM training 的完整语义、monitor/secure/DMA 剩余内存约束、入口寄存器状态及最小 AArch64 payload 冷启动仍待验证。
 
 BaseOS 参考源本次按 `main` 快照审查，commit：[`cbe253a43f46cf551cc9a6c79a84015bde3686cf`](https://github.com/dengzhan007/BaseOS-MultiFrontend/commit/cbe253a43f46cf551cc9a6c79a84015bde3686cf)。
 
@@ -127,7 +127,7 @@ BaseOS 的 native SPL / monitor / A32 loader 是当前最有价值的技术参�
 
 ## 8. 对 Linkslot Pico 的实施建议
 
-1. RG34XX 非 SP 首轮及第二轮前缀采集已完成，见[现场报告](rg34xx-live-inventory-2026-11-22.md)。下一轮通过 GPT PARTNAME=env 读取完整 env 分区并验证 CRC/ENV_SIZE，再解析 bootcmd、镜像加载路径和启动配置；不写入任何启动区域。
+1. RG34XX 非 SP 三轮只读采集已完成，见[现场报告](rg34xx-live-inventory-2026-11-22.md)。完整 16 MiB env 分区已读取；其中 128 KiB 环境映像 CRC 有效，25 个变量解析无警告，完整 p3 hash 与 BaseOS prepared env 区域一致。
 2. 首轮已完成 TOC1、U-Boot、monitor、DTB 和 Boot0 的组件/镜像指纹对比。继续解释现场包与 BaseOS 固定输入不一致的来源，并结合 env、Boot0 两个位置的实际选择及运行时 FDT 完成差异闭环。
 3. 对比两种入口方案：保留原厂链并修改/替换 A32 BL33，或采用 BaseOS 的 A64 SPL + 原厂 monitor + A32 BL33。前者改动面可能更小；后者对 SD/DRAM/恢复路径控制更强，但会接管 Boot0/SPL 职责，验证和恢复复杂度更高。
 4. 不论选择哪条路径，先建立一个最小 A32 handoff adapter 和纯 AArch64 payload。payload 只输出早期日志、CurrentEL、寄存器参数和安全范围内的内存信息；不启动 Linkslot、模拟器、Wi-Fi、音频或显示驱动。
@@ -148,6 +148,6 @@ BaseOS 的 native SPL / monitor / A32 loader 是当前最有价值的技术参�
 - live FDT、/proc/iomem 与 MemTotal 一致显示内核可见 1 GiB RAM；TOC1 内静态 DTB 仍声明 512 MiB。live FDT 的 boot_disp/boot_fb0 与 bootargs disp_reserve 精确给出 framebuffer 区间 `[0x7bf24800, 0x7c076000)`；没有标准 /reserved-memory 节点仍不能据此认定 monitor、secure world 或其他 DMA carveout 不存在。
 - LBA 16 位置 Boot0 头部声明 128 KiB，LBA 512 位置头部声明 64 KiB；两者 checksum 均通过，但主体 hash 不同。不能将差异简单归因于首扇区训练改写，也没有证明当前 BROM 使用哪份。
 - TOC1 中 monitor 与 BaseOS RG34XX 固定指纹完全一致；U-Boot/DTB 呈现 gzip 优化特征，但现场 TOC1 和 U-Boot 都不匹配固定输入包/组件指纹。
-- GPT p6=UDISK、p7=primary 与 /proc/cmdline 的 appfs@p6、UDISK@p7 使用不同命名层；运行时 p6 ext4=/data、p7 vfat=/mnt/sdcard，逻辑用途与 bootargs 相符，不构成已证实的分区错位。第二轮已读取 env 前缀并提取 bootcmd/boot_normal/setargs_mmc 等变量；CRC/ENV_SIZE 尚待完整 16 MiB env 采集验证。采集器现按 PARTNAME=env 读取完整分区，并新增 env CRC/变量解析器。FDT 检查器已接入 Windows runner。
+- GPT p6=UDISK、p7=primary 与 /proc/cmdline 的 appfs@p6、UDISK@p7 使用不同命名层；运行时 p6 ext4=/data、p7 vfat=/mnt/sdcard，逻辑用途与 bootargs 相符。第三轮完整 p3 env CRC 唯一匹配 128 KiB 映像，25 个变量解析无警告，完整 16 MiB p3 hash 与 BaseOS prepared env 区域完全一致。目标 U-Boot 含 update bootcmd/part info 路径字符串，runtime cmdline 与 setargs_mmc 相符；尚无实际函数执行 trace。FDT 检查器已解析 framebuffer `[0x7bf24800,0x7c076000)`。
 
-**当前阶段判断：** 首轮设备信息采集与第二轮 env 前缀解析已完成，但完整 env CRC/ENV_SIZE、启动链安全边界和入口 ABI 审查尚未完成。Issue #2 仍不得据猜测地址构建或启动 payload；在验证完整 env、明确 Boot0 选择及 monitor/DRAM 占用前，不触碰启动区域。
+**当前阶段判断：** 三轮现场采集和完整 env CRC/hash 验证已完成；启动链安全边界、Boot0 当前选择及入口 ABI 审查尚未完成。Issue #2 仍不得据猜测地址构建或启动 payload；在明确 Boot0 选择及 monitor/DRAM 占用前，不触碰启动区域。
