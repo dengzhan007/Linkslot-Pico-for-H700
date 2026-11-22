@@ -4,7 +4,7 @@
 
 本报告仅针对 **Anbernic RG34XX（非 SP）/ Allwinner H700 / Cortex-A53 / 1 GiB LPDDR4**。RG34XX SP 是独立机型，不可将其 2 GiB 内存、`rg34xxsp_v1` 面板或固件指纹当作本机数据。
 
-本次审计只读取公开仓库和已提交研究资料，没有改写 SD 卡、Boot0、TOC1、U-Boot 或 monitor。
+启动链架构与交接 ABI 的基础审计来自公开仓库和已提交研究资料。2026-11-22 已补充 RG34XX 非 SP 实机只读 inventory；本项目没有改写 SD 卡、Boot0、TOC1、U-Boot 或 monitor。
 
 **结论：现有 AArch32 U-Boot 不能被视为可直接启动任意 AArch64 裸机程序的入口。** BaseOS-MultiFrontend 已经研究出一条更具体的候选架构：由 AArch64 SPL 负责 SD、DRAM 和加载；保留厂商 monitor；让 monitor 进入一个 RAM 中的 AArch32 SVC BL33 适配器；适配器再通过厂商 SMC 交接到 AArch64。它为 Linkslot Pico 提供了可研究的桥接方式，但其最终 SMC 是按厂商 Linux 启动 ABI 逆向验证的，尚未证明它是通用裸机 payload ABI，更没有在 RG34XX 非 SP 上完成实机验收。
 
@@ -14,7 +14,7 @@
 
 1. **RG34XX 型号固件静态证据**：来自 BaseOS-MultiFrontend 固定的 `rg34xx` prepared 输入、兼容性清单、U-Boot/Boot0 静态分析和模拟器执行。
 2. **其他 H700 实验机的实机证据**：BaseOS 原生 SPL 项目记录了 RG34XX SP（2 GiB LPDDR4）及 RG40XX V（1 GiB LPDDR3）实验。它能证明某些共享 H700 monitor/启动机制可工作，但不能代替 RG34XX 非 SP 的 1 GiB LPDDR4 验收。
-3. **本项目 RG34XX 待验证项**：实际掌机读回的 Boot0/TOC1/U-Boot/monitor、主板 revision、DRAM 实际训练结果、入口寄存器状态及最小 AArch64 payload 冷启动。
+3. **本项目 RG34XX 现场证据**：已读回本机 Boot0/TOC1/U-Boot/monitor、live FDT、GPT、内存映射和分区信息；Boot0 副本选择、U-Boot env、DRAM training 的完整语义、monitor 内存约束、入口寄存器状态及最小 AArch64 payload 冷启动仍待验证。
 
 BaseOS 参考源本次按 `main` 快照审查，commit：[`cbe253a43f46cf551cc9a6c79a84015bde3686cf`](https://github.com/dengzhan007/BaseOS-MultiFrontend/commit/cbe253a43f46cf551cc9a6c79a84015bde3686cf)。
 
@@ -24,7 +24,7 @@ BaseOS 参考源本次按 `main` 快照审查，commit：[`cbe253a43f46cf551cc9a
 
 ```text
 Allwinner Boot ROM
-  └─ SD / eGON.BT0 Boot0（64 KiB）
+  └─ SD / eGON.BT0 Boot0（镜像长度按头部声明，现场读回覆盖 64/128 KiB）
        ├─ 选择 DRAM 参数并完成 training
        └─ 读取 TOC1 启动包
             ├─ vendor monitor（BL31 路径）
@@ -136,3 +136,18 @@ BaseOS 的 native SPL / monitor / A32 loader 是当前最有价值的技术参�
 ## 9. 安全边界
 
 本次审查为只读，不涉及刷写或现场设备访问。后续首轮实机审计仍只读；在完成备份、地址冲突证明、入口状态分析和明确恢复方案前，不得试写 Boot0、TOC1、U-Boot 或 monitor。设备无 eMMC，本项目只设计 SD 启动；失败恢复按项目约定通过电脑重写/修复 SD 卡，不能把自动回退到 Linux 当作产品前提。
+
+
+## 10. RG34XX 非 SP 首轮实机只读 Inventory（2026-11-22）
+
+本轮真实设备采集、原始 hash、Boot0 两个位置的差异、TOC1 组件身份、运行时 FDT/DRAM 和 GPT/启动参数矛盾均已单独归档，详见 [RG34XX 首轮实机只读 Inventory 报告](rg34xx-live-inventory-2026-11-22.md)。
+
+本轮关键更新：
+
+- 现场 FDT 的 rg34xx_v1 面板节点与 720×480 分辨率支持目标是 RG34XX 非 SP；root compatible 的 allwinner,h616 / sun50iw9p1 仍是通用家族标识，不能单独作为 SKU 证明。
+- live FDT、/proc/iomem 与 MemTotal 一致显示内核可见 1 GiB RAM；TOC1 内静态 DTB 仍声明 512 MiB。没有 /reserved-memory 节点，不能据此认定 monitor、secure world、显示或 DMA carveout 不存在。
+- LBA 16 位置 Boot0 头部声明 128 KiB，LBA 512 位置头部声明 64 KiB；两者 checksum 均通过，但主体 hash 不同。不能将差异简单归因于首扇区训练改写，也没有证明当前 BROM 使用哪份。
+- TOC1 中 monitor 与 BaseOS RG34XX 固定指纹完全一致；U-Boot/DTB 呈现 gzip 优化特征，但现场 TOC1 和 U-Boot 都不匹配固定输入包/组件指纹。
+- 当前 GPT p6=UDISK、p7=primary，与 /proc/cmdline 的 appfs@p6、UDISK@p7 不一致。首轮未取得 env 分区内容；已修复采集器，按精确 PARTNAME=env 查找而不假设分区号。
+
+**当前阶段判断：** 首轮设备信息采集已完成，但启动链安全边界和入口 ABI 审查没有完成。Issue #2 仍不得据猜测地址构建或启动 payload；在取得 env、明确 Boot0 选择及 monitor/DRAM 占用前，不触碰启动区域。
