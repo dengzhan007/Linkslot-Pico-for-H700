@@ -39,7 +39,7 @@
 
 | 平台 | 默认核心 | 备选/候选 | 决定依据 |
 |---|---|---|---|
-| GB | Gambatte | mGBA | Gambatte 为 GB/GBC 专用、准确性导向；mGBA 作为需要 Camera 等功能时的可选项 |
+| GB | Gambatte | mGBA | Gambatte 为 GB/GBC 专用、准确性导向；mGBA 作为可选项 |
 | GBC | Gambatte | mGBA | 优先准确性、调色板和 GBC 色彩校正；保留 mGBA 作为可选项 |
 | GBA | mGBA | gpSP | 以 Linkslot 已有核心和存档路径为基线；gpSP 为兼容性/性能备选 |
 
@@ -65,7 +65,7 @@ armGBA-pico 暂列实验候选，而非正式默认核心。它在 GammaOS Pico 
 
 - 优先实现 USB ADB gadget（开发构建或用户主动打开调试模式）；至少提供日志读取、shell/命令执行和文件推送/拉取。
 - Wi-Fi SSH 作为后续可选调试通道，依赖 H700 Wi-Fi 与 TCP Server 完成；默认关闭，用户在设备端主动开启。
-- 串口/早期启动日志、崩溃记录、启动阶段计时必须保留，作为 ADB/SSH 不可用时的恢复手段。
+- 串口/早期启动日志、崩溃记录、启动阶段计时必须保留，作为 ADB/SSH 不可用时的调试入口。
 - 不为 ADB/SSH 保持设备待机；只在设备正常运行时接受连接。
 
 当前上游 LK 中的 USB/Fastboot 代码不等于已经具备 ADB。标准 ADB 需要单独实现 USB gadget transport 和 ADB protocol；SSH 也需要 TCP Server、加密和认证，不能把 Pico 的 TCP/TLS 客户端直接称为 SSH 服务。
@@ -81,3 +81,26 @@ armGBA-pico 暂列实验候选，而非正式默认核心。它在 GammaOS Pico 
 ## ADR-008：数据可移植性
 
 尽量沿用 Linkslot 的 `Games/`、`Saves/`、`States/`、`Cheats/`、`linkSlot/Config/`、`linkSlot/Metadata/` 和 `linkSlot/mods/`。无法兼容的核心即时存档必须以核心 ID/版本隔离；不得将不兼容状态文件覆盖到另一个核心目录。
+
+## ADR-009：单一前端
+
+**决定：** 本项目只有 Linkslot 一个前端，不建设多前端管理、动态前端加载、前端插件接口或通用 Frontend ABI。
+
+架构抽象优先服务于 H700 硬件隔离和 Linkslot 上游同步，不为了未来尚未提出的多前端需求增加运行时、存储布局或 UI 复杂度。将来真的更换前端时，再针对新前端做一次性适配；不要求现在为任意前端预留插件兼容。
+
+## ADR-010：Linkslot 上游同步策略
+
+**决定：** 优先降低跟进 Linkslot 上游版本时的代码改动量和冲突面，不要求直接安装原版 Linkslot 发布包，也不要求 H700 端能原样运行上游二进制。
+
+- Linkslot 上游源码通过 Git subtree 固定放在 `third_party/linkslot`，以具体 commit SHA 为版本基线。
+- H700/LK 代码放在 subtree 之外；Linkslot 的平台相关调用通过窄适配层提供。
+- 优先复用上游用户逻辑、数据格式、UI 资源、Web 页面、同步协议和 MOD 规范。
+- 只有确实需要时才修改 subtree 内源码；每个本地补丁必须有记录和回归测试。
+- 每次同步上游后先生成差异报告、编译复用部分并运行兼容测试，再更新正式基线。
+- 不建设完整 POSIX/Linux 兼容层。若某个上游模块的系统依赖太深，允许只复用其协议、数据模型和可独立测试逻辑，并在 H700 侧替换该模块。
+
+## ADR-011：SD 启动，无 eMMC 回退
+
+**决定：** 目标设备无 eMMC，本项目只考虑 SD 卡启动，不设计 eMMC 写入、双系统启动选择或自动回到原 Linux/BaseOS 的回退机制。
+
+启动链原型只需验证 SD 加载、内存交接、裸机入口和正常冷启动。设备无法启动时，恢复路径是通过电脑修复/重写 SD 卡或使用设备真实存在的 Boot ROM/USB 烧录入口；不把运行时回退作为验收条件。
