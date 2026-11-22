@@ -10,8 +10,8 @@
 
 | 文件 | 内容 |
 |---|---|
-| boot0-primary.bin | 原始 SD LBA 16 起的 64 KiB Boot0 副本 |
-| boot0-secondary.bin | 原始 SD LBA 512 起的 64 KiB Boot0 副本 |
+| boot0-primary.bin | 原始 SD LBA 16 起采集的 128 KiB Boot0 区域；解析器按头部声明的 64/128 KiB 镜像长度截取 |
+| boot0-secondary.bin | 原始 SD LBA 512 起采集的 128 KiB Boot0 区域；解析器按头部声明的 64/128 KiB 镜像长度截取 |
 | toc1-package.bin | 原始 SD LBA 32800 起的 0x140000 字节 TOC1 包 |
 | env-partition-first64k.bin | 可选：GPT 分区标签为 env 的分区起始 64 KiB |
 | live-fdt.dtb | 内核提供 /sys/firmware/fdt 时保存的 live FDT |
@@ -69,7 +69,7 @@ LBA 16、512、32800 和 TOC1 长度 0x140000 来自 BaseOS-MultiFrontend 的 H7
     python3 tools/inspect_h700_boot0.py ./rg34xx-readonly-inventory/boot0-primary.bin -o ./rg34xx-readonly-inventory/boot0-primary.json
     python3 tools/inspect_h700_boot0.py ./rg34xx-readonly-inventory/boot0-secondary.bin -o ./rg34xx-readonly-inventory/boot0-secondary.json
 
-工具会验证 64 KiB eGON.BT0 标记、镜像长度及 Allwinner checksum，并输出 0x38、0x9f4、0xa74 三组 32-word DRAM 参数候选。0x38 主候选位于 Boot0 第一扇区，可能在 DRAM training 时变化，因此同时报告整段 SHA-256、第一扇区 SHA-256 和第一扇区之后的主体 SHA-256。它不会仅凭参数内容断言实际训练成功，也不会据此自动生成 DRAM 设置。
+工具会验证 eGON.BT0 标记、头部声明的镜像长度及 Allwinner checksum。采集器固定读取 128 KiB；解析器按头部声明长度截取并计算 checksum，当前测试覆盖 64 KiB 和 128 KiB 两种镜像。随后输出 0x38、0x9f4、0xa74 三组 32-word DRAM 参数候选。0x38 主候选位于 Boot0 第一扇区，可能在 DRAM training 时变化，因此同时报告整段 SHA-256、第一扇区 SHA-256 和第一扇区之后的主体 SHA-256。0x9f4 和 0xa74 位于第一扇区之后；若它们在两份副本间不同，不能仅凭“首扇区会变化”解释，必须结合两份 JSON 的主体 SHA-256 与原始参数 words 单独审查。工具不会仅凭参数内容断言实际训练成功，也不会据此自动生成 DRAM 设置。
 
 
 在项目仓库根目录执行：
