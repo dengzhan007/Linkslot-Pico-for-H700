@@ -1,0 +1,13 @@
+# Build outputs
+/build/
+/out/
+*.o
+*.a
+*.elf
+*.bin
+*.map
+*.lst
+
+# Local tooling
+.DS_Store
+Thumbs.db
