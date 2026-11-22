@@ -27,6 +27,7 @@
 - [已确认的设计决策](docs/decisions.md)
 - [模拟器与存档兼容性](docs/emulator-save-compatibility.md)
 - [开发路线与阶段验收](docs/roadmap.md)
+- [上游源码基线](docs/upstream-baselines.md)
 
 ## 项目状态
 
