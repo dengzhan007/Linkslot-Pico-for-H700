@@ -13,8 +13,9 @@ from typing import Any
 SECTION_RE = re.compile(r"^== (.+) ==$")
 NODE_RE = re.compile(r"^-- (.+) --$")
 REGION_RE = re.compile(
-    r"^\s*(\d+):\s*(0x[0-9a-fA-F]+)\.\.(0x[0-9a-fA-F]+)(?:\s+(.*))?$"
+    r"^\s*(\d+):\s*(0x[0-9a-fA-F]+)\.\.(0x[0-9a-fA-F]+)(?:\s*,?\s*(.*))?$"
 )
+REPORTED_SIZE_RE = re.compile(r"(?:^|[,\s])size:\s*(\d+)\s*([KMG]?)\b", re.IGNORECASE)
 INTEGER_RE = re.compile(r"^\s*(0x[0-9a-fA-F]+|[0-9]+)\s*$")
 
 
@@ -116,12 +117,26 @@ def _parse_debugfs(text: str) -> dict[str, Any]:
                 end_inclusive = int(match.group(3), 16)
                 if end_inclusive < start:
                     raise MemoryMapError(f"memblock region end precedes start: {line}")
+                suffix = (match.group(4) or "").strip()
+                size_match = REPORTED_SIZE_RE.search(suffix)
+                reported_size = None
+                if size_match:
+                    size_value = int(size_match.group(1))
+                    size_unit = size_match.group(2).upper()
+                    unit_power = {"": 0, "K": 1, "M": 2, "G": 3}[size_unit]
+                    reported_size = {
+                        "value": size_value,
+                        "unit": size_unit or "B",
+                        "bytes": size_value * (1024 ** unit_power),
+                    }
                 memblock[current_attr].append({
                     "index": int(match.group(1)),
                     "start": f"0x{start:x}",
                     "end_inclusive": f"0x{end_inclusive:x}",
                     "end_exclusive": f"0x{end_inclusive + 1:x}",
-                    "attributes": (match.group(4) or "").strip(),
+                    "size_bytes": end_inclusive - start + 1,
+                    "reported_size": reported_size,
+                    "attributes": suffix,
                 })
 
     finish_cma()
