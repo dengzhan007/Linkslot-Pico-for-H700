@@ -200,7 +200,7 @@ fi
         case "$config" in
             *.gz)
                 if command -v gzip >/dev/null 2>&1; then
-                    gzip -dc "$config" 2>/dev/null | grep -E '^(CONFIG_(TEE|OPTEE|SUNXI_ION|ION|CMA|DMA_CMA|OF_RESERVED_MEM)=|# CONFIG_(TEE|OPTEE|SUNXI_ION|ION|CMA|DMA_CMA|OF_RESERVED_MEM) is not set)' || true
+                    gzip -dc "$config" 2>/dev/null | grep -E '^(CONFIG_(TEE|OPTEE|ION|ION_SUNXI|ION_OF|CMA|DMA_CMA|OF_RESERVED_MEM)=|# CONFIG_(TEE|OPTEE|ION|ION_SUNXI|ION_OF|CMA|DMA_CMA|OF_RESERVED_MEM) is not set)' || true
                     CONFIG_CAPTURED=1
                 else
                     echo "gzip utility unavailable; config not decoded"
@@ -213,6 +213,35 @@ fi
         esac
     done
     [ "$CONFIG_CAPTURED" -eq 1 ] || echo "NOT_PRESENT: no readable kernel config export"
+    echo
+    echo "== relevant built-in ION / DRM symbols (names only) =="
+    if [ -r /proc/kallsyms ]; then
+        awk '
+            $3 == "sunxi_ion_probe" ||
+            $3 == "optee_probe_drm_configure" ||
+            $3 == "ion_secure_heap_create" {
+                print "[address redacted] " $3
+                found[$3] = 1
+            }
+            END {
+                if (!found["sunxi_ion_probe"])
+                    print "NOT_FOUND_OR_HIDDEN: sunxi_ion_probe"
+                if (!found["optee_probe_drm_configure"])
+                    print "NOT_FOUND_OR_HIDDEN: optee_probe_drm_configure"
+                if (!found["ion_secure_heap_create"])
+                    print "NOT_FOUND_OR_HIDDEN: ion_secure_heap_create"
+            }
+        ' /proc/kallsyms
+    else
+        echo "NOT_PRESENT: /proc/kallsyms"
+    fi
+    for module in ion_sunxi optee; do
+        if [ -d "/sys/module/$module" ]; then
+            echo "MODULE_SYSFS_PRESENT: $module"
+        else
+            echo "MODULE_SYSFS_NOT_PRESENT: $module"
+        fi
+    done
     echo
     echo "== ION device and runtime debugfs =="
     for path in /dev/ion /dev/tee0 /dev/teepriv0 /sys/class/misc/ion /sys/class/tee /sys/kernel/debug/ion /sys/kernel/debug/ion/heaps /sys/kernel/debug/ion/clients /sys/bus/platform/drivers/ion-sunxi; do
