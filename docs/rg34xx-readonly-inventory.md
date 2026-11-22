@@ -21,7 +21,7 @@
 | iomem.txt / interrupts.txt | 内存资源范围与中断状态 |
 | page-size.txt / page-size-source.txt | 优先通过 getconf 读取 PAGE_SIZE；不可用时尝试从 /proc/self/smaps 的 KernelPageSize 获取，并记录来源，用于把 CMA PFN 换算为物理 byte range |
 | debugfs-memory-reservations.txt | 若内核导出 debugfs CMA/memblock 节点，只读采集 CMA base_pfn/count/order_per_bit 与 memblock memory/reserved；不触碰 alloc/free 控制节点 |
-| memory-map-report.json | 自动将 CMA PFN/count（存在 PAGE_SIZE 时）转成物理区间，并解析 memblock memory/reserved 的起止地址；即使 PAGE_SIZE 缺失也会解析 memblock，并与 live FDT framebuffer、RAM 和 meminfo 交叉引用 |
+| memory-map-report.json | 自动将 CMA PFN/count（存在 PAGE_SIZE 时）转成物理区间，并解析 memblock memory/reserved 的起止地址；支持普通空格格式与 RG34XX 的 `, size:NNNK` 格式，保留端点计算的精确字节长度；即使 PAGE_SIZE 缺失也会解析 memblock，并与 live FDT framebuffer、RAM 和 meminfo 交叉引用 |
 | partitions.txt / mounts.txt | 块设备分区及挂载状态 |
 | device-and-block-layout.txt | 设备树 model/compatible、块设备 sysfs 与分区标签 |
 | gpt-sfdisk.txt 或 gpt-fdisk.txt | 系统提供 sfdisk 或 fdisk 时生成分区表文本 |
