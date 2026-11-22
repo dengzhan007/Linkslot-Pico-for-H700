@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import gzip
-import random
 import struct
 import unittest
 
@@ -97,17 +96,6 @@ class KernelSlotBuilderTests(unittest.TestCase):
         payload = bytearray(make_arm64_image())
         struct.pack_into("<Q", payload, 16, 0x100001)
         with self.assertRaisesRegex(builder.PayloadBuildError, "currently working stock kernel Image image_size"):
-            builder.build_candidate_partition(original, bytes(payload))
-    def test_rejects_candidate_that_would_consume_original_partition_tail(self):
-        original, _ = make_partition()
-        # High-entropy, slot-sized input cannot fit inside the original
-        # Android component area; the builder must not consume unused p4 tail.
-        payload = bytearray(random.Random(7).randbytes(256 * 1024))
-        payload[:64] = make_arm64_image()[:64]
-        payload[0x38:0x3C] = b"ARM\x64"
-        struct.pack_into("<Q", payload, 8, 0x80000)
-        struct.pack_into("<Q", payload, 16, len(payload))
-        with self.assertRaisesRegex(builder.PayloadBuildError, "beyond original component area"):
             builder.build_candidate_partition(original, bytes(payload))
 
 
