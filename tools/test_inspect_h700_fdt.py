@@ -25,7 +25,7 @@ def cells(*values):
 def make_fdt():
     property_names = (
         "#address-cells", "#size-cells", "model", "compatible", "bootargs",
-        "device_type", "reg", "lcd_driver_name", "lcd_x", "lcd_y", "status",
+        "device_type", "reg", "lcd_driver_name", "lcd_x", "lcd_y", "status", "boot_fb0",
         "no-map", "debug_mode", "ranges",
     )
     strings = bytearray()
@@ -101,6 +101,10 @@ def make_fdt():
     prop("status", b"late\0")
     end()
 
+    begin("disp@01000000")
+    prop("boot_fb0", b"7bf00000,2d0,1e0,20,b40,0,0,2d0,1e0\\0")
+    end()
+
     begin("platform")
     prop("debug_mode", be32(0))
     end()
@@ -139,7 +143,16 @@ class FdtInspectorTests(unittest.TestCase):
         self.assertEqual(report["pmic_nodes"][0]["compatible"], ["x-powers,axp2202"])
         self.assertEqual([x["status"] for x in report["usb_controllers"]], ["okay", "late"])
         self.assertEqual(report["debug_modes"][0]["value"], 0)
-        self.assertEqual(report["chosen_bootargs"], "root=/dev/mmcblk0p5 cma=64M")
+        self.assertEqual(report["chosen_bootargs"], "root=/dev/mmcblk0p5 cma=64M disp_reserve=1382400,0x7bf00000")
+        self.assertEqual(report["disp_reserve_bootarg"], {"size_bytes": 1382400, "base": "0x7bf00000"})
+        framebuffer = report["boot_framebuffers"][0]
+        self.assertEqual(framebuffer["base"], "0x7bf00000")
+        self.assertEqual((framebuffer["width"], framebuffer["height"]), (720, 480))
+        self.assertEqual(framebuffer["bits_per_pixel"], 32)
+        self.assertEqual(framebuffer["stride_bytes"], 2880)
+        self.assertEqual(framebuffer["size_bytes"], 1382400)
+        self.assertEqual(framebuffer["end_exclusive"], "0x7c076000")
+        self.assertTrue(framebuffer["matches_disp_reserve"])
         self.assertEqual(len(report["sha256"]), 64)
 
     def test_rejects_bad_magic(self):
