@@ -31,6 +31,20 @@
 | PMIC / Power | BaseOS 提供 AXP2202 关机路径及电源状态集成 | 本 profile 暂不把 PMIC 寄存器访问当作已验证的裸机实现；需读取 RG34XX live DT/sysfs/内核日志确认实际绑定器件 |
 | Audio | BaseOS 有 RG34XX 专属 speaker amp kernel profile | 可用作 codec/功放行为参考；Linux 内核模块不能直接作为裸机驱动 |
 
+## 3.1 BaseOS 已验证固件输入指纹
+
+BaseOS-MultiFrontend 为 RG34XX 准备的输入镜像固定为：
+
+- 输入文件：`RG34XX-V1.0.6-BASE-20260526-mod-v3.9.9.img`
+- 输入镜像 SHA-256：`a3026c053fd2ee02549c7eb8614d64730bda50fddaff87ec4cfbba979e0c5906`
+- BaseOS boot-prefix SHA-256：`fb75bc4c835fa74ff41c0a1fdbe79b8871a960fc249716847fb7be529835c3c3`
+- Boot0（prepared input）SHA-256：`b6edbf39af0bf1f35a7e2fd991c8966b04d061e247c81985d2516f695464049b`
+- TOC1 package SHA-256：`6c380adb6e4f16aa535da25f665706b0a6118b542947859aad5931f4baa9ac28`
+- U-Boot payload SHA-256：`c6bd78cfdfc1cb6b5cc6217200ef1ae7741703b2465995e5c011789d5cd6a566`
+- vendor monitor SHA-256（兼容性清单）：`676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31`
+
+这些值来自 BaseOS-MultiFrontend 的 `manifest/prepared/rg34xx.json`、`manifest/kernel-gzip.json` 和 `experiments/h700-boot-speed/evidence/compatibility.json`。它们是已审计的构建输入指纹，不应误读为当前测试机每个启动阶段的现场读回值。BaseOS 文档指出 Boot0 会在启动时更新其头部区域，因此实际设备上的 Boot0 运行时哈希需要按其规则读取和核验。
+
 ## 3. RG34XX 启动链基线
 
 BaseOS-MultiFrontend 中的固件审计资料确认了 RG34XX 使用 Allwinner H700 vendor boot chain，而非 Rockchip 启动链。
