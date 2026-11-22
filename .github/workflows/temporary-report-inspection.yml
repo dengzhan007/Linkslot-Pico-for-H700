@@ -1,0 +1,41 @@
+name: Temporary RG34XX iomem cross-check
+
+on:
+  push:
+    branches:
+      - "audit/inspect-rg34xx-report-20261122"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout audit branch
+        uses: actions/checkout@v4
+
+      - name: Checkout field reports
+        uses: actions/checkout@v4
+        with:
+          ref: reports
+          path: reports
+
+      - name: Print iomem and memory summaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib
+          import zipfile
+
+          archive = pathlib.Path("reports/reports/rg34xx-inventory-20261122-195053.zip")
+          wanted = {"iomem.txt", "meminfo.txt", "device-and-block-layout.txt"}
+          with zipfile.ZipFile(archive) as zf:
+              for info in zf.infolist():
+                  name = info.filename.replace("\\\\", "/").replace("\\", "/").rsplit("/", 1)[-1]
+                  if name in wanted:
+                      print(f"===== {name} BEGIN =====")
+                      print(zf.read(info).decode("utf-8", "replace"))
+                      print(f"===== {name} END =====")
+          PY
