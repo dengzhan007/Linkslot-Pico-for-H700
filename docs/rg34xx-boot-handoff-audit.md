@@ -215,3 +215,33 @@ ION debugfs 的当前分配为：
 现场 `memblock` 区间 `[0x7ec00000,0x7fc00000)`（16 MiB）仍没有可直接观测的 owner。它可能与 Allwinner DRM/TEE carveout 有关，但当前报告没有 `drm_base/drm_size/tee_base`，也没有 `drm config service not available` 结果；因此目前既不能确认匹配，也不能确认 vendor SMC 失败。该 16 MiB 区间、其余未知 reserved entries 和 RAM 顶部离散碎片继续整体排除，不得用于 payload、heap 或 loader。
 
 只读 collector 的 dmesg 筛选已补充 `drm config service`、`drm_base`、`drm_size`、`tee_base` 关键词。下一轮重新运行后，若出现成功日志，需比较返回的 `drm_base/drm_size` 是否与上述 16 MiB 区间吻合，并核对 `tee_base`；若出现失败日志，保留十六进制返回状态；若两类日志都没有，则需检查目标内核是否包含此 vendor 调用路径，不能推断为零尺寸或 SMC 失败。此项完成前，不批准任何 payload 地址或入口。
+
+
+## 13. 21:03 DRM-info SMC 复采与下一步判定（2026-11-22）
+
+[21:03 只读复采报告](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261122-210352/DRM-SMC-finding.md) 未捕获 `drm_base/drm_size/tee_base` 成功日志，也未捕获 `drm config service not available` 失败日志。因此它没有给出 `GET_DRM_INFO` 的返回值，不能据此认定 SMC 未执行、成功或失败。
+
+该轮同时确认：
+
+- `/sys/bus/platform/drivers/ion-sunxi/ion` 是已绑定设备的 sysfs 链接，而不仅是 driver 目录存在；
+- live FDT 中 `allwinner,secure` heap 节点状态为 `okay`，ID 6，base/size 均为零；
+- ION debugfs 导出 `secure` heap，但分配总量为零；
+- `/dev/tee0` / `/dev/teepriv0` 仍不存在，标准 OP-TEE UID 检查仍失败。
+
+### 13.1 纠正配置符号检查
+
+此前采集器 grep 使用了 `CONFIG_SUNXI_ION`，但同系列 Allwinner 4.9.170 参考树的 [ION Kconfig](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/staging/android/ion/Kconfig)、[ION Makefile](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/staging/android/ion/Makefile) 和 [sunxi 子目录 Makefile](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/staging/android/ion/sunxi/Makefile) 使用的符号实际是 `CONFIG_ION_SUNXI`，设备树解析选项为 `CONFIG_ION_OF`。故 21:03 报告中“config grep 未显示 CONFIG_SUNXI_ION”的说法是采集器过滤错误造成的，不能用作驱动未编入的证据。
+
+采集器现查询 `CONFIG_ION_SUNXI` 与 `CONFIG_ION_OF`，并在 `/proc/kallsyms` 可读时只输出以下相关符号名称（不保留内核地址）：
+
+- `sunxi_ion_probe`
+- `optee_probe_drm_configure`
+- `ion_secure_heap_create`
+
+同系列参考源码显示，若目标二进制确实包含相同实现，且 CONFIG_TEE 编译分支启用、secure heap DT 节点被解析为 secure 类型，那么 `sunxi_ion_probe()` 创建该 heap 前会调用 `optee_probe_drm_configure()`。当前观察到驱动绑定及 secure heap 节点，使这条路径值得直接核验；但目标 #19 二进制并未与参考源逐字节对应，不能把参考源码的控制流直接当成本机事实。
+
+下一轮采集需要先核对正确的 config 符号及 kallsyms 符号。若函数符号存在但日志仍缺失，后续应取得与 Linux `#19` 对应的源码/配置或内核镜像，核对该函数是否实际调用、日志级别/输出路径以及 secure heap 创建顺序。不得为获得返回值而从 userspace 主动发 SMC，也不得触碰 unknown reserved memory。
+
+### 13.2 内存安全状态
+
+`[0x7ec00000,0x7fc00000)` 仍是 16 MiB 未知保留区；本轮没有新的 owner 或物理地址证据。CMA `[0x77c00000,0x7bc00000)`、framebuffer `[0x7bf24800,0x7c076000)`、monitor 区 `[0x48000000,0x49000000)` 继续按已知用途排除。其余无 owner 的保留区和 RAM 顶部碎片也继续排除。当前没有批准的 payload RAM 区间或入口地址。
