@@ -85,7 +85,8 @@ def pack_aarch64_image(
         "text_offset": f"0x{text_offset:x}",
         "image_size": f"0x{image_size:x}",
         "flags": "0x0",
-        "magic": ARM64_MAGIC.decode("ascii", errors="replace"),
+        "magic": r"ARM\x64",
+        "magic_hex": ARM64_MAGIC.hex(),
         "limits": [
             "Static host build artifact only; it has not been executed on RG34XX.",
             "Private stack and entry record are embedded in this Image's file-backed storage.",
