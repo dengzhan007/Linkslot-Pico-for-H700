@@ -146,6 +146,73 @@ def disassemble_window(data: bytes, offset: int, radius: int) -> list[dict[str, 
     } for ins in engine.disasm(code, start)]
 
 
+
+def a32_bl_target(data: bytes, offset: int) -> int | None:
+    """Decode one little-endian A32 BL immediate instruction."""
+    if offset < 0 or offset + 4 > len(data) or offset % 4:
+        return None
+    word = struct.unpack_from("<I", data, offset)[0]
+    if (word & 0x0F000000) != 0x0B000000:
+        return None
+    immediate = word & 0x00FFFFFF
+    if immediate & 0x00800000:
+        immediate -= 0x01000000
+    return offset + 8 + (immediate << 2)
+
+
+def a32_blx_target(data: bytes, offset: int) -> int | None:
+    """Decode one little-endian A32 BLX-immediate instruction."""
+    if offset < 0 or offset + 4 > len(data) or offset % 4:
+        return None
+    word = struct.unpack_from("<I", data, offset)[0]
+    if (word & 0xFE000000) != 0xFA000000:
+        return None
+    immediate = ((word & 0x00FFFFFF) << 2) | ((word >> 23) & 0x2)
+    if immediate & 0x02000000:
+        immediate -= 0x04000000
+    return offset + 8 + immediate
+
+
+def find_direct_callers(data: bytes, target: int) -> list[int]:
+    callers = []
+    for offset in range(0, len(data) - 3, 4):
+        if a32_bl_target(data, offset) == target:
+            callers.append(offset)
+        elif a32_blx_target(data, offset) == target:
+            callers.append(offset)
+    return callers
+
+
+def find_movw_movt_smc_id(data: bytes) -> list[dict[str, str]]:
+    """Find A32 MOVW/MOVT pairs that construct 0x8000ff04."""
+    instructions = []
+    for offset in range(0, len(data) - 3, 4):
+        word = struct.unpack_from("<I", data, offset)[0]
+        opcode = word & 0x0FF00000
+        if opcode not in (0x03000000, 0x03400000):
+            continue
+        register = (word >> 12) & 0xF
+        immediate = (((word >> 4) & 0xF000) | (word & 0x0FFF))
+        kind = "movw" if opcode == 0x03000000 else "movt"
+        instructions.append((offset, kind, register, immediate))
+    matches = []
+    for index, first in enumerate(instructions):
+        off1, kind1, reg1, imm1 = first
+        if kind1 != "movw" or imm1 != 0xFF04:
+            continue
+        for off2, kind2, reg2, imm2 in instructions[index + 1:index + 9]:
+            if off2 - off1 > 32:
+                break
+            if kind2 == "movt" and reg2 == reg1 and imm2 == 0x8000:
+                matches.append({
+                    "movw_offset": f"0x{off1:x}",
+                    "movt_offset": f"0x{off2:x}",
+                    "register": f"r{reg1}",
+                    "value": "0x8000ff04",
+                })
+    return matches
+
+
 def scan_uboot(uboot: bytes, context_bytes: int = 0x50) -> dict[str, Any]:
     smc_offsets = occurrences(uboot, A32_SMC0)
     constant_offsets = {
@@ -153,6 +220,18 @@ def scan_uboot(uboot: bytes, context_bytes: int = 0x50) -> dict[str, Any]:
         for name, needle in CONSTANTS.items()
     }
     sites = []
+    # Provisional function entries inferred from the wrapper instruction shapes.
+    wrapper_entries = [0xB18, 0xB58]
+    wrapper_callers = {
+        f"0x{entry:x}": [
+            {
+                "callsite": f"0x{callsite:x}",
+                "disassembly": disassemble_window(uboot, callsite, context_bytes),
+            }
+            for callsite in find_direct_callers(uboot, entry)
+        ]
+        for entry in wrapper_entries
+    }
     for offset in smc_offsets:
         nearby = {}
         for name, needle in CONSTANTS.items():
@@ -170,6 +249,9 @@ def scan_uboot(uboot: bytes, context_bytes: int = 0x50) -> dict[str, Any]:
         "uboot_bytes": len(uboot),
         "uboot_sha256": sha256(uboot),
         "a32_smc0_sites": sites,
+        "provisional_smc_wrapper_entries": [f"0x{x:x}" for x in wrapper_entries],
+        "direct_callers_of_smc_wrappers": wrapper_callers,
+        "movw_movt_constructed_linux_smc_id": find_movw_movt_smc_id(uboot),
         "constant_occurrences": constant_offsets,
         "analysis_limit": (
             "Raw A32 instruction-pattern inventory only. A match does not prove "
