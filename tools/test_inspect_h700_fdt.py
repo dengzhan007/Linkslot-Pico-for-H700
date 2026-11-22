@@ -63,6 +63,8 @@ def make_fdt():
 
     begin("chosen")
     prop("bootargs", b"root=/dev/mmcblk0p5 cma=64M disp_reserve=1382400,0x7bf24800\0")
+    prop("linux,initrd-start", cells(0, 0x42000000))
+    prop("linux,initrd-end", cells(0, 0x42000200))
     end()
 
     begin("memory@40000000")
