@@ -325,6 +325,25 @@ def find_thumb_smc_sites(data: bytes) -> list[dict[str, Any]]:
     return sites
 
 
+
+def disassemble_arm_window(data: bytes, offset: int, radius: int = 0x20) -> list[dict[str, Any]]:
+    start = max(0, offset - radius)
+    start -= start % 4
+    end = min(len(data), offset + radius + 4)
+    end -= (end - start) % 4
+    try:
+        from capstone import Cs, CS_ARCH_ARM, CS_MODE_ARM
+    except ImportError:
+        return [{"capstone": "not-installed", "raw_hex": data[start:end].hex(),
+                 "window_offset": f"0x{start:x}"}]
+    engine = Cs(CS_ARCH_ARM, CS_MODE_ARM)
+    return [{
+        "offset": f"0x{ins.address:x}",
+        "bytes": ins.bytes.hex(),
+        "mnemonic": ins.mnemonic,
+        "operands": ins.op_str,
+    } for ins in engine.disasm(data[start:end], start)]
+
 def disassemble_thumb_window(data: bytes, offset: int, radius: int = 0x20) -> list[dict[str, Any]]:
     start = max(0, offset - radius)
     start -= start % 2
@@ -415,6 +434,11 @@ def scan_uboot(uboot: bytes, context_bytes: int = 0x50) -> dict[str, Any]:
         "thumb2_handoff_windows": {
             f"0x{x:x}": disassemble_thumb_window(uboot, x, 0x100)
             for x in (0x1080, 0x1474, 0x14E4)
+        },
+        "handoff_helper_0x1080": {
+            "raw_bytes": uboot[0x1080:0x10C0].hex(),
+            "thumb": disassemble_thumb_window(uboot, 0x1080, 0x40),
+            "arm": disassemble_arm_window(uboot, 0x1080, 0x40),
         },
         "thumb2_handoff_related_constant_refs": {
             "kernel_entry_literals": {
