@@ -297,14 +297,32 @@ BaseOS-MultiFrontend 的 `experiments/h700-boot-speed/DESIGN.md` 将下列地址
 
 这套 native SPL / monitor / A32 loader 的物理试验覆盖 BaseOS 实验记录中的 RG34XX SP（2 GiB LPDDR4）和 RG40XX V（1 GiB LPDDR3）；这些结果不能替代本目标 RG34XX 非 SP（1 GiB LPDDR4）的冷启动与 handoff 验收。该项目的目标机地址、入口 EL、栈、cache/MMU/TLB、GIC 和 secure carveout 仍须以本机证据验证。
 
-### 7.2 本轮尚未取得 CMA / memblock 物理区间
+### 7.2 第四轮已捕获 memblock 节点，但仍需解析具体地址
 
-第三轮 ZIP 的 `mounts.txt` 显示 debugfs 已挂载在 `/sys/kernel/debug`，但该 ZIP 没有 `debugfs-memory-reservations.txt`。所以本轮只能确认 `CmaTotal=65536 kB`、`CmaFree=60360 kB`，没有 CMA `base_pfn/count` 或 memblock `memory/reserved` 物理区间。当前 `/proc/iomem` 仅显示 System RAM、kernel code 和 kernel data 子范围，不能补足 secure/CMA 保留布局。
+第三轮 ZIP 的 `mounts.txt` 显示 debugfs 已挂载在 `/sys/kernel/debug`，但当时归档没有 `debugfs-memory-reservations.txt`。因此第三轮只能确认 `CmaTotal=65536 kB`、`CmaFree=60360 kB`，没有 CMA `base_pfn/count` 或 memblock `memory/reserved` 物理区间。
 
-已在最新只读采集器中加入 CMA debugfs（含多 range 的 `base_pfn/count`）及 memblock `memory/reserved` 读取。它只读取这些描述节点，不触碰 CMA 的 `alloc/free` 控制文件。第三轮 ZIP 生成时间早于这一改动；下一轮采集应包含 `debugfs-memory-reservations.txt`，若文件明确记录 NOT_PRESENT，也请保留原文件供我们判断内核是否导出该接口。
+第四轮采集已归档在 [reports 分支的 `rg34xx-inventory-20261122-195053.zip`](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261122-195053.zip)，采集时间为 2026-11-22 19:50:53（UTC+8），采集器基线为 `acc5e09`。归档 SHA-256 为：
+
+```text
+bbfa065e590ecd7f8394f9b251d15468d63ed6c93bbe192e4272a65a700ab5e2
+```
+
+该轮报告索引确认：
+
+- Boot0 两份副本仍为有效 `eGON.BT0`，头部声明长度与 128 KiB 采集长度一致；摘要 hash 与前几轮相同。
+- TOC1 SHA-256 仍为 `e6c20e3a…aa4604`，包含 u-boot、monitor、dtbo、dtb 四项。
+- 完整 16 MiB env 分区 CRC 仍有效（`0xe3b6e401`），25 个变量。
+- live FDT 的 framebuffer 仍为 `[0x7bf24800,0x7c076000)`，720×480×32bpp，与 `disp_reserve` 一致。
+- `/sys/kernel/debug/cma` 未导出；`/sys/kernel/debug/memblock` 已导出并被采集。CMA 节点缺失不能解释为没有 CMA/保留区；memblock 内容必须按实际 `memory/reserved` 条目读取。
+- `getconf` 不可用，因此该轮 `page-size.txt` 为 NOT_PRESENT，归档保留原始 debugfs 快照，未将 CMA PFN 换算为物理字节区间。
+
+目前从报告索引能够确认 memblock 节点已采集，但尚未把 ZIP 内 `debugfs-memory-reservations.txt` 的具体条目读入本报告，所以**还不能列出该机 memblock 的具体 reserved ranges，也不能据此批准 payload RAM 区间**。memblock 条目自身已经是物理 byte 地址，不依赖 PAGE_SIZE；只有 CMA 的 PFN/count 换算需要内核页大小。
+
+为避免再次丢失这部分有效信息，采集解析工具已修正：debugfs 快照存在时，即使 PAGE_SIZE 缺失，也会继续生成 `memory-map-report.json` 并解析 memblock；CMA PFN 在缺页大小时只保留原始值。设备侧采集器现在优先用 `getconf`，不可用时再尝试从 `/proc/self/smaps` 的 `KernelPageSize` 获取页大小，并将来源写入 `page-size-source.txt`。这些修复位于 main 后续提交中，第四轮归档仍是修复前的采集版本。
+
 
 ## 8. 下一步
 
-完整 env 分区已读回且 CRC/hash 验证通过。下一阶段重点是 CMA/memblock 物理区间、Boot0 当前选择/DRAM training 证据，以及 monitor/secure/DMA 内存范围；在此之前不批准任何 payload 地址或 A32→A64 handoff 实现，继续只读。
+完整 env 分区已读回且 CRC/hash 验证通过；第四轮已确认 memblock debugfs 节点存在并已采集，但具体 reserved ranges 尚待解析。下一阶段重点是读出 memblock 原始条目、补齐页大小以换算 CMA PFN（若内核可提供）、获取 Boot0 当前选择/DRAM training 证据，以及收敛 monitor/secure/DMA 内存范围；在此之前不批准任何 payload 地址或 A32→A64 handoff 实现，继续只读。
 
 在 U-Boot environment 和 monitor/DRAM 安全边界审查完成前，不修改 Boot0、TOC1、U-Boot、monitor 或 GPT，不试刷 AArch64 payload。设备没有 eMMC；失败恢复仍按项目设计由电脑重写/修复 SD 卡，不依赖回退到旧 Linux/BaseOS。
