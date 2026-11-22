@@ -180,7 +180,7 @@ else
 fi
 
 if command -v dmesg >/dev/null 2>&1; then
-    dmesg 2>/dev/null | grep -iE 'sunxi|dram|memory|lcd|panel|backlight|axp|pmic|mmc|boot|uart|serial|reserved|cma|memblock|framebuffer|boot_fb|disp_reserve|secure|tee|bl31' \
+    dmesg 2>/dev/null | grep -iE 'sunxi|dram|memory|lcd|panel|backlight|axp|pmic|mmc|boot|uart|serial|reserved|cma|memblock|framebuffer|boot_fb|disp_reserve|drm config service|drm_base|drm_size|tee_base|secure|tee|bl31' \
         > "$OUTDIR/dmesg-hardware-lines.txt" || true
 fi
 
@@ -248,7 +248,7 @@ fi
     echo
     echo "== ION / TEE / DRM / secure / CMA kernel log lines =="
     if command -v dmesg >/dev/null 2>&1; then
-        dmesg 2>/dev/null | grep -iE 'Ion:|ion[-_ ]|drm_base|drm_size|tee_base|optee|secure|cma|reserved|BL31|ATF|trusted|api uid' || true
+        dmesg 2>/dev/null | grep -iE 'Ion:|ion[-_ ]|drm config service|drm_base|drm_size|tee_base|optee|secure|cma|reserved|BL31|ATF|trusted|api uid' || true
     else
         echo "NOT_PRESENT: dmesg utility"
     fi
