@@ -94,15 +94,22 @@ class MemoryMapInspectorTests(unittest.TestCase):
         self.assertEqual(report["memblock"], {"memory": [], "reserved": []})
         self.assertEqual(report["debugfs_presence"]["/sys/kernel/debug/cma"], "not_present")
 
-    def test_rejects_missing_or_invalid_page_size(self):
+    def test_parses_memblock_when_page_size_is_unavailable(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             debugfs = root / "debugfs.txt"
             pagesize = root / "page-size.txt"
             debugfs.write_text(SNAPSHOT, encoding="utf-8")
-            pagesize.write_text("NOT_PRESENT\n", encoding="ascii")
-            with self.assertRaisesRegex(MODULE.MemoryMapError, "page size"):
-                MODULE.inspect_snapshot(debugfs, pagesize)
+            pagesize.write_text("NOT_PRESENT\\n", encoding="ascii")
+            report = MODULE.inspect_snapshot(debugfs, pagesize)
+
+        self.assertIsNone(report["page_size_bytes"])
+        self.assertFalse(report["cma_pfns_normalized"])
+        self.assertEqual(report["cma_areas"][0]["base_pfn"], 507904)
+        self.assertEqual(report["memblock"]["memory"][0]["start"], "0x40000000")
+        self.assertEqual(report["memblock"]["reserved"][1]["end_exclusive"], "0x7c076000")
+        self.assertTrue(any("Memblock ranges are already physical byte addresses" in x
+                            for x in report["limitations"]))
 
     def test_rejects_reversed_memblock_range(self):
         bad = SNAPSHOT.replace(
