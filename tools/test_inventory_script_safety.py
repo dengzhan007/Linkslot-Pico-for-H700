@@ -94,6 +94,13 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertNotIn('/alloc"', self.source)
         self.assertNotIn('/free"', self.source)
 
+    def test_root_argument_is_recorded_even_when_disk_is_explicit(self):
+        root_parse = self.source.index('for arg in $(cat /proc/cmdline')
+        disk_guard = self.source.index('if [ -z "$DISK" ]; then')
+        self.assertLess(root_parse, disk_guard)
+        self.assertIn('ROOTARG="${arg#root=}"', self.source)
+        self.assertIn('echo "root_argument_from_cmdline=$ROOTARG"', self.source)
+
     def test_device_is_never_used_as_dd_output(self):
         self.assertNotIn('of="$DISK"', self.source)
         self.assertNotIn("of=$DISK", self.source)
