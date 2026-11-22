@@ -59,6 +59,13 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         offenders = [line for line in source.splitlines() if forbidden.search(line)]
         self.assertEqual(offenders, [])
 
+    def test_env_partition_is_discovered_by_exact_gpt_label(self):
+        self.assertIn('for node in /sys/class/block/"$BASE"p*', self.source)
+        self.assertIn("grep -qx 'PARTNAME=env' \"$node/uevent\"", self.source)
+        self.assertIn('ENV_PART="/dev/$ENV_DEVNAME"', self.source)
+        self.assertIn('of="$OUTDIR/env-partition-first64k.bin"', self.source)
+        self.assertNotIn("/dev/mmcblk0p3", self.source)
+
     def test_device_is_never_used_as_dd_output(self):
         self.assertNotIn('of="$DISK"', self.source)
         self.assertNotIn("of=$DISK", self.source)
