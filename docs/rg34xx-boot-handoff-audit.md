@@ -262,7 +262,7 @@ ION debugfs 的当前分配为：
 
 ### 14.1 下一步：取得当前设备的 boot 分区镜像
 
-现场 GPT/启动参数将 PARTNAME=boot 对应到 p4；已记录分区范围为起始 LBA 303104、131072 sectors（64 MiB）。下一步应从当前测试卡只读提取 /dev/mmcblk0p4，验证 Android boot image header（ANDROID!），再解析其 kernel payload，并检查内嵌版本标识是否为 Linux version 4.9.170 ... #19 ...。以当前卡的 GPT PARTNAME 为依据，不得使用其他机型文档中固定的 raw image offset。
+现场 GPT/启动参数将 PARTNAME=boot 对应到 p4；已记录分区范围为起始 LBA 303104、131072 sectors（64 MiB）。collector 现通过 sysfs 精确匹配 PARTNAME=boot，动态发现对应 block node 并读取完整分区至报告目录的 boot-partition.bin（最大 64 MiB），同时计算 SHA-256；不硬编码 /dev/mmcblk0p4 或固定 raw offset。若 PARTNAME 缺失则记录 skipped，不猜分区号；若分区超过上限或出现重复标签则报错退出。下一轮从采集文件验证 Android boot image header（ANDROID!），解析 kernel payload，并检查内嵌版本标识是否为 Linux version 4.9.170 ... #19 ...。该读取只从设备分区读出数据，不执行 SD/Boot0/TOC1/U-Boot 写入。
 
 [KNULLI 的 RG34XX 开发说明](https://knulli.org/devices/anbernic/rg34xx/)明确指出 Anbernic 未发布该设备的 kernel/U-Boot 源码，开发者需要从 stock SD/固件提取二进制。取得匹配的 kernel payload 后，后续只做静态检查：反汇编 sunxi_ion_probe 与 optee_probe_drm_configure 的实际目标代码、确认调用条件及返回路径，并检查日志字符串是否存在。暂不为获取返回值而重新绑定 driver、触发 ION heap 重建、主动调用 SMC 或改变启动参数。
 
