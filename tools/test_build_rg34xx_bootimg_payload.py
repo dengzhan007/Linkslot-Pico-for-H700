@@ -85,6 +85,19 @@ class KernelSlotBuilderTests(unittest.TestCase):
         with self.assertRaisesRegex(builder.PayloadBuildError, "kernel slot"):
             builder.build_candidate_partition(original, bytes(payload))
 
+    def test_rejects_payload_larger_than_proven_stock_decompression_output(self):
+        original, _ = make_partition()
+        payload = bytearray(make_arm64_image())
+        payload.append(0xAA)
+        with self.assertRaisesRegex(builder.PayloadBuildError, "uncompressed size of the currently working stock kernel"):
+            builder.build_candidate_partition(original, bytes(payload))
+
+    def test_rejects_payload_image_size_above_proven_stock_image_size(self):
+        original, _ = make_partition()
+        payload = bytearray(make_arm64_image())
+        struct.pack_into("<Q", payload, 16, 0x100001)
+        with self.assertRaisesRegex(builder.PayloadBuildError, "currently working stock kernel Image image_size"):
+            builder.build_candidate_partition(original, bytes(payload))
     def test_rejects_candidate_that_would_consume_original_partition_tail(self):
         original, _ = make_partition()
         # High-entropy, slot-sized input cannot fit inside the original
