@@ -365,7 +365,7 @@ def find_thumb_callers_to_targets(data: bytes, targets: list[int]) -> dict[str, 
                 result[f"0x{target:x}"].append({
                     "callsite": f"0x{offset:x}",
                     "mnemonic": ins.mnemonic,
-                    "disassembly": disassemble_thumb_window(data, offset, 0x20),
+                    "disassembly": disassemble_thumb_window(data, offset, 0x100),
                 })
             break
     return result
