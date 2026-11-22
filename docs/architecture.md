@@ -2,13 +2,15 @@
 
 ## 1. 项目定位
 
-目标是运行在 Anbernic H700 / Rockchip RK3566 上的独立裸机游戏环境：启动后直接进入 Linkslot，不启动完整 Linux，也不依赖 suspend/s2idle 保持游戏状态。GammaOS Pico 提供裸机运行时、Core ABI、渲染与输入组织方式的参考；Linkslot 是本项目唯一前端及用户功能的来源。
+目标是运行在 Anbernic RG34XX / Allwinner H700（四核 Cortex-A53）上的独立裸机游戏环境：启动后直接进入 Linkslot，不启动完整 Linux，也不依赖 suspend/s2idle 保持游戏状态。GammaOS Pico 提供裸机运行时、Core ABI、渲染与输入组织方式的参考；Linkslot 是本项目唯一前端及用户功能的来源。
 
 当前没有多前端需求，不建设前端插件系统、动态前端加载器或通用 Frontend ABI。架构优先保证 Linkslot 上游更新时，H700 适配代码保持独立、上游业务代码尽量少改。
 
-这不是把 MT6785 版 LK 原样移植到 RK3566。两者 SoC、启动链、PMIC、显示控制器、音频和 Wi-Fi 硬件不同；MTK 寄存器地址、CONNSYS、DMA 描述符及电源时序不能用于 H700。
+GammaOS Pico 参考树面向 MT6785，不能原样作为 RG34XX 的 SoC/板级实现。RG34XX 使用 Allwinner H700，Boot0/TOC1/vendor monitor/U-Boot 启动链与 MTK 平台不同；MTK 寄存器、CONNSYS、DMA 描述符及电源时序均不能用于 H700。RG34XX 的具体硬件边界见 [RG34XX 硬件基线](rg34xx-hardware-profile.md)。
 
 ## 2. 启动方式
+
+目标为 RG34XX / Allwinner H700。BaseOS-MultiFrontend 已提供该机型可运行的 SD 启动系统及大量固件调查资料。现有 vendor 链包含 Allwinner Boot0（eGON.BT0）、TOC1、vendor monitor 和 32-bit AArch32 U-Boot 2018.05；后续进入 AArch64 Linux 时经过 monitor 交接。裸机 payload 的 EL、寄存器 ABI 和入口仍未验证，不能直接把 Linux entry address 当成裸机入口。
 
 目标设备无 eMMC，本项目只考虑从 SD 卡启动，不设计 eMMC 安装、双系统选择或自动回退到原 Linux/BaseOS 的流程。
 
@@ -23,7 +25,7 @@
 | 层 | 职责 | 设计约束 |
 |---|---|---|
 | Boot handoff | U-Boot 加载、内存交接 | 只考虑 SD 卡启动；不设计 eMMC 安装或旧系统回退 |
-| H700 HAL | 时钟、计时器、MMU/cache、GPIO、PMIC、背光、显示、音频、SD、USB、Wi-Fi | 所有寄存器与时序按 RK3566 和具体板型重新确认 |
+| H700 HAL | 时钟、计时器、MMU/cache、GPIO、PMIC、背光、显示、音频、SD、USB、Wi-Fi | 所有寄存器与时序按 Allwinner H700 和 RG34XX 具体板型重新确认 |
 | Runtime | 任务/线程、锁、事件、内存分配、日志、文件系统封装 | 提供 Linkslot 实际需要的服务；不为兼容 Linux 而建设完整 POSIX 模拟层 |
 | Emulator Host | GB/GBC/GBA Core ABI、帧调度、输入、音频、视频、持久化 | 模拟器核心与 Linkslot UI 解耦，核心可替换 |
 | Linkslot App | 唯一前端：卡带 UI、游戏库、配置、MOD、云同步入口 | 尽量跟随上游；平台差异经适配层提供，不散落到业务逻辑 |
@@ -103,9 +105,15 @@ linkSlot/mods/
 
 其他 Linkslot 目录（BIOS、Guides、Wallpapers、Music 等）可以继续保留，但不为未支持的平台创建模拟器入口。
 
-## 10. 硬件差异与设备 profile
+## 9. 硬件差异与设备 profile
 
 H700 设备不能只用一个屏幕分辨率或一套按键定义。至少建立设备 profile，记录板型、屏幕型号/时序、GPIO 按键、音频 codec/功放、PMIC、Wi-Fi 芯片/总线、USB 端口用途和电源域。一个 profile 通过实机验证后才能标记为受支持。
+
+## 10. 目标机型
+
+首期只支持 Anbernic RG34XX（非 SP）。其 CPU 是 Cortex-A53，因此所有 H700 C/C++/汇编和模拟器核心交叉编译均使用 AArch64 Cortex-A53 target。不能将 RG34XX SP 的 2 GB LPDDR4、`rg34xxsp_v1` 面板驱动或 Boot0 DRAM 参数套用到 RG34XX。
+
+详细硬件基线及证据见 [RG34XX 硬件基线](rg34xx-hardware-profile.md)。
 
 ## 11. 参考代码
 
