@@ -41,7 +41,7 @@ bash scripts/build-h700-objects.sh
 
 ## 后续扩展顺序
 
-1. 固定第一台实机型号与板级版本。
+1. 核实 RG34XX 实机主板 revision 与当前固件版本。
 2. 获取 U-Boot 版本、启动环境、SD 读取命令和 DRAM map。
 3. 依据实际 handoff ABI 增加 startup/entry 和 linker script。
 4. 验证 C/C++ 所需的 freestanding runtime、内存分配、异常/静态构造策略；核心实际需要的功能再逐步启用。
