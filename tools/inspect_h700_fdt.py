@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import struct
 import sys
 from pathlib import Path
@@ -189,6 +190,17 @@ def inspect_fdt(path: Path) -> dict[str, Any]:
     model = _strings(root.get("model"))
     compatible = _strings(root.get("compatible"))
     chosen = nodes.get("/chosen", {})
+    chosen_bootargs = (_strings(chosen.get("bootargs")) or [None])[0]
+    disp_reserve_match = re.search(
+        r"(?:^|\\s)disp_reserve=([0-9]+),(0x[0-9a-fA-F]+)(?:\\s|$)",
+        chosen_bootargs or "",
+    )
+    disp_reserve = None
+    if disp_reserve_match:
+        disp_reserve = {
+            "size_bytes": int(disp_reserve_match.group(1), 10),
+            "base": int(disp_reserve_match.group(2), 16),
+        }
     memory = []
     for node_path, props in nodes.items():
         if _strings(props.get("device_type")) == ["memory"] or node_path.rsplit("/", 1)[-1].startswith("memory@"):
@@ -216,6 +228,7 @@ def inspect_fdt(path: Path) -> dict[str, Any]:
     pmics = []
     usb = []
     debug_modes = []
+    boot_framebuffers = []
     for node_path, props in nodes.items():
         if "lcd_driver_name" in props:
             panels.append({
@@ -235,6 +248,37 @@ def inspect_fdt(path: Path) -> dict[str, Any]:
                         "status": (_strings(props.get("status")) or ["okay"])[0]})
         if "debug_mode" in props:
             debug_modes.append({"node": node_path, "value": _number(props.get("debug_mode"))})
+        if "boot_fb0" in props:
+            raw_fb = (_strings(props.get("boot_fb0")) or [""])[0]
+            fields = raw_fb.split(",")
+            fb_report: dict[str, Any] = {"node": node_path, "raw": raw_fb}
+            try:
+                if len(fields) < 5:
+                    raise ValueError("boot_fb0 has fewer than five fields")
+                base = int(fields[0], 16)
+                width = int(fields[1], 16)
+                height = int(fields[2], 16)
+                bits_per_pixel = int(fields[3], 16)
+                stride_bytes = int(fields[4], 16)
+                size_bytes = stride_bytes * height
+                fb_report.update({
+                    "base": f"0x{base:x}",
+                    "width": width,
+                    "height": height,
+                    "bits_per_pixel": bits_per_pixel,
+                    "stride_bytes": stride_bytes,
+                    "size_bytes": size_bytes,
+                    "end_exclusive": f"0x{base + size_bytes:x}",
+                    "remaining_hex_fields": fields[5:],
+                    "matches_disp_reserve": bool(
+                        disp_reserve
+                        and disp_reserve["base"] == base
+                        and disp_reserve["size_bytes"] == size_bytes
+                    ),
+                })
+            except (ValueError, OverflowError) as exc:
+                fb_report["parse_error"] = str(exc)
+            boot_framebuffers.append(fb_report)
 
     return {
         "file": str(path),
@@ -243,7 +287,11 @@ def inspect_fdt(path: Path) -> dict[str, Any]:
         "totalsize": _u32(blob, 4),
         "model": model,
         "compatible": compatible,
-        "chosen_bootargs": (_strings(chosen.get("bootargs")) or [None])[0],
+        "chosen_bootargs": chosen_bootargs,
+        "disp_reserve_bootarg": ({
+            "size_bytes": disp_reserve["size_bytes"],
+            "base": f"0x{disp_reserve['base']:x}",
+        } if disp_reserve else None),
         "memory_regions": memory,
         "reserved_memory_nodes": reserved,
         "has_reserved_memory_node": reserved_root is not None,
@@ -251,6 +299,7 @@ def inspect_fdt(path: Path) -> dict[str, Any]:
         "pmic_nodes": pmics,
         "usb_controllers": sorted(usb, key=lambda item: item["node"]),
         "debug_modes": debug_modes,
+        "boot_framebuffers": boot_framebuffers,
         "node_count": len(nodes),
     }
 
