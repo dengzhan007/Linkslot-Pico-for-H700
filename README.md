@@ -16,6 +16,8 @@
 
 ## 当前开发基线
 
+- 首台目标设备：Anbernic RG34XX（非 RG34XX SP）；SoC 为 Allwinner H700，四核 Cortex-A53，1 GB LPDDR4，720×480 屏幕，无 eMMC。详见 [RG34XX 硬件基线](docs/rg34xx-hardware-profile.md)。
+
 - UI / 用户功能来源：[luguiyi/linkslot](https://github.com/luguiyi/linkslot)
 - 裸机 / LK 参考：[TheGammaSqueeze/lk-mt6785](https://github.com/TheGammaSqueeze/lk-mt6785)
 - 首期平台：GB、GBC、GBA。
@@ -25,7 +27,7 @@
 
 ## 当前工程进展
 
-- 已建立 H700 Cortex-A55 / AArch64 freestanding 编译检查及 GitHub Actions。
+- 已建立 RG34XX Allwinner H700 Cortex-A53 / AArch64 freestanding 编译检查及 GitHub Actions。
 - 当前检查只生成并验证 AArch64 目标文件，不是可启动 payload；加载地址、入口、栈和 U-Boot 交接将在实机启动链确认后确定。
 - Linkslot 即将发布大版本，暂缓导入/同步上游源码和逐 crate 复用审计，避免对即将过时的版本重复适配。
 
@@ -48,6 +50,8 @@ bash scripts/build-h700-objects.sh
 
 ## 重要设计文档
 
+- [RG34XX 硬件基线](docs/rg34xx-hardware-profile.md)
+
 - [总体架构与硬件边界](docs/architecture.md)
 - [已确认的设计决策](docs/decisions.md)
 - [模拟器与存档兼容性](docs/emulator-save-compatibility.md)
@@ -64,5 +68,5 @@ bash scripts/build-h700-objects.sh
 1. 先验证 H700 SD 启动、显示、输入、SD 读写和完全关机路径，再接入完整 Linkslot UI。
 2. 数据格式优先兼容 Linkslot；不得无必要改变 Games / Saves / States / Cheats / linkSlot 目录语义。
 3. 任何自动存档、同步和关机行为必须遵守 `docs/decisions.md`。
-4. 不能将 MT6785/MTK 特有驱动、寄存器或 DMA 参数直接用于 RK3566/H700。
+4. 首期目标是 RG34XX / Allwinner H700 / Cortex-A53；不能将 MT6785/MTK 特有驱动或其他 SoC 的寄存器、DMA 参数直接用于 H700。
 5. 上游代码和第三方核心必须保留许可证、NOTICE、对应源码及构建来源。
