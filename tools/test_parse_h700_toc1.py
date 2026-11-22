@@ -24,7 +24,7 @@ def make_package(items, *, count_override=None, size_override=None, overlap=Fals
     for index, (name, payload) in enumerate(items):
         offset = cursor
         if overlap and index == 1:
-            offset = entries[0][1]
+            offset = entries[0][0] + 1
         entries.append((offset, offset + len(payload), name, payload))
         cursor = max(cursor, offset + len(payload))
         cursor = (cursor + 15) & ~15
@@ -63,8 +63,6 @@ class Toc1ParserTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "extract"
-            manifest = MODULE.extract_toc1_file if hasattr(MODULE, "extract_toc1_file") else None
-            self.assertIsNone(manifest)
             # Exercise the public extractor through a temporary input file.
             source = Path(temporary) / "toc1.bin"
             source.write_bytes(original)
@@ -105,7 +103,7 @@ class Toc1ParserTests(unittest.TestCase):
 
     def test_rejects_item_past_package_end(self):
         blob = bytearray(make_package([("u-boot", b"x")]))
-        struct.pack_into("<I", blob, MODULE.HEADER_BYTES + 64, len(blob) - 1)
+        struct.pack_into("<I", blob, MODULE.HEADER_BYTES + 64, len(blob))
         with self.assertRaises(MODULE.Toc1Error):
             MODULE.parse_toc1(bytes(blob))
 
