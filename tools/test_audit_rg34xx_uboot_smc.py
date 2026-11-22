@@ -8,10 +8,26 @@ from pathlib import Path
 import audit_rg34xx_uboot_smc as audit
 
 
+def a32_bl(offset: int, target: int) -> bytes:
+    immediate = ((target - (offset + 8)) >> 2) & 0x00FFFFFF
+    return struct.pack("<I", 0xEB000000 | immediate)
+
+
+def a32_mov_half(base: int, register: int, immediate: int) -> bytes:
+    word = base | (((immediate >> 12) & 0xF) << 16) | (register << 12) | (immediate & 0xFFF)
+    return struct.pack("<I", word)
+
+
 def make_toc1() -> bytes:
-    uboot = bytearray(512)
+    uboot = bytearray(0xC00)
     uboot[0x40:0x44] = struct.pack("<I", 0x8000FF04)
     uboot[0x80:0x84] = audit.A32_SMC0
+    uboot[0xA0:0xA4] = a32_mov_half(0xE3000000, 0, 0xFF04)  # MOVW r0, #0xFF04
+    uboot[0xA4:0xA8] = a32_mov_half(0xE3400000, 0, 0x8000)  # MOVT r0, #0x8000
+    uboot[0xC0:0xC4] = a32_bl(0xC0, 0xB18)
+    uboot[0xC4:0xC8] = a32_bl(0xC4, 0xB58)
+    uboot[0xB24:0xB28] = audit.A32_SMC0
+    uboot[0xB5C:0xB60] = audit.A32_SMC0
     data = {
         "u-boot": bytes(uboot),
         "monitor": b"M" * 128,
@@ -51,6 +67,18 @@ class UbootSmcAuditTests(unittest.TestCase):
         self.assertEqual(
             report["constant_occurrences"]["vendor_linux_smc_0x8000ff04"],
             ["0x40"],
+        )
+        self.assertEqual(
+            report["direct_callers_of_smc_wrappers"]["0xb18"][0]["callsite"],
+            "0xc0",
+        )
+        self.assertEqual(
+            report["direct_callers_of_smc_wrappers"]["0xb58"][0]["callsite"],
+            "0xc4",
+        )
+        self.assertEqual(
+            report["movw_movt_constructed_linux_smc_id"][0]["value"],
+            "0x8000ff04",
         )
 
     def test_reads_toc1_from_inventory_zip(self):
