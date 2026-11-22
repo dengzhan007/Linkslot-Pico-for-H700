@@ -108,7 +108,20 @@ SMC 分支前的 CPU/cache 清理也已在现场 binary 中拆开：`0x14D0 -> 0
 
 BaseOS-MultiFrontend 中与现场 monitor SHA-256 相同的 vendor monitor 已在 Unicorn verifier 中走过真实 SMC dispatch/ERET 指令，仿真结果为 `ELR=0x40080000`、`SPSR=0x3c5`、`x0=0x44000000`、`x1..x3=0`。这是使用实际 monitor 指令的仿真证据，不是 RG34XX 实机寄存器捕获；此外 verifier 注入了 SMC 异常上下文，`SCTLR_EL1` 输入来自 BaseOS 自有 A32 loader proof，不能直接当作现场 stock U-Boot 的 `SCTLR_EL1` 数值。
 
-尚未完成的关键门槛仍是：恢复精确 `CONFIG_SYS_BOOTM_LEN`；确认 `images.ft_addr` 最初来自哪份 DTB，以及它如何从 p4 appended DTB / TOC1 工作树变成 Linux 收到的 1 GiB live FDT；并把现场 U-Boot cache-maintenance 结束状态与相同 monitor 的 ERET 行为完整衔接。
+### 4.3 FDT 来源的现场 U-Boot 静态证据
+
+对当前现场 U-Boot 的新增反汇编窗口得到以下数据流：
+
+- `0xEF5C` 从全局 data 的 `sb+0x5c` 读取 FDT blob 指针；读取 FDT header 的 totalsize，计算 `(totalsize + 0x101f) & ~0x1f`（原 totalsize 加约 4 KiB，再按 32-byte 对齐），更新全局 FDT size/top-of-RAM 状态，并调用 `0x66380` 的 FDT 扩容/复制 helper。该函数处理的是 U-Boot 已有的 control-FDT，不是从 Android p4 解析出新 DTB 的代码。
+- `0x8680` 将传入地址写入一个全局指针槽；BaseOS-MultiFrontend 的同类 U-Boot trace 将其命名为 `set_working_fdt_addr`，槽名为 `working_fdt`。
+- `0x7F10` 的 `bootm` 路径从该全局指针槽读出 FDT 地址，并调用 `0xFDA4` 进行 initrd 相关 fixup；后续 chosen/FDT 更新路径也使用该工作树。最终 `boot_jump_linux` 将 `images.ft_addr` 指向的 FDT 复制到 `0x44000000`，再传入 monitor。
+- BaseOS `experiments/h700-boot-speed/uboot-trace.py` 的初始化模型把 `working_fdt` 指向 TOC1 package DTB，并注明真实设备启动时 `0xEF5C` 相关逻辑会先增加 4096 bytes spare space。BaseOS trace 是静态/仿真模型，并非本机实时指针捕获；但该模型与当前 RG34XX U-Boot 的 `0xEF5C`、`0x8680`、`0x7F10` 机器码窗口一致。
+
+因此目前最强来源判断是：**TOC1 package DTB → U-Boot `gd->fdt_blob` / `working_fdt` → bootm FDT fixups → `images.ft_addr` → copy to `0x44000000`**。p4 appended DTB 尚未在这条已定位的目标机路径中出现，不是当前首选来源。Android header 的 `dtb_addr=0x44000000` 是最终 handoff copy destination，不能反推它就是源树地址。
+
+证据边界仍须保留：目前没有运行时读取 `gd+0x5c`、`working_fdt` 或 `images.ft_addr` 的数值，也未在设备上捕获 FDT 指针。因此 TOC1 DTB 是高置信来源候选，不是指针级实机证明。下一步仍需本地三份 FDT 属性比较，并在后续入口探针中校验 FDT magic、totalsize、memory 与 chosen 属性。
+
+尚未完成的关键门槛仍是：恢复精确 `CONFIG_SYS_BOOTM_LEN`；用本地属性比较确认 live FDT 与 TOC1 DTB / p4 appended DTB 的差异和 fixup；并把现场 U-Boot cache-maintenance 结束状态与相同 monitor 的 ERET 行为完整衔接。
 
 ### 4.2 已有主机侧 kernel-slot 构建器（不刷写）
 
