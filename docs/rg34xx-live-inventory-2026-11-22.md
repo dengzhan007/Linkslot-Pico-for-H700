@@ -38,7 +38,7 @@
 
 静态 TOC1 DTB 与 live FDT 的 RAM size 不同；live FDT、/proc/iomem 和 MemTotal 相互印证 1 GiB 运行时容量。可以确认内核阶段看到的是 1 GiB RAM，但目前没有证据定位是哪一个启动阶段把静态 DTB 的 512 MiB 修改为 1 GiB。
 
-这不是可直接使用的裸机 RAM map。现在已能明确排除 live FDT 标记的 framebuffer 区间 `[0x7bf24800, 0x7c076000)`，以及 64 MiB CMA、内核自身占用；但 monitor/secure world、其他 DMA/carveout 和 SPL/loader 自身空间仍未完整确认。没有标准 `/reserved-memory` 节点也不代表这些区域不存在。任何 payload 链接地址都必须等到完整占用图和 monitor 约束查明后再确定。
+这不是可直接使用的裸机 RAM map。现在已能明确排除 live FDT 标记的 framebuffer 区间 `[0x7bf24800, 0x7c076000)`，以及当前 Linux 的 kernel code/data 子范围；`CmaTotal=64 MiB` 只说明 CMA 总量，第三轮尚未取得其物理 base，因此不能声称已排除某个 64 MiB CMA 地址区间。monitor/secure world、CMA 实际位置、其他 DMA/carveout 和 SPL/loader 自身空间仍未完整确认。没有标准 `/reserved-memory` 节点也不代表这些区域不存在。任何 payload 链接地址都必须等到完整占用图和 monitor 约束查明后再确定。
 
 ## 4. Boot0 两个位置的现场读回
 
