@@ -53,7 +53,7 @@ Boot ROM
 
 该候选的核心 handoff 调用点和参数布局已在现场 U-Boot binary 中确认；剩余门槛为：
 
-1. 静态追踪当前 U-Boot 的 Android gzip 解压路径，确认输出目标、输出长度限制，并将 `images.ep` 实值与 p4 header `kernel_addr=0x40080000` 对应起来。
+1. 已由现场 selector `0xF698` 的 patched bytes、Android header 与 U-Boot v2018.05 `bootm` 数据流确认：kernel 使用 gzip，解压目标及 `images.ep` 均为 p4 header `kernel_addr=0x40080000`。当前原厂 kernel 解压长度 17,461,256 bytes 是可证明的输出能力下限；精确 `CONFIG_SYS_BOOTM_LEN` 仍需恢复，builder 在此之前保守限制 payload 不超过原 kernel 解压长度及 `image_size=0x1138000`。
 2. 对与现场相同 hash 的 vendor monitor 检查 `0x8000FF04` 服务的 ERET 行为：CurrentEL、SPSR_EL3/ELR_EL3、x0..x3、DAIF、中断、MMU/cache/TLB 和 FDT 指针。
 3. 确认 `images.ft_addr` 的原始 FDT 来源与 fixup 顺序，解释 p4 appended DTB（512 MiB）、TOC1 DTB 和 live FDT（1 GiB）之间的关系。
 4. 在上述静态门槛通过后，才生成一个不调用 Linux、不访问未知 RAM 的 AArch64 entry probe；模拟结果不能替代 RG34XX 非 SP 实机验收。
@@ -78,7 +78,7 @@ SMC 分支前的 CPU/cache 清理也已在现场 binary 中拆开：`0x14D0 -> 0
 
 BaseOS-MultiFrontend 中与现场 monitor SHA-256 相同的 vendor monitor 已在 Unicorn verifier 中走过真实 SMC dispatch/ERET 指令，仿真结果为 `ELR=0x40080000`、`SPSR=0x3c5`、`x0=0x44000000`、`x1..x3=0`。这是使用实际 monitor 指令的仿真证据，不是 RG34XX 实机寄存器捕获；此外 verifier 注入了 SMC 异常上下文，`SCTLR_EL1` 输入来自 BaseOS 自有 A32 loader proof，不能直接当作现场 stock U-Boot 的 `SCTLR_EL1` 数值。
 
-尚未完成的关键门槛仍是：实际 `images.ep`/gzip decompressor 的最终落点核验；`images.ft_addr` 最初来自哪份 DTB，以及它如何从旧的 512 MiB appended tree 变成 Linux 收到的 1 GiB live FDT；并把现场 U-Boot cache-maintenance 结束状态与相同 monitor 的 ERET 行为完整衔接。
+尚未完成的关键门槛仍是：恢复精确 `CONFIG_SYS_BOOTM_LEN`；确认 `images.ft_addr` 最初来自哪份 DTB，以及它如何从 p4 appended DTB / TOC1 工作树变成 Linux 收到的 1 GiB live FDT；并把现场 U-Boot cache-maintenance 结束状态与相同 monitor 的 ERET 行为完整衔接。
 
 ### 4.2 已有主机侧 kernel-slot 构建器（不刷写）
 
