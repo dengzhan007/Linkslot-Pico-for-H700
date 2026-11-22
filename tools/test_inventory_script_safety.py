@@ -107,7 +107,7 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertIn('/proc/modules', self.source)
         self.assertIn('/sys/bus/platform/drivers/ion-sunxi', self.source)
         self.assertIn('cat "$path"', self.source)
-        self.assertNotRegex(self.source, r">\\s*/sys/(?:kernel/debug|bus/platform|class/misc)/")
+        self.assertNotRegex(self.source, r">\s*/sys/(?:kernel/debug|bus/platform|class/misc)/")
         self.assertNotIn('ION_IOC_', self.source)
         self.assertNotIn('GET_DRM_INFO', self.source)
 
