@@ -14,8 +14,9 @@ $Boot0Inspector = Join-Path $RepoRoot "tools\inspect_h700_boot0.py"
 $Toc1Parser = Join-Path $RepoRoot "tools\parse_h700_toc1.py"
 $FdtInspector = Join-Path $RepoRoot "tools\inspect_h700_fdt.py"
 $EnvInspector = Join-Path $RepoRoot "tools\inspect_h700_env.py"
+$MemoryMapInspector = Join-Path $RepoRoot "tools\inspect_h700_memory_map.py"
 
-foreach ($path in @($Collector, $Boot0Inspector, $Toc1Parser, $FdtInspector, $EnvInspector)) {
+foreach ($path in @($Collector, $Boot0Inspector, $Toc1Parser, $FdtInspector, $EnvInspector, $MemoryMapInspector)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         throw "Required project file not found: $path"
     }
@@ -172,6 +173,30 @@ $envImage = Join-Path $OutputDirectory "env-partition.bin"
 if (Test-Path -LiteralPath $envImage -PathType Leaf) {
     & $pythonExe @pythonArgs $EnvInspector $envImage -o (Join-Path $OutputDirectory "env-report.json")
     if ($LASTEXITCODE -ne 0) { throw "U-Boot environment inspection failed." }
+}
+
+$memorySnapshot = Join-Path $OutputDirectory "debugfs-memory-reservations.txt"
+$pageSizeFile = Join-Path $OutputDirectory "page-size.txt"
+$liveFdtJson = Join-Path $OutputDirectory "live-fdt.json"
+$meminfoFile = Join-Path $OutputDirectory "meminfo.txt"
+if ((Test-Path -LiteralPath $memorySnapshot -PathType Leaf) -and
+    (Test-Path -LiteralPath $pageSizeFile -PathType Leaf)) {
+    $pageSizeText = (Get-Content -LiteralPath $pageSizeFile -Raw).Trim()
+    if ($pageSizeText -match '^\d+
+Write-Host "Inventory collected and parsed successfully."
+Write-Host "Review: $OutputDirectory"
+Write-Host "The device-side collector only reads the source block device; output files were written under /tmp."
+) {
+        $memoryMapArgs = @($MemoryMapInspector, $memorySnapshot, "--page-size", $pageSizeFile, "--meminfo", $meminfoFile)
+        if (Test-Path -LiteralPath $liveFdtJson -PathType Leaf) {
+            $memoryMapArgs += @("--fdt-json", $liveFdtJson)
+        }
+        $memoryMapArgs += @("-o", (Join-Path $OutputDirectory "memory-map-report.json"))
+        & $pythonExe @pythonArgs @memoryMapArgs
+        if ($LASTEXITCODE -ne 0) { throw "CMA/memblock memory map inspection failed." }
+    } else {
+        Write-Warning "Page size was not exported; raw debugfs memory snapshot is retained without PFN-to-byte conversion."
+    }
 }
 
 Write-Host ""
