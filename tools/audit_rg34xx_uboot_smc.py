@@ -191,6 +191,30 @@ def a32_rotated_immediate(word: int) -> int:
     return ((value >> rotation) | (value << (32 - rotation))) & 0xFFFFFFFF if rotation else value
 
 
+
+def find_a32_ldr_literal_refs_to_value(data: bytes, value: int) -> list[dict[str, Any]]:
+    """Find A32 LDR-literal sites whose literal-pool word equals value."""
+    references = []
+    for offset in range(0, len(data) - 3, 4):
+        word = struct.unpack_from("<I", data, offset)[0]
+        if (word & 0x0F7F0000) != 0x051F0000:
+            continue
+        immediate = word & 0xFFF
+        up = bool(word & 0x00800000)
+        effective = offset + 8 + (immediate if up else -immediate)
+        if effective < 0 or effective + 4 > len(data):
+            continue
+        literal = struct.unpack_from("<I", data, effective)[0]
+        if literal == value:
+            references.append({
+                "instruction_offset": f"0x{offset:x}",
+                "literal_offset": f"0x{effective:x}",
+                "value": f"0x{literal:x}",
+                "disassembly": disassemble_window(data, offset, 0x20),
+            })
+    return references
+
+
 def find_a32_adr_refs(data: bytes, target: int) -> list[dict[str, Any]]:
     """Find ADD/SUB immediate instructions using PC as base and resolving to target."""
     references = []
@@ -215,8 +239,8 @@ def find_a32_adr_refs(data: bytes, target: int) -> list[dict[str, Any]]:
     return references
 
 
-def find_a32_blx_register_sites(data: bytes, limit: int = 256) -> list[dict[str, Any]]:
-    """Inventory A32 BLX-register instructions; data regions can create false positives."""
+def find_a32_blx_register_sites(data: bytes, limit: int = 256) -> list[dict[str, str]]:
+    """Inventory A32 BLX-register instruction offsets; raw data can cause false positives."""
     sites = []
     for offset in range(0, len(data) - 3, 4):
         word = struct.unpack_from("<I", data, offset)[0]
@@ -224,7 +248,6 @@ def find_a32_blx_register_sites(data: bytes, limit: int = 256) -> list[dict[str,
             sites.append({
                 "offset": f"0x{offset:x}",
                 "register": f"r{word & 0xF}",
-                "disassembly": disassemble_window(data, offset, 0x30),
             })
             if len(sites) >= limit:
                 break
@@ -287,7 +310,10 @@ def find_movw_movt_smc_id(data: bytes) -> list[dict[str, str]]:
 def scan_uboot(uboot: bytes, context_bytes: int = 0x50) -> dict[str, Any]:
     smc_offsets = occurrences(uboot, A32_SMC0)
     constant_offsets = {
-        name: [f"0x{x:x}" for x in occurrences(uboot, needle)]
+        name: {
+            "count": len(occurrences(uboot, needle)),
+            "first_64_offsets": [f"0x{x:x}" for x in occurrences(uboot, needle)[:64]],
+        }
         for name, needle in CONSTANTS.items()
     }
     sites = []
@@ -336,8 +362,18 @@ def scan_uboot(uboot: bytes, context_bytes: int = 0x50) -> dict[str, Any]:
                 f"0x{x:x}": find_a32_adr_refs(uboot, x)
                 for x in occurrences(uboot, CONSTANTS["vendor_linux_smc_0x8000ff04"])
             },
-            "possible_absolute_pointer_refs_at_0x4a001510": find_word_pointer_refs(uboot, 0x4A001510),
-            "raw_offset_word_refs_to_0x1510": find_word_pointer_refs(uboot, 0x1510),
+            "literal_ldr_of_value": {
+                f"0x{value:x}": find_a32_ldr_literal_refs_to_value(uboot, value)
+                for value in (0x8000FF04, 0x4A000B18, 0x4A000B58, 0xB18, 0xB58)
+            },
+            "wrapper_address_refs": {
+                f"0x{entry:x}": {
+                    "relative_offset_word_refs": find_word_pointer_refs(uboot, entry),
+                    "base_0x4a000000_word_refs": find_word_pointer_refs(uboot, 0x4A000000 + entry),
+                    "adr_pc_relative_refs": find_a32_adr_refs(uboot, entry),
+                }
+                for entry in wrapper_entries
+            },
             "constant_context": [
                 {
                     "offset": f"0x{x:x}",
