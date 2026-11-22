@@ -14,10 +14,10 @@ MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 
 
-def make_boot0():
-    image = bytearray(MODULE.BOOT0_BYTES)
+def make_boot0(size=MODULE.BOOT0_BYTES):
+    image = bytearray(size)
     image[4:12] = b"eGON.BT0"
-    struct.pack_into("<I", image, MODULE.IMAGE_SIZE_OFFSET, MODULE.BOOT0_BYTES)
+    struct.pack_into("<I", image, MODULE.IMAGE_SIZE_OFFSET, size)
     image[MODULE.DEBUG_OFFSET] = 3
     primary = [0x2A0, 8] + [0x100 + i for i in range(30)]
     lpddr3 = [0x2A0, 7] + [0x200 + i for i in range(30)]
@@ -49,6 +49,23 @@ class Boot0InspectorTests(unittest.TestCase):
             report["sha256_body_after_first_sector"],
             hashlib.sha256(data[512:]).hexdigest(),
         )
+
+    def test_accepts_128kib_boot0_declared_by_header(self):
+        data = make_boot0(0x20000)
+        report = MODULE.parse_boot0(data)
+        self.assertEqual(report["bytes"], 0x20000)
+        self.assertEqual(report["captured_bytes"], 0x20000)
+        self.assertTrue(report["checksum_valid"])
+        self.assertEqual(report["sha256_full"], hashlib.sha256(data).hexdigest())
+
+    def test_crops_capture_tail_to_header_declared_size(self):
+        image = make_boot0(MODULE.BOOT0_BYTES)
+        captured = image + bytes(0x10000)
+        report = MODULE.parse_boot0(captured)
+        self.assertEqual(report["bytes"], MODULE.BOOT0_BYTES)
+        self.assertEqual(report["captured_bytes"], 0x20000)
+        self.assertTrue(report["checksum_valid"])
+        self.assertEqual(report["sha256_full"], hashlib.sha256(image).hexdigest())
 
     def test_first_sector_changes_do_not_change_stable_body_hash(self):
         original = make_boot0()
