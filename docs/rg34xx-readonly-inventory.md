@@ -19,9 +19,9 @@
 | env-report.json | 解析 key=value 变量并扫描 CRC32 头偏移/sector-aligned 环境长度；报告 CRC 覆盖长度与实际 GPT 分区大小。CRC 有效证明该映像内部一致，但不单独证明 U-Boot 已选中它 |
 | cmdline.txt / cpuinfo.txt / meminfo.txt | 运行时内核启动参数、CPU 与内存信息 |
 | iomem.txt / interrupts.txt | 内存资源范围与中断状态 |
-| page-size.txt | 通过 getconf 读取运行内核的 PAGE_SIZE，用于把 CMA PFN 换算为物理 byte range |
+| page-size.txt / page-size-source.txt | 优先通过 getconf 读取 PAGE_SIZE；不可用时尝试从 /proc/self/smaps 的 KernelPageSize 获取，并记录来源，用于把 CMA PFN 换算为物理 byte range |
 | debugfs-memory-reservations.txt | 若内核导出 debugfs CMA/memblock 节点，只读采集 CMA base_pfn/count/order_per_bit 与 memblock memory/reserved；不触碰 alloc/free 控制节点 |
-| memory-map-report.json | 自动将 CMA PFN/count 转成物理区间，并解析 memblock memory/reserved 的起止地址；与 live FDT framebuffer、RAM 和 meminfo 交叉引用 |
+| memory-map-report.json | 自动将 CMA PFN/count（存在 PAGE_SIZE 时）转成物理区间，并解析 memblock memory/reserved 的起止地址；即使 PAGE_SIZE 缺失也会解析 memblock，并与 live FDT framebuffer、RAM 和 meminfo 交叉引用 |
 | partitions.txt / mounts.txt | 块设备分区及挂载状态 |
 | device-and-block-layout.txt | 设备树 model/compatible、块设备 sysfs 与分区标签 |
 | gpt-sfdisk.txt 或 gpt-fdisk.txt | 系统提供 sfdisk 或 fdisk 时生成分区表文本 |
@@ -43,7 +43,7 @@ LBA 16、512、32800 和 TOC1 长度 0x140000 来自 BaseOS-MultiFrontend 的 H7
 
     powershell -ExecutionPolicy Bypass -File .\scripts\run-rg34xx-inventory.ps1
 
-脚本会确认只连接了一台已授权的 ADB 设备、确认 ADB shell 为 root、读取 /proc/cmdline 并校验整盘设备与 root 分区一致，然后自动 push 采集器、运行只读采集、pull 报告、解析两份 Boot0、解包 TOC1，并用 FDT 检查器分别输出 live-fdt.json 与 TOC1 内 dtb-report.json。采集器会优先通过 sysfs 中的精确 PARTNAME=env 查找环境分区并读取完整分区（限制 64 MiB），不硬编码 p3；若找不到且存在 by-partlabel/env 链接，才使用该链接作为兼容回退。Windows runner 会自动运行 env 解析器并输出 env-report.json；若页大小可读，还会运行 memory map parser 输出 memory-map-report.json。默认结果保存在 build/rg34xx-inventory-时间戳/。多个 ADB 设备同时连接时用 -DeviceSerial 指定；root 参数不是 /dev 块设备时，在确认真实启动 SD 整盘后用 -BlockDevice 显式指定。
+脚本会确认只连接了一台已授权的 ADB 设备、确认 ADB shell 为 root、读取 /proc/cmdline 并校验整盘设备与 root 分区一致，然后自动 push 采集器、运行只读采集、pull 报告、解析两份 Boot0、解包 TOC1，并用 FDT 检查器分别输出 live-fdt.json 与 TOC1 内 dtb-report.json。采集器会优先通过 sysfs 中的精确 PARTNAME=env 查找环境分区并读取完整分区（限制 64 MiB），不硬编码 p3；若找不到且存在 by-partlabel/env 链接，才使用该链接作为兼容回退。Windows runner 会自动运行 env 解析器并输出 env-report.json；只要 debugfs 快照存在就运行 memory map parser 输出 memory-map-report.json。PAGE_SIZE 可用时将 CMA PFN/count 换算为 byte range；PAGE_SIZE 缺失时仍解析 memblock（其地址本身是 byte address），CMA 仅保留原始 PFN/count。默认结果保存在 build/rg34xx-inventory-时间戳/。多个 ADB 设备同时连接时用 -DeviceSerial 指定；root 参数不是 /dev 块设备时，在确认真实启动 SD 整盘后用 -BlockDevice 显式指定。
 
 该快捷脚本要求 Windows PowerShell 5.1 或 PowerShell 7、Android platform-tools 和 Python 3。ADB shell 必须为 root；若设备 ADB 不是 root，请按下方方法在 root SSH shell 执行采集器。
 
