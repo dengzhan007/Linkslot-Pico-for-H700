@@ -25,6 +25,13 @@
 
 LBA 16、512、32800 和 TOC1 长度 0x140000 来自 BaseOS-MultiFrontend 的 H700 启动链采集/装载代码。采集器只适用于与这些布局一致的 RG34XX/BaseOS SD 镜像；如果现场读取结果和固件清单不一致，应先解释布局差异，不要直接把镜像视为损坏。
 
+需要特别区分两种已记录的 TOC1 指纹：
+
+- RG34XX 原始厂商包：BaseOS 的兼容性调查记录 SHA-256 为 56371d984e29e74db63009ce27f829eb0a55ce9007ee5e40c52479b22418af3。这个值对应 BaseOS H700 native-handoff/compatibility 研究中的厂商 TOC1 输入。
+- BaseOS gzip 启动包：manifest/kernel-gzip.json 记录 SHA-256 为 6c380adb6e4f16aa535da25f665706b0a6118b542947859aad5931f4baa9ac28。它不是原始厂商包的另一个别名；kernel_gzip.py 会修改 U-Boot 的 Android 压缩选择指令、TOC1 checksum，以及 DTB 中的 debug_mode 和 USB controller status，并要求 boot package 与 boot image 配套安装。
+
+因此，现场 hash 应先与设备当前安装的 BaseOS 启动方案比对。仅仅不匹配其中一个值不能判定损坏；更高版本或其他启动方案可能有独立指纹。具体修改边界见 BaseOS 的 docs/12-kernel-gzip.md 和 tools/kernel_gzip.py。
+
 ## 在设备上运行
 
 优先使用 ADB 把脚本临时传入 /tmp：
@@ -51,7 +58,7 @@ LBA 16、512、32800 和 TOC1 长度 0x140000 来自 BaseOS-MultiFrontend 的 H7
 
     python3 tools/parse_h700_toc1.py ./rg34xx-readonly-inventory/toc1-package.bin -o ./rg34xx-readonly-inventory/toc1-extracted
 
-程序会验证 TOC1 item 数量、表格边界、名称、偏移、长度、重叠与整体 SHA-256，并在 items/ 下提取各组件。manifest.json 会记录整个包与每个组件的 SHA-256。当前解析器复现 BaseOS 已提交的表结构：64 字节包头、从偏移 64 开始的 item 表、每项 368 字节、名称 64 字节、数据 offset/size 位于项内偏移 +64/+68。
+程序会验证 TOC1 item 数量、表格边界、名称、偏移、长度、重叠与整体 SHA-256，并在 items/ 下提取各组件。manifest.json 会记录整个包与每个组件的 SHA-256。当前解析器验证 Allwinner 包头 magic、包长度、checksum stamp、MIE; 表标记、四个组件名、每项 368 字节、名称 64 字节、offset/size/encryption/type 字段和 IIE; 项尾标记；并验证 payload 不越界、不重叠。
 
 它不验证厂商签名、不解析 Boot0 DRAM training 的语义，也不证明 payload handoff ABI。提取成功只表示容器布局通过边界检查。
 
@@ -73,4 +80,4 @@ LBA 16、512、32800 和 TOC1 长度 0x140000 来自 BaseOS-MultiFrontend 的 H7
 
 ## 验证
 
-主机 CI 对采集脚本运行 sh -n，并用纯合成 TOC1 数据测试解析器的有效包、重复名称、越界、重叠和非法名称处理。它不需要真实设备固件，也不会向硬件写入。
+主机 CI 对采集脚本运行 sh -n，并用纯合成 TOC1 数据测试解析器的有效包、Allwinner checksum、错误 magic、项目数、重复名称、越界、重叠、非法名称和 IIE; 尾标记处理。它不需要真实设备固件，也不会向硬件写入。
