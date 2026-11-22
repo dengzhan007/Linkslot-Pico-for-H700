@@ -16,7 +16,7 @@
 
 ## 当前工作：不依赖 Linkslot 上游版本的准备
 
-### A. 工具链与工程基础（已开始）
+### A. 工具链与工程基础（已完成第一步）
 
 - [x] AArch64 freestanding C、C++ 和汇编编译探针。
 - [x] 检查 C、C++ 和汇编产物确实为 AArch64 ELF relocatable objects。
