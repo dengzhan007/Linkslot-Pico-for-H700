@@ -184,6 +184,76 @@ if command -v dmesg >/dev/null 2>&1; then
         > "$OUTDIR/dmesg-hardware-lines.txt" || true
 fi
 
+# Capture read-only runtime evidence for the vendor ION/TEE path. In
+# particular, some Allwinner kernels populate the secure ION heap through a
+# vendor SMC even when the standard OP-TEE API probe fails. Never invoke an
+# ioctl, SMC, debugfs control file, or any write operation from this collector.
+{
+    echo "== kernel identity =="
+    uname -a 2>&1 || true
+    echo
+    echo "== kernel configuration (when exported) =="
+    CONFIG_CAPTURED=0
+    for config in /proc/config.gz "/boot/config-$(uname -r 2>/dev/null)" /boot/config; do
+        [ -r "$config" ] || continue
+        echo "-- $config --"
+        case "$config" in
+            *.gz)
+                if command -v gzip >/dev/null 2>&1; then
+                    gzip -dc "$config" 2>/dev/null | grep -E '^(CONFIG_(TEE|OPTEE|SUNXI_ION|ION|CMA|DMA_CMA|OF_RESERVED_MEM)=|# CONFIG_(TEE|OPTEE|SUNXI_ION|ION|CMA|DMA_CMA|OF_RESERVED_MEM) is not set)' || true
+                    CONFIG_CAPTURED=1
+                else
+                    echo "gzip utility unavailable; config not decoded"
+                fi
+                ;;
+            *)
+                grep -E '^(CONFIG_(TEE|OPTEE|SUNXI_ION|ION|CMA|DMA_CMA|OF_RESERVED_MEM)=|# CONFIG_(TEE|OPTEE|SUNXI_ION|ION|CMA|DMA_CMA|OF_RESERVED_MEM) is not set)' "$config" || true
+                CONFIG_CAPTURED=1
+                ;;
+        esac
+    done
+    [ "$CONFIG_CAPTURED" -eq 1 ] || echo "NOT_PRESENT: no readable kernel config export"
+    echo
+    echo "== ION device and runtime debugfs =="
+    for path in /dev/ion /sys/class/misc/ion /sys/kernel/debug/ion /sys/kernel/debug/ion/heaps /sys/kernel/debug/ion/clients /sys/bus/platform/drivers/ion-sunxi; do
+        if [ -e "$path" ]; then
+            ls -ld "$path" 2>&1 || true
+        else
+            echo "NOT_PRESENT: $path"
+        fi
+    done
+    for heap in sys_user cma secure; do
+        path="/sys/kernel/debug/ion/heaps/$heap"
+        if [ -r "$path" ]; then
+            echo "-- $path --"
+            cat "$path" 2>&1 || true
+        else
+            echo "NOT_READABLE_OR_ABSENT: $path"
+        fi
+    done
+    echo
+    echo "== loaded ION / TEE modules =="
+    if [ -r /proc/modules ]; then
+        grep -iE 'ion|tee|optee' /proc/modules || echo "NO_MATCHING_MODULES (drivers may be built-in)"
+    else
+        echo "NOT_PRESENT: /proc/modules"
+    fi
+    echo
+    echo "== platform driver binding =="
+    if [ -d /sys/bus/platform/drivers/ion-sunxi ]; then
+        ls -la /sys/bus/platform/drivers/ion-sunxi 2>&1 || true
+    else
+        echo "NOT_PRESENT: /sys/bus/platform/drivers/ion-sunxi"
+    fi
+    echo
+    echo "== ION / TEE / DRM / secure / CMA kernel log lines =="
+    if command -v dmesg >/dev/null 2>&1; then
+        dmesg 2>/dev/null | grep -iE 'Ion:|ion[-_ ]|drm_base|drm_size|tee_base|optee|secure|cma|reserved|BL31|ATF|trusted|api uid' || true
+    else
+        echo "NOT_PRESENT: dmesg utility"
+    fi
+} > "$OUTDIR/tee-ion-runtime.txt"
+
 # Capture physical CMA/memblock layout when the running kernel exposes it via
 # debugfs. These are reads only; do not touch the CMA alloc/free control files.
 {
