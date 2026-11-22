@@ -28,6 +28,16 @@ _start:
     msr     daifset, #0xf
     isb
 
+    /*
+     * Do not touch data memory unless the monitor left both the EL1 MMU
+     * and data cache disabled. With either enabled, wait in-place: no
+     * stack setup and no record writes occur under an unknown translation
+     * or cache-coherency regime.
+     */
+    mrs     x26, sctlr_el1
+    tbnz    x26, #0, .Lunsafe_halt  /* SCTLR_EL1.M */
+    tbnz    x26, #2, .Lunsafe_halt  /* SCTLR_EL1.C */
+
     /* Establish a private 16-byte-aligned stack inside this Image. */
     adrp    x9, __entry_stack_top
     add     x9, x9, :lo12:__entry_stack_top
@@ -42,8 +52,7 @@ _start:
     stp     x23, x24, [x10, #0x20]   /* original SP, initial DAIF */
     str     x25, [x10, #0x30]        /* CurrentEL */
 
-    mrs     x11, sctlr_el1
-    str     x11, [x10, #0x38]
+    str     x26, [x10, #0x38]       /* SCTLR_EL1 observed before memory writes */
     mrs     x11, ttbr0_el1
     str     x11, [x10, #0x40]
     mrs     x11, ttbr1_el1
@@ -65,6 +74,7 @@ _start:
     str     x11, [x10, #0x70]
     dsb     sy
 
+.Lunsafe_halt:
 1:
     wfe
     b       1b
