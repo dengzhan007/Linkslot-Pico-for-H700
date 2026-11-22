@@ -1,0 +1,87 @@
+# RG34XX 原厂 boot.img 内核槽位裸机 payload 路径评估
+
+## 1. 目的与项目定位
+
+本文件评估一个优先于替换 Boot0/U-Boot 的低改动启动路径：保留 RG34XX 当前 Boot ROM、Boot0、TOC1、vendor monitor、AArch32 U-Boot、环境分区和 GPT，只研究把 p4 Android boot image 的 kernel component 替换成一个符合 AArch64 Linux Image 容器头部的 freestanding payload。
+
+这不是 GammaOS Pico 前端移植，也不是最终启动方案决定。产品目标仍是 GammaOS Pico/LK 裸机运行架构 + Linkslot 唯一前端，首期 GB/GBC/GBA。当前没有可刷写固件。本阶段只做静态分析、主机侧容器验证和可回滚的实验设计；未获明确批准前不写测试 SD。
+
+**选择该方向的原因：** 当前 U-Boot 已经能读取 p4、解压 gzip kernel 并把 AArch64 Image 交给后续启动路径。若能够证明它会按可复用的 A64 入口契约交接一个 freestanding Image，我们就不必为了第一份诊断 payload 先替换 Boot0、引入 mainline SPL 或实现自有 SD/DRAM 初始化。
+
+## 2. 当前设备实际 boot 分区证据
+
+用户提供的完整 p4 boot 分区只读镜像：
+
+- 大小：67,108,864 bytes（64 MiB）。
+- SHA-256：`41cfaa8f9ade4a5e05a89188abb7db154243e38b8e19c53b730f0a45ff325516`。
+- Android header：v2，`ANDROID!`，page size 2048，header size 1660，image ID 校验通过。
+- boot image 的 `kernel_addr=0x40080000`、`ramdisk_addr=0x42000000`、`dtb_addr=0x44000000`。
+- kernel component 位于文件偏移 `0x800`，gzip 压缩长度 7,018,071 bytes；解压得到 17,461,256-byte AArch64 Image，SHA-256 `39cf8c3eb9a75ff0eda51b4074cd65860c5aa5386093bcaf69339819421d84b7`。
+- 解压后 Image header magic 为 `ARM\x64`，`text_offset=0x80000`，`image_size=0x1138000`；版本串精确匹配现场 `Linux 4.9.170 #19`（2026-05-26 13:58:08 CST）。
+- Android boot image 还包含 512-byte ramdisk、空 second/recovery_dtbo 和 137,770-byte appended DTB。五个组件及 SHA-1 image ID 按 Android v2 规则验证通过。
+
+主机工具 [inspect_android_bootimg.py](../tools/inspect_android_bootimg.py) 可重复检查 header、component offsets、长度、SHA-256、image ID、gzip kernel、AArch64 Image header 和 appended FDT；它只读输入，不访问块设备。
+
+## 3. 三份 DTB 必须区分
+
+当前已读回的三份树不同，不能直接互换：
+
+| 来源 | 大小 | SHA-256 | 观察到的内容 |
+|---|---:|---|---|
+| p4 Android boot.img appended DTB | 137,770 B | `e2f3ec2aa9ad78ce5ab553dc9f75fc04070fdb7b6cc405ba3f3af79b9fd9d3c0` | `memory@40000000` 声明 512 MiB，chosen bootargs 为旧模板 |
+| TOC1 DTB | 144,384 B | `c28c87380ffab00148bf4dc457e70b8c6c576470dcfbc53df64addddf89603a1` | 与当前设备 H700/`rg34xx_v1` 固件配置对应；BaseOS 对照工具会修改其中的 debug_mode 与五个 USB host controller status |
+| Linux 实际收到的 live FDT | 143,936 B | `ccaf4cd9fe973c17e376f773876486bd479f46e85e18ac25ce3dc33920c4c57f` | 声明 1 GiB RAM；bootargs 带动态 root/partitions/cma/serial 等字段 |
+
+BaseOS-MultiFrontend 的 `tools/kernel_gzip.py` 明确按 Android v2 五组件顺序解析 p4 image，并保留其中原有 DTB；同时它单独解析、修改 TOC1 `dtb`，注释说明 U-Boot 从 package DTB 读取早期启动配置。其 boot chain 文档也记录 U-Boot 从 p4 boot image 取 kernel/ramdisk、从环境与 GPT 构造 bootargs。该设计是“TOC1 DTB 是 U-Boot 工作树、boot.img appended DTB 不一定是最终 FDT”的强线索，但并非对本机当前 U-Boot 二进制的直接执行证明。
+
+因此：任何替换 boot image 的构建器必须按原样保留 appended DTB、ramdisk、header cmdline 和未知组件；payload 不应自行构造一个新的 FDT，也不能假定 Linux 原来接收的是 appended DTB。先静态确定当前 U-Boot 实际使用的 FDT 来源。
+
+## 4. 低改动候选启动流程
+
+```text
+Boot ROM
+  -> 原厂 Boot0（不变）
+  -> 原厂 TOC1 / vendor monitor（不变）
+  -> 原厂 AArch32 U-Boot（不变）
+  -> sunxi_flash read 45000000 boot
+  -> bootm 45000000：验证 Android v2、解压 gzip kernel 到原 kernel slot
+  -> 原厂 monitor / A32-to-A64 handoff（实际 ABI 待静态确认）
+  -> AArch64 freestanding payload
+```
+
+当前环境中已读到 `boot_normal=sunxi_flash read 45000000 boot;bootm 45000000`。BaseOS 的 H700 U-Boot Unicorn trace 在各目标 profile 上到达 `boot_jump_linux`，记录 entry `0x40080000`、FDT `0x44000000`；但 trace 在最终 kernel-jump hook 停止，且其文档说明没有执行到 monitor SMC。因此这只能证明 loader 的预期参数，不能单独证明本机 monitor ERET 或寄存器状态。
+
+该候选要求验证：
+
+1. 当前 RG34XX `#19` 所配 U-Boot 的实际 binary 确实识别 p4 Android v2、按当前 gzip selector 解压 kernel，并以 `0x40080000` 为 Image 入口。
+2. 当前 U-Boot 在最终跳转前的 A32 指令/调用链，明确进入 vendor monitor 的服务号、寄存器参数和 cache/MMU 状态；不得只引用其他 H700 build 的 Unicorn trace。
+3. monitor 对 A64 目标的实际 ERET 状态，包括 CurrentEL、SPSR_EL3/ELR_EL3 的来源、x0..x3、DAIF、中断、MMU/cache/TLB 和 FDT 指针。
+4. 原厂 U-Boot 最终传入的 FDT 是否来自 TOC1 DTB，并解释从 TOC1 static DTB 到 143,936-byte live FDT 的改动来源。
+
+## 5. 第一份 payload 的边界
+
+在上述调用契约全部得到静态确认前，不生成可刷写镜像。确认后第一份 payload 只做入口诊断，不实现 allocator、文件系统、HAL 或 Linkslot：
+
+- 采用带 AArch64 Image header 的 freestanding binary，header 中 code0 分支跳到自身 `_start`；保留 `ARM\x64`、text_offset 和 image_size 字段的一致性。
+- 先使用 stock kernel slot `0x40080000`，输出尺寸严格受 host-built image_size 限制；代码、静态数据、BSS、诊断记录和临时栈全部由 payload linker script 在自身镜像范围内分配。
+- 不将 `[0x7ec00000,0x7fc00000)`、CMA `[0x77c00000,0x7bc00000)`、monitor `[0x48000000,0x49000000)`、framebuffer `[0x7bf24800,0x7c076000)` 或其它 unknown reserved entries 用作堆/栈。
+- 入口最先捕获 x0..x3、SP、CurrentEL、DAIF、SCTLR_EL1、TTBR0/1_EL1、MAIR_EL1、VBAR_EL1 等可读状态；x0 是否为 FDT 指针需要检查 magic/totalsize 后才确认。
+- 首轮不启用 MMU、不触发 SMC、不重新初始化 DRAM、不改变电源/显示时序；日志优先使用经确认的早期 UART。若 UART/时钟/pinctrl 继承状态不确定，使用无外设访问的内存记录/停机路径，不编造输出。
+- 不保留或调用 Linux 入口代码、Linux exception vectors 或 Linux 驱动；这是真正的 freestanding entry probe。
+
+这个诊断阶段只需要在已被原厂 bootloader 读取的 kernel image 槽位内占用有限、显式链接的空间；它**不等于**已建立系统 RAM allocator。要进入 HAL、SD DMA、图形 framebuffer 双缓冲或多核心运行，仍需独立证明可用内存 ownership。
+
+## 6. 实现与验收顺序
+
+1. **离线镜像检查（已开始）：** 验证 Android v2 header、组件布局、image ID、kernel gzip、AArch64 Image header、appended DTB；工具与合成测试不得涉及设备。
+2. **当前 U-Boot 静态审计：** 取得与当前 p4/TOC1 配套的实际 U-Boot binary；定位 `bootm` 解压输出、kernel jump 参数、最终 SMC 和 FDT 选择。BaseOS prepared U-Boot 与现场 hash 不同，不能直接将其指令偏移套到现场 binary。
+3. **主机侧 payload builder：** 只在第 2 步确认后实现，重建 Android v2 image 时仅变更 kernel component 与必需的尺寸/image ID；ramdisk、second、recovery_dtbo、appended DTB、cmdline 及未使用 p4 尾部必须逐字节保持或按明确规则保留，并通过 round-trip/hash/边界测试。
+4. **入口模拟：** 把实际 U-Boot handoff 和 vendor monitor 交接模型接到 payload，断言真实入口寄存器、EL、异常屏蔽、栈和 FDT。模拟结果不能替代 RG34XX 非 SP 实机验收。
+5. **硬件试验评审：** 只有前四步通过后，才单独制作测试卡镜像；原始整卡/Boot0/TOC1/U-Boot 必须有经校验备份，试验不覆盖用户日常卡。此项需要用户明确批准后才执行。
+6. **后续移植：** payload 能稳定冷启动并记录入口状态后，再做早期日志、timer/GPIO/input、display/backlight、SD/filesystem、audio、PMIC full poweroff；之后才是 core ABI 和 Linkslot 大版本同步。
+
+## 7. 失败时的回退路线
+
+若当前 U-Boot/monitor 只能接受 Linux 特定入口，或不能安全地交接任意 freestanding A64 Image，则回到项目 `docs/architecture.md` 已保留的备选路线：自有 A32 BL33 handoff adapter，必要时再评估 A64 SPL + vendor monitor。BaseOS-MultiFrontend 的 `native/entry32.S`、`spl/README.md` 和 monitor verifier 是研究参考，但其 RG34XX SP/RG40XXV 结果不等于 RG34XX 非 SP 实机通过。
+
+本评估不改变“不刷 Boot0、不改 TOC1、不写 U-Boot、不试 payload 地址”的当前安全约束。
