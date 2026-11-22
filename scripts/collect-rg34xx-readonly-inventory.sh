@@ -166,19 +166,70 @@ read_exact "boot0-primary" 16 256 "boot0-primary.bin"
 read_exact "boot0-secondary" 512 256 "boot0-secondary.bin"
 read_exact "toc1-package" 32800 2560 "toc1-package.bin"
 
-# The U-Boot environment is a separate GPT partition on BaseOS cards. Capture
-# only its first 64 KiB when a by-partlabel link is available; never guess p3.
-ENV_PART="/dev/disk/by-partlabel/env"
-if [ -b "$ENV_PART" ]; then
+# Find the environment partition by its exact GPT PARTNAME, not by a
+# hard-coded partition number. Older userspaces may omit /dev/disk/by-partlabel.
+ENV_PART=""
+ENV_SOURCE=""
+ENV_MATCHES=0
+ENV_PART_SIZE=0
+for node in /sys/class/block/"$BASE"p*; do
+    [ -r "$node/uevent" ] || continue
+    if grep -qx 'PARTNAME=env' "$node/uevent"; then
+        ENV_MATCHES=$((ENV_MATCHES + 1))
+        ENV_DEVNAME="$(sed -n 's/^DEVNAME=//p' "$node/uevent")"
+        ENV_PART_SIZE="$(cat "$node/size" 2>/dev/null || echo 0)"
+        case "$ENV_DEVNAME" in
+            "$BASE"p[0-9]*) ;;
+            *)
+                echo "error: env PARTNAME resolved to an unexpected device: $ENV_DEVNAME" >&2
+                exit 1
+                ;;
+        esac
+        ENV_PART="/dev/$ENV_DEVNAME"
+        ENV_SOURCE="sysfs PARTNAME=env"
+    fi
+done
+
+[ "$ENV_MATCHES" -le 1 ] || {
+    echo "error: multiple partitions advertise PARTNAME=env" >&2
+    exit 1
+}
+
+# Compatibility fallback for systems exposing the by-partlabel symlink but
+# not partition uevent metadata. The link name is semantic; no pN is assumed.
+if [ "$ENV_MATCHES" -eq 0 ] && [ -b /dev/disk/by-partlabel/env ]; then
+    ENV_PART="/dev/disk/by-partlabel/env"
+    ENV_SOURCE="by-partlabel/env"
+    if command -v blockdev >/dev/null 2>&1; then
+        ENV_PART_SIZE="$(blockdev --getsz "$ENV_PART" 2>/dev/null || echo 0)"
+    fi
+fi
+
+if [ -n "$ENV_PART" ]; then
+    [ -b "$ENV_PART" ] || {
+        echo "error: discovered env partition is not a block device: $ENV_PART" >&2
+        exit 1
+    }
+    case "$ENV_PART_SIZE" in
+        ''|*[!0-9]*)
+            echo "error: invalid env partition size: $ENV_PART_SIZE" >&2
+            exit 1
+            ;;
+    esac
+    [ "$ENV_PART_SIZE" -ge 128 ] || {
+        echo "error: env partition is smaller than 64 KiB or its size is unknown" >&2
+        exit 1
+    }
     dd if="$ENV_PART" of="$OUTDIR/env-partition-first64k.bin" bs=512 count=128 2>"$OUTDIR/env-dd.txt"
     actual="$(wc -c < "$OUTDIR/env-partition-first64k.bin" | tr -d ' ')"
     [ "$actual" -eq 65536 ] || {
         echo "error: short read from $ENV_PART" >&2
         exit 1
     }
-    echo "env_partition_capture=first_64KiB" >> "$OUTDIR/summary.txt"
+    sha256sum "$OUTDIR/env-partition-first64k.bin" >> "$OUTDIR/raw-sha256.txt" 2>/dev/null || true
+    echo "env_partition_capture=first_64KiB source=$ENV_SOURCE device=${ENV_PART##*/}" >> "$OUTDIR/summary.txt"
 else
-    echo "env_partition_capture=skipped_no_by-partlabel-env" >> "$OUTDIR/summary.txt"
+    echo "env_partition_capture=skipped_no_PARTNAME_env" >> "$OUTDIR/summary.txt"
 fi
 
 {
