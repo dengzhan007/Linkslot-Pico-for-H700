@@ -58,9 +58,27 @@ Boot ROM
 3. monitor 对 A64 目标的实际 ERET 状态，包括 CurrentEL、SPSR_EL3/ELR_EL3 的来源、x0..x3、DAIF、中断、MMU/cache/TLB 和 FDT 指针。
 4. 原厂 U-Boot 最终传入的 FDT 是否来自 TOC1 DTB，并解释从 TOC1 static DTB 到 143,936-byte live FDT 的改动来源。
 
+
+### 4.1 现场 U-Boot 的 vendor A64 handoff 已直接定位
+
+现场 TOC1 的 U-Boot SHA-256 为 `4d60a22ff13eac00dba89e0ee7df52a49852c0d9d856bec545ce40126191d127`。对这个实际 binary 的 Thumb/A32 混合代码反汇编，已找到 `0x8000FF04` → `SMC #0` 的真实调用链，而不是继续依赖 BaseOS prepared U-Boot 的 Unicorn trace。完整字段和偏移见[现场 U-Boot handoff 二进制审计](rg34xx-uboot-handoff-binary-audit.md)。
+
+关键结论：
+
+- `boot_jump_linux` 形态的函数在 `0x1474` 收到 `images` 结构指针，`r6 = [images + 0x60]`，后续作为 kernel entry 使用。
+- `images.ft_addr` 与 `images.ft_len` 分别从 `+0x6c`、`+0x70` 读取。
+- U-Boot 调用 `memcpy(0x44000000, images.ft_addr, images.ft_len)`，将当前 FDT 复制到 `0x44000000`。
+- 然后设置 `r0=0x8000FF04`、`r1=images.ep`、`r2=0x44000000`、`r3=1`，经 `BLX` 调用 A32 SMC wrapper 并执行 `SMC #0`。
+- 另一个 AArch32 fallback 分支通过 `BLX r6` 进入 kernel，且传入 `(r0=0, r1=machine-id, r2=FDT)`；这独立确认 `r6` 是 kernel entry、`r5` 保存 FDT 目标地址。
+- U-Boot 2018.05 `bootm_headers_t` 的 `ep`、`ft_addr`、`ft_len` 字段顺序与目标二进制 `+0x60/+0x6c/+0x70` 的访问吻合。现场 `ep` 与 Android header `kernel_addr=0x40080000` 对应是强证据；还需核对实际 decompressor/load path 来最终确认运行时 entry。
+
+所以当前已找到原厂启动链使用的真实 A32→A64 monitor handoff 服务和参数布局。保留 Boot0/TOC1/monitor/U-Boot、只替换 p4 kernel component 是当前首选移植路径，不再与重写 SPL 方案并列为同等优先级。
+
+尚未完成的两项不是 handoff 服务号本身，而是：实际 `images.ep`/kernel decompressor 的最终落点核验；`images.ft_addr` 最初来自哪份 DTB，以及它如何从旧的 512 MiB appended tree 变成 Linux 收到的 1 GiB live FDT。
+
 ## 5. 第一份 payload 的边界
 
-在上述调用契约全部得到静态确认前，不生成可刷写镜像。确认后第一份 payload 只做入口诊断，不实现 allocator、文件系统、HAL 或 Linkslot：
+当前 U-Boot 已确认存在 vendor SMC handoff 调用点和参数准备路径；但 monitor 的 ERET 状态、现场 `images.ep` 实值及 FDT 来源仍待核验。在这些最后门槛完成前，不生成可刷写镜像。之后第一份 payload 只做入口诊断，不实现 allocator、文件系统、HAL 或 Linkslot：
 
 - 采用带 AArch64 Image header 的 freestanding binary，header 中 code0 分支跳到自身 `_start`；保留 `ARM\x64`、text_offset 和 image_size 字段的一致性。
 - 先使用 stock kernel slot `0x40080000`，输出尺寸严格受 host-built image_size 限制；代码、静态数据、BSS、诊断记录和临时栈全部由 payload linker script 在自身镜像范围内分配。
@@ -73,8 +91,8 @@ Boot ROM
 
 ## 6. 实现与验收顺序
 
-1. **离线镜像检查（已开始）：** 验证 Android v2 header、组件布局、image ID、kernel gzip、AArch64 Image header、appended DTB；工具与合成测试不得涉及设备。
-2. **当前 U-Boot 静态审计：** 取得与当前 p4/TOC1 配套的实际 U-Boot binary；定位 `bootm` 解压输出、kernel jump 参数、最终 SMC 和 FDT 选择。BaseOS prepared U-Boot 与现场 hash 不同，不能直接将其指令偏移套到现场 binary。
+1. **离线镜像检查（已完成第一轮）：** 验证 Android v2 header、组件布局、image ID、kernel gzip、AArch64 Image header、appended DTB；工具与合成测试不得涉及设备。
+2. **当前 U-Boot handoff 静态审计（已定位核心调用）：** 现场 U-Boot 已找到 `0x8000FF04` → `SMC #0` 的直接调用链，并确认 `images.ep` 与 FDT 的参数流；BaseOS prepared U-Boot 与现场 hash 不同，所有现场偏移均来自目标 TOC1 U-Boot。仍需验证 gzip decompressor 的输出地址、`images.ft_addr` 来源与 FDT fixups，并静态核对 monitor ERET 状态。
 3. **主机侧 payload builder：** 只在第 2 步确认后实现，重建 Android v2 image 时仅变更 kernel component 与必需的尺寸/image ID；ramdisk、second、recovery_dtbo、appended DTB、cmdline 及未使用 p4 尾部必须逐字节保持或按明确规则保留，并通过 round-trip/hash/边界测试。
 4. **入口模拟：** 把实际 U-Boot handoff 和 vendor monitor 交接模型接到 payload，断言真实入口寄存器、EL、异常屏蔽、栈和 FDT。模拟结果不能替代 RG34XX 非 SP 实机验收。
 5. **硬件试验评审：** 只有前四步通过后，才单独制作测试卡镜像；原始整卡/Boot0/TOC1/U-Boot 必须有经校验备份，试验不覆盖用户日常卡。此项需要用户明确批准后才执行。
