@@ -60,7 +60,7 @@ for object in "$OUT_DIR/compile_probe.o" "$OUT_DIR/compile_probe_asm.o" "$OUT_DI
 done
 
 echo "H700 compile-only architecture check passed."
-echo "Note: this does not provide a C/C++ runtime, produce a bootable payload, or validate a U-Boot handoff."
+echo "Note: compile probes and the passive Image artifact do not provide a C/C++ runtime, tested bootable firmware, or a validated device handoff."
 
 # Build a passive, Image-contained AArch64 entry probe. This is a host-side
 # static artifact only; it is not inserted into an Android boot image and is
