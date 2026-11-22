@@ -101,21 +101,35 @@ def inspect_env(data: bytes, source: str = "") -> dict[str, Any]:
     matches = _crc_matches(data, stored_crc)
 
     # Allwinner redundant env commonly stores a flags byte after the CRC.
-    # Prefer offset 5 only when the byte looks like a flag and it yields a
-    # populated key/value table. Otherwise parse the conventional offset 4.
+    # When a CRC match exists, use the matching data offset as stronger
+    # evidence than byte-shape heuristics. Otherwise report a parse candidate.
     offset4_vars, offset4_warnings = _parse_variables(data, 4)
     offset5_vars, offset5_warnings = _parse_variables(data, 5)
     flag = data[4]
-    if flag in (0, 1) and len(offset5_vars) >= len(offset4_vars):
+    matched_offsets = {item["data_offset"] for item in matches}
+    if len(matched_offsets) == 1:
+        data_offset = next(iter(matched_offsets))
+    elif flag in (0, 1) and len(offset5_vars) >= len(offset4_vars):
         data_offset = 5
-        variables = offset5_vars
-        parse_warnings = offset5_warnings
-        header_format = "CRC32 + flags byte + NUL-separated variables (candidate)"
     else:
         data_offset = 4
+
+    if data_offset == 5:
+        variables = offset5_vars
+        parse_warnings = offset5_warnings
+        header_format = (
+            "CRC32 + flags byte + NUL-separated variables (CRC matched)"
+            if 5 in matched_offsets else
+            "CRC32 + flags byte + NUL-separated variables (candidate)"
+        )
+    else:
         variables = offset4_vars
         parse_warnings = offset4_warnings
-        header_format = "CRC32 + NUL-separated variables (candidate)"
+        header_format = (
+            "CRC32 + NUL-separated variables (CRC matched)"
+            if 4 in matched_offsets else
+            "CRC32 + NUL-separated variables (candidate)"
+        )
 
     return {
         "format": "Allwinner/U-Boot environment (structural candidate)",
