@@ -14,7 +14,7 @@
 
 1. **RG34XX 型号固件静态证据**：来自 BaseOS-MultiFrontend 固定的 `rg34xx` prepared 输入、兼容性清单、U-Boot/Boot0 静态分析和模拟器执行。
 2. **其他 H700 实验机的实机证据**：BaseOS 原生 SPL 项目记录了 RG34XX SP（2 GiB LPDDR4）及 RG40XX V（1 GiB LPDDR3）实验。它能证明某些共享 H700 monitor/启动机制可工作，但不能代替 RG34XX 非 SP 的 1 GiB LPDDR4 验收。
-3. **本项目 RG34XX 现场证据**：已读回本机 Boot0/TOC1/U-Boot/monitor、完整 env、live FDT、GPT、内存映射和分区信息；已验证 p3 内 128 KiB U-Boot env CRC 和完整 p3 prepared hash，亦已从 boot_fb0 与 disp_reserve 交叉确认 framebuffer 物理范围。Boot0 副本选择、DRAM training 的完整语义、monitor/secure/DMA 剩余内存约束、入口寄存器状态及最小 AArch64 payload 冷启动仍待验证。
+3. **本项目 RG34XX 现场证据**：已读回本机 Boot0/TOC1/U-Boot/monitor、完整 env、live FDT、GPT、内存映射和分区信息；已验证 p3 内 128 KiB U-Boot env CRC 和完整 p3 prepared hash，亦已从 boot_fb0 与 disp_reserve 交叉确认 framebuffer 物理范围。Boot0 本次实际选择（LBA 16 是高置信候选但未直接观测）、DRAM training 的完整语义、monitor/secure/DMA 剩余内存约束、入口寄存器状态及最小 AArch64 payload 冷启动仍待验证。
 
 BaseOS 参考源本次按 `main` 快照审查，commit：[`cbe253a43f46cf551cc9a6c79a84015bde3686cf`](https://github.com/dengzhan007/BaseOS-MultiFrontend/commit/cbe253a43f46cf551cc9a6c79a84015bde3686cf)。
 
@@ -148,6 +148,6 @@ BaseOS 的 native SPL / monitor / A32 loader 是当前最有价值的技术参�
 - live FDT、/proc/iomem 与 MemTotal 一致显示内核可见 1 GiB RAM；TOC1 内静态 DTB 仍声明 512 MiB。live FDT 的 boot_disp/boot_fb0 与 bootargs disp_reserve 精确给出 framebuffer 区间 `[0x7bf24800, 0x7c076000)`；没有标准 /reserved-memory 节点仍不能据此认定 monitor、secure world 或其他 DMA carveout 不存在。
 - LBA 16 位置 Boot0 头部声明 128 KiB，LBA 512 位置头部声明 64 KiB；两者 checksum 均通过，但主体 hash 不同。不能将差异简单归因于首扇区训练改写，也没有证明当前 BROM 使用哪份。
 - TOC1 中 monitor 与 BaseOS RG34XX 固定指纹完全一致；U-Boot/DTB 呈现 gzip 优化特征，但现场 TOC1 和 U-Boot 都不匹配固定输入包/组件指纹。
-- GPT p6=UDISK、p7=primary 与 /proc/cmdline 的 appfs@p6、UDISK@p7 使用不同命名层；运行时 p6 ext4=/data、p7 vfat=/mnt/sdcard，逻辑用途与 bootargs 相符。第三轮完整 p3 env CRC 唯一匹配 128 KiB 映像，25 个变量解析无警告，完整 16 MiB p3 hash 与 BaseOS prepared env 区域完全一致。目标 U-Boot 含 update bootcmd/part info 路径字符串，runtime cmdline 与 setargs_mmc 相符；尚无实际函数执行 trace。FDT 检查器已解析 framebuffer `[0x7bf24800,0x7c076000)`。
+- GPT p6=UDISK、p7=primary 与 /proc/cmdline 的 appfs@p6、UDISK@p7 使用不同命名层；运行时 p6 ext4=/data、p7 vfat=/mnt/sdcard，逻辑用途与 bootargs 相符。第三轮完整 p3 env CRC 唯一匹配 128 KiB 映像，25 个变量解析无警告，完整 16 MiB p3 hash 与 BaseOS prepared env 区域完全一致。H616-specific BROM 资料支持 LBA 16/LBA 512 为两处候选位置，LBA 16 最可能为本次正常启动来源。目标 U-Boot 含 update bootcmd/part info 路径字符串，runtime cmdline 与 setargs_mmc 相符；尚无实际函数执行 trace。FDT 检查器已解析 framebuffer `[0x7bf24800,0x7c076000)`。
 
 **当前阶段判断：** 三轮现场采集和完整 env CRC/hash 验证已完成；启动链安全边界、Boot0 当前选择及入口 ABI 审查尚未完成。Issue #2 仍不得据猜测地址构建或启动 payload；在明确 Boot0 选择及 monitor/DRAM 占用前，不触碰启动区域。
