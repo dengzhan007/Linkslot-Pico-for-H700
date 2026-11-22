@@ -72,7 +72,9 @@ def validate_stock_profile(report: dict[str, Any]) -> int:
     return slot_bytes
 
 
-def validate_payload_image(payload: bytes, slot_bytes: int) -> dict[str, Any]:
+def validate_payload_image(
+    payload: bytes, slot_bytes: int, max_output_bytes: int, max_image_size: int
+) -> dict[str, Any]:
     if len(payload) < 64 or payload[0x38:0x3C] != b"ARM\x64":
         raise PayloadBuildError("payload must have an AArch64 Image header (ARM\\x64)")
     code0, code1 = struct.unpack_from("<2I", payload, 0)
@@ -90,6 +92,16 @@ def validate_payload_image(payload: bytes, slot_bytes: int) -> dict[str, Any]:
     if image_size > slot_bytes or len(payload) > slot_bytes:
         raise PayloadBuildError(
             f"AArch64 Image exceeds kernel slot before ramdisk (0x{slot_bytes:x} bytes)"
+        )
+    if len(payload) > max_output_bytes:
+        raise PayloadBuildError(
+            "payload output exceeds the uncompressed size of the currently working stock kernel "
+            f"({max_output_bytes} bytes); confirm CONFIG_SYS_BOOTM_LEN before raising this bound"
+        )
+    if image_size > max_image_size:
+        raise PayloadBuildError(
+            "payload Image image_size exceeds the currently working stock kernel Image image_size "
+            f"(0x{max_image_size:x}); confirm the loader's output ceiling before raising this bound"
         )
     if EXPECTED_KERNEL_ADDR - DRAM_BASE != text_offset:
         raise PayloadBuildError("kernel_addr and Image text_offset are inconsistent")
@@ -132,7 +144,16 @@ def build_candidate_partition(
 
     original_report = android.inspect_android_boot_image(original_partition)
     slot_bytes = validate_stock_profile(original_report)
-    payload_report = validate_payload_image(payload_image, slot_bytes)
+    original_arm64 = original_report["kernel"].get("arm64_image")
+    if not original_arm64 or not original_arm64.get("image_size"):
+        raise PayloadBuildError("original gzip kernel has no validated AArch64 Image header")
+    max_output_bytes = original_report["kernel"].get("uncompressed_bytes")
+    if not isinstance(max_output_bytes, int) or max_output_bytes <= 0:
+        raise PayloadBuildError("original kernel uncompressed output size is unavailable")
+    max_image_size = int(original_arm64["image_size"], 16)
+    payload_report = validate_payload_image(
+        payload_image, slot_bytes, max_output_bytes, max_image_size
+    )
     compressed_kernel = gzip.compress(payload_image, compresslevel=9, mtime=0)
     if not compressed_kernel:
         raise PayloadBuildError("gzip produced an empty kernel component")
@@ -215,6 +236,8 @@ def build_candidate_partition(
         "ramdisk_address": f"0x{EXPECTED_RAMDISK_ADDR:x}",
         "fdt_handoff_address": f"0x{EXPECTED_DTB_ADDR:x}",
         "kernel_slot_bytes_before_ramdisk": slot_bytes,
+        "validated_decompressed_output_ceiling_bytes": max_output_bytes,
+        "validated_aarch64_image_size_ceiling": f"0x{max_image_size:x}",
         "original_kernel": {
             "bytes": original_report["components"]["kernel"]["size"],
             "sha256": original_report["components"]["kernel"]["sha256"],
