@@ -77,6 +77,15 @@ e6c20e3a54c51b9336c798e3a4fa1ca6c45b28c6f70456e2db9c252aa4ba4604
 
 现场 monitor SHA-256 与 BaseOS RG34XX 固件资料中固定的 vendor monitor SHA-256 完全一致。这是目前最强的组件复用证据；它只确认 monitor 二进制身份，不代表其运行时状态、可调用服务或 payload handoff ABI 已经确认。
 
+现场 monitor 组件还包含如下静态字符串特征：
+
+- 构建标记：Built : 16:02:57, 2024-06-26。
+- 平台源文件路径：plat/sun50iw9p1/bl31_sunxi_setup.c；并包含 allwinner,h616、allwinner,t507 平台标识。
+- 存在 BL31 image-entry / context management 字符串，以及 PSCI CPU_ON、CPU_OFF、CPU_SUSPEND、System Suspend 等处理路径名称。
+- 同一二进制包含 “No TSP provided by BL2 boot loader” 和 “Platform has not exported a PSCI System Off/Reset hook” 等诊断字符串。
+
+这些是 monitor 二进制内部的编译/诊断字符串，支持其属于 Allwinner sun50iw9p1 BL31/ATF monitor 的判断；它们不等于本次启动日志实际打印了这些 warning，也不能仅凭字符串确认 TSP、PSCI hook 的现场运行状态或 vendor SMC 服务表。当前只确认二进制 hash 与已知 BaseOS RG34XX monitor 相同。
+
 ### 5.2 U-Boot
 
 现场 U-Boot SHA-256 与 BaseOS manifest/kernel-gzip.json 所记录的 RG34XX 原始 U-Boot 输入 SHA-256 不同。其偏移 63128（0xF698）处包含 40f20123，紧邻上下文与 BaseOS kernel_gzip.py 所修改的压缩选择指令位置一致。将该指令恢复为原始字节并重算 U-Boot checksum 后，U-Boot hash 仍不等于已固定的原始输入 hash。因此只能判断它具有该优化补丁的特征，不能说它是已知准备镜像中的精确 U-Boot 文件。
