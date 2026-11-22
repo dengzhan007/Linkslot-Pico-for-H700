@@ -61,6 +61,25 @@ TOC1 是报告分支 `rg34xx-inventory-20261122-195053.zip` 中的现场读回�
 
 另一条路径将同一个 `r6` 作为 `r1`、FDT 目标地址作为 `r2`，并以 `r3=1` 调用 Function ID `0x8000FF04`。它与 BaseOS H700 native handoff 研究记录的参数顺序 `r0=0x8000ff04, r1=kernel_entry, r2=FDT, r3=1` 精确吻合。现在这个服务调用已直接在 RG34XX 当前 U-Boot binary 中找到。
 
+### 2.4 进入 SMC 前的 cache / CPU 状态清理
+
+handoff 函数在真正选择 SMC/A32 分支前还执行了 `0x14D0 -> 0x0C7C`。现场 binary 的直接控制流为：
+
+1. `0x0C7C` 设置 `r0=3` 并跳入 `0x0C3E`。
+2. `0x0C3E` 调用 `0x1600`；该 helper 通过 `MSR CPSR_c` 将 CPSR 的 I/F mask bits (`0xC0`) 置位，因此这一路径会屏蔽 IRQ/FIQ。
+3. 由于此处 `r0=3`，`0x0C3E` 对参数最高位的测试为 false，不会进入 `0x0C4A` 的另一条分支。那条未走分支会调用 `0x195A`，在满足 SCTLR.C 条件时 clean D-cache 后清除 SCTLR.M/C；**当前 `r0=3` 路径没有执行该分支**。
+4. 实际走的 `0x0C66` 分支先调用 `0x18D6`，清 SCTLR.I（临时关闭 I-cache）；再调用 `0x0B64`，执行 I-cache invalidate (`MCR p15,c7,c5,0`) 和 branch predictor invalidate (`MCR p15,c7,c5,6`)，带 DSB/ISB。
+5. `0x0B7E` 通过 `BLX` 进入 A32 helper `0x0A5C`。该 helper读取 CLIDR/CCSIDR cache geometry 并遍历 set/way，执行 `MCR p15,c7,c14,2`，即 D-cache clean by set/way。
+6. 再次调用 `0x0B64` 失效 I-cache/branch predictor，最后 `0x18C4` 设置 SCTLR.I 恢复 I-cache。
+
+所以这个具体 handoff 路径的静态指令证据是：IRQ/FIQ mask 被置位；D-cache 执行 set/way clean；I-cache/branch predictor 被失效后重新启用。因为 `r0=3`，不能把这条路径描述成关闭 MMU 或关闭 D-cache。也不能只凭这段 helper 推断调用 SMC 时 SCTLR.M/C 的全部现场值；`0x2BC0` 等其它前置函数、U-Boot relocation 和 monitor 服务自身仍需纳入最终入口状态确认。
+
+### 2.5 SMC 与 AArch32 fallback 的选择条件
+
+`0x14D4` 先检查传入 `flag` 的 `0x200` 位；同版本 U-Boot `BOOTM_STATE_OS_FAKE_GO` 正是 `0x00000200`。该位为 1 时，函数清理栈并返回，不执行实际 OS handoff。对于正常非 fake-go 路径，`0x14D6` 调用 `0x27DC`；该 helper 从全局基址 `0x4A000000` 附近读取 byte offset `0x4E9`，返回其是否等于 1。返回非零时进入 `0x14DC..0x14E4` 的 vendor SMC 路径；返回零时进入 `0x14F4..0x14F8` 的传统 AArch32 fallback（`r0=0`、`r1=machine-id`、`r2=FDT`、`BLX r6`）。目前只将 `+0x4E9 == 1` 解释为二进制中的路径选择条件；尚无证据给这个字段命名为某个特定设备能力或固件状态。
+
+上述 `BOOTM_STATE_OS_FAKE_GO` 数值对照来自 [U-Boot v2018.05 include/image.h](https://github.com/u-boot/u-boot/blob/v2018.05/include/image.h)，其中 `BOOTM_STATE_OS_FAKE_GO=0x00000200`。
+
 ## 3. 与当前 p4 Android boot image 对应
 
 用户上传的当前 p4 boot partition SHA-256 为 `41cfaa8f9ade4a5e05a89188abb7db154243e38b8e19c53b730f0a45ff325516`。其 Android v2 header 字段 `kernel_addr=0x40080000`，`ramdisk_addr=0x42000000`，`dtb_addr=0x44000000`。压缩 kernel 解压后为 `ARM\x64` AArch64 Image，`text_offset=0x80000`，版本为 Linux 4.9.170 `#19`，与现场 runtime 完全匹配。
@@ -89,7 +108,7 @@ boot_normal = sunxi_flash read 0x45000000 boot; bootm 0x45000000
 
 1. 静态确认当前 U-Boot 的 Android gzip 解压写入目标和输出长度限制，核实 `images.ep` 实值为 `0x40080000`。
 2. 确认 `images.ft_addr` 的原始 FDT 来源，以及 TOC1 DTB、p4 appended DTB、live FDT 的具体 fixup 顺序。p4 appended DTB 声明 512 MiB，live FDT 声明 1 GiB；不得用 p4 里的旧树替代 live 树。
-3. 用当前相同 hash 的 monitor binary 检查 `0x8000FF04` 服务的实际 ERET 状态、目标 EL/SPSR、cache/MMU/TLB、DAIF 和 x0..x3。BaseOS 对照研究的 `SPSR=0x3c5` 可作为校验目标，不能先当作 RG34XX 现场已直接观测。
+3. 用当前相同 hash 的 monitor binary 检查 `0x8000FF04` 服务的实际 ERET 状态、目标 EL/SPSR、cache/MMU/TLB、DAIF 和 x0..x3。BaseOS 的 monitor verifier 以实际 vendor monitor 指令完成了仿真 ERET：`ELR=0x40080000`、`SPSR=0x3c5`、`x0=0x44000000`、`x1..x3=0`；该结果是 emulation/model evidence，不是 RG34XX 现场硬件寄存器捕获，也不能替代当前 U-Boot 最终 CPU 状态核对。
 4. 主机侧构建一个带同样 ARM64 Image header、`text_offset=0x80000`、gzip 压缩的入口诊断 payload；仅重建 Android v2 kernel component 和必要的 size/image ID，保留 ramdisk、second、recovery_dtbo、appended DTB、cmdline 与 p4 未使用尾部。
 5. 完成入口模拟和恢复评审后，才考虑独立测试卡。没有用户明确批准前，不改 SD/Boot0/TOC1/U-Boot，不试刷 payload。
 
