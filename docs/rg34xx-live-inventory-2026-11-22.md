@@ -398,7 +398,8 @@ Linux OP-TEE 驱动在通过 DT 选择 SMC conduit 后，会调用 OP-TEE API UI
 
 ### 9.4 ION heap 声明没有给出固定物理范围
 
-live FDT 还声明了 Allwinner ION heap：
+live FDT 还声明了三类 Allwinner ION heap：
+- `/ion/heap_sys_user@0`：`compatible="allwinner,sys_user"`，`heap-name="sys_user"`，`heap-base=0`，`heap-size=0`，`heap-type="ion_system"`。
 - `/ion/heap_cma@0`：`compatible="allwinner,cma"`，`heap-name="cma"`，`heap-base=0`，`heap-size=0`，`heap-type="ion_cma"`。
 - `/ion/heap_secure@0`：`compatible="allwinner,secure"`，`heap-name="secure"`，`heap-base=0`，`heap-size=0`，`heap-type="ion_secure"`。
 
