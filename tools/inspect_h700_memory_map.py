@@ -96,7 +96,7 @@ def _parse_debugfs(text: str) -> dict[str, Any]:
             current_attr = line[1:-1].strip()
             continue
 
-        if current_section == "cma debugfs" and current_attr:
+        if current_section == "cma debugfs" and current_attr and line.strip():
             value = line.strip()
             try:
                 parsed: int | str = int(value, 0)
