@@ -97,6 +97,20 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertNotIn('/alloc"', self.source)
         self.assertNotIn('/free"', self.source)
 
+    def test_tee_ion_runtime_capture_is_read_only(self):
+        self.assertIn('> "$OUTDIR/tee-ion-runtime.txt"', self.source)
+        self.assertIn('/proc/config.gz', self.source)
+        self.assertIn('CONFIG_(TEE|OPTEE|SUNXI_ION|ION|CMA|DMA_CMA|OF_RESERVED_MEM)', self.source)
+        self.assertIn('/dev/ion', self.source)
+        self.assertIn('/sys/kernel/debug/ion/heaps/$heap', self.source)
+        self.assertIn('drm_base|drm_size|tee_base', self.source)
+        self.assertIn('/proc/modules', self.source)
+        self.assertIn('/sys/bus/platform/drivers/ion-sunxi', self.source)
+        self.assertIn('cat "$path"', self.source)
+        self.assertNotRegex(self.source, r">\\s*/sys/(?:kernel/debug|bus/platform|class/misc)/")
+        self.assertNotIn('ION_IOC_', self.source)
+        self.assertNotIn('GET_DRM_INFO', self.source)
+
     def test_root_argument_is_recorded_even_when_disk_is_explicit(self):
         root_parse = self.source.index('for arg in $(cat /proc/cmdline')
         disk_guard = self.source.index('if [ -z "$DISK" ]; then')
