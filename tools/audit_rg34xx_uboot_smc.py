@@ -320,7 +320,7 @@ def find_thumb_smc_sites(data: bytes) -> list[dict[str, Any]]:
                 "file_offset": f"0x{offset:x}",
                 "immediate": first & 0xF,
                 "bytes": data[offset:offset + 4].hex(),
-                "disassembly": disassemble_thumb_window(data, offset, 0x20),
+                "disassembly": disassemble_thumb_window(data, offset, 0x80),
             })
     return sites
 
