@@ -15,59 +15,74 @@ Source file: user-provided complete GPT `PARTNAME=boot` partition, captured read
 | kernel version string | `Linux version 4.9.170 ... #19 SMP PREEMPT Tue May 26 13:58:08 CST 2026` |
 | Image header | `ARM\x64`, image_size `0x1138000`, text_offset `0x80000` |
 
-The embedded version string exactly matches the live RG34XX runtime identity in `tee-ion-runtime.txt`: Linux 4.9.170 `#19`, built 2026-05-26 13:58:08 CST. This makes the extracted payload the correct binary for the runtime audit; no other model's kernel is substituted.
+The embedded version string exactly matches the live RG34XX runtime identity in the 21:20 `tee-ion-runtime.txt` report. The analyzed binary is therefore the kernel image associated with the current device's running `#19` build, not a substitute kernel from another H700 model.
 
-## 2. Address notation
+## 2. Address and offset convention
 
-Disassembly was performed on the decompressed AArch64 `Image`, wrapped in a temporary ELF for `llvm-objdump`. Its `.text` VMA was set to `0x01138000` solely to make file offsets directly visible as disassembly labels. **These labels are not claimed to be live kernel virtual addresses or payload entry addresses.** The authoritative locations below are raw byte offsets from the beginning of the uncompressed Image.
+All offsets below are **byte offsets from the beginning of the decompressed 17,461,256-byte Image**. They were verified by AArch64 instruction decoding and direct branch-target calculation against the raw Image bytes. They are not runtime virtual addresses, physical load addresses, Kallsyms addresses, or payload entry addresses.
 
-| Code | Raw Image file offset | Synthetic disassembly label |
-|---|---:|---:|
-| ION platform initialization / heap creation routine | `0x666244` | `0x1799244` |
-| secure heap type comparison (`cmp w1, #6`) | `0x66636c` | `0x179936c` |
-| direct BL from ION routine to DRM helper | `0x666380` | `0x1799380` |
-| DRM-info SMC helper body | `0x67663c` | `0x17ae63c` |
-| SMC argument/result wrapper | `0x675098` | `0x17ae098` |
-| AArch64 `smc #0` result-capture stub | `0x010120` | `0x1148120` |
+An earlier draft of this report used incorrect offsets for the caller and wrapper. Those values (`0x666244`, `0x66636c`, `0x666380`, `0x675098`) were wrong and are superseded by this section. Do not use them.
 
-## 3. Static call chain in the target #19 binary
+| Code | Raw Image file offset |
+|---|---:|
+| Probe-like ION heap initialization routine | `0x661244` |
+| heap type comparison (`cmp w1, #6`) | `0x66136c` |
+| direct BL from that routine to DRM helper | `0x661380` |
+| DRM-info SMC helper body | `0x67663c` |
+| SMC argument/result wrapper | `0x676098` |
+| AArch64 `smc #0` stub | `0x010120` |
 
-The disassembled ION initialization routine at Image offset `0x666244` has the structure of the platform driver's probe path: it allocates the driver state, creates the ION device, parses the device-tree heap definitions, allocates the heap array, iterates over each configured heap, creates each ION heap and adds it to the ION device.
+Do not map these raw file offsets directly to Kallsyms virtual addresses. A section-aware ELF reconstruction is required to establish that mapping; this audit intentionally reports only byte offsets that can be checked against the decompressed Image.
 
-Inside that loop, the machine code loads the heap's type field and compares it with integer `6` at offset `0x66636c`. If it is not 6, execution branches around the DRM call. If it is 6, the code prepares the three output pointers and executes a **direct `BL`** at offset `0x666380` to the helper at `0x67663c`.
+## 3. Static call path in the target #19 binary
 
-That helper is not identified merely by a symbol name. Its instructions independently establish its semantics:
+The routine beginning at Image offset `0x661244` has the structure of the Allwinner ION platform heap initialization/probe path: it allocates device state, establishes an ION device, parses the device-tree heap definitions, allocates the heap array, loops over the parsed heap records, and then creates/adds ION heaps. This sequence matches the shape of the comparison implementation in `sunxi_ion_probe()` from the Allwinner 4.9.170 reference tree.
 
-1. It constructs `x0 = 0xB200000F` (`mov x0, #15`; `movk x0, #0xB200, lsl #16`).
-2. It calls the wrapper at Image offset `0x675098`.
-3. The wrapper calls the common AArch64 `smc #0` stub at Image offset `0x010120`; the stub captures `x0..x3` into the result structure.
-4. The helper checks result `a0`. A nonzero status follows the failure branch, prints `drm config service not available`, and returns `-EINVAL`.
-5. A zero status copies result `a1`, `a2`, and `a3` to the three supplied outputs, prints `drm_base`, `drm_size`, and `tee_base`, and returns 0.
+Within that heap loop:
 
-The caller proceeds to the ION heap creation call after the helper returns; it does not branch on the helper's return value. Thus creation of the debugfs `secure` heap is compatible with either an SMC success or an SMC failure. A present but empty secure heap does not reveal the returned DRM range.
+1. At `0x661368`, the routine loads the heap record's type field.
+2. At `0x66136c`, it executes `cmp w1, #6`.
+3. At `0x661370`, a non-6 type branches around the DRM helper.
+4. For type 6, it prepares output pointers to the heap base, heap size and a stack slot for `tee_base`.
+5. At `0x661380`, it executes a direct `BL` to `0x67663c`.
+6. After the helper returns, control continues into the heap-creation path. There is no conditional branch on the helper's return value before continuing.
+
+The helper at `0x67663c` independently decodes as follows:
+
+- It constructs `x0 = 0xB200000F` (`mov x0, #15`; `movk x0, #0xB200, lsl #16`), the Allwinner `GET_DRM_INFO` fast-call ID.
+- It calls the wrapper at `0x676098`.
+- The wrapper calls the instruction at `0x010120`, which is literally AArch64 `smc #0`; the following instructions save returned `x0..x3` to the caller's result structure.
+- The helper tests returned `a0`. A nonzero status follows the failure branch, references the string `drm config service not available`, and returns `-EINVAL`.
+- A zero status copies returned `a1`, `a2`, and `a3` to the three output pointers, then references the format strings `drm_base=0x%x`, `drm_size=0x%x`, and `tee_base=0x%x`, before returning 0.
+
+The strings are present in the same decompressed Image at offsets `0xbf1bbb`, `0xbf1be0`, `0xbf1bef`, and `0xbf1bfe`, respectively. Both success and failure output paths are encoded in the target binary.
 
 ## 4. Runtime correlation
 
 The 21:20:49 read-only runtime report independently shows:
 
 - `CONFIG_ION_SUNXI=y`, `CONFIG_ION_OF=y`, `CONFIG_TEE=y`, `CONFIG_OPTEE=y`;
-- the platform device is bound under `/sys/bus/platform/drivers/ion-sunxi/ion`;
-- live FDT `/ion/heap_secure@0` has `compatible = allwinner,secure`, `id = 6`, and type `ion_secure`;
-- `/sys/kernel/debug/ion/heaps/secure` exists, although current allocation is zero;
-- the captured dmesg still contains neither the success fields (`drm_base`, `drm_size`, `tee_base`) nor the failure text (`drm config service not available`).
+- the `ion-sunxi` platform device bound at `/sys/bus/platform/drivers/ion-sunxi/ion`;
+- live FDT `/ion/heap_secure@0` with `compatible = allwinner,secure`, `id = 6`, and `type = ion_secure`;
+- `/sys/kernel/debug/ion/heaps/secure` exists, although its current allocation total is zero;
+- the captured dmesg has neither the success fields (`drm_base`, `drm_size`, `tee_base`) nor the failure text (`drm config service not available`).
 
-The matching Allwinner 4.9.170 reference implementation maps the `allwinner,secure` heap to `ION_HEAP_TYPE_SECURE`; in its `enum ion_heap_type`, that enum value is 6. The target binary itself compares the parsed heap type with 6 before the direct DRM helper call. Reference sources: [sunxi_ion.c](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/staging/android/ion/sunxi/sunxi_ion.c), [uapi/ion.h](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/staging/android/uapi/ion.h), [OP-TEE core.c](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/tee/optee/core.c). The reference tree is a comparison source, not proof of byte-identical source for the target kernel.
+The matching Allwinner 4.9.170 comparison source maps `allwinner,secure` to `ION_HEAP_TYPE_SECURE`, whose enum value is 6. It also shows the same heap-type test and DRM helper call in the `sunxi_ion_probe()` path. References: [sunxi_ion.c](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/staging/android/ion/sunxi/sunxi_ion.c), [uapi/ion.h](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/staging/android/uapi/ion.h), and [OP-TEE core.c](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/tee/optee/core.c). That reference source is comparative evidence, not a claim that the target #19 source tree is byte-identical.
 
-## 5. Interpretation and remaining discrepancy
+The FDT heap type 6, bound ION device and existing `secure` heap make the type-6 branch applicable to the live configuration. The static call path is therefore highly relevant to the device's ION setup. However, the present capture does not prove the exact runtime execution of that branch, nor the SMC return value.
 
-The exact target binary contains a direct secure-heap probe call to an implementation that issues Allwinner `GET_DRM_INFO` (`0xB200000F`) through `SMC #0`. The live FDT and runtime secure-heap node indicate that the type-6 condition was configured and the ION driver successfully created the secure heap. This is strong evidence that the vendor DRM-info helper should have been reached during ION initialization.
+## 5. What remains unresolved
 
-However, the captured dmesg has neither branch's expected `printk` output. Therefore the exact SMC return status and the values of `drm_base`, `drm_size`, and `tee_base` remain **unknown**. Do not state that the SMC succeeded or failed. The missing messages are an unresolved discrepancy between the static call path and captured runtime log; it is not evidence of a zero return value or a zero-sized carveout.
+The target binary contains a direct call from its ION heap initialization path to a helper that issues `0xB200000F` through `SMC #0`. It contains distinct success and failure output paths. But neither output appears in the captured dmesg, so the actual SMC return status and the values of `drm_base`, `drm_size`, and `tee_base` remain **unknown**.
 
-The standard OP-TEE API `api uid mismatch` remains a separate UID/revision/capability probe and must not be used as the vendor DRM-info SMC return status.
+The helper's return value is not checked by the caller before heap creation. Therefore, an empty `secure` heap can exist after either a successful or failed SMC; heap presence and zero allocations cannot distinguish the two.
 
-## 6. Memory-safety boundary
+The missing messages are a runtime logging/execution discrepancy to resolve, not evidence that the SMC succeeded, failed, or returned a zero-sized region. The standard OP-TEE API `api uid mismatch` is a separate UID/revision/capability probe and is not the vendor DRM-info SMC return status.
 
-No physical address is approved by this audit. In particular, `[0x7ec00000,0x7fc00000)` remains an owner-unknown 16 MiB reserved interval and must stay excluded. The monitor, CMA, framebuffer, kernel/FDT/initrd, other memblock reservations and top-of-RAM fragments also remain excluded. Do not infer available payload RAM by subtracting memblock reservations from total RAM.
+## 6. Porting relevance and memory safety
+
+This DRM audit is a boot-safety dependency, not the porting deliverable. It does not itself decide the boot architecture or approve a payload address. The port still needs a minimal AArch64 freestanding entry, an owned stack/vector/logging contract, a proven usable-memory policy, and then the H700 HAL.
+
+No physical address is approved by this audit. In particular, `[0x7ec00000,0x7fc00000)` remains an owner-unknown 16 MiB reserved interval and must stay excluded. The monitor, CMA, framebuffer, FDT/initrd, other memblock reservations and top-of-RAM fragments also remain excluded. Do not infer available payload RAM by subtracting memblock reservations from total RAM.
 
 No SMC, ioctl, driver rebind, debugfs control write, boot-media write, or on-device instrumentation was performed.
