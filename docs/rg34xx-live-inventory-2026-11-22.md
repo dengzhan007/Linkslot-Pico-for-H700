@@ -1,0 +1,126 @@
+# RG34XX 首轮实机只读 Inventory（2026-11-22）
+
+## 1. 采集范围与结论
+
+目标设备为 Anbernic RG34XX（非 SP）。采集时间为 2026-11-22 18:15:51（设备本地 UTC+8），源块设备为 /dev/mmcblk0。主机侧报告目录为 build/rg34xx-inventory-20261122-181713。
+
+本次只读采集没有向 SD 卡发送写命令；Boot0、TOC1、运行时 FDT、内核内存映射及 GPT 均来自本次现场读回。设备块节点的 read-only 标志为 0，表示内核没有把该块设备强制设置成只读；这不改变本次采集命令只执行读取的事实。
+
+**结论：** 已确认这台 RG34XX 实机使用 4 核 Cortex-A53、rg34xx_v1 720×480 面板、AXP2202 PMIC，运行时系统识别到 1 GiB RAM。TOC1 内的 vendor monitor 与 BaseOS RG34XX 已固定的 monitor 指纹完全一致；U-Boot 和 DTB 呈现 BaseOS gzip 启动优化的特征，但整个现场 TOC1 不是已知准备镜像的精确指纹。Boot0 两个位置读出的镜像长度、debug 字段和可执行主体也不同。当前还不能确定 BROM 实际采用哪一份 Boot0、U-Boot 环境如何解释分区差异、monitor 的安全内存边界或可复用的裸机 AArch64 入口 ABI。
+
+## 2. 设备与运行时平台
+
+| 项目 | 现场证据 |
+|---|---|
+| SoC / DT compatible | DT root model 为 sun50iw9；compatible 为 allwinner,h616、arm,sun50iw9p1。这是 H700 所属的通用 SoC 家族标识，不是 RG34XX SKU 名称 |
+| 机型识别 | LCD 节点 lcd_driver_name 为 rg34xx_v1；非 SP 面板驱动名与 720×480 时序和 RG34XX 非 SP 基线吻合 |
+| CPU | 4 个 CPU；CPU architecture 8，CPU part 0xd03（Cortex-A53） |
+| PMIC | FDT compatible 包含 x-powers,axp2202；内核日志注册 axp2202-pek 与 axp2202_battery |
+| Linux | 4.9.170，aarch64；构建时间 2026-05-26 13:58:08 CST |
+| U-Boot 标识 | 内核命令行 uboot_message 为 2018.05，构建时间 2026-05-26 13:55:09 |
+| SD | /dev/mmcblk0，30,375,936 个 512-byte sectors，15,552,479,232 bytes；内核日志识别为 14.5 GiB SDHC |
+
+注意：root DT compatible 的 allwinner,h616 / sun50iw9p1 不能单独证明产品型号。识别 RG34XX 非 SP 主要依赖 rg34xx_v1 面板节点；该结论与已知硬件基线一致，但不等价于读取主板丝印或硬件 revision。
+
+## 3. DRAM 与运行时内存地图
+
+| 来源 | 结果 |
+|---|---|
+| TOC1 内静态 DTB 的 /memory | 0x40000000 起，大小 0x20000000（512 MiB） |
+| 内核收到的 live FDT 的 /memory | 0x40000000 起，大小 0x40000000（1 GiB） |
+| /proc/iomem | System RAM 0x40000000–0x7fffffff（1 GiB） |
+| /proc/meminfo | MemTotal 996700 kB；MemFree 927436 kB；MemAvailable 941056 kB |
+| CMA | cma=64M；CmaTotal 65536 kB，CmaFree 64416 kB |
+| 显示预留参数 | bootargs 含 disp_reserve=1382400,0x7bf24800 |
+| FDT reserved-memory | live FDT 与 TOC1 静态 DTB 均未发现 /reserved-memory 节点 |
+
+静态 TOC1 DTB 与 live FDT 的 RAM size 不同；live FDT、/proc/iomem 和 MemTotal 相互印证 1 GiB 运行时容量。可以确认内核阶段看到的是 1 GiB RAM，但目前没有证据定位是哪一个启动阶段把静态 DTB 的 512 MiB 修改为 1 GiB。
+
+这不是可直接使用的裸机 RAM map。display reserve、CMA、内核占用、monitor/secure world、DMA、framebuffer 和 SPL/loader 自身空间仍需进一步确认；没有 /reserved-memory 节点也不代表这些区域不存在。任何 payload 链接地址都必须等到完整占用图和 monitor 约束查明后再确定。
+
+## 4. Boot0 两个位置的现场读回
+
+采集器从 LBA 16 和 LBA 512 各读取 256 sectors（128 KiB）。解析器按每份镜像头部的 image_size 字段截取有效镜像后再验证 Allwinner checksum。
+
+| 项目 | LBA 16（primary capture） | LBA 512（secondary capture） |
+|---|---|---|
+| 原始采集长度 | 128 KiB | 128 KiB |
+| 头部声明有效长度 | 128 KiB | 64 KiB |
+| checksum | 通过 | 通过 |
+| debug byte（0x34） | 3 | 0 |
+| 有效镜像 SHA-256 | bf886995745a0eb9b5030296f9f6163035e164b3a82183716e67ff876319289f | 4701a85e4db7e8339b91b92f691a83cc954ec63a09369087c2e41d80eafa9f5d |
+| 有效镜像首 512 字节之后 SHA-256 | ff847db96640d09d45c32b1babd77a60b270589aa015160d2740924c9ede4b50 | 1bdc26d91460255019a4b06bee804c4d63cca2a94b15a3e366c31d10146a5608 |
+| 0x38 主参数 | LPDDR4，672 MHz | LPDDR4，672 MHz |
+| 0x9f4 候选 | 全零 | LPDDR3，672 MHz |
+| 0xa74 候选 | 全零 | LPDDR4，672 MHz |
+
+LBA 512 的文件在磁盘上仍是 128 KiB 原始采集；其头部只声明 64 KiB 有效镜像，因此解析器生成的 SHA-256 是对前 64 KiB 计算的。完整 128 KiB 原始文件 SHA-256 为 5f143679e0d2c5293d22fee47a47ea6c17120c7a19e6007247c8b13710aa5ef9。两种 hash 对应不同长度，不应混用。
+
+两份镜像都能通过自身 checksum，0x38 参数的 DRAM 类型与频率相同；但 debug byte、有效长度、首扇区 tuning words 和首扇区之后的主体 hash 均不同。尤其主体 hash 不同，因此不能把两份读回简单解释成“只有 Boot0 training 改写了第一扇区”。LBA 512 的备用候选参数块有有效内容，而 LBA 16 的对应位置为零。尚未证明 BROM 在当前启动中选择了哪一个位置，也不能仅凭候选块推断 active DRAM profile 或训练成功状态。
+
+## 5. TOC1 与组件指纹
+
+现场 TOC1 位于 LBA 32800，大小 0x140000（1,310,720 bytes），Allwinner checksum 与四项目录边界校验通过。
+
+| 组件 | 大小 | SHA-256 |
+|---|---:|---|
+| u-boot | 1,048,576 | 4d60a22ff13eac00dba89e0ee7df52a49852c0d9d856bec545ce40126191d127 |
+| monitor | 107,216 | 676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31 |
+| dtbo | 2,336 | 4bee281701610f96dcbdd1d38cb8df28386224d8c68b668b9a7a7a9df8e73ec2 |
+| dtb | 144,384 | c28c87380ffab00148bf4dc457e70b8c6c576470dcfbc53df64addddf89603a1 |
+
+TOC1 整包 SHA-256：
+
+e6c20e3a54c51b9336c798e3a4fa1ca6c45b28c6f70456e2db9c252aa4ba4604
+
+### 5.1 Monitor
+
+现场 monitor SHA-256 与 BaseOS RG34XX 固件资料中固定的 vendor monitor SHA-256 完全一致。这是目前最强的组件复用证据；它只确认 monitor 二进制身份，不代表其运行时状态、可调用服务或 payload handoff ABI 已经确认。
+
+### 5.2 U-Boot
+
+现场 U-Boot SHA-256 与 BaseOS manifest/kernel-gzip.json 所记录的 RG34XX 原始 U-Boot 输入 SHA-256 不同。其偏移 63128（0xF698）处包含 40f20123，紧邻上下文与 BaseOS kernel_gzip.py 所修改的压缩选择指令位置一致。将该指令恢复为原始字节并重算 U-Boot checksum 后，U-Boot hash 仍不等于已固定的原始输入 hash。因此只能判断它具有该优化补丁的特征，不能说它是已知准备镜像中的精确 U-Boot 文件。
+
+### 5.3 DTB 与 gzip 优化特征
+
+TOC1 内 DTB 的 debug_mode 为 0；EHCI1、OHCI1、OHCI2、EHCI3、OHCI3 的 status 为 late，EHCI2 仍为 okay。这些字段与 BaseOS kernel_gzip.py 所实施的调整一致。静态 DTB 声明 512 MiB RAM，而 live FDT 声明 1 GiB，进一步说明最终送入内核的 FDT 并非简单原样等同于 TOC1 内 DTB。
+
+### 5.4 必须更正的旧 hash 解释
+
+BaseOS 的 manifest/kernel-gzip.json 中 RG34XX 的 6c380adb6e4f16aa535da25f665706b0a6118b542947859aad5931f4baa9ac28，是 tools/kernel_gzip.py 在开始修改之前要求匹配的**输入 TOC1 包 hash**。脚本会在其基础上改写 U-Boot 压缩选择指令、相关 checksum、DTB debug_mode 和五个 USB controller 状态。因此，6c380... 不能称为 gzip-patched 输出包 hash。
+
+另一个历史记录中的 56371d984e29e74db63009ce27f829eb0a55ce9007ee5e40c52479b22418af3，是 BaseOS 兼容性/原始 vendor package 记录中的指纹。现场 TOC1 的 e6c20... 与这两个 hash 都不相同。现场包 checksum 有效且组件结构完整；指纹不匹配只能说明它是另一份现场固件组合，不能据此判定损坏。
+
+## 6. 分区表与启动参数不一致
+
+本次 sysfs 和 GPT 工具输出一致，当前 GPT 为：
+
+| 分区 | GPT 名称 | 起始 sector | sector 数 | 大小 |
+|---|---|---:|---:|---:|
+| p1 | special | 73728 | 131072 | 64 MiB |
+| p2 | boot-resource | 204800 | 65536 | 32 MiB |
+| p3 | env | 270336 | 32768 | 16 MiB |
+| p4 | boot | 303104 | 131072 | 64 MiB |
+| p5 | rootfs | 1482752 | 1048576 | 512 MiB |
+| p6 | UDISK | 2531328 | 262144 | 128 MiB |
+| p7 | primary | 2793472 | 27582461 | 约 13.1 GiB |
+
+但当前 /proc/cmdline 的 partitions= 字符串仍写着 appfs@mmcblk0p6 和 UDISK@mmcblk0p7，与 GPT/sysfs 读出的 p6=UDISK、p7=primary 不一致。root=/dev/mmcblk0p5 与当前 p5=rootfs 一致。该差异需要结合 U-Boot environment、启动参数生成路径及用户空间挂载配置调查，不能仅凭 partitions= 字符串推断 GPT 被损坏。
+
+fdisk 输出的磁盘容量文字为 2544M，与块设备 sysfs 的 30,375,936 sectors（约 14.5 GiB）明显不符；分区 sector 范围与 sysfs 一致。后续容量判断应使用块设备 sector 数和 sysfs，而不要采信这条 fdisk 容量文字。
+
+此次没有生成 env-partition-first64k.bin：原采集器只检查 /dev/disk/by-partlabel/env，而当前系统没有该目录/链接；但 sysfs 的 mmcblk0p3/uevent 明确标记 PARTNAME=env。已修复采集器，下一次将通过精确 GPT PARTNAME 在 sysfs 中发现 env 分区、校验大小后读取首 64 KiB，不会假设它一定是 p3。
+
+## 7. 对启动路线的影响
+
+1. 原厂 monitor 看起来可复用，且与已知 RG34XX monitor 输入完全相同；仍需在后续入口审计中确认 monitor 的实际加载地址、保留内存、SMC 服务与安全世界访问范围。
+2. 当前 U-Boot 带有 BaseOS gzip 优化特征，但不是已知精确 pinned U-Boot hash。不要对它盲目应用基于固定二进制偏移的补丁，也不要假定其环境变量与 prepared profile 一致。
+3. 当前两份 Boot0 在长度、debug 状态和主体内容上存在区别。必须弄清 BROM 使用哪个副本及其选择规则，再决定是否保留厂商链或接管 SPL。
+4. runtime FDT 证明内核可见 1 GiB RAM，但没有提供 monitor/secure/DMA 等完整 carveout。不能把 0x40000000–0x7fffffff 整段当作裸机可用内存。
+5. 目前仍没有实机证据证明 AArch32 BL33 如何进入任意 AArch64 payload，或厂商 Linux SMC 可被安全地重新定向。Issue #2 的 payload 地址和入口 ABI 继续保持未定，不构建猜地址的 dummy payload。
+
+## 8. 下一步
+
+下一次只读采集的重点是 p3 环境分区首 64 KiB。新采集器按 GPT PARTNAME=env 动态发现分区，不硬编码分区号；采集后需要解析环境变量，重点确认 bootcmd、启动介质/分区、镜像加载路径和是否存在自定义 handoff。之后再把当前 TOC1 组件、live FDT、分区布局与 BaseOS 原生 SPL 的实际使用范围逐项对照。
+
+在 U-Boot environment 和 monitor/DRAM 安全边界审查完成前，不修改 Boot0、TOC1、U-Boot、monitor 或 GPT，不试刷 AArch64 payload。设备没有 eMMC；失败恢复仍按项目设计由电脑重写/修复 SD 卡，不依赖回退到旧 Linux/BaseOS。
