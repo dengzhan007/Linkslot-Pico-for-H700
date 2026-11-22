@@ -105,4 +105,4 @@ LBA 16、512、32800 和 TOC1 长度 0x140000 来自 BaseOS-MultiFrontend 的 H7
 
 ## 验证
 
-主机 CI 对采集脚本运行 sh -n，Windows runner 进行 PowerShell 语法检查；静态检查所有 dd 输出都指向报告目录，并用纯合成数据测试 Boot0 checksum/DRAM 候选解析、TOC1 容器边界与 checksum、FDT 的内存/reserved-memory/面板/PMIC/USB/bootargs 解析，U-Boot env 的 key=value 提取、CRC 覆盖范围识别和损坏 CRC 拒绝，以及 CMA/memblock PFN/物理区间解析、缺失接口处理和 debugfs 采集只读边界检查。它不需要真实设备固件，也不会向硬件写入。
+主机 CI 对采集脚本运行 sh -n，Windows runner 进行 PowerShell 语法检查；静态检查所有 dd 输出都指向报告目录，并用纯合成数据测试 Boot0 checksum/DRAM 候选解析、TOC1 容器边界与 checksum、FDT 的内存/reserved-memory/initrd/firmware OP-TEE 节点/ION heap/面板/PMIC/USB/bootargs 解析，U-Boot env 的 key=value 提取、CRC 覆盖范围识别和损坏 CRC 拒绝，以及 CMA/memblock PFN/物理区间解析、缺失接口处理和 debugfs 采集只读边界检查。它不需要真实设备固件，也不会向硬件写入。
