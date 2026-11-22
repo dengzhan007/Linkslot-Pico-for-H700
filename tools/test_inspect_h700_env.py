@@ -14,13 +14,15 @@ MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 
 
-def make_env(size=4096, redundant=True):
+def make_env(size=4096, redundant=True, leading_nul=False):
     variables = (
         b"bootcmd=run setargs_nand boot_normal\0"
         b"mmc_root=/dev/mmcblk0p5\0"
         b"setargs_mmc=setenv bootargs root=/dev/mmcblk0p5 rootwait\0"
         b"bootdelay=0\0\0"
     )
+    if leading_nul:
+        variables = b"\\0" + variables
     header_bytes = 5 if redundant else 4
     if len(variables) > size - header_bytes:
         raise ValueError("test environment is too small")
@@ -34,7 +36,7 @@ class H700EnvInspectorTests(unittest.TestCase):
     def test_valid_redundant_environment_and_variables(self):
         report = MODULE.inspect_env(make_env(), "synthetic-env")
         self.assertTrue(report["crc_valid"])
-        self.assertEqual(report["flags_byte_candidate"], 0)
+        self.assertEqual(report["first_data_byte"], {"hex": "0x00", "is_nul": True})
         self.assertEqual(report["variables_data_offset"], 5)
         self.assertEqual(report["variable_count"], 4)
         variables = {item["name"]: item["value"] for item in report["variables"]}
@@ -47,6 +49,20 @@ class H700EnvInspectorTests(unittest.TestCase):
         self.assertTrue(report["crc_valid"])
         self.assertEqual(report["variables_data_offset"], 4)
         self.assertEqual(report["variable_count"], 4)
+
+    def test_full_partition_finds_embedded_128kib_env_image(self):
+        image = make_env(size=0x20000, redundant=False, leading_nul=True)
+        partition = image + bytes(0x3E0000) + bytes([0xFF]) * 0xC00000
+        self.assertEqual(len(partition), 0x1000000)
+
+        report = MODULE.inspect_env(partition, "synthetic-16MiB-partition")
+        self.assertTrue(report["crc_valid"])
+        self.assertEqual(len(report["crc_matches"]), 1)
+        self.assertEqual(report["crc_matches"][0]["data_offset"], 4)
+        self.assertEqual(report["crc_matches"][0]["env_image_bytes"], 0x20000)
+        self.assertEqual(report["first_data_byte"], {"hex": "0x00", "is_nul": True})
+        variables = {item["name"]: item["value"] for item in report["variables"]}
+        self.assertEqual(variables["bootcmd"], "run setargs_nand boot_normal")
 
     def test_bad_crc_does_not_prevent_read_only_variable_extraction(self):
         image = bytearray(make_env())
