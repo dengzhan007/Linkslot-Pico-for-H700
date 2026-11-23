@@ -2,17 +2,17 @@
  * Minimal FAT16/FAT32 write support for save/state persistence (GBA-from-SD).
  * Read-only mount via fat_ro.c; attach a writer with fat_set_writer() first.
  *
- * Scope: create-or-replace a whole file with a SHORT (8.3, uppercased) name in an
- * existing directory. That is all the save/state flow needs (fixed set of files,
- * rewritten in full each time). Long file names on write are intentionally not
- * supported - saves/states are named by us, so an 8.3-safe name is fine.
+ * Scope: create-or-replace a whole file in an existing directory. FAT16/32 file
+ * creation supports VFAT long names; mkdir -p still accepts only 8.3 directory
+ * components. This is not yet a complete Linkslot persistence backend: it has no
+ * temp-file rename or durable block flush/barrier contract.
  */
 #ifndef FAT_WR_H
 #define FAT_WR_H
 
 #include "fat_ro.h"
 
-/* Create <name> (8.3, case-insensitive) in directory <dirpath>, replacing it if it
+/* Create <name> (8.3 or VFAT long name, case-insensitive) in directory <dirpath>, replacing it if it
  * already exists, with `len` bytes from `buf`. Allocates a fresh cluster chain,
  * writes the data, and writes/updates the directory entry; the old chain (on
  * replace) is freed. Returns 0 on success, negative on error (no writer / dir
