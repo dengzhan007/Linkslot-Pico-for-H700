@@ -29,6 +29,15 @@ enum h700_sunxi_sdc0_scan_status h700_sunxi_sdc0_scan_primary_gpt(
 
     if (config == NULL || config->pio == NULL ||
         config->platform == NULL || config->platform->mmc_io == NULL ||
+        config->platform->mmc_io->read32 == NULL ||
+        config->platform->mmc_io->write32 == NULL ||
+        config->platform->mmc_io->time_ms == NULL ||
+        config->platform->mmc_io->delay_us == NULL ||
+        config->platform->mmc_io->read_barrier == NULL ||
+        config->platform->ccu.read32 == NULL ||
+        config->platform->ccu.write32 == NULL ||
+        config->platform->osc24m_hz == 0u ||
+        config->platform->pll6_effective_hz == 0u ||
         partitions == NULL || partition_capacity < H700_GPT_MAX_ENTRIES ||
         result == NULL ||
         config->controller_reset_timeout_ms == 0u ||
