@@ -92,6 +92,14 @@ The synthetic RG34XX regression vector uses C_SIZE 29,663, which decodes to **30
 
 Run `sh scripts/test-h700-sunxi-mmc-fat.sh`.
 
+### Libretro VFS v3 read-only FAT provider (host-only)
+
+`h700_fat_vfs_backend.c` converts the mounted FAT volume into the C callback table declared by `platform/h700/runtime/include/linkslot_vfs.h`. The installer mounts one validated GPT partition through CMD17 and publishes the backend with `linkslot_vfs_install()`. Fixed arrays hold at most 16 open files and 8 open directories. The mount root exposes only existing directories whose names match the current allowed top-level roots; file access is constrained to an absolute path under the configured mount prefix. Relative paths are rejected until a caller can provide an explicit base directory.
+
+This first backend is read-only by design. It implements get_path/open/close/size/tell/seek/read/stat/opendir/readdir/dirent callbacks; write/flush/remove/rename/truncate/mkdir return failure. The provider struct, MMC device and mounted FAT volume must be static/process-lifetime objects. The current implementation assumes VFS callbacks are serialized and does not claim SMP or reader/writer synchronization.
+
+Run `sh scripts/test-h700-fat-vfs-backend.sh` for the mock-C-ABI integration regression. The target startup path still needs to invoke the installer before Libretro `retro_init()`; this test does not claim the physical RG34XX frontend is wired or bootable.
+
 ### GPT -> CMD17 -> FAT32 directory/file scan (host-only)
 
 A higher-level fake-card test now builds a synthetic FAT32 p7 with a root `ROMS` directory, a `BIOS.BIN` file, and `ROMS/TITLE.GBA`. It mounts that volume using the GPT partition record and the same CMD17 PIO callback, enumerates the subdirectory, opens both files case-insensitively, and reads back their four-byte payloads. The test confirms the generic `fat_ro.c` directory traversal and file reader work over the new H700 block adapter, and that no SD write command is emitted.

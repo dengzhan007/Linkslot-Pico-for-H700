@@ -48,6 +48,7 @@ on:
       - "scripts/test-h700-fat-partition-bounds.sh"
       - "scripts/test-h700-sunxi-mmc-fat.sh"
       - "scripts/test-h700-sunxi-mmc-fat-scan.sh"
+      - "scripts/test-h700-fat-vfs-backend.sh"
       - "platform/h700/runtime/mgba_static.rs"
       - "platform/h700/runtime/tests/mgba_static_stub.c"
       - "scripts/probe-mgba-static-api-link.py"
@@ -210,6 +211,9 @@ jobs:
 
       - name: Test GPT -> CMD17 -> FAT32 directory and file reads
         run: sh scripts/test-h700-sunxi-mmc-fat-scan.sh
+
+      - name: Test read-only Libretro VFS v3 FAT/CMD17 backend
+        run: sh scripts/test-h700-fat-vfs-backend.sh
 
       - name: Host-compile H700 FAT16/FAT32 and exFAT storage candidate
         run: |

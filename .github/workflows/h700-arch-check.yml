@@ -20,6 +20,7 @@ on:
       - "scripts/test-h700-fat-partition-bounds.sh"
       - "scripts/test-h700-sunxi-mmc-fat.sh"
       - "scripts/test-h700-sunxi-mmc-fat-scan.sh"
+      - "scripts/test-h700-fat-vfs-backend.sh"
       - ".github/workflows/h700-arch-check.yml"
   pull_request:
     paths:
@@ -64,6 +65,7 @@ jobs:
           sh scripts/test-h700-fat-partition-bounds.sh
           sh scripts/test-h700-sunxi-mmc-fat.sh
           sh scripts/test-h700-sunxi-mmc-fat-scan.sh
+          sh scripts/test-h700-fat-vfs-backend.sh
 
   compile-aarch64-objects:
     runs-on: ubuntu-latest
