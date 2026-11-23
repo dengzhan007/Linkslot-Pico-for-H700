@@ -68,8 +68,8 @@ static int test_pinmux_drive_pull_and_preservation(void)
 
     CHECK((fake.regs[PORT_F_MUX0 / 4u] & MUX_MASK) == 0x00222222u,
           "PF0-PF5 select ALT2/MMC0");
-    CHECK((fake.regs[PORT_F_DRV0 / 4u] & DRV_MASK) == 0x00000aaau,
-          "PF0-PF5 use 30 mA drive setting");
+    CHECK((fake.regs[PORT_F_DRV0 / 4u] & DRV_MASK) == 0x00000fffu,
+          "PF0-PF5 use 40 mA drive setting");
     CHECK((fake.regs[PORT_F_PULL0 / 4u] & PULL_MASK) == 0x00000555u,
           "PF0-PF5 use pull-up setting");
 
