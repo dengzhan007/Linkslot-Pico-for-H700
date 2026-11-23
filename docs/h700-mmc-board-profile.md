@@ -41,7 +41,7 @@ CCU debugfs showed `sdmmc0_mod` at 100 MHz and enabled, with `sdmmc0_bus` and `s
 
 The live inventory maps the active sdc0 pin group to PF0–PF5. The exact SoC-family vendor table `pinctrl-sun50iw9p1.c` maps PF0–PF5 to `sdc0` at **ALT2 (value 2)**; the captured vendor pinconf specifies 40 mA drive and pull-up. The generic mainline H616 DT's 30 mA setting is not used for this RG34XX profile:
 
-| Pin | MMC0 signal | H616 mux selector |
+| Pin | MMC0 signal | sun50iw9p1 mux selector |
 |---|---|---:|
 | PF0 | D1 | 2 |
 | PF1 | D0 | 2 |
