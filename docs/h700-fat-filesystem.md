@@ -39,6 +39,19 @@ The imported FAT writer originally guarded its write critical section only under
 
 The imported FAT writer originally guarded its write critical section only under `__arm__`. H700 is AArch64, so that condition left `wr_lock()` / `wr_unlock()` as no-ops on the target. The H700 port now enables the LK mutex path for both `__arm__` and `__aarch64__`; the AArch64 preprocessor branch compiles in CI against stub declarations matching the pinned LK API. This is not yet a target-LK link or runtime test. It serializes writer-vs-writer operations only: readers are not coordinated with writers, and lazy mutex initialization via local critical-section masking is not an SMP-safety proof.
 
+## H700 SD/MMC controller reference (not an implementation)
+
+A pinned U-Boot reference is available at `u-boot/u-boot` commit `e578056c766d653270b14557c2a9d8daec414c17`:
+
+- `dts/upstream/src/arm64/allwinner/sun50i-h616.dtsi` defines MMC0/MMC1/MMC2 at `0x04020000`, `0x04021000`, and `0x04022000`; their clock and reset names are `CLK_BUS_MMCx`, `CLK_MMCx`, and `RST_BUS_MMCx`.
+- `arch/arm/include/asm/arch-sunxi/clock_sun50i_h6.h` gives MMC module-clock config offsets `0x830/0x834/0x838`.
+- `drivers/clk/sunxi/clk_h616.c` gives the MMC bus gate/reset register at offset `0x84c`: gate bits 0–2 and reset bits 16–18.
+- `drivers/mmc/sunxi_mmc.c` is the H616-capable controller reference, including its H616 FIFO threshold setup. It is U-Boot code, not an LK driver.
+
+The ROCKNIX H700 patch `projects/ROCKNIX/devices/H700/patches/linux/0158-mmc-sunxi-mmc-mask-data0-when-updating-the-clock-on-h616-emmc.patch` (distribution commit `1d806accd02e9bbfeca03cb5497179e77c7c18d8`) explicitly says MMC2 drives the second SD slot on RG34XX and RG35XX H, and adds `mask_data0` to the H616 eMMC controller configuration. Despite the `emmc` compatible, this is a removable SD-slot use case on those boards.
+
+This establishes useful register and controller references, but **does not identify which slot holds the currently booted/game card on the test unit**. Do not assume MMC2 is the card to mount. The read-only live inventory still needs to bind the actual block device to its DT node, card-detect GPIO, pinctrl, regulator and clock state before an LK driver is selected. The U-Boot/Linux implementations are reference material only; their initialization and power sequencing have not been ported or hardware-tested in LK.
+
 ## Not implemented
 
 - H700 SD/MMC host driver, clocks, pinmux, card power and card-detect.
