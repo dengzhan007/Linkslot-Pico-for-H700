@@ -1,6 +1,6 @@
 # Linkslot 1.0.36 与 LK/H700 可移植性审计（初步）
 
-> 状态：源码静态审计，尚非编译/实机验收。本文用于确定下一阶段技术验证顺序，不表示 Linkslot 已在 LK 上运行。
+> 状态：源码静态审计 + host-only 交叉编译/静态链接验证已完成第一轮；尚非 LK 集成或实机验收。本文不表示 Linkslot 已在 LK 上运行。
 
 ## 1. 当前 Linkslot 源码基线
 
@@ -92,7 +92,7 @@ commit `9bf1419a49e0af6dba8b05916df382c9c9c6d0a8`。
 ## 4. Linkslot 1.0.36 的 crate 初步分级
 
 这里区分“逻辑/数据可复用”和“当前 crate 能否原样在 LK 编译”：
-前者可能成立，后者目前均未通过 LK 编译验证。
+前者可能成立。首轮 host-only 验证仅覆盖 `slot-input`、`slot-model` 的临时适配副本；不是整个 crate 的 LK 集成验收。
 
 | Crate | 当前源码事实 | 初步处理 |
 |---|---|---|
@@ -121,27 +121,48 @@ commit `9bf1419a49e0af6dba8b05916df382c9c9c6d0a8`。
 
 `slot-i18n` 与 `slot-cheevos` 可作为第二批候选。其余模块先保留语义/资源级复用，不承诺 crate 原样复用。
 
-## 5. 下一步必须做的技术验证
+## 5. 已完成的 host-only 技术验证（2026-11-23）
 
-在创建 `third_party/linkslot` subtree、修改上游源码或实现 HAL 之前，完成一个隔离的 host-only feasibility spike：
+验证由 GitHub Actions 云端 Runner 执行，不依赖用户本地电脑性能。测试脚本位于本分支 `scripts/audit-linkslot-nostd.py`，工作流为 `.github/workflows/linkslot-lk-rust-feasibility.yml`。本次成功运行：
 
-1. 固定并记录 LK 源码 commit 与目标 ABI（AArch32 或 AArch64），不得把 A32 archive 链接进 A64 ELF。
-2. 用 freestanding Rust crate 导出一个很小的 `extern "C"` API；实现 `panic=abort`，不依赖 Rust `std`。
-3. 分别检查 `core`、`alloc` 的目标支持和所需工具链；若要 `alloc`，用薄 `GlobalAlloc` wrapper 调用经审查的 LK heap API，不伪装成完整 allocator。
-4. 用 LK 侧 C stub 调用 Rust 静态库，验证参数、返回值、结构体布局、栈/调用约定和 panic 行为；只做主机交叉编译与链接检查，不进入 RG34XX。
-5. 在临时副本中把 `slot-input` 与 `slot-model` 纯逻辑切为 `no_std+alloc` 试编译；不得直接修改 `upstream/linkslot` 快照。
-6. 生成 map、符号表、ELF header、undefined symbol 清单，确保没有意外引入 `std`、libc/Linux syscall、pthread、动态链接器或 unwinder。
-7. 对 AArch32 LK 路线和 AArch64 freestanding 路线分别出具结果；若任一工具链/链接假设不成立，明确记录失败原因。
+- Workflow run：`45102606482`（commit `3cc4bd9917ec77c8730cd42e6d41ea7186bd1f40`）。
+- Rust/Cargo：`1.96.0`；目标：`armv7a-none-eabi`、`aarch64-unknown-none`。
+- 现有 H700 AArch64 C11/C++17/ASM compile scaffold：通过，三个 object 均核对为 AArch64。
+- `slot-input` 临时副本：`no_std + alloc`，两个目标 `cargo check` 均通过。
+- `slot-model` 临时副本：保留纯静态数据与领域类型，暂时移除 `PathBuf` 根路径 resolver 和 `Path` 扩展名 helper；两个目标 `cargo check` 均通过。
+- Rust `staticlib` + C freestanding shim + allocator ABI 薄桩：AArch32、AArch64 两个最终 ELF 均链接成功；ELF header 架构正确；`nm -u` 无未解析符号；两份 linker map 已生成。
 
-输出：
-- `docs/linkslot-1.0.36-portability-audit.md`（本文）
-- `build/audit-work/linkslot-1.0.36/` 下的临时构建对象、map 和检查结果
-- 下一阶段架构选择建议；不生成可刷写镜像、不写 SD、不修改启动区域、不执行 payload。
+### AArch32 EHABI 说明
+
+Rust 1.96 的 AArch32 `alloc` 静态库含有 `__aeabi_unwind_cpp_pr0` 符号引用。已使用 `readelf -Wr` 检查全部引用，确认均为 `.ARM.exidx` 上的 `R_ARM_NONE` 元数据 relocation，不是可执行代码调用或 `PREL31` relocation。仅在本次 `panic=abort`、无异常展开的 ABI 探测中，通过 linker `--defsym=__aeabi_unwind_cpp_pr0=0` 解析该元数据标记。**这不是 EHABI unwinder 实现**；若未来启用 C++/Rust 异常展开或需要栈展开，必须接入真实且经过验证的 unwinder，不能复用这个零地址占位。
+
+### 验证边界
+
+- 编译的是两个 Linkslot crate 的隔离临时副本，不是直接把 upstream workspace 全量改成 `no_std`。
+- allocator 只验证通用 C ABI 形状，使用测试 arena；尚未连接 GammaOS LK 的真实 `heap_alloc` / `heap_free`。
+- C stub 仅验证函数调用、静态链接、ELF 目标架构和符号闭合；尚未验证 LK 启动、栈、内存布局、异常/中断、调度或设备 ABI。
+- 没有编译完整 Linkslot UI、Libretro 核心、文件系统、显示/输入/音频 HAL；没有生成可刷写镜像、写 SD 或执行 payload。
+
+工作流与产物：
+- [GitHub Actions 成功运行](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45102606482)
+- [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16)
+
+## 6. 下一步必须做的技术验证
+
+1. 确认 H700 选用 AArch32 LK 还是 AArch64 runtime；本轮证明两个 Rust 目标都能做 freestanding staticlib，不足以单独决定启动架构。
+2. 在 host-only 环境中对照 GammaOS LK 的真实 API/头文件，写一个专用适配层，并链接实际 LK heap symbols；核实 allocator 对齐、释放、失败路径与线程安全策略。
+3. 扩展 ABI 测试，覆盖多参数结构体、对齐、回调、枚举布局、panic abort 与栈需求；检查最终 ELF 的 `readelf -A/-h/-S`、map 和调用约定。
+4. 继续切分 `slot-model` 路径/I/O 依赖，增加单元测试；验证 `slot-input` gesture 行为与上游测试一致。
+5. 在不修改 `upstream/linkslot` 快照的前提下，逐步评估 `slot-i18n`、`slot-cheevos`，之后才评估 UI、存储、图形和 Libretro runtime。
+6. 继续单独关闭 H700 启动交接/内存 ownership 的 NO-GO 门槛；未关闭前不得执行设备 payload。
+
+仍不生成可刷写镜像、不写 SD、不修改启动区域、不执行 payload。
 
 ## 6. 当前结论
 
 - linkSlot 1.0.36 已成为当前 UI/功能审查基线，但原始上游 Git commit 不可得。
 - Linkslot 的 `device` feature 仍是 Linux AArch64，不是 LK/bare-metal。
 - GammaOS LK 参考分支目前是 AArch32 LK，不能与当前 AArch64 probe/scaffold 混为同一目标。
-- `slot-input` 与 `slot-model` 的纯逻辑是目前最值得验证的 Rust 复用入口。
-- 当前没有可运行 Linkslot Pico 的 firmware、HAL 或已批准 payload 地址。
+- `slot-input` 与 `slot-model` 的纯逻辑已在 AArch32、AArch64 两目标通过隔离 `no_std+alloc` 编译；通用 Rust/C ABI 静态链接探针亦已通过。
+- AArch32 探针用 `ABS 0` 仅解析 R_ARM_NONE unwind 元数据 marker；这不提供 unwinder，启用异常展开前仍须接入真实运行时。
+- 当前仍没有可运行 Linkslot Pico 的 firmware、H700 HAL、实际 LK allocator 绑定或已批准 payload 地址。
