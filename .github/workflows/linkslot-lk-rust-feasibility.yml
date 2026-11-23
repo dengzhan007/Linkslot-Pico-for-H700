@@ -23,8 +23,6 @@ on:
       - "scripts/test-linkslot-slot-retro-vfs.py"
       - "platform/h700/**"
       - "scripts/build-h700-objects.sh"
-  push:
-    branches: ["porting/linkslot-1.0.36-feasibility"]
   workflow_dispatch:
 
 permissions:
