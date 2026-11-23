@@ -48,9 +48,14 @@ A pinned U-Boot reference is available at `u-boot/u-boot` commit `e578056c766d65
 - `drivers/clk/sunxi/clk_h616.c` gives the MMC bus gate/reset register at offset `0x84c`: gate bits 0–2 and reset bits 16–18.
 - `drivers/mmc/sunxi_mmc.c` is the H616-capable controller reference, including its H616 FIFO threshold setup. It is U-Boot code, not an LK driver.
 
-The ROCKNIX H700 patch `projects/ROCKNIX/devices/H700/patches/linux/0158-mmc-sunxi-mmc-mask-data0-when-updating-the-clock-on-h616-emmc.patch` (distribution commit `1d806accd02e9bbfeca03cb5497179e77c7c18d8`) explicitly says MMC2 drives the second SD slot on RG34XX and RG35XX H, and adds `mask_data0` to the H616 eMMC controller configuration. Despite the `emmc` compatible, this is a removable SD-slot use case on those boards.
+The ROCKNIX H700 patch `0126-20241018_macroalpha82_rg35xx_add_additional_hardware_support.patch` (distribution commit `1d806accd02e9bbfeca03cb5497179e77c7c18d8`) adds the second SD slot on MMC2 for the RG35XX family; RG34XX's ROCKNIX DTS inherits the RG35XX Plus DTS. Its board wiring is:
 
-This establishes useful register and controller references, but **does not identify which slot holds the currently booted/game card on the test unit**. Do not assume MMC2 is the card to mount. The read-only live inventory still needs to bind the actual block device to its DT node, card-detect GPIO, pinctrl, regulator and clock state before an LK driver is selected. The U-Boot/Linux implementations are reference material only; their initialization and power sequencing have not been ported or hardware-tested in LK.
+- MMC0 (primary slot): 4-bit bus, card-detect PF6, `vmmc-supply = reg_cldo3`, write-protect disabled, 1.8 V signaling disabled.
+- MMC2 (second slot): 4-bit bus, card-detect PE22, external 3.3 V regulator enabled by PE4, `vmmc-supply = reg_vcc3v3_mmc2`, `vqmmc-supply = reg_cldo3`, write-protect disabled, 1.8 V signaling disabled.
+- MMC1 is the Wi-Fi SDIO controller on RG35XX Plus; the patch's Linux aliases deliberately swap MMC1/MMC2 numbering (`mmc1 = &mmc2`, `mmc2 = &mmc1`). Therefore Linux `mmcblkN` numbering must not be treated as the physical controller number.
+- The ROCKNIX patch `0158-mmc-sunxi-mmc-mask-data0-when-updating-the-clock-on-h616-emmc.patch` explicitly says MMC2 drives the second SD slot on RG34XX and RG35XX H, and adds `mask_data0` to the H616 eMMC controller configuration. Despite the `emmc` compatible, this is a removable SD-slot use case on those boards.
+
+This is a substantially better board-level reference, but **does not identify which slot holds the currently booted/game card on the test unit**. The read-only live inventory still needs to bind the actual block device to its DT node and confirm the applied DT revision, card-detect, pinctrl, regulator and clock state before an LK driver is selected. The U-Boot/Linux implementations are reference material only; their initialization and power sequencing have not been ported or hardware-tested in LK.
 
 ## Not implemented
 
