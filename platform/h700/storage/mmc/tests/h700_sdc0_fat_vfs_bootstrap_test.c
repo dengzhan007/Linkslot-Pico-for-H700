@@ -352,6 +352,45 @@ static void make_fat32_entry(uint8_t *entry,
     put_le32(entry + 28u, size);
 }
 
+static uint8_t fat_lfn_checksum(const char short_name[11])
+{
+    uint8_t sum = 0u;
+    unsigned int i;
+    for (i = 0u; i < 11u; ++i)
+        sum = (uint8_t)(((sum & 1u) ? 0x80u : 0u) + (sum >> 1) +
+                        (uint8_t)short_name[i]);
+    return sum;
+}
+
+static void make_fat_lfn_entry(uint8_t *entry,
+                               const char *name,
+                               const char short_name[11])
+{
+    uint16_t units[13];
+    size_t length = strlen(name);
+    size_t i;
+
+    for (i = 0u; i < 13u; ++i)
+        units[i] = 0xffffu;
+    for (i = 0u; i < length && i < 12u; ++i)
+        units[i] = (uint8_t)name[i];
+    if (length < 13u)
+        units[length] = 0u;
+
+    memset(entry, 0xff, 32u);
+    entry[0] = 0x41u;      /* LAST_LONG_ENTRY | ordinal 1 */
+    entry[11] = 0x0fu;     /* ATTR_LONG_NAME */
+    entry[12] = 0u;
+    entry[13] = fat_lfn_checksum(short_name);
+    put_le16(entry + 26u, 0u);
+    for (i = 0u; i < 5u; ++i)
+        put_le16(entry + 1u + i * 2u, units[i]);
+    for (i = 0u; i < 6u; ++i)
+        put_le16(entry + 14u + i * 2u, units[5u + i]);
+    for (i = 0u; i < 2u; ++i)
+        put_le16(entry + 28u + i * 2u, units[11u + i]);
+}
+
 static void make_fat32_vfs_partition(struct fake_h700 *f)
 {
     uint8_t *vbr = f->media + (size_t)GPT_P7_FIRST * 512u;
@@ -385,7 +424,8 @@ static void make_fat32_vfs_partition(struct fake_h700 *f)
     make_fat32_entry(root + 32u, "BIOS       ", 0x10u, 6u, 0u);
     make_fat32_entry(games, "GBA        ", 0x10u, 4u, 0u);
     make_fat32_entry(gba, "TITLE   GBA", 0x20u, 5u, 4u);
-    make_fat32_entry(bios, "BIOS    BIN", 0x20u, 7u, 4u);
+    make_fat_lfn_entry(bios, "gba_bios.bin", "GBA_BI~1BIN");
+    make_fat32_entry(bios + 32u, "GBA_BI~1BIN", 0x20u, 7u, 4u);
 
     memcpy(f->media + (size_t)(FAT32_DATA_START + 3u) * 512u, "GAME", 4u);
     memcpy(f->media + (size_t)(FAT32_DATA_START + 5u) * 512u, "BIOS", 4u);
@@ -523,8 +563,16 @@ static int test_full_sdc0_gpt_fat_vfs_bootstrap(void)
     CHECK(g_installed_vfs->close(file) == 0,
           "Libretro file handle closes");
 
+    directory = g_installed_vfs->opendir("/mnt/sdcard/BIOS", false);
+    CHECK(directory != 0 && g_installed_vfs->readdir(directory) &&
+          strcmp(g_installed_vfs->dirent_get_name(directory), "gba_bios.bin") == 0 &&
+          !g_installed_vfs->dirent_is_dir(directory),
+          "FAT VFAT long filename gba_bios.bin is enumerated for Linkslot BIOS scan");
+    CHECK(g_installed_vfs->closedir(directory) == 0,
+          "BIOS directory closes");
+
     file = g_installed_vfs->open(
-        "/mnt/sdcard/BIOS/BIOS.BIN",
+        "/mnt/sdcard/BIOS/gba_bios.bin",
         LINKSLOT_RETRO_VFS_FILE_ACCESS_READ, 0u);
     CHECK(file != 0 && g_installed_vfs->read(file, data, 4u) == 4 &&
           memcmp(data, "BIOS", 4u) == 0,
