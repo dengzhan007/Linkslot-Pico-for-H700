@@ -30,6 +30,10 @@
 - [x] 真实 mGBA（固定 manifest commit）AArch32 static Libretro archive 编译通过：Linux 与 Generic 两版均有 115 个对象，25/25 Libretro exports 前缀化；Generic 外部符号从 81 降至 67。
 - [x] mGBA VFS v3 文件/目录 AArch32 archive 通过：114 个对象、25/25 exports 前缀化；旧 vfs-file/vfs-dirent 对象和 POSIX/stdio/host config directory 依赖移除，真正外部符号 51 项。
 - [x] 同一 mGBA VFS v3 变体使用 arm-none-eabi GCC/newlib 构建通过：94 个对象、ELF32/ARM EABI5、52 项真正外部符号；这仍是 static archive，未与 newlib/LK 做 whole-archive link。
+- [x] mGBA VDir VFS v3 adapter 主机回归通过：真实 C 源编译并覆盖枚举、rewind、nested dirs、path traversal、VFileOpen/remove/mkdir。
+- [x] mGBA whole-archive 与 newlib/libm/libgcc 链接诊断：只有 11 个 syscall hooks 未解决；加 libnosys 后 ELF32/ARM 无未解析符号，但 libnosys 是 dummy syscall，不是可运行的 LK/H700 服务。
+- [ ] 为 _sbrk/_gettimeofday/_read/_write/_fstat/_isatty/_close/_lseek/_exit/_kill/_getpid 编写真实 LK/H700 adapter；需要 heap/RTC/console/descriptor 语义和测试。
+
 - [ ] 用 newlib/libm/libgcc/libnosys 做 whole-archive 链接探针，区分 newlib 已提供符号与 H700/LK runtime adapter。
 
 - [ ] 同一 mGBA VFS v3 变体改用 arm-none-eabi GCC/newlib 编译，验证是否完全脱离 glibc sysroot；再将 51 个外部符号映射到 LK libc/libm/EABI/RTC/log。
