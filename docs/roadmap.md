@@ -88,6 +88,7 @@
 - [x] 完成 H616 sdc0 PF0–PF5 pinmux 及上游参考电气字段的 host-only helper：ALT2、30mA drive、pull-up；保留同 bank 其他 pin 字段并验证 readback。PIO/APB1 使能和 RG34XX 实机 pinconf 尚未实测，详见 [H700 MMC 板级配置](h700-mmc-board-profile.md)。
 - [x] 增加 H616 sdc0 CCU gate/reset 与 400 kHz module/card clock 集成封装及主机寄存器回归；通过 CCU 偏移回调写入 `0x84c` / `0x830`，并复用 `MASK_DATA0` 时钟更新逻辑。尚未配置 PF0–PF5 pinmux/电气参数或执行实机 MMIO，详见 [H700 MMC 板级配置](h700-mmc-board-profile.md)。
 - [x] 建立统一的 sdc0 只读 bring-up→SD v2 识别→CMD17 block reader→primary GPT scan 入口，并以 fake H700 PIO/CCU/MMC/FIFO 完整模拟；确认 p6 UDISK、p7 primary 和无写命令。调用方仍需提供已启用的 PIO/APB1 时钟、卡供电和有效 MMIO 映射；尚未进行实机测试。
+- [x] FAT16/FAT32/exFAT mount 增加 GPT/MBR 分区 extent 约束；新增显式 `fat_mount_partition()`，并在读取 FAT 表/根目录前验证 BPB/VolumeLength、FAT 容量、cluster heap 与 root cluster 不越界。新增 GPT p7、MBR、FAT16/32、exFAT host 测试；尚未挂载实机 p7。
 - [ ] 在 sdc0 只读块设备路径完成后，读取真实磁盘 GPT 并对照现场分区布局；再以文件系统签名识别 ROM/user-data 卷，不依赖 Linux mmcblk 编号或 GPT 分区标签。
 
 依赖 B 完成后再实现：

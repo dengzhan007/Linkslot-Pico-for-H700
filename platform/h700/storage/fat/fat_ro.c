@@ -36,46 +36,84 @@ static uint32_t next_cluster(fat_vol *v, uint32_t n)
 	return (val >= 0xFFF8u) ? 0 : val;
 }
 
-static int parse_bpb(fat_vol *v, const uint8_t *b, uint32_t part_lba)
+static int parse_bpb(fat_vol *v, const uint8_t *b,
+                     uint32_t part_lba, uint32_t partition_sectors)
 {
 	uint16_t bps = rd16(b + 0x0B);
-	uint8_t  spc = b[0x0D];
+	uint8_t spc = b[0x0D];
 	uint16_t reserved = rd16(b + 0x0E);
-	uint8_t  nfats = b[0x10];
+	uint8_t nfats = b[0x10];
 	uint16_t root_ents = rd16(b + 0x11);
 	uint32_t tot16 = rd16(b + 0x13), tot32 = rd32(b + 0x20);
 	uint16_t fatsz16 = rd16(b + 0x16);
 	uint32_t fatsz = fatsz16;
-	uint32_t total, root_dir_secs, first_data, dataclus;
-	/* FATSz16==0 is the definitive FAT32 marker: the volume was laid out with a
-	 * 32-bit FAT + a cluster-based root dir. This is more reliable than the spec's
-	 * cluster-count threshold, which misreads a small-but-FAT32-formatted volume. */
+	uint32_t total, dataclus, root_cluster = 0;
+	uint64_t root_dir_secs, first_data, fat_entries;
 	int fat32 = (fatsz16 == 0);
-	if (bps != 512 || spc == 0 || nfats == 0) return -1;
-	if (fat32) fatsz = rd32(b + 0x24);
+
+	if (bps != 512u || spc == 0u || (spc & (spc - 1u)) != 0u ||
+	    reserved == 0u || nfats == 0u || nfats > 2u)
+		return -1;
+
+	if (fat32) {
+		fatsz = rd32(b + 0x24);
+		if (root_ents != 0u)
+			return -1;
+	} else if (root_ents == 0u) {
+		return -1;
+	}
+
 	total = tot16 ? tot16 : tot32;
-	if (total == 0 || fatsz == 0) return -1;
-	root_dir_secs = ((uint32_t)root_ents * 32u + (bps - 1)) / bps;
-	first_data = reserved + (uint32_t)nfats * fatsz + root_dir_secs;
-	if (first_data >= total) return -1;
-	dataclus = (total - first_data) / spc;
+	if (total == 0u || fatsz == 0u)
+		return -1;
+	if (partition_sectors != 0u && total > partition_sectors)
+		return -1;
+	if ((uint64_t)part_lba + total - 1u > 0xffffffffull)
+		return -1;
+
+	root_dir_secs = ((uint64_t)root_ents * 32u + (bps - 1u)) / bps;
+	first_data = (uint64_t)reserved + (uint64_t)nfats * fatsz + root_dir_secs;
+	if (first_data >= total || first_data > 0xffffffffull)
+		return -1;
+
+	dataclus = (uint32_t)(((uint64_t)total - first_data) / spc);
+	if (dataclus == 0u)
+		return -1;
+	if (!fat32 && (dataclus < 4085u || dataclus >= 65525u))
+		return -1; /* FAT12 and FAT32-shaped FAT16 layouts are unsupported. */
+	if (fat32 && dataclus < 4085u)
+		return -1;
+
+	fat_entries = ((uint64_t)fatsz * 512u) / (fat32 ? 4u : 2u);
+	if (fat_entries < (uint64_t)dataclus + 2u)
+		return -1;
+
+	if (fat32) {
+		root_cluster = rd32(b + 0x2C);
+		if (root_cluster < 2u || (uint64_t)root_cluster >= (uint64_t)dataclus + 2u)
+			return -1;
+	}
+
 	v->bytes_per_sec = bps;
 	v->sec_per_clus = spc;
 	v->num_fats = nfats;
 	v->part_lba = part_lba;
+	v->partition_sectors = partition_sectors;
+	v->volume_sectors = total;
 	v->fat_start = part_lba + reserved;
 	v->fat_sectors = fatsz;
-	v->data_start = part_lba + first_data;            /* == LBA of cluster 2 */
+	v->data_start = part_lba + (uint32_t)first_data;
 	v->total_clusters = dataclus;
 	v->is_fat32 = (uint8_t)fat32;
-	if (!fat32 && dataclus < 4085u) return -1;        /* FAT12 unsupported */
-	if (v->is_fat32) {
-		v->root_cluster = rd32(b + 0x2C);
-		v->root_start = 0; v->root_sectors = 0;
+
+	if (fat32) {
+		v->root_cluster = root_cluster;
+		v->root_start = 0u;
+		v->root_sectors = 0u;
 	} else {
-		v->root_cluster = 0;
+		v->root_cluster = 0u;
 		v->root_start = part_lba + reserved + (uint32_t)nfats * fatsz;
-		v->root_sectors = root_dir_secs;
+		v->root_sectors = (uint32_t)root_dir_secs;
 	}
 	return 0;
 }
@@ -97,13 +135,24 @@ static int is_exfat_vbr(const uint8_t *s)
 
 /* Try a volume boot record at `lba`: FAT16/32 (BPB) or exFAT. 0 when mounted. */
 static int s_saw_bad_exfat;   /* an exFAT boot sector was found but its volume did not mount */
-static int try_vbr(fat_vol *v, fat_read_fn rd, void *ctx, uint32_t lba)
+static int try_vbr(fat_vol *v, fat_read_fn rd, void *ctx,
+                   uint32_t lba, uint32_t partition_sectors)
 {
 	uint8_t vbr[512];
+
+	if (partition_sectors != 0u &&
+	    (uint64_t)lba + partition_sectors - 1u > 0xffffffffull)
+		return -1;
 	if (rd(ctx, lba, 1, vbr) != 1) return -1;
 	if (vbr[510] != 0x55 || vbr[511] != 0xAA) return -1;
-	if (is_exfat_vbr(vbr)) { if (exfat_mount(v, lba, vbr) == 0) return 0; s_saw_bad_exfat = 1; return -4; }
-	if ((vbr[0] == 0xEB || vbr[0] == 0xE9) && parse_bpb(v, vbr, lba) == 0) return 0;
+	if (is_exfat_vbr(vbr)) {
+		if (exfat_mount(v, lba, vbr, partition_sectors) == 0) return 0;
+		s_saw_bad_exfat = 1;
+		return -4;
+	}
+	if ((vbr[0] == 0xEB || vbr[0] == 0xE9) &&
+	    parse_bpb(v, vbr, lba, partition_sectors) == 0)
+		return 0;
 	return -1;
 }
 
@@ -159,9 +208,12 @@ static int try_gpt(fat_vol *v, fat_read_fn rd, void *ctx, uint32_t hdr_lba, uint
 			int zero = 1, k;
 			for (k = 0; k < 16; k++) if (pe[k]) { zero = 0; break; }
 			if (zero) continue;                                   /* unused slot */
+			uint64_t part_size;
 			if (first_hi || last_hi || first < 2u || last < first) continue;
+			part_size = (uint64_t)last - first + 1u;
+			if (part_size == 0u || part_size > 0xffffffffull) continue;
 			got_any = 1;
-			if (try_vbr(v, rd, ctx, first) == 0) return 0;
+			if (try_vbr(v, rd, ctx, first, (uint32_t)part_size) == 0) return 0;
 		}
 	}
 	return got_any ? -3 : -2;
@@ -171,15 +223,17 @@ int fat_mount(fat_vol *v, fat_read_fn rd, void *ctx)
 {
 	uint8_t s0[512];
 	int i, r, saw_protective = 0;
+	if (!v || !rd) return -1;
 	v->wr = 0;
-	v->rd = rd; v->ctx = ctx; v->mounted = 0; v->is_exfat = 0;
+	v->rd = rd; v->ctx = ctx; v->mounted = 0; v->is_exfat = 0; v->is_fat32 = 0;
+	v->partition_sectors = 0u; v->volume_sectors = 0u;
 	v->fatw_valid = 0; v->fatw_dirty = 0;   /* drop any stale write-back FAT cache */
 	s_saw_bad_exfat = 0;
 	if (rd(ctx, 0, 1, s0) != 1) return -1;
 	/* 1. bare volume ("superfloppy"): the first sector is itself a VBR */
 	if (s0[510] == 0x55 && s0[511] == 0xAA) {
-		if (is_exfat_vbr(s0)) { if (exfat_mount(v, 0, s0) == 0) { v->mounted = 1; return 0; } return -4; }
-		if ((s0[0] == 0xEB || s0[0] == 0xE9) && parse_bpb(v, s0, 0) == 0) { v->mounted = 1; return 0; }
+		if (is_exfat_vbr(s0)) { if (exfat_mount(v, 0, s0, 0u) == 0) { v->mounted = 1; return 0; } return -4; }
+		if ((s0[0] == 0xEB || s0[0] == 0xE9) && parse_bpb(v, s0, 0, 0u) == 0) { v->mounted = 1; return 0; }
 		/* 2. MBR partition table: every entry is range checked; a protective entry (0xEE)
 		 * or an empty table sends us to the GPT */
 		for (i = 0; i < 4; i++) {
@@ -187,10 +241,11 @@ int fat_mount(fat_vol *v, fat_read_fn rd, void *ctx)
 			uint8_t type = e[4];
 			uint32_t lba = rd32(e + 8), cnt = rd32(e + 12);
 			if (type == 0xEE) { saw_protective = 1; continue; }
-			if (type == 0 || lba < 1u || lba + cnt < lba) continue;   /* a zero length is tolerated (sloppy tools) */
+			if (type == 0 || lba < 1u || cnt == 0u ||
+			    (uint64_t)lba + cnt - 1u > 0xffffffffull) continue;
 			/* FAT16 0x04/0x06/0x0E, FAT32 0x0B/0x0C, exFAT/NTFS 0x07: but the type byte is
 			 * advisory (formatters leave it stale), so any entry gets its VBR looked at */
-			if (try_vbr(v, rd, ctx, lba) == 0) { v->mounted = 1; return 0; }
+			if (try_vbr(v, rd, ctx, lba, cnt) == 0) { v->mounted = 1; return 0; }
 		}
 	} else {
 		saw_protective = 1;   /* no MBR signature: still look for a GPT, then the raw scan */
@@ -212,9 +267,35 @@ int fat_mount(fat_vol *v, fat_read_fn rd, void *ctx)
 	{
 		static const uint32_t probe[] = { 2048u, 8192u, 16384u, 32768u, 63u, 64u, 128u, 256u, 65536u, 4096u };
 		for (i = 0; i < (int)(sizeof probe / sizeof probe[0]); i++)
-			if (try_vbr(v, rd, ctx, probe[i]) == 0) { v->mounted = 1; return 0; }
+			if (try_vbr(v, rd, ctx, probe[i], 0u) == 0) { v->mounted = 1; return 0; }
 	}
 	return s_saw_bad_exfat ? -4 : -3;   /* -4: an exFAT volume is there but unreadable (damaged) */
+}
+
+/* Mount a known partition without probing unrelated LBAs. */
+int fat_mount_partition(fat_vol *v, fat_read_fn rd, void *ctx,
+                        uint32_t part_lba, uint32_t partition_sectors)
+{
+	int result;
+	if (!v || !rd || partition_sectors == 0u ||
+	    (uint64_t)part_lba + partition_sectors - 1u > 0xffffffffull)
+		return -1;
+
+	v->wr = 0;
+	v->rd = rd;
+	v->ctx = ctx;
+	v->mounted = 0;
+	v->is_exfat = 0;
+	v->is_fat32 = 0;
+	v->partition_sectors = partition_sectors;
+	v->volume_sectors = 0u;
+	v->fatw_valid = 0;
+	v->fatw_dirty = 0;
+	s_saw_bad_exfat = 0;
+
+	result = try_vbr(v, rd, ctx, part_lba, partition_sectors);
+	if (result == 0) v->mounted = 1;
+	return result;
 }
 
 /* ---- directory iteration ---- */

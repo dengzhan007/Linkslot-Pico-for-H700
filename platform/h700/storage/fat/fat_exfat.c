@@ -49,32 +49,68 @@ static uint32_t clus_at(fat_vol *v, uint32_t first, int nofat, uint32_t pos, uin
 }
 
 /* ---- mount ---- */
-int exfat_mount(fat_vol *v, uint32_t part_lba, const uint8_t *b)
+int exfat_mount(fat_vol *v, uint32_t part_lba, const uint8_t *b,
+                uint32_t partition_sectors)
 {
-	uint32_t fat_off = rd32(b + 0x50), fat_len = rd32(b + 0x54), heap_off = rd32(b + 0x58);
-	uint32_t ccount = rd32(b + 0x5C), root = rd32(b + 0x60);
+	uint32_t fat_off = rd32(b + 0x50), fat_len = rd32(b + 0x54);
+	uint32_t heap_off = rd32(b + 0x58), ccount = rd32(b + 0x5C);
+	uint32_t root = rd32(b + 0x60);
+	uint32_t volume_low = rd32(b + 0x48), volume_high = rd32(b + 0x4C);
 	uint8_t bps_shift = b[0x6C], spc_shift = b[0x6D], nfats = b[0x6E];
 	uint16_t flags = rd16(b + 0x6A);
-	if (bps_shift != 9) return -1;                      /* 512 byte sectors only */
-	if (spc_shift > 16 || nfats < 1 || nfats > 2) return -1;
-	if (fat_off == 0 || fat_len == 0 || heap_off == 0 || ccount == 0) return -1;
-	if (heap_off < fat_off + fat_len * nfats) return -1;
-	if (root < 2u || root >= ccount + 2u) return -1;
-	v->is_exfat = 1; v->is_fat32 = 0;
+	uint64_t volume_sectors = ((uint64_t)volume_high << 32) | volume_low;
+	uint64_t fat_end, heap_end, fat_entries;
+	uint32_t active_fat_lba;
+
+	if (bps_shift != 9u || spc_shift > 16u || nfats < 1u || nfats > 2u)
+		return -1;
+	if (volume_sectors == 0u || volume_high != 0u)
+		return -1; /* current block/FAT API uses 32-bit absolute LBAs */
+	if (partition_sectors != 0u && volume_sectors > partition_sectors)
+		return -1;
+	if ((uint64_t)part_lba + volume_sectors - 1u > 0xffffffffull)
+		return -1;
+	if (fat_off < 24u || fat_len == 0u || heap_off == 0u || ccount == 0u)
+		return -1;
+
+	fat_end = (uint64_t)fat_off + (uint64_t)fat_len * nfats;
+	heap_end = (uint64_t)heap_off + (uint64_t)ccount * (1ull << spc_shift);
+	fat_entries = ((uint64_t)fat_len * 512u) / 4u;
+	if (fat_end > heap_off || fat_end > volume_sectors ||
+	    heap_end > volume_sectors || fat_entries < (uint64_t)ccount + 2u)
+		return -1;
+	if (root < 2u || (uint64_t)root >= (uint64_t)ccount + 2u)
+		return -1;
+
+	active_fat_lba = part_lba + fat_off +
+	    (((flags & 1u) != 0u && nfats == 2u) ? fat_len : 0u);
+	if ((uint64_t)active_fat_lba + fat_len - 1u > 0xffffffffull)
+		return -1;
+
+	v->is_exfat = 1u;
+	v->is_fat32 = 0u;
 	v->part_lba = part_lba;
-	v->ex_spc_shift = spc_shift; v->ex_spc = 1u << spc_shift;
+	v->partition_sectors = partition_sectors;
+	v->volume_sectors = (uint32_t)volume_sectors;
+	v->ex_spc_shift = spc_shift;
+	v->ex_spc = 1u << spc_shift;
 	v->ex_fat_len = fat_len;
-	v->ex_fat_lba = part_lba + fat_off + ((flags & 1u) && nfats == 2 ? fat_len : 0u);   /* ActiveFat */
+	v->ex_fat_lba = active_fat_lba;
 	v->ex_heap_lba = part_lba + heap_off;
 	v->total_clusters = ccount;
 	v->root_cluster = root;
-	v->sec_per_clus = (uint8_t)(v->ex_spc > 255u ? 255u : v->ex_spc);   /* informational only */
+	v->sec_per_clus = (uint8_t)(v->ex_spc > 255u ? 255u : v->ex_spc);
 	v->num_fats = nfats;
-	v->bytes_per_sec = 512;
-	v->ex_bitmap_clus = 0; v->ex_bitmap_len = 0; v->ex_upcase_clus = 0; v->ex_upcase_len = 0;
-	/* the root holds the bitmap and up-case entries; walk its first cluster(s) for them */
+	v->bytes_per_sec = 512u;
+	v->ex_bitmap_clus = 0u;
+	v->ex_bitmap_len = 0u;
+	v->ex_upcase_clus = 0u;
+	v->ex_upcase_len = 0u;
+
+	/* All metadata bounds are checked above before reading the root cluster. */
 	{
-		uint8_t fatb[512]; uint32_t fatb_sec = 0xFFFFFFFFu, c = root, hops = 0;
+		uint8_t fatb[512];
+		uint32_t fatb_sec = 0xFFFFFFFFu, c = root, hops = 0;
 		while (clus_ok(v, c) && hops++ < 64u) {
 			uint32_t s;
 			for (s = 0; s < v->ex_spc; s++) {
@@ -84,15 +120,22 @@ int exfat_mount(fat_vol *v, uint32_t part_lba, const uint8_t *b)
 				for (i = 0; i < 16; i++) {
 					const uint8_t *e = sb + i * 32;
 					if (e[0] == 0) goto done;
-					if (e[0] == ET_BITMAP && !(e[1] & 1u)) { v->ex_bitmap_clus = rd32(e + 0x14); v->ex_bitmap_len = rd32(e + 0x18); }
-					else if (e[0] == ET_UPCASE) { v->ex_upcase_clus = rd32(e + 0x14); v->ex_upcase_len = rd32(e + 0x18); }
+					if (e[0] == ET_BITMAP && !(e[1] & 1u)) {
+						v->ex_bitmap_clus = rd32(e + 0x14);
+						v->ex_bitmap_len = rd32(e + 0x18);
+					} else if (e[0] == ET_UPCASE) {
+						v->ex_upcase_clus = rd32(e + 0x14);
+						v->ex_upcase_len = rd32(e + 0x18);
+					}
 				}
 			}
 			c = fat_next(v, c, fatb, &fatb_sec);
 		}
 	}
 done:
-	if (!clus_ok(v, v->ex_bitmap_clus) || v->ex_bitmap_len < (ccount + 7u) / 8u) return -3;
+	if (!clus_ok(v, v->ex_bitmap_clus) ||
+	    v->ex_bitmap_len < ((uint64_t)ccount + 7u) / 8u)
+		return -3;
 	return 0;
 }
 

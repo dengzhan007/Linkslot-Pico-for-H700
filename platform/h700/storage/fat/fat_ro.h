@@ -211,6 +211,8 @@ typedef struct {
 	fat_write_fn wr;          /* 0 for read-only; set via fat_set_writer for fat_wr.c */
 	void *ctx;
 	uint32_t part_lba;        /* absolute LBA of the volume's first sector */
+	uint32_t partition_sectors; /* partition extent from GPT/MBR; zero for legacy raw probe */
+	uint32_t volume_sectors;    /* BPB/VolumeLength value in 512-byte sectors */
 	uint32_t fat_start;       /* absolute LBA of FAT #0 */
 	uint32_t fat_sectors;     /* sectors per FAT */
 	uint32_t data_start;      /* absolute LBA of cluster 2 minus 2*spc (see clus_lba) */
@@ -280,6 +282,9 @@ typedef struct {
 /* Probe the block device (MBR or bare VBR), locate the first FAT16/32 volume,
  * parse its BPB. Returns 0 on success, negative on failure (no card / not FAT). */
 int fat_mount(fat_vol *v, fat_read_fn rd, void *ctx);
+/* Mount a known GPT/MBR partition without probing outside its declared extent. */
+int fat_mount_partition(fat_vol *v, fat_read_fn rd, void *ctx,
+                        uint32_t part_lba, uint32_t partition_sectors);
 
 /* Open the directory a fat_readdir entry names (one of two folders of the same name). */
 int fat_opendir_entry(fat_vol *v, const fat_dirent *e, fat_dir *d);

@@ -15,7 +15,7 @@
 
 #include "fat_ro.h"
 
-int      exfat_mount(fat_vol *v, uint32_t part_lba, const uint8_t *vbr);
+int      exfat_mount(fat_vol *v, uint32_t part_lba, const uint8_t *vbr, uint32_t partition_sectors);
 int      exfat_opendir(fat_vol *v, const char *path, fat_dir *d);
 int      exfat_readdir(fat_dir *d, fat_dirent *e);
 void     exfat_dir_at(fat_vol *v, fat_dir *d, const fat_dirent *e);

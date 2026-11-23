@@ -160,6 +160,14 @@ Initial bring-up should stay read-only: use identification clock first, send onl
 
 The profile is safe to link into host diagnostics or target builds because it only returns static data. It does not map MMIO, enable clocks, change pins, power the card, issue SD commands, or read/write storage.
 
+## FAT/exFAT partition-bound validation
+
+The FAT backend now has an explicit `fat_mount_partition()` entry point. The caller passes a GPT/MBR partition start LBA and its exact sector count; the FAT BPB's TotalSectors must not exceed that extent. FAT metadata is validated before mounting: bytes-per-sector and cluster size, reserved area, FAT count/size, data region, FAT entry capacity, FAT16/FAT32 cluster-range classification, and FAT32 root-cluster bounds. The legacy whole-device `fat_mount()` path also propagates GPT/MBR partition lengths when it discovers a volume, rather than treating a VBR as unbounded.
+
+The exFAT mount path reads VolumeLength from the VBR and checks it against the containing partition, the 32-bit LBA limit, FAT copies and FAT size, cluster heap end, cluster count, and root-cluster range before reading the root cluster to locate the allocation bitmap/up-case table. This project currently uses 32-bit sector LBAs, so exFAT volumes with a nonzero high 32-bit VolumeLength are rejected rather than truncated.
+
+Host tests cover FAT16, FAT32 and exFAT valid extents, BPB/VolumeLength extending one sector beyond the partition, an undersized FAT, an invalid FAT32 root cluster, exFAT heap overflow, MBR extent propagation, and GPT p7 extent propagation. Run `sh scripts/test-h700-fat-partition-bounds.sh`. These are synthetic metadata regressions; the actual RG34XX p7 boot sector has not yet been read by the H700 path.
+
 ## Implementation sequence
 
 1. Implement a minimal, **read-only** sdc0 block path and validate SD command initialization without issuing any write/erase commands.

@@ -16,6 +16,8 @@ on:
       - "scripts/test-h700-sunxi-mmc-gpt-adapter.sh"
       - "scripts/test-h700-sunxi-mmc-gpt-integration.sh"
       - "scripts/test-h700-sdc0-readonly-scan.sh"
+      - "platform/h700/storage/fat/**"
+      - "scripts/test-h700-fat-partition-bounds.sh"
       - ".github/workflows/h700-arch-check.yml"
   pull_request:
     paths:
@@ -57,6 +59,7 @@ jobs:
           sh scripts/test-h700-sunxi-mmc-gpt-adapter.sh
           sh scripts/test-h700-sunxi-mmc-gpt-integration.sh
           sh scripts/test-h700-sdc0-readonly-scan.sh
+          sh scripts/test-h700-fat-partition-bounds.sh
 
   compile-aarch64-objects:
     runs-on: ubuntu-latest
