@@ -161,16 +161,39 @@ void _start(void) {
             log=out / "logs" / f"abi-{triple}-cargo.log")
         archive = abi / "target" / triple / "release" / "liblk_linkslot_abi_probe.a"
         obj, elf = abi / f"shim-{triple}.o", abi / f"abi-{triple}.elf"
+        map_file = abi / f"abi-{triple}.map"
         run(["clang", f"--target={clang_target}", "-mcpu=cortex-a53", "-ffreestanding", "-fno-builtin",
              "-fno-stack-protector", "-fno-unwind-tables", "-fno-asynchronous-unwind-tables",
              "-c", str(abi / "shim.c"), "-o", str(obj)])
-        run(["ld.lld", "-m", emulation, "-static", "-e", "_start", "-o", str(elf), str(obj), str(archive)])
+        link_args = ["ld.lld", "-m", emulation, "-static", "-e", "_start",
+                     f"-Map={map_file}", "-o", str(elf)]
+        notes = []
+        if triple == "armv7a-none-eabi":
+            # Verify every __aeabi_unwind_cpp_pr0 reference is R_ARM_NONE in
+            # .ARM.exidx. This is a metadata-only marker, not a code call.
+            relocations = run(["readelf", "-Wr", str(archive)])
+            marker = re.findall(
+                r"\b(R_ARM_[A-Z0-9_]+)\s+[^\n]*__aeabi_unwind_cpp_pr0",
+                relocations
+            )
+            if not marker or any(kind != "R_ARM_NONE" for kind in marker):
+                raise RuntimeError(
+                    "AArch32 EHABI marker was not metadata-only; refusing to resolve it: "
+                    + repr(marker)
+                )
+            link_args.append("--defsym=__aeabi_unwind_cpp_pr0=0")
+            notes.append("EHABI: every __aeabi_unwind_cpp_pr0 reference is R_ARM_NONE metadata only; resolved to ABS 0 for this panic=abort/no-unwind probe. This is not an unwinder implementation.")
+        run(link_args + [str(obj), str(archive)])
         header = run(["readelf", "-h", str(elf)])
         undefined = run(["llvm-nm", "-u", str(elf)])
-        if machine not in header: raise RuntimeError(f"{elf.name}: wrong ELF machine")
-        if undefined.strip(): raise RuntimeError(f"{elf.name}: unresolved symbols:\n{undefined}")
+        if machine not in header:
+            raise RuntimeError(f"{elf.name}: wrong ELF machine")
+        if undefined.strip():
+            raise RuntimeError(f"{elf.name}: unresolved symbols:\n{undefined}")
         sha = run(["sha256sum", str(elf)]).strip()
         report.append(f"- PASS: {triple} staticlib + freestanding C shim linked; machine={machine}; no undefined symbols; {sha}\n")
+        report.extend(f"  - {note}\n" for note in notes)
+        report.append(f"  - Linker map: {map_file.name}\n")
     report.append("\n")
 
 def main():
