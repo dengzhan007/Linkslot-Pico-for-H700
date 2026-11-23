@@ -81,31 +81,50 @@ static void fatal_if_unsafe_heap(void)
     stop_forever();
 }
 
-void *malloc(size_t size)
+static void set_reent_errno(struct _reent *reent, int error)
+{
+    if (reent) {
+        reent->_errno = error;
+    } else {
+        errno = error;
+    }
+}
+
+static void *malloc_with_reent(size_t size, struct _reent *reent)
 {
     void *p;
 
     if (!heap_is_safe()) {
-        errno = ENOMEM;
+        set_reent_errno(reent, ENOMEM);
         return NULL;
     }
 
-    /* A private aligned header retains the requested size and raw LK pointer. */
+    /* Include a conservative margin for the pinned LK allocator's own header/alignment. */
     if (size > SIZE_MAX - sizeof(h700_alloc_header_t) - H700_LK_HEAP_INTERNAL_OVERHEAD) {
-        errno = ENOMEM;
+        set_reent_errno(reent, ENOMEM);
         return NULL;
     }
     p = g_ops.heap_alloc(sizeof(h700_alloc_header_t) + size, 16);
     if (!p) {
-        errno = ENOMEM;
+        set_reent_errno(reent, ENOMEM);
         return NULL;
     }
+
     h700_alloc_header_t *header = (h700_alloc_header_t *)p;
     header->size = size;
     header->magic = H700_ALLOC_MAGIC;
     header->reserved[0] = 0;
     header->reserved[1] = 0;
     return (void *)(header + 1);
+}
+
+void *malloc(size_t size)
+{
+#ifdef H700_HOST_ADAPTER_TEST
+    return malloc_with_reent(size, NULL);
+#else
+    return malloc_with_reent(size, _REENT);
+#endif
 }
 
 void free(void *ptr)
@@ -118,6 +137,7 @@ void free(void *ptr)
         fatal_if_unsafe_heap();
         return;
     }
+
     h700_alloc_header_t *header = allocation_header(ptr);
     if (header->magic != H700_ALLOC_MAGIC) {
         fatal_if_unsafe_heap();
@@ -127,17 +147,17 @@ void free(void *ptr)
     g_ops.heap_free(header);
 }
 
-void *calloc(size_t count, size_t size)
+static void *calloc_with_reent(size_t count, size_t size, struct _reent *reent)
 {
     size_t total;
     void *p;
 
     if (size != 0 && count > SIZE_MAX / size) {
-        errno = ENOMEM;
+        set_reent_errno(reent, ENOMEM);
         return NULL;
     }
     total = count * size;
-    p = malloc(total);
+    p = malloc_with_reent(total, reent);
     if (!p) {
         return NULL;
     }
@@ -145,19 +165,28 @@ void *calloc(size_t count, size_t size)
     return p;
 }
 
-void *realloc(void *ptr, size_t size)
+void *calloc(size_t count, size_t size)
+{
+#ifdef H700_HOST_ADAPTER_TEST
+    return calloc_with_reent(count, size, NULL);
+#else
+    return calloc_with_reent(count, size, _REENT);
+#endif
+}
+
+static void *realloc_with_reent(void *ptr, size_t size, struct _reent *reent)
 {
     void *p;
 
     if (!ptr) {
-        return size ? malloc(size) : NULL;
+        return size ? malloc_with_reent(size, reent) : NULL;
     }
     if (size == 0) {
         free(ptr);
         return NULL;
     }
     if (!heap_is_safe()) {
-        errno = ENOMEM;
+        set_reent_errno(reent, ENOMEM);
         return NULL;
     }
 
@@ -169,11 +198,11 @@ void *realloc(void *ptr, size_t size)
 
     /*
      * The pinned LK heap_realloc() internally calls heap_alloc(size, 0),
-     * losing the caller's requested alignment. Allocate a new 16-byte-aligned
-     * block, copy only the recorded user length, then free the old raw block.
-     * On allocation failure the old block remains untouched.
+     * losing caller alignment. Allocate a 16-byte-aligned replacement, copy
+     * the recorded user length and free the old raw allocation. On failure
+     * the old block remains untouched.
      */
-    p = malloc(size);
+    p = malloc_with_reent(size, reent);
     if (!p) {
         return NULL;
     }
@@ -183,36 +212,33 @@ void *realloc(void *ptr, size_t size)
     return p;
 }
 
+void *realloc(void *ptr, size_t size)
+{
+#ifdef H700_HOST_ADAPTER_TEST
+    return realloc_with_reent(ptr, size, NULL);
+#else
+    return realloc_with_reent(ptr, size, _REENT);
+#endif
+}
+
 /*
- * Newlib's public malloc/free/realloc/calloc wrappers call their reentrant
- * counterparts. Override those as well, so internal libc callers cannot
- * fall back to newlib's separate _sbrk_r-backed heap.
+ * Newlib's public malloc/free/realloc/calloc wrappers dispatch to the
+ * reentrant counterparts internally. Override those too, so libc callers
+ * cannot fall back to newlib's separate _sbrk_r-backed heap.
  */
 void *_malloc_r(struct _reent *reent, size_t size)
 {
-    void *p = malloc(size);
-    if (!p && reent) {
-        reent->_errno = errno ? errno : ENOMEM;
-    }
-    return p;
+    return malloc_with_reent(size, reent);
 }
 
 void *_calloc_r(struct _reent *reent, size_t count, size_t size)
 {
-    void *p = calloc(count, size);
-    if (!p && reent) {
-        reent->_errno = errno ? errno : ENOMEM;
-    }
-    return p;
+    return calloc_with_reent(count, size, reent);
 }
 
 void *_realloc_r(struct _reent *reent, void *ptr, size_t size)
 {
-    void *p = realloc(ptr, size);
-    if (!p && size != 0 && reent) {
-        reent->_errno = errno ? errno : ENOMEM;
-    }
-    return p;
+    return realloc_with_reent(ptr, size, reent);
 }
 
 void _free_r(struct _reent *reent, void *ptr)
