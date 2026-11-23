@@ -7,7 +7,6 @@
 
 struct h700_newlib_ops {
     void *(*heap_alloc)(size_t size, unsigned int alignment);
-    void *(*heap_realloc)(void *ptr, size_t size);
     void (*heap_free)(void *ptr);
     bool (*heap_ready)(void);
     bool (*single_cpu_active)(void);
