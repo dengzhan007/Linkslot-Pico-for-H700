@@ -5,6 +5,7 @@
 
 #include "h700_gpt_readonly.h"
 #include "sunxi_mmc_clock.h"
+#include "sunxi_mmc_pio_read.h"
 #include "sunxi_sd_card_init.h"
 
 struct h700_sunxi_mmc_block_timeouts {
