@@ -37,9 +37,10 @@ def main() -> None:
     stub = out / "lk-stubs"
     (stub / "kernel").mkdir(parents=True, exist_ok=True)
     (stub / "kernel" / "thread.h").write_text(
-        "typedef struct { int opaque; } mutex_t;\n"
-        "void enter_critical_section(void);\n"
-        "void exit_critical_section(void);\n", encoding="utf-8")
+        "#ifndef H700_TEST_LK_THREAD_H\\n#define H700_TEST_LK_THREAD_H\\n"
+        "typedef struct { int opaque; } mutex_t;\\n"
+        "void enter_critical_section(void);\\n"
+        "void exit_critical_section(void);\\n#endif\\n", encoding="utf-8")
     (stub / "kernel" / "mutex.h").write_text(
         "#include <kernel/thread.h>\n"
         "void mutex_init(mutex_t *);\n"
