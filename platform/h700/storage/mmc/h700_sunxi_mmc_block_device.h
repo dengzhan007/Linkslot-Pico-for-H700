@@ -24,7 +24,9 @@ struct h700_sunxi_mmc_block_device {
  * selected SD card. Card capacity/addressing comes from the CSD/OCR result.
  *
  * The resulting reader exposes only 512-byte sector reads through CMD17.
- * It has no write, erase, flush, or arbitrary-command method.
+ * It has no write, erase, flush, or arbitrary-command method. The `io` table
+ * and `io->context` are retained by pointer in device->host and must remain
+ * valid for the lifetime of the block device.
  */
 int h700_sunxi_mmc_block_device_init(
     struct h700_sunxi_mmc_block_device *device,
