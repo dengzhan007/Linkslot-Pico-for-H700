@@ -17,7 +17,7 @@ for tool in cc mkfs.fat mcopy mmd mkfs.exfat fsck.exfat; do
 done
 
 cc -std=c11 -O2 -Wall -Wextra -Werror -I "$SRC" \
-  "$SRC/fat_ro.c" "$SRC/tests/fat_ro_test.c" -o "$OUT/fat_ro_test"
+  "$SRC/fat_ro.c" "$SRC/fat_exfat.c" "$SRC/tests/fat_ro_test.c" -o "$OUT/fat_ro_test"
 cc -std=c11 -O2 -Wall -Wextra -Werror -I "$SRC" \
   "$SRC/fat_ro.c" "$SRC/fat_wr.c" "$SRC/fat_exfat.c" \
   "$SRC/tests/fat_exfat_rw_test.c" -o "$OUT/fat_exfat_rw_test"
