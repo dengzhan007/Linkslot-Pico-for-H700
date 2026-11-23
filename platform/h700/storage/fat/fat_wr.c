@@ -394,7 +394,7 @@ static int fat_wr_put_i(fat_vol *v, const char *dirpath, const char *name,
 	if (!is83) mangle_short(v, cluster, root_sec, root_left, name, short11);
 
 	/* allocate + write the data chain (linear scan via hint, not O(n^2)) */
-	need_clus = len ? (len + cbytes - 1u) / cbytes : 0u;
+	need_clus = len ? 1u + (len - 1u) / cbytes : 0u;
 	{
 		uint32_t ahint = 2u;
 		for (i = 0; i < need_clus; i++) {
@@ -622,17 +622,24 @@ static int fat_wr_mkpath_i(fat_vol *v, const char *path)
 		fat_dir d;
 		int parent_is_root = (curlen == 1);
 		int i;
+		if (curlen < 1 || curlen > 254) return -4;
 		for (i = 0; i < curlen; i++) child[ci++] = cur[i];
-		if (!parent_is_root) child[ci++] = '/';
+		if (!parent_is_root) {
+			if (ci >= 255) return -4;
+			child[ci++] = '/';
+		}
+		if (ci >= 255 && *p) return -4;
 		while (*p && *p != '/' && ci < 255) { child[ci++] = *p++; n++; }
+		if (*p && *p != '/') return -4; /* do not silently truncate a component */
 		child[ci] = 0;
 		while (*p == '/') p++;
-		if (n == 0) break;
+		if (n == 0) return -4;
 		/* missing -> create it; looked for twice, so a read that failed once does not
 		 * make a second folder of the same name */
 		if (fat_opendir(v, child, &d) != 0 && fat_opendir(v, child, &d) != 0) {
-			char comp[64]; int k = 0;
+			char comp[13]; int k = 0;
 			uint32_t pcl, prs, prl, parent_first;
+			if (n >= (int)sizeof comp) return -4;
 			for (i = ci - n; i < ci; i++) comp[k++] = child[i];
 			comp[k] = 0;
 			if (dir_head(v, cur, &pcl, &prs, &prl) != 0) return -2;
