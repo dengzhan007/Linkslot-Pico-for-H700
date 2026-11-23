@@ -211,12 +211,171 @@ void _start(void) {
         report.append(f"  - Linker map: {map_file.name}\n")
     report.append("\n")
 
+def build_lk_heap_abi(lk_source, out, report):
+    expected = "9bf1419a49e0af6dba8b05916df382c9c9c6d0a8"
+    actual = run(["git", "-C", str(lk_source), "rev-parse", "HEAD"]).strip()
+    if actual != expected:
+        raise RuntimeError(f"LK source pin mismatch: expected {expected}, got {actual}")
+    heap_header = lk_source / "include/lib/heap.h"
+    heap_source = lk_source / "lib/heap/heap.c"
+    thread_header = lk_source / "include/kernel/thread.h"
+    thread_source = lk_source / "kernel/thread.c"
+    arm_ops = lk_source / "arch/arm/ops.S"
+    for p in (heap_header, heap_source, thread_header, thread_source, arm_ops):
+        if not p.is_file():
+            raise RuntimeError(f"pinned LK evidence file missing: {p}")
+
+    header_text = heap_header.read_text(encoding="utf-8")
+    heap_text = heap_source.read_text(encoding="utf-8")
+    thread_header_text = thread_header.read_text(encoding="utf-8")
+    thread_c = thread_source.read_text(encoding="utf-8")
+    arm_text = arm_ops.read_text(encoding="utf-8")
+    for needle in ("heap_alloc(size_t, unsigned int alignment)", "heap_free(void *)"):
+        if needle not in header_text:
+            raise RuntimeError("LK heap header signature changed: " + needle)
+    if "int critical_section_count = 1;" not in thread_c:
+        raise RuntimeError("LK global critical-section count definition changed")
+    if "extern int critical_section_count;" not in thread_header_text:
+        raise RuntimeError("LK global critical-section declaration missing")
+    if not re.search(r"orr\s+r0,\s*r0,\s*#\(1<<7\)", arm_text):
+        raise RuntimeError("LK ARM IRQ-mask implementation changed; re-audit SMP semantics")
+    if "enter_critical_section();" not in heap_text or "exit_critical_section();" not in heap_text:
+        raise RuntimeError("LK heap critical-section wrapping changed")
+
+    abi = out / "lk-heap-abi-probe"
+    (abi / "src").mkdir(parents=True, exist_ok=True)
+    (abi / "Cargo.toml").write_text(manifest("lk_real_heap_api_probe", "staticlib"), encoding="utf-8")
+    rust = r'''#![no_std]
+extern crate alloc;
+use alloc::vec::Vec;
+use core::alloc::{GlobalAlloc, Layout};
+use core::panic::PanicInfo;
+
+struct LkHeapAllocator;
+unsafe impl GlobalAlloc for LkHeapAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        if layout.align() > u32::MAX as usize {
+            return core::ptr::null_mut();
+        }
+        unsafe { heap_alloc(layout.size(), layout.align() as u32) }
+    }
+    unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
+        unsafe { heap_free(ptr) }
+    }
+}
+#[global_allocator]
+static ALLOCATOR: LkHeapAllocator = LkHeapAllocator;
+
+unsafe extern "C" {
+    fn heap_alloc(size: usize, alignment: u32) -> *mut u8;
+    fn heap_free(ptr: *mut u8);
+}
+
+#[no_mangle]
+pub extern "C" fn linkslot_lk_heap_probe(value: u32) -> u32 {
+    let mut values = Vec::new();
+    values.push(value);
+    values.push(value + 1);
+    values.iter().copied().sum()
+}
+
+#[panic_handler]
+fn panic(_info: &PanicInfo) -> ! {
+    loop { core::hint::spin_loop(); }
+}
+'''
+    (abi / "src/lib.rs").write_text(rust, encoding="utf-8")
+    c = r'''#include <lib/heap.h>
+#include <stdint.h>
+
+_Static_assert(sizeof(size_t) == 4, "LK AArch32 size_t must be 32-bit");
+_Static_assert(sizeof(unsigned int) == 4, "LK heap alignment argument must be 32-bit");
+
+static unsigned char arena[16384] __attribute__((aligned(16)));
+static size_t arena_used;
+static volatile uint32_t probe_result;
+
+/* Test-only implementation of the exact pinned LK heap API declarations.
+ * It is NOT the LK heap implementation and is never executed on device. */
+void *heap_alloc(size_t size, unsigned int alignment) {
+    if (alignment != 0 && (alignment & (alignment - 1u)) != 0) return (void *)0;
+    size_t a = alignment ? alignment : sizeof(void *);
+    if (alignment && a < 16u) a = 16u;
+    uintptr_t base = (uintptr_t)arena;
+    uintptr_t current = base + arena_used;
+    uintptr_t aligned = (current + a - 1u) & ~(uintptr_t)(a - 1u);
+    size_t next = (size_t)(aligned - base) + size;
+    if (next > sizeof(arena)) return (void *)0;
+    arena_used = next;
+    return (void *)aligned;
+}
+void heap_free(void *ptr) {
+    (void)ptr;
+}
+
+extern uint32_t linkslot_lk_heap_probe(uint32_t value);
+void _start(void) {
+    probe_result = linkslot_lk_heap_probe(21u);
+    for (;;) { }
+}
+'''
+    (abi / "lk_heap_shim.c").write_text(c, encoding="utf-8")
+    triple = "armv7a-none-eabi"
+    clang_target, emulation, machine = TARGETS[triple]
+    run(["cargo", "build", "--manifest-path", str(abi / "Cargo.toml"),
+         "--target", triple, "--release"],
+        env={"RUSTFLAGS": "-C panic=abort -C force-unwind-tables=no -C target-cpu=cortex-a53"},
+        log=out / "logs" / "lk-heap-rust-cargo.log")
+    archive = abi / "target" / triple / "release" / "liblk_real_heap_api_probe.a"
+    obj = abi / "lk-heap-shim.o"
+    elf = abi / "lk-heap-api-armv7a.elf"
+    map_file = abi / "lk-heap-api-armv7a.map"
+    run(["clang", f"--target={clang_target}", "-mcpu=cortex-a53", "-ffreestanding",
+         "-fno-builtin", "-fno-stack-protector", "-fno-unwind-tables",
+         "-fno-asynchronous-unwind-tables", "-D_SIZE_T_DEFINED_",
+         "-I", str(lk_source / "include"), "-Wall", "-Wextra", "-Werror",
+         "-c", str(abi / "lk_heap_shim.c"), "-o", str(obj)],
+        log=out / "logs" / "lk-heap-header-c-compile.log")
+    relocations = run(["readelf", "-Wr", str(archive)])
+    marker = re.findall(r"\b(R_ARM_[A-Z0-9_]+)\s+[^\n]*__aeabi_unwind_cpp_pr0", relocations)
+    if not marker or any(kind != "R_ARM_NONE" for kind in marker):
+        raise RuntimeError("LK heap ABI probe EHABI metadata marker changed: " + repr(marker))
+    run(["ld.lld", "-m", emulation, "-static", "-e", "_start",
+         "--defsym=__aeabi_unwind_cpp_pr0=0", f"-Map={map_file}",
+         "-o", str(elf), str(obj), str(archive)])
+    header = run(["readelf", "-h", str(elf)])
+    undefined = run(["llvm-nm", "-u", str(elf)])
+    symbols = run(["llvm-nm", "-g", str(elf)])
+    if machine not in header:
+        raise RuntimeError("LK heap API probe emitted the wrong ELF machine")
+    if undefined.strip():
+        raise RuntimeError("LK heap API probe unresolved symbols:\n" + undefined)
+    for symbol in ("heap_alloc", "heap_free", "linkslot_lk_heap_probe"):
+        if symbol not in symbols:
+            raise RuntimeError("LK heap ABI symbol missing from linked ELF: " + symbol)
+
+    report.append("## Pinned GammaOS LK heap API compatibility probe (AArch32 only)\n\n")
+    report.append(f"- LK reference commit: {actual}\n")
+    report.append("- Compiled against the pinned include/lib/heap.h declarations.\n")
+    report.append("- Rust GlobalAlloc calls heap_alloc(size_t, unsigned int) and heap_free(void *); the C shim implements only a test stub with matching signatures.\n")
+    report.append("- PASS: ARM ELF32 static link, expected heap symbols defined, no unresolved external symbols, linker map generated.\n")
+    report.append("- Important: this does NOT link or execute the real lib/heap/heap.c; it is header/signature/ABI compatibility evidence only.\n\n")
+
+    report.append("### LK allocator alignment and concurrency audit\n\n")
+    report.append("- heap_alloc rejects non-zero alignments that are not powers of two; zero is accepted. For positive alignments below 16 bytes, the implementation raises the requested alignment to 16 bytes.\n")
+    report.append("- heap_free accepts only the pointer; Rust GlobalAlloc::dealloc can map directly to it. Rust layout alignment must fit in the C unsigned int argument; the adapter returns null if it does not.\n")
+    report.append("- heap_alloc / heap_free protect their free-list mutations using LK enter_critical_section() / exit_critical_section().\n")
+    report.append("- The pinned LK thread header declares a global critical_section_count; kernel/thread.c defines it globally. ARM arch_disable_ints changes the local CPSR IRQ-mask bit. This proves local interrupt exclusion, not cross-core mutual exclusion.\n")
+    report.append("- Therefore this allocator adapter is not approved for concurrent multi-core use. It is usable only after proving secondary H700 cores are held off for the LK lifetime, or after adding and validating a cross-core heap lock / SMP-safe allocator.\n")
+    report.append("- This pinned LK branch is AArch32/MTK-oriented and is a reference, not an H700-ready kernel port.\n\n")
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--source", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--lk-source", type=Path, required=True)
     args = ap.parse_args()
-    source, out = args.source.resolve(), args.out.resolve()
+    source, out, lk_source = args.source.resolve(), args.out.resolve(), args.lk_source.resolve()
     out.mkdir(parents=True, exist_ok=True)
     report = [
         "# Linkslot 1.0.36 no_std / LK ABI feasibility build\n\n",
@@ -232,7 +391,8 @@ def main():
         build_candidates(source, out, report)
         report.append("## Rust staticlib / C ABI / allocator shim\n\n")
         build_abi(out, report)
-        report.append("\n## Result\n\nAll configured host-only compile/link gates passed. This only demonstrates compiler support, selected logic compiling with core+alloc, C-callable staticlib linkage, and a linkable allocator shim. It does not prove real LK heap ABI, startup state, memory map, exception setup, or device execution.\n")
+        build_lk_heap_abi(lk_source, out, report)
+        report.append("\n## Result\n\nAll configured host-only compile/link gates passed. This only demonstrates compiler support, selected logic compiling with core+alloc, C-callable staticlib linkage, and a linkable allocator shim. The LK heap test checks only the pinned header/signature ABI with a test stub, not the real heap implementation, SMP safety, startup state, memory map, exception setup, or device execution.\n")
     except Exception as exc:
         report.append(f"\n## FAILURE\n\n{type(exc).__name__}: {exc}\n")
         (out / "REPORT.md").write_text("".join(report), encoding="utf-8")
