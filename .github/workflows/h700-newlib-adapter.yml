@@ -1,0 +1,68 @@
+name: H700 newlib adapter ABI
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - ".github/workflows/h700-newlib-adapter.yml"
+      - "platform/h700/runtime/**"
+      - "scripts/test-h700-newlib-adapter.py"
+  push:
+    branches: ["porting/linkslot-1.0.36-feasibility"]
+    paths:
+      - ".github/workflows/h700-newlib-adapter.yml"
+      - "platform/h700/runtime/**"
+      - "scripts/test-h700-newlib-adapter.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: h700-newlib-adapter-\${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  adapter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned GammaOS LK reference
+        uses: actions/checkout@v4
+        with:
+          repository: TheGammaSqueeze/lk-mt6785
+          ref: 9bf1419a49e0af6dba8b05916df382c9c9c6d0a8
+          path: .ci/lk-reference
+          persist-credentials: false
+
+      - name: Install arm-none-eabi/newlib toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi libnewlib-dev
+
+      - name: Test host behavior and compile AArch32 adapter/LK binding
+        run: |
+          python3 scripts/test-h700-newlib-adapter.py \
+            --source . \
+            --lk-source .ci/lk-reference \
+            --out build/h700-newlib-adapter
+
+      - name: Publish adapter report
+        if: always()
+        run: |
+          if [ -f build/h700-newlib-adapter/REPORT.md ]; then
+            cat build/h700-newlib-adapter/REPORT.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload adapter objects and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: h700-newlib-adapter-\${{ github.run_id }}
+          path: build/h700-newlib-adapter/
+          if-no-files-found: warn
+          retention-days: 30
