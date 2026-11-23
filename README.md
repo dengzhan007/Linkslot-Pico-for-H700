@@ -72,6 +72,7 @@ bash scripts/build-h700-objects.sh
 - [模拟器与存档兼容性](docs/emulator-save-compatibility.md)
 - [开发路线与阶段验收](docs/roadmap.md)
 - [H700 AArch64 构建基础](docs/h700-build-scaffold.md)
+- [H700 newlib/LK 运行时适配与堆安全边界](docs/h700-newlib-runtime.md)
 - [上游源码基线](docs/upstream-baselines.md)
 
 ## 项目状态
