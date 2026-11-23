@@ -370,7 +370,7 @@ bool VDirCreate(const char* path) {
         "Requests Libretro VFS v3 with v2/v1 fallback and exposes the negotiated interface.\n"
         "Adds VDirOpen/VDirCreate based on v3 callbacks; rewind uses close/reopen of stored path.\n"
         "Removes vfs-file.c and vfs-dirent.c from this experimental build; VFileOpen requires frontend VFS.\n"
-        "Uses relative '.' config root through VFS; disables unused INI FILE wrappers; no host mkdir/getenv/getcwd.\\n"
+        "Uses relative '.' config root through VFS; disables unused INI FILE wrappers; no host mkdir/getenv/getcwd.\n"
         "Only the CI checkout is patched; Linkslot snapshot and upstream repository are unchanged.\n",
         encoding="utf-8"
     )
@@ -454,7 +454,7 @@ def main():
 
     (out / "vfs3-defined-symbols.txt").write_text(defined, encoding="utf-8")
     (out / "vfs3-undefined-raw.txt").write_text(undefined, encoding="utf-8")
-    (out / "vfs3-external-undefined.txt").write_text("\n".join(sorted(unames)) + "\n", encoding="utf-8")
+    (out / "vfs3-external-undefined.txt").write_text("\n".join(sorted(external_names)) + "\n", encoding="utf-8")
     (out / "vfs3-object-members.txt").write_text(members, encoding="utf-8")
     report = [
         "# mGBA AArch32 static archive using Libretro VFS v3\n\n",
@@ -463,14 +463,14 @@ def main():
         "mGBA requests VFS v3 (falls back to v2/v1); VFileOpen requires the frontend VFS; VDirOpen/VDirCreate use VFS v3.\n",
         "Archive size: " + str(archive.stat().st_size) + " bytes; object members: " + str(len(members.splitlines())) + ".\n",
         "Namespaced Libretro exports: " + str(len(EXPORTS)) + "/25; no unprefixed retro_* globals.\n",
-        "Unique external undefined symbols: " + str(len(unames)) + ".\n",
+        "Unique true external undefined symbols (archive-internal references resolved): " + str(len(external_names)) + ".\n",
         "POSIX dirent/stdio fallback symbols: 0 (guarded list checked).\n",
         "Full undefined list: vfs3-external-undefined.txt.\n\n",
         "Boundary: archive/dependency proof only. No final LK link, no actual ROM run, and no persistent H700 storage backend.\n",
     ]
     (out / "REPORT.md").write_text("".join(report), encoding="utf-8")
     print((out / "REPORT.md").read_text(encoding="utf-8"))
-    print("External symbols:\n" + "\n".join(sorted(unames)))
+    print("External symbols:\n" + "\n".join(sorted(external_names)))
 
 if __name__ == "__main__":
     main()
