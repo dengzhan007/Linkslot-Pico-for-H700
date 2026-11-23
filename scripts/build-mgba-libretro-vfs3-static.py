@@ -261,6 +261,7 @@ bool VDirCreate(const char* path) {
 }
 #endif
 '''
+    directory_c = directory_c.replace("\\t", "\t")
     (source / "src/platform/libretro/libretro-vfs-dir.c").write_text(directory_c, encoding="utf-8")
 
     current_source = "$" + "{CMAKE_CURRENT_SOURCE_DIR}"
