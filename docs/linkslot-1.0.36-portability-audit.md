@@ -161,6 +161,35 @@ void heap_free(void *ptr);
 
 本次 LK heap probe 使用固定 LK 头文件，但实现的 `heap_alloc/free` 是测试桩，**没有编译或链接真实 `lib/heap/heap.c`，也没有运行堆代码**。这仅是 header/signature/ABI 兼容证据。
 
+### AArch32 LK-as-BL33 入口/镜像布局 host-only 探针
+
+- Workflow run：[45104480127](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45104480127)，commit `79a07e0e053c124f32832b023a235084f1920849`，成功。
+- 使用固定 GammaOS LK `crt0.S` 与 `exceptions.S`，替换 `kmain` 和 exception callback 为测试桩，按 BaseOS 研究中的 BL33 slot `0x4a000000` 链接 ELF32/ARM。
+- 专用入口在镜像偏移 +0 放置 A32 分支，指向 `0x4a001024`；异常向量表移至 `0x4a001000`；`BOOT_ARGUMENT_LOCATION` 位于 `0x4a001020`；原 LK reset 路径位于其后。
+- LK 原 `crt0.S` 的向量表占 +4..+0x1f、启动参数槽位在 +0x20；BaseOS 兼容加载器会用不透明头数据覆盖 +4..+0x63f，因此必须迁移向量/参数槽位。
+- 为让入口包装避开头区，reset 路径被移到 +0x1000 之后；LK 原本 `sub r0, r0, #(.Laddr - _start)` 的 ARM 立即数随后超范围，临时适配改成 literal-pool 加载常量。
+- `arch/arm/arch.c::arch_early_init()` 之后还会把 VBAR 重设为 `MEMBASE`；真实端口必须同步改为 `__lk_vectors_start`，否则入口阶段设置会被覆盖。
+- 合成头覆盖测试确认：将 +4..+0x63f 换成不透明测试字节后，第一条入口分支不变，向量/入口/启动参数都未与头区重叠。该测试没有使用真实厂商头，也没有执行 ELF。
+- 探针 stub ELF 的 `_end=0x4a0033f8`、flat image 为 5100 bytes；这个小体积只代表 stub probe，不能推算完整 LK 镜像大小。链接约束 `0x4a0e0000` 只引用了当前 BaseOS loader 的 BSS 上界，不是新的 RAM/heap 授权。
+
+### LK A53 与 SMP 源码审计（当前阻断条件）
+
+固定参考仍为 `TheGammaSqueeze/lk-mt6785` commit `9bf1419a49e0af6dba8b05916df382c9c9c6d0a8`：
+
+- `arch/arm/rules.mk` 的 `ARM_CPU=cortex-a53` 分支虽然定义了 A53 feature flags，实际却加了 `-mcpu=cortex-a9`；H700 端必须改为 `-mcpu=cortex-a53`，再核对 FPU/NEON 与 float ABI。
+- `arch/arm/crt0.S` 只在 `ARM_CPU_CORTEX_A7` 条件下设置 ACTLR.SMP；没有 A53 专用路径。不能盲目复制；H700 端要先决定单核运行还是实现/验证 SMP coherency。
+- `kernel/thread.c` 使用一个全局 `current_thread`、一组全局 run queue 和一个全局 `critical_section_count`，没有看到 per-CPU 调度状态。
+- `include/kernel/thread.h` 的临界区通过全局 nesting count，在 0→1 时调用 `arch_disable_ints()`；A32 `arch_disable_ints` 仅设置执行核 CPSR.I。它只阻止本核 IRQ，不是跨核锁。
+- 因而参考 LK scheduler/heap 是 uniprocessor 设计。若 H700 的其他 Cortex-A53 核在 LK 运行期间可执行，则当前 scheduler 与 allocator 都不安全；必须实现 per-CPU scheduler/跨核锁，或通过真实启动链证据证明 secondary cores 持续处于关闭/停驻状态。
+- 现有 BL31→BL33 证据只证明主核进入 A32 SVC；secondary-core 状态仍为 UNKNOWN，不能据此声称 LK 可用四核。
+
+### Libretro 核心装载边界
+
+- Linkslot `slot-retro` 当前通过 `libloading::Library` 加载 `.so`，并依赖 `std`、文件路径、TLS 回调上下文和动态符号表；当前 Linux `.so` 产物不能直接用在 LK。
+- 可行方向是将每个 Libretro core 编成可静态链接的对象/库，再为 Linkslot 保留的 RetroCore 行为提供静态 API 表；若同时链接多个导出相同 `retro_*` 符号的核心，需要命名空间包装或分离加载区。
+- GammaOS Pico 参考分支的 `emu/gba/gba_core_abi.h` 描述了一个版本化 C import/export table；但源码文件明确写着“contract definition / not yet wired into the build”。它仅是 ABI 设计参考，不是已完成的通用核心动态加载功能。
+- 该参考的 `0x4e400000` 核心槽位与 MTK Pico 的地址/内存布局绑定，**不得用于 H700**；H700 需要在完成 RAM ownership 审计后单独规划核心代码、BSS、ROM、状态和 JIT 区域。
+
 ### AArch32 EHABI 说明
 
 Rust 1.96 的 AArch32 `alloc` 静态库含有 `__aeabi_unwind_cpp_pr0` 符号引用。已使用 `readelf -Wr` 检查全部引用，确认均为 `.ARM.exidx` 上的 `R_ARM_NONE` 元数据 relocation，不是可执行代码调用或 `PREL31` relocation。仅在本次 `panic=abort`、无异常展开的 ABI 探测中，通过 linker `--defsym=__aeabi_unwind_cpp_pr0=0` 解析该元数据标记。
@@ -182,8 +211,8 @@ Rust 1.96 的 AArch32 `alloc` 静态库含有 `__aeabi_unwind_cpp_pr0` 符号引
 
 ## 6. 下一步必须做的技术验证
 
-1. **启动架构决策**：评估把 AArch32 LK 作为厂商 BL31 的 AArch32 BL33（现有现场分析的 BL33 状态为 AArch32 SVC，SPSR `0x1d3`）的路线，与移植 AArch64 LK/建立 AArch64 runtime 的路线；不能只因 Rust 双目标都能编译就决定。
-2. **H700 多核状态审计**：查清 BL31 → BL33 时每个 Cortex-A53 核心的启动/停驻状态，以及 LK 生命周期内 secondary core 是否可能运行。若多核活动，不能复用当前依赖本核 IRQ 屏蔽的 heap 临界区作为全局 allocator 锁。
+1. **启动架构决策**：A32 LK-as-BL33 的 header/vector/entry host layout 已通过；接下来需验证真实 BaseOS header/package 接口、完整 LK 体积与 linker bound、A53 编译 flags、VBAR 迁移和 cold-entry 状态。与 AArch64 runtime 路线比较后再定，不能只因布局/交叉编译通过就宣布可启动。
+2. **H700 多核状态审计**：查清 BL31 → BL33 时每个 Cortex-A53 核心的启动/停驻状态。参考 LK scheduler 目前是单核设计（全局 current_thread/run queue/critical count + 本核 IRQ mask）；若 secondary core 可进入 LK，必须先实现 per-CPU scheduler、跨核同步与 SMP-safe allocator，不能直接复用。
 3. **LK heap 实现验证**：只有在 pinned LK heap 的平台依赖和编译配置可控后，尝试单独编译真实 `lib/heap/heap.c`；再考虑跨核 heap lock、对齐、free/coalescing、OOM 和初始化时序测试。
 4. **Linkslot 模块继续拆分**：保留 `slot-input` 的 47 项上游行为测试；进一步从 `slot-model` 分离路径/文件 I/O 助手，确保纯数据模型的 no_std 测试与上游语义保持一致。
 5. **第二批复用评估**：再评估 `slot-i18n` 静态翻译表和 `slot-cheevos` C 引擎；之后才开始 UI、存储、图形和 Libretro runtime 的分层设计。
