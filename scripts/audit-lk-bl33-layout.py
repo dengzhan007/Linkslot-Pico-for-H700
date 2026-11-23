@@ -98,6 +98,15 @@ lk_bl33_entry:
     isb
 """
     patched_crt0 = original_crt0[:i] + prefix + original_crt0[j:]
+    relocation = "sub\t\tr0, r0, #(.Laddr - _start)"
+    if patched_crt0.count(relocation) != 1:
+        raise RuntimeError("LK crt0 self-relocation instruction changed; re-audit before adapting")
+    # Moving reset behind the +0x1000 vectors makes the offset too large for
+    # one ARM data-processing immediate. Load it via the literal pool instead.
+    patched_crt0 = patched_crt0.replace(
+        relocation,
+        "ldr\t\tr1, =(.Laddr - _start)\n\tsub\t\tr0, r0, r1"
+    )
     (out / "crt0-bl33.S").write_text(patched_crt0, encoding="utf-8")
 
     c_stubs = r'''volatile int critical_section_count = 1;
