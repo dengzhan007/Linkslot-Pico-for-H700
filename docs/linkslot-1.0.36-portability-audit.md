@@ -293,6 +293,20 @@ Generic 相比 Linux 版本减少了 24 个 Linux/glibc 专属符号，包括 `o
 - Artifact ID：`14789909499`。
 - [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16) 仍是 draft。
 
+### 第八轮：mGBA VFS v3 arm-none-eabi/newlib 编译
+
+- Workflow run：[45114286962](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45114286962)，commit `cbb9208152dc3c85188ad374b7e085843b991565`，结论 success。
+- 安装真实 `arm-none-eabi` GCC/newlib 工具链，使用同一套 mGBA VFS v3 临时源码补丁构建；不是把 `CMAKE_SYSTEM_NAME=Generic` + glibc 再描述为 bare metal。
+- 最终 archive `mgba_libretro-vfs3-arm-none-eabi.a`：**2,856,556 bytes、94 个对象**。独立抽取首个成员并检查 ELF header：ELF32 / ARM / EABI5。
+- 25/25 个 `mgba_retro_*` 导出入口、`VDirOpen/VDirCreate/libretroVFSGetInterface` 均存在；旧 `vfs-file.c.obj`/ `vfs-dirent.c.obj` 不在归档；POSIX/stdio 文件与目录 API 没有作为外部依赖重新出现。
+- 真正外部未解析符号 **52 项**，按 archive `nm -u` 减全局定义计算。相较 glibc archive，符号转为 newlib 常见的 `__errno/_ctype_/gettimeofday/localtime/sscanf/strtol` 等接口，表明 sysroot ABI 已从 glibc 换到 newlib。
+- 该 archive 尚未链接 newlib/libm/libgcc/libnosys，也未接 LK 库；不能把 52 项都判为 newlib 不支持。下一步做 whole-archive link probe，辨别被通用 newlib/libgcc 满足的符号与仍需 H700/LK adapter 的剩余项。
+
+验证产物：
+- [第八轮 GitHub Actions 成功运行](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45114286962)
+- Artifact ID：`14791290676`。
+- [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16) 仍为 draft。
+
 ### AArch32 EHABI 说明
 
 Rust 1.96 的 AArch32 `alloc` 静态库含有 `__aeabi_unwind_cpp_pr0` 符号引用。已使用 `readelf -Wr` 检查全部引用，确认均为 `.ARM.exidx` 上的 `R_ARM_NONE` 元数据 relocation，不是可执行代码调用或 `PREL31` relocation。仅在本次 `panic=abort`、无异常展开的 ABI 探测中，通过 linker `--defsym=__aeabi_unwind_cpp_pr0=0` 解析该元数据标记。
@@ -313,6 +327,7 @@ Rust 1.96 的 AArch32 `alloc` 静态库含有 `__aeabi_unwind_cpp_pr0` 符号引
 - [第五轮 GitHub Actions 成功运行（真实 mGBA Linux/Generic A32 archive）](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45108202490)
 - [第六轮 GitHub Actions 成功运行（VFS v3 ABI + 全部前序验证）](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45109949583)
 - [第七轮 GitHub Actions 成功运行（真实 mGBA VFS v3 文件/目录 archive）](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45113739310)
+- [第八轮 GitHub Actions 成功运行（mGBA arm-none-eabi/newlib VFS v3 archive）](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45114286962)
 - [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16)
 
 
@@ -322,7 +337,7 @@ Rust 1.96 的 AArch32 `alloc` 静态库含有 `__aeabi_unwind_cpp_pr0` 符号引
 2. **H700 多核状态审计**：查清 BL31 → BL33 时每个 Cortex-A53 核心的启动/停驻状态。参考 LK scheduler 目前是单核设计（全局 current_thread/run queue/critical count + 本核 IRQ mask）；若 secondary core 可进入 LK，必须先实现 per-CPU scheduler、跨核同步与 SMP-safe allocator，不能直接复用。
 3. **LK heap 实现验证**：只有在 pinned LK heap 的平台依赖和编译配置可控后，尝试单独编译真实 `lib/heap/heap.c`；再考虑跨核 heap lock、对齐、free/coalescing、OOM 和初始化时序测试。
 4. **Linkslot 模块继续拆分**：保留 `slot-input` 的 47 项上游行为测试；进一步从 `slot-model` 分离路径/文件 I/O 助手，确保纯数据模型的 no_std 测试与上游语义保持一致。
-5. **mGBA → H700 VFS/libc 适配**：真实 mGBA A32 VFS v3 文件/目录 archive 已通过；旧 stdio/dirent/Linux descriptor/host config dir 依赖已从该变体移除，剩余 51 个真正外部符号。下一步先试 `arm-none-eabi`/newlib 构建，再映射 51 项到 LK libc、libm/EABI、RTC 和日志服务；随后将 Libretro VFS v3 接入 Linkslot `slot-retro`，最后实现真实 H700 SD/FAT 文件/目录 backend。存档/即时状态/battery save 语义必须保留。
+5. **mGBA → H700 VFS/libc 适配**：真实 mGBA A32 VFS v3 archive 已同时通过 arm-linux-gnueabi/glibc 与 arm-none-eabi/newlib 编译；newlib archive 为 94 个对象、52 个真正外部符号。下一步用 newlib/libm/libgcc/libnosys 做 whole-archive link probe，再把剩余项映射到 LK libc、RTC、日志和 EABI；之后把 Libretro VFS v3 接入 Linkslot `slot-retro`，最后实现真实 H700 SD/FAT 文件/目录 backend。存档/即时状态/battery save 语义必须保留。
 6. 继续单独关闭 H700 启动交接/内存 ownership 的 NO-GO 门槛；未关闭前不得执行设备 payload。
 
 仍不生成可刷写镜像、不写 SD、不修改启动区域、不执行 payload。
