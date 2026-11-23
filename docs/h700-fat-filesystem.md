@@ -22,6 +22,16 @@ The imported code is the generic filesystem layer only:
 
 Do **not** import the adjacent `sd_fat.c/.h` as an H700 driver. It depends on MediaTek `mmc_wrap_bread/bwrite`, `mmc_legacy_init`, `msdc_ext_sd_power_on`, MTK watchdog and mutex services, and MTK-specific SD host numbering/power sequencing. None is evidence of H700 controller support.
 
+## H700 CMD17 read-only bridge status
+
+The H700-facing glue now includes `h700_sunxi_mmc_fat.c`:
+
+- `h700_sunxi_mmc_fat_read()` implements the imported `fat_read_fn` callback by issuing one CMD17 per 512-byte sector. It always uses an explicitly aligned bounce sector before copying into the caller's buffer, since the FAT code's byte-oriented local arrays do not promise 4-byte alignment.
+- `h700_sunxi_mmc_fat_mount_gpt_partition()` accepts an already-validated GPT entry, validates the full partition extent against card capacity and the 32-bit FAT LBA limit, then calls `fat_mount_partition()`. FAT16/FAT32/exFAT mount validation now checks the declared volume size, FAT capacity, heap/data region and root cluster against that extent.
+- `scripts/test-h700-sunxi-mmc-fat.sh` covers aligned-bounce reads, sequential CMD17 sector reads and a read-only FAT32 p7 mount. `scripts/test-h700-sunxi-mmc-fat-scan.sh` goes further: a synthetic FAT32 disk is mounted through GPT/CMD17, its ROM directory is enumerated, and ROM/BIOS file content is read back through the PIO path.
+
+All of these are host-side register/media simulations. They do not prove that the real RG34XX's card is on MMC0, that PIO/APB1 and card power have been configured correctly, or that any physical VBR/FAT sector has been read. The sdc0 top-level bring-up API still requires platform-provided MMIO mappings, PIO/APB1 enablement and card power; it has not been run against live hardware.
+
 ## Current validation
 
 - `scripts/test-h700-fat-compile.py` compiles all three production C files and the host test harnesses with C11, `-Wall -Wextra -Werror`. It also forces the `__aarch64__` preprocessor branch in `fat_wr.c` against narrow LK mutex/critical-section declarations, so the AArch64 writer-lock branch is not silently compiled out.
@@ -59,9 +69,9 @@ This is a substantially better board-level reference, but **does not identify wh
 
 ## Not implemented
 
-- H700 SD/MMC host driver, clocks, pinmux, card power and card-detect.
-- Partition selection and mount policy.
-- VFS file/directory handle table and path resolver wiring.
+- Physical H700 SD/MMC operation: the current sdc0 code is host-tested only; real MMIO mapping, PIO/APB1 clock, card power, card-detect and a live CMD17 read remain unvalidated on RG34XX.
+- Automatic partition-selection policy. A caller can explicitly mount a GPT record with its exact extent, but no real-card GPT scan or automatic UDISK/primary selection has been performed.
+- VFS file/directory handle table and path resolver wiring to the FAT/exFAT functions.
 - Durable block flush/barrier, power-loss-safe save/state replacement.
 - Concurrency protection across frontend, core callbacks and storage.
 - Device testing. No card writes or boot writes are authorized by this port.

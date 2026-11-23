@@ -19,6 +19,7 @@ on:
       - "platform/h700/storage/fat/**"
       - "scripts/test-h700-fat-partition-bounds.sh"
       - "scripts/test-h700-sunxi-mmc-fat.sh"
+      - "scripts/test-h700-sunxi-mmc-fat-scan.sh"
       - ".github/workflows/h700-arch-check.yml"
   pull_request:
     paths:
@@ -62,6 +63,7 @@ jobs:
           sh scripts/test-h700-sdc0-readonly-scan.sh
           sh scripts/test-h700-fat-partition-bounds.sh
           sh scripts/test-h700-sunxi-mmc-fat.sh
+          sh scripts/test-h700-sunxi-mmc-fat-scan.sh
 
   compile-aarch64-objects:
     runs-on: ubuntu-latest

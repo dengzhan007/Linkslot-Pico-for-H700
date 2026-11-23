@@ -92,6 +92,13 @@ The synthetic RG34XX regression vector uses C_SIZE 29,663, which decodes to **30
 
 Run `sh scripts/test-h700-sunxi-mmc-fat.sh`.
 
+### GPT -> CMD17 -> FAT32 directory/file scan (host-only)
+
+A higher-level fake-card test now builds a synthetic FAT32 p7 with a root `ROMS` directory, a `BIOS.BIN` file, and `ROMS/TITLE.GBA`. It mounts that volume using the GPT partition record and the same CMD17 PIO callback, enumerates the subdirectory, opens both files case-insensitively, and reads back their four-byte payloads. The test confirms the generic `fat_ro.c` directory traversal and file reader work over the new H700 block adapter, and that no SD write command is emitted.
+
+This is still host emulation. The FAT sectors and directory contents are synthetic, and the test does not mount or enumerate the physical RG34XX card. Run `sh scripts/test-h700-sunxi-mmc-fat-scan.sh`.
+
+
 
 `h700_sunxi_sdc0_readonly_scan.c` is the top-level orchestration API. Given mapped PIO/CCU/MMC callbacks and caller-supplied timeouts, it configures PF0–PF5 with the pinned H616 reference profile, enables MMC0 bus/reset, requests the 400 kHz identification clock, identifies and selects the SD v2 card, creates the CMD17-only block reader, and parses the primary GPT into caller-owned partition storage. The result preserves card identification and GPT error codes for diagnostics.
 
