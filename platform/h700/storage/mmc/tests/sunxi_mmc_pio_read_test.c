@@ -28,6 +28,7 @@ struct fake_mmc {
     uint64_t now_ms;
     int fifo_available;
     int inject_controller_error;
+    int inject_card_r1_error;
     int omit_data_over;
     int hold_recovery;
     int data0_mask_seen;
@@ -104,6 +105,8 @@ static void fake_write32(void *context, uint32_t offset, uint32_t value)
             fake->regs[offset / 4u] &= ~SUNXI_MMC_CMD_START;
             fake->regs[SUNXI_MMC_REG_RINT / 4u] |=
                 SUNXI_MMC_RINT_COMMAND_DONE;
+            fake->regs[SUNXI_MMC_REG_RESP0 / 4u] =
+                fake->inject_card_r1_error ? (1u << 31) : 0x00000900u;
             if (!fake->omit_data_over)
                 fake->regs[SUNXI_MMC_REG_RINT / 4u] |=
                     SUNXI_MMC_RINT_DATA_OVER;
@@ -331,6 +334,29 @@ static int test_controller_error_recovers(void)
     return 1;
 }
 
+static int test_card_r1_error_is_not_reported_as_success(void)
+{
+    struct fake_mmc fake;
+    struct sunxi_mmc_io io;
+    struct sunxi_mmc_readonly_host host;
+    _Alignas(4) uint8_t buffer[512];
+    uint32_t response = 0u;
+
+    fake_init(&fake, 1);
+    fake.inject_card_r1_error = 1;
+    io = make_io(&fake);
+    host = make_host(&io, TEST_SECTORS, 1);
+
+    CHECK(sunxi_mmc_read_sector(&host, 1u, buffer, sizeof(buffer), &response) ==
+              SUNXI_MMC_READ_CARD_ERROR,
+          "card-side R1 error is returned separately");
+    CHECK((response & (1u << 31)) != 0u,
+          "card R1 status is preserved for diagnostics");
+    CHECK(fake.recovery_command_count == 1u,
+          "card-side R1 error triggers controller recovery");
+    return 1;
+}
+
 static int test_missing_data_over_times_out(void)
 {
     struct fake_mmc fake;
@@ -379,6 +405,7 @@ int main(void)
         !test_invalid_buffer_and_lba() ||
         !test_fifo_timeout_recovers_controller() ||
         !test_controller_error_recovers() ||
+        !test_card_r1_error_is_not_reported_as_success() ||
         !test_missing_data_over_times_out() ||
         !test_recovery_timeout_is_reported())
         return EXIT_FAILURE;

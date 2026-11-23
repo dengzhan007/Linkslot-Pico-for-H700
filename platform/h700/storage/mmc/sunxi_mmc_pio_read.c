@@ -7,6 +7,11 @@
 #define SD_BLOCK_WORDS           (SD_BLOCK_SIZE / 4u)
 #define SD_FIFO_FALLBACK_WORDS   32u
 #define SD_POLL_DELAY_US         10u
+#define SD_R1_ERROR_MASK ( \
+    (1u << 31) | (1u << 30) | (1u << 29) | (1u << 28) | \
+    (1u << 27) | (1u << 26) | (1u << 25) | (1u << 24) | \
+    (1u << 23) | (1u << 22) | (1u << 21) | (1u << 20) | \
+    (1u << 19) | (1u << 16) | (1u << 15) | (1u << 7))
 
 static int host_valid(const struct sunxi_mmc_readonly_host *host)
 {
@@ -238,6 +243,13 @@ enum sunxi_mmc_read_result sunxi_mmc_read_sector(
     response_word = io->read32(io->context, SUNXI_MMC_REG_RESP0);
     if (response != 0)
         *response = response_word;
+
+    /* A completed controller transfer may still carry a card-side R1 error. */
+    if ((response_word & SD_R1_ERROR_MASK) != 0u) {
+        if (recover_controller(io, host->recovery_timeout_ms) != 0)
+            return SUNXI_MMC_READ_RECOVERY_FAILED;
+        return SUNXI_MMC_READ_CARD_ERROR;
+    }
 
     finish_success(io);
     return SUNXI_MMC_READ_OK;
