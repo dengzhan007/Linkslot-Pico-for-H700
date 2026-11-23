@@ -26,7 +26,8 @@ on:
       - "scripts/test-linkslot-static-mgba-selection.py"
       - "platform/h700/runtime/storage_path.rs"
       - "scripts/test-h700-storage-path.py"
-      - "scripts/test-h700-fat-compile.py"\n      - "scripts/test-h700-fat-images.sh"
+      - "scripts/test-h700-fat-compile.py"
+      - "scripts/test-h700-fat-images.sh"
       - "platform/h700/storage/fat/**"
       - "platform/h700/runtime/mgba_static.rs"
       - "platform/h700/runtime/tests/mgba_static_stub.c"
@@ -152,7 +153,10 @@ jobs:
             --source platform/h700/storage/fat \
             --out build/audit-work/linkslot-1.0.36/h700-fat-compile
 
-      - name: Run FAT32 and exFAT real-image host regressions\n        run: bash scripts/test-h700-fat-images.sh\n\n      - name: Build pinned mGBA as AArch32 namespaced static archive
+      - name: Run FAT32 and exFAT real-image host regressions
+        run: bash scripts/test-h700-fat-images.sh
+
+      - name: Build pinned mGBA as AArch32 namespaced static archive
         run: |
           python3 scripts/build-mgba-aarch32-static.py \
             --source .ci/mgba-source \
