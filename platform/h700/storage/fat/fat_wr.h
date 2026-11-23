@@ -16,7 +16,7 @@
  * already exists, with `len` bytes from `buf`. Allocates a fresh cluster chain,
  * writes the data, and writes/updates the directory entry; the old chain (on
  * replace) is freed. Returns 0 on success, negative on error (no writer / dir
- * missing / disk full / name not 8.3). */
+ * missing / disk full / invalid name). */
 int fat_wr_put(fat_vol *v, const char *dirpath, const char *name,
 	       const void *buf, uint32_t len);
 
