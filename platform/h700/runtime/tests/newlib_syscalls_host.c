@@ -24,6 +24,7 @@ extern int h700_test_write(int, const char *, int);
 extern int h700_test_gettimeofday(struct timeval *, void *);
 extern int h700_test_getpid(void);
 extern int h700_test_kill(int, int);
+extern void h700_test_exit(int);
 
 static int g_heap_ready;
 static int g_fail_alloc;
