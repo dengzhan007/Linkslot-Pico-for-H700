@@ -26,7 +26,7 @@ extern int h700_test_kill(int, int);
 
 static int g_heap_ready;
 static int g_single_cpu;
-static unsigned g_allocs, g_reallocs, g_frees;
+static unsigned g_allocs, g_frees;
 static unsigned g_fatal_calls;
 static int g_read_mode;
 static int g_time_mode;
@@ -45,12 +45,6 @@ static void *fake_heap_alloc(size_t size, unsigned int alignment)
         return NULL;
     }
     return p;
-}
-
-static void *fake_heap_realloc(void *ptr, size_t size)
-{
-    g_reallocs++;
-    return realloc(ptr, size);
 }
 
 static void fake_heap_free(void *ptr)
@@ -119,7 +113,6 @@ int main(void)
     struct h700_newlib_ops bad = {0};
     struct h700_newlib_ops ops = {
         .heap_alloc = fake_heap_alloc,
-        .heap_realloc = fake_heap_realloc,
         .heap_free = fake_heap_free,
         .heap_ready = fake_heap_ready,
         .single_cpu_active = fake_single_cpu,
@@ -132,7 +125,7 @@ int main(void)
     struct timeval tv;
     char input[8] = {0};
     char *p, *q;
-    unsigned alloc_before, realloc_before, free_before;
+    unsigned alloc_before, free_before;
 
     errno = 0;
     CHECK(h700_test_malloc(16) == NULL && errno == ENOMEM,
@@ -155,6 +148,7 @@ int main(void)
     CHECK(p != NULL && ((uintptr_t)p & 15u) == 0,
           "malloc requests and receives 16-byte alignment");
     memset(p, 0x5a, 32);
+    CHECK(((uintptr_t)p & 15u) == 0, "malloc result remains 16-byte aligned");
 
     q = (char *)h700_test_calloc(4, 8);
     CHECK(q != NULL, "calloc succeeds");
@@ -166,23 +160,29 @@ int main(void)
     CHECK(h700_test_calloc(SIZE_MAX, 2) == NULL && errno == ENOMEM,
           "calloc detects multiplication overflow");
 
+    h700_test_free(q);
     alloc_before = g_allocs;
-    realloc_before = g_reallocs;
+    free_before = g_frees;
     q = (char *)h700_test_realloc(NULL, 24);
-    CHECK(q != NULL && g_allocs == alloc_before + 1 &&
-          g_reallocs == realloc_before,
-          "realloc(NULL,n) uses heap_alloc, not LK heap_realloc(NULL)");
+    CHECK(q != NULL && g_allocs == alloc_before + 1,
+          "realloc(NULL,n) uses aligned LK heap_alloc");
 
     strcpy(q, "old");
+    alloc_before = g_allocs;
+    free_before = g_frees;
     char *grown = (char *)h700_test_realloc(q, 64);
     CHECK(grown != NULL && !strcmp(grown, "old"),
-          "realloc preserves content through LK heap_realloc");
-    CHECK(g_reallocs == realloc_before + 1, "realloc dispatches once");
+          "realloc preserves original contents");
+    CHECK(((uintptr_t)grown & 15u) == 0,
+          "realloc preserves 16-byte newlib alignment");
+    CHECK(g_allocs == alloc_before + 1 && g_frees == free_before + 1,
+          "realloc allocates an aligned block and releases the old raw block");
 
     free_before = g_frees;
     h700_test_free(grown);
     h700_test_free(NULL);
     CHECK(g_frees == free_before + 1, "free(NULL) is a no-op");
+    h700_test_free(p);
 
     errno = 0;
     CHECK(h700_test_sbrk(4096) == (void *)-1 && errno == ENOMEM,
