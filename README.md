@@ -30,7 +30,7 @@
 
 - 已建立 RG34XX / Allwinner H700 / Cortex-A53 的 AArch64 freestanding 编译检查及 GitHub Actions。
 - 当前检查只生成并验证 C11、C++17 和 AArch64 汇编目标文件，不是可启动 payload；加载地址、入口、EL、栈和 AArch32-to-AArch64 交接仍待启动链审计。
-- Linkslot 即将发布大版本，暂缓导入/同步上游源码和逐 crate 复用审计，避免对即将过时的版本重复适配。
+- 已归档用户提供的 linkSlot 1.0.36 源码快照（`upstream/linkslot`，快照 commit `8590d6ff`）；正在审查逐 crate 复用范围和 LK Rust runtime 可行性。该 ZIP 不含原始 Git 历史，不能把快照 commit 当作上游 commit。
 
 本地运行 AArch64 编译检查：
 
@@ -43,11 +43,13 @@ bash scripts/build-h700-objects.sh
 
 ## Linkslot 上游同步
 
-项目不要求直接使用原版 Linkslot 发布包升级。重点是尽量保持上游业务代码原样、将 H700/LK 适配放在独立目录，通过固定 commit 的 Git subtree 跟进上游，减少每次更新时需要手工修改的代码和重新适配范围。
+项目不要求直接使用原版 Linkslot Linux 发布包。目标是尽量保持上游业务逻辑和数据语义，将 H700/LK 适配放在独立目录，减少每次更新时需要重新移植的范围。
 
-**当前等待 Linkslot 即将发布的大版本后再确定导入基线。** 在此之前优先推进不依赖 Linkslot 内部 API 的 H700 构建基础、启动链和硬件调查。
+**当前源码基线：** 用户提供的 linkSlot 1.0.36 已归档到本仓库 `upstream/linkslot` 分支。原始输入是无 `.git` 的 ZIP，原始上游 commit/tag 不可得；仓库中的 `8590d6ff` 是快照归档 commit，不是上游源码 commit。当前先完成逐 crate 复用审计和 LK Rust ABI/工具链验证，尚不把整个 workspace 导入 `third_party/linkslot`。
 
-具体同步规则见 [Linkslot 上游同步与移植边界](docs/linkslot-upstream-sync.md)。
+特别注意：Linkslot 当前 `device` feature 仍构建为 AArch64 Linux/glibc 程序，不是 LK/bare-metal；GammaOS LK 参考分支本身是 AArch32。两者的 runtime/ABI 选择必须先解决。
+
+具体规则见 [Linkslot 上游同步与移植边界](docs/linkslot-upstream-sync.md) 和 [1.0.36 可移植性审计](docs/linkslot-1.0.36-portability-audit.md)。
 
 ## 重要设计文档
 
