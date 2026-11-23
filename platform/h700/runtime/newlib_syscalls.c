@@ -19,6 +19,7 @@
 
 #define H700_FATAL_HEAP_UNSAFE 0x7001
 #define H700_ALLOC_MAGIC 0x48373030u
+#define H700_LK_HEAP_INTERNAL_OVERHEAD 128u
 
 typedef struct __attribute__((aligned(16))) {
     size_t size;
@@ -88,7 +89,7 @@ void *malloc(size_t size)
     }
 
     /* A private aligned header retains the requested size and raw LK pointer. */
-    if (size > SIZE_MAX - sizeof(h700_alloc_header_t)) {
+    if (size > SIZE_MAX - sizeof(h700_alloc_header_t) - H700_LK_HEAP_INTERNAL_OVERHEAD) {
         errno = ENOMEM;
         return NULL;
     }
