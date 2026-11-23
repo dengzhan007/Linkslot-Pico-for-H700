@@ -22,6 +22,9 @@ on:
       - "scripts/audit-libretro-vfs-v3-abi.py"
       - "scripts/test-linkslot-slot-retro-vfs.py"
       - "scripts/test-linkslot-static-core-api.py"
+      - "scripts/test-linkslot-mgba-static-rust-binding.py"
+      - "platform/h700/runtime/mgba_static.rs"
+      - "platform/h700/runtime/tests/mgba_static_stub.c"
       - "scripts/probe-mgba-static-api-link.py"
       - "platform/h700/**"
       - "scripts/build-h700-objects.sh"
@@ -116,6 +119,14 @@ jobs:
           python3 scripts/test-linkslot-static-core-api.py \
             --source .ci/upstream-linkslot \
             --out build/audit-work/linkslot-1.0.36/slot-retro-static-api
+
+      - name: Bind namespaced mGBA exports to the Rust slot-retro API type
+        run: |
+          python3 scripts/test-linkslot-mgba-static-rust-binding.py \
+            --source .ci/upstream-linkslot \
+            --module platform/h700/runtime/mgba_static.rs \
+            --stub platform/h700/runtime/tests/mgba_static_stub.c \
+            --out build/audit-work/linkslot-1.0.36/slot-retro-static-mgba
 
       - name: Build pinned mGBA as AArch32 namespaced static archive
         run: |
