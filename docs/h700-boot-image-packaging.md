@@ -50,7 +50,7 @@ python3 tools/h700_boot_image.py extract-inputs \
 - dtb.bin
 - extracted-manifest.json
 
-manifest 记录源分区 hash、活动镜像 hash、每个拆分组件的长度和 SHA-256。脚本不会修改原始分区 dump，也不会触碰 SD 卡。offset 和 size 必须显式提供，不会扫描分区或猜测哪个 Android image 是活动镜像。
+manifest 记录源分区 hash、活动镜像 hash、每个拆分组件的长度和 SHA-256。脚本不会修改原始分区 dump，也不会触碰 SD 卡。offset 和 size 必须显式提供，不会扫描分区或猜测哪个 Android image 是活动镜像。对于文档给出的已审计 offset/size，工具还会核对整张 image 的 FNV-1a（0x04762a5f）以及 BOL4 component length/packed length/unpacked length/FNV（0x80474e / 0x80473e / 0x010a7008 / 0xb4c47d39）；任意一项不符都会拒绝提取。
 
 注意：0x03000000 / 0x829000 是这次 RG34XX 现场采集报告记录的固定审计值，不是所有固件版本的通用常量。更换设备、固件或 boot 分区来源前，必须重新核对对应报告和镜像头部。
 
@@ -106,7 +106,7 @@ C 互操作测试夹具 `tools/vendor/baseos-native-lz4/` 逐字保留 BaseOS-Mu
 
 ## 验证与限制
 
-CI 的 unittest discover 运行 13 项 host tests，覆盖 raw LZ4、BOL4 FNV/长度/损坏输入、AArch64 Image magic、Android v2 layout、image ID、load-address policy、16 MiB image budget、本地分区 dump 的有界提取、提取 hash manifest、原始文件不变性，以及与 BaseOS native C decoder 的互操作。Linux runner 会编译并运行固定版本的 native C decoder；Windows runner 运行纯 Python 测试（若没有 host C compiler 则跳过 C 互操作测试）。
+CI 的 unittest discover 运行 14 项 host tests，覆盖 raw LZ4、BOL4 FNV/长度/损坏输入、AArch64 Image magic、Android v2 layout、image ID、load-address policy、16 MiB image budget、本地分区 dump 的有界提取、提取 hash manifest、原始文件不变性、已审计活动镜像 fingerprint，以及与 BaseOS native C decoder 的互操作。Linux runner 会编译并运行固定版本的 native C decoder；Windows runner 运行纯 Python 测试（若没有 host C compiler 则跳过 C 互操作测试）。
 
 **该工具不是完整固件构建器，也不构成实机启动许可。** 它不会生成或修改 Boot0、TOC1、BL31、BL33、SPL、分区表或安装包；不会写 SD/Boot 区；不会执行 payload。Android v2 文件通过结构校验，只代表封装与当前 loader 的文件格式相符，不代表内存归属、SMC 目标地址、watchdog 恢复、UART/显示观察通道或 RG34XX 冷启动已经通过。
 

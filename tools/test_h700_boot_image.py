@@ -163,6 +163,21 @@ class AndroidV2Tests(unittest.TestCase):
                                       capture_output=True, text=True)
             self.assertNotEqual(rejected.returncode, 0)
 
+
+    def test_audited_rg34xx_active_extent_rejects_structurally_valid_other_image(self):
+        kernel = fake_kernel()
+        bol4 = boot.build_bol4(kernel)
+        dtb_size = (boot.RG34XX_ACTIVE_IMAGE_BYTES - boot.PAGE_SIZE -
+                    boot.align_page(len(bol4)))
+        dtb = bytearray(dtb_size)
+        dtb[:4] = b"\xd0\x0d\xfe\xed"
+        struct.pack_into(">I", dtb, 4, 40)
+        image = boot.build_android_v2(fake_header(), bol4, bytes(dtb),
+                                      max_image=boot.MAX_ANDROID_IMAGE)
+        self.assertEqual(len(image), boot.RG34XX_ACTIVE_IMAGE_BYTES)
+        with self.assertRaisesRegex(boot.ImageError, "FNV-1a mismatch"):
+            boot.validate_rg34xx_reference_active_image(image, bol4)
+
     def test_extract_inputs_from_local_partition_dump(self):
         kernel = fake_kernel()
         bol4 = boot.build_bol4(kernel)

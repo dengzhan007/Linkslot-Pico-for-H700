@@ -25,6 +25,15 @@ ANDROID_TAGS_ADDR = 0x40000100
 MAX_KERNEL_OUTPUT = 0x01F80000
 MAX_ANDROID_IMAGE = 0x01000000
 
+# Exact identity from the read-only RG34XX active-loader capture on 2026-11-23.
+RG34XX_ACTIVE_IMAGE_OFFSET = 0x03000000
+RG34XX_ACTIVE_IMAGE_BYTES = 0x00829000
+RG34XX_ACTIVE_IMAGE_FNV1A32 = 0x04762A5F
+RG34XX_ACTIVE_BOL4_BYTES = 0x0080474E
+RG34XX_ACTIVE_BOL4_PACKED_BYTES = 0x0080473E
+RG34XX_ACTIVE_KERNEL_BYTES = 0x010A7008
+RG34XX_ACTIVE_BOL4_FNV1A32 = 0xB4C47D39
+
 
 class ImageError(ValueError):
     """Invalid or unsupported kernel/boot-image input."""
@@ -288,6 +297,22 @@ def build_android_v2(header_template: bytes, bol4_kernel: bytes, dtb: bytes,
 
 
 
+
+def validate_rg34xx_reference_active_image(image: bytes, bol4: bytes) -> None:
+    """Require the exact image and BOL4 identity recorded in the RG34XX round-16 audit."""
+    if len(image) != RG34XX_ACTIVE_IMAGE_BYTES:
+        raise ImageError("RG34XX reference active-image length mismatch")
+    if fnv1a32(image) != RG34XX_ACTIVE_IMAGE_FNV1A32:
+        raise ImageError("RG34XX reference active-image FNV-1a mismatch")
+    if len(bol4) != RG34XX_ACTIVE_BOL4_BYTES or len(bol4) < 16:
+        raise ImageError("RG34XX reference BOL4 component length mismatch")
+    packed_len, output_len, checksum = struct.unpack_from("<III", bol4, 4)
+    if (packed_len != RG34XX_ACTIVE_BOL4_PACKED_BYTES or
+            output_len != RG34XX_ACTIVE_KERNEL_BYTES or
+            checksum != RG34XX_ACTIVE_BOL4_FNV1A32):
+        raise ImageError("RG34XX reference BOL4 header identity mismatch")
+
+
 def extract_android_v2_inputs(partition: bytes, offset: int, image_size: int) -> dict[str, bytes]:
     """Extract the active Android v2 inputs from an explicitly bounded p4 dump."""
     if offset < 0 or image_size <= 0 or offset > len(partition) or image_size > len(partition) - offset:
@@ -295,6 +320,8 @@ def extract_android_v2_inputs(partition: bytes, offset: int, image_size: int) ->
     image = partition[offset:offset + image_size]
     header, parts = split_android_v2(image)
     bol4, initrd, second, recovery_dtbo, dtb = parts
+    if offset == RG34XX_ACTIVE_IMAGE_OFFSET and image_size == RG34XX_ACTIVE_IMAGE_BYTES:
+        validate_rg34xx_reference_active_image(image, bol4)
     if second or recovery_dtbo:
         raise ImageError("audited RG34XX active image expects empty second and recovery-DTBO components")
     kernel = unpack_bol4(bol4)
