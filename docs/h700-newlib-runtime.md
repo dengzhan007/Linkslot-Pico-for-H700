@@ -23,9 +23,11 @@ The LK source is a useful API/reference baseline, not proof that its MT6785 plat
 
 ## Allocator contract
 
-platform/h700/runtime/newlib_syscalls.c overrides newlib's malloc/calloc/realloc/free and routes allocations through injected LK heap services.
+platform/h700/runtime/newlib_syscalls.c overrides both public malloc/calloc/realloc/free and reentrant _malloc_r/_calloc_r/_realloc_r/_free_r entry points, routing all of them through injected LK heap services. This is necessary because newlib's public malloc wrapper dispatches to _malloc_r; overriding only malloc would allow internal libc callers to reach newlib's own _sbrk_r-backed pool.
 
 The adapter does not call heap_realloc(). It places a 16-byte-aligned private header in each heap_alloc(size, 16) block, records the user allocation length, and implements realloc() as aligned allocate + bounded copy + free. The header size is rounded to a multiple of 16 so the returned user pointer remains 16-byte aligned on AArch32.
+
+The reentrant wrappers set the supplied struct _reent error field on allocation failure. The newlib __malloc_lock/__malloc_unlock hooks are no-ops because no newlib-owned malloc pool is used; the actual shared allocator is LK heap_alloc/heap_free, whose local critical sections protect each free-list operation. This is safe only under the explicit single-active-CPU gate. It is not a cross-core lock and does not make LK SMP-safe.
 
 The adapter rejects allocations unless both callbacks report true:
 
