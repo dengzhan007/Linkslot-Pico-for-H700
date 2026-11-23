@@ -44,11 +44,8 @@ static int heap_is_safe(void)
            g_ops.single_cpu_active();
 }
 
-static void fatal_if_unsafe_heap(void)
+static void stop_forever(void)
 {
-    if (g_ops_installed && g_ops.fatal) {
-        g_ops.fatal(H700_FATAL_HEAP_UNSAFE);
-    }
 #if defined(__arm__)
     for (;;) {
         __asm__ volatile("wfi");
@@ -56,6 +53,14 @@ static void fatal_if_unsafe_heap(void)
 #else
     __builtin_trap();
 #endif
+}
+
+static void fatal_if_unsafe_heap(void)
+{
+    if (g_ops_installed && g_ops.fatal) {
+        g_ops.fatal(H700_FATAL_HEAP_UNSAFE);
+    }
+    stop_forever();
 }
 
 void *malloc(size_t size)
@@ -206,6 +211,7 @@ int _read(int fd, char *buffer, int length)
         return -1;
     }
 
+    errno = 0;
     result = g_ops.console_read(buffer, (size_t)length);
     if (result < 0) {
         if (errno == 0) {
@@ -240,6 +246,7 @@ int _write(int fd, const char *buffer, int length)
         return -1;
     }
 
+    errno = 0;
     result = g_ops.console_write(buffer, (size_t)length);
     if (result < 0) {
         if (errno == 0) {
@@ -267,6 +274,7 @@ int _gettimeofday(struct timeval *tv, void *tz)
         errno = ENOSYS;
         return -1;
     }
+    errno = 0;
     if (g_ops.rtc_gettimeofday(tv) != 0) {
         if (errno == 0) {
             errno = EIO;
@@ -294,5 +302,5 @@ void _exit(int status)
     if (g_ops_installed && g_ops.fatal) {
         g_ops.fatal(status);
     }
-    fatal_if_unsafe_heap();
+    stop_forever();
 }
