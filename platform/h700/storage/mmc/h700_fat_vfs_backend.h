@@ -7,6 +7,7 @@
 
 #include "fat_ro.h"
 #include "h700_sunxi_mmc_fat.h"
+#include "h700_sunxi_sdc0_readonly_scan.h"
 #include "linkslot_vfs.h"
 
 #define H700_FAT_VFS_MAX_FILES 16u
@@ -61,6 +62,37 @@ struct h700_fat_vfs {
  * The provider, MMC device and mounted volume are process-lifetime state.
  * Installation is one-shot and must occur before retro_init().
  */
+enum h700_fat_vfs_bootstrap_result {
+    H700_FAT_VFS_BOOTSTRAP_OK = 0,
+    H700_FAT_VFS_BOOTSTRAP_INVALID = -1,
+    H700_FAT_VFS_BOOTSTRAP_SCAN_FAILED = -2,
+    H700_FAT_VFS_BOOTSTRAP_PARTITION_NOT_FOUND = -3,
+    H700_FAT_VFS_BOOTSTRAP_BLOCK_DEVICE_FAILED = -4,
+    H700_FAT_VFS_BOOTSTRAP_INSTALL_FAILED = -5
+};
+
+/*
+ * Complete read-only startup helper:
+ *   sdc0 pin/clock/card initialization -> primary GPT scan -> exact GPT-name
+ *   lookup -> persistent CMD17 block device -> bounded FAT mount -> VFS install.
+ *
+ * The caller must provide process-lifetime provider/device objects and a
+ * process-lifetime GPT scratch array with H700_GPT_MAX_ENTRIES elements.
+ * "primary" is the expected RG34XX p7 label; callers may provide another
+ * exact GPT name where the board layout differs. The scan result preserves
+ * the card/GPT diagnostics. PIO/APB1, card power and MMIO mappings remain
+ * explicit platform preconditions; no guessed regulator setup is performed.
+ */
+enum h700_fat_vfs_bootstrap_result h700_fat_vfs_scan_partition_and_install(
+    struct h700_fat_vfs *provider,
+    struct h700_sunxi_mmc_block_device *device,
+    const struct h700_sunxi_sdc0_scan_config *scan_config,
+    struct h700_gpt_partition *partitions,
+    size_t partition_capacity,
+    const char *partition_name,
+    const char *mount_prefix,
+    struct h700_sunxi_sdc0_scan_result *scan_result);
+
 int h700_fat_vfs_mount_and_install(
     struct h700_fat_vfs *provider,
     struct h700_sunxi_mmc_block_device *device,

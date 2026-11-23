@@ -92,6 +92,14 @@ The synthetic RG34XX regression vector uses C_SIZE 29,663, which decodes to **30
 
 Run `sh scripts/test-h700-sunxi-mmc-fat.sh`.
 
+### Unified sdc0 → GPT → FAT → VFS bootstrap (host-only)
+
+`h700_fat_vfs_scan_partition_and_install()` is the single read-only startup entry point for a selected GPT name. It performs the existing H616 sdc0 reference pin/CCU setup and SD v2 identification, reads and validates primary GPT, locates the exact name requested by the caller (normally `primary` on the tested RG34XX inventory), initializes the caller-owned persistent CMD17 block device, bounds the FAT mount to that GPT entry, and registers the read-only C backend with `linkslot_vfs_install()`.
+
+The API takes caller-owned persistent provider and block-device objects plus a GPT scratch array of at least 128 entries and a result structure for card/GPT diagnostics. It must be invoked before Libretro `retro_init()`. The PIO/APB1 clock, card power, MMIO mappings and actual clock-parent rate remain board-provided prerequisites; this routine does not guess regulator or slot wiring. The block-device object must not alias the provider object and both must remain alive for the lifetime of open VFS handles.
+
+The new full host test models an 8192-sector SDHC card with p6 `UDISK` and p7 `primary`, then calls the unified bootstrap once and opens/reads synthetic `Games/GBA/TITLE.GBA` and `BIOS/BIOS.BIN` through the installed VFS table. This proves the complete simulated software call chain and that the write-command count remains zero; it is not a live RG34XX card test. Run `sh scripts/test-h700-sdc0-fat-vfs-bootstrap.sh`.
+
 ### Libretro VFS v3 read-only FAT provider (host-only)
 
 `h700_fat_vfs_backend.c` converts the mounted FAT volume into the C callback table declared by `platform/h700/runtime/include/linkslot_vfs.h`. The installer mounts one validated GPT partition through CMD17 and publishes the backend with `linkslot_vfs_install()`. Fixed arrays hold at most 16 open files and 8 open directories. The mount root exposes only existing directories whose names match the current allowed top-level roots; file access is constrained to an absolute path under the configured mount prefix. Relative paths are rejected until a caller can provide an explicit base directory.

@@ -572,3 +572,55 @@ int h700_fat_vfs_mount_and_install(
 
     return 0;
 }
+
+
+enum h700_fat_vfs_bootstrap_result h700_fat_vfs_scan_partition_and_install(
+    struct h700_fat_vfs *state,
+    struct h700_sunxi_mmc_block_device *device,
+    const struct h700_sunxi_sdc0_scan_config *scan_config,
+    struct h700_gpt_partition *partitions,
+    size_t partition_capacity,
+    const char *partition_name,
+    const char *mount_prefix,
+    struct h700_sunxi_sdc0_scan_result *scan_result)
+{
+    const struct h700_gpt_partition *partition = 0;
+    struct h700_sunxi_mmc_block_timeouts timeouts;
+    struct h700_block_reader unused_reader;
+    enum h700_sunxi_sdc0_scan_status scan_status;
+    enum h700_gpt_result lookup_status;
+
+    if (state == 0 || device == 0 || scan_config == 0 ||
+        partitions == 0 || partition_capacity < H700_GPT_MAX_ENTRIES ||
+        partition_name == 0 || partition_name[0] == '\0' ||
+        scan_result == 0 || mount_prefix == 0)
+        return H700_FAT_VFS_BOOTSTRAP_INVALID;
+
+    scan_status = h700_sunxi_sdc0_scan_primary_gpt(
+        scan_config, partitions, partition_capacity, scan_result);
+    if (scan_status != H700_SDC0_SCAN_OK)
+        return H700_FAT_VFS_BOOTSTRAP_SCAN_FAILED;
+
+    lookup_status = h700_gpt_find_unique_name(
+        partitions, scan_result->gpt.partition_count,
+        partition_name, &partition);
+    if (lookup_status != H700_GPT_OK || partition == 0)
+        return H700_FAT_VFS_BOOTSTRAP_PARTITION_NOT_FOUND;
+
+    timeouts.command_timeout_ms = scan_config->command_timeout_ms;
+    timeouts.fifo_timeout_ms = scan_config->fifo_timeout_ms;
+    timeouts.data_timeout_ms = scan_config->data_timeout_ms;
+    timeouts.recovery_timeout_ms = scan_config->recovery_timeout_ms;
+
+    if (h700_sunxi_mmc_block_device_init(
+            device, &unused_reader,
+            scan_config->platform->mmc_io, &scan_result->card,
+            &timeouts) != 0)
+        return H700_FAT_VFS_BOOTSTRAP_BLOCK_DEVICE_FAILED;
+
+    if (h700_fat_vfs_mount_and_install(
+            state, device, partition, mount_prefix) != 0)
+        return H700_FAT_VFS_BOOTSTRAP_INSTALL_FAILED;
+
+    return H700_FAT_VFS_BOOTSTRAP_OK;
+}

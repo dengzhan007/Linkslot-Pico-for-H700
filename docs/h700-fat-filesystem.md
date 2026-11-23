@@ -33,6 +33,8 @@ The H700-facing glue now includes `h700_sunxi_mmc_fat.c`:
 All of these are host-side register/media simulations. They do not prove that the real RG34XX's card is on MMC0, that PIO/APB1 and card power have been configured correctly, or that any physical VBR/FAT sector has been read. The sdc0 top-level bring-up API still requires platform-provided MMIO mappings, PIO/APB1 enablement and card power; it has not been run against live hardware.
 
 ## Read-only Libretro VFS v3 backend
+A higher-level `h700_fat_vfs_scan_partition_and_install()` now packages startup ordering for a caller: run the read-only sdc0 bring-up/SD identification/primary GPT scan, locate one exact GPT name (for the RG34XX inventory, `primary`), recreate the CMD17 block-device state in caller-owned persistent memory, mount that partition with its exact extent, and install the VFS v3 backend. The caller supplies a persistent provider object, a persistent block-device object, and a 128-entry GPT scratch array, and must call this before Libretro `retro_init()`. It does not power the card or enable/map PIO/APB1; those remain board preconditions.
+
 
 `h700_fat_vfs_backend.c` installs a concrete `linkslot_vfs_backend` table through the existing `linkslot_vfs_install()` ABI. It uses fixed file and directory handle tables (no heap allocation), calls the CMD17-backed FAT reader for file and directory operations, and preserves the original absolute path in file handles. It accepts only absolute paths under the exact configured mount prefix and restricts the first path component to `Games`, `BIOS`, `Saves`, `States`, `System`, or `linkSlot`. The virtual mount root enumerates only real directories from that allowlist.
 
@@ -78,7 +80,7 @@ This is a substantially better board-level reference, but **does not identify wh
 
 - Physical H700 SD/MMC operation: the current sdc0 code is host-tested only; real MMIO mapping, PIO/APB1 clock, card power, card-detect and a live CMD17 read remain unvalidated on RG34XX.
 - Automatic partition-selection policy. A caller can explicitly mount a GPT record with its exact extent, but no real-card GPT scan or automatic UDISK/primary selection has been performed.
-- VFS file/directory handle table and path resolver wiring to the FAT/exFAT functions.
+- Target startup wiring: the C VFS provider and unified bootstrap API are host-tested, but the actual H700 Linkslot startup code still needs to provide persistent state and call `h700_fat_vfs_scan_partition_and_install()` before `retro_init()`.
 - Durable block flush/barrier, power-loss-safe save/state replacement.
 - Concurrency protection across frontend, core callbacks and storage.
 - Device testing. No card writes or boot writes are authorized by this port.
