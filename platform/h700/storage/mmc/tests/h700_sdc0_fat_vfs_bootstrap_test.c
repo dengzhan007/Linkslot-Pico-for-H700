@@ -487,7 +487,7 @@ static int test_full_sdc0_gpt_fat_vfs_bootstrap(void)
     platform.ccu.read32 = ccu_read32;
     platform.ccu.write32 = ccu_write32;
     platform.osc24m_hz = 24000000u;
-    platform.pll6_effective_hz = 600000000u;
+    platform.pll6_effective_hz = 0u; /* 400 kHz identification uses HOSC. */
 
     config.pio = &pio_io;
     config.platform = &platform;
