@@ -39,9 +39,10 @@ struct h700_fat_vfs_dir_slot {
  * The provider is static/process-lifetime storage. It owns the mounted FAT
  * volume and fixed VFS handle tables; no allocator is needed in the callbacks.
  *
- * The MMC device supplied at mount time must also remain alive for the whole
- * VFS lifetime. Calls are expected to be serialized by the frontend; this
- * provider does not add an SMP lock around the shared MMC FIFO controller.
+ * The MMC device, the `sunxi_mmc_io` callback table stored in device->host.io,
+ * and that table's context must also remain valid for the whole VFS lifetime.
+ * The IO table is referenced, not copied. Calls are expected to be serialized
+ * by the frontend; this provider adds no SMP lock around the shared MMC FIFO.
  */
 struct h700_fat_vfs {
     uint32_t magic;
