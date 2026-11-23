@@ -186,7 +186,9 @@ void heap_free(void *ptr);
 ### Libretro 核心装载边界
 
 - Linkslot `slot-retro` 当前通过 `libloading::Library` 加载 `.so`，并依赖 `std`、文件路径、TLS 回调上下文和动态符号表；当前 Linux `.so` 产物不能直接用在 LK。
-- 可行方向是将每个 Libretro core 编成可静态链接的对象/库，再为 Linkslot 保留的 RetroCore 行为提供静态 API 表；若同时链接多个导出相同 `retro_*` 符号的核心，需要命名空间包装或分离加载区。
+- 第四轮已完成静态 registry host-only 探针：按 `ffi.rs::Api` 的 C ABI 结构组织 Rust 函数表，两个 mock core 以 `mgba_` / `gpsp_` 前缀导出完整必需入口；A32/A64 最终 ELF 无未解析符号，主机 callback/save-state/memory 往返通过。
+- 这证明可用编译期符号前缀命名多个静态核心，Linkslot 的 API 结构和回调边界无需因为移除 `libloading` 而改变。下一步优先把一个真实 mGBA core 构建成 A32 静态对象并接入 registry；GB/GBC/GBA 首期可先共享 mGBA，再决定是否加入 gpSP。
+- 同时链接多个真实核心仍需处理完整导出符号集合的命名空间映射，并确保 core 内部引用也使用同一前缀。不能只重命名 `retro_init` 一两个导出函数。
 - GammaOS Pico 参考分支的 `emu/gba/gba_core_abi.h` 描述了一个版本化 C import/export table；但源码文件明确写着“contract definition / not yet wired into the build”。它仅是 ABI 设计参考，不是已完成的通用核心动态加载功能。
 - 该参考的 `0x4e400000` 核心槽位与 MTK Pico 的地址/内存布局绑定，**不得用于 H700**；H700 需要在完成 RAM ownership 审计后单独规划核心代码、BSS、ROM、状态和 JIT 区域。
 
@@ -204,6 +206,20 @@ void heap_free(void *ptr);
 验证产物：
 - [第三轮 GitHub Actions 成功运行](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45106548485)
 - Artifact ID：`14788005484`，名称 `linkslot-lk-rust-feasibility-45106548485`。
+- [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16) 仍为 draft。
+
+### 第四轮：静态 Libretro core API registry host-only 探针
+
+- Workflow run：[45107173305](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45107173305)，commit `26e25ef2cb12550dbc984e0d84dc1ca5c3441aeb`，结论 success。
+- 按当前 `crates/slot-retro/src/ffi.rs::Api` 的函数顺序与 C ABI 形状，构造了 no_std Rust 静态 API registry；它直接引用带前缀的 core exports，不使用 `libloading`、`dlopen` 或 `dlsym`。
+- 两个模拟核心分别导出 `mgba_retro_*` 和 `gpsp_retro_*`，验证多个 Libretro core 可在同一个静态链接映像中避免通用 `retro_*` 名称冲突。
+- AArch32 `armv7a-none-eabi` 和 AArch64 `aarch64-unknown-none` 均链接出正确架构 ELF；链接器 `--no-undefined` 通过，CI `nm -u` 检查无未解析符号，均生成 map。
+- x86_64 主机实际运行 C harness，按 Linkslot API 结构调用：API version、环境回调、视频、音频 sample/batch、输入轮询/读取、控制器设置、ROM 装载、运行一帧、cheat reset/set、serialize/unserialize、memory data/size、unload/deinit。两个模拟核心分别通过，进程退出码 0。
+- 这证明的是**静态注册表和 C ABI 回调接线可行**；模拟核心不是 mGBA/gpSP 本体，不证明真实 ROM 兼容、性能、存档一致性或 H700 运行时。
+
+产物：
+- [第四轮 GitHub Actions 成功运行](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45107173305)
+- Artifact ID：`14787947224`，名称 `linkslot-lk-rust-feasibility-45107173305`。
 - [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16) 仍为 draft。
 
 ### AArch32 EHABI 说明
@@ -232,7 +248,7 @@ Rust 1.96 的 AArch32 `alloc` 静态库含有 `__aeabi_unwind_cpp_pr0` 符号引
 2. **H700 多核状态审计**：查清 BL31 → BL33 时每个 Cortex-A53 核心的启动/停驻状态。参考 LK scheduler 目前是单核设计（全局 current_thread/run queue/critical count + 本核 IRQ mask）；若 secondary core 可进入 LK，必须先实现 per-CPU scheduler、跨核同步与 SMP-safe allocator，不能直接复用。
 3. **LK heap 实现验证**：只有在 pinned LK heap 的平台依赖和编译配置可控后，尝试单独编译真实 `lib/heap/heap.c`；再考虑跨核 heap lock、对齐、free/coalescing、OOM 和初始化时序测试。
 4. **Linkslot 模块继续拆分**：保留 `slot-input` 的 47 项上游行为测试；进一步从 `slot-model` 分离路径/文件 I/O 助手，确保纯数据模型的 no_std 测试与上游语义保持一致。
-5. **第二批复用评估**：再评估 `slot-i18n` 静态翻译表和 `slot-cheevos` C 引擎；之后才开始 UI、存储、图形和 Libretro runtime 的分层设计。
+5. **真实核心静态构建**：先以 mGBA 为单一 GB/GBC/GBA 核心，验证其 AArch32 静态构建/符号前缀/Libretro ABI；之后再评估 gpSP 的静态并存。下一步再评估 `slot-cheevos` C 引擎及 UI/存储/图形 runtime。
 6. 继续单独关闭 H700 启动交接/内存 ownership 的 NO-GO 门槛；未关闭前不得执行设备 payload。
 
 仍不生成可刷写镜像、不写 SD、不修改启动区域、不执行 payload。
