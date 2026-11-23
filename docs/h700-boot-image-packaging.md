@@ -127,6 +127,8 @@ separate native firmware concatenation at p4 +40 MiB. The audited package is
 `dc9dc3ae66b30244911e7054ca66136991626cabb0d59c796c4b253a126f28e9`,
 FNV-1a32 `0xaf0018cb`. `extract-firmware` checks that identity and splits the
 monitor, DTBO, DTB and AArch32 loader extents without modifying the source dump.
+It validates FDT magic/totalsize for both DTBO and DTB and requires their
+in-component trailing padding (plus monitor/DTBO extent padding) to be zero.
 
 ```powershell
 py -3 tools/h700_boot_image.py extract-firmware `
