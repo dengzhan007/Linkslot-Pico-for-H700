@@ -12,7 +12,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-for tool in cc mkfs.fat mcopy mmd mkfs.exfat fsck.exfat; do
+for tool in cc mkfs.fat mcopy mmd fsck.fat mkfs.exfat fsck.exfat; do
   command -v "$tool" >/dev/null || { echo "missing required tool: $tool" >&2; exit 2; }
 done
 
@@ -21,6 +21,9 @@ cc -std=c11 -O2 -Wall -Wextra -Werror -I "$SRC" \
 cc -std=c11 -O2 -Wall -Wextra -Werror -I "$SRC" \
   "$SRC/fat_ro.c" "$SRC/fat_wr.c" "$SRC/fat_exfat.c" \
   "$SRC/tests/fat_exfat_rw_test.c" -o "$OUT/fat_exfat_rw_test"
+cc -std=c11 -O2 -Wall -Wextra -Werror -I "$SRC" \
+  "$SRC/fat_ro.c" "$SRC/fat_wr.c" "$SRC/fat_exfat.c" \
+  "$SRC/tests/fat_fat32_rw_test.c" -o "$OUT/fat_fat32_rw_test"
 
 echo "== FAT32 real-image read regression =="
 FATIMG="$OUT/fat32.img"
@@ -41,6 +44,8 @@ mcopy -i "$FATIMG" "$OUT/Pokemon Emerald (USA).gba" "::/roms/gba/Pokemon Emerald
 mcopy -i "$FATIMG" "$OUT/Zelda.gba" ::/roms/gba/Zelda.gba
 mcopy -i "$FATIMG" "$OUT/Big.gba" ::/roms/gba/Big.gba
 "$OUT/fat_ro_test" "$FATIMG"
+"$OUT/fat_fat32_rw_test" "$FATIMG"
+fsck.fat -n "$FATIMG"
 
 echo "== exFAT real-image read/write regression =="
 for CLUSTER in 4K 128K; do
