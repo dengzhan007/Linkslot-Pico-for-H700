@@ -38,6 +38,14 @@ jobs:
           path: .ci/upstream-linkslot
           persist-credentials: false
 
+      - name: Checkout pinned GammaOS LK reference
+        uses: actions/checkout@v4
+        with:
+          repository: TheGammaSqueeze/lk-mt6785
+          ref: 9bf1419a49e0af6dba8b05916df382c9c9c6d0a8
+          path: .ci/lk-reference
+          persist-credentials: false
+
       - name: Install LLVM cross-link tools
         run: |
           sudo apt-get update
@@ -55,6 +63,7 @@ jobs:
         run: |
           python3 scripts/audit-linkslot-nostd.py \
             --source .ci/upstream-linkslot \
+            --lk-source .ci/lk-reference \
             --out build/audit-work/linkslot-1.0.36
 
       - name: Publish build report in job summary
