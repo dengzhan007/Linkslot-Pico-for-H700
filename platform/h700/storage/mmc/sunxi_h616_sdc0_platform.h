@@ -19,9 +19,9 @@ struct sunxi_h616_sdc0_platform {
 };
 
 /*
- * Select the H616 APB1 parent/divider required by the PIO controller.
- * Uses the 24 MHz oscillator directly; the upstream H616 clock tree has no
- * separate PIO bus-gate register.
+ * Configure the RG34XX sun50iw9p1 APB1 parent/divider used by clk_pio.
+ * The vendor clock driver maps the PIO clock to APB1; select the 24 MHz HOSC
+ * directly. This pinctrl clock path has no separate PIO gate register.
  */
 int sunxi_h616_pio_enable_apb1_24m(
     const struct sunxi_h616_sdc0_platform *platform);
