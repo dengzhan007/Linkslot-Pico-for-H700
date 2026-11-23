@@ -1,0 +1,58 @@
+name: Recover audited RG34XX prepared boot prefix
+
+on:
+  push:
+    branches:
+      - porting/linkslot-1.0.36-feasibility
+    paths:
+      - .github/workflows/recover-rg34xx-prepared-prefix.yml
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    name: Download and verify source prefix (read-only)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Install zstd
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+
+      - name: Download pinned prepared bundle and extract only RG34XX prefix
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="$RUNNER_TEMP/baseos-prepared-20260914.tar.zst"
+          url="https://github.com/pvaibhav/BaseOS/releases/download/prepared-20260914/baseos-prepared-20260914.tar.zst"
+          curl --fail --location --retry 3 --retry-all-errors --silent --show-error "$url" -o "$bundle"
+          printf '%s  %s\n' \
+            "86a0186b5ac8ab907dc1d5c24220c9fcd94f38dd9dc3fddb7fb5cf59d4c7719f" \
+            "$bundle" | sha256sum --check -
+          mkdir -p build/recovered-prefix
+          zstd --decompress --long=31 --stdout "$bundle" |
+            tar --extract --to-stdout --file=- rg34xx/boot-prefix.img \
+              > build/recovered-prefix/boot-prefix.img
+          test "$(stat -c '%s' build/recovered-prefix/boot-prefix.img)" = "222298112"
+          printf '%s  %s\n' \
+            "fb75bc4c835fa74ff41c0a1fdbe79b8871a960fc249716847fb7be529835c3c3" \
+            "build/recovered-prefix/boot-prefix.img" | sha256sum --check -
+          {
+            echo "artifact=RG34XX prepared boot-prefix.img"
+            echo "bundle_sha256=86a0186b5ac8ab907dc1d5c24220c9fcd94f38dd9dc3fddb7fb5cf59d4c7719f"
+            echo "prefix_bytes=222298112"
+            echo "prefix_sha256=fb75bc4c835fa74ff41c0a1fdbe79b8871a960fc249716847fb7be529835c3c3"
+            echo "hardware_access=none"
+            echo "device_io=none"
+            echo "flash_or_image_modification=none"
+          } > build/recovered-prefix/README.txt
+
+      - name: Upload verified prefix as short-lived CI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG34XX-Prepared-Boot-Prefix-${{ github.sha }}
+          path: build/recovered-prefix/
+          if-no-files-found: error
+          retention-days: 3
