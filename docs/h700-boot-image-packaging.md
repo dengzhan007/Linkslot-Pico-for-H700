@@ -73,7 +73,7 @@ python3 tools/h700_boot_image.py inspect build/rg34xx-linkslot-boot.img
 
 **不能把新生成的 p4+48 MiB 镜像单独替换到现有启动分区。** 固定版本的 BaseOS native loader 在启动时会比较 SPL 生成记录中的 image byte length/FNV 与 loader 编译时的 BASEOS_IMAGE_BYTES / BASEOS_IMAGE_FNV。固定版本的 native/build.py 会从同一份 Android image 生成这两个常量，并把 image 的 SHA-256 计入 generation；配套 p4+40 MiB firmware package（含 native loader）也由该构建过程生成。因此只要 Android image 内容或长度变化，就必须同步重建并校验匹配的 p4+40 MiB firmware/SPL 侧产物，不能保留旧 package 再只换 p4+48 MiB image。
 
-reports 中的 stage-0 audit 已记录，原始 boot-package.bin 和构建期 GPT prefix 没有归档，当前无法仅凭仓库里的文本/JSON 报告重建匹配的 native firmware generation。这个工具只实现 Android/BOL4 host component，不生成配套 firmware package、capsule、Boot0 或完整分区镜像。
+reports 中的 stage-0 audit 曾记录 TOC1 source package 与构建期 GPT prefix 缺失。现在已从 05c39a7 Actions upgrade artifact 的 rootfs 恢复精确 `boot-gzip/boot-package.bin`（SHA-256 `56371d98…af3d`），以及 boot.img、Boot0、env.bin；恢复证据见 reports 分支 `rg34xx-native-build-inputs-from-0539a7-artifact.md`。原始 prepared `boot-prefix.img`（222,298,112 B，SHA-256 `fb75bc4c…35c3c3`）仍未恢复；A/B output image prefix 不是它的替代品。这个工具只实现 Android/BOL4 host component 和只读 native firmware 提取，不生成配套 firmware package、capsule、Boot0 或完整分区镜像。
 
 ## 使用独立输入构建
 
