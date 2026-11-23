@@ -100,9 +100,13 @@ initrd 和 command line 可省略；默认保留 header template 中的 command 
 
 每个组件按 2048 字节页对齐。工具检查 ANDROID! magic、page size 2048、header version 2、header_size 1660，以及 RG34XX 当前 loader 使用的 kernel/ramdisk/second/tags 地址；重算组件长度与 Android image ID（SHA-1）。默认完整 Android image 上限为 16 MiB。initrd 不得超过 loader 的 1 MiB 限制。
 
+
+
+C 互操作测试夹具 `tools/vendor/baseos-native-lz4/` 逐字保留 BaseOS-MultiFrontend 的 `experiments/h700-boot-speed/native/lz4-stream.c/.h`，来源固定为 commit `cbe253a43f46cf551cc9a6c79a84015bde3686cf`。测试 harness 仅在主机进程中调用 `baseos_lz4_begin()` / `baseos_lz4_step()`；不会调用 MMIO、启动代码或设备接口。
+
 ## 验证与限制
 
-CI 的 unittest discover 运行 12 项 host tests，覆盖 raw LZ4、BOL4 FNV/长度/损坏输入、AArch64 Image magic、Android v2 layout、image ID、load-address policy、16 MiB image budget、本地分区 dump 的有界提取、提取 hash manifest 和原始文件不变性。Linux 与 Windows runner 均执行该套测试。
+CI 的 unittest discover 运行 13 项 host tests，覆盖 raw LZ4、BOL4 FNV/长度/损坏输入、AArch64 Image magic、Android v2 layout、image ID、load-address policy、16 MiB image budget、本地分区 dump 的有界提取、提取 hash manifest、原始文件不变性，以及与 BaseOS native C decoder 的互操作。Linux runner 会编译并运行固定版本的 native C decoder；Windows runner 运行纯 Python 测试（若没有 host C compiler 则跳过 C 互操作测试）。
 
 **该工具不是完整固件构建器，也不构成实机启动许可。** 它不会生成或修改 Boot0、TOC1、BL31、BL33、SPL、分区表或安装包；不会写 SD/Boot 区；不会执行 payload。Android v2 文件通过结构校验，只代表封装与当前 loader 的文件格式相符，不代表内存归属、SMC 目标地址、watchdog 恢复、UART/显示观察通道或 RG34XX 冷启动已经通过。
 

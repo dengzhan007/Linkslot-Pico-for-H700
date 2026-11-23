@@ -2,6 +2,8 @@ import contextlib
 import io
 import json
 import random
+import shutil
+import subprocess
 import struct
 import tempfile
 import unittest
@@ -125,6 +127,41 @@ class AndroidV2Tests(unittest.TestCase):
             boot.build_android_v2(fake_header(), boot.build_bol4(fake_kernel()), fake_dtb(),
                                   max_image=4096)
 
+
+
+    def test_bol4_decodes_with_pinned_baseos_native_c_decoder(self):
+        compiler = shutil.which("cc") or shutil.which("clang")
+        if compiler is None:
+            self.skipTest("host C compiler is not installed")
+        vendor = Path(__file__).parent / "vendor" / "baseos-native-lz4"
+        harness = vendor / "decode_harness.c"
+        decoder = vendor / "lz4-stream.c"
+        header = vendor / "lz4-stream.h"
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            executable = root / ("decode.exe" if __import__("os").name == "nt" else "decode")
+            frame_path = root / "kernel.BOL4"
+            output_path = root / "kernel.Image"
+            subprocess.run(
+                [compiler, "-std=c11", "-O2", "-I", str(vendor), str(harness),
+                 str(decoder), "-o", str(executable)],
+                check=True, capture_output=True, text=True
+            )
+
+            kernel = fake_kernel()
+            frame = boot.build_bol4(kernel)
+            frame_path.write_bytes(frame)
+            subprocess.run([str(executable), str(frame_path), str(output_path)],
+                           check=True, capture_output=True, text=True)
+            self.assertEqual(output_path.read_bytes(), kernel)
+
+            damaged = bytearray(frame)
+            damaged[12] ^= 1
+            frame_path.write_bytes(damaged)
+            rejected = subprocess.run([str(executable), str(frame_path), str(output_path)],
+                                      capture_output=True, text=True)
+            self.assertNotEqual(rejected.returncode, 0)
 
     def test_extract_inputs_from_local_partition_dump(self):
         kernel = fake_kernel()
