@@ -26,13 +26,19 @@ sdc1 successfully enumerated an SDIO DDR50 device and is excluded from the first
 
 From the device's debugfs capture, sdc0 was in pinctrl state `default`, with PF0–PF5 muxed to `sdc0`. sdc1 was also in `default`, with PG0–PG5 muxed to `sdc1`. sdc2 was in state `sleep`; its default pinctrl map describes PC1, PC5, PC6, PC8–PC11, PC13–PC16 and PC0, while the sleep map disables those pins. This means the r2 capture does not show sdc2 default pinmux actively driving the empty slot.
 
-The observed sdc0 and sdc1 pinconf entries are raw values `0x00002809` / `0x00000005`; the sdc2 default map mostly uses `0x00001e09` / `0x00000005`, with PC0 carrying `0x00000003`. These are vendor PIO encodings, not decoded electrical settings. Do not copy them into LK until the exact H700 PIO pinconf implementation has been inspected. The current `sunxi_h616_sdc0_pins.c` host-tested helper uses the generic H616 upstream ALT2 / 30 mA / pull-up reference, not these live raw vendor values.
+The observed pinconf values are vendor packed configurations, and the exact `sun50iw9p1` encoding is now decoded. The vendor `include/linux/pinctrl/pinconf-generic.h` packs values as `(argument << 8) | parameter`: `PIN_CONFIG_DRIVE_STRENGTH` is parameter 9, `PIN_CONFIG_BIAS_PULL_UP` is 5, and `PIN_CONFIG_BIAS_PULL_DOWN` is 3. Its `sunxi_pconf_set()` converts drive mA to the two-bit hardware field with `mA / 10 - 1`.
+
+- sdc0/sdc1 `0x00002809` = 40 mA drive; `0x00000005` = pull-up.
+- sdc2 default `0x00001e09` = 30 mA drive; `0x00000005` = pull-up.
+- sdc2 PC0 `0x00000003` = pull-down.
+
+This is grounded in the `sun50iw9p1` vendor implementation pinned at [T507_Kernel @ 98fcc7d](https://github.com/qiaoweibiao/T507_Kernel/tree/98fcc7d3f112e51b0edfb71536da89cb2115106f): `drivers/pinctrl/sunxi/pinctrl-sunxi.c`, `pinctrl-sun50iw9p1.c`, and `include/linux/pinctrl/pinconf-generic.h`. The same SoC-family pin table maps PF0–PF5 to sdc0 ALT2 on D1/D0/CLK/CMD/D3/D2. The project helper now uses the live sdc0 electrical settings, 40 mA and pull-up. This remains source-backed decoding plus host register-model validation, not a live LK MMIO test.
 
 CCU debugfs showed `sdmmc0_mod` at 100 MHz and enabled, with `sdmmc0_bus` and `sdmmc0_rst` enabled. `sdmmc1_mod` was 200 MHz and enabled, with its bus/reset gates enabled. `sdmmc2_mod` showed an 800 kHz rate but was not enabled/prepared; its bus/reset gates were off. These module-clock rates are not card SDCLK rates: the Linux log reports sdc0's card bus at 50 MHz. The H616 CCU reference places MMC module clock config registers at `0x830/0x834/0x838` and the combined gate/reset register at `0x84c` (see the pinned [U-Boot clock definitions](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/arch/arm/include/asm/arch-sunxi/clock_sun50i_h6.h)).
 
 ## sdc0 pinmux and CCU register reference
 
-The live inventory maps the active sdc0 pin group to PF0–PF5. The pinned H616 reference device tree at Linux commit `fa2933aac170dd19c6a7f0d7b81a8f537e40915c` declares the generic `mmc0_pins` group as PF0–PF5, function `mmc0`, drive-strength 30 mA and pull-up bias. The matching `pinctrl-sun50i-h616.c` pin descriptors identify function selector **ALT2 (value 2)** on each signal:
+The live inventory maps the active sdc0 pin group to PF0–PF5. The exact SoC-family vendor table `pinctrl-sun50iw9p1.c` maps PF0–PF5 to `sdc0` at **ALT2 (value 2)**; the captured vendor pinconf specifies 40 mA drive and pull-up. The generic mainline H616 DT's 30 mA setting is not used for this RG34XX profile:
 
 | Pin | MMC0 signal | H616 mux selector |
 |---|---|---:|
@@ -43,7 +49,7 @@ The live inventory maps the active sdc0 pin group to PF0–PF5. The pinned H616 
 | PF4 | D3 | 2 |
 | PF5 | D2 | 2 |
 
-This is the upstream H616 pin-function/reference configuration, not a decoded readback of the RG34XX's raw vendor pinconf words. Keep the live debugfs values `0x00002809` / `0x00000005` classified as unresolved; do not translate them into drive/pull values or write them back to PIO registers. The 30 mA/pull-up declaration is a useful board bring-up reference, not proof that those exact electrical settings were active at the time of the capture.
+The PF0–PF5 mux and electrical settings are now source-backed for the `sun50iw9p1` family: ALT2, 40 mA and pull-up. The helper writes only the six relevant fields, preserving PF6/PF7 and all other register bits. This is a source decode plus host register-model validation, not a live LK MMIO test.
 
 The H616 CCU reference gives the following MMC0 clock-control layout (offsets are relative to the CCU base):
 
@@ -60,7 +66,7 @@ The Linux H616 CCU driver defines MMC parents as `osc24M`, `pll-periph0-2x`, and
 
 References:
 - [H616 MMC0 pin group and controller node, Linux commit](https://github.com/torvalds/linux/blob/fa2933aac170dd19c6a7f0d7b81a8f537e40915c/arch/arm64/boot/dts/allwinner/sun50i-h616.dtsi)
-- [H616 PF0–PF5 function selectors, Linux commit](https://github.com/torvalds/linux/blob/fa2933aac170dd19c6a7f0d7b81a8f537e40915c/drivers/pinctrl/sunxi/pinctrl-sun50i-h616.c)
+- [sun50iw9p1 vendor PF0–PF5 pin map and pinconf implementation](https://github.com/qiaoweibiao/T507_Kernel/tree/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/pinctrl/sunxi)
 - [H616 MMC module clock fields, Linux commit](https://github.com/torvalds/linux/blob/fa2933aac170dd19c6a7f0d7b81a8f537e40915c/drivers/clk/sunxi-ng/ccu-sun50i-h616.c)
 - [Pinned U-Boot MMC clock calculation](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/drivers/mmc/sunxi_mmc.c)
 - [Pinned U-Boot H6/H616 clock register definitions](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/arch/arm/include/asm/arch-sunxi/clock_sun50i_h6.h)
@@ -117,11 +123,11 @@ This is still host emulation. The FAT sectors and directory contents are synthet
 
 
 
-`h700_sunxi_sdc0_readonly_scan.c` is the top-level orchestration API. Given mapped PIO/CCU/MMC callbacks and caller-supplied timeouts, it configures PF0–PF5 with the pinned H616 reference profile, enables MMC0 bus/reset, requests the 400 kHz identification clock, identifies and selects the SD v2 card, creates the CMD17-only block reader, and parses the primary GPT into caller-owned partition storage. The result preserves card identification and GPT error codes for diagnostics.
+`h700_sunxi_sdc0_readonly_scan.c` is the top-level orchestration API. Given mapped PIO/CCU/MMC callbacks and caller-supplied timeouts, it configures PF0–PF5 with the decoded RG34XX `sun50iw9p1` profile (ALT2, 40 mA, pull-up), enables MMC0 bus/reset, requests the 400 kHz identification clock, identifies and selects the SD v2 card, creates the CMD17-only block reader, and parses the primary GPT into caller-owned partition storage. The result preserves card identification and GPT error codes for diagnostics.
 
-It configures APB1 to the 24 MHz OSC24M source, applies the PF0–PF5 pin group and MMC0 gate/reset, but still requires the caller to have powered the SD card. It does not set a guessed regulator voltage, change any unknown vendor PIO raw pinconf words, configure a high-speed timing mode, access another MMC controller, or expose any storage write method. It changes only the supplied PIO/CCU/controller registers and sends SD identification plus CMD17 read commands.
+It configures APB1 to the 24 MHz OSC24M source, applies the known PF0–PF5 sdc0 pin settings and MMC0 gate/reset, but still requires the caller to have powered the SD card. It does not set a guessed regulator voltage or change unrelated/unknown PIO fields, configure a high-speed timing mode, access another MMC controller, or expose any storage write method. It changes only the supplied PIO/CCU/controller registers and sends SD identification plus CMD17 read commands.
 
-The integrated fake-H700 regressions model PIO, CCU, MMC command/response registers, FIFO, and synthetic SDHC images. The current unified bootstrap test checks the orchestration order, CSD-derived capacity, 400 kHz module clock, PF0–PF5 reference settings, GPT p6 `UDISK` / p7 `primary` labels, FAT32 p7 mount, ROM/BIOS reads through the registered Libretro VFS v3 table, and absence of write commands. This remains host simulation, not physical RG34XX validation. Run `sh scripts/test-h700-sdc0-readonly-scan.sh`.
+The integrated fake-H700 regressions model PIO, CCU, MMC command/response registers, FIFO, and synthetic SDHC images. The current unified bootstrap test checks the orchestration order, CSD-derived capacity, 400 kHz module clock, PF0–PF5 ALT2/40 mA/pull-up settings, GPT p6 `UDISK` / p7 `primary` labels, FAT32 p7 mount, ROM/BIOS reads through the registered Libretro VFS v3 table, and absence of write commands. This remains host simulation, not physical RG34XX validation. Run `sh scripts/test-h700-sdc0-readonly-scan.sh`.
 
 ### End-to-end synthetic GPT over CMD17 (host-only)
 
@@ -139,9 +145,9 @@ Run `sh scripts/test-h700-sunxi-mmc-gpt-adapter.sh`.
 
 ### H616 sdc0 PF0-PF5 pin configuration (host-only)
 
-`sunxi_h616_sdc0_pins.c` implements the generic H616 MMC0 pin group from the pinned upstream device tree. The PIO bank stride is `0x24`; Port F is bank index 5, so PF0–PF5 share MUX0 at PIO offset `0xb4`, DRV0 at `0xc8`, and PULL0 at `0xd0` (offsets relative to PIO base `0x0300b000`). The H616 pinctrl descriptor assigns ALT2 to MMC0 on each of PF0–PF5; the device tree specifies 30 mA drive and pull-up. Mainline pinctrl encodes those as drive field value 2 and pull field value 1.
+`sunxi_h616_sdc0_pins.c` implements the RG34XX `sun50iw9p1` sdc0 pin group. The PIO bank stride is `0x24`; Port F is bank index 5, so PF0–PF5 share MUX0 at PIO offset `0xb4`, DRV0 at `0xc8`, and PULL0 at `0xd0` (offsets relative to PIO base `0x0300b000`). The vendor `pinctrl-sun50iw9p1.c` descriptor assigns ALT2 to `sdc0` on each of PF0–PF5. The live pinconf specifies 40 mA drive (hardware field 3) and pull-up (field 1).
 
-The helper updates only PF0–PF5 fields, preserves PF6/PF7 and all unrelated drive/pull fields, sets drive and pull before switching the mux to ALT2, and validates readback. Before touching these PIO registers, the unified bring-up calls `sunxi_h616_pio_enable_apb1_24m()`, which configures the H616 APB1 clock register at CCU offset `0x520` to use the 24 MHz OSC24M parent (M=1, P=/1, mux=OSC24M). The upstream H616 PIO node declares APB1 as its bus clock and the H616 CCU tree has no separate PIO bus-gate register. The helper rejects a platform that does not report a 24 MHz oscillator and verifies the clock field readback. The raw RG34XX vendor pinconf values from live debugfs are still not decoded; this code uses the pinned H616 generic reference declaration, not those raw values. It is host-tested only and has not been run against the device's PIO registers.
+The helper updates only PF0–PF5 fields, preserves PF6/PF7 and all unrelated drive/pull fields, sets 40 mA drive and pull-up before switching the mux to ALT2, and validates readback. Before touching these PIO registers, the unified bring-up calls `sunxi_h616_pio_enable_apb1_24m()`, which configures the APB1 clock register at CCU offset `0x520` to use the 24 MHz OSC24M parent (M=1, P=/1, mux=OSC24M). The `sun50iw9p1` PIO node declares APB1 as its bus clock; this helper rejects a platform that does not report a 24 MHz oscillator and verifies the clock field readback. It is host-tested only and has not been run against the device's PIO registers.
 
 Run `sh scripts/test-h700-h616-sdc0-pins.sh` for register-layout, field-preservation, write-order, and readback-error tests.
 
@@ -149,7 +155,7 @@ Run `sh scripts/test-h700-h616-sdc0-pins.sh` for register-layout, field-preserva
 
 `sunxi_h616_sdc0_platform.c` binds the existing pure divider calculator and H616 `MASK_DATA0` clock-update helper to the documented CCU-relative offsets. The caller maps CCU base `0x03001000` from the H616 device tree and provides read/write callbacks. `sunxi_h616_sdc0_enable_bus()` sets only MMC0 bus gate bit 0 and reset-deassert bit 16 in CCU `0x84c`. `sunxi_h616_sdc0_set_clock_hz()` currently accepts only rates up to 24 MHz, disables card output, writes `MMC0_CLK_CFG` at `0x830`, clears the controller divider, and reenables the card clock through the shared `MASK_DATA0` update path. The 400 kHz regression expects module-clock register value `0x8000020e`.
 
-The high-speed path above 24 MHz is deliberately rejected until H616 sampling/output timing and calibration are validated for the RG34XX board. The helper does not program PIO mux/bias/drive, card power, or physical MMIO itself. The exact PF0–PF5 pin function is ALT2 per H616 upstream, and the upstream device tree specifies 30 mA/pull-up, but the live RG34XX vendor PIO raw pinconf values remain unresolved; no pinconf register writes are included. The callback implementation must be integrated only after those board-level requirements are verified.
+The high-speed path above 24 MHz is deliberately rejected until H616-family sampling/output timing and calibration are validated for the RG34XX board. The clock helper does not itself program PIO mux/bias/drive, card power, or physical MMIO; pin configuration is handled by the separate PIO helper using the decoded RG34XX settings (ALT2, 40 mA, pull-up). All helpers remain host-tested only, and actual register access on the device is still unverified.
 
 Run `sh scripts/test-h700-h616-sdc0-platform.sh` for host register-model tests covering CCU gate/reset, exact 400 kHz divider value, H616 update sequencing, timeout cleanup, and deliberate rejection of unvalidated high-speed requests.
 
@@ -169,7 +175,7 @@ The block argument is the sector LBA for SDHC/SDXC and LBA multiplied by 512 for
 
 The host regression models the register block and FIFO. It covers CMD17 flags (including absence of the write bit), SDHC/SDSC addressing, 512-byte transfer, response return, FIFO ordering/barriers, invalid buffers/ranges, FIFO/data timeouts, controller errors, and recovery timeout. Run `sh scripts/test-h700-sunxi-mmc-pio-read.sh`.
 
-**Evidence boundary:** the host-tested read primitive and full software path have not yet been run against the physical controller. Round 16 does confirm the live controller mapping and Linux's successful use of sdc0, but no H700/LK CMD17 operation has read a physical sector. PIO/APB1 enablement, card power, MMIO mapping and pinconf translation still need a target implementation and validation.
+**Evidence boundary:** the host-tested read primitive and full software path have not yet been run against the physical controller. Round 16 confirms the live controller mapping and Linux's successful use of sdc0, but no H700/LK CMD17 operation has read a physical sector. Physical MMIO mapping, PIO/APB1 bring-up, card power and on-device validation remain outstanding; the PF0–PF5 pinconf values are now source-decoded.
 
 ## sdc0 read-only driver constraints
 
