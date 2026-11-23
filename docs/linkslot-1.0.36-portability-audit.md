@@ -259,6 +259,21 @@ Generic 相比 Linux 版本减少了 24 个 Linux/glibc 专属符号，包括 `o
 - Artifact ID：`14787663902`，名称 `linkslot-lk-rust-feasibility-45108202490`。
 - 本轮 ZIP 内有 Linux 与 Generic 两个真实 mGBA archive、符号清单、CMake 日志和前序验证产物。
 
+### 第六轮：Linkslot Libretro VFS v3 service ABI host-only 探针
+
+- Workflow run：[45109949583](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45109949583)，commit `3d6b8ba74248db66ee1a63d0e5b3271da1c2911e`，结论 success。
+- 新增 `scripts/audit-libretro-vfs-v3-abi.py`：Rust `no_std` registry 对外暴露 Libretro VFS v3 C interface（v1 文件操作、v2 truncate、v3 stat/mkdir/目录枚举），并通过 `RETRO_ENVIRONMENT_GET_VFS_INTERFACE = 45 | 0x10000` 返回 version 3。
+- AArch32 `armv7a-none-eabi` 静态链接为 ELF32/ARM；AArch64 `aarch64-unknown-none` 静态链接为 ELF64/AArch64；两者都通过 `--no-undefined` 和 `nm -u`。
+- x86_64 主机 C harness 通过返回的函数表实际调用：版本协商（支持/超版本/空参数）、文件 open/read/write/seek/size/truncate/flush/close、stat、mkdir、rename、remove、目录 open/read/name/is_dir/close；测试进程退出码 0。
+- 测试 backend 是内存假文件系统，不访问 SD，不持久化数据，不是 H700 FAT 驱动，也没有接入真实 mGBA 或 Linkslot `slot-retro`。
+- 当前探针是单一 backend registry；生产实现仍需设计 per-handle 生命周期、重入/并发锁、路径规范化/卡根目录 containment、I/O 错误映射和 flush/rename 持久化语义。
+- Libretro VFS v3 目录 API没有 rewind；目录 rewind 可用存储原路径、close + reopen 实现，但 mGBA 的 Generic `vfs-dirent.c` 尚未适配为该 API。mGBA 原来的目录 backend 仍依赖 POSIX dirent。
+
+验证产物：
+- [第六轮 GitHub Actions 成功运行](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45109949583)
+- Artifact ID：`14789192113`，名称 `linkslot-lk-rust-feasibility-45109949583`。
+- [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16) 仍为 draft。
+
 ### AArch32 EHABI 说明
 
 Rust 1.96 的 AArch32 `alloc` 静态库含有 `__aeabi_unwind_cpp_pr0` 符号引用。已使用 `readelf -Wr` 检查全部引用，确认均为 `.ARM.exidx` 上的 `R_ARM_NONE` 元数据 relocation，不是可执行代码调用或 `PREL31` relocation。仅在本次 `panic=abort`、无异常展开的 ABI 探测中，通过 linker `--defsym=__aeabi_unwind_cpp_pr0=0` 解析该元数据标记。
@@ -277,6 +292,7 @@ Rust 1.96 的 AArch32 `alloc` 静态库含有 `__aeabi_unwind_cpp_pr0` 符号引
 - [第二轮 GitHub Actions 成功运行](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45103281417)
 - [第三轮 GitHub Actions 成功运行（含 slot-i18n 与 A32 BL33 布局）](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45106548485)
 - [第五轮 GitHub Actions 成功运行（真实 mGBA Linux/Generic A32 archive）](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45108202490)
+- [第六轮 GitHub Actions 成功运行（VFS v3 ABI + 全部前序验证）](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45109949583)
 - [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16)
 
 
@@ -286,7 +302,7 @@ Rust 1.96 的 AArch32 `alloc` 静态库含有 `__aeabi_unwind_cpp_pr0` 符号引
 2. **H700 多核状态审计**：查清 BL31 → BL33 时每个 Cortex-A53 核心的启动/停驻状态。参考 LK scheduler 目前是单核设计（全局 current_thread/run queue/critical count + 本核 IRQ mask）；若 secondary core 可进入 LK，必须先实现 per-CPU scheduler、跨核同步与 SMP-safe allocator，不能直接复用。
 3. **LK heap 实现验证**：只有在 pinned LK heap 的平台依赖和编译配置可控后，尝试单独编译真实 `lib/heap/heap.c`；再考虑跨核 heap lock、对齐、free/coalescing、OOM 和初始化时序测试。
 4. **Linkslot 模块继续拆分**：保留 `slot-input` 的 47 项上游行为测试；进一步从 `slot-model` 分离路径/文件 I/O 助手，确保纯数据模型的 no_std 测试与上游语义保持一致。
-5. **mGBA → H700 VFS/libc 适配**：先实现并验证 Linkslot Libretro VFS v2 文件/目录接口，或明确等效 mGBA VFS backend；补齐 Generic archive 的时间/locale/math/EABI 外部依赖，然后做真实 LK headers 的最终静态链接探针。再把 battery save 与即时状态的既有语义接入。
+5. **mGBA → H700 VFS/libc 适配**：Libretro VFS v3 的函数表/host fake backend/A32/A64 静态链接已通过；下一步将 mGBA Generic `vfs-dirent.c` 改为 Libretro VFS v3（目录 rewind 用 close/reopen），再设计 Linkslot 真正的 SD/FAT backend。补齐时间/locale/math/EABI 外部依赖后，才做真实 LK headers 的最终静态链接；battery save 与即时状态语义必须保留。
 6. 继续单独关闭 H700 启动交接/内存 ownership 的 NO-GO 门槛；未关闭前不得执行设备 payload。
 
 仍不生成可刷写镜像、不写 SD、不修改启动区域、不执行 payload。
