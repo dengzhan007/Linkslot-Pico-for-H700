@@ -214,7 +214,7 @@ static enum sunxi_sd_init_result negotiate_ocr(
         if (result != SUNXI_SD_INIT_OK)
             return result;
 
-        if ((ocr[0] & SD_OCR_READY) != 0u) {
+        if ((ocr[0] & SUNXI_SD_OCR_READY) != 0u) {
             if ((ocr[0] & SD_OCR_VOLTAGE_WINDOW) == 0u)
                 return SUNXI_SD_INIT_UNSUPPORTED_CARD;
             *ocr_out = ocr[0];
@@ -302,7 +302,7 @@ enum sunxi_sd_init_result sunxi_sd_card_identify(
     result = negotiate_ocr(host, &card->ocr);
     if (result != SUNXI_SD_INIT_OK)
         return result;
-    block_addressed = (card->ocr & SD_OCR_CCS) != 0u;
+    block_addressed = (card->ocr & SUNXI_SD_OCR_CCS) != 0u;
 
     /* 4) Read CID and obtain the card-relative address. */
     result = send_command(host, SD_CMD_SEND_CID, 0u,

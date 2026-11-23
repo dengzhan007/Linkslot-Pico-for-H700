@@ -57,6 +57,7 @@ COMMON_FLAGS=(
     -o "$OUT_DIR/sunxi_mmc_pio_read.o"
 
 "$CC" "${COMMON_FLAGS[@]}" -std=c11 \
+    -I"$ROOT/platform/h700/storage/gpt/tests/freestanding_include" \
     -I"$ROOT/platform/h700/storage/mmc" \
     -c "$ROOT/platform/h700/storage/mmc/sunxi_sd_card_init.c" \
     -o "$OUT_DIR/sunxi_sd_card_init.o"
