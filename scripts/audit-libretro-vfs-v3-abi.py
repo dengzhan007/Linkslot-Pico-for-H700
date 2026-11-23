@@ -565,20 +565,19 @@ def main():
             run(cmd,out/(name+".log"));objects.append(obj)
         elf=out/("vfs-"+triple+".elf")
         mapf=out/("vfs-"+triple+".map")
-        run(["ld.lld","-m",emulation,"-static","-e","_start","--no-undefined",
-             "-Map="+str(mapf),"-o",str(elf),*map(str,objects),str(rlib)],out/(triple+"-link.log"))
-        header=run(["readelf","-h",str(elf)])
-        undef=run(["llvm-nm","-u",str(elf)])
+        link_args=["ld.lld","-m",emulation,"-static","-e","_start","--no-undefined"]
         if triple == "armv7a-none-eabi":
             reloc=run(["readelf","-Wr",str(rlib)])
-            markers=__import__("re").findall(r"\\b(R_ARM_[A-Z0-9_]+)\\s+[^\\n]*__aeabi_unwind_cpp_pr0",reloc)
+            markers=__import__("re").findall(r"\b(R_ARM_[A-Z0-9_]+)\s+[^\n]*__aeabi_unwind_cpp_pr0",reloc)
             if not markers or any(kind != "R_ARM_NONE" for kind in markers):
                 raise RuntimeError("AArch32 EHABI marker changed: "+repr(markers))
-            run(["ld.lld","-m",emulation,"-static","-e","_start","--no-undefined",
-                 "--defsym=__aeabi_unwind_cpp_pr0=0","-Map="+str(mapf),"-o",str(elf),
-                 *map(str,objects),str(rlib)])
-            header=run(["readelf","-h",str(elf)])
-            undef=run(["llvm-nm","-u",str(elf)])
+            # The panic=abort, no-unwind probe has only R_ARM_NONE exidx metadata.
+            # This absolute symbol is a metadata marker, not an unwinder implementation.
+            link_args.append("--defsym=__aeabi_unwind_cpp_pr0=0")
+        link_args += ["-Map="+str(mapf),"-o",str(elf),*map(str,objects),str(rlib)]
+        run(link_args,out/(triple+"-link.log"))
+        header=run(["readelf","-h",str(elf)])
+        undef=run(["llvm-nm","-u",str(elf)])
         if machine not in header or undef.strip():
             raise RuntimeError(triple+": wrong ELF machine or unresolved symbols: "+undef)
         report.append("- PASS: "+triple+" static link; "+machine+" ELF; no undefined symbols.\n")
