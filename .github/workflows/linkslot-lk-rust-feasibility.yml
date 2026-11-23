@@ -9,6 +9,7 @@ on:
       - "scripts/audit-linkslot-nostd.py"
       - "scripts/audit-lk-bl33-layout.py"
       - "scripts/audit-slot-i18n-nostd.py"
+      - "scripts/audit-libretro-static-abi.py"
       - "platform/h700/**"
       - "scripts/build-h700-objects.sh"
   push:
@@ -73,6 +74,11 @@ jobs:
           python3 scripts/audit-slot-i18n-nostd.py \
             --source .ci/upstream-linkslot \
             --out build/audit-work/linkslot-1.0.36/slot-i18n
+
+      - name: Test static Libretro core ABI registry
+        run: |
+          python3 scripts/audit-libretro-static-abi.py \
+            --out build/audit-work/linkslot-1.0.36/static-libretro
 
       - name: Probe AArch32 LK-as-BL33 image and vector layout
         run: |
