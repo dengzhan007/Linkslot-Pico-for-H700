@@ -33,22 +33,24 @@ struct h700_sunxi_sdc0_scan_result {
 enum h700_sunxi_sdc0_scan_status {
     H700_SDC0_SCAN_OK = 0,
     H700_SDC0_SCAN_INVALID = -1,
-    H700_SDC0_SCAN_PIN_CONFIG_FAILED = -2,
-    H700_SDC0_SCAN_BUS_ENABLE_FAILED = -3,
-    H700_SDC0_SCAN_CARD_IDENTIFY_FAILED = -4,
-    H700_SDC0_SCAN_BLOCK_ADAPTER_FAILED = -5,
-    H700_SDC0_SCAN_GPT_FAILED = -6
+    H700_SDC0_SCAN_PIO_CLOCK_FAILED = -2,
+    H700_SDC0_SCAN_PIN_CONFIG_FAILED = -3,
+    H700_SDC0_SCAN_BUS_ENABLE_FAILED = -4,
+    H700_SDC0_SCAN_CARD_IDENTIFY_FAILED = -5,
+    H700_SDC0_SCAN_BLOCK_ADAPTER_FAILED = -6,
+    H700_SDC0_SCAN_GPT_FAILED = -7
 };
 
 /*
  * Run the complete read-only sdc0 bring-up and primary-GPT scan:
- *   PF0-PF5 reference pin configuration -> MMC0 gate/reset ->
+ *   APB1 PIO clock -> PF0-PF5 reference pin configuration -> MMC0 gate/reset ->
  *   400 kHz clock + SD v2 identification -> CMD17 block reader -> GPT parser.
  *
  * Board preconditions:
  * - The caller has mapped the H616 PIO, CCU and sdc0 register blocks and
  *   supplied valid offset-based callbacks.
- * - The PIO/APB1 clock is already running.
+ * - PIO, CCU and MMC register blocks are mapped. This routine configures APB1
+ *   to 24 MHz from OSC24M before applying the PF0-PF5 pin group.
  * - The SD card is powered and stable.
  * - PLL6 effective rate is measured/obtained from the platform, not guessed.
  *

@@ -483,6 +483,8 @@ static int test_full_sdc0_gpt_fat_vfs_bootstrap(void)
           provider.volume.wr == 0,
           "FAT volume is bounded to GPT p7 and remains read-only");
 
+    CHECK((fake.ccu[0x520u / 4u] & 0x03000303u) == 0u,
+          "APB1 is configured to OSC24M for PIO before card startup");
     CHECK((fake.ccu[SUNXI_CCU_MMC_GATE_RESET / 4u] &
            (SUNXI_CCU_MMC_GATE_BIT(0) | SUNXI_CCU_MMC_RESET_BIT(0))) ==
           (SUNXI_CCU_MMC_GATE_BIT(0) | SUNXI_CCU_MMC_RESET_BIT(0)),

@@ -397,6 +397,8 @@ static int test_complete_readonly_sdc0_gpt_scan(void)
           strcmp(partitions[1].name, "primary") == 0,
           "p7 primary is resolved from GPT");
 
+    CHECK((fake.ccu[0x520u / 4u] & 0x03000303u) == 0u,
+          "APB1 is configured to OSC24M before PIO use");
     CHECK((fake.ccu[SUNXI_CCU_MMC_GATE_RESET / 4u] &
            (SUNXI_CCU_MMC_GATE_BIT(0) | SUNXI_CCU_MMC_RESET_BIT(0))) ==
           (SUNXI_CCU_MMC_GATE_BIT(0) | SUNXI_CCU_MMC_RESET_BIT(0)),

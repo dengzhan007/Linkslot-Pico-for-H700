@@ -85,7 +85,7 @@
 - [x] 建立合成 GPT over CMD17 端到端 host 测试：通过 PIO FIFO 模拟卡片扇区，调用真实 GPT 解析器识别 p6 UDISK/p7 primary，验证 no-write 路径。此项仍不是 RG34XX 实机扇区读取。
 - [x] 实现 SD CSD 结构 0/1 只读容量解析与寻址类型校验；用 RG34XX 现场 30,375,936-sector 容量建立合成 R2 回归。尚未从实体卡采集 CSD 响应，详见 [H700 MMC 板级配置](h700-mmc-board-profile.md)。
 - [x] 实现 SD v2 只读卡识别状态机及模拟寄存器回归：CMD0/CMD8/CMD55-ACMD41/CMD2/CMD3/CMD9/CMD7，SDSC 额外 CMD16；限定只读命令、400 kHz、1-bit 识别，不包含 pinmux/CCU 实机配置和真实卡通讯，详见 [H700 MMC 板级配置](h700-mmc-board-profile.md)。
-- [x] 完成 H616 sdc0 PF0–PF5 pinmux 及上游参考电气字段的 host-only helper：ALT2、30mA drive、pull-up；保留同 bank 其他 pin 字段并验证 readback。PIO/APB1 使能和 RG34XX 实机 pinconf 尚未实测，详见 [H700 MMC 板级配置](h700-mmc-board-profile.md)。
+- [x] 完成 H616 PIO/APB1 24MHz（OSC24M）时钟选择 helper，并在统一 bring-up 中先配置 APB1，再配置 PF0–PF5 pinmux（ALT2、上游参考 30mA、pull-up）；寄存器读回与整条模拟调用顺序均有 host 回归。RG34XX vendor raw pinconf 仍未解码，未进行实机 MMIO，详见 [H700 MMC 板级配置](h700-mmc-board-profile.md)。
 - [x] 增加 H616 sdc0 CCU gate/reset 与 400 kHz module/card clock 集成封装及主机寄存器回归；通过 CCU 偏移回调写入 `0x84c` / `0x830`，并复用 `MASK_DATA0` 时钟更新逻辑。PF0–PF5 已有独立 host-tested ALT2/上游参考电气 helper；目标 PIO/APB1 使能、卡供电和实际 MMIO 仍未测试，详见 [H700 MMC 板级配置](h700-mmc-board-profile.md)。
 - [x] 建立统一的 sdc0 只读 bring-up→SD v2 识别→CMD17 block reader→primary GPT scan 入口，并以 fake H700 PIO/CCU/MMC/FIFO 完整模拟；确认 p6 UDISK、p7 primary 和无写命令。调用方仍需提供已启用的 PIO/APB1 时钟、卡供电和有效 MMIO 映射；尚未进行实机测试。
 - [x] 将 CMD17 单扇区读取桥接到 FAT16/FAT32/exFAT 多扇区回调，使用对齐 bounce buffer；支持按 GPT 分区记录带精确 extent 挂载只读卷，并测试 FAT32 p7 的 GPT→CMD17→VBR 路径。

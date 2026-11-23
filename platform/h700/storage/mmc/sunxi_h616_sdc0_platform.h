@@ -19,6 +19,14 @@ struct sunxi_h616_sdc0_platform {
 };
 
 /*
+ * Select the H616 APB1 parent/divider required by the PIO controller.
+ * Uses the 24 MHz oscillator directly; the upstream H616 clock tree has no
+ * separate PIO bus-gate register.
+ */
+int sunxi_h616_pio_enable_apb1_24m(
+    const struct sunxi_h616_sdc0_platform *platform);
+
+/*
  * Enable the sdc0 AHB gate and deassert its bus reset.
  *
  * The caller maps the H616 CCU at 0x03001000 and passes callbacks that use

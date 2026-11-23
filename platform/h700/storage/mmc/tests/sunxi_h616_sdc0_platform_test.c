@@ -102,6 +102,30 @@ static void fake_init(struct fake_platform *fake,
     platform->pll6_effective_hz = 600000000u;
 }
 
+static int test_pio_apb1_clock_selects_osc24m(void)
+{
+    struct fake_platform fake;
+    struct sunxi_mmc_io mmc;
+    struct sunxi_h616_sdc0_platform platform;
+    const uint32_t initial = 0x8000040cu;
+    const uint32_t apb1_mask = 0x03000303u;
+
+    fake_init(&fake, &mmc, &platform);
+    fake.ccu_regs[0x520u / 4u] = initial;
+
+    CHECK(sunxi_h616_pio_enable_apb1_24m(&platform) == 0,
+          "H616 APB1 clock selects OSC24M for PIO");
+    CHECK(fake.ccu_regs[0x520u / 4u] == (initial & ~apb1_mask),
+          "APB1 mux/divider fields are programmed and unrelated bits preserved");
+
+    platform.osc24m_hz = 25000000u;
+    CHECK(sunxi_h616_pio_enable_apb1_24m(&platform) != 0,
+          "unverified oscillator rate is rejected rather than guessed");
+    CHECK(fake.ccu_regs[0x520u / 4u] == (initial & ~apb1_mask),
+          "invalid oscillator rate does not modify APB1");
+    return 1;
+}
+
 static int test_bus_gate_and_reset(void)
 {
     struct fake_platform fake;
@@ -186,7 +210,8 @@ static int test_clock_update_timeout(void)
 
 int main(void)
 {
-    if (!test_bus_gate_and_reset() ||
+    if (!test_pio_apb1_clock_selects_osc24m() ||
+        !test_bus_gate_and_reset() ||
         !test_400khz_clock_programming() ||
         !test_rejects_unvalidated_high_speed() ||
         !test_clock_update_timeout())

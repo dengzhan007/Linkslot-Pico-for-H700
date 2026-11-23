@@ -50,7 +50,10 @@ enum h700_sunxi_sdc0_scan_status h700_sunxi_sdc0_scan_primary_gpt(
         config->recovery_timeout_ms == 0u)
         return H700_SDC0_SCAN_INVALID;
 
-    /* PIO/APB1 and card power are explicit platform preconditions. */
+    /* Configure the PIO parent clock before touching PF0-PF5 mux registers. */
+    if (sunxi_h616_pio_enable_apb1_24m(config->platform) != 0)
+        return H700_SDC0_SCAN_PIO_CLOCK_FAILED;
+
     if (sunxi_h616_sdc0_configure_pins(config->pio) != 0)
         return H700_SDC0_SCAN_PIN_CONFIG_FAILED;
 
