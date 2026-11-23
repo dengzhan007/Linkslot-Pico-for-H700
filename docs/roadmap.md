@@ -73,7 +73,8 @@
 - [ ] 比较 AArch32 LK 直接替代当前 A32 SVC BL33（现场分析的入口 `0x4a000000` / SPSR `0x1d3`）与 A32 handoff adapter + AArch64 payload 两种路线；明确 BL33 image/header、入口、栈、MMU/GIC 和 secondary-core 状态。此项只做源码/主机构建评估，不试写启动区域。
 - [ ] 建立最小 A32 handoff adapter + AArch64 payload；实机验证 CurrentEL、SPSR、参数寄存器、栈、异常向量、GIC、MMU/cache/TLB 与 FDT/内存边界。
 - [ ] 完成重复冷启动、第一帧/日志时间戳和失败恢复测试；恢复方式按电脑重写/修复 SD 卡，不依赖旧 Linux 自动回退。
-- [x] 增加 RG34XX BaseOS-native BOL4 / Android boot v2 host 打包与检查工具，使用纯 Python raw LZ4；自动校验 AArch64 Image、BOL4 FNV/长度、Android v2 header/load addresses/image ID、组件页对齐与 16 MiB 上限，并通过 10 项 host tests。该工具只生成普通文件，不操作 SD/Boot 区，也不代表镜像已能在实机启动。
+- [x] 增加 RG34XX BaseOS-native BOL4 / Android boot v2 host 打包、检查与本地 p4 dump 提取工具；显式按本次已审计 capture 的 p4 +48 MiB / 0x829000 extent 提取活动镜像，并拆出 header、BOL4、AArch64 Image、initrd、DTB 与 SHA-256 manifest。12 项 host tests 覆盖压缩、容器、损坏输入、有界提取及不修改原始 dump；工具只处理普通文件，不操作 SD/Boot 区，也不代表镜像已能在实机启动。
+- [ ] 使用本地保留的 64 MiB `boot-partition.bin` 运行 `extract-inputs`，并对提取出的活动镜像与报告中的 BOL4 length/FNV、kernel SHA-256、DTB/ramdisk 进行逐项交叉核验；原始分区 dump 目前未上传仓库，因此此项尚未由云端 CI 执行。
 - [ ] 使用已核验且相互匹配的 RG34XX Android v2 header、DTB、initrd 与 AArch64 Image 输入构建一次真实 host candidate，归档 hash 和 extents；这仍不替代 watchdog 恢复、安全内存归属与目标机冷启动验收。
 
 ### C. Allwinner H700 基础 HAL

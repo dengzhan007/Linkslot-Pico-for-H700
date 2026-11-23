@@ -125,6 +125,46 @@ class AndroidV2Tests(unittest.TestCase):
             boot.build_android_v2(fake_header(), boot.build_bol4(fake_kernel()), fake_dtb(),
                                   max_image=4096)
 
+
+    def test_extract_inputs_from_local_partition_dump(self):
+        kernel = fake_kernel()
+        bol4 = boot.build_bol4(kernel)
+        initrd = b"newc-empty-initrd"
+        dtb = fake_dtb()
+        image = boot.build_android_v2(fake_header(), bol4, dtb, initrd)
+        offset = 0x03000000
+        partition = bytearray(offset + len(image) + 512)
+        partition[offset:offset + len(image)] = image
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            partition_path = root / "boot-partition.bin"
+            output_dir = root / "extracted"
+            partition_path.write_bytes(partition)
+            source_before = partition_path.read_bytes()
+            output_dir.mkdir()
+
+            manifest = boot.write_extracted_inputs(partition_path, offset, len(image), output_dir)
+
+            self.assertEqual(partition_path.read_bytes(), source_before)
+            self.assertTrue(manifest["host_only"])
+            self.assertTrue(manifest["not_installable"])
+            self.assertEqual((output_dir / "active-boot.img").read_bytes(), image)
+            self.assertEqual((output_dir / "android-v2-header.bin").read_bytes(), image[:boot.PAGE_SIZE])
+            self.assertEqual((output_dir / "kernel.BOL4").read_bytes(), bol4)
+            self.assertEqual((output_dir / "kernel.Image").read_bytes(), kernel)
+            self.assertEqual((output_dir / "initrd.img").read_bytes(), initrd)
+            self.assertEqual((output_dir / "dtb.bin").read_bytes(), dtb)
+            saved_manifest = json.loads((output_dir / "extracted-manifest.json").read_text())
+            self.assertEqual(saved_manifest["source_image_sha256"], manifest["source_image_sha256"])
+
+            with self.assertRaisesRegex(boot.ImageError, "must be empty"):
+                boot.write_extracted_inputs(partition_path, offset, len(image), output_dir)
+
+    def test_extract_inputs_rejects_out_of_bounds_extent(self):
+        with self.assertRaisesRegex(boot.ImageError, "outside"):
+            boot.extract_android_v2_inputs(b"\0" * 4096, 0x3000, 2048)
+
     def test_cli_build_and_inspect_are_file_only_roundtrip(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

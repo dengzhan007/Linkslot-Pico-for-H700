@@ -287,6 +287,76 @@ def build_android_v2(header_template: bytes, bol4_kernel: bytes, dtb: bytes,
     return image
 
 
+
+def extract_android_v2_inputs(partition: bytes, offset: int, image_size: int) -> dict[str, bytes]:
+    """Extract the active Android v2 inputs from an explicitly bounded p4 dump."""
+    if offset < 0 or image_size <= 0 or offset > len(partition) or image_size > len(partition) - offset:
+        raise ImageError("active Android image extent is outside the supplied partition dump")
+    image = partition[offset:offset + image_size]
+    header, parts = split_android_v2(image)
+    bol4, initrd, second, recovery_dtbo, dtb = parts
+    if second or recovery_dtbo:
+        raise ImageError("audited RG34XX active image expects empty second and recovery-DTBO components")
+    kernel = unpack_bol4(bol4)
+    if len(initrd) > 0x100000:
+        raise ImageError("extracted initrd exceeds the audited 1 MiB loader limit")
+    if len(dtb) < 40 or dtb[:4] != b"\xd0\x0d\xfe\xed":
+        raise ImageError("extracted DTB has no valid FDT header")
+    dtb_size = int.from_bytes(dtb[4:8], "big")
+    if dtb_size < 40 or dtb_size > len(dtb):
+        raise ImageError("extracted DTB totalsize exceeds its Android component extent")
+    return {
+        "active-boot.img": image,
+        "android-v2-header.bin": header,
+        "kernel.BOL4": bol4,
+        "kernel.Image": kernel,
+        "initrd.img": initrd,
+        "dtb.bin": dtb,
+    }
+
+
+def write_extracted_inputs(partition_path: Path, offset: int, image_size: int,
+                           output_dir: Path) -> dict:
+    """Read a local p4 dump and write its exact active boot components to an empty folder."""
+    partition_path = partition_path.resolve()
+    output_dir = output_dir.resolve()
+    if partition_path == output_dir or output_dir in partition_path.parents:
+        raise ImageError("output directory must not contain or replace the partition dump")
+    partition = partition_path.read_bytes()
+    extracted = extract_android_v2_inputs(partition, offset, image_size)
+    if output_dir.exists() and not output_dir.is_dir():
+        raise ImageError("extraction output path exists and is not a directory")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    if any(output_dir.iterdir()):
+        raise ImageError("extraction output directory must be empty")
+    manifest = {
+        "format": "RG34XX active BaseOS Android v2 / BOL4 input extraction",
+        "host_only": True,
+        "device_io_performed": False,
+        "source_partition_file": partition_path.name,
+        "source_partition_bytes": len(partition),
+        "source_partition_sha256": hashlib.sha256(partition).hexdigest(),
+        "source_image_offset": f"0x{offset:x}",
+        "source_image_bytes": image_size,
+        "source_image_sha256": hashlib.sha256(extracted["active-boot.img"]).hexdigest(),
+        "components": {
+            name: {
+                "bytes": len(data),
+                "sha256": hashlib.sha256(data).hexdigest(),
+            }
+            for name, data in extracted.items()
+        },
+        "not_installable": True,
+        "not_hardware_validated": True,
+    }
+    for name, data in extracted.items():
+        (output_dir / name).write_bytes(data)
+    (output_dir / "extracted-manifest.json").write_text(
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+    )
+    return manifest
+
+
 def manifest_for(header_template: bytes, kernel: bytes, bol4: bytes, image: bytes,
                  dtb: bytes, initrd: bytes) -> dict:
     return {
@@ -337,6 +407,13 @@ def command_build(args: argparse.Namespace) -> int:
     return 0
 
 
+
+def command_extract_inputs(args: argparse.Namespace) -> int:
+    manifest = write_extracted_inputs(args.partition, args.offset, args.size, args.output_dir)
+    print(json.dumps(manifest, indent=2))
+    return 0
+
+
 def command_inspect(args: argparse.Namespace) -> int:
     image = args.image.read_bytes()
     header, parts = split_android_v2(image, max_image=args.max_image_bytes)
@@ -375,6 +452,16 @@ def main(argv: list[str] | None = None) -> int:
     build.add_argument("--manifest", type=Path)
     build.add_argument("--max-image-bytes", type=int, default=MAX_ANDROID_IMAGE)
     build.set_defaults(func=command_build)
+    extract = sub.add_parser("extract-inputs", help="extract the audited active image from a local boot-partition dump")
+    extract.add_argument("--partition", type=Path, required=True,
+                         help="local read-only 64 MiB RG34XX p4/boot partition dump")
+    extract.add_argument("--offset", type=lambda value: int(value, 0), required=True,
+                         help="explicit active Android image byte offset inside p4")
+    extract.add_argument("--size", type=lambda value: int(value, 0), required=True,
+                         help="explicit active Android image extent in bytes")
+    extract.add_argument("--output-dir", type=Path, required=True,
+                         help="new or empty directory for extracted host-side inputs")
+    extract.set_defaults(func=command_extract_inputs)
     inspect = sub.add_parser("inspect", help="verify an Android v2 image and its BOL4 kernel")
     inspect.add_argument("image", type=Path)
     inspect.add_argument("--max-image-bytes", type=int, default=MAX_ANDROID_IMAGE)
