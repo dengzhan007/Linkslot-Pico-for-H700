@@ -52,7 +52,7 @@ enum h700_sunxi_sdc0_scan_status {
  * - PIO, CCU and MMC register blocks are mapped. This routine configures APB1
  *   to 24 MHz from OSC24M before applying the PF0-PF5 pin group.
  * - The SD card is powered and stable.
- * - The initial identification path uses the confirmed 24 MHz HOSC and does not require a PLL-rate value. The platform wrapper rejects rates above 24 MHz until the sun50iw9p1 `pll_periph1x2` path is validated.
+ * - The initial identification path uses the confirmed 24 MHz HOSC and does not require a PLL-rate value. The platform wrapper accepts only the exact 400 kHz identification rate; all other transfer rates remain disabled until the sun50iw9p1 `pll_periph1x2` path and RG34XX timing are validated.
  *
  * This routine only changes controller/clock/pin registers. Its storage
  * protocol sends identification and CMD17 read commands only. It has no
