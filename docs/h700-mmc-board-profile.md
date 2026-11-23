@@ -14,7 +14,7 @@ The Linux host indices above are diagnostic observations only. They do not defin
 
 ## Storage policy
 
-The initial Linkslot storage path should use **sdc0**. It owns the currently booted SDHC card; bootargs specify p5 as rootfs and identify p7 as UDISK. RG34XX has no eMMC. Linux's `removable=0` / non-removable setting for sdc0 must not be interpreted as eMMC media.
+The initial Linkslot storage path should use **sdc0**. It owns the currently booted SDHC card; bootargs specify p5 as rootfs and identify p7 as UDISK. The live mount table confirms p7 is mounted at `/mnt/sdcard` (vfat), including `/mnt/sdcard/Roms` and `.userdata`, while p6 is mounted at `/data` (ext4). Sysfs `PARTNAME` values conflict with the bootargs and mount table for p6/p7, so the implementation must inspect the on-disk GPT and the actual volume layout rather than trust the sysfs label. RG34XX has no eMMC. Linux's `removable=0` / non-removable setting for sdc0 must not be interpreted as eMMC media.
 
 sdc2 is kept as an optional second-slot candidate. It exposes a card-detect GPIO and a `vqmmc-supply` reference, but no card was inserted in the capture. Its GPIO provider cells and exact regulator/clock initialization still require decoding. The profile intentionally records these properties as present-but-unresolved and does not provide pin numbers, polarity, pull, drive, or regulator voltage to a driver.
 
