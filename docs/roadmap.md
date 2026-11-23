@@ -11,12 +11,21 @@
 - [x] 确认目标设备无 eMMC，只设计 SD 卡启动，不做旧系统自动回退。
 - [x] 建立 RG34XX / Allwinner H700 Cortex-A53 的 AArch64 freestanding C、C++ 与汇编编译检查和 CI。
 - [x] 获取并归档用户提供的 linkSlot 1.0.36 源码快照（`upstream/linkslot` @ `8590d6ff`，SHA256 清单完整）；原始 ZIP 无 `.git`，因此真实上游 commit/tag 仍不可得。
-- [ ] 完成 Linkslot 1.0.36 逐 crate 可移植性审计，验证 AArch32/AArch64 LK runtime 选型与 Rust `no_std`/`alloc` 静态库可行性；在此之前不导入整个 workspace/subtree。
+- [x] 完成 Linkslot 1.0.36 第一轮逐 crate 可移植性审计与 host-only Rust `no_std`/`alloc` 构建：`slot-input`、`slot-model` 临时副本均通过 AArch32/AArch64 编译，原版上游 58 项测试、适配手势 47 项、纯模型 4 项通过；Rust/C 静态链接检查通过。真实 runtime 选型仍未完成。
 - [x] 确认目标 SoC 是 Allwinner H700，不是 Rockchip RK3566；AArch64 编译 CPU target 已修正为 Cortex-A53。
 - [x] 锁定第一台实机为 Anbernic RG34XX（非 SP），建立 Allwinner H700 / Cortex-A53 硬件基线。
 
 ## 当前工作：不依赖 Linkslot 上游版本的准备
 
+### A2. Linkslot Rust 裸机可移植性（第一轮已完成）
+
+- [x] 固定 Linkslot 1.0.36 只读 ZIP 快照及 SHA256 清单，不伪造原始上游 commit。
+- [x] `slot-input` 纯手势逻辑在 AArch32/AArch64 `no_std + alloc` 目标通过编译；保留的 47 项上游行为测试全部通过。
+- [x] `slot-model` 纯领域数据在 AArch32/AArch64 `no_std + alloc` 目标通过编译；4 项纯模型回归测试通过。
+- [x] 验证 Rust 静态库与 AArch32/AArch64 freestanding C shim 的最终 ELF 链接。
+- [x] 按固定 LK 头文件完成 `heap_alloc/heap_free` AArch32 声明/ABI 兼容测试；测试实现为 stub，不是实际 heap。
+- [ ] 编译并验证真实 LK heap implementation；先解决 global critical section 不是跨核锁的风险。
+- [ ] 完成 AArch32 LK-as-BL33 与 AArch64 LK/runtime 两条路线的架构选择。
 ### A. 工具链与工程基础（已完成第一步）
 
 - [x] AArch64 freestanding C、C++ 和汇编编译探针。
@@ -39,7 +48,7 @@
 - [x] 读取第四轮 memblock `memory/reserved`：确认 1 GiB memory window 与 46 条 reserved entries；识别 `[0x48000000,0x49000000)` 为与 BaseOS vendor monitor 研究窗口一致的 16 MiB 保留区，并将 `[0x77c00000,0x7bc00000)` 标为与 `CmaTotal=64 MiB` 精确匹配的高置信 CMA 候选；现场明细见 [Inventory 报告](rg34xx-live-inventory-2026-11-22.md)。解析器现支持 RG34XX 的逗号加 `size:...K` memblock 格式，且 PAGE_SIZE 缺失时仍能解析 memblock。
 - [x] 反编译第四轮 live FDT 并与 memblock 交叉审查：将 `[0x42000000,0x42001000)` 与 FDT initrd 范围 `[0x42000000,0x42000200)` 关联，将 `[0x44000000,0x44023240)` 标记为高置信 live FDT blob 候选；识别 `/firmware/optee` SMC conduit 和 ION secure/CMA heap 声明；确认 ION heap base/size 为零、Linux OP-TEE UID 检查失败及 bootargs `androidboot.secure_os_exist=0`，但不据此声称安全世界/secure carveout 不存在。FDT parser 已增加 initrd、firmware_nodes、ion_heaps JSON 字段和合成测试。
 - [ ] 完成剩余保留区归属审查：尤其 `[0x7ec00000,0x7fc00000)` 的 16 MiB 高地址区、top-of-RAM 37 条碎片、monitor 实际访问上界、其他 secure/DMA/display carveout 与 loader 生命周期。第四轮 `/proc/iomem` 未给该 16 MiB 区域标注 owner；与 Linux 4.9.170 / sun50iw9p1 同系列 Allwinner 参考驱动显示的 ION secure heap `GET_DRM_INFO` vendor SMC 路径存在待验证关联，但本机尚无该 SMC 返回值。标准 OP-TEE UID mismatch 不等于 vendor DRM SMC 已失败。下一轮 collector 已新增只读 `tee-ion-runtime.txt`，等待捕获运行内核 config、ION/TEE 节点、heap debugfs、driver bind 和完整相关日志。此项验证完成前，16 MiB 继续作为未知保留区排除；ION `heap_secure` 的 FDT base/size 为零本身不能给任何物理地址定名。framebuffer `[0x7bf24800,0x7c076000)` 即使未出现在 memblock 列表中也必须排除。不得把 `memblock.memory - memblock.reserved` 直接当作 payload 可用 RAM。
-- [ ] 选定保留原厂 U-Boot 还是采用 A64 SPL + vendor monitor + A32 BL33；先完成入口/恢复设计评审，不试写启动区域。
+- [ ] 比较 AArch32 LK 直接替代当前 A32 SVC BL33（现场分析的入口 `0x4a000000` / SPSR `0x1d3`）与 A32 handoff adapter + AArch64 payload 两种路线；明确 BL33 image/header、入口、栈、MMU/GIC 和 secondary-core 状态。此项只做源码/主机构建评估，不试写启动区域。
 - [ ] 建立最小 A32 handoff adapter + AArch64 payload；实机验证 CurrentEL、SPSR、参数寄存器、栈、异常向量、GIC、MMU/cache/TLB 与 FDT/内存边界。
 - [ ] 完成重复冷启动、第一帧/日志时间戳和失败恢复测试；恢复方式按电脑重写/修复 SD 卡，不依赖旧 Linux 自动回退。
 
@@ -60,7 +69,7 @@
 
 不依赖 Linkslot UI 的工作可以先做：
 
-- 审查 Gambatte、mGBA、gpSP 的 AArch64 构建和 ABI；
+- 审查 Gambatte、mGBA、gpSP 的 AArch32/AArch64 构建和 ABI；根据最终 LK/runtime 架构固定核心 ABI。
 - 比较 Pico Core ABI 与当前核心上游接口；
 - 建立 ROM、视频帧、音频采样、输入、即时状态、电池存档的核心测试夹具；
 - 确认 GB/GBC/GBA 核心在 Cortex-A53 上的优化选项和内存需求；
