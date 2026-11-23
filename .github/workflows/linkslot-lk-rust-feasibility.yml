@@ -13,6 +13,7 @@ on:
       - "scripts/build-mgba-aarch32-static.py"
       - "scripts/build-mgba-aarch32-generic-static.py"
       - "scripts/build-mgba-libretro-vfs3-static.py"
+      - "scripts/build-mgba-arm-none-eabi-vfs3.py"
       - "scripts/audit-libretro-vfs-v3-abi.py"
       - "platform/h700/**"
       - "scripts/build-h700-objects.sh"
@@ -64,7 +65,7 @@ jobs:
       - name: Install LLVM cross-link tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang llvm lld cmake gcc-arm-linux-gnueabi g++-arm-linux-gnueabi libc6-dev-armel-cross
+          sudo apt-get install -y clang llvm lld cmake gcc-arm-linux-gnueabi g++-arm-linux-gnueabi libc6-dev-armel-cross gcc-arm-none-eabi libnewlib-arm-none-eabi libnewlib-dev libstdc++-arm-none-eabi-dev
 
       - name: Install pinned Rust toolchain and freestanding targets
         uses: dtolnay/rust-toolchain@1.96.0
@@ -110,6 +111,10 @@ jobs:
       - name: Build mGBA with required Libretro VFS v3 file and directory backend
         run: |
           python3 scripts/build-mgba-libretro-vfs3-static.py --source .ci/mgba-source --out build/audit-work/linkslot-1.0.36/mgba-vfs3
+
+      - name: Build mGBA VFS v3 with bare-metal arm-none-eabi/newlib
+        run: |
+          python3 scripts/build-mgba-arm-none-eabi-vfs3.py --source .ci/mgba-source --out build/audit-work/linkslot-1.0.36/mgba-arm-none-eabi --patch-script scripts/build-mgba-libretro-vfs3-static.py
 
       - name: Probe AArch32 LK-as-BL33 image and vector layout
         run: |
