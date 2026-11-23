@@ -46,6 +46,12 @@ COMMON_FLAGS=(
     -c "$ROOT/platform/h700/storage/mmc/sunxi_mmc_clock.c" \
     -o "$OUT_DIR/sunxi_mmc_clock.o"
 
+"$CC" "${COMMON_FLAGS[@]}" -std=c11 \
+    -I"$ROOT/platform/h700/storage/gpt/tests/freestanding_include" \
+    -I"$ROOT/platform/h700/storage/gpt" \
+    -c "$ROOT/platform/h700/storage/gpt/h700_gpt_readonly.c" \
+    -o "$OUT_DIR/h700_gpt_readonly.o"
+
 "$CC" "${COMMON_FLAGS[@]}" -c \
     "$ROOT/platform/h700/arch/compile_probe.S" \
     -o "$OUT_DIR/compile_probe_asm.o"
@@ -55,7 +61,7 @@ COMMON_FLAGS=(
     -c "$ROOT/platform/h700/arch/compile_probe.cpp" \
     -o "$OUT_DIR/compile_probe_cpp.o"
 
-for object in "$OUT_DIR/compile_probe.o" "$OUT_DIR/compile_probe_asm.o" "$OUT_DIR/compile_probe_cpp.o" "$OUT_DIR/h700_mmc_board_profile.o" "$OUT_DIR/sunxi_mmc_clock.o"; do
+for object in "$OUT_DIR/compile_probe.o" "$OUT_DIR/compile_probe_asm.o" "$OUT_DIR/compile_probe_cpp.o" "$OUT_DIR/h700_mmc_board_profile.o" "$OUT_DIR/sunxi_mmc_clock.o" "$OUT_DIR/h700_gpt_readonly.o"; do
     format="$("$OBJDUMP" -f "$object")"
     if ! grep -q "architecture: aarch64" <<<"$format"; then
         echo "error: $object is not an AArch64 object" >&2
