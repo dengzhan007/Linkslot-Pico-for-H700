@@ -56,3 +56,52 @@ jobs:
           path: build/recovered-prefix/
           if-no-files-found: error
           retention-days: 3
+
+  recover-uboot-source:
+    name: Recover pinned U-Boot v2026.10 source archive
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Download candidate archive and enforce native builder pin
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="f943a88389c8fd70a6b0d061a88267465e143c7ca6ea2b75837ab20f5b60c739"
+          mkdir -p build/uboot-source
+          urls=(
+            "https://github.com/u-boot/u-boot/archive/refs/tags/v2026.10.tar.gz"
+            "https://git.u-boot-project.org/u-boot/u-boot/-/archive/v2026.10/u-boot-v2026.10.tar.gz"
+          )
+          found=0
+          for index in "${!urls[@]}"; do
+            candidate="$RUNNER_TEMP/u-boot-candidate-$index.tar.gz"
+            echo "Trying ${urls[$index]}"
+            if ! curl --fail --location --retry 2 --retry-delay 2 --silent --show-error \
+                 --connect-timeout 20 "${urls[$index]}" -o "$candidate"; then
+              echo "Candidate download failed; trying the next canonical source."
+              continue
+            fi
+            got="$(sha256sum "$candidate" | cut -d' ' -f1)"
+            echo "Candidate SHA-256: $got"
+            if [ "$got" = "$expected" ]; then
+              cp "$candidate" build/uboot-source/u-boot-v2026.10.tar.gz
+              {
+                echo "url=${urls[$index]}"
+                echo "sha256=$got"
+                echo "bytes=$(stat -c '%s' "$candidate")"
+                echo "archive_root=$(tar -tzf "$candidate" | head -n 1)"
+              } > build/uboot-source/README.txt
+              found=1
+              break
+            fi
+          done
+          test "$found" = 1
+          printf '%s  %s\n' "$expected" build/uboot-source/u-boot-v2026.10.tar.gz | sha256sum --check -
+
+      - name: Upload exact pinned U-Boot source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: H700-Pinned-U-Boot-v2026.10-${{ github.sha }}
+          path: build/uboot-source/
+          if-no-files-found: error
+          retention-days: 3
