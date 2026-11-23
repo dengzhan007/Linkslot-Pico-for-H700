@@ -37,7 +37,6 @@ enum h700_sunxi_sdc0_scan_status h700_sunxi_sdc0_scan_primary_gpt(
         config->platform->ccu.read32 == NULL ||
         config->platform->ccu.write32 == NULL ||
         config->platform->osc24m_hz == 0u ||
-        config->platform->pll6_effective_hz == 0u ||
         partitions == NULL || partition_capacity < H700_GPT_MAX_ENTRIES ||
         result == NULL ||
         config->controller_reset_timeout_ms == 0u ||
