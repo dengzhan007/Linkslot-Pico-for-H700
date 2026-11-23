@@ -19,7 +19,7 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     files = [
         "fat_ro.c", "fat_wr.c", "fat_exfat.c",
-        "tests/fat_ro_test.c", "tests/fat_exfat_rw_test.c",
+        "tests/fat_ro_test.c", "tests/fat_exfat_rw_test.c", "tests/fat_fat32_rw_test.c",
     ]
     results = []
     for rel in files:
