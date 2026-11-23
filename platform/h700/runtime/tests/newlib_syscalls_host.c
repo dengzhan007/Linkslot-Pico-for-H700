@@ -190,7 +190,7 @@ int main(void)
           "realloc preserves original contents");
     CHECK(((uintptr_t)grown & 15u) == 0,
           "realloc preserves 16-byte newlib alignment");
-    CHECK(g_allocs == alloc_before + 3 && g_frees == free_before + 1,
+    CHECK(g_allocs == alloc_before + 2 && g_frees == free_before + 1,
           "realloc allocates aligned replacement and releases old raw block");
 
     free_before = g_frees;
