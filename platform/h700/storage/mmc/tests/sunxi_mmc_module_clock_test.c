@@ -61,14 +61,13 @@ static int test_range_boundaries(void)
           "rate below oscillator minimum rejected");
     CHECK(config.register_value == 0u && config.actual_hz == 0u,
           "failed calculation publishes zero result");
-    CHECK(sunxi_mmc_calculate_module_clock(4687500u, OSC_HZ,
+    CHECK(sunxi_mmc_calculate_module_clock(24000001u, OSC_HZ,
           PLL6_EFFECTIVE_HZ, &config) == SUNXI_MMC_MODULE_CLOCK_OK,
-          "minimum PLL6-derived rate accepted");
-    CHECK(config.n_exponent == 3u && config.m_divider == 16u &&
-          config.actual_hz == 4687500u, "minimum PLL6 divider");
-    CHECK(sunxi_mmc_calculate_module_clock(4687499u, OSC_HZ,
-          PLL6_EFFECTIVE_HZ, &config) == SUNXI_MMC_MODULE_CLOCK_OUT_OF_RANGE,
-          "rate below PLL6 minimum rejected");
+          "first rate above OSC24M threshold selects PLL6");
+    CHECK(config.source == SUNXI_MMC_MODULE_CLOCK_PLL6 &&
+          config.n_exponent == 1u && config.m_divider == 13u &&
+          config.actual_hz == 23076923u,
+          "PLL6 threshold transition uses the expected rounded divider");
     return 1;
 }
 static int test_invalid_arguments(void)
