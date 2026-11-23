@@ -12,6 +12,7 @@ on:
       - "scripts/audit-libretro-static-abi.py"
       - "scripts/build-mgba-aarch32-static.py"
       - "scripts/build-mgba-aarch32-generic-static.py"
+      - "scripts/audit-libretro-vfs-v3-abi.py"
       - "platform/h700/**"
       - "scripts/build-h700-objects.sh"
   push:
@@ -89,6 +90,11 @@ jobs:
         run: |
           python3 scripts/audit-libretro-static-abi.py \
             --out build/audit-work/linkslot-1.0.36/static-libretro
+
+      - name: Test no_std Libretro VFS v3 service ABI
+        run: |
+          python3 scripts/audit-libretro-vfs-v3-abi.py \
+            --out build/audit-work/linkslot-1.0.36/libretro-vfs-v3
 
       - name: Build pinned mGBA as AArch32 namespaced static archive
         run: |
