@@ -170,7 +170,8 @@ static int resolve_path(const struct h700_fat_vfs *state,
                 return -1;
 
             if (first_component != 0) {
-                if (!allowed_root(suffix + component_start, component_length))
+                if (!allowed_root_name_case_insensitive(
+                        suffix + component_start, component_length))
                     return -1;
                 first_component = 0;
             }
