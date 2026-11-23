@@ -172,8 +172,8 @@ enum h700_gpt_result h700_gpt_read_primary(
     size_t partition_capacity,
     struct h700_gpt_table *table)
 {
-    uint8_t sector[H700_GPT_SECTOR_SIZE];
-    uint8_t header[H700_GPT_SECTOR_SIZE];
+    _Alignas(4) uint8_t sector[H700_GPT_SECTOR_SIZE];
+    _Alignas(4) uint8_t header[H700_GPT_SECTOR_SIZE];
     uint64_t entries_lba;
     uint64_t table_bytes;
     uint64_t table_sectors;

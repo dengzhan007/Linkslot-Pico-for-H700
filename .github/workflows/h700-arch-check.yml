@@ -13,6 +13,7 @@ on:
       - "scripts/test-h700-sunxi-sd-card-init.sh"
       - "scripts/test-h700-h616-sdc0-platform.sh"
       - "scripts/test-h700-h616-sdc0-pins.sh"
+      - "scripts/test-h700-sunxi-mmc-gpt-adapter.sh"
       - ".github/workflows/h700-arch-check.yml"
   pull_request:
     paths:
@@ -46,6 +47,7 @@ jobs:
           sh scripts/test-h700-sunxi-sd-card-init.sh
           sh scripts/test-h700-h616-sdc0-platform.sh
           sh scripts/test-h700-h616-sdc0-pins.sh
+          sh scripts/test-h700-sunxi-mmc-gpt-adapter.sh
 
   compile-aarch64-objects:
     runs-on: ubuntu-latest
