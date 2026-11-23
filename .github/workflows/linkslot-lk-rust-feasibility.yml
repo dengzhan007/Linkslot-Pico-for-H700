@@ -147,6 +147,9 @@ jobs:
             --module platform/h700/runtime/storage_path.rs \
             --out build/audit-work/linkslot-1.0.36/h700-storage-path
 
+      - name: Syntax-check read-only H700 MMC inventory collector
+        run: sh -n scripts/collect-h700-mmc-map-readonly.sh
+
       - name: Host-compile H700 FAT16/FAT32 and exFAT storage candidate
         run: |
           python3 scripts/test-h700-fat-compile.py \
