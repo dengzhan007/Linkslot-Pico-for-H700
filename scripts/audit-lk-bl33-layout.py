@@ -60,12 +60,12 @@ def main():
             raise RuntimeError("pinned LK evidence file missing: " + str(p))
 
     original_crt0 = crt0_path.read_text(encoding="utf-8")
-    begin = ".globl _start\\n_start:"
+    begin = ".globl _start\n_start:"
     marker = "reset:\n"
     i = original_crt0.find(begin)
     j = original_crt0.find(marker, i)
     if i < 0 or j < 0:
-        raise RuntimeError("unexpected LK crt0 startup shape; re-audit before adapting")
+        raise RuntimeError("unexpected LK crt0 startup shape; expected _start followed by reset; found: " + repr(original_crt0[original_crt0.find("_start")-16:original_crt0.find("_start")+48]))
 
     # The first word must remain executable. BL31's vendor loader reads an
     # opaque header from +4 through +0x63f. Keep the rest of the first page
