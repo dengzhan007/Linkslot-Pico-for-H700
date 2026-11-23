@@ -1,10 +1,12 @@
 # Linkslot 上游同步与移植边界
 
-## 当前状态：等待即将发布的大版本
+## 当前状态：Linkslot 1.0.36 源码快照已取得，正在进行可移植性审计
 
-Linkslot 上游即将有一版较大的更新，因此当前**暂不导入 subtree、不对现有旧版逐 crate 做完整复用审计，也不开始针对旧版做大规模适配**。当前研究快照只用于理解项目结构。等新版本正式发布后，以新 release 对应的 commit SHA 重新执行审计和导入，避免重复工作。
+用户提供的 linkSlot 1.0.36 源码已归档到本仓库 `upstream/linkslot` 分支，快照 commit 为 `8590d6ff1b2caa26118051069c975106fbb14bd3`。它是无 `.git` 的 ZIP 快照，因此该 commit 只是本仓库的归档提交，不是原始上游 Git commit；真实上游 commit/tag 不可得，详见 [上游基线](upstream-baselines.md) 与 [1.0.36 可移植性审计](linkslot-1.0.36-portability-audit.md)。
 
-等待期间优先推进独立于 Linkslot API 的 H700 AArch64 工具链、SD 启动链、板级硬件识别、基础 HAL 探测和模拟器核心构建研究。
+当前不直接把整个 workspace 导入 `third_party/linkslot`，也不开始大规模修改上游代码。先完成逐 crate 复用审计与 LK Rust ABI/工具链可行性验证。特别注意：Linkslot 的 `device` feature 仍通过 `rust:1.96-bullseye` / `linux/arm64` 构建，是 AArch64 Linux/glibc 程序，不是 LK/bare-metal。
+
+等待审计期间继续推进不依赖 Linkslot UI 的 H700 启动链、硬件边界与 freestanding 工具链工作；探针实机准入仍遵循 reports 分支的 NO-GO 结论。
 
 ## 目标
 
@@ -70,22 +72,12 @@ H700 侧提供稳定的适配接口，不让 Linkslot 业务模块直接访问 S
 
 ## 5. 上游更新流程
 
-等大版本发布并选定正式基线后，再将 Linkslot 上游 remote 命名为 `linkslot-upstream`，首次导入到 `third_party/linkslot`。以下为届时使用的流程示意，当前不要执行：
+1. 若取得上游原始 Git 历史，先核验 release tag 与 commit，再使用固定 SHA 进行 subtree 导入/更新。
+2. 若只取得新的 ZIP 源码快照，先将原始归档按日期和 SHA-256 归档；记录快照 commit 与上游真实 commit 的区别。
+3. 对快照版本可使用 `git diff` / 文件级 SHA 比较变化，但不能声称获得原始上游 Git 历史，也不能用快照伪造 release tag。
+4. 在 1.0.36 crate 审计和 LK ABI 试编译完成前，不创建 `third_party/linkslot` subtree，不把完整 workspace 作为 H700 根 workspace 成员。
 
-```sh
-git remote add linkslot-upstream https://github.com/luguiyi/linkslot.git
-git fetch linkslot-upstream --tags
-
-# 首次导入：使用确认过的 release tag，而不是浮动的 main
-# 将 <release-tag> 替换为实际版本标签
-git subtree add --prefix=third_party/linkslot linkslot-upstream <release-tag> --squash
-
-# 后续更新：先确认新 tag 对应的 commit SHA，再用固定 SHA 同步
-git fetch linkslot-upstream --tags
-git subtree pull --prefix=third_party/linkslot linkslot-upstream <new-commit-sha> --squash
-```
-
-首次导入前确认目标目录不存在或为空，不得覆盖本项目工程文件。每次同步均记录新旧上游 commit SHA 和 tag；正式构建不直接追踪浮动的 `main`。
+原始上游仓库公开版本落后于用户提供快照时，不得从公开 `main` 强行 subtree pull 覆盖 1.0.36。应继续以 `upstream/linkslot` 分支作为只读输入，等待可核验的上游 Git 基线或后续源码快照。
 
 每次同步必须经过：
 
