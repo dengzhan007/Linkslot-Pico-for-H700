@@ -10,6 +10,7 @@ on:
       - "scripts/audit-lk-bl33-layout.py"
       - "scripts/audit-slot-i18n-nostd.py"
       - "scripts/audit-libretro-static-abi.py"
+      - "scripts/build-mgba-aarch32-static.py"
       - "platform/h700/**"
       - "scripts/build-h700-objects.sh"
   push:
@@ -41,6 +42,14 @@ jobs:
           path: .ci/upstream-linkslot
           persist-credentials: false
 
+      - name: Checkout pinned mGBA source
+        uses: actions/checkout@v4
+        with:
+          repository: libretro/mgba
+          ref: e31759b24e7a4e3899285ff720d7b573ac328ae7
+          path: .ci/mgba-source
+          persist-credentials: false
+
       - name: Checkout pinned GammaOS LK reference
         uses: actions/checkout@v4
         with:
@@ -52,7 +61,7 @@ jobs:
       - name: Install LLVM cross-link tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang llvm lld
+          sudo apt-get install -y clang llvm lld cmake gcc-arm-linux-gnueabi g++-arm-linux-gnueabi libc6-dev-armel-cross
 
       - name: Install pinned Rust toolchain and freestanding targets
         uses: dtolnay/rust-toolchain@1.96.0
@@ -79,6 +88,12 @@ jobs:
         run: |
           python3 scripts/audit-libretro-static-abi.py \
             --out build/audit-work/linkslot-1.0.36/static-libretro
+
+      - name: Build pinned mGBA as AArch32 namespaced static archive
+        run: |
+          python3 scripts/build-mgba-aarch32-static.py \
+            --source .ci/mgba-source \
+            --out build/audit-work/linkslot-1.0.36/mgba-static
 
       - name: Probe AArch32 LK-as-BL33 image and vector layout
         run: |
