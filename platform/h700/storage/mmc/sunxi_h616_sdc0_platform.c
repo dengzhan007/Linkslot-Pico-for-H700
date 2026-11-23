@@ -19,8 +19,7 @@ static int platform_valid(const struct sunxi_h616_sdc0_platform *platform)
            platform->mmc_io != 0 &&
            platform->ccu.read32 != 0 &&
            platform->ccu.write32 != 0 &&
-           platform->osc24m_hz != 0u &&
-           platform->pll6_effective_hz != 0u;
+           platform->osc24m_hz != 0u;
 }
 
 int sunxi_h616_pio_enable_apb1_24m(
