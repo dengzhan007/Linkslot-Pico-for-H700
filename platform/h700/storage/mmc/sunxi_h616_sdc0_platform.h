@@ -15,6 +15,7 @@ struct sunxi_h616_sdc0_platform {
     const struct sunxi_mmc_io *mmc_io;
     struct sunxi_h616_ccu_io ccu;
     uint32_t osc24m_hz;
+    /* H616/U-Boot candidate only; not needed for <=24 MHz HOSC bring-up. */
     uint32_t pll6_effective_hz;
 };
 
