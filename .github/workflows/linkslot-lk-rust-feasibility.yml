@@ -11,6 +11,7 @@ on:
       - "scripts/audit-slot-i18n-nostd.py"
       - "scripts/audit-libretro-static-abi.py"
       - "scripts/build-mgba-aarch32-static.py"
+      - "scripts/build-mgba-aarch32-generic-static.py"
       - "platform/h700/**"
       - "scripts/build-h700-objects.sh"
   push:
@@ -94,6 +95,10 @@ jobs:
           python3 scripts/build-mgba-aarch32-static.py \
             --source .ci/mgba-source \
             --out build/audit-work/linkslot-1.0.36/mgba-static
+
+      - name: Build mGBA with Generic CMake backend for LK comparison
+        run: |
+          python3 scripts/build-mgba-aarch32-generic-static.py --source .ci/mgba-source --out build/audit-work/linkslot-1.0.36/mgba-generic
 
       - name: Probe AArch32 LK-as-BL33 image and vector layout
         run: |
