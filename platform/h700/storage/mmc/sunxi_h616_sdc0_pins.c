@@ -7,7 +7,7 @@
 #define PIO_PORT_F_INDEX      5u
 #define PIO_MMC0_PINS         6u
 #define PIO_MUX_ALT2          2u
-#define PIO_DRIVE_30MA        2u
+#define PIO_DRIVE_40MA        3u
 #define PIO_PULL_UP           1u
 
 #define PIO_PORT_F_BASE (PIO_PORT_F_INDEX * PIO_BANK_STRIDE)
@@ -18,7 +18,7 @@
 #define PIO_MUX_MASK   0x00ffffffu
 #define PIO_MUX_VALUE  0x00222222u
 #define PIO_DRV_MASK   0x00000fffu
-#define PIO_DRV_VALUE  0x00000aaau
+#define PIO_DRV_VALUE  0x00000fffu
 #define PIO_PULL_MASK  0x00000fffu
 #define PIO_PULL_VALUE 0x00000555u
 
