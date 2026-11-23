@@ -28,23 +28,6 @@ static void copy_bytes(char *destination, const char *source, size_t length)
     destination[length] = '\0';
 }
 
-static int allowed_root(const char *component, size_t length)
-{
-    size_t i;
-    for (i = 0u; i < sizeof(g_allowed_roots) / sizeof(g_allowed_roots[0]); ++i) {
-        size_t root_length = bounded_length(g_allowed_roots[i], 32u);
-        size_t j;
-        if (root_length != length)
-            continue;
-        for (j = 0u; j < length; ++j)
-            if (component[j] != g_allowed_roots[i][j])
-                break;
-        if (j == length)
-            return 1;
-    }
-    return 0;
-}
-
 static int valid_mount_prefix(const char *prefix, char output[H700_FAT_VFS_MOUNT_CAPACITY])
 {
     size_t length = bounded_length(prefix, H700_FAT_VFS_MOUNT_CAPACITY);
