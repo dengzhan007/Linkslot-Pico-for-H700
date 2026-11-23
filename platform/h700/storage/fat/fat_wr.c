@@ -323,7 +323,7 @@ static mutex_t s_fat_wr_mtx; static volatile int s_fat_wr_mtx_init;
  * was found made that way). */
 static void wr_lock(void)
 {
-#ifdef __arm__
+#if defined(__arm__) || defined(__aarch64__)
 	enter_critical_section();
 	if (!s_fat_wr_mtx_init) { mutex_init(&s_fat_wr_mtx); s_fat_wr_mtx_init = 1; }
 	exit_critical_section();
@@ -332,7 +332,7 @@ static void wr_lock(void)
 }
 static void wr_unlock(void)
 {
-#ifdef __arm__
+#if defined(__arm__) || defined(__aarch64__)
 	mutex_release(&s_fat_wr_mtx);
 #endif
 }
