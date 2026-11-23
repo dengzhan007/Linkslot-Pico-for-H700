@@ -17,6 +17,8 @@ on:
       - "scripts/probe-mgba-newlib-whole-archive-link.py"
       - "scripts/test-mgba-vdir-vfs3-host.py"
       - "scripts/test-h700-newlib-adapter.py"
+      - "platform/h700/runtime/lk_bindings.c"
+      - "platform/h700/runtime/newlib_syscalls.h"
       - "scripts/audit-libretro-vfs-v3-abi.py"
       - "platform/h700/**"
       - "scripts/build-h700-objects.sh"
@@ -127,6 +129,7 @@ jobs:
         run: |
           python3 scripts/test-h700-newlib-adapter.py \
             --source . \
+            --lk-source .ci/lk-reference \
             --out build/audit-work/linkslot-1.0.36/h700-newlib-adapter
 
       - name: Diagnose whole-archive mGBA link against newlib (not LK)
