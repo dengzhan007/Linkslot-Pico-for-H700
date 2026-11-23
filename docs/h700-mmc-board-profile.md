@@ -63,6 +63,13 @@ The same-family vendor clock source independently confirms the MMC0 offsets: `cl
 | `0x84c` (`MMC_GATE_RESET`) | MMC0 bus gate | bit 0 |
 | `0x84c` (`MMC_GATE_RESET`) | MMC0 reset deassert | bit 16 |
 
+### H700 v4p1x clock-update sequence
+
+The pinned `sun50iw9p1` vendor implementation for the exact live controller family is `drivers/mmc/host/sunxi-mmc-v4p1x.c`. Its `__sunxi_mmc_do_oclk_onoff()` clears CARD_CLOCK/LOW_POWER/MASK_DATA0, then sets MASK_DATA0 when `ignore_dat0` is true, issues `START | UPCLK_ONLY | WAIT_PRE_OVER`, waits for START to clear, and removes MASK_DATA0 after the update. Its public `sunxi_mmc_oclk_onoff()` always calls the helper with `ignore_dat0 = 1`. This directly corroborates the sequence used by the H700 clock helper; it is not merely inferred from the generic H616 path.
+
+Reference: [pinned sun50iw9p1 v4p1x MMC clock-update code](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/mmc/host/sunxi-mmc-v4p1x.c).
+
+
 The Linux H616 CCU driver provides a register-field comparison, but the RG34XX `sun50iw9p1` vendor clock source is authoritative for the target parent topology: the SMHC parent list is `hosc`, `pll_periph0x2`, and `pll_periph1x2`. The vendor DTS assigns `pll_periph0` and `pll_periph1` 600 MHz and defines their `x2` outputs as fixed factors, so this is not the same as assuming the H616 U-Boot `PLL6` 600 MHz effective input. Do not copy the live debugfs `sdmmc0_mod = 100 MHz` rate as the card SDCLK. Linux separately reports the card bus at 50 MHz.
 
 References:
