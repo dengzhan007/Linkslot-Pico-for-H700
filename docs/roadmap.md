@@ -26,6 +26,9 @@
 - [x] 按固定 LK 头文件完成 `heap_alloc/heap_free` AArch32 声明/ABI 兼容测试；测试实现为 stub，不是实际 heap。
 - [x] `slot-i18n` 翻译表静态化探针通过：6 个 domain、1,763 个唯一 key、12 份双语 JSON；构建期检查 key/placeholder/元数据，no_std 静态表在 AArch32/AArch64 通过编译，候选 13 项测试与原版 18 项测试全部通过。
 - [x] AArch32 LK-as-BL33 入口/头区布局 host-only 探针通过：入口分支、向量表和启动参数在 BaseOS 不透明头区覆盖下不重叠；这不是完整 LK build 或启动证明。
+- [x] 静态 Libretro API registry host-only 探针通过：两套前缀化 mock core 在 AArch32/AArch64 静态链接，主机回调/状态/内存往返通过；未构建真实 emulator core。
+- [ ] 将真实 mGBA 构建为 AArch32 静态核心并接入 registry；首期先让 GB/GBC/GBA 共用 mGBA，gpSP 后续再评估。
+
 
 - [ ] 编译并验证真实 LK heap implementation；先解决 global critical section 不是跨核锁的风险。
 - [ ] 完成 AArch32 LK-as-BL33 与 AArch64 LK/runtime 两条路线的架构选择；当前参考 LK 是单核调度，A53 编译 flag 和 SMP 初始化也需重做，secondary-core 状态未知。
