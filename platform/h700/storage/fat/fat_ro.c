@@ -81,8 +81,8 @@ static int parse_bpb(fat_vol *v, const uint8_t *b,
 		return -1;
 	if (!fat32 && (dataclus < 4085u || dataclus >= 65525u))
 		return -1; /* FAT12 and FAT32-shaped FAT16 layouts are unsupported. */
-	if (fat32 && dataclus < 4085u)
-		return -1;
+	if (fat32 && (dataclus < 4085u || dataclus > 0x0FFFFFF5u))
+		return -1; /* Keep FAT32 cluster IDs representable and out of reserved values. */
 
 	fat_entries = ((uint64_t)fatsz * 512u) / (fat32 ? 4u : 2u);
 	if (fat_entries < (uint64_t)dataclus + 2u)

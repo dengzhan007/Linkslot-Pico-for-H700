@@ -59,7 +59,7 @@ int exfat_mount(fat_vol *v, uint32_t part_lba, const uint8_t *b,
 	uint8_t bps_shift = b[0x6C], spc_shift = b[0x6D], nfats = b[0x6E];
 	uint16_t flags = rd16(b + 0x6A);
 	uint64_t volume_sectors = ((uint64_t)volume_high << 32) | volume_low;
-	uint64_t fat_end, heap_end, fat_entries;
+	uint64_t fat_end, heap_end, fat_entries, active_fat_lba64;
 	uint32_t active_fat_lba;
 
 	if (bps_shift != 9u || spc_shift > 16u || nfats < 1u || nfats > 2u)
@@ -82,10 +82,11 @@ int exfat_mount(fat_vol *v, uint32_t part_lba, const uint8_t *b,
 	if (root < 2u || (uint64_t)root >= (uint64_t)ccount + 2u)
 		return -1;
 
-	active_fat_lba = part_lba + fat_off +
+	active_fat_lba64 = (uint64_t)part_lba + fat_off +
 	    (((flags & 1u) != 0u && nfats == 2u) ? fat_len : 0u);
-	if ((uint64_t)active_fat_lba + fat_len - 1u > 0xffffffffull)
+	if (active_fat_lba64 + fat_len - 1u > 0xffffffffull)
 		return -1;
+	active_fat_lba = (uint32_t)active_fat_lba64;
 
 	v->is_exfat = 1u;
 	v->is_fat32 = 0u;
@@ -404,7 +405,7 @@ static uint16_t set_checksum(const uint8_t *ents, int nents)
  * the plain rule, but the hash must match what Windows computes, so read the table. */
 static uint16_t upcase_unit(fat_vol *v, uint16_t ch)
 {
-	uint32_t pos = 0, code = 0, fpos;
+	uint32_t code = 0, fpos;
 	uint8_t fatb[512], sb[512]; uint32_t fatb_sec = 0xFFFFFFFFu;
 	if (!v->ex_upcase_clus) return (ch >= 'a' && ch <= 'z') ? (uint16_t)(ch - 32) : ch;
 	for (fpos = 0; fpos + 2u <= v->ex_upcase_len; ) {
@@ -429,7 +430,6 @@ static uint16_t upcase_unit(fat_vol *v, uint16_t ch)
 		}
 		if (code == ch) return u;
 		code++;
-		pos++;
 		if (code > ch) break;
 	}
 	return (ch >= 'a' && ch <= 'z') ? (uint16_t)(ch - 32) : ch;
@@ -744,7 +744,7 @@ int exfat_wr_put(fat_vol *v, const char *dirpath, const char *name, const void *
 			uint32_t i;
 			for (i = 0; i < need; i++) if (bm_set(&bm, first + i, 1) != 0) return -4;
 		} else {
-			uint32_t prev = 0, i, c = 2u, got = 0;
+			uint32_t prev = 0, i, c = 2u;
 			nofat = 0;
 			for (i = 0; i < need; i++) {
 				while (c < v->total_clusters + 2u && bm_get(&bm, c) != 0) c++;
@@ -752,7 +752,7 @@ int exfat_wr_put(fat_vol *v, const char *dirpath, const char *name, const void *
 				if (bm_set(&bm, c, 1) != 0 || fat_set(v, c, 0xFFFFFFFFu) != 0) return -4;
 				if (prev && fat_set(v, prev, c) != 0) return -4;
 				if (!first) first = c;
-				prev = c; got++; c++;
+				prev = c; c++;
 			}
 		}
 	}

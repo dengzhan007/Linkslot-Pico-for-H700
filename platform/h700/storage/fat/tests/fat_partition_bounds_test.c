@@ -237,6 +237,20 @@ static int test_fat32_partition_bounds(void)
     return 1;
 }
 
+static int test_fat32_cluster_ids_remain_representable(void)
+{
+    struct fake_disk disk;
+    fat_vol volume;
+    memset(&disk, 0, sizeof(disk));
+    disk.base_lba = 100u;
+    make_fat32_vbr(&disk, 0x80000000u, 0x04000000u);
+
+    CHECK(fat_mount_partition(&volume, fake_read, &disk,
+                              disk.base_lba, 0x80000000u) != 0,
+          "FAT32 cluster count beyond the 28-bit cluster ID range is rejected");
+    return 1;
+}
+
 static int test_fat16_partition_bounds(void)
 {
     struct fake_disk disk;
@@ -333,6 +347,7 @@ static int test_legacy_mbr_scan_uses_partition_extent(void)
 int main(void)
 {
     if (!test_fat32_partition_bounds() ||
+        !test_fat32_cluster_ids_remain_representable() ||
         !test_fat16_partition_bounds() ||
         !test_exfat_partition_bounds() ||
         !test_gpt_scan_uses_partition_extent() ||
