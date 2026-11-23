@@ -85,7 +85,7 @@ def main():
         out / "arm-none-eabi-adapter-compile.log")
     header_text = run(["arm-none-eabi-readelf", "-h", str(target_obj)],
                       out / "arm-none-eabi-object-header.log")
-    if "ELF32" not in header_text or "ARM" not in header_text or "EABI5" not in header_text:
+    if "ELF32" not in header_text or "Machine:                           ARM" not in header_text or "Flags: 0x5000000, Version5 EABI" not in header_text:
         raise RuntimeError("newlib adapter object is not ELF32/ARM EABI5")
     # Compile the real LK heap binding against the pinned LK header. Werror
     # ensures the heap function pointer prototypes agree exactly.
