@@ -8,6 +8,7 @@ on:
       - ".github/workflows/linkslot-lk-rust-feasibility.yml"
       - "scripts/audit-linkslot-nostd.py"
       - "scripts/audit-lk-bl33-layout.py"
+      - "scripts/audit-slot-i18n-nostd.py"
       - "platform/h700/**"
       - "scripts/build-h700-objects.sh"
   push:
@@ -66,6 +67,12 @@ jobs:
             --source .ci/upstream-linkslot \
             --lk-source .ci/lk-reference \
             --out build/audit-work/linkslot-1.0.36
+
+      - name: Test slot-i18n static no_std tables
+        run: |
+          python3 scripts/audit-slot-i18n-nostd.py \
+            --source .ci/upstream-linkslot \
+            --out build/audit-work/linkslot-1.0.36/slot-i18n
 
       - name: Probe AArch32 LK-as-BL33 image and vector layout
         run: |
