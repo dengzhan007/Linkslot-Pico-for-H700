@@ -420,21 +420,37 @@ def main():
     archive = out / "mgba_libretro-vfs3-aarch32-static.a"
     shutil.copy2(archives[0], archive)
     members = run(["arm-linux-gnueabi-ar", "t", str(archive)])
+    member_names = set(members.splitlines())
     defined = run(["llvm-nm", "-g", "--defined-only", str(archive)])
     undefined = run(["llvm-nm", "-u", str(archive)])
     dnames = {x.split()[-1] for x in defined.splitlines() if len(x.split()) >= 2}
     unames = {x.split()[-1] for x in undefined.splitlines() if len(x.split()) >= 2}
+    # nm -u on an archive lists both true external dependencies and normal
+    # cross-object references resolved by other members. Subtract global
+    # definitions before reporting the unresolved platform boundary.
+    external_names = unames - dnames
+
     missing = ["mgba_" + x for x in EXPORTS if "mgba_" + x not in dnames]
     unprefixed = sorted(x for x in dnames if re.match(r"^retro_[A-Za-z0-9_]+$", x))
-    if missing or unprefixed:
-        raise RuntimeError("Libretro exports check failed: missing=" + repr(missing) + " unprefixed=" + repr(unprefixed))
-    forbidden = sorted(unames & {
-        "opendir", "readdir", "closedir", "rewinddir", "stat", "mkdir", "remove",
+    required_backend = ["VDirOpen", "VDirCreate", "libretroVFSGetInterface"]
+    missing_backend = [x for x in required_backend if x not in dnames]
+    forbidden_members = sorted(x for x in member_names
+                               if x.endswith("vfs-file.c.obj") or x.endswith("vfs-dirent.c.obj"))
+    if missing or unprefixed or missing_backend or forbidden_members:
+        raise RuntimeError("static VFS backend check failed: missing exports=" + repr(missing) +
+                           " unprefixed=" + repr(unprefixed) +
+                           " missing VFS symbols=" + repr(missing_backend) +
+                           " old VFS objects=" + repr(forbidden_members))
+
+    forbidden = sorted(external_names & {
+        "opendir", "opendir64", "readdir", "readdir64", "closedir", "rewinddir",
+        "stat", "stat64", "__stat64_time64", "mkdir", "remove",
         "fopen", "fopen64", "fread", "fwrite", "fseek", "ftell", "fflush", "fclose",
-        "getcwd", "getenv", "mkdir"
+        "getcwd", "getenv", "open", "open64", "read", "write", "close", "lseek64",
+        "mmap64", "msync", "munmap", "fsync", "ftruncate64"
     })
     if forbidden:
-        raise RuntimeError("POSIX dirent/stdio symbols remain: " + ", ".join(forbidden))
+        raise RuntimeError("POSIX dirent/stdio/host filesystem symbols remain: " + ", ".join(forbidden))
 
     (out / "vfs3-defined-symbols.txt").write_text(defined, encoding="utf-8")
     (out / "vfs3-undefined-raw.txt").write_text(undefined, encoding="utf-8")
