@@ -76,8 +76,10 @@ def make_candidate(src, dst, name):
 
 def build_candidates(source, out, report):
     root = out / "candidate-crates"
+    root.mkdir(parents=True, exist_ok=True)
     for name in ("slot-input", "slot-model"):
         dst = root / name
+        dst.mkdir(parents=True, exist_ok=True)
         notes = make_candidate(source / "crates" / name, dst, name)
         report.extend([f"### {name}\n", *[f"- {n}\n" for n in notes]])
         for triple in TARGETS:
