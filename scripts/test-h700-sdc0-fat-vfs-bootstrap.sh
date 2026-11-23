@@ -39,8 +39,8 @@ build_variant()
     # Compile each C translation unit separately. Keep the object list explicit
     # at link time instead of relying on a flattened source-list expansion.
     for source in $SOURCES; do
-        filename="\${source##*/}"
-        object="$object_dir/\${filename%.c}.o"
+        filename="${source##*/}"
+        object="$object_dir/${filename%.c}.o"
         # shellcheck disable=SC2086
         cc -std=c11 $flags -Wall -Wextra -Werror \
             -I"$ROOT/platform/h700/runtime/include" \
