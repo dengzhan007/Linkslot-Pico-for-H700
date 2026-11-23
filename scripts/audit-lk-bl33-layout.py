@@ -54,9 +54,10 @@ def main():
     arch_c_path = lk / "arch/arm/arch.c"
     rules_path = lk / "arch/arm/rules.mk"
     thread_path = lk / "kernel/thread.c"
+    thread_header_path = lk / "include/kernel/thread.h"
     heap_path = lk / "lib/heap/heap.c"
     ops_path = lk / "arch/arm/ops.S"
-    for p in (crt0_path, vectors_path, arch_c_path, rules_path, thread_path, heap_path, ops_path):
+    for p in (crt0_path, vectors_path, arch_c_path, rules_path, thread_path, thread_header_path, heap_path, ops_path):
         if not p.is_file():
             raise RuntimeError("pinned LK evidence file missing: " + str(p))
 
@@ -236,13 +237,19 @@ void thread_preempt(void) { }
     crt0 = original_crt0
     rules = rules_path.read_text(encoding="utf-8")
     thread = thread_path.read_text(encoding="utf-8")
+    thread_header = thread_header_path.read_text(encoding="utf-8")
     heap = heap_path.read_text(encoding="utf-8")
     ops = ops_path.read_text(encoding="utf-8")
     has_a53_mcpu_bug = "ifeq ($(ARM_CPU),cortex-a53)" in rules and "CFLAGS += -mcpu=cortex-a9" in rules
     has_a7_only_smp = "#ifdef ARM_CPU_CORTEX_A7" in crt0 and "ARM_CPU_CORTEX_A53" not in crt0
     global_scheduler = "thread_t *current_thread;" in thread and "static struct list_node run_queue" in thread
     global_critical = "int critical_section_count = 1;" in thread
-    local_irq_mask = bool(re.search(r"cpsid\s+i", ops)) or bool(re.search(r"cpsid\s+if", ops))
+    local_irq_mask = bool(re.search(r"orr\s+r0,\s*r0,\s*#\(1<<7\)", ops))
+    global_critical_transition = ("critical_section_count++;" in thread_header and
+                                  "if (critical_section_count == 1)" in thread_header and
+                                  "arch_disable_ints();" in thread_header and
+                                  "critical_section_count--;" in thread_header and
+                                  "arch_enable_ints();" in thread_header)
 
     report = [
         "# AArch32 LK-as-BL33 host-only layout probe\n\n",
@@ -262,8 +269,12 @@ void thread_preempt(void) { }
         f"- A53 compiler flag audit: {'FOUND: cortex-a53 branch still uses -mcpu=cortex-a9' if has_a53_mcpu_bug else 'not found; re-audit rules'}.\n",
         f"- A53 SMP-enable audit: {'FOUND: crt0 only sets ACTLR.SMP for ARM_CPU_CORTEX_A7; no A53-specific path' if has_a7_only_smp else 'no A7-only condition found; re-audit'}.\n",
         f"- Scheduler audit: {'global current-thread and run-queue structures are present' if global_scheduler else 'scheduler structures changed; re-audit'}.\n",
-        f"- Critical-section audit: {'global critical_section_count and local IRQ masking; not an SMP lock' if global_critical and local_irq_mask else 'critical-section implementation changed; re-audit'}.\n",
-        "- H700 secondary-core state at BL31->BL33 remains UNKNOWN. Until other Cortex-A53 cores are proven held off, this LK scheduler/allocator is not approved for multi-core use.\n",
+        f"- Critical-section audit: {'global nesting counter + local CPSR IRQ mask; one-core only, not a cross-core lock' if global_critical and local_irq_mask and global_critical_transition else 'critical-section implementation changed; re-audit'}.\n",
+        "- LK thread.c uses one global current_thread, one set of global run queues and one global critical_section_count; no per-CPU scheduler state was found in this port. This is a uniprocessor design, not an SMP scheduler.\n",
+        "- arch_disable_ints only sets CPSR.I on the executing core. The global nesting count is not an atomic cross-core lock. Do not allow secondary cores to enter this runtime without adding an SMP design.\n",
+        "- The Cortex-A53 rules.mk branch defines A53 feature flags but compiles with -mcpu=cortex-a9. The H700 port must correct this to -mcpu=cortex-a53 and separately audit FPU/NEON/ABI flags.\n",
+        "- crt0.S enables ACTLR.SMP only when ARM_CPU_CORTEX_A7 is defined; it has no Cortex-A53 branch. The H700 port must explicitly establish A53 coherency/SMP state or deliberately remain single-core under a proven secondary-core hold-off contract.\n",
+        "- H700 secondary-core state at BL31->BL33 remains UNKNOWN. Until other Cortex-A53 cores are proven held off or an SMP port is implemented and validated, this LK runtime is not approved for multi-core use.\n",
         "- The linker bound 0x4a0e0000 is copied only from the BaseOS loader BSS limit. It does not certify the full RAM map, grant a heap range, or supersede reserved-memory exclusions.\n",
         "- lk-a32-bl33-layout-header-overlay.bin is a synthetic host-test artifact, not firmware/a bootable payload. Never write it to SD or execute it.\n"
     ]
