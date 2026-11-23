@@ -22,6 +22,7 @@ on:
       - "scripts/audit-libretro-vfs-v3-abi.py"
       - "scripts/test-linkslot-slot-retro-vfs.py"
       - "scripts/test-linkslot-static-core-api.py"
+      - "scripts/probe-mgba-static-api-link.py"
       - "platform/h700/**"
       - "scripts/build-h700-objects.sh"
   workflow_dispatch:
@@ -144,6 +145,13 @@ jobs:
             --source . \
             --lk-source .ci/lk-reference \
             --out build/audit-work/linkslot-1.0.36/h700-newlib-adapter
+
+      - name: Bind real mGBA exports into the Linkslot static API shape
+        run: |
+          python3 scripts/probe-mgba-static-api-link.py \
+            --archive build/audit-work/linkslot-1.0.36/mgba-arm-none-eabi/mgba_libretro-vfs3-arm-none-eabi.a \
+            --adapter-object build/audit-work/linkslot-1.0.36/mgba-static-api-link/mgba-static-api-and-newlib-adapter.o \
+            --out build/audit-work/linkslot-1.0.36/mgba-static-api-link
 
       - name: Diagnose whole-archive mGBA link against newlib (not LK)
         run: |
