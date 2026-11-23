@@ -4,8 +4,9 @@
 #include <stdint.h>
 
 /*
- * PIO callbacks use offsets relative to the H616 PIO base 0x0300b000.
- * The PIO/APB1 clock must already be enabled by the platform.
+ * PIO callbacks use offsets relative to the RG34XX sun50iw9p1 PIO base
+ * 0x0300b000. Its DT clock is clk_pio, which the vendor clock driver maps
+ * to APB1; configure that clock before accessing PIO registers.
  */
 struct sunxi_h616_pio_io {
     void *context;
