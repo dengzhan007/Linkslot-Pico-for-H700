@@ -86,7 +86,6 @@ pub struct VfsInterfaceInfo {
 
 #[repr(C)]
 pub struct VfsBackend {
-    pub context: *mut c_void,
     pub get_path: Option<GetPathFn>,
     pub open: Option<OpenFn>,
     pub close: Option<CloseFn>,
@@ -289,7 +288,6 @@ typedef struct {
 } VfsInterface;
 typedef struct { uint32_t required_interface_version; VfsInterface *iface; } VfsInterfaceInfo;
 typedef struct {
-    void *context;
     get_path_t get_path; open_t open; close_t close; size_t_fn size;
     tell_t tell; seek_t seek; read_t read; write_t write; flush_t flush;
     path_fn remove; rename_t rename; truncate_t truncate;
@@ -449,7 +447,7 @@ static int mock_closedir(retro_vfs_dir_handle *h) {
     closedir_count++; return 0;
 }
 VfsBackend mock_backend = {
-    0, mock_get_path, mock_open, mock_close, mock_size, mock_tell, mock_seek,
+    mock_get_path, mock_open, mock_close, mock_size, mock_tell, mock_seek,
     mock_read, mock_write, mock_flush, mock_remove, mock_rename, mock_truncate,
     mock_stat, mock_mkdir, mock_opendir, mock_readdir, mock_dirent_name,
     mock_dirent_is_dir, mock_closedir
