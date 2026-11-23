@@ -84,6 +84,14 @@ These are module-clock examples, not direct card-SDCLK claims. The calculator do
 
 The synthetic RG34XX regression vector uses C_SIZE 29,663, which decodes to **30,375,936 sectors** and **15,552,479,232 bytes**, matching the live Linux block inventory. This validates the bit-position and capacity arithmetic only; the CSD bytes have not yet been captured from the physical SD card. Run `sh scripts/test-h700-sunxi-sd-csd.sh`.
 
+### H616 sdc0 PF0-PF5 pin configuration (host-only)
+
+`sunxi_h616_sdc0_pins.c` implements the generic H616 MMC0 pin group from the pinned upstream device tree. The PIO bank stride is `0x24`; Port F is bank index 5, so PF0–PF5 share MUX0 at PIO offset `0xb4`, DRV0 at `0xc8`, and PULL0 at `0xd0` (offsets relative to PIO base `0x0300b000`). The H616 pinctrl descriptor assigns ALT2 to MMC0 on each of PF0–PF5; the device tree specifies 30 mA drive and pull-up. Mainline pinctrl encodes those as drive field value 2 and pull field value 1.
+
+The helper updates only PF0–PF5 fields, preserves PF6/PF7 and all unrelated drive/pull fields, sets drive and pull before switching the mux to ALT2, and validates readback. It requires the PIO/APB1 register clock to be enabled by the caller. The raw RG34XX vendor pinconf values from live debugfs are still not decoded; this code uses the pinned H616 generic reference declaration, not those raw values. It is host-tested only and has not been run against the device's PIO registers.
+
+Run `sh scripts/test-h700-h616-sdc0-pins.sh` for register-layout, field-preservation, write-order, and readback-error tests.
+
 ### H616 sdc0 CCU and identification-clock integration (host-only)
 
 `sunxi_h616_sdc0_platform.c` binds the existing pure divider calculator and H616 `MASK_DATA0` clock-update helper to the documented CCU-relative offsets. The caller maps CCU base `0x03001000` from the H616 device tree and provides read/write callbacks. `sunxi_h616_sdc0_enable_bus()` sets only MMC0 bus gate bit 0 and reset-deassert bit 16 in CCU `0x84c`. `sunxi_h616_sdc0_set_clock_hz()` currently accepts only rates up to 24 MHz, disables card output, writes `MMC0_CLK_CFG` at `0x830`, clears the controller divider, and reenables the card clock through the shared `MASK_DATA0` update path. The 400 kHz regression expects module-clock register value `0x8000020e`.
