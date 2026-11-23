@@ -84,6 +84,14 @@ These are module-clock examples, not direct card-SDCLK claims. The calculator do
 
 The synthetic RG34XX regression vector uses C_SIZE 29,663, which decodes to **30,375,936 sectors** and **15,552,479,232 bytes**, matching the live Linux block inventory. This validates the bit-position and capacity arithmetic only; the CSD bytes have not yet been captured from the physical SD card. Run `sh scripts/test-h700-sunxi-sd-csd.sh`.
 
+### SD memory-card identification state machine (host-only)
+
+`sunxi_sd_card_init.c` adds a closed, read-only command sequence for SD v2 memory cards: CMD0, CMD8, repeated CMD55/ACMD41, CMD2, CMD3, CMD9, CMD7, and CMD16 only for byte-addressed SDSC. It performs controller soft/FIFO/DMA reset, initializes timeout and H616 FIFO-threshold registers, keeps the bus at 1-bit mode, requests a 400 kHz identification clock through a platform callback, waits at least 1 ms for the required power-up clock cycles, negotiates OCR, records CID/RCA/CSD, decodes capacity, selects the card, and waits for DAT0 busy to clear. It rejects invalid CMD8 echo, unsupported CSD/addressing combinations, and SD cards that do not complete OCR power-up. SDUC and MMC/eMMC are outside the current supported profile.
+
+The clock callback must configure both the module clock and card clock using the measured effective parent frequency and the common H616 MASK_DATA0 clock-update path. Board code must already have mapped the sdc0 registers, enabled its CCU bus/reset resources, configured PF0–PF5, and powered the card. Those board operations are deliberately not guessed or performed here. The implementation stays at 400 kHz after initialization; clock-up to 25/50 MHz is a later, separately validated step.
+
+The host regression simulates the controller registers and SD responses. It covers the complete SDHC command order and the RG34XX capacity vector, ACMD41 readiness polling, SDSC byte addressing plus CMD16, CMD8 rejection, CMD55/ACMD41 rejection, OCR/command/busy timeouts, and the invariant that no command sets the write bit. It is not evidence of a physical card negotiation. Run `sh scripts/test-h700-sunxi-sd-card-init.sh`.
+
 ### Single-sector read primitive (host-only, not a complete MMC driver)
 
 `sunxi_mmc_pio_read.c` adds a deliberately narrow CMD17 operation for one 512-byte sector. It uses the AHB-accessed CPU FIFO path and keeps IDMA disabled; it never exposes arbitrary command submission and has no write, erase, or multi-block-write operation. The caller must already have completed controller initialization, card identification/OCR negotiation, RCA selection, card selection, bus-width setup, and clock setup. It then supplies the known card capacity and whether the card uses block addressing (SDHC/SDXC) or byte addressing (SDSC).
