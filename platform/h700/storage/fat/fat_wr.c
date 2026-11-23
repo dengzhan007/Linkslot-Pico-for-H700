@@ -311,7 +311,7 @@ static int fat_wr_put_i(fat_vol *v, const char *dirpath, const char *name,
  * fully persisted before returning (the caller may power off right after). */
 static int fat_wr_put_locked(fat_vol *v, const char *dirpath, const char *name,
 			     const void *data, uint32_t len);
-#ifdef __arm__
+#if defined(__arm__) || defined(__aarch64__)
 #include <kernel/mutex.h>
 #include <kernel/thread.h>
 static mutex_t s_fat_wr_mtx; static volatile int s_fat_wr_mtx_init;
