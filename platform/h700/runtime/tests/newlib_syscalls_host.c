@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <setjmp.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -25,6 +26,9 @@ extern int h700_test_getpid(void);
 extern int h700_test_kill(int, int);
 
 static int g_heap_ready;
+static int g_fail_alloc;
+static jmp_buf g_fatal_jump;
+static int g_expect_fatal;
 static int g_single_cpu;
 static unsigned g_allocs, g_frees;
 static unsigned g_fatal_calls;
@@ -37,6 +41,7 @@ static void *fake_heap_alloc(size_t size, unsigned int alignment)
 {
     void *p = NULL;
     g_allocs++;
+    if (g_fail_alloc) return NULL;
     if (alignment > 16 || (alignment & (alignment - 1)) != 0) {
         return NULL;
     }
@@ -99,6 +104,9 @@ static void fake_fatal(int reason)
 {
     (void)reason;
     g_fatal_calls++;
+    if (g_expect_fatal) {
+        longjmp(g_fatal_jump, 1);
+    }
 }
 
 #define CHECK(cond, message) do { \
@@ -170,13 +178,19 @@ int main(void)
     strcpy(q, "old");
     alloc_before = g_allocs;
     free_before = g_frees;
+    g_fail_alloc = 1;
+    errno = 0;
+    CHECK(h700_test_realloc(q, 128) == NULL && errno == ENOMEM &&
+          !strcmp(q, "old"), "failed realloc leaves the original allocation intact");
+    g_fail_alloc = 0;
+
     char *grown = (char *)h700_test_realloc(q, 64);
     CHECK(grown != NULL && !strcmp(grown, "old"),
           "realloc preserves original contents");
     CHECK(((uintptr_t)grown & 15u) == 0,
           "realloc preserves 16-byte newlib alignment");
-    CHECK(g_allocs == alloc_before + 1 && g_frees == free_before + 1,
-          "realloc allocates an aligned block and releases the old raw block");
+    CHECK(g_allocs == alloc_before + 2 && g_frees == free_before + 1,
+          "realloc allocates aligned replacement and releases old raw block");
 
     free_before = g_frees;
     h700_test_free(grown);
@@ -244,6 +258,22 @@ int main(void)
     errno = 0;
     CHECK(h700_test_kill(2, 15) == -1 && errno == ESRCH,
           "unknown pid rejected");
+
+    g_expect_fatal = 1;
+    if (setjmp(g_fatal_jump) == 0) {
+        g_single_cpu = 0;
+        h700_test_free(grown);
+        CHECK(0, "free must not proceed while secondary CPUs are active");
+    }
+    CHECK(g_fatal_calls == 1,
+          "unsafe heap free is routed to the fatal/panic hook");
+    g_single_cpu = 1;
+    g_expect_fatal = 1;
+    if (setjmp(g_fatal_jump) == 0) {
+        h700_test_exit(23);
+        CHECK(0, "_exit must be non-returning");
+    }
+    CHECK(g_fatal_calls == 2, "_exit forwards status to fatal/panic hook");
 
     puts("PASS: H700 newlib allocator gate and 11 syscall hooks");
     return 0;
