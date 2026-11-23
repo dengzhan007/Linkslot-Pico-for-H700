@@ -569,6 +569,16 @@ def main():
              "-Map="+str(mapf),"-o",str(elf),*map(str,objects),str(rlib)],out/(triple+"-link.log"))
         header=run(["readelf","-h",str(elf)])
         undef=run(["llvm-nm","-u",str(elf)])
+        if triple == "armv7a-none-eabi":
+            reloc=run(["readelf","-Wr",str(rlib)])
+            markers=__import__("re").findall(r"\\b(R_ARM_[A-Z0-9_]+)\\s+[^\\n]*__aeabi_unwind_cpp_pr0",reloc)
+            if not markers or any(kind != "R_ARM_NONE" for kind in markers):
+                raise RuntimeError("AArch32 EHABI marker changed: "+repr(markers))
+            run(["ld.lld","-m",emulation,"-static","-e","_start","--no-undefined",
+                 "--defsym=__aeabi_unwind_cpp_pr0=0","-Map="+str(mapf),"-o",str(elf),
+                 *map(str,objects),str(rlib)])
+            header=run(["readelf","-h",str(elf)])
+            undef=run(["llvm-nm","-u",str(elf)])
         if machine not in header or undef.strip():
             raise RuntimeError(triple+": wrong ELF machine or unresolved symbols: "+undef)
         report.append("- PASS: "+triple+" static link; "+machine+" ELF; no undefined symbols.\n")
