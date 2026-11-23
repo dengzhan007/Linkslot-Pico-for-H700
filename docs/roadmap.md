@@ -94,6 +94,7 @@
 - [x] 增加统一 `h700_fat_vfs_scan_partition_and_install()` bootstrap：一次调用完成 sdc0 初始化、SD 识别、GPT 精确名称查找、持久 CMD17 block device、FAT 分区挂载和 VFS v3 注册；fake 8192-sector 卡端到端读 ROM/BIOS 并确认零写命令。目标 Linkslot 启动代码仍需在 `retro_init()` 前调用，尚未实机验证。
 - [x] FAT16/FAT32/exFAT mount 增加 GPT/MBR 分区 extent 约束；新增显式 `fat_mount_partition()`，并在读取 FAT 表/根目录前验证 BPB/VolumeLength、FAT 容量、cluster heap 与 root cluster 不越界。新增 GPT p7、MBR、FAT16/32、exFAT host 测试；尚未挂载实机 p7。
 - [ ] 在 sdc0 只读块设备路径完成后，读取真实磁盘 GPT 并对照现场分区布局；再以文件系统签名识别 ROM/user-data 卷，不依赖 Linux mmcblk 编号或 GPT 分区标签。
+- [ ] 将 Linkslot 1.0.36 的 `Games/<platform>/` 扫描/启动路径与 RG34XX p7 现存 `Roms/` 目录统一适配；不能只改 C VFS 白名单，必须覆盖 Rust `slot-store` 扫描、ROM 路径、BIOS、Saves、States 等全部消费者，并测试 `Games` 与 `Roms` 同时存在时的冲突策略。保持 `Games/` 为规范新布局（ADR-008）；在 Rust 文件系统适配接通前不得宣称现有卡目录可直接兼容。
 
 依赖 B 完成后再实现：
 
