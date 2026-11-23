@@ -37,14 +37,14 @@ def main() -> None:
     stub = out / "lk-stubs"
     (stub / "kernel").mkdir(parents=True, exist_ok=True)
     (stub / "kernel" / "thread.h").write_text(
-        "typedef struct { int opaque; } mutex_t;\\n"
-        "void enter_critical_section(void);\\n"
-        "void exit_critical_section(void);\\n", encoding="utf-8")
+        "typedef struct { int opaque; } mutex_t;\n"
+        "void enter_critical_section(void);\n"
+        "void exit_critical_section(void);\n", encoding="utf-8")
     (stub / "kernel" / "mutex.h").write_text(
-        "#include <kernel/thread.h>\\n"
-        "void mutex_init(mutex_t *);\\n"
-        "void mutex_acquire(mutex_t *);\\n"
-        "void mutex_release(mutex_t *);\\n", encoding="utf-8")
+        "#include <kernel/thread.h>\n"
+        "void mutex_init(mutex_t *);\n"
+        "void mutex_acquire(mutex_t *);\n"
+        "void mutex_release(mutex_t *);\n", encoding="utf-8")
     cmd = [cc, "-D__aarch64__", "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
            "-I", str(stub), "-I", str(src), "-c", str(src / "fat_wr.c"),
            "-o", str(out / "fat_wr-aarch64-lock.o")]
