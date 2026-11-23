@@ -20,9 +20,12 @@ struct sunxi_mmc_module_clock_config {
     uint8_t n_exponent;
 };
 /*
- * Pure H616/H700 clock calculator. pll6_effective_hz must match the
- * effective PLL6 rate returned by the pinned U-Boot clock_get_pll6() path;
- * do not pass the raw doubled clock input. No MMIO/CCU access is performed.
+ * Pure H616/U-Boot-style clock calculator candidate. Requests <=24 MHz use
+ * HOSC only and do not require pll6_effective_hz. The >24 MHz branch is not
+ * validated for RG34XX sun50iw9p1: its vendor SMHC clock tree supplies
+ * pll_periph1x2 as the PLL parent. The H700 platform wrapper therefore
+ * rejects >24 MHz until the parent mux/rate semantics are reconciled.
+ * No MMIO/CCU access is performed.
  */
 int sunxi_mmc_calculate_module_clock(
     uint32_t target_hz,
