@@ -407,8 +407,8 @@ static int test_complete_readonly_sdc0_gpt_scan(void)
           "sdc0 module clock is set to the 400 kHz identification rate");
     CHECK((fake.pio[0xb4u / 4u] & 0x00ffffffu) == 0x00222222u,
           "PF0-PF5 are configured for MMC0 ALT2");
-    CHECK((fake.pio[0xc8u / 4u] & 0x00000fffu) == 0x00000aaau,
-          "PF0-PF5 drive fields use 30 mA reference setting");
+    CHECK((fake.pio[0xc8u / 4u] & 0x00000fffu) == 0x00000fffu,
+          "PF0-PF5 drive fields use decoded 40 mA board setting");
     CHECK((fake.pio[0xd0u / 4u] & 0x00000fffu) == 0x00000555u,
           "PF0-PF5 pull fields use pull-up reference setting");
 
