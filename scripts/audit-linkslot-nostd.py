@@ -40,6 +40,8 @@ def manifest(name, kind="rlib"):
 
 def make_candidate(src, dst, name):
     shutil.copytree(src / "src", dst / "src")
+    if name == "slot-input" and (src / "tests").is_dir():
+        shutil.copytree(src / "tests", dst / "tests")
     (dst / "Cargo.toml").write_text(manifest(name), encoding="utf-8")
     notes = []
     if name == "slot-input":
@@ -88,7 +90,20 @@ def build_candidates(source, out, report):
                 env={"RUSTFLAGS": "-C panic=abort -C force-unwind-tables=no -C target-cpu=cortex-a53"},
                 log=out / "logs" / f"{name}-{triple}.log")
             report.append(f"- PASS: cargo check --target {triple}\n")
+        if name == "slot-input":
+            run(["cargo", "test", "--manifest-path", str(dst / "Cargo.toml"),
+                 "--target", "x86_64-unknown-linux-gnu"],
+                log=out / "logs" / "slot-input-no-std-host-tests.log")
+            report.append("- PASS: upstream gesture integration tests against the no_std candidate on host\n")
         report.append("\n")
+
+def test_upstream_host(source, out, report):
+    run(["cargo", "test", "--manifest-path", str(source / "Cargo.toml"),
+         "-p", "slot-input", "-p", "slot-model", "--locked"],
+        env={"CARGO_TARGET_DIR": str(out / "baseline-host-target")},
+        log=out / "logs" / "upstream-slot-input-slot-model-host-tests.log")
+    report.append("## Unmodified upstream host unit/integration tests\n\n")
+    report.append("- PASS: cargo test -p slot-input -p slot-model --locked against immutable upstream snapshot\n\n")
 
 def build_abi(out, report):
     abi = out / "abi-probe"
@@ -213,6 +228,7 @@ def main():
         "Temporary isolated copies of upstream sources are adapted; the upstream snapshot is unchanged.\n\n"
     ]
     try:
+        test_upstream_host(source, out, report)
         build_candidates(source, out, report)
         report.append("## Rust staticlib / C ABI / allocator shim\n\n")
         build_abi(out, report)
