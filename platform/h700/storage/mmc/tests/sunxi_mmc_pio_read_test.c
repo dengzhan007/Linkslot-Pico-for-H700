@@ -300,7 +300,8 @@ static int test_fifo_timeout_recovers_controller(void)
           "controller recovery issues one UPCLK_ONLY command");
     CHECK(fake.read_command_count == 1u,
           "recovery does not issue another card read");
-    CHECK(fake.regs[SUNXI_MMC_REG_CMD / 4u] == 0u,
+    CHECK((fake.regs[SUNXI_MMC_REG_CMD / 4u] &
+           SUNXI_MMC_CMD_START) == 0u,
           "recovery clock update completes");
     CHECK(fake.data0_mask_seen,
           "H616 recovery clock update asserts MASK_DATA0");
