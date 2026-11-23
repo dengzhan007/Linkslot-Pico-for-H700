@@ -98,7 +98,7 @@ def build_candidate(source: Path, out: Path) -> tuple[int, int]:
         "#![no_std]\n",
         "extern crate alloc;\n",
         "#[cfg(test)] extern crate std;\n",
-        "use alloc::{format, string::{String, ToString}, vec::Vec};\n",
+        "use alloc::{format, string::{String, ToString}, vec, vec::Vec};\n",
         r'''
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Language { #[default] ZhCn, EnUs }
