@@ -1,4 +1,5 @@
 #include "sunxi_h616_sdc0_platform.h"
+#include "sunxi_sd_card_init.h"
 
 #include "sunxi_mmc_module_clock.h"
 #include "sunxi_mmc_regs.h"
@@ -83,8 +84,7 @@ int sunxi_h616_sdc0_set_clock_hz(
     int result;
 
     if (!platform_valid(platform) || update_timeout_ms == 0u ||
-        target_hz == 0u ||
-        target_hz > SUNXI_MMC_MODULE_CLOCK_OSC24M_LIMIT_HZ)
+        target_hz != SUNXI_SD_IDENTIFICATION_CLOCK_HZ)
         return -1;
 
     result = sunxi_mmc_calculate_module_clock(
