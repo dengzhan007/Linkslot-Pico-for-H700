@@ -15,6 +15,7 @@ on:
       - "scripts/build-mgba-libretro-vfs3-static.py"
       - "scripts/build-mgba-arm-none-eabi-vfs3.py"
       - "scripts/probe-mgba-newlib-whole-archive-link.py"
+      - "scripts/test-mgba-vdir-vfs3-host.py"
       - "scripts/audit-libretro-vfs-v3-abi.py"
       - "platform/h700/**"
       - "scripts/build-h700-objects.sh"
@@ -112,6 +113,10 @@ jobs:
       - name: Build mGBA with required Libretro VFS v3 file and directory backend
         run: |
           python3 scripts/build-mgba-libretro-vfs3-static.py --source .ci/mgba-source --out build/audit-work/linkslot-1.0.36/mgba-vfs3
+
+      - name: Test actual mGBA VDir adapter against Libretro VFS v3 fake backend
+        run: |
+          python3 scripts/test-mgba-vdir-vfs3-host.py --source .ci/mgba-source --out build/audit-work/linkslot-1.0.36/mgba-vdir-host
 
       - name: Build mGBA VFS v3 with bare-metal arm-none-eabi/newlib
         run: |
