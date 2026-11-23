@@ -51,7 +51,7 @@ The live inventory maps the active sdc0 pin group to PF0–PF5. The exact SoC-fa
 
 The PF0–PF5 mux and electrical settings are now source-backed for the `sun50iw9p1` family: ALT2, 40 mA and pull-up. The helper writes only the six relevant fields, preserving PF6/PF7 and all other register bits. This is a source decode plus host register-model validation, not a live LK MMIO test.
 
-The H616 CCU reference gives the following MMC0 clock-control layout (offsets are relative to the CCU base):
+The same-family vendor clock source independently confirms the MMC0 offsets: `clk-sun50iw9.h` defines `SMHC0_CFG = 0x830` and `SMHC_GATE = 0x84c`; `clk-sun50iw9.c` binds `sdmmc0_mod` to `SMHC0_CFG`, and `sdmmc0_bus` / `sdmmc0_rst` to `SMHC_GATE` bits 0 / 16. The H616 CCU reference gives the following matching MMC0 clock-control layout (offsets are relative to the CCU base):
 
 | Register | Field | Value |
 |---|---|---|
@@ -69,6 +69,7 @@ References:
 - [sun50iw9p1 vendor PF0–PF5 pin map and pinconf implementation](https://github.com/qiaoweibiao/T507_Kernel/tree/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/pinctrl/sunxi)
 - [sun50iw9p1 PIO base, clk_pio consumer and sdc0_pins_a electrical profile](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/arch/arm64/boot/dts/sunxi/sun50iw9p1-pinctrl.dtsi)
 - [sun50iw9p1 APB1/PIO clock parent mapping and APB1_CFG offset](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/clk/sunxi/clk-sun50iw9.c)
+- [sun50iw9p1 MMC0/SMHC clock and gate/reset register definitions](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/clk/sunxi/clk-sun50iw9.h)
 - [H616 MMC module clock fields, Linux commit](https://github.com/torvalds/linux/blob/fa2933aac170dd19c6a7f0d7b81a8f537e40915c/drivers/clk/sunxi-ng/ccu-sun50i-h616.c)
 - [Pinned U-Boot MMC clock calculation](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/drivers/mmc/sunxi_mmc.c)
 - [Pinned U-Boot H6/H616 clock register definitions](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/arch/arm/include/asm/arch-sunxi/clock_sun50i_h6.h)
