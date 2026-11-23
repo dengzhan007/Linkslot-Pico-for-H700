@@ -60,7 +60,9 @@ struct h700_fat_vfs {
  * Games, BIOS, Saves, States, System and linkSlot are exposed. Relative paths,
  * traversal, sibling mount prefixes and write/update access are rejected.
  *
- * The provider, MMC device and mounted volume are process-lifetime state.
+ * The provider, MMC device, sunxi_mmc_io table and its context are
+ * process-lifetime state; the IO table is retained by pointer. The GPT scratch
+ * array is synchronous-call storage and need not persist after return.
  * Installation is one-shot and must occur before retro_init().
  */
 enum h700_fat_vfs_bootstrap_result {
