@@ -69,6 +69,54 @@ def make_candidate(src, dst, name):
         if count != 1: raise RuntimeError("could not isolate Platform::accepts(Path)")
         p.write_text(txt, encoding="utf-8")
         notes += ["lib.rs: no_std + alloc; omit filesystem root resolver", "layout.rs: retain constants; remove PathBuf helper", "machine.rs: retain domain data; remove Path-based extension helper; use alloc"]
+        tests = dst / "tests"
+        tests.mkdir(parents=True, exist_ok=True)
+        (tests / "portable_model.rs").write_text(r'''use slot_model::{by_dir, by_id, core, MachineId, Platform, MACHINES};
+
+#[test]
+fn portable_machine_table_has_unique_ids_and_directories() {
+    for (i, a) in MACHINES.iter().enumerate() {
+        for b in &MACHINES[i + 1..] {
+            assert_ne!(a.id, b.id);
+            assert_ne!(a.dir, b.dir);
+        }
+    }
+}
+
+#[test]
+fn every_machine_has_a_valid_default_core() {
+    for machine in MACHINES {
+        assert!(machine.cores.contains(&machine.default_core));
+        for id in machine.cores {
+            assert!(core(id).is_some(), "unregistered core: {id}");
+        }
+    }
+}
+
+#[test]
+fn platform_order_and_registry_lookups_are_stable() {
+    assert_eq!(Platform::ALL.len(), MACHINES.len());
+    for (index, platform) in Platform::ALL.iter().enumerate() {
+        assert_eq!(platform.index(), index);
+        let item = platform.machine();
+        assert_eq!(by_id(item.id).map(|m| m.id), Some(item.id));
+        assert_eq!(by_dir(item.dir).map(|m| m.id), Some(item.id));
+    }
+    assert_eq!(Platform::Fc.index(), 3);
+    assert!(by_id(MachineId("NOT-A-MACHINE")).is_none());
+}
+
+#[test]
+fn rom_extensions_are_unique_in_stable_table_order() {
+    let extensions: Vec<&str> = slot_model::machine::all_rom_ext().collect();
+    let mut sorted = extensions.clone();
+    sorted.sort_unstable();
+    sorted.dedup();
+    assert_eq!(sorted.len(), extensions.len());
+    assert_eq!(extensions.first(), Some(&"gba"));
+}
+''', encoding="utf-8")
+        notes.append("tests/portable_model.rs: add no_std domain-table regression coverage")
     remaining = []
     for p in (dst / "src").rglob("*.rs"):
         txt = p.read_text(encoding="utf-8")
@@ -90,11 +138,13 @@ def build_candidates(source, out, report):
                 env={"RUSTFLAGS": "-C panic=abort -C force-unwind-tables=no -C target-cpu=cortex-a53"},
                 log=out / "logs" / f"{name}-{triple}.log")
             report.append(f"- PASS: cargo check --target {triple}\n")
+        run(["cargo", "test", "--manifest-path", str(dst / "Cargo.toml"),
+             "--target", "x86_64-unknown-linux-gnu"],
+            log=out / "logs" / f"{name}-no-std-host-tests.log")
         if name == "slot-input":
-            run(["cargo", "test", "--manifest-path", str(dst / "Cargo.toml"),
-                 "--target", "x86_64-unknown-linux-gnu"],
-                log=out / "logs" / "slot-input-no-std-host-tests.log")
-            report.append("- PASS: upstream gesture integration tests against the no_std candidate on host\n")
+            report.append("- PASS: 47 upstream gesture integration tests against the no_std candidate on host\n")
+        else:
+            report.append("- PASS: generated no_std domain-table regression tests on host\n")
         report.append("\n")
 
 def test_upstream_host(source, out, report):
