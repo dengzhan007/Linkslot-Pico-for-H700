@@ -94,7 +94,7 @@ def main():
     # Compile the real LK heap binding against the pinned LK header. Werror
     # ensures the heap function pointer prototypes agree exactly.
     binding_obj = out / "lk_bindings-arm-none-eabi.o"
-    binding_flags = cpu_flags + ["-I", str(lk_root / "include")]
+    binding_flags = cpu_flags + ["-idirafter", str(lk_root / "include")]
     run(["arm-none-eabi-gcc", *binding_flags, "-c", str(lk_bindings), "-o", str(binding_obj)],
         out / "lk-bindings-compile.log")
     binding_defined = run(["arm-none-eabi-nm", "-g", "--defined-only", str(binding_obj)],
