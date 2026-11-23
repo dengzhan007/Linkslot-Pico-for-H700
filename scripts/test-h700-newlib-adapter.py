@@ -2,6 +2,7 @@
 """Host-regress H700 newlib hooks and cross-compile the production AArch32 object."""
 from __future__ import annotations
 import argparse
+import re
 import shutil
 import subprocess
 import sys
@@ -85,8 +86,11 @@ def main():
         out / "arm-none-eabi-adapter-compile.log")
     header_text = run(["arm-none-eabi-readelf", "-h", str(target_obj)],
                       out / "arm-none-eabi-object-header.log")
-    if "ELF32" not in header_text or "Machine:                           ARM" not in header_text or "Flags: 0x5000000, Version5 EABI" not in header_text:
-        raise RuntimeError("newlib adapter object is not ELF32/ARM EABI5")
+    is_elf32 = bool(re.search(r"Class:\s+ELF32\b", header_text))
+    is_arm = bool(re.search(r"Machine:\s+ARM\b", header_text))
+    is_eabi5 = bool(re.search(r"Flags:\s+0x5000000,\s*Version5 EABI", header_text))
+    if not (is_elf32 and is_arm and is_eabi5):
+        raise RuntimeError("newlib adapter object is not ELF32/ARM EABI5; readelf header was:\n" + header_text)
     # Compile the real LK heap binding against the pinned LK header. Werror
     # ensures the heap function pointer prototypes agree exactly.
     binding_obj = out / "lk_bindings-arm-none-eabi.o"
