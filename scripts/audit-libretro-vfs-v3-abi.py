@@ -463,7 +463,6 @@ HARNESS = r'''#include "linkslot_vfs_abi.h"
 extern VfsBackend mock_backend;
 extern unsigned mock_flushes(void), mock_closes(void), mock_closedirs(void);
 extern unsigned mock_removes(void), mock_renames(void), mock_mkdirs(void);
-static int check(bool condition, int code) { return condition ? 0 : code; }
 int vfs_host_run(void) {
     VfsInterfaceInfo info = {2, 0};
     VfsInterface *v;
