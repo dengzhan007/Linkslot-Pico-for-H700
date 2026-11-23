@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/time.h>
+#include <reent.h>
 
 extern void *h700_test_malloc(size_t);
 extern void *h700_test_calloc(size_t, size_t);
@@ -24,6 +25,12 @@ extern int h700_test_write(int, const char *, int);
 extern int h700_test_gettimeofday(struct timeval *, void *);
 extern int h700_test_getpid(void);
 extern int h700_test_kill(int, int);
+extern void *h700_test_malloc_r(struct _reent *, size_t);
+extern void *h700_test_calloc_r(struct _reent *, size_t, size_t);
+extern void *h700_test_realloc_r(struct _reent *, void *, size_t);
+extern void h700_test_free_r(struct _reent *, void *);
+extern void h700_test_malloc_lock(struct _reent *);
+extern void h700_test_malloc_unlock(struct _reent *);
 extern void h700_test_exit(int);
 
 static int g_heap_ready;
@@ -132,6 +139,7 @@ int main(void)
     };
     struct stat st;
     struct timeval tv;
+    struct _reent reent = {0};
     char input[8] = {0};
     char *p, *q;
     unsigned alloc_before, free_before;
@@ -139,6 +147,9 @@ int main(void)
     errno = 0;
     CHECK(h700_test_malloc(16) == NULL && errno == ENOMEM,
           "allocation fails closed before service installation");
+    reent._errno = 0;
+    CHECK(h700_test_malloc_r(&reent, 16) == NULL && reent._errno == ENOMEM,
+          "newlib _malloc_r fails closed and sets the passed reent errno");
     errno = 0;
     CHECK(h700_newlib_install(&bad) == -1 && errno == EINVAL,
           "reject incomplete platform services");
@@ -153,6 +164,27 @@ int main(void)
           "allocation blocked while secondary CPUs are not parked");
 
     g_single_cpu = 1;
+    reent._errno = 0;
+    q = (char *)h700_test_calloc_r(&reent, 2, 16);
+    CHECK(q != NULL && reent._errno == 0, "newlib _calloc_r uses LK allocator");
+    for (unsigned i = 0; i < 32; ++i) {
+        CHECK(q[i] == 0, "newlib _calloc_r zeroes its allocation");
+    }
+    h700_test_free_r(&reent, q);
+    q = (char *)h700_test_malloc_r(&reent, 16);
+    CHECK(q != NULL, "newlib _malloc_r allocates through LK heap");
+    strcpy(q, "reent");
+    char *rq = (char *)h700_test_realloc_r(&reent, q, 48);
+    CHECK(rq != NULL && !strcmp(rq, "reent") &&
+          ((uintptr_t)rq & 15u) == 0,
+          "newlib _realloc_r preserves content and alignment");
+    h700_test_free_r(&reent, rq);
+    reent._errno = 0;
+    CHECK(h700_test_calloc_r(&reent, SIZE_MAX, 2) == NULL &&
+          reent._errno == ENOMEM, "newlib _calloc_r propagates overflow errno");
+    h700_test_malloc_lock(&reent);
+    h700_test_malloc_unlock(&reent);
+
     p = (char *)h700_test_malloc(32);
     CHECK(p != NULL && ((uintptr_t)p & 15u) == 0,
           "malloc requests and receives 16-byte alignment");
