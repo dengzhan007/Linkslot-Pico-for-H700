@@ -1,5 +1,5 @@
 #!/bin/sh
-set -eu
+set -eux
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 OUT="/tmp/h700-sdc0-fat-vfs-bootstrap-$$"
@@ -60,8 +60,25 @@ build_variant()
         grep -Eq '[[:space:]]T[[:space:]]h700_gpt_find_unique_name$'
 
     printf 'Link objects (%s):\n%s\n' "$variant" "$objects"
+    # Pass every required object explicitly; no wildcard or positional-list expansion.
     # shellcheck disable=SC2086
-    cc $flags $objects -o "$object_dir/test-h700-sdc0-fat-vfs-bootstrap"
+    cc $flags \
+        "$object_dir/h700_fat_vfs_backend.o" \
+        "$object_dir/h700_sunxi_mmc_fat.o" \
+        "$object_dir/h700_sunxi_mmc_block_device.o" \
+        "$object_dir/h700_sunxi_sdc0_readonly_scan.o" \
+        "$object_dir/sunxi_h616_sdc0_pins.o" \
+        "$object_dir/sunxi_h616_sdc0_platform.o" \
+        "$object_dir/sunxi_mmc_clock.o" \
+        "$object_dir/sunxi_mmc_module_clock.o" \
+        "$object_dir/sunxi_mmc_pio_read.o" \
+        "$object_dir/sunxi_sd_card_init.o" \
+        "$object_dir/sunxi_sd_csd.o" \
+        "$object_dir/h700_gpt_readonly.o" \
+        "$object_dir/fat_ro.o" \
+        "$object_dir/fat_exfat.o" \
+        "$object_dir/h700_sdc0_fat_vfs_bootstrap_test.o" \
+        -o "$object_dir/test-h700-sdc0-fat-vfs-bootstrap"
 }
 
 build_variant plain
