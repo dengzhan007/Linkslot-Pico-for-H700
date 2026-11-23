@@ -52,12 +52,13 @@ def make_candidate(src, dst, name):
         notes += ["lib.rs: no_std + alloc", "gesture.rs: alloc Vec/vec and core::mem::take", "raw.rs: alloc Vec"]
     else:
         p = dst / "src/lib.rs"
-        txt = "#![no_std]\nextern crate alloc;\n" + p.read_text(encoding="utf-8")
+        txt = "#![no_std]\n" + p.read_text(encoding="utf-8")
+        txt = txt.replace("\npub mod core;", "\nextern crate alloc;\n\npub mod core;")
         txt = txt.replace("pub use layout::{resolve_root, DEVICE_ROOT};", "pub use layout::DEVICE_ROOT;")
         p.write_text(txt, encoding="utf-8")
         p = dst / "src/layout.rs"
         txt = p.read_text(encoding="utf-8").replace("use std::path::PathBuf;\n", "")
-        txt, count = re.subn(r"\npub fn resolve_root\(.*?\n\}\n", "\n", txt, flags=re.S)
+        txt, count = re.subn(r"\n/// 解析内容根目录。\n(?:///.*\n)*pub fn resolve_root\(.*?\n\}\n", "\n", txt, flags=re.S)
         if count != 1: raise RuntimeError("could not isolate layout::resolve_root")
         p.write_text(txt, encoding="utf-8")
         p = dst / "src/machine.rs"
