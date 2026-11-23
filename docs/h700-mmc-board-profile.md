@@ -84,6 +84,14 @@ These are module-clock examples, not direct card-SDCLK claims. The calculator do
 
 The synthetic RG34XX regression vector uses C_SIZE 29,663, which decodes to **30,375,936 sectors** and **15,552,479,232 bytes**, matching the live Linux block inventory. This validates the bit-position and capacity arithmetic only; the CSD bytes have not yet been captured from the physical SD card. Run `sh scripts/test-h700-sunxi-sd-csd.sh`.
 
+### H616 sdc0 CCU and identification-clock integration (host-only)
+
+`sunxi_h616_sdc0_platform.c` binds the existing pure divider calculator and H616 `MASK_DATA0` clock-update helper to the documented CCU-relative offsets. The caller maps CCU base `0x03001000` from the H616 device tree and provides read/write callbacks. `sunxi_h616_sdc0_enable_bus()` sets only MMC0 bus gate bit 0 and reset-deassert bit 16 in CCU `0x84c`. `sunxi_h616_sdc0_set_clock_hz()` currently accepts only rates up to 24 MHz, disables card output, writes `MMC0_CLK_CFG` at `0x830`, clears the controller divider, and reenables the card clock through the shared `MASK_DATA0` update path. The 400 kHz regression expects module-clock register value `0x8000020e`.
+
+The high-speed path above 24 MHz is deliberately rejected until H616 sampling/output timing and calibration are validated for the RG34XX board. The helper does not program PIO mux/bias/drive, card power, or physical MMIO itself. The exact PF0–PF5 pin function is ALT2 per H616 upstream, and the upstream device tree specifies 30 mA/pull-up, but the live RG34XX vendor PIO raw pinconf values remain unresolved; no pinconf register writes are included. The callback implementation must be integrated only after those board-level requirements are verified.
+
+Run `sh scripts/test-h700-h616-sdc0-platform.sh` for host register-model tests covering CCU gate/reset, exact 400 kHz divider value, H616 update sequencing, timeout cleanup, and deliberate rejection of unvalidated high-speed requests.
+
 ### SD memory-card identification state machine (host-only)
 
 `sunxi_sd_card_init.c` adds a closed, read-only command sequence for SD v2 memory cards: CMD0, CMD8, repeated CMD55/ACMD41, CMD2, CMD3, CMD9, CMD7, and CMD16 only for byte-addressed SDSC. It performs controller soft/FIFO/DMA reset, initializes timeout and H616 FIFO-threshold registers, keeps the bus at 1-bit mode, requests a 400 kHz identification clock through a platform callback, waits at least 1 ms for the required power-up clock cycles, negotiates OCR, records CID/RCA/CSD, decodes capacity, selects the card, and waits for DAT0 busy to clear. It rejects invalid CMD8 echo, unsupported CSD/addressing combinations, and SD cards that do not complete OCR power-up. SDUC and MMC/eMMC are outside the current supported profile.

@@ -64,6 +64,11 @@ COMMON_FLAGS=(
 
 "$CC" "${COMMON_FLAGS[@]}" -std=c11 \
     -I"$ROOT/platform/h700/storage/mmc" \
+    -c "$ROOT/platform/h700/storage/mmc/sunxi_h616_sdc0_platform.c" \
+    -o "$OUT_DIR/sunxi_h616_sdc0_platform.o"
+
+"$CC" "${COMMON_FLAGS[@]}" -std=c11 \
+    -I"$ROOT/platform/h700/storage/mmc" \
     -c "$ROOT/platform/h700/storage/mmc/sunxi_sd_csd.c" \
     -o "$OUT_DIR/sunxi_sd_csd.o"
 
@@ -82,7 +87,7 @@ COMMON_FLAGS=(
     -c "$ROOT/platform/h700/arch/compile_probe.cpp" \
     -o "$OUT_DIR/compile_probe_cpp.o"
 
-for object in "$OUT_DIR/compile_probe.o" "$OUT_DIR/compile_probe_asm.o" "$OUT_DIR/compile_probe_cpp.o" "$OUT_DIR/h700_mmc_board_profile.o" "$OUT_DIR/sunxi_mmc_clock.o" "$OUT_DIR/sunxi_mmc_module_clock.o" "$OUT_DIR/sunxi_mmc_pio_read.o" "$OUT_DIR/sunxi_sd_csd.o" "$OUT_DIR/sunxi_sd_card_init.o" "$OUT_DIR/h700_gpt_readonly.o"; do
+for object in "$OUT_DIR/compile_probe.o" "$OUT_DIR/compile_probe_asm.o" "$OUT_DIR/compile_probe_cpp.o" "$OUT_DIR/h700_mmc_board_profile.o" "$OUT_DIR/sunxi_mmc_clock.o" "$OUT_DIR/sunxi_mmc_module_clock.o" "$OUT_DIR/sunxi_mmc_pio_read.o" "$OUT_DIR/sunxi_sd_csd.o" "$OUT_DIR/sunxi_sd_card_init.o" "$OUT_DIR/sunxi_h616_sdc0_platform.o" "$OUT_DIR/h700_gpt_readonly.o"; do
     format="$("$OBJDUMP" -f "$object")"
     if ! grep -q "architecture: aarch64" <<<"$format"; then
         echo "error: $object is not an AArch64 object" >&2

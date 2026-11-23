@@ -39,6 +39,7 @@ on:
       - "scripts/test-h700-sunxi-mmc-pio-read.sh"
       - "scripts/test-h700-sunxi-sd-csd.sh"
       - "scripts/test-h700-sunxi-sd-card-init.sh"
+      - "scripts/test-h700-h616-sdc0-platform.sh"
       - "platform/h700/runtime/mgba_static.rs"
       - "platform/h700/runtime/tests/mgba_static_stub.c"
       - "scripts/probe-mgba-static-api-link.py"
@@ -180,6 +181,9 @@ jobs:
 
       - name: Test H700 read-only SD card identification state machine
         run: sh scripts/test-h700-sunxi-sd-card-init.sh
+
+      - name: Test H616 sdc0 bus gate and 400 kHz clock integration
+        run: sh scripts/test-h700-h616-sdc0-platform.sh
 
       - name: Host-compile H700 FAT16/FAT32 and exFAT storage candidate
         run: |

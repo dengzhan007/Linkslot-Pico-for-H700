@@ -11,6 +11,7 @@ on:
       - "scripts/test-h700-sunxi-mmc-pio-read.sh"
       - "scripts/test-h700-sunxi-sd-csd.sh"
       - "scripts/test-h700-sunxi-sd-card-init.sh"
+      - "scripts/test-h700-h616-sdc0-platform.sh"
       - ".github/workflows/h700-arch-check.yml"
   pull_request:
     paths:
@@ -42,6 +43,7 @@ jobs:
           sh scripts/test-h700-sunxi-mmc-pio-read.sh
           sh scripts/test-h700-sunxi-sd-csd.sh
           sh scripts/test-h700-sunxi-sd-card-init.sh
+          sh scripts/test-h700-h616-sdc0-platform.sh
 
   compile-aarch64-objects:
     runs-on: ubuntu-latest
