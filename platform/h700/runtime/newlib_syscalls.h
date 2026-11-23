@@ -24,4 +24,7 @@ struct h700_newlib_ops {
  */
 int h700_newlib_install(const struct h700_newlib_ops *ops);
 
+/* Install the table using the pinned LK heap and H700 platform callbacks. */
+int h700_newlib_install_lk_bindings(void);
+
 #endif
