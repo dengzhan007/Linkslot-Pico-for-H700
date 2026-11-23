@@ -39,7 +39,7 @@ def main():
     stub = out / "link-entry.c"
     stub.write_text(
         "__attribute__((noreturn)) void _start(void) { "
-        "for (;;) { __asm__ volatile(\\"wfi\\"); } }\\n",
+        'for (;;) { __asm__ volatile("wfi"); } }\n',
         encoding="utf-8"
     )
     stub_obj = out / "link-entry.o"
