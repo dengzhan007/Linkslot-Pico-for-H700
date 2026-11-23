@@ -15,7 +15,7 @@
 
 struct fake_sd {
     uint32_t regs[129];
-    uint8_t media[SECTORS][512];
+    uint8_t media[SECTORS * 512u];
     uint32_t fifo_index;
     uint64_t selected_lba;
     uint32_t command_count;
@@ -98,7 +98,7 @@ static void entry_name(uint8_t *e, const char *s)
 static void make_entry(struct fake_sd *f, unsigned slot,
                        uint64_t first, uint64_t last, const char *name)
 {
-    uint8_t *e=f->media[2] + slot*ENTRY_SIZE;
+    uint8_t *e=f->media + 2u*512u + slot*ENTRY_SIZE;
     unsigned i;
     memset(e,0,ENTRY_SIZE);
     e[0]=0x28;
@@ -108,8 +108,10 @@ static void make_entry(struct fake_sd *f, unsigned slot,
 
 static void make_gpt(struct fake_sd *f)
 {
-    uint8_t *m=f->media[0], *h=f->media[1], *a=f->media[2];
-    memset(m,0,512); memset(h,0,512); memset(a,0,512); memset(f->media[3],0,512);
+    uint8_t *m=f->media;
+    uint8_t *h=f->media + 512u;
+    uint8_t *a=f->media + 2u*512u;
+    memset(m,0,512); memset(h,0,512); memset(a,0,1024);
     m[450]=0xee; put32(m+454,1); put32(m+458,SECTORS-1); m[510]=0x55; m[511]=0xaa;
     make_entry(f,5,4,10,"UDISK");
     make_entry(f,6,11,38,"primary");
