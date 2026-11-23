@@ -14,11 +14,13 @@ struct sunxi_h616_pio_io {
 };
 
 /*
- * Configure PF0-PF5 for MMC0 using the pinned H616 upstream reference:
- * ALT2, 30 mA drive, weak pull-up. Only fields for PF0-PF5 are changed;
- * all other pins in those register words are preserved.
+ * Configure RG34XX PF0-PF5 for sdc0 using the live sun50iw9p1 pinconf
+ * capture: ALT2, 40 mA drive, weak pull-up. The vendor packed pinconf
+ * values 0x00002809 / 0x00000005 decode as DRIVE_STRENGTH(40 mA) /
+ * BIAS_PULL_UP using the sun50iw9p1 PIO driver encoding.
  *
- * This is not a decode or replay of the RG34XX vendor raw pinconf words.
+ * Only PF0-PF5 fields are changed; all unrelated register fields remain
+ * preserved. This helper remains host-tested and is not yet a live MMIO test.
  */
 int sunxi_h616_sdc0_configure_pins(
     const struct sunxi_h616_pio_io *pio);
