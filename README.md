@@ -35,8 +35,8 @@
 - 已用固定 GammaOS LK commit 的 `include/lib/heap.h` 完成 AArch32 `heap_alloc/heap_free` 签名/链接兼容探测；这不是真实 LK heap 实现。LK 参考源码的临界区只证明本核 IRQ 屏蔽，不能当作多核堆锁。
 - `slot-i18n` 的 12 份双语 JSON 已通过静态表 no_std 探针：1,763 个 key/语言，原版 18 项测试与候选 13 项测试通过，AArch32/AArch64 编译通过；尚未接入 UI。
 - 已完成静态 Libretro API registry 探针：两个前缀化 mock core 在 AArch32/AArch64 生成无未解析符号的 ELF，主机回调/状态/内存往返通过；这还不是 mGBA/gpSP 实际核心构建。
-- 已将固定版本真实 mGBA 编译为 AArch32 static Libretro archive（Linux、Generic 及 VFS v3 文件/目录适配变体）；VFS v3 archive 为 114 个对象、25/25 个 API 导出前缀化、51 个真正外部依赖；旧 stdio/dirent/Linux descriptor/host config directory 依赖已移除。
-- mGBA VFS v3 适配仍是 CI 临时源码改造：Linkslot 的 `slot-retro::environment()` 尚未接入函数表，H700 SD/FAT backend 也未实现；当前 archive 仍用 arm-linux-gnueabi/glibc sysroot，不是最终 LK 链接或实机运行。下一步改用 arm-none-eabi/newlib 试编译并完成 51 项运行时符号映射。
+- 已将固定版本真实 mGBA 编译为 AArch32 static Libretro archive（Linux、Generic、VFS v3 glibc 及 VFS v3 arm-none-eabi/newlib 变体）；VFS v3 newlib archive 为 94 个对象、ELF32/ARM EABI5、25/25 个 API 导出前缀化、52 个真正外部依赖；旧 stdio/dirent/Linux descriptor/host config directory 依赖已移除。
+- mGBA VFS v3 适配仍是 CI 临时源码改造：Linkslot 的 `slot-retro::environment()` 尚未接入函数表，H700 SD/FAT backend 也未实现。newlib archive 还未做 whole-archive link，也不是最终 LK 链接或实机运行；下一步用 newlib/libm/libgcc/libnosys 做链接探针并映射剩余符号。
 
 
 - A32 LK-as-BL33 的镜像入口/头区/向量布局探针通过，但它使用测试 stub 和合成头，不是完整 LK 固件；LK 参考分支目前为单核调度，A53 编译标志/SMP 启动路径未适配，secondary CPU 状态仍未知。
