@@ -123,46 +123,70 @@ commit `9bf1419a49e0af6dba8b05916df382c9c9c6d0a8`。
 
 ## 5. 已完成的 host-only 技术验证（2026-11-23）
 
-验证由 GitHub Actions 云端 Runner 执行，不依赖用户本地电脑性能。测试脚本位于本分支 `scripts/audit-linkslot-nostd.py`，工作流为 `.github/workflows/linkslot-lk-rust-feasibility.yml`。本次成功运行：
+验证由 GitHub Actions 云端 Runner 执行，不依赖用户本地电脑性能。测试脚本位于本分支 `scripts/audit-linkslot-nostd.py`，工作流为 `.github/workflows/linkslot-lk-rust-feasibility.yml`。
 
-- Workflow run：`45102606482`（commit `3cc4bd9917ec77c8730cd42e6d41ea7186bd1f40`）。
+### 第二轮完成结果
+
+- Workflow run：[45103281417](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45103281417)，commit `8c0b9c62accd5ee904cd9a8fb69733b0eac25484`，结论 success。
 - Rust/Cargo：`1.96.0`；目标：`armv7a-none-eabi`、`aarch64-unknown-none`。
 - 现有 H700 AArch64 C11/C++17/ASM compile scaffold：通过，三个 object 均核对为 AArch64。
-- `slot-input` 临时副本：`no_std + alloc`，两个目标 `cargo check` 均通过。
-- `slot-model` 临时副本：保留纯静态数据与领域类型，暂时移除 `PathBuf` 根路径 resolver 和 `Path` 扩展名 helper；两个目标 `cargo check` 均通过。
-- Rust `staticlib` + C freestanding shim + allocator ABI 薄桩：AArch32、AArch64 两个最终 ELF 均链接成功；ELF header 架构正确；`nm -u` 无未解析符号；两份 linker map 已生成。
+- 未修改的 Linkslot 1.0.36 `slot-input`、`slot-model` host tests：**58 项通过**（gesture 47、layout 3、registry 8）。
+- `slot-input` 隔离 `no_std + alloc` 副本：AArch32、AArch64 `cargo check` 通过；原版 gesture integration tests 在该 `no_std` 副本上 **47/47 通过**。
+- `slot-model` 隔离 `no_std + alloc` 副本：AArch32、AArch64 `cargo check` 通过；纯机种/核心/ROM 扩展名回归测试 **4/4 通过**。该副本刻意暂时移除 `PathBuf` 根路径 resolver 和 `Path` 扩展名 helper。
+- Rust `staticlib` + freestanding C shim + allocator ABI 薄桩：AArch32、AArch64 最终 ELF 均链接成功；架构字段正确；`nm -u` 无未解析外部符号；map 已生成。
+- 另将 pinned GammaOS LK `include/lib/heap.h` 放入 AArch32 C 编译器进行真实头文件编译；Rust `GlobalAlloc` 使用相同的 `heap_alloc(size_t, unsigned int)` / `heap_free(void *)` 原型，并与匹配签名的测试桩静态链接成功。最终 ELF32/ARM 定义了 `heap_alloc`、`heap_free`、Rust probe 符号，无未解析外部符号。
+
+### LK heap API 的真实契约与限制
+
+固定参考：
+`TheGammaSqueeze/lk-mt6785` branch `lk-gba-emu-sd-card-kpa` commit `9bf1419a49e0af6dba8b05916df382c9c9c6d0a8`。
+
+头文件声明：
+
+```c
+void *heap_alloc(size_t size, unsigned int alignment);
+void *heap_realloc(void *ptr, size_t size);
+void heap_free(void *ptr);
+```
+
+静态源码审查还确认：
+
+- `heap_alloc` 接受 alignment=0 或 2 的幂；非零且非 2 的幂会返回 NULL。
+- 请求的正对齐小于 16 时，heap 实现会提高到 16。
+- `heap_free` 只需要指针，因此可对应 Rust `GlobalAlloc::dealloc`。
+- heap free-list 修改位于 LK `enter_critical_section()` / `exit_critical_section()` 保护区内。
+- 但 LK `critical_section_count` 是全局变量；AArch32 `arch_disable_ints` 只设置本核 CPSR 的 IRQ mask 位。这证明本核中断屏蔽，不证明多核互斥。
+
+**重要结论：当前 adapter 不批准用于多核并发分配。** 只有在证明 LK 生命周期内 H700 其他核心始终被可靠停住，或为 heap 增加并验证跨核锁/SMP-safe allocator 后，才可把它用作 H700 多线程的全局 allocator。
+
+本次 LK heap probe 使用固定 LK 头文件，但实现的 `heap_alloc/free` 是测试桩，**没有编译或链接真实 `lib/heap/heap.c`，也没有运行堆代码**。这仅是 header/signature/ABI 兼容证据。
 
 ### AArch32 EHABI 说明
 
-Rust 1.96 的 AArch32 `alloc` 静态库含有 `__aeabi_unwind_cpp_pr0` 符号引用。已使用 `readelf -Wr` 检查全部引用，确认均为 `.ARM.exidx` 上的 `R_ARM_NONE` 元数据 relocation，不是可执行代码调用或 `PREL31` relocation。仅在本次 `panic=abort`、无异常展开的 ABI 探测中，通过 linker `--defsym=__aeabi_unwind_cpp_pr0=0` 解析该元数据标记。**这不是 EHABI unwinder 实现**；若未来启用 C++/Rust 异常展开或需要栈展开，必须接入真实且经过验证的 unwinder，不能复用这个零地址占位。
+Rust 1.96 的 AArch32 `alloc` 静态库含有 `__aeabi_unwind_cpp_pr0` 符号引用。已使用 `readelf -Wr` 检查全部引用，确认均为 `.ARM.exidx` 上的 `R_ARM_NONE` 元数据 relocation，不是可执行代码调用或 `PREL31` relocation。仅在本次 `panic=abort`、无异常展开的 ABI 探测中，通过 linker `--defsym=__aeabi_unwind_cpp_pr0=0` 解析该元数据标记。
+
+这不是 EHABI unwinder 实现；未来启用 C++/Rust 异常展开或需要栈展开，必须接入真实且经过验证的 unwinder。
 
 ### 验证边界
 
-- 编译的是两个 Linkslot crate 的隔离临时副本，不是直接把 upstream workspace 全量改成 `no_std`。
-- allocator 只验证通用 C ABI 形状，使用测试 arena；尚未连接 GammaOS LK 的真实 `heap_alloc` / `heap_free`。
-- C stub 仅验证函数调用、静态链接、ELF 目标架构和符号闭合；尚未验证 LK 启动、栈、内存布局、异常/中断、调度或设备 ABI。
-- 没有编译完整 Linkslot UI、Libretro 核心、文件系统、显示/输入/音频 HAL；没有生成可刷写镜像、写 SD 或执行 payload。
+- 两个 Linkslot crate 都是在临时隔离副本中测试；`upstream/linkslot` 快照没有修改。
+- 没有把完整 workspace 改成 `no_std`；UI、存储、网络、图形、Libretro loader 尚未接入。
+- LK allocator 薄桩不代表真实 LK heap 行为，尤其没有确认并发、释放合并、oom 行为和 heap 初始化时序。
+- 没有验证 LK 启动、栈、EL、MMU、异常/中断、调度或 H700 硬件驱动。
+- 没有生成可刷写镜像、写 SD 或执行 payload。
 
-工作流与产物：
-- [GitHub Actions 成功运行](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45102606482)
+工作流和产物：
+- [第二轮 GitHub Actions 成功运行](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45103281417)
 - [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16)
+
 
 ## 6. 下一步必须做的技术验证
 
-1. 确认 H700 选用 AArch32 LK 还是 AArch64 runtime；本轮证明两个 Rust 目标都能做 freestanding staticlib，不足以单独决定启动架构。
-2. 在 host-only 环境中对照 GammaOS LK 的真实 API/头文件，写一个专用适配层，并链接实际 LK heap symbols；核实 allocator 对齐、释放、失败路径与线程安全策略。
-3. 扩展 ABI 测试，覆盖多参数结构体、对齐、回调、枚举布局、panic abort 与栈需求；检查最终 ELF 的 `readelf -A/-h/-S`、map 和调用约定。
-4. 继续切分 `slot-model` 路径/I/O 依赖，增加单元测试；验证 `slot-input` gesture 行为与上游测试一致。
-5. 在不修改 `upstream/linkslot` 快照的前提下，逐步评估 `slot-i18n`、`slot-cheevos`，之后才评估 UI、存储、图形和 Libretro runtime。
+1. **启动架构决策**：评估把 AArch32 LK 作为厂商 BL31 的 AArch32 BL33（现有现场分析的 BL33 状态为 AArch32 SVC，SPSR `0x1d3`）的路线，与移植 AArch64 LK/建立 AArch64 runtime 的路线；不能只因 Rust 双目标都能编译就决定。
+2. **H700 多核状态审计**：查清 BL31 → BL33 时每个 Cortex-A53 核心的启动/停驻状态，以及 LK 生命周期内 secondary core 是否可能运行。若多核活动，不能复用当前依赖本核 IRQ 屏蔽的 heap 临界区作为全局 allocator 锁。
+3. **LK heap 实现验证**：只有在 pinned LK heap 的平台依赖和编译配置可控后，尝试单独编译真实 `lib/heap/heap.c`；再考虑跨核 heap lock、对齐、free/coalescing、OOM 和初始化时序测试。
+4. **Linkslot 模块继续拆分**：保留 `slot-input` 的 47 项上游行为测试；进一步从 `slot-model` 分离路径/文件 I/O 助手，确保纯数据模型的 no_std 测试与上游语义保持一致。
+5. **第二批复用评估**：再评估 `slot-i18n` 静态翻译表和 `slot-cheevos` C 引擎；之后才开始 UI、存储、图形和 Libretro runtime 的分层设计。
 6. 继续单独关闭 H700 启动交接/内存 ownership 的 NO-GO 门槛；未关闭前不得执行设备 payload。
 
 仍不生成可刷写镜像、不写 SD、不修改启动区域、不执行 payload。
-
-## 6. 当前结论
-
-- linkSlot 1.0.36 已成为当前 UI/功能审查基线，但原始上游 Git commit 不可得。
-- Linkslot 的 `device` feature 仍是 Linux AArch64，不是 LK/bare-metal。
-- GammaOS LK 参考分支目前是 AArch32 LK，不能与当前 AArch64 probe/scaffold 混为同一目标。
-- `slot-input` 与 `slot-model` 的纯逻辑已在 AArch32、AArch64 两目标通过隔离 `no_std+alloc` 编译；通用 Rust/C ABI 静态链接探针亦已通过。
-- AArch32 探针用 `ABS 0` 仅解析 R_ARM_NONE unwind 元数据 marker；这不提供 unwinder，启用异常展开前仍须接入真实运行时。
-- 当前仍没有可运行 Linkslot Pico 的 firmware、H700 HAL、实际 LK allocator 绑定或已批准 payload 地址。
