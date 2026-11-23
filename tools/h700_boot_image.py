@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Build and inspect the RG34XX BaseOS-native BOL4 / Android boot-v2 container.
 
-This is a host-side packaging tool only. It does not read or write a device,
-SD card, Boot0, TOC1, U-Boot, monitor, or firmware partition.
+This is a host-side file-only tool. It never reads or writes a live device or
+SD card. It can inspect local partition dumps, but never writes boot sectors.
 """
 from __future__ import annotations
 
@@ -33,6 +33,18 @@ RG34XX_ACTIVE_BOL4_BYTES = 0x0080474E
 RG34XX_ACTIVE_BOL4_PACKED_BYTES = 0x0080473E
 RG34XX_ACTIVE_KERNEL_BYTES = 0x010A7008
 RG34XX_ACTIVE_BOL4_FNV1A32 = 0xB4C47D39
+
+# Exact p4 +40 MiB firmware package identity from the read-only loader audit.
+RG34XX_FIRMWARE_OFFSET = 0x02800000
+RG34XX_FIRMWARE_BYTES = 0x00046200
+RG34XX_FIRMWARE_SHA256 = "dc9dc3ae66b30244911e7054ca66136991626cabb0d59c796c4b253a126f28e9"
+RG34XX_FIRMWARE_FNV1A32 = 0xAF0018CB
+RG34XX_FIRMWARE_EXTENTS = (
+    ("monitor", 0x00000, 0x1A400, 0x1A2D0, 0x48000000),
+    ("dtbo",    0x1A400, 0x00A00, 0x00920, 0x4A100000),
+    ("dtb",     0x1AE00, 0x23400, None,    0x4A200000),
+    ("loader",  0x3E200, 0x08000, 0x08000, 0x4A000000),
+)
 
 
 class ImageError(ValueError):
@@ -384,6 +396,150 @@ def write_extracted_inputs(partition_path: Path, offset: int, image_size: int,
     return manifest
 
 
+
+
+def split_rg34xx_native_firmware(firmware: bytes, *,
+                                 expected_sha256: str | None = RG34XX_FIRMWARE_SHA256,
+                                 expected_fnv: int | None = RG34XX_FIRMWARE_FNV1A32) -> dict[str, bytes]:
+    """Parse the audited p4+40 MiB native firmware concatenation."""
+    if len(firmware) != RG34XX_FIRMWARE_BYTES:
+        raise ImageError("RG34XX native firmware package length mismatch")
+    if expected_sha256 is not None and hashlib.sha256(firmware).hexdigest() != expected_sha256:
+        raise ImageError("RG34XX native firmware package SHA-256 mismatch")
+    if expected_fnv is not None and fnv1a32(firmware) != expected_fnv:
+        raise ImageError("RG34XX native firmware package FNV-1a mismatch")
+
+    parts: dict[str, bytes] = {"firmware-package.bin": firmware}
+    for name, offset, extent_bytes, payload_bytes, _destination in RG34XX_FIRMWARE_EXTENTS:
+        extent = firmware[offset:offset + extent_bytes]
+        if len(extent) != extent_bytes:
+            raise ImageError(f"truncated native firmware {name} extent")
+        if payload_bytes is not None:
+            payload = extent[:payload_bytes]
+            padding = extent[payload_bytes:]
+            if any(padding):
+                raise ImageError(f"native firmware {name} padding is not zero-filled")
+        else:
+            payload = extent
+        if name == "monitor" and _u32(payload, 0) != 0x1400003E:
+            raise ImageError("native firmware monitor header/branch word mismatch")
+        if name == "dtb":
+            if len(payload) < 40 or payload[:4] != b"\\xd0\\x0d\\xfe\\xed":
+                raise ImageError("native firmware DTB has no FDT header")
+            totalsize = int.from_bytes(payload[4:8], "big")
+            if totalsize < 40 or totalsize > len(payload):
+                raise ImageError("native firmware DTB totalsize exceeds its extent")
+        if name == "loader":
+            if _u32(payload, 0) != 0xEA0003FE or payload[4:9] != b"uboot":
+                raise ImageError("native firmware AArch32 loader entry/header mismatch")
+        parts[f"{name}.bin"] = payload
+    return parts
+
+
+def write_extracted_native_firmware(partition_path: Path, output_dir: Path,
+                                    active_image_path: Path | None = None) -> dict:
+    """Extract and fingerprint the paired p4+40 MiB firmware package from a local p4 dump."""
+    partition_path = partition_path.resolve()
+    output_dir = output_dir.resolve()
+    if partition_path == output_dir or output_dir in partition_path.parents:
+        raise ImageError("output directory must not contain or replace the partition dump")
+    if active_image_path is not None:
+        active_image_path = active_image_path.resolve()
+        if active_image_path in (partition_path, output_dir) or output_dir in active_image_path.parents:
+            raise ImageError("active image input must remain outside the firmware output directory")
+
+    partition = partition_path.read_bytes()
+    if len(partition) != 64 * 1024 * 1024:
+        raise ImageError("RG34XX firmware extraction requires the audited 64 MiB p4 dump")
+    end = RG34XX_FIRMWARE_OFFSET + RG34XX_FIRMWARE_BYTES
+    if end > len(partition):
+        raise ImageError("native firmware extent is outside the supplied p4 dump")
+    firmware = partition[RG34XX_FIRMWARE_OFFSET:end]
+    parts = split_rg34xx_native_firmware(firmware)
+
+    active_identity = None
+    if active_image_path is not None:
+        active_image = active_image_path.read_bytes()
+        _header, android_parts = split_android_v2(active_image)
+        validate_rg34xx_reference_active_image(active_image, android_parts[0])
+        dtb_matches = android_parts[4] == parts["dtb.bin"]
+        active_identity = {
+            "bytes": len(active_image),
+            "sha256": hashlib.sha256(active_image).hexdigest(),
+            "fnv1a32": f"0x{fnv1a32(active_image):08x}",
+            "dtb_byte_identical_to_firmware_dtb": dtb_matches,
+            "loader_image_length_literal_candidate_offsets": [
+                f"0x{offset:x}" for offset in _find_all(parts["loader.bin"], struct.pack("<I", len(active_image)))
+            ],
+            "loader_image_fnv_literal_candidate_offsets": [
+                f"0x{offset:x}" for offset in _find_all(parts["loader.bin"], struct.pack("<I", fnv1a32(active_image)))
+            ],
+            "literal_scan_is_not_instruction_level_proof": True,
+        }
+        if not dtb_matches:
+            raise ImageError("p4+40 firmware DTB differs from the p4+48 active Android image DTB")
+
+    if output_dir.exists() and not output_dir.is_dir():
+        raise ImageError("firmware extraction output path exists and is not a directory")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    if any(output_dir.iterdir()):
+        raise ImageError("firmware extraction output directory must be empty")
+
+    extents = {}
+    for name, offset, extent_bytes, payload_bytes, destination in RG34XX_FIRMWARE_EXTENTS:
+        payload = parts[f"{name}.bin"]
+        extents[name] = {
+            "offset": f"0x{offset:x}",
+            "extent_bytes": extent_bytes,
+            "payload_bytes": len(payload) if payload_bytes is not None else int.from_bytes(payload[4:8], "big"),
+            "destination": f"0x{destination:08x}",
+            "sha256": hashlib.sha256(payload).hexdigest(),
+            "extent_sha256": hashlib.sha256(firmware[offset:offset + extent_bytes]).hexdigest(),
+        }
+
+    manifest = {
+        "format": "RG34XX p4+40 MiB BaseOS native firmware extraction",
+        "host_only": True,
+        "device_io_performed": False,
+        "source_partition_file": partition_path.name,
+        "source_partition_bytes": len(partition),
+        "source_partition_sha256": hashlib.sha256(partition).hexdigest(),
+        "firmware_offset": f"0x{RG34XX_FIRMWARE_OFFSET:x}",
+        "firmware_bytes": len(firmware),
+        "firmware_sha256": hashlib.sha256(firmware).hexdigest(),
+        "firmware_fnv1a32": f"0x{fnv1a32(firmware):08x}",
+        "extents": extents,
+        "active_image_pair_check": active_identity,
+        "not_installable": True,
+        "not_hardware_validated": True,
+        "requires_matching_native_firmware_rebuild": True,
+    }
+    for filename, data in parts.items():
+        (output_dir / filename).write_bytes(data)
+    (output_dir / "firmware-manifest.json").write_text(
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+    )
+    return manifest
+
+
+def _find_all(haystack: bytes, needle: bytes) -> list[int]:
+    offsets = []
+    start = 0
+    while needle:
+        offset = haystack.find(needle, start)
+        if offset < 0:
+            break
+        offsets.append(offset)
+        start = offset + 1
+    return offsets
+
+
+def command_extract_firmware(args: argparse.Namespace) -> int:
+    manifest = write_extracted_native_firmware(args.partition, args.output_dir, args.active_image)
+    print(json.dumps(manifest, indent=2))
+    return 0
+
+
 def manifest_for(header_template: bytes, kernel: bytes, bol4: bytes, image: bytes,
                  dtb: bytes, initrd: bytes) -> dict:
     return {
@@ -495,6 +651,14 @@ def main(argv: list[str] | None = None) -> int:
     extract.add_argument("--output-dir", type=Path, required=True,
                          help="new or empty directory for extracted host-side inputs")
     extract.set_defaults(func=command_extract_inputs)
+    firmware = sub.add_parser("extract-firmware", help="extract the audited p4+40 MiB native firmware package")
+    firmware.add_argument("--partition", type=Path, required=True,
+                          help="local read-only 64 MiB RG34XX p4/boot partition dump")
+    firmware.add_argument("--active-image", type=Path,
+                          help="optional extracted p4+48 MiB active-boot.img for pair/DTB checks")
+    firmware.add_argument("--output-dir", type=Path, required=True,
+                          help="new or empty folder for extracted firmware extents")
+    firmware.set_defaults(func=command_extract_firmware)
     inspect = sub.add_parser("inspect", help="verify an Android v2 image and its BOL4 kernel")
     inspect.add_argument("image", type=Path)
     inspect.add_argument("--max-image-bytes", type=int, default=MAX_ANDROID_IMAGE)

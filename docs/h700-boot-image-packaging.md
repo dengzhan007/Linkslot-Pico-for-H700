@@ -117,3 +117,33 @@ CI 的 unittest discover 运行 14 项 host tests，覆盖 raw LZ4、BOL4 FNV/�
 a64 hardware readiness 报告中的 hardware probe 仍为 NO-GO；未知保留区 [0x7ec00000,0x7fc00000) 及 RAM 顶部碎片继续排除。由于真实 boot-partition.bin 没有上传，本次会话不能对现场二进制运行提取命令，也不能声称已经产出真实 RG34XX candidate。
 
 这项工作只关闭“缺少可重复的 BOL4 / Android v2 host pack-and-verify primitive”这一工程缺口，不把项目状态提升为可刷写或可启动。
+
+
+## Extract the paired p4+40 MiB native firmware package
+
+The active Android image is stored at p4 +48 MiB, but its loader is part of a
+separate native firmware concatenation at p4 +40 MiB. The audited package is
+`0x46200` bytes, SHA-256
+`dc9dc3ae66b30244911e7054ca66136991626cabb0d59c796c4b253a126f28e9`,
+FNV-1a32 `0xaf0018cb`. `extract-firmware` checks that identity and splits the
+monitor, DTBO, DTB and AArch32 loader extents without modifying the source dump.
+
+```powershell
+py -3 tools/h700_boot_image.py extract-firmware `
+  --partition boot-partition.bin `
+  --active-image build/rg34xx-active-inputs/active-boot.img `
+  --output-dir build/rg34xx-native-firmware
+```
+
+The optional `--active-image` verifies the audited p4+48 MiB Android image and
+requires its DTB bytes to match the p4+40 MiB firmware DTB. It also reports
+byte-pattern offsets for the active image length and FNV in the extracted
+loader. These offsets are search hints only, not instruction-level proof that
+the constants are used by the loader. The full firmware and component binaries
+remain local; only `firmware-manifest.json` is needed for report evidence.
+
+The extracted firmware is **not** a rebuilt or installable package. It is the
+exact currently deployed package, useful for confirming the pair and recovering
+its inputs for a future matched build. Rebuilding the p4+40 MiB package and SPL
+with regenerated image length/FNV/generation remains a separate task. No
+hardware validation, device I/O or flash operation is performed.

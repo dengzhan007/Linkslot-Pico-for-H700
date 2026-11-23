@@ -74,7 +74,8 @@
 - [ ] 建立最小 A32 handoff adapter + AArch64 payload；实机验证 CurrentEL、SPSR、参数寄存器、栈、异常向量、GIC、MMU/cache/TLB 与 FDT/内存边界。
 - [ ] 完成重复冷启动、第一帧/日志时间戳和失败恢复测试；恢复方式按电脑重写/修复 SD 卡，不依赖旧 Linux 自动回退。
 - [x] 增加 RG34XX BaseOS-native BOL4 / Android boot v2 host 打包、检查与本地 p4 dump 提取工具；显式按本次已审计 capture 的 p4 +48 MiB / 0x829000 extent 提取活动镜像，并拆出 header、BOL4、AArch64 Image、initrd、DTB 与 SHA-256 manifest；固定 extent 同时校验 Android image FNV 与 BOL4 header fingerprint。14 项 host tests 覆盖压缩、容器、损坏输入、有界提取、不修改原始 dump，并以固定 BaseOS native C decoder 验证 BOL4 互操作；工具只处理普通文件，不操作 SD/Boot 区，也不代表镜像已能在实机启动。
-- [ ] 使用本地保留的 64 MiB `boot-partition.bin` 运行 `extract-inputs`，并对提取出的活动镜像与报告中的 BOL4 length/FNV、kernel SHA-256、DTB/ramdisk 进行逐项交叉核验；原始分区 dump 目前未上传仓库，因此此项尚未由云端 CI 执行。
+- [x] 使用本地保留的 64 MiB `boot-partition.bin` 运行 `extract-inputs` 并完成 21 项交叉核验；`extracted-manifest.json`、`verification.json`、`SHA256SUMS.txt` 已归档到 `reports/rg34xx-active-inputs/`（8/8 checksum）；原始分区与提取二进制仍只保留本地。BOL4 解压所得 `kernel.Image` SHA-256 与主 Android gzip 内核逐字节一致，见 reports 分支的 `rg34xx-boot-partition-deep-audit.md` addendum。
+- [ ] 从同一份本地 p4 dump 提取 p4+40 MiB native firmware package（`0x02800000` / `0x46200`），校验 SHA-256/FNV 与 monitor、DTBO、DTB、AArch32 loader extent；与 p4+48 MiB active image 做 DTB 字节级配对，并检查 loader 中镜像长度/FNV 常量候选。只发布 manifest，不上传固件二进制；这一步仍不代表已重建或可刷写。
 - [ ] 为任何修改后的 p4+48 MiB Android/BOL4 image 重建与之匹配的 p4+40 MiB native firmware/SPL package；必须重新生成并核验 `BASEOS_IMAGE_BYTES`、`BASEOS_IMAGE_FNV` 和 generation。当前 reports 已记录原始 `boot-package.bin` 与 build-time GPT prefix 未归档，因此不能从文本报告重建这组产物；禁止只替换活动 Android image。
 - [ ] 使用已核验且相互匹配的 RG34XX Android v2 header、DTB、initrd 与 AArch64 Image 输入构建一次真实 host candidate，归档 hash 和 extents；这仍不替代 watchdog 恢复、安全内存归属与目标机冷启动验收。
 

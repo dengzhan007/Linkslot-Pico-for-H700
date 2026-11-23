@@ -245,5 +245,49 @@ class AndroidV2Tests(unittest.TestCase):
             self.assertEqual(json.loads(stdout.getvalue())["kernel_bytes"], len(fake_kernel()))
 
 
+class NativeFirmwareTests(unittest.TestCase):
+    def fake_firmware(self):
+        monitor_payload = struct.pack("<I", 0x1400003E) + b"M" * (0x1A2D0 - 4)
+        monitor = monitor_payload + bytes(0x1A400 - len(monitor_payload))
+        dtbo_payload = b"O" * 0x920
+        dtbo = dtbo_payload + bytes(0xA00 - len(dtbo_payload))
+        dtb = bytearray(0x23400)
+        dtb[:4] = b"\xd0\x0d\xfe\xed"
+        struct.pack_into(">I", dtb, 4, 40)
+        loader = struct.pack("<I", 0xEA0003FE) + b"uboot" + bytes(0x8000 - 9)
+        return monitor + dtbo + bytes(dtb) + loader
+
+    def test_native_firmware_extents_and_loader_header_are_bounded(self):
+        firmware = self.fake_firmware()
+        parts = boot.split_rg34xx_native_firmware(
+            firmware, expected_sha256=None, expected_fnv=None
+        )
+        self.assertEqual(len(parts["firmware-package.bin"]), boot.RG34XX_FIRMWARE_BYTES)
+        self.assertEqual(len(parts["monitor.bin"]), 0x1A2D0)
+        self.assertEqual(len(parts["dtbo.bin"]), 0x920)
+        self.assertEqual(len(parts["dtb.bin"]), 0x23400)
+        self.assertEqual(len(parts["loader.bin"]), 0x8000)
+        self.assertEqual(parts["loader.bin"][:4], struct.pack("<I", 0xEA0003FE))
+
+        damaged = bytearray(firmware)
+        damaged[0x1A3FF] = 1
+        with self.assertRaisesRegex(boot.ImageError, "padding"):
+            boot.split_rg34xx_native_firmware(
+                bytes(damaged), expected_sha256=None, expected_fnv=None
+            )
+
+    def test_native_firmware_reference_fingerprint_rejects_other_package(self):
+        with self.assertRaisesRegex(boot.ImageError, "SHA-256"):
+            boot.split_rg34xx_native_firmware(self.fake_firmware())
+
+    def test_native_firmware_rejects_wrong_loader_entry(self):
+        firmware = bytearray(self.fake_firmware())
+        firmware[0x3E200] ^= 1
+        with self.assertRaisesRegex(boot.ImageError, "loader entry/header"):
+            boot.split_rg34xx_native_firmware(
+                bytes(firmware), expected_sha256=None, expected_fnv=None
+            )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
