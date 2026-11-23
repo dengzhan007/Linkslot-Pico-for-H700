@@ -235,6 +235,7 @@ class AndroidV2Tests(unittest.TestCase):
             manifest = json.loads(stdout.getvalue())
             self.assertTrue(manifest["host_only"])
             self.assertTrue(manifest["not_installable"])
+            self.assertTrue(manifest["requires_matching_native_firmware_rebuild"])
             self.assertTrue(output.is_file())
             self.assertTrue((root / "boot.img.bol4").is_file())
             self.assertTrue((root / "boot.img.json").is_file())

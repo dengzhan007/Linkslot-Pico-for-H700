@@ -404,6 +404,11 @@ def manifest_for(header_template: bytes, kernel: bytes, bol4: bytes, image: byte
         "android_image_id": image[0x240:0x260].hex(),
         "not_installable": True,
         "not_hardware_validated": True,
+        "requires_matching_native_firmware_rebuild": True,
+        "native_firmware_pairing_reason": (
+            "The native loader checks record.image_bytes/image_fnv against "
+            "BASEOS_IMAGE_BYTES/BASEOS_IMAGE_FNV compiled from the paired image."
+        ),
     }
 
 
@@ -458,6 +463,7 @@ def command_inspect(args: argparse.Namespace) -> int:
         "image_id": image[0x240:0x260].hex(),
         "host_only": True,
         "not_installable": True,
+        "requires_matching_native_firmware_rebuild": True,
     }
     print(json.dumps(report, indent=2))
     return 0

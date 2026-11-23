@@ -71,6 +71,10 @@ python3 tools/h700_boot_image.py inspect build/rg34xx-linkslot-boot.img
 
 这生成一个新的 host-side Android v2 文件、独立 BOL4 component 和 JSON manifest。它不是可刷写安装包，也不修改原始 boot 分区。
 
+**不能把新生成的 p4+48 MiB 镜像单独替换到现有启动分区。** 固定版本的 BaseOS native loader 在启动时会比较 SPL 生成记录中的 image byte length/FNV 与 loader 编译时的 BASEOS_IMAGE_BYTES / BASEOS_IMAGE_FNV。固定版本的 native/build.py 会从同一份 Android image 生成这两个常量，并把 image 的 SHA-256 计入 generation；配套 p4+40 MiB firmware package（含 native loader）也由该构建过程生成。因此只要 Android image 内容或长度变化，就必须同步重建并校验匹配的 p4+40 MiB firmware/SPL 侧产物，不能保留旧 package 再只换 p4+48 MiB image。
+
+reports 中的 stage-0 audit 已记录，原始 boot-package.bin 和构建期 GPT prefix 没有归档，当前无法仅凭仓库里的文本/JSON 报告重建匹配的 native firmware generation。这个工具只实现 Android/BOL4 host component，不生成配套 firmware package、capsule、Boot0 或完整分区镜像。
+
 ## 使用独立输入构建
 
 如果已有经核验的文件，也可直接执行：
