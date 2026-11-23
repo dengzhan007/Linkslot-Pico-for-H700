@@ -40,7 +40,7 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
 
     for tool in ("git", "cmake", "arm-linux-gnueabi-gcc", "arm-linux-gnueabi-g++",
-                 "llvm-nm", "llvm-ar"):
+                 "llvm-nm", "llvm-ar", "arm-linux-gnueabi-ar", "arm-linux-gnueabi-ranlib"):
         if not shutil.which(tool):
             raise RuntimeError("required tool missing: " + tool)
 
@@ -58,10 +58,10 @@ def main():
         "cmake", "-S", str(source), "-B", str(build),
         "-DCMAKE_SYSTEM_NAME=Linux",
         "-DCMAKE_SYSTEM_PROCESSOR=arm",
-        "-DCMAKE_C_COMPILER=arm-linux-gnueabi-gcc",
-        "-DCMAKE_CXX_COMPILER=arm-linux-gnueabi-g++",
-        "-DCMAKE_AR=arm-linux-gnueabi-ar",
-        "-DCMAKE_RANLIB=arm-linux-gnueabi-ranlib",
+        "-DCMAKE_C_COMPILER=" + shutil.which("arm-linux-gnueabi-gcc"),
+        "-DCMAKE_CXX_COMPILER=" + shutil.which("arm-linux-gnueabi-g++"),
+        "-DCMAKE_AR=" + shutil.which("arm-linux-gnueabi-ar"),
+        "-DCMAKE_RANLIB=" + shutil.which("arm-linux-gnueabi-ranlib"),
         "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
         "-DCMAKE_BUILD_TYPE=Release",
         "-DCMAKE_C_FLAGS=" + cflags,
