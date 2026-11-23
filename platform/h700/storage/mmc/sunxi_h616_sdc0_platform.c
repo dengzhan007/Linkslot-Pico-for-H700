@@ -6,10 +6,10 @@
 
 #define SUNXI_CCU_APB1_CFG          0x520u
 #define SUNXI_CCU_APB1_M_MASK       (0x3u << 0)
-#define SUNXI_CCU_APB1_P_MASK       (0x3u << 8)
+#define SUNXI_CCU_APB1_N_MASK       (0x3u << 8)
 #define SUNXI_CCU_APB1_MUX_MASK     (0x3u << 24)
 #define SUNXI_CCU_APB1_CFG_MASK     (SUNXI_CCU_APB1_M_MASK | \
-                                    SUNXI_CCU_APB1_P_MASK | \
+                                    SUNXI_CCU_APB1_N_MASK | \
                                     SUNXI_CCU_APB1_MUX_MASK)
 #define SUNXI_H616_OSC24M_HZ        24000000u
 
@@ -33,7 +33,7 @@ int sunxi_h616_pio_enable_apb1_24m(
         return -1;
 
     /*
-     * APB1 parent 0 is osc24M; M=0 encodes divide-by-1 and P=0 encodes /1.
+     * APB1 parent 0 is osc24M; M=0 encodes divide-by-1 and N=0 encodes /1.
      * Preserve unrelated CCU bits, then verify the selected clock fields.
      */
     value = platform->ccu.read32(platform->ccu.context,
