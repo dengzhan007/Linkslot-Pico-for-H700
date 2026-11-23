@@ -178,17 +178,21 @@ static int test_400khz_clock_programming(void)
     return 1;
 }
 
-static int test_rejects_unvalidated_high_speed(void)
+static int test_rejects_unvalidated_transfer_rates(void)
 {
     struct fake_platform fake;
     struct sunxi_mmc_io mmc;
     struct sunxi_h616_sdc0_platform platform;
 
     fake_init(&fake, &mmc, &platform);
+    CHECK(sunxi_h616_sdc0_set_clock_hz(&platform, 1000000u, 20u) != 0,
+          "non-identification rate below 24 MHz is not yet enabled");
+    CHECK(sunxi_h616_sdc0_set_clock_hz(&platform, 24000000u, 20u) != 0,
+          "24 MHz card clock is not yet enabled");
     CHECK(sunxi_h616_sdc0_set_clock_hz(&platform, 25000000u, 20u) != 0,
-          "clock above 24 MHz is rejected pending timing validation");
+          "clock above 24 MHz is rejected pending parent/timing validation");
     CHECK(fake.clock_writes == 0u && fake.update_commands == 0u,
-          "rejected high-speed request does not touch hardware");
+          "all unvalidated transfer-rate requests fail before hardware access");
     return 1;
 }
 
@@ -215,7 +219,7 @@ int main(void)
     if (!test_pio_apb1_clock_selects_osc24m() ||
         !test_bus_gate_and_reset() ||
         !test_400khz_clock_programming() ||
-        !test_rejects_unvalidated_high_speed() ||
+        !test_rejects_unvalidated_transfer_rates() ||
         !test_clock_update_timeout())
         return EXIT_FAILURE;
 
