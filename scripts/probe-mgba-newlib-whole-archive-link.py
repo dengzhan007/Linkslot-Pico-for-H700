@@ -27,8 +27,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--archive", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--adapter-object", type=Path, default=None)
     args = ap.parse_args()
     archive, out = args.archive.resolve(), args.out.resolve()
+    adapter = args.adapter_object.resolve() if args.adapter_object else None
+    if adapter is not None and not adapter.is_file():
+        raise RuntimeError("newlib adapter object not found: " + str(adapter))
     out.mkdir(parents=True, exist_ok=True)
     if not archive.is_file():
         raise RuntimeError("mGBA archive not found: " + str(archive))
@@ -69,6 +73,7 @@ def main():
             "-Wl,-e,_start", "-Wl,--no-undefined",
             "-Wl,-Map=" + str(mapfile),
             "-Wl,--whole-archive", str(archive), "-Wl,--no-whole-archive",
+            *([str(adapter)] if adapter else []),
             str(stub_obj), "-Wl,--start-group", *libs, "-Wl,--end-group",
             "-o", str(elf),
         ]
