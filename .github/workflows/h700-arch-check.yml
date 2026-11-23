@@ -15,6 +15,7 @@ on:
       - "scripts/test-h700-h616-sdc0-pins.sh"
       - "scripts/test-h700-sunxi-mmc-gpt-adapter.sh"
       - "scripts/test-h700-sunxi-mmc-gpt-integration.sh"
+      - "scripts/test-h700-sdc0-readonly-scan.sh"
       - ".github/workflows/h700-arch-check.yml"
   pull_request:
     paths:
@@ -55,6 +56,7 @@ jobs:
           sh scripts/test-h700-h616-sdc0-pins.sh
           sh scripts/test-h700-sunxi-mmc-gpt-adapter.sh
           sh scripts/test-h700-sunxi-mmc-gpt-integration.sh
+          sh scripts/test-h700-sdc0-readonly-scan.sh
 
   compile-aarch64-objects:
     runs-on: ubuntu-latest

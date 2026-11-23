@@ -84,6 +84,14 @@ These are module-clock examples, not direct card-SDCLK claims. The calculator do
 
 The synthetic RG34XX regression vector uses C_SIZE 29,663, which decodes to **30,375,936 sectors** and **15,552,479,232 bytes**, matching the live Linux block inventory. This validates the bit-position and capacity arithmetic only; the CSD bytes have not yet been captured from the physical SD card. Run `sh scripts/test-h700-sunxi-sd-csd.sh`.
 
+### Full sdc0 read-only scan orchestration (host-only)
+
+`h700_sunxi_sdc0_readonly_scan.c` is the top-level orchestration API. Given mapped PIO/CCU/MMC callbacks and caller-supplied timeouts, it configures PF0–PF5 with the pinned H616 reference profile, enables MMC0 bus/reset, requests the 400 kHz identification clock, identifies and selects the SD v2 card, creates the CMD17-only block reader, and parses the primary GPT into caller-owned partition storage. The result preserves card identification and GPT error codes for diagnostics.
+
+It explicitly requires the caller to have enabled PIO/APB1 and powered the SD card. It does not set a guessed regulator voltage, change any unknown vendor PIO raw pinconf words, configure a high-speed timing mode, access another MMC controller, or expose any storage write method. It changes only the supplied PIO/CCU/controller registers and sends SD identification plus CMD17 read commands.
+
+The integrated fake-H700 regression models PIO, CCU, MMC command/response registers, FIFO, and a 1024-sector SDHC image. It checks the orchestration order, CSD-derived capacity, 400 kHz module clock, PF0–PF5 reference settings, GPT p6/p7 labels, six CMD17 reads, and absence of write commands. This is the highest-level host simulation so far; it is not physical RG34XX validation. Run `sh scripts/test-h700-sdc0-readonly-scan.sh`.
+
 ### End-to-end synthetic GPT over CMD17 (host-only)
 
 A separate integration regression now exercises the complete software path: the GPT parser calls the `h700_block_reader`, which issues CMD17 through the FIFO-backed PIO reader, whose fake controller returns sectors from a synthetic 40-sector SDHC image. The GPT contains p6 named `UDISK` and p7 named `primary`; the test verifies both names and 1-based GPT slot numbers are discovered from the on-disk entries. It also asserts that six CMD17 reads service MBR, primary header, and both entry-array sectors in CRC and parse passes, with no command carrying the write bit.
