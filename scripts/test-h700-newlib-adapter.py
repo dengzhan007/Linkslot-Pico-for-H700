@@ -30,15 +30,20 @@ def run(args, log):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--source", type=Path, required=True, help="repository root")
+    ap.add_argument("--lk-source", type=Path, required=True, help="pinned LK reference source")
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
     root, out = args.source.resolve(), args.out.resolve()
+    lk_root = args.lk_source.resolve()
     out.mkdir(parents=True, exist_ok=True)
     src = root / "platform/h700/runtime/newlib_syscalls.c"
     header = root / "platform/h700/runtime/newlib_syscalls.h"
     harness = root / "platform/h700/runtime/tests/newlib_syscalls_host.c"
-    if not src.is_file() or not header.is_file() or not harness.is_file():
-        raise RuntimeError("H700 newlib adapter source or host regression file missing")
+    lk_bindings = root / "platform/h700/runtime/lk_bindings.c"
+    if not src.is_file() or not header.is_file() or not harness.is_file() or not lk_bindings.is_file():
+        raise RuntimeError("H700 newlib adapter, LK binding or host regression source missing")
+    if not (lk_root / "include/lib/heap.h").is_file():
+        raise RuntimeError("pinned LK include/lib/heap.h not found")
 
     for tool in ("cc", "arm-none-eabi-gcc", "arm-none-eabi-nm", "arm-none-eabi-readelf"):
         if not shutil.which(tool):
@@ -77,6 +82,30 @@ def main():
                       out / "arm-none-eabi-object-header.log")
     if "ELF32" not in header_text or "ARM" not in header_text or "EABI5" not in header_text:
         raise RuntimeError("newlib adapter object is not ELF32/ARM EABI5")
+    # Compile the real LK heap binding against the pinned LK header. Werror
+    # ensures the heap function pointer prototypes agree exactly.
+    binding_obj = out / "lk_bindings-arm-none-eabi.o"
+    binding_flags = cpu_flags + ["-I", str(lk_root / "include")]
+    run(["arm-none-eabi-gcc", *binding_flags, "-c", str(lk_bindings), "-o", str(binding_obj)],
+        out / "lk-bindings-compile.log")
+    binding_defined = run(["arm-none-eabi-nm", "-g", "--defined-only", str(binding_obj)],
+                          out / "lk-bindings-defined.log")
+    binding_undefined = run(["arm-none-eabi-nm", "-u", str(binding_obj)],
+                            out / "lk-bindings-undefined.log")
+    binding_defined_names = {line.split()[-1] for line in binding_defined.splitlines()
+                             if len(line.split()) >= 2}
+    binding_undefined_names = {line.split()[-1] for line in binding_undefined.splitlines()
+                               if len(line.split()) >= 2}
+    if "h700_newlib_install_lk_bindings" not in binding_defined_names:
+        raise RuntimeError("LK binding install entry missing")
+    required_lk = {"heap_alloc", "heap_free",
+                   "h700_platform_heap_ready", "h700_platform_single_cpu_active",
+                   "h700_platform_console_read", "h700_platform_console_write",
+                   "h700_platform_rtc_gettimeofday", "h700_platform_fatal"}
+    if not required_lk.issubset(binding_undefined_names):
+        raise RuntimeError("LK binding external dependencies mismatch: missing " +
+                           repr(sorted(required_lk - binding_undefined_names)))
+
     defined = run(["arm-none-eabi-nm", "-g", "--defined-only", str(target_obj)],
                   out / "arm-none-eabi-defined-symbols.log")
     defined_names = {line.split()[-1] for line in defined.splitlines() if len(line.split()) >= 2}
@@ -95,6 +124,7 @@ def main():
         "# H700 newlib adapter validation\n\n",
         "Host regression: PASS. " + output.strip() + "\n\n",
         "AArch32 target compile: PASS. Actual arm-none-eabi/newlib headers, Cortex-A53 ARM state, NEON/VFPv4 softfp; object is ELF32/ARM EABI5.\n\n",
+        "Pinned LK heap binding: PASS. lk_bindings.c compiles with -Werror against the exact pinned include/lib/heap.h signatures; heap_alloc/heap_free resolve to LK externals and heap-ready/single-core/console/RTC/fatal services remain explicit platform integration points.\n\n",
         "Adapter exports: all 16 required allocator/syscall/install symbols are present.\n\n",
         "Target object undefined dependencies:\n\n~~~text\n",
         unresolved,
