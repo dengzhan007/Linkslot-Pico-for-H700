@@ -18,9 +18,9 @@
 #define PIO_MUX_MASK   0x00ffffffu
 #define PIO_MUX_VALUE  0x00222222u
 #define PIO_DRV_MASK   0x00000fffu
-#define PIO_DRV_VALUE  0x00000fffu
+#define PIO_DRV_VALUE  (PIO_DRIVE_40MA * 0x00000555u)
 #define PIO_PULL_MASK  0x00000fffu
-#define PIO_PULL_VALUE 0x00000555u
+#define PIO_PULL_VALUE (PIO_PULL_UP * 0x00000555u)
 
 static int update_fields(const struct sunxi_h616_pio_io *pio,
                          uint32_t offset,
