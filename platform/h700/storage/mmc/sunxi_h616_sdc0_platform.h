@@ -29,8 +29,9 @@ int sunxi_h616_pio_enable_apb1_24m(
 /*
  * Enable the sdc0 AHB gate and deassert its bus reset.
  *
- * The caller maps the H616 CCU at 0x03001000 and passes callbacks that use
- * CCU-relative offsets. No pinmux, regulator or card-power change is made.
+ * The caller maps the RG34XX sun50iw9p1 CCU at 0x03001000 and passes
+ * callbacks that use CCU-relative offsets. No pinmux, regulator or
+ * card-power change is made.
  */
 int sunxi_h616_sdc0_enable_bus(
     const struct sunxi_h616_sdc0_platform *platform);
