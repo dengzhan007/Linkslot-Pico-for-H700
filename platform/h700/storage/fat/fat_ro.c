@@ -5,8 +5,6 @@
 /* ---- tiny mem helpers (no libc dependency in LK) ---- */
 static void fr_memcpy(void *d, const void *s, unsigned n)
 { unsigned char *dp = d; const unsigned char *sp = s; while (n--) *dp++ = *sp++; }
-static int fr_memcmp(const void *a, const void *b, unsigned n)
-{ const unsigned char *x = a, *y = b; while (n--) { if (*x != *y) return *x - *y; x++; y++; } return 0; }
 
 static uint16_t rd16(const uint8_t *p) { return (uint16_t)(p[0] | (p[1] << 8)); }
 static uint32_t rd32(const uint8_t *p)
