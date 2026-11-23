@@ -424,7 +424,7 @@ def split_rg34xx_native_firmware(firmware: bytes, *,
         if name == "monitor" and _u32(payload, 0) != 0x1400003E:
             raise ImageError("native firmware monitor header/branch word mismatch")
         if name == "dtb":
-            if len(payload) < 40 or payload[:4] != b"\\xd0\\x0d\\xfe\\xed":
+            if len(payload) < 40 or payload[:4] != b"\xd0\x0d\xfe\xed":
                 raise ImageError("native firmware DTB has no FDT header")
             totalsize = int.from_bytes(payload[4:8], "big")
             if totalsize < 40 or totalsize > len(payload):
