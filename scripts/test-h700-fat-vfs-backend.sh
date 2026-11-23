@@ -9,7 +9,15 @@ SOURCES="
 $ROOT/platform/h700/storage/mmc/h700_fat_vfs_backend.c
 $ROOT/platform/h700/storage/mmc/h700_sunxi_mmc_fat.c
 $ROOT/platform/h700/storage/mmc/h700_sunxi_mmc_block_device.c
+$ROOT/platform/h700/storage/mmc/h700_sunxi_sdc0_readonly_scan.c
+$ROOT/platform/h700/storage/mmc/sunxi_h616_sdc0_pins.c
+$ROOT/platform/h700/storage/mmc/sunxi_h616_sdc0_platform.c
+$ROOT/platform/h700/storage/mmc/sunxi_mmc_clock.c
+$ROOT/platform/h700/storage/mmc/sunxi_mmc_module_clock.c
 $ROOT/platform/h700/storage/mmc/sunxi_mmc_pio_read.c
+$ROOT/platform/h700/storage/mmc/sunxi_sd_card_init.c
+$ROOT/platform/h700/storage/mmc/sunxi_sd_csd.c
+$ROOT/platform/h700/storage/gpt/h700_gpt_readonly.c
 $ROOT/platform/h700/storage/fat/fat_ro.c
 $ROOT/platform/h700/storage/fat/fat_exfat.c
 $ROOT/platform/h700/storage/mmc/tests/h700_fat_vfs_backend_test.c
