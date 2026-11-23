@@ -29,6 +29,41 @@ The observed sdc0 and sdc1 pinconf entries are raw values `0x00002809` / `0x0000
 
 CCU debugfs showed `sdmmc0_mod` at 100 MHz and enabled, with `sdmmc0_bus` and `sdmmc0_rst` enabled. `sdmmc1_mod` was 200 MHz and enabled, with its bus/reset gates enabled. `sdmmc2_mod` showed an 800 kHz rate but was not enabled/prepared; its bus/reset gates were off. These module-clock rates are not card SDCLK rates: the Linux log reports sdc0's card bus at 50 MHz. The H616 CCU reference places MMC module clock config registers at `0x830/0x834/0x838` and the combined gate/reset register at `0x84c` (see the pinned [U-Boot clock definitions](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/arch/arm/include/asm/arch-sunxi/clock_sun50i_h6.h)).
 
+## sdc0 pinmux and CCU register reference
+
+The live inventory maps the active sdc0 pin group to PF0–PF5. The pinned H616 reference device tree at Linux commit `fa2933aac170dd19c6a7f0d7b81a8f537e40915c` declares the generic `mmc0_pins` group as PF0–PF5, function `mmc0`, drive-strength 30 mA and pull-up bias. The matching `pinctrl-sun50i-h616.c` pin descriptors identify function selector **ALT2 (value 2)** on each signal:
+
+| Pin | MMC0 signal | H616 mux selector |
+|---|---|---:|
+| PF0 | D1 | 2 |
+| PF1 | D0 | 2 |
+| PF2 | CLK | 2 |
+| PF3 | CMD | 2 |
+| PF4 | D3 | 2 |
+| PF5 | D2 | 2 |
+
+This is the upstream H616 pin-function/reference configuration, not a decoded readback of the RG34XX's raw vendor pinconf words. Keep the live debugfs values `0x00002809` / `0x00000005` classified as unresolved; do not translate them into drive/pull values or write them back to PIO registers. The 30 mA/pull-up declaration is a useful board bring-up reference, not proof that those exact electrical settings were active at the time of the capture.
+
+The H616 CCU reference gives the following MMC0 clock-control layout (offsets are relative to the CCU base):
+
+| Register | Field | Value |
+|---|---|---|
+| `0x830` (`MMC0_CLK_CFG`) | M divider | bits 0–3 |
+| `0x830` (`MMC0_CLK_CFG`) | N divider | bits 8–9 |
+| `0x830` (`MMC0_CLK_CFG`) | parent mux | bits 24–25 |
+| `0x830` (`MMC0_CLK_CFG`) | module clock gate | bit 31 |
+| `0x84c` (`MMC_GATE_RESET`) | MMC0 bus gate | bit 0 |
+| `0x84c` (`MMC_GATE_RESET`) | MMC0 reset deassert | bit 16 |
+
+The Linux H616 CCU driver defines MMC parents as `osc24M`, `pll-periph0-2x`, and `pll-periph1-2x`, with a fixed post-divider of 2 for each MMC module clock. The pinned U-Boot sunxi MMC implementation instead describes the effective PLL6 input rate and accounts for the H616 hidden divider in its clock calculation. Keep the effective parent-rate semantics consistent when porting the divider calculation; do not copy the live debugfs `sdmmc0_mod = 100 MHz` rate as the card SDCLK. Linux separately reports the card bus at 50 MHz.
+
+References:
+- [H616 MMC0 pin group and controller node, Linux commit](https://github.com/torvalds/linux/blob/fa2933aac170dd19c6a7f0d7b81a8f537e40915c/arch/arm64/boot/dts/allwinner/sun50i-h616.dtsi)
+- [H616 PF0–PF5 function selectors, Linux commit](https://github.com/torvalds/linux/blob/fa2933aac170dd19c6a7f0d7b81a8f537e40915c/drivers/pinctrl/sunxi/pinctrl-sun50i-h616.c)
+- [H616 MMC module clock fields, Linux commit](https://github.com/torvalds/linux/blob/fa2933aac170dd19c6a7f0d7b81a8f537e40915c/drivers/clk/sunxi-ng/ccu-sun50i-h616.c)
+- [Pinned U-Boot MMC clock calculation](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/drivers/mmc/sunxi_mmc.c)
+- [Pinned U-Boot H6/H616 clock register definitions](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/arch/arm/include/asm/arch-sunxi/clock_sun50i_h6.h)
+
 ## sdc0 read-only driver constraints
 
 The first controller implementation should target the `sdc0` register block at `0x04020000` only. The pinned [U-Boot sunxi MMC implementation](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/drivers/mmc/sunxi_mmc.c) provides a portable reference for command/response handling, polling, FIFO transfers through the AHB path, clock setup, and H616 FIFO threshold initialization. Its register map is in [sunxi_mmc.h](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/drivers/mmc/sunxi_mmc.h).
