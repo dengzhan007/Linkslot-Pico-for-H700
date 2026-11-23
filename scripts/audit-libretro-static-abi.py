@@ -402,7 +402,9 @@ def compile_c(out: Path, compiler: str, target_arg=None, cpu=None, cross=False):
         if target_arg:
             cmd.append(target_arg)
         if cpu:
-            cmd += ["-mcpu=" + cpu, "-marm"]
+            cmd += ["-mcpu=" + cpu]
+            if target_arg and "armv7a" in target_arg:
+                cmd.append("-marm")
         cmd += ["-std=c11", "-ffreestanding", "-fno-builtin", "-fno-stack-protector",
                 "-fno-unwind-tables", "-fno-asynchronous-unwind-tables",
                 "-Wall", "-Wextra", "-Werror", "-I", str(out), "-c", str(source), "-o", str(obj)]
@@ -413,7 +415,9 @@ def compile_c(out: Path, compiler: str, target_arg=None, cpu=None, cross=False):
     if target_arg:
         cmd.append(target_arg)
     if cpu:
-        cmd += ["-mcpu=" + cpu, "-marm"]
+        cmd += ["-mcpu=" + cpu]
+        if target_arg and "armv7a" in target_arg:
+            cmd.append("-marm")
     cmd += ["-std=c11", "-ffreestanding", "-fno-builtin", "-fno-stack-protector",
             "-fno-unwind-tables", "-fno-asynchronous-unwind-tables",
             "-Wall", "-Wextra", "-Werror", "-I", str(out)]
