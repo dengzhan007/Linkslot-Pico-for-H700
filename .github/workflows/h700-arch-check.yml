@@ -14,6 +14,7 @@ on:
       - "scripts/test-h700-h616-sdc0-platform.sh"
       - "scripts/test-h700-h616-sdc0-pins.sh"
       - "scripts/test-h700-sunxi-mmc-gpt-adapter.sh"
+      - "scripts/test-h700-sunxi-mmc-gpt-integration.sh"
       - ".github/workflows/h700-arch-check.yml"
   pull_request:
     paths:
@@ -24,6 +25,11 @@ on:
       - "scripts/test-h700-sunxi-mmc-module-clock.sh"
       - "scripts/test-h700-sunxi-mmc-pio-read.sh"
       - "scripts/test-h700-sunxi-sd-csd.sh"
+      - "scripts/test-h700-sunxi-sd-card-init.sh"
+      - "scripts/test-h700-h616-sdc0-platform.sh"
+      - "scripts/test-h700-h616-sdc0-pins.sh"
+      - "scripts/test-h700-sunxi-mmc-gpt-adapter.sh"
+      - "scripts/test-h700-sunxi-mmc-gpt-integration.sh"
       - ".github/workflows/h700-arch-check.yml"
   workflow_dispatch:
 
@@ -48,6 +54,7 @@ jobs:
           sh scripts/test-h700-h616-sdc0-platform.sh
           sh scripts/test-h700-h616-sdc0-pins.sh
           sh scripts/test-h700-sunxi-mmc-gpt-adapter.sh
+          sh scripts/test-h700-sunxi-mmc-gpt-integration.sh
 
   compile-aarch64-objects:
     runs-on: ubuntu-latest

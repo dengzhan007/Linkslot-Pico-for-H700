@@ -84,6 +84,12 @@ These are module-clock examples, not direct card-SDCLK claims. The calculator do
 
 The synthetic RG34XX regression vector uses C_SIZE 29,663, which decodes to **30,375,936 sectors** and **15,552,479,232 bytes**, matching the live Linux block inventory. This validates the bit-position and capacity arithmetic only; the CSD bytes have not yet been captured from the physical SD card. Run `sh scripts/test-h700-sunxi-sd-csd.sh`.
 
+### End-to-end synthetic GPT over CMD17 (host-only)
+
+A separate integration regression now exercises the complete software path: the GPT parser calls the `h700_block_reader`, which issues CMD17 through the FIFO-backed PIO reader, whose fake controller returns sectors from a synthetic 40-sector SDHC image. The GPT contains p6 named `UDISK` and p7 named `primary`; the test verifies both names and 1-based GPT slot numbers are discovered from the on-disk entries. It also asserts that six CMD17 reads service MBR, primary header, and both entry-array sectors in CRC and parse passes, with no command carrying the write bit.
+
+This closes the host-side interface wiring gap, but remains synthetic: no physical RG34XX LBA0, GPT header, or partition sector has yet been read. Run `sh scripts/test-h700-sunxi-mmc-gpt-integration.sh`.
+
 ### CMD17 to GPT block-reader adapter (host-only)
 
 `h700_sunxi_mmc_block_device.c` converts a successfully identified SD card into the existing `h700_block_reader` interface. It copies the sector capacity and block/byte-addressing classification returned by the card's OCR/CSD, fixes the sector size at 512 bytes, and forwards each GPT sector request to the read-only CMD17 PIO function. Errors and out-of-range LBAs are propagated as failed sector reads. The adapter exposes no write, erase, flush, or raw-command method.
