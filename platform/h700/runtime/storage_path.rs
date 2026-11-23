@@ -71,7 +71,13 @@ fn validate_card_relative(path: &str, allowed_roots: &[&str]) -> Result<String, 
         out.push_str(component);
     }
     let root = first.ok_or(PathError::Empty)?;
-    if !allowed_roots.iter().any(|allowed| *allowed == root) {
+    // FAT16/32 and exFAT root names are case-insensitive for ASCII letters.
+    // Keep this policy aligned with the H700 C VFS backend, which accepts
+    // "Games" even when the on-card directory is stored as "GAMES".
+    if !allowed_roots
+        .iter()
+        .any(|allowed| allowed.eq_ignore_ascii_case(root))
+    {
         return Err(PathError::DisallowedRoot);
     }
     Ok(out)
@@ -86,6 +92,21 @@ mod tests {
         assert_eq!(resolve_card_path("/mnt/sdcard/Games/GBA/title.gba", "/mnt/sdcard", ROOTS, None),
             Ok(String::from("Games/GBA/title.gba")));
     }
+    #[test] fn allowed_roots_match_fat_ascii_case_insensitively() {
+        assert_eq!(
+            resolve_card_path("/mnt/sdcard/games/GBA/title.gba", "/mnt/sdcard", ROOTS, None),
+            Ok(String::from("games/GBA/title.gba"))
+        );
+        assert_eq!(
+            resolve_card_path("bios/gba_bios.bin", "/mnt/sdcard", ROOTS, Some("BIOS")),
+            Ok(String::from("BIOS/bios/gba_bios.bin"))
+        );
+        assert_eq!(
+            resolve_card_path("/mnt/sdcard/Private/secret", "/mnt/sdcard", ROOTS, None),
+            Err(PathError::DisallowedRoot)
+        );
+    }
+
     #[test] fn rejects_sibling_mount_prefix() {
         assert_eq!(resolve_card_path("/mnt/sdcard2/Games/a.gba", "/mnt/sdcard", ROOTS, None),
             Err(PathError::OutsideMount));
