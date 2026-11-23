@@ -11,9 +11,19 @@ static int read_sector_callback(void *context, uint64_t lba, void *buffer)
     if (device == 0 || buffer == 0)
         return -1;
 
-    result = sunxi_mmc_read_sector(&device->host, lba, buffer,
-                                   H700_GPT_SECTOR_SIZE, 0);
-    return result == SUNXI_MMC_READ_OK ? 0 : -1;
+    {
+        _Alignas(4) uint8_t sector[H700_GPT_SECTOR_SIZE];
+        uint8_t *destination = (uint8_t *)buffer;
+        uint32_t i;
+
+        result = sunxi_mmc_read_sector(&device->host, lba, sector,
+                                       sizeof(sector), 0);
+        if (result != SUNXI_MMC_READ_OK)
+            return -1;
+        for (i = 0u; i < H700_GPT_SECTOR_SIZE; ++i)
+            destination[i] = sector[i];
+    }
+    return 0;
 }
 
 int h700_sunxi_mmc_block_device_init(

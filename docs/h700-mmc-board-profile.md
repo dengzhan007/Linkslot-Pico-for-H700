@@ -84,7 +84,14 @@ These are module-clock examples, not direct card-SDCLK claims. The calculator do
 
 The synthetic RG34XX regression vector uses C_SIZE 29,663, which decodes to **30,375,936 sectors** and **15,552,479,232 bytes**, matching the live Linux block inventory. This validates the bit-position and capacity arithmetic only; the CSD bytes have not yet been captured from the physical SD card. Run `sh scripts/test-h700-sunxi-sd-csd.sh`.
 
-### Full sdc0 read-only scan orchestration (host-only)
+### CMD17 FAT adapter and GPT partition mount
+
+`h700_sunxi_mmc_fat.c` adapts the selected SD card to the existing FAT16/FAT32/exFAT read callback. Each requested sector is issued as a separate CMD17 operation and copied from an explicitly 4-byte-aligned 512-byte bounce buffer. This is important because the filesystem reader's byte-oriented local arrays are not required by C to have the alignment demanded by the PIO FIFO routine. The callback reports only complete sectors and rejects 32-bit LBA/count overflow or requests beyond the card capacity.
+
+`h700_sunxi_mmc_fat_mount_gpt_partition()` accepts a validated GPT partition record, checks its LBA range against the card capacity and the current 32-bit FAT API, then calls `fat_mount_partition()` with the exact GPT extent. The resulting volume remains read-only. The host test mounts a synthetic FAT32 p7 (`primary`) VBR through the same CMD17 data path and verifies its partition/BPB lengths, rejects out-of-card GPT bounds, tests unaligned multi-sector destinations, and asserts no SD write command was emitted.
+
+Run `sh scripts/test-h700-sunxi-mmc-fat.sh`.
+
 
 `h700_sunxi_sdc0_readonly_scan.c` is the top-level orchestration API. Given mapped PIO/CCU/MMC callbacks and caller-supplied timeouts, it configures PF0–PF5 with the pinned H616 reference profile, enables MMC0 bus/reset, requests the 400 kHz identification clock, identifies and selects the SD v2 card, creates the CMD17-only block reader, and parses the primary GPT into caller-owned partition storage. The result preserves card identification and GPT error codes for diagnostics.
 
