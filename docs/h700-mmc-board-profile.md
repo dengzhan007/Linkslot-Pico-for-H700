@@ -14,7 +14,9 @@ The Linux host indices above are diagnostic observations only. They do not defin
 
 ## Storage policy
 
-The initial Linkslot storage path should use **sdc0**. It owns the currently booted SDHC card; bootargs specify p5 as rootfs and identify p7 as UDISK. The live mount table confirms p7 is mounted at `/mnt/sdcard` (vfat), including `/mnt/sdcard/Roms` and `.userdata`, while p6 is mounted at `/data` (ext4). Sysfs `PARTNAME` values conflict with the bootargs and mount table for p6/p7, so the implementation must inspect the on-disk GPT and the actual volume layout rather than trust the sysfs label. RG34XX has no eMMC. Linux's `removable=0` / non-removable setting for sdc0 must not be interpreted as eMMC media.
+The first Linkslot storage target is **sdc0 at MMIO `0x04020000`**. Round 16 directly bound `/sys/class/block/mmcblk0` through `mmc_host0` to DT node `/soc@03000000/sdmmc@04020000`; the kernel enumerated a 14.5 GiB SDHC card and mounted p7 at `/mnt/sdcard`. This confirms the controller used by the currently running system/game volume; it is not inferred from the Linux `mmcblk0` number alone.
+
+The p6/p7 names need care: sysfs `PARTNAME` reports p6 as `UDISK` and p7 as `primary`, while the bootargs `partitions=` string labels p6 `appfs` and p7 `UDISK`. The live mount table resolves the use: p6 is `/data` (ext4), while p7 is the vfat volume at `/mnt/sdcard` containing `Roms`, `SYSTEM`, `.userdata` and other card directories. The unified H700 bootstrap therefore selects the on-disk GPT name `primary` for p7; it must not choose p6 from the stale/conflicting `UDISK` label. The H700 driver has not yet read the physical GPT or VBR, so the live Linux mount observation and the host GPT test remain separate evidence. RG34XX's sdc0 is Linux-designated non-removable but is reported as SDHC, not eMMC.
 
 sdc2 is kept as an optional second-slot candidate. It exposes a card-detect GPIO and a `vqmmc-supply` reference, but no card was inserted in the capture. Its GPIO provider cells and exact regulator/clock initialization still require decoding. The profile intentionally records these properties as present-but-unresolved and does not provide pin numbers, polarity, pull, drive, or regulator voltage to a driver.
 
@@ -25,7 +27,7 @@ sdc1 successfully enumerated an SDIO DDR50 device and is excluded from the first
 
 From the device's debugfs capture, sdc0 was in pinctrl state `default`, with PF0–PF5 muxed to `sdc0`. sdc1 was also in `default`, with PG0–PG5 muxed to `sdc1`. sdc2 was in state `sleep`; its default pinctrl map describes PC1, PC5, PC6, PC8–PC11, PC13–PC16 and PC0, while the sleep map disables those pins. This means the r2 capture does not show sdc2 default pinmux actively driving the empty slot.
 
-The observed sdc0 and sdc1 pinconf entries are raw values `0x00002809` / `0x00000005`; the sdc2 default map mostly uses `0x00001e09` / `0x00000005`, with PC0 carrying `0x00000003`. These are vendor PIO encodings, not decoded electrical settings. Do not copy them into LK until the exact H700 PIO pinconf implementation has been inspected.
+The observed sdc0 and sdc1 pinconf entries are raw values `0x00002809` / `0x00000005`; the sdc2 default map mostly uses `0x00001e09` / `0x00000005`, with PC0 carrying `0x00000003`. These are vendor PIO encodings, not decoded electrical settings. Do not copy them into LK until the exact H700 PIO pinconf implementation has been inspected. The current `sunxi_h616_sdc0_pins.c` host-tested helper uses the generic H616 upstream ALT2 / 30 mA / pull-up reference, not these live raw vendor values.
 
 CCU debugfs showed `sdmmc0_mod` at 100 MHz and enabled, with `sdmmc0_bus` and `sdmmc0_rst` enabled. `sdmmc1_mod` was 200 MHz and enabled, with its bus/reset gates enabled. `sdmmc2_mod` showed an 800 kHz rate but was not enabled/prepared; its bus/reset gates were off. These module-clock rates are not card SDCLK rates: the Linux log reports sdc0's card bus at 50 MHz. The H616 CCU reference places MMC module clock config registers at `0x830/0x834/0x838` and the combined gate/reset register at `0x84c` (see the pinned [U-Boot clock definitions](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/arch/arm/include/asm/arch-sunxi/clock_sun50i_h6.h)).
 
@@ -120,7 +122,7 @@ This is still host emulation. The FAT sectors and directory contents are synthet
 
 It explicitly requires the caller to have enabled PIO/APB1 and powered the SD card. It does not set a guessed regulator voltage, change any unknown vendor PIO raw pinconf words, configure a high-speed timing mode, access another MMC controller, or expose any storage write method. It changes only the supplied PIO/CCU/controller registers and sends SD identification plus CMD17 read commands.
 
-The integrated fake-H700 regression models PIO, CCU, MMC command/response registers, FIFO, and a 1024-sector SDHC image. It checks the orchestration order, CSD-derived capacity, 400 kHz module clock, PF0–PF5 reference settings, GPT p6/p7 labels, six CMD17 reads, and absence of write commands. This is the highest-level host simulation so far; it is not physical RG34XX validation. Run `sh scripts/test-h700-sdc0-readonly-scan.sh`.
+The integrated fake-H700 regressions model PIO, CCU, MMC command/response registers, FIFO, and synthetic SDHC images. The current unified bootstrap test checks the orchestration order, CSD-derived capacity, 400 kHz module clock, PF0–PF5 reference settings, GPT p6 `UDISK` / p7 `primary` labels, FAT32 p7 mount, ROM/BIOS reads through the registered Libretro VFS v3 table, and absence of write commands. This remains host simulation, not physical RG34XX validation. Run `sh scripts/test-h700-sdc0-readonly-scan.sh`.
 
 ### End-to-end synthetic GPT over CMD17 (host-only)
 
@@ -168,11 +170,11 @@ The block argument is the sector LBA for SDHC/SDXC and LBA multiplied by 512 for
 
 The host regression models the register block and FIFO. It covers CMD17 flags (including absence of the write bit), SDHC/SDSC addressing, 512-byte transfer, response return, FIFO ordering/barriers, invalid buffers/ranges, FIFO/data timeouts, controller errors, and recovery timeout. Run `sh scripts/test-h700-sunxi-mmc-pio-read.sh`.
 
-**Evidence boundary:** this is a host-tested read primitive only. It has not initialized an H700 controller, negotiated a live SD card, read a physical sector, or been connected to the GPT parser. The current inventory does not yet provide a freestanding card-identification sequence or a validated live MMIO/clock/pinctrl setup. The next milestone is to build that initialization layer using the observed sdc0 profile, then run repeated read-only CID/CSD and LBA0/GPT reads on the RG34XX without enabling any write path.
+**Evidence boundary:** the host-tested read primitive and full software path have not yet been run against the physical controller. Round 16 does confirm the live controller mapping and Linux's successful use of sdc0, but no H700/LK CMD17 operation has read a physical sector. PIO/APB1 enablement, card power, MMIO mapping and pinconf translation still need a target implementation and validation.
 
 ## sdc0 read-only driver constraints
 
-The first controller implementation should target the `sdc0` register block at `0x04020000` only. The pinned [U-Boot sunxi MMC implementation](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/drivers/mmc/sunxi_mmc.c) provides a portable reference for command/response handling, polling, FIFO transfers through the AHB path, clock setup, and H616 FIFO threshold initialization. Its register map is in [sunxi_mmc.h](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/drivers/mmc/sunxi_mmc.h).
+The first controller implementation targets the confirmed `sdc0` register block at `0x04020000` only. The pinned [U-Boot sunxi MMC implementation](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/drivers/mmc/sunxi_mmc.c) provides a portable reference for command/response handling, polling, FIFO transfers through the AHB path, clock setup, and H616 FIFO threshold initialization. Its register map is in [sunxi_mmc.h](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/drivers/mmc/sunxi_mmc.h).
 
 Important H616-specific constraint: CLKCR bit 31 is `MASK_DATA0`. Mainline Linux's H616 config sets `mask_data0 = true`; a July 2026 U-Boot change describes an H616 initial `UPCLK_ONLY` clock-update timeout and masks DATA0 around clock-off/on update sequences. This is a shared H616 clock-update behavior, not an sdc2-only feature. Implement it in the common clock-update path for sdc0 as well, while preserving the failure cleanup and not assuming that the old pinned U-Boot code already contains the fix. References: [mainline Linux H616 config](https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux/+/fa2933aac170dd19c6a7f0d7b81a8f537e40915c/drivers/mmc/host/sunxi-mmc.c#1197), [U-Boot H6-family fix](https://www.mail-archive.com/u-boot%40lists.denx.de/msg579824.html).
 
@@ -202,7 +204,7 @@ Host tests cover FAT16, FAT32 and exFAT valid extents, BPB/VolumeLength extendin
 
 1. Implement a minimal, **read-only** sdc0 block path and validate SD command initialization without issuing any write/erase commands.
 2. Parse GPT read-only and locate p7 using the on-disk GPT rather than hardcoding the bootargs or kernel partition numbers.
-3. Read-only mount the intended UDISK filesystem and run ROM enumeration/readback checks.
+3. Use the live mapping to select GPT p7 (`PARTNAME=primary`, mounted by Linux at `/mnt/sdcard` despite the bootargs `UDISK` label), then read-only mount and run ROM enumeration/readback checks through the H700 path.
 4. Only then add sdc2 as a separately controlled optional slot, after decoding its GPIO, clock and regulator provider details and obtaining a capture with a card inserted.
 5. Keep FAT/exFAT save writes disabled until LFN directory creation, reader/writer synchronization, atomic replace, and durable block flush/barrier semantics are implemented and tested.
 
