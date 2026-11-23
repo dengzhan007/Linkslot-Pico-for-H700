@@ -10,6 +10,7 @@
 #include "newlib_syscalls.h"
 
 #include <errno.h>
+#include <reent.h>
 #include <limits.h>
 #include <stdint.h>
 #include <string.h>
@@ -179,6 +180,60 @@ void *realloc(void *ptr, size_t size)
     memcpy(p, ptr, copy_size);
     free(ptr);
     return p;
+}
+
+/*
+ * Newlib's public malloc/free/realloc/calloc wrappers call their reentrant
+ * counterparts. Override those as well, so internal libc callers cannot
+ * fall back to newlib's separate _sbrk_r-backed heap.
+ */
+void *_malloc_r(struct _reent *reent, size_t size)
+{
+    void *p = malloc(size);
+    if (!p && reent) {
+        reent->_errno = errno ? errno : ENOMEM;
+    }
+    return p;
+}
+
+void *_calloc_r(struct _reent *reent, size_t count, size_t size)
+{
+    void *p = calloc(count, size);
+    if (!p && reent) {
+        reent->_errno = errno ? errno : ENOMEM;
+    }
+    return p;
+}
+
+void *_realloc_r(struct _reent *reent, void *ptr, size_t size)
+{
+    void *p = realloc(ptr, size);
+    if (!p && size != 0 && reent) {
+        reent->_errno = errno ? errno : ENOMEM;
+    }
+    return p;
+}
+
+void _free_r(struct _reent *reent, void *ptr)
+{
+    (void)reent;
+    free(ptr);
+}
+
+/*
+ * The reentrant wrappers above use only the LK heap, whose free-list access
+ * is protected inside heap_alloc/heap_free. The H700 build must keep secondary
+ * CPUs parked until an SMP-safe heap lock is available. No separate newlib
+ * malloc pool is used, so these hooks intentionally carry no second lock.
+ */
+void __malloc_lock(struct _reent *reent)
+{
+    (void)reent;
+}
+
+void __malloc_unlock(struct _reent *reent)
+{
+    (void)reent;
 }
 
 /* No contiguous newlib heap arena is reserved. malloc-family calls use LK heap. */
