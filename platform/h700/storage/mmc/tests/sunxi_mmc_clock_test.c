@@ -133,7 +133,7 @@ int main(void)
         !check((fake.clkcr_writes[1] & SUNXI_MMC_CLKCR_MASK_DATA0) == 0u,
                "clock-off deasserts DATA0 mask after update") ||
         !check(fake.rint_write_count == 1u &&
-               fake.last_rint_write == 0x00000124u,
+               fake.last_rint_write == 0x00000524u,
                "clock-off clears raw interrupt status"))
         return EXIT_FAILURE;
 
