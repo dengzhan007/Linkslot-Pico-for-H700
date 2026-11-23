@@ -16,6 +16,7 @@ on:
       - "scripts/build-mgba-arm-none-eabi-vfs3.py"
       - "scripts/probe-mgba-newlib-whole-archive-link.py"
       - "scripts/test-mgba-vdir-vfs3-host.py"
+      - "scripts/test-h700-newlib-adapter.py"
       - "scripts/audit-libretro-vfs-v3-abi.py"
       - "platform/h700/**"
       - "scripts/build-h700-objects.sh"
@@ -122,10 +123,17 @@ jobs:
         run: |
           python3 scripts/build-mgba-arm-none-eabi-vfs3.py --source .ci/mgba-source --out build/audit-work/linkslot-1.0.36/mgba-arm-none-eabi --patch-script scripts/build-mgba-libretro-vfs3-static.py
 
+      - name: Test H700 newlib adapter (host regression + AArch32 compile)
+        run: |
+          python3 scripts/test-h700-newlib-adapter.py \
+            --source . \
+            --out build/audit-work/linkslot-1.0.36/h700-newlib-adapter
+
       - name: Diagnose whole-archive mGBA link against newlib (not LK)
         run: |
           python3 scripts/probe-mgba-newlib-whole-archive-link.py \
             --archive build/audit-work/linkslot-1.0.36/mgba-arm-none-eabi/mgba_libretro-vfs3-arm-none-eabi.a \
+            --adapter-object build/audit-work/linkslot-1.0.36/h700-newlib-adapter/newlib_syscalls-arm-none-eabi.o \
             --out build/audit-work/linkslot-1.0.36/mgba-newlib-link
 
       - name: Probe AArch32 LK-as-BL33 image and vector layout
