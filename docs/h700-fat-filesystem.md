@@ -26,6 +26,10 @@ Do **not** import the adjacent `sd_fat.c/.h` as an H700 driver. It depends on Me
 
 `scripts/test-h700-fat-compile.py` compiles the three production C files and both upstream host test harnesses with C11, `-Wall -Wextra -Werror`. This is only a compile gate. The next gate is to run the host harnesses against generated FAT32 and exFAT images, then add failure-injection and durability-order tests before exposing writes to Linkslot.
 
+## Concurrency audit
+
+The imported FAT writer originally guarded its write critical section only under `__arm__`. H700 is AArch64, so that condition left `wr_lock()` / `wr_unlock()` as no-ops on the target. The H700 port now enables the same LK mutex path for both `__arm__` and `__aarch64__`. This addresses writer-vs-writer serialization only; readers are not yet coordinated with writers, and the lazy mutex initialization / full runtime behavior still require target-LK integration validation.
+
 ## Not implemented
 
 - H700 SD/MMC host driver, clocks, pinmux, card power and card-detect.
