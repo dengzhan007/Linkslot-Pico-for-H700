@@ -443,7 +443,7 @@ static int write_entry(fat_vol *v, uint32_t lba, int ent, const uint8_t rec[32])
  * chain entries of a chained file are left, exFAT ignores FAT contents of free clusters) */
 static void free_clusters(fat_vol *v, bm_t *bm, uint32_t first, int nofat, uint32_t len)
 {
-	uint32_t n = len ? (len + cbytes(v) - 1u) / cbytes(v) : 0u, i, c = first;
+	uint32_t cb = cbytes(v), n = len ? 1u + (len - 1u) / cb : 0u, i, c = first;
 	uint8_t fatb[512]; uint32_t fatb_sec = 0xFFFFFFFFu;
 	for (i = 0; i < n && clus_ok(v, c); i++) {
 		uint32_t nx = nofat ? c + 1u : fat_next(v, c, fatb, &fatb_sec);
@@ -527,7 +527,7 @@ static int update_stream(fat_vol *v, uint32_t str_lba, int str_ent, uint32_t new
  * and has no length to maintain. */
 static int dir_grow(fat_vol *v, bm_t *bm, fat_dir *dir, uint32_t str_lba, int str_ent)
 {
-	uint32_t cb = cbytes(v), nclus = dir->ex_len ? (dir->ex_len + cb - 1u) / cb : 0u, nc, s;
+	uint32_t cb = cbytes(v), nclus = dir->ex_len ? 1u + (dir->ex_len - 1u) / cb : 0u, nc, s;
 	uint8_t zb[512];
 	ex_memset(zb, 0, 512);
 	if (dir->ex_nofat && dir->ex_len) {
@@ -552,6 +552,7 @@ static int dir_grow(fat_vol *v, bm_t *bm, fat_dir *dir, uint32_t str_lba, int st
 	}
 	for (s = 0; s < v->ex_spc; s++) if (wsec(v, clus_lba(v, nc) + s, zb) != 0) return -1;
 	if (str_lba) {
+		if (dir->ex_len > 0xFFFFFFFFu - cb) return -1;
 		if (update_stream(v, str_lba, str_ent, dir->ex_len + cb, dir->ex_nofat) != 0) return -1;
 		dir->ex_len += cb;
 	}
@@ -692,7 +693,7 @@ int exfat_wr_put(fat_vol *v, const char *dirpath, const char *name, const void *
 	if (dir_resolve(v, dirpath, &dir, &str_lba, &str_ent) != 0) return -3;
 	bm.v = v; bm.valid = 0; bm.dirty = 0;
 	cb = cbytes(v);
-	need = len ? (len + cb - 1u) / cb : 0u;
+	need = len ? 1u + (len - 1u) / cb : 0u;
 	/* allocate: a contiguous run first (no FAT chain), else a chain */
 	if (need) {
 		first = bm_find_run(&bm, need);
@@ -704,7 +705,7 @@ int exfat_wr_put(fat_vol *v, const char *dirpath, const char *name, const void *
 			nofat = 0;
 			for (i = 0; i < need; i++) {
 				while (c < v->total_clusters + 2u && bm_get(&bm, c) != 0) c++;
-				if (c >= v->total_clusters + 2u) { if (first) free_clusters(v, &bm, first, 0, got * cb); bm_flush(&bm); return -4; }
+				if (c >= v->total_clusters + 2u) { if (first) free_clusters(v, &bm, first, 0, len); bm_flush(&bm); return -4; }
 				if (bm_set(&bm, c, 1) != 0 || fat_set(v, c, 0xFFFFFFFFu) != 0) return -4;
 				if (prev && fat_set(v, prev, c) != 0) return -4;
 				if (!first) first = c;
@@ -772,12 +773,18 @@ int exfat_wr_mkpath(fat_vol *v, const char *path)
 	while (*p) {
 		char child[256]; int ci = 0, n = 0, i;
 		fat_dir d;
+		if (curlen < 1 || curlen > 254) return -4;
 		for (i = 0; i < curlen; i++) child[ci++] = cur[i];
-		if (curlen > 1) child[ci++] = '/';
+		if (curlen > 1) {
+			if (ci >= 255) return -4;
+			child[ci++] = '/';
+		}
+		if (ci >= 255 && *p) return -4;
 		while (*p && *p != '/' && ci < 255) { child[ci++] = *p++; n++; }
+		if (*p && *p != '/') return -4; /* do not silently truncate a component */
 		child[ci] = 0;
 		while (*p == '/') p++;
-		if (n == 0) break;
+		if (n == 0) return -4;
 		/* looked for twice: a read that failed once does not make a second folder */
 		if (exfat_opendir(v, child, &d) != 0 && exfat_opendir(v, child, &d) != 0) {
 			char comp[256]; int k = 0;
