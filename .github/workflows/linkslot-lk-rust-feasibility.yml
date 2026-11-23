@@ -150,14 +150,14 @@ jobs:
         run: |
           python3 scripts/probe-mgba-static-api-link.py \
             --archive build/audit-work/linkslot-1.0.36/mgba-arm-none-eabi/mgba_libretro-vfs3-arm-none-eabi.a \
-            --adapter-object build/audit-work/linkslot-1.0.36/mgba-static-api-link/mgba-static-api-and-newlib-adapter.o \
+            --adapter-object build/audit-work/linkslot-1.0.36/h700-newlib-adapter/newlib_syscalls-arm-none-eabi.o \
             --out build/audit-work/linkslot-1.0.36/mgba-static-api-link
 
       - name: Diagnose whole-archive mGBA link against newlib (not LK)
         run: |
           python3 scripts/probe-mgba-newlib-whole-archive-link.py \
             --archive build/audit-work/linkslot-1.0.36/mgba-arm-none-eabi/mgba_libretro-vfs3-arm-none-eabi.a \
-            --adapter-object build/audit-work/linkslot-1.0.36/h700-newlib-adapter/newlib_syscalls-arm-none-eabi.o \
+            --adapter-object build/audit-work/linkslot-1.0.36/mgba-static-api-link/mgba-static-api-and-newlib-adapter.o \
             --out build/audit-work/linkslot-1.0.36/mgba-newlib-link
 
       - name: Probe AArch32 LK-as-BL33 image and vector layout
