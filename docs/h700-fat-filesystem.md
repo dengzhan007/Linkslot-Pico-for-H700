@@ -24,11 +24,20 @@ Do **not** import the adjacent `sd_fat.c/.h` as an H700 driver. It depends on Me
 
 ## Current validation
 
-`scripts/test-h700-fat-compile.py` compiles the three production C files and both upstream host test harnesses with C11, `-Wall -Wextra -Werror`. This is only a compile gate. The next gate is to run the host harnesses against generated FAT32 and exFAT images, then add failure-injection and durability-order tests before exposing writes to Linkslot.
+- `scripts/test-h700-fat-compile.py` compiles all three production C files and the host test harnesses with C11, `-Wall -Wextra -Werror`. It also forces the `__aarch64__` preprocessor branch in `fat_wr.c` against narrow LK mutex/critical-section declarations, so the AArch64 writer-lock branch is not silently compiled out.
+- Full feasibility workflow [45133921000](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45133921000) passed. Its real-image test generated a 128 MiB FAT32 image and 256 MiB exFAT images (4 KiB and 128 KiB clusters). FAT32 reader checks passed for VFAT long-name enumeration, multi-cluster reads and odd-offset reads. exFAT checks passed for long-name ROM reads, partial reads, mkdir, create/replace, 32 KiB and 1 MiB writes, readback, and `fsck.exfat -n` on both cluster sizes.
+- The successful run artifact is [14798564036](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45133921000), 380,273,334 bytes; SHA-256 `17a71fdada4af8d4b1e3eb651a1aba112c1688b81570037d6e35f81a6b53f8cf`.
+- A further FAT32 writer regression now covers VFAT long-name create/replace/delete, empty files and invalid path rejection; it was added after that run and is awaiting the next CI result. Do not count it as passed until the current run completes.
+
+This is host-image validation, not hardware validation. The test callbacks use ordinary host file I/O. They do not exercise the H700 SD/MMC controller, cache flush/barrier semantics, actual card power loss, or Linkslot's VFS handle table. Failure-injection and write-order/power-cut tests are still required before exposing writes to Linkslot.
 
 ## Concurrency audit
 
 The imported FAT writer originally guarded its write critical section only under `__arm__`. H700 is AArch64, so that condition left `wr_lock()` / `wr_unlock()` as no-ops on the target. The H700 port now enables the same LK mutex path for both `__arm__` and `__aarch64__`. This addresses writer-vs-writer serialization only; readers are not yet coordinated with writers, and the lazy mutex initialization / full runtime behavior still require target-LK integration validation.
+
+## Concurrency audit
+
+The imported FAT writer originally guarded its write critical section only under `__arm__`. H700 is AArch64, so that condition left `wr_lock()` / `wr_unlock()` as no-ops on the target. The H700 port now enables the LK mutex path for both `__arm__` and `__aarch64__`; the AArch64 preprocessor branch compiles in CI against stub declarations matching the pinned LK API. This is not yet a target-LK link or runtime test. It serializes writer-vs-writer operations only: readers are not coordinated with writers, and lazy mutex initialization via local critical-section masking is not an SMP-safety proof.
 
 ## Not implemented
 
