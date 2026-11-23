@@ -243,6 +243,11 @@ def main():
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     source, out = args.source.resolve(), args.out.resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    run(["cargo", "test", "--manifest-path", str(source / "Cargo.toml"),
+         "-p", "slot-i18n", "--locked"],
+        env={"CARGO_TARGET_DIR": str(out / "upstream-target")},
+        log=out / "upstream-host-tests.log")
     key_count, domain_count, entries_per_language = build_candidate(source, out)
     report = [
         "# slot-i18n no_std static-table feasibility\n\n",
@@ -250,6 +255,7 @@ def main():
         "Domains: " + str(domain_count) + "; unique keys: " + str(key_count) +
         "; entries per language: " + str(entries_per_language) + ".\n",
         "Build-time JSON checks: schema, language metadata, UTF-8/newline policy, non-empty values, bilingual key parity, global key uniqueness and placeholder parity all passed.\n",
+        "Unmodified upstream slot-i18n unit and translations integration tests passed on host.\n",
         "Runtime representation: read-only static slices; no serde_json, HashMap or OnceLock in the candidate. t_args/placeholders/entries use alloc.\n\n"
     ]
     for target in TARGETS:
