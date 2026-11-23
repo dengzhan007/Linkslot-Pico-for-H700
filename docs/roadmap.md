@@ -29,6 +29,9 @@
 - [x] 静态 Libretro API registry host-only 探针通过：两套前缀化 mock core 在 AArch32/AArch64 静态链接，主机回调/状态/内存往返通过；未构建真实 emulator core。
 - [x] 真实 mGBA（固定 manifest commit）AArch32 static Libretro archive 编译通过：Linux 与 Generic 两版均有 115 个对象，25/25 Libretro exports 前缀化；Generic 外部符号从 81 降至 67。
 - [x] mGBA VFS v3 文件/目录 AArch32 archive 通过：114 个对象、25/25 exports 前缀化；旧 vfs-file/vfs-dirent 对象和 POSIX/stdio/host config directory 依赖移除，真正外部符号 51 项。
+- [x] 同一 mGBA VFS v3 变体使用 arm-none-eabi GCC/newlib 构建通过：94 个对象、ELF32/ARM EABI5、52 项真正外部符号；这仍是 static archive，未与 newlib/LK 做 whole-archive link。
+- [ ] 用 newlib/libm/libgcc/libnosys 做 whole-archive 链接探针，区分 newlib 已提供符号与 H700/LK runtime adapter。
+
 - [ ] 同一 mGBA VFS v3 变体改用 arm-none-eabi GCC/newlib 编译，验证是否完全脱离 glibc sysroot；再将 51 个外部符号映射到 LK libc/libm/EABI/RTC/log。
 - [ ] Linkslot `slot-retro::environment()` 仍需实现真实 Libretro VFS v3；H700 SD 块设备与 FAT/exFAT 文件/目录 backend 仍未实现。
 
