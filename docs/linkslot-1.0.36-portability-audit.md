@@ -190,6 +190,22 @@ void heap_free(void *ptr);
 - GammaOS Pico 参考分支的 `emu/gba/gba_core_abi.h` 描述了一个版本化 C import/export table；但源码文件明确写着“contract definition / not yet wired into the build”。它仅是 ABI 设计参考，不是已完成的通用核心动态加载功能。
 - 该参考的 `0x4e400000` 核心槽位与 MTK Pico 的地址/内存布局绑定，**不得用于 H700**；H700 需要在完成 RAM ownership 审计后单独规划核心代码、BSS、ROM、状态和 JIT 区域。
 
+### 第三轮：slot-i18n 静态表 no_std 验证（2026-11-23）
+
+- Workflow run：[45106548485](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45106548485)，commit `cee3779a546630bfcd39e8d516ae1a0f56db8cfa`，结论 success。
+- 固定源仍是 `upstream/linkslot` 的用户提供 ZIP 快照；原文件没有修改。
+- 从原 crate 的 6 个 domain 和 12 份 `translations/*.json` 生成临时候选；构建期校验 schema/language 元数据、UTF-8/BOM/换行、非空字符串、双语 key 集一致、跨 domain key 唯一、placeholder 一致性：**1,763 个唯一 key，每种语言各 1,763 条，全部通过**。
+- 候选在运行时使用只读静态 slice；不依赖 `serde_json`、`HashMap` 或 `OnceLock`。`t_args`、`placeholders`、`entries` 保留原接口形状并使用 `alloc` 的 `String/Vec`。
+- 原版 `slot-i18n` host tests：**9 个单元测试 + 9 个 translations 集成测试，18/18 通过**。
+- 临时 no_std 静态表候选：**13/13 host tests 通过**（复制的原单元测试 + 两个完整语言表比对测试 + domain/language 条目数测试）。
+- 候选 `cargo check` 对 `armv7a-none-eabi` 和 `aarch64-unknown-none` 均通过。
+- 该结果说明 Linkslot 的翻译数据可以从运行时 JSON 解析改成构建期静态表，并保持已测试的查找/回退/占位符行为。没有做完整 workspace/no_std 转换，也没有测 UI 的字体字形、绘制或 H700 运行时。
+
+验证产物：
+- [第三轮 GitHub Actions 成功运行](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45106548485)
+- Artifact ID：`14788005484`，名称 `linkslot-lk-rust-feasibility-45106548485`。
+- [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16) 仍为 draft。
+
 ### AArch32 EHABI 说明
 
 Rust 1.96 的 AArch32 `alloc` 静态库含有 `__aeabi_unwind_cpp_pr0` 符号引用。已使用 `readelf -Wr` 检查全部引用，确认均为 `.ARM.exidx` 上的 `R_ARM_NONE` 元数据 relocation，不是可执行代码调用或 `PREL31` relocation。仅在本次 `panic=abort`、无异常展开的 ABI 探测中，通过 linker `--defsym=__aeabi_unwind_cpp_pr0=0` 解析该元数据标记。
@@ -198,14 +214,15 @@ Rust 1.96 的 AArch32 `alloc` 静态库含有 `__aeabi_unwind_cpp_pr0` 符号引
 
 ### 验证边界
 
-- 两个 Linkslot crate 都是在临时隔离副本中测试；`upstream/linkslot` 快照没有修改。
-- 没有把完整 workspace 改成 `no_std`；UI、存储、网络、图形、Libretro loader 尚未接入。
+- `slot-input`、`slot-model`、`slot-i18n` 均在临时隔离候选中测试；`upstream/linkslot` 快照没有修改。
+- 没有把完整 workspace 改成 `no_std`；UI、存储、网络、图形、Libretro loader 尚未接入。`slot-i18n` 的 1,763×2 静态翻译表只完成 host 生成/编译/行为测试，未在设备 UI 上运行。
 - LK allocator 薄桩不代表真实 LK heap 行为，尤其没有确认并发、释放合并、oom 行为和 heap 初始化时序。
 - 没有验证 LK 启动、栈、EL、MMU、异常/中断、调度或 H700 硬件驱动。
 - 没有生成可刷写镜像、写 SD 或执行 payload。
 
 工作流和产物：
 - [第二轮 GitHub Actions 成功运行](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45103281417)
+- [第三轮 GitHub Actions 成功运行（含 slot-i18n 与 A32 BL33 布局）](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45106548485)
 - [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16)
 
 
