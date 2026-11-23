@@ -45,7 +45,7 @@ permissions:
 
 jobs:
   storage-host-regression:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -70,7 +70,7 @@ jobs:
           sh scripts/test-h700-sdc0-fat-vfs-bootstrap.sh
 
   compile-aarch64-objects:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
