@@ -106,6 +106,55 @@ struct VFile* VFileOpenLibretro(const char* path, int flags);
 #error "Can't build VFS subsystem without a VFile backend"
 """)
 
+    # The actual mGBA config path uses ConfigurationReadVFile; disable
+    # inih's unused FILE*-based convenience wrappers in this no-stdio build.
+    ini_c = source / "src/third-party/inih/ini.c"
+    replace_once(ini_c, """/* See documentation in header file. */
+int ini_parse_file(FILE* file, ini_handler handler, void* user)
+{
+    return ini_parse_stream((ini_reader)fgets, file, handler, user);
+}
+
+/* See documentation in header file. */
+int ini_parse(const char* filename, ini_handler handler, void* user)
+{
+    FILE* file;
+    int error;
+
+    file = fopen(filename, "r");
+    if (!file)
+        return -1;
+    error = ini_parse_file(file, handler, user);
+    fclose(file);
+    return error;
+}
+
+/* An ini_reader function to read the next line from a string buffer. This
+""", """#ifndef ENABLE_LIBRETRO_VFS_REQUIRED
+/* See documentation in header file. */
+int ini_parse_file(FILE* file, ini_handler handler, void* user)
+{
+    return ini_parse_stream((ini_reader)fgets, file, handler, user);
+}
+
+/* See documentation in header file. */
+int ini_parse(const char* filename, ini_handler handler, void* user)
+{
+    FILE* file;
+    int error;
+
+    file = fopen(filename, "r");
+    if (!file)
+        return -1;
+    error = ini_parse_file(file, handler, user);
+    fclose(file);
+    return error;
+}
+#endif
+
+/* An ini_reader function to read the next line from a string buffer. This
+""")
+
     directory_c = r'''/* mGBA VDir backend using the frontend's Libretro VFS v3. */
 #include "libretro-vfs.h"
 #include <mgba-util/vfs.h>
@@ -348,7 +397,8 @@ def main():
         raise RuntimeError("Libretro exports check failed: missing=" + repr(missing) + " unprefixed=" + repr(unprefixed))
     forbidden = sorted(unames & {
         "opendir", "readdir", "closedir", "rewinddir", "stat", "mkdir", "remove",
-        "fopen", "fopen64", "fread", "fwrite", "fseek", "ftell", "fflush", "fclose"
+        "fopen", "fopen64", "fread", "fwrite", "fseek", "ftell", "fflush", "fclose",
+        "getcwd", "getenv"
     })
     if forbidden:
         raise RuntimeError("POSIX dirent/stdio symbols remain: " + ", ".join(forbidden))
