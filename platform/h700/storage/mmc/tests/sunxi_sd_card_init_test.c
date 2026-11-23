@@ -39,6 +39,7 @@ struct fake_mmc {
     int inject_r1_error;
     int busy_stuck;
     int write_command_seen;
+    int inject_voltage_change_done;
 };
 
 static void set_csd_bits(uint32_t words[4],
@@ -169,6 +170,9 @@ static void fake_write32(void *context, uint32_t offset, uint32_t value)
         if (!fake->omit_command_done)
             fake->regs[SUNXI_MMC_REG_RINT / 4u] |=
                 SUNXI_MMC_RINT_COMMAND_DONE;
+        if (fake->inject_voltage_change_done)
+            fake->regs[SUNXI_MMC_REG_RINT / 4u] |=
+                SUNXI_MMC_RINT_VOLTAGE_CHANGE_DONE;
         return;
     }
 
@@ -292,6 +296,25 @@ static int test_sdhc_identification_sequence(void)
     CHECK((fake.regs[SUNXI_MMC_REG_GCTRL / 4u] &
            SUNXI_MMC_GCTRL_DMA_ENABLE) == 0u,
           "IDMA remains disabled");
+    return 1;
+}
+
+static int test_voltage_change_done_is_not_controller_error(void)
+{
+    struct fake_mmc fake;
+    struct sunxi_mmc_io io;
+    struct sunxi_sd_init_host host;
+    struct sunxi_sd_card_info card;
+
+    fake_init(&fake, 1);
+    fake.inject_voltage_change_done = 1;
+    io = make_io(&fake);
+    host = make_host(&io, &fake);
+
+    CHECK(sunxi_sd_card_identify(&host, &card) == SUNXI_SD_INIT_OK,
+          "normal voltage-change-done status does not fail command polling");
+    CHECK(fake.command_count == 10u,
+          "card initialization continues through all commands");
     return 1;
 }
 
@@ -422,6 +445,7 @@ static int test_busy_timeout_after_select(void)
 int main(void)
 {
     if (!test_sdhc_identification_sequence() ||
+        !test_voltage_change_done_is_not_controller_error() ||
         !test_sdsc_byte_addressed_and_cmd16() ||
         !test_rejects_non_v2_or_wrong_if_cond_echo() ||
         !test_ocr_timeout() ||
