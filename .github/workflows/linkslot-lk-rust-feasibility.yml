@@ -36,6 +36,7 @@ on:
       - "scripts/test-h700-gpt-readonly.sh"
       - "scripts/test-h700-sunxi-mmc-clock.sh"
       - "scripts/test-h700-sunxi-mmc-module-clock.sh"
+      - "scripts/test-h700-sunxi-mmc-pio-read.sh"
       - "platform/h700/runtime/mgba_static.rs"
       - "platform/h700/runtime/tests/mgba_static_stub.c"
       - "scripts/probe-mgba-static-api-link.py"
@@ -168,6 +169,9 @@ jobs:
 
       - name: Test H616 MMC module clock divider calculator
         run: sh scripts/test-h700-sunxi-mmc-module-clock.sh
+
+      - name: Test H700 read-only CMD17 PIO sector read
+        run: sh scripts/test-h700-sunxi-mmc-pio-read.sh
 
       - name: Host-compile H700 FAT16/FAT32 and exFAT storage candidate
         run: |

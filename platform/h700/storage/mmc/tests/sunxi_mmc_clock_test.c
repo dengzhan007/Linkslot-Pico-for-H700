@@ -81,6 +81,7 @@ static struct sunxi_mmc_io make_io(struct fake_mmc *fake)
     io.write32 = fake_write32;
     io.time_ms = fake_time_ms;
     io.delay_us = fake_delay_us;
+    io.read_barrier = NULL;
     return io;
 }
 

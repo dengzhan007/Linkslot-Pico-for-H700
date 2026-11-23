@@ -46,12 +46,42 @@
 #define SUNXI_MMC_CLKCR_MASK_DATA0  (1u << 31)
 
 /* CMD */
-#define SUNXI_MMC_CMD_WAIT_PRE_OVER (1u << 13)
-#define SUNXI_MMC_CMD_UPCLK_ONLY    (1u << 21)
-#define SUNXI_MMC_CMD_START         (1u << 31)
+#define SUNXI_MMC_CMD_RESP_EXPIRE       (1u << 6)
+#define SUNXI_MMC_CMD_CHK_RESPONSE_CRC (1u << 8)
+#define SUNXI_MMC_CMD_DATA_EXPIRE      (1u << 9)
+#define SUNXI_MMC_CMD_WRITE            (1u << 10)
+#define SUNXI_MMC_CMD_AUTO_STOP         (1u << 12)
+#define SUNXI_MMC_CMD_WAIT_PRE_OVER    (1u << 13)
+#define SUNXI_MMC_CMD_UPCLK_ONLY       (1u << 21)
+#define SUNXI_MMC_CMD_START            (1u << 31)
 
 /* RINT */
-#define SUNXI_MMC_RINT_SDIO         (1u << 16)
+#define SUNXI_MMC_RINT_RESP_ERROR          (1u << 1)
+#define SUNXI_MMC_RINT_COMMAND_DONE        (1u << 2)
+#define SUNXI_MMC_RINT_DATA_OVER           (1u << 3)
+#define SUNXI_MMC_RINT_RESP_CRC_ERROR      (1u << 6)
+#define SUNXI_MMC_RINT_DATA_CRC_ERROR      (1u << 7)
+#define SUNXI_MMC_RINT_RESP_TIMEOUT        (1u << 8)
+#define SUNXI_MMC_RINT_DATA_TIMEOUT        (1u << 9)
+#define SUNXI_MMC_RINT_VOLTAGE_CHANGE_DONE (1u << 10)
+#define SUNXI_MMC_RINT_FIFO_RUN_ERROR      (1u << 11)
+#define SUNXI_MMC_RINT_HARDWARE_LOCKED     (1u << 12)
+#define SUNXI_MMC_RINT_START_BIT_ERROR     (1u << 13)
+#define SUNXI_MMC_RINT_END_BIT_ERROR       (1u << 15)
+#define SUNXI_MMC_RINT_SDIO               (1u << 16)
+#define SUNXI_MMC_RINT_ERROR_MASK \
+    (SUNXI_MMC_RINT_RESP_ERROR | SUNXI_MMC_RINT_RESP_CRC_ERROR | \
+     SUNXI_MMC_RINT_DATA_CRC_ERROR | SUNXI_MMC_RINT_RESP_TIMEOUT | \
+     SUNXI_MMC_RINT_DATA_TIMEOUT | SUNXI_MMC_RINT_VOLTAGE_CHANGE_DONE | \
+     SUNXI_MMC_RINT_FIFO_RUN_ERROR | SUNXI_MMC_RINT_HARDWARE_LOCKED | \
+     SUNXI_MMC_RINT_START_BIT_ERROR | SUNXI_MMC_RINT_END_BIT_ERROR)
+
+/* STATUS */
+#define SUNXI_MMC_STATUS_FIFO_EMPTY       (1u << 2)
+#define SUNXI_MMC_STATUS_FIFO_FULL        (1u << 3)
+#define SUNXI_MMC_STATUS_CARD_DATA_BUSY   (1u << 9)
+#define SUNXI_MMC_STATUS_DATA_FSM_BUSY    (1u << 10)
+#define SUNXI_MMC_STATUS_FIFO_LEVEL(value) (((value) >> 17) & 0x3fffu)
 
 /* GCTRL */
 #define SUNXI_MMC_GCTRL_SOFT_RESET  (1u << 0)

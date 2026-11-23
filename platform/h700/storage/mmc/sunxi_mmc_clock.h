@@ -10,6 +10,7 @@ struct sunxi_mmc_io {
     void (*write32)(void *context, uint32_t offset, uint32_t value);
     uint64_t (*time_ms)(void *context);
     void (*delay_us)(void *context, uint32_t delay);
+    void (*read_barrier)(void *context);
 };
 
 enum sunxi_mmc_clock_result {

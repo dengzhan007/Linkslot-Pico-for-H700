@@ -78,6 +78,16 @@ With the test fixture's 24 MHz OSC and **600 MHz effective PLL6 input** (a fixtu
 
 These are module-clock examples, not direct card-SDCLK claims. The calculator does not enable the CCU bus gate, deassert reset, configure PIO, update CLKCR, issue a card command, or access storage. A future sdc0 driver must obtain the effective PLL6 rate from the actual platform clock state rather than assuming 600 MHz. Run `sh scripts/test-h700-sunxi-mmc-module-clock.sh` for the host regression and optional ASan/UBSan pass.
 
+### Single-sector read primitive (host-only, not a complete MMC driver)
+
+`sunxi_mmc_pio_read.c` adds a deliberately narrow CMD17 operation for one 512-byte sector. It uses the AHB-accessed CPU FIFO path and keeps IDMA disabled; it never exposes arbitrary command submission and has no write, erase, or multi-block-write operation. The caller must already have completed controller initialization, card identification/OCR negotiation, RCA selection, card selection, bus-width setup, and clock setup. It then supplies the known card capacity and whether the card uses block addressing (SDHC/SDXC) or byte addressing (SDSC).
+
+The block argument is the sector LBA for SDHC/SDXC and LBA multiplied by 512 for SDSC. Each request validates the LBA, 32-bit command-argument range, buffer capacity, and 4-byte alignment. The FIFO path drains exactly 128 words, checks the controller RINT error mask, and waits separately for COMMAND_DONE and DATA_OVER. Timeout/error recovery resets controller/FIFO/DMA state and executes the H616 UPCLK_ONLY clock update with MASK_DATA0 asserted and cleared on success or timeout.
+
+The host regression models the register block and FIFO. It covers CMD17 flags (including absence of the write bit), SDHC/SDSC addressing, 512-byte transfer, response return, FIFO ordering/barriers, invalid buffers/ranges, FIFO/data timeouts, controller errors, and recovery timeout. Run `sh scripts/test-h700-sunxi-mmc-pio-read.sh`.
+
+**Evidence boundary:** this is a host-tested read primitive only. It has not initialized an H700 controller, negotiated a live SD card, read a physical sector, or been connected to the GPT parser. The current inventory does not yet provide a freestanding card-identification sequence or a validated live MMIO/clock/pinctrl setup. The next milestone is to build that initialization layer using the observed sdc0 profile, then run repeated read-only CID/CSD and LBA0/GPT reads on the RG34XX without enabling any write path.
+
 ## sdc0 read-only driver constraints
 
 The first controller implementation should target the `sdc0` register block at `0x04020000` only. The pinned [U-Boot sunxi MMC implementation](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/drivers/mmc/sunxi_mmc.c) provides a portable reference for command/response handling, polling, FIFO transfers through the AHB path, clock setup, and H616 FIFO threshold initialization. Its register map is in [sunxi_mmc.h](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/drivers/mmc/sunxi_mmc.h).
