@@ -111,6 +111,7 @@ static int test_pio_apb1_clock_selects_osc24m(void)
     const uint32_t apb1_mask = 0x03000303u;
 
     fake_init(&fake, &mmc, &platform);
+    platform.pll6_effective_hz = 0u; /* PIO/APB1 path does not use PLL. */
     fake.ccu_regs[0x520u / 4u] = initial;
 
     CHECK(sunxi_h616_pio_enable_apb1_24m(&platform) == 0,
@@ -153,6 +154,7 @@ static int test_400khz_clock_programming(void)
     uint32_t clkcr = 0x0000045au;
 
     fake_init(&fake, &mmc, &platform);
+    platform.pll6_effective_hz = 0u; /* 400 kHz uses HOSC only. */
     fake.mmc_regs[SUNXI_MMC_REG_CLKCR / 4u] = clkcr;
 
     CHECK(sunxi_h616_sdc0_set_clock_hz(&platform, 400000u, 20u) == 0,
