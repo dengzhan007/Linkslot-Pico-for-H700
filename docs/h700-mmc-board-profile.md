@@ -22,6 +22,14 @@ sdc2 is kept as an optional second-slot candidate. It exposes a card-detect GPIO
 
 sdc1 successfully enumerated an SDIO DDR50 device and is excluded from the first storage implementation.
 
+### Linkslot ROM-root compatibility
+
+The round-16 Linux mount inventory reports the physical p7 volume contains a top-level `Roms/` directory. The pinned Linkslot 1.0.36 snapshot instead defines `Games/` as its canonical library root: `slot-store::scan` searches `Games/<platform>/`, and `slot-model::layout` names the root `Games`. The current H700 read-only VFS provider also allows `Games`, not `Roms`.
+
+This is a real media-layout compatibility gap, separate from MMC/GPT/FAT correctness. A successful future block read or VFS mount will not make the existing `Roms/` tree visible to Linkslot by itself. ADR-008 keeps `Games/` as the project's canonical layout; do not silently rename the canonical path or add a C-only whitelist alias and claim the problem is solved. The current Linkslot scanner still uses Rust `std::fs`, and the target Rust storage/filesystem adapter has not been integrated with the C VFS backend.
+
+Before claiming existing-card compatibility, implement and test a single path-translation/migration policy across library scanning, ROM launch paths, BIOS/system lookup, saves and states. A root alias is acceptable only if the policy is applied consistently to every filesystem consumer and safely handles the case where both `Games/` and `Roms/` already exist. Until then, treat `Roms/` support as an explicit open integration item; the canonical new layout remains `Games/`.
+
 
 ## Live pin and clock observations
 
