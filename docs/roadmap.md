@@ -10,7 +10,8 @@
 - [x] 固化关机、手动电池存档、手动云同步、家庭 LAN Web 和调试规则。
 - [x] 确认目标设备无 eMMC，只设计 SD 卡启动，不做旧系统自动回退。
 - [x] 建立 RG34XX / Allwinner H700 Cortex-A53 的 AArch64 freestanding C、C++ 与汇编编译检查和 CI。
-- [ ] 等待 Linkslot 即将发布的大版本后，重新锁定上游 commit 并完成逐 crate 复用审计。
+- [x] 获取并归档用户提供的 linkSlot 1.0.36 源码快照（`upstream/linkslot` @ `8590d6ff`，SHA256 清单完整）；原始 ZIP 无 `.git`，因此真实上游 commit/tag 仍不可得。
+- [ ] 完成 Linkslot 1.0.36 逐 crate 可移植性审计，验证 AArch32/AArch64 LK runtime 选型与 Rust `no_std`/`alloc` 静态库可行性；在此之前不导入整个 workspace/subtree。
 - [x] 确认目标 SoC 是 Allwinner H700，不是 Rockchip RK3566；AArch64 编译 CPU target 已修正为 Cortex-A53。
 - [x] 锁定第一台实机为 Anbernic RG34XX（非 SP），建立 Allwinner H700 / Cortex-A53 硬件基线。
 
