@@ -18,6 +18,21 @@
 #include <sys/types.h>
 
 #define H700_FATAL_HEAP_UNSAFE 0x7001
+#define H700_ALLOC_MAGIC 0x48373030u
+
+typedef struct __attribute__((aligned(16))) {
+    size_t size;
+    uint32_t magic;
+    uint32_t reserved[2];
+} h700_alloc_header_t;
+
+_Static_assert((sizeof(h700_alloc_header_t) % 16) == 0,
+               "H700 allocation header must preserve 16-byte alignment");
+
+static h700_alloc_header_t *allocation_header(void *ptr)
+{
+    return ((h700_alloc_header_t *)ptr) - 1;
+}
 
 static struct h700_newlib_ops g_ops;
 static int g_ops_installed;
@@ -25,7 +40,7 @@ static int g_ops_installed;
 int h700_newlib_install(const struct h700_newlib_ops *ops)
 {
     if (!ops || g_ops_installed ||
-        !ops->heap_alloc || !ops->heap_realloc || !ops->heap_free ||
+        !ops->heap_alloc || !ops->heap_free ||
         !ops->heap_ready || !ops->single_cpu_active || !ops->fatal) {
         errno = EINVAL;
         return -1;
@@ -72,12 +87,22 @@ void *malloc(size_t size)
         return NULL;
     }
 
-    /* LK heap accepts a power-of-two alignment; 16 exceeds AAPCS32 alignment. */
-    p = g_ops.heap_alloc(size, 16);
+    /* A private aligned header retains the requested size and raw LK pointer. */
+    if (size > SIZE_MAX - sizeof(h700_alloc_header_t)) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    p = g_ops.heap_alloc(sizeof(h700_alloc_header_t) + size, 16);
     if (!p) {
         errno = ENOMEM;
+        return NULL;
     }
-    return p;
+    h700_alloc_header_t *header = (h700_alloc_header_t *)p;
+    header->size = size;
+    header->magic = H700_ALLOC_MAGIC;
+    header->reserved[0] = 0;
+    header->reserved[1] = 0;
+    return (void *)(header + 1);
 }
 
 void free(void *ptr)
@@ -90,7 +115,13 @@ void free(void *ptr)
         fatal_if_unsafe_heap();
         return;
     }
-    g_ops.heap_free(ptr);
+    h700_alloc_header_t *header = allocation_header(ptr);
+    if (header->magic != H700_ALLOC_MAGIC) {
+        fatal_if_unsafe_heap();
+        return;
+    }
+    header->magic = 0;
+    g_ops.heap_free(header);
 }
 
 void *calloc(size_t count, size_t size)
@@ -127,15 +158,25 @@ void *realloc(void *ptr, size_t size)
         return NULL;
     }
 
-    /*
-     * LK heap_realloc(ptr, size) copies the old allocation and frees it.
-     * Do not pass NULL: this LK implementation forms an allocation-header
-     * pointer before checking ptr, so realloc(NULL, n) must use heap_alloc.
-     */
-    p = g_ops.heap_realloc(ptr, size);
-    if (!p) {
-        errno = ENOMEM;
+    h700_alloc_header_t *old_header = allocation_header(ptr);
+    if (old_header->magic != H700_ALLOC_MAGIC) {
+        fatal_if_unsafe_heap();
+        return NULL;
     }
+
+    /*
+     * The pinned LK heap_realloc() internally calls heap_alloc(size, 0),
+     * losing the caller's requested alignment. Allocate a new 16-byte-aligned
+     * block, copy only the recorded user length, then free the old raw block.
+     * On allocation failure the old block remains untouched.
+     */
+    p = malloc(size);
+    if (!p) {
+        return NULL;
+    }
+    size_t copy_size = old_header->size < size ? old_header->size : size;
+    memcpy(p, ptr, copy_size);
+    free(ptr);
     return p;
 }
 
