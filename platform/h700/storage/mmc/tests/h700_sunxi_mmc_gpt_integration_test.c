@@ -38,7 +38,7 @@ static uint32_t read32(void *context, uint32_t offset)
         const uint8_t *p;
         uint32_t i;
         if (f->selected_lba >= SECTORS || f->fifo_index >= FIFO_WORDS) return 0;
-        p = f->media[f->selected_lba];
+        p = f->media + (size_t)f->selected_lba * 512u;
         i = f->fifo_index++ * 4u;
         return (uint32_t)p[i] | ((uint32_t)p[i+1] << 8) |
                ((uint32_t)p[i+2] << 16) | ((uint32_t)p[i+3] << 24);
