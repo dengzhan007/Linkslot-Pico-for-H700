@@ -602,11 +602,12 @@ static inline int lsvfs_memcmp(const void *a, const void *b, size_t n) {
         if triple == "armv7a-none-eabi":
             reloc=run(["readelf","-Wr",str(rlib)])
             markers=__import__("re").findall(r"\b(R_ARM_[A-Z0-9_]+)\s+[^\n]*__aeabi_unwind_cpp_pr0",reloc)
-            if not markers or any(kind != "R_ARM_NONE" for kind in markers):
-                raise RuntimeError("AArch32 EHABI marker changed: "+repr(markers))
-            # The panic=abort, no-unwind probe has only R_ARM_NONE exidx metadata.
-            # This absolute symbol is a metadata marker, not an unwinder implementation.
-            link_args.append("--defsym=__aeabi_unwind_cpp_pr0=0")
+            # Only resolve the EHABI personality marker when this toolchain emits
+            # it as R_ARM_NONE metadata; never mask a code/PREL31 unwind reference.
+            if any(kind != "R_ARM_NONE" for kind in markers):
+                raise RuntimeError("AArch32 EHABI needs a real unwinder: "+repr(markers))
+            if markers:
+                link_args.append("--defsym=__aeabi_unwind_cpp_pr0=0")
         link_args += ["-Map="+str(mapf),"-o",str(elf),*map(str,objects),str(rlib)]
         run(link_args,out/(triple+"-link.log"))
         header=run(["readelf","-h",str(elf)])
