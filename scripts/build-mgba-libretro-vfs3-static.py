@@ -155,6 +155,38 @@ int ini_parse(const char* filename, ini_handler handler, void* user)
 /* An ini_reader function to read the next line from a string buffer. This
 """)
 
+    # Use a frontend-owned relative config root; the portable desktop fallback
+    # must not call getenv/getcwd/mkdir in an H700 bare-metal build.
+    config_c = source / "src/core/config.c"
+    replace_once(config_c, """#elif defined(__HAIKU__)
+	char path[B_PATH_NAME_LENGTH];
+	find_directory(B_USER_SETTINGS_DIRECTORY, 0, false, path, B_PATH_NAME_LENGTH);
+	snprintf(out, outLength, "%s/%s", path, binaryName);
+	mkdir(out, 0755);
+#else
+	char* xdgConfigHome = getenv("XDG_CONFIG_HOME");
+""", """#elif defined(__HAIKU__)
+	char path[B_PATH_NAME_LENGTH];
+	find_directory(B_USER_SETTINGS_DIRECTORY, 0, false, path, B_PATH_NAME_LENGTH);
+	snprintf(out, outLength, "%s/%s", path, binaryName);
+	mkdir(out, 0755);
+#elif defined(ENABLE_LIBRETRO_VFS_REQUIRED)
+	strlcpy(out, ".", outLength);
+#else
+	char* xdgConfigHome = getenv("XDG_CONFIG_HOME");
+""")
+    replace_once(config_c, """#elif defined(PSP2) || defined(GEKKO) || defined(__SWITCH__) || defined(__3DS__)
+	UNUSED(outLength);
+	out[0] = '\0';
+#else
+	getcwd(out, outLength);
+""", """#elif defined(PSP2) || defined(GEKKO) || defined(__SWITCH__) || defined(__3DS__) || defined(ENABLE_LIBRETRO_VFS_REQUIRED)
+	UNUSED(outLength);
+	out[0] = '\0';
+#else
+	getcwd(out, outLength);
+""")
+
     directory_c = r'''/* mGBA VDir backend using the frontend's Libretro VFS v3. */
 #include "libretro-vfs.h"
 #include <mgba-util/vfs.h>
@@ -338,6 +370,7 @@ bool VDirCreate(const char* path) {
         "Requests Libretro VFS v3 with v2/v1 fallback and exposes the negotiated interface.\n"
         "Adds VDirOpen/VDirCreate based on v3 callbacks; rewind uses close/reopen of stored path.\n"
         "Removes vfs-file.c and vfs-dirent.c from this experimental build; VFileOpen requires frontend VFS.\n"
+        "Uses relative '.' config root through VFS; disables unused INI FILE wrappers; no host mkdir/getenv/getcwd.\\n"
         "Only the CI checkout is patched; Linkslot snapshot and upstream repository are unchanged.\n",
         encoding="utf-8"
     )
@@ -398,7 +431,7 @@ def main():
     forbidden = sorted(unames & {
         "opendir", "readdir", "closedir", "rewinddir", "stat", "mkdir", "remove",
         "fopen", "fopen64", "fread", "fwrite", "fseek", "ftell", "fflush", "fclose",
-        "getcwd", "getenv"
+        "getcwd", "getenv", "mkdir"
     })
     if forbidden:
         raise RuntimeError("POSIX dirent/stdio symbols remain: " + ", ".join(forbidden))
