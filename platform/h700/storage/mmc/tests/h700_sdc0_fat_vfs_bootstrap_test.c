@@ -459,7 +459,7 @@ static int test_full_sdc0_gpt_fat_vfs_bootstrap(void)
     static struct h700_fat_vfs provider;
     static struct h700_sunxi_mmc_block_device device;
     static struct h700_gpt_partition partitions[H700_GPT_MAX_ENTRIES];
-    struct sunxi_mmc_io mmc_io;
+    static struct sunxi_mmc_io mmc_io;
     struct sunxi_h616_pio_io pio_io;
     struct sunxi_h616_sdc0_platform platform;
     struct h700_sunxi_sdc0_scan_config config;
