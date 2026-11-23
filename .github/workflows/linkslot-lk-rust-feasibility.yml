@@ -12,6 +12,7 @@ on:
       - "scripts/audit-libretro-static-abi.py"
       - "scripts/build-mgba-aarch32-static.py"
       - "scripts/build-mgba-aarch32-generic-static.py"
+      - "scripts/build-mgba-libretro-vfs3-static.py"
       - "scripts/audit-libretro-vfs-v3-abi.py"
       - "platform/h700/**"
       - "scripts/build-h700-objects.sh"
@@ -105,6 +106,10 @@ jobs:
       - name: Build mGBA with Generic CMake backend for LK comparison
         run: |
           python3 scripts/build-mgba-aarch32-generic-static.py --source .ci/mgba-source --out build/audit-work/linkslot-1.0.36/mgba-generic
+
+      - name: Build mGBA with required Libretro VFS v3 file and directory backend
+        run: |
+          python3 scripts/build-mgba-libretro-vfs3-static.py --source .ci/mgba-source --out build/audit-work/linkslot-1.0.36/mgba-vfs3
 
       - name: Probe AArch32 LK-as-BL33 image and vector layout
         run: |
