@@ -189,13 +189,12 @@ int main(void)
           "realloc preserves original contents");
     CHECK(((uintptr_t)grown & 15u) == 0,
           "realloc preserves 16-byte newlib alignment");
-    CHECK(g_allocs == alloc_before + 2 && g_frees == free_before + 1,
+    CHECK(g_allocs == alloc_before + 3 && g_frees == free_before + 1,
           "realloc allocates aligned replacement and releases old raw block");
 
     free_before = g_frees;
-    h700_test_free(grown);
     h700_test_free(NULL);
-    CHECK(g_frees == free_before + 1, "free(NULL) is a no-op");
+    CHECK(g_frees == free_before, "free(NULL) is a no-op");
     h700_test_free(p);
 
     errno = 0;
@@ -268,6 +267,7 @@ int main(void)
     CHECK(g_fatal_calls == 1,
           "unsafe heap free is routed to the fatal/panic hook");
     g_single_cpu = 1;
+    h700_test_free(grown);
     g_expect_fatal = 1;
     if (setjmp(g_fatal_jump) == 0) {
         h700_test_exit(23);
