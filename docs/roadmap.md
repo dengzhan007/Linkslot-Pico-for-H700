@@ -17,15 +17,18 @@
 
 ## 当前工作：不依赖 Linkslot 上游版本的准备
 
-### A2. Linkslot Rust 裸机可移植性（第一轮已完成）
+### A2. Linkslot Rust 裸机可移植性（host-only 第一批验证已完成）
 
 - [x] 固定 Linkslot 1.0.36 只读 ZIP 快照及 SHA256 清单，不伪造原始上游 commit。
 - [x] `slot-input` 纯手势逻辑在 AArch32/AArch64 `no_std + alloc` 目标通过编译；保留的 47 项上游行为测试全部通过。
 - [x] `slot-model` 纯领域数据在 AArch32/AArch64 `no_std + alloc` 目标通过编译；4 项纯模型回归测试通过。
 - [x] 验证 Rust 静态库与 AArch32/AArch64 freestanding C shim 的最终 ELF 链接。
 - [x] 按固定 LK 头文件完成 `heap_alloc/heap_free` AArch32 声明/ABI 兼容测试；测试实现为 stub，不是实际 heap。
+- [x] `slot-i18n` 翻译表静态化探针通过：6 个 domain、1,763 个唯一 key、12 份双语 JSON；构建期检查 key/placeholder/元数据，no_std 静态表在 AArch32/AArch64 通过编译，候选 13 项测试与原版 18 项测试全部通过。
+- [x] AArch32 LK-as-BL33 入口/头区布局 host-only 探针通过：入口分支、向量表和启动参数在 BaseOS 不透明头区覆盖下不重叠；这不是完整 LK build 或启动证明。
+
 - [ ] 编译并验证真实 LK heap implementation；先解决 global critical section 不是跨核锁的风险。
-- [ ] 完成 AArch32 LK-as-BL33 与 AArch64 LK/runtime 两条路线的架构选择。
+- [ ] 完成 AArch32 LK-as-BL33 与 AArch64 LK/runtime 两条路线的架构选择；当前参考 LK 是单核调度，A53 编译 flag 和 SMP 初始化也需重做，secondary-core 状态未知。
 ### A. 工具链与工程基础（已完成第一步）
 
 - [x] AArch64 freestanding C、C++ 和汇编编译探针。
