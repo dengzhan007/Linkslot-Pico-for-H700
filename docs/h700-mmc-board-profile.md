@@ -67,6 +67,8 @@ The Linux H616 CCU driver defines MMC parents as `osc24M`, `pll-periph0-2x`, and
 References:
 - [H616 MMC0 pin group and controller node, Linux commit](https://github.com/torvalds/linux/blob/fa2933aac170dd19c6a7f0d7b81a8f537e40915c/arch/arm64/boot/dts/allwinner/sun50i-h616.dtsi)
 - [sun50iw9p1 vendor PF0–PF5 pin map and pinconf implementation](https://github.com/qiaoweibiao/T507_Kernel/tree/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/pinctrl/sunxi)
+- [sun50iw9p1 PIO base, clk_pio consumer and sdc0_pins_a electrical profile](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/arch/arm64/boot/dts/sunxi/sun50iw9p1-pinctrl.dtsi)
+- [sun50iw9p1 APB1/PIO clock parent mapping and APB1_CFG offset](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/clk/sunxi/clk-sun50iw9.c)
 - [H616 MMC module clock fields, Linux commit](https://github.com/torvalds/linux/blob/fa2933aac170dd19c6a7f0d7b81a8f537e40915c/drivers/clk/sunxi-ng/ccu-sun50i-h616.c)
 - [Pinned U-Boot MMC clock calculation](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/drivers/mmc/sunxi_mmc.c)
 - [Pinned U-Boot H6/H616 clock register definitions](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/arch/arm/include/asm/arch-sunxi/clock_sun50i_h6.h)
@@ -147,7 +149,7 @@ Run `sh scripts/test-h700-sunxi-mmc-gpt-adapter.sh`.
 
 `sunxi_h616_sdc0_pins.c` implements the RG34XX `sun50iw9p1` sdc0 pin group. The PIO bank stride is `0x24`; Port F is bank index 5, so PF0–PF5 share MUX0 at PIO offset `0xb4`, DRV0 at `0xc8`, and PULL0 at `0xd0` (offsets relative to PIO base `0x0300b000`). The vendor `pinctrl-sun50iw9p1.c` descriptor assigns ALT2 to `sdc0` on each of PF0–PF5. The live pinconf specifies 40 mA drive (hardware field 3) and pull-up (field 1).
 
-The helper updates only PF0–PF5 fields, preserves PF6/PF7 and all unrelated drive/pull fields, sets 40 mA drive and pull-up before switching the mux to ALT2, and validates readback. Before touching these PIO registers, the unified bring-up calls `sunxi_h616_pio_enable_apb1_24m()`, which configures the APB1 clock register at CCU offset `0x520` to use the 24 MHz OSC24M parent (M=1, P=/1, mux=OSC24M). The `sun50iw9p1` PIO node declares APB1 as its bus clock; this helper rejects a platform that does not report a 24 MHz oscillator and verifies the clock field readback. It is host-tested only and has not been run against the device's PIO registers.
+The helper updates only PF0–PF5 fields, preserves PF6/PF7 and all unrelated drive/pull fields, sets 40 mA drive and pull-up before switching the mux to ALT2, and validates readback. The vendor DTS at `sun50iw9p1-pinctrl.dtsi` defines the PIO MMIO base as `0x0300b000`, supplies the pinctrl consumer with `clk_pio`, and defines `sdc0_pins_a` with muxsel 2, drive 3 and pull 1. In the pinned `clk-sun50iw9p1` clock driver, the logical `pio` clock uses `apb1` as its parent; `APB1_CFG` is CCU offset `0x520`, and HOSC is the 24 MHz parent. Therefore the unified bring-up calls `sunxi_h616_pio_enable_apb1_24m()` before PIO access to select HOSC with M=1/N=1. The helper rejects a platform that does not report a 24 MHz oscillator and verifies clock-field readback. This is confirmed by the same SoC-family source, but remains host-tested only and has not been run against the device's PIO registers.
 
 Run `sh scripts/test-h700-h616-sdc0-pins.sh` for register-layout, field-preservation, write-order, and readback-error tests.
 
