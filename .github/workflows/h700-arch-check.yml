@@ -5,6 +5,11 @@ on:
     paths:
       - "platform/h700/**"
       - "scripts/build-h700-objects.sh"
+      - "scripts/test-h700-gpt-readonly.sh"
+      - "scripts/test-h700-sunxi-mmc-clock.sh"
+      - "scripts/test-h700-sunxi-mmc-module-clock.sh"
+      - "scripts/test-h700-sunxi-mmc-pio-read.sh"
+      - "scripts/test-h700-sunxi-sd-csd.sh"
       - ".github/workflows/h700-arch-check.yml"
   pull_request:
     paths:
@@ -17,6 +22,20 @@ permissions:
   contents: read
 
 jobs:
+  storage-host-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run H700 read-only storage host regressions
+        run: |
+          sh scripts/test-h700-gpt-readonly.sh
+          sh scripts/test-h700-sunxi-mmc-clock.sh
+          sh scripts/test-h700-sunxi-mmc-module-clock.sh
+          sh scripts/test-h700-sunxi-mmc-pio-read.sh
+          sh scripts/test-h700-sunxi-sd-csd.sh
+
   compile-aarch64-objects:
     runs-on: ubuntu-latest
     steps:
