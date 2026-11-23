@@ -174,6 +174,12 @@ int main(void)
     q = (char *)h700_test_malloc_r(&reent, 16);
     CHECK(q != NULL, "newlib _malloc_r allocates through LK heap");
     strcpy(q, "reent");
+    reent._errno = 0;
+    g_fail_alloc = 1;
+    CHECK(h700_test_realloc_r(&reent, q, 64) == NULL &&
+          reent._errno == ENOMEM && !strcmp(q, "reent"),
+          "newlib _realloc_r preserves old allocation and reent errno on failure");
+    g_fail_alloc = 0;
     char *rq = (char *)h700_test_realloc_r(&reent, q, 48);
     CHECK(rq != NULL && !strcmp(rq, "reent") &&
           ((uintptr_t)rq & 15u) == 0,
