@@ -60,7 +60,7 @@ def main():
             raise RuntimeError("pinned LK evidence file missing: " + str(p))
 
     original_crt0 = crt0_path.read_text(encoding="utf-8")
-    begin = ".global _start\n_start:"
+    begin = ".globl _start\\n_start:"
     marker = "reset:\n"
     i = original_crt0.find(begin)
     j = original_crt0.find(marker, i)
