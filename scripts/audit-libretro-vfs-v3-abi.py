@@ -313,6 +313,40 @@ bool linkslot_vfs_environment(uint32_t, void *);
 C_BACKEND = r'''#include "linkslot_vfs_abi.h"
 #include <string.h>
 #include <stdint.h>
+static size_t lsvfs_strlen(const char *s) { size_t n=0; while (s && s[n]) n++; return n; }
+static int lsvfs_strcmp(const char *a, const char *b) {
+    while (*a && *a == *b) { a++; b++; }
+    return (unsigned char)*a - (unsigned char)*b;
+}
+static char *lsvfs_strstr(const char *h, const char *n) {
+    size_t k;
+    if (!*n) return (char *)h;
+    for (; *h; h++) {
+        for (k=0; n[k] && h[k] == n[k]; k++) { }
+        if (!n[k]) return (char *)h;
+    }
+    return 0;
+}
+static void *lsvfs_memcpy(void *d, const void *s, size_t n) {
+    unsigned char *o=(unsigned char *)d; const unsigned char *i=(const unsigned char *)s;
+    for (size_t k=0;k<n;k++) o[k]=i[k];
+    return d;
+}
+static void *lsvfs_memset(void *d, int v, size_t n) {
+    unsigned char *o=(unsigned char *)d; for (size_t k=0;k<n;k++) o[k]=(unsigned char)v; return d;
+}
+static int lsvfs_memcmp(const void *a, const void *b, size_t n) {
+    const unsigned char *x=(const unsigned char *)a,*y=(const unsigned char *)b;
+    for (size_t k=0;k<n;k++) if (x[k]!=y[k]) return (int)x[k]-(int)y[k];
+    return 0;
+}
+#define strlen lsvfs_strlen
+#define strcmp lsvfs_strcmp
+#define strstr lsvfs_strstr
+#define memcpy lsvfs_memcpy
+#define memset lsvfs_memset
+#define memcmp lsvfs_memcmp
+
 
 typedef struct {
     char path[64];
@@ -543,6 +577,24 @@ def main():
     (out/"Cargo.toml").write_text(rust_manifest(),encoding="utf-8")
     (out/"src/lib.rs").write_text(RUST,encoding="utf-8")
     (out/"linkslot_vfs_abi.h").write_text(C_HEADER,encoding="utf-8")
+    freestanding_string = """#ifndef LINK_SLOT_VFS_STRING_H
+#define LINK_SLOT_VFS_STRING_H
+#include <stddef.h>
+size_t lsvfs_strlen(const char *);
+int lsvfs_strcmp(const char *, const char *);
+char *lsvfs_strstr(const char *, const char *);
+void *lsvfs_memcpy(void *, const void *, size_t);
+void *lsvfs_memset(void *, int, size_t);
+int lsvfs_memcmp(const void *, const void *, size_t);
+#define strlen lsvfs_strlen
+#define strcmp lsvfs_strcmp
+#define strstr lsvfs_strstr
+#define memcpy lsvfs_memcpy
+#define memset lsvfs_memset
+#define memcmp lsvfs_memcmp
+#endif
+"""
+    (out/"string.h").write_text(freestanding_string,encoding="utf-8")
     (out/"mock_backend.c").write_text(C_BACKEND,encoding="utf-8")
     (out/"harness.c").write_text(HARNESS,encoding="utf-8")
     report=["# Libretro VFS v3 no_std service ABI probe\n\n",
