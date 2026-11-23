@@ -307,6 +307,21 @@ Generic 相比 Linux 版本减少了 24 个 Linux/glibc 专属符号，包括 `o
 - Artifact ID：`14791290676`。
 - [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16) 仍为 draft。
 
+### 第九轮：mGBA whole-archive newlib 链接与真实 VDir 主机回归
+
+- Workflow run：[45115290950](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45115290950)，commit `fc817b3fa84b7a0b57a693ae2785090cf9e86763`，结论 success。
+- 直接编译并调用实际的临时 mGBA `libretro-vfs-dir.c`，用 fake Libretro VFS v3 backend 测试目录 open/list/name/type/EOF、rewind close+reopen、嵌套目录、VFileOpen 路径拼接、`..`/绝对路径/反斜杠拒绝、remove、mkdir 与 existing-dir stat fallback：全部通过，进程 exit 0。
+- whole-archive 链接使用 round 8 的真实 arm-none-eabi/newlib mGBA archive、测试专用 WFI `_start`，且使用 `--whole-archive` 强制把全部 mGBA 对象拉入链接。
+- 只链接 `-lc -lm -lgcc` 时，剩余未定义符号恰为 11 个 newlib syscall hooks：`_close`、`_exit`、`_fstat`、`_getpid`、`_gettimeofday`、`_isatty`、`_kill`、`_lseek`、`_read`、`_sbrk`、`_write`。上一轮 52 项 true external symbols 的其余部分都已由 newlib/libm/libgcc 满足。
+- 再加入 `-lnosys` 后，整个 archive 链接成功：ELF32/ARM/EABI5、soft-float，`nm -u` 无未解析符号。测试 ELF size 为 text 1,061,848 / data 801,140 / bss 5,540 / total 1,868,528 bytes。
+- **不可把这个 link pass 当作有效 runtime**：libnosys 的 syscall 实现是 dummy/stub；特别是 `_sbrk` 不提供可供 newlib malloc 使用的真实 bounded heap，`_gettimeofday` 没有真实 RTC，`_read/_write` 不是 H700 console 服务。WFI entry 和默认 linker layout 也不是 H700 启动/内存布局。
+- 下一步是为 11 个 hooks 设计真实 LK/H700 适配并做独立单元测试；先处理 heap/RTC/console，再实现文件描述符语义（原则上 mGBA 文件访问继续走 VFS，newlib fd 只服务 console/runtime）。
+
+产物：
+- [第九轮 GitHub Actions 成功运行](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45115290950)
+- Artifact ID：`14790883150`。
+- [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16) 仍为 draft。
+
 ### AArch32 EHABI 说明
 
 Rust 1.96 的 AArch32 `alloc` 静态库含有 `__aeabi_unwind_cpp_pr0` 符号引用。已使用 `readelf -Wr` 检查全部引用，确认均为 `.ARM.exidx` 上的 `R_ARM_NONE` 元数据 relocation，不是可执行代码调用或 `PREL31` relocation。仅在本次 `panic=abort`、无异常展开的 ABI 探测中，通过 linker `--defsym=__aeabi_unwind_cpp_pr0=0` 解析该元数据标记。
@@ -328,6 +343,7 @@ Rust 1.96 的 AArch32 `alloc` 静态库含有 `__aeabi_unwind_cpp_pr0` 符号引
 - [第六轮 GitHub Actions 成功运行（VFS v3 ABI + 全部前序验证）](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45109949583)
 - [第七轮 GitHub Actions 成功运行（真实 mGBA VFS v3 文件/目录 archive）](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45113739310)
 - [第八轮 GitHub Actions 成功运行（mGBA arm-none-eabi/newlib VFS v3 archive）](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45114286962)
+- [第九轮 GitHub Actions 成功运行（newlib whole-archive link 与 mGBA VDir 回归）](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45115290950)
 - [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16)
 
 
@@ -337,7 +353,7 @@ Rust 1.96 的 AArch32 `alloc` 静态库含有 `__aeabi_unwind_cpp_pr0` 符号引
 2. **H700 多核状态审计**：查清 BL31 → BL33 时每个 Cortex-A53 核心的启动/停驻状态。参考 LK scheduler 目前是单核设计（全局 current_thread/run queue/critical count + 本核 IRQ mask）；若 secondary core 可进入 LK，必须先实现 per-CPU scheduler、跨核同步与 SMP-safe allocator，不能直接复用。
 3. **LK heap 实现验证**：只有在 pinned LK heap 的平台依赖和编译配置可控后，尝试单独编译真实 `lib/heap/heap.c`；再考虑跨核 heap lock、对齐、free/coalescing、OOM 和初始化时序测试。
 4. **Linkslot 模块继续拆分**：保留 `slot-input` 的 47 项上游行为测试；进一步从 `slot-model` 分离路径/文件 I/O 助手，确保纯数据模型的 no_std 测试与上游语义保持一致。
-5. **mGBA → H700 VFS/libc 适配**：真实 mGBA A32 VFS v3 archive 已同时通过 arm-linux-gnueabi/glibc 与 arm-none-eabi/newlib 编译；newlib archive 为 94 个对象、52 个真正外部符号。下一步用 newlib/libm/libgcc/libnosys 做 whole-archive link probe，再把剩余项映射到 LK libc、RTC、日志和 EABI；之后把 Libretro VFS v3 接入 Linkslot `slot-retro`，最后实现真实 H700 SD/FAT 文件/目录 backend。存档/即时状态/battery save 语义必须保留。
+5. **mGBA → H700 VFS/libc 适配**：真实 mGBA A32 VFS v3 archive 已通过 arm-none-eabi/newlib 编译；whole-archive 诊断证明 newlib/libm/libgcc 满足除 11 个 syscall hooks 外的依赖，加入 libnosys 能 link，但只是 dummy stubs。实际 mGBA VDir adapter 的主机 fake-VFS 回归也通过。下一步为 `_sbrk/_gettimeofday/_read/_write` 等 11 hooks 设计真正 LK/H700 服务，再把 VFS v3 接入 Linkslot `slot-retro`，最后实现 SD/FAT backend。存档/即时状态/battery save 语义必须保留。
 6. 继续单独关闭 H700 启动交接/内存 ownership 的 NO-GO 门槛；未关闭前不得执行设备 payload。
 
 仍不生成可刷写镜像、不写 SD、不修改启动区域、不执行 payload。
