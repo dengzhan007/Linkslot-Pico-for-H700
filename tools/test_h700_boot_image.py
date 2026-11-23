@@ -249,8 +249,10 @@ class NativeFirmwareTests(unittest.TestCase):
     def fake_firmware(self):
         monitor_payload = struct.pack("<I", 0x1400003E) + b"M" * (0x1A2D0 - 4)
         monitor = monitor_payload + bytes(0x1A400 - len(monitor_payload))
-        dtbo_payload = b"O" * 0x920
-        dtbo = dtbo_payload + bytes(0xA00 - len(dtbo_payload))
+        dtbo_payload = bytearray(0x920)
+        dtbo_payload[:4] = b"\xd0\x0d\xfe\xed"
+        struct.pack_into(">I", dtbo_payload, 4, 0x920)
+        dtbo = bytes(dtbo_payload) + bytes(0xA00 - len(dtbo_payload))
         dtb = bytearray(0x23400)
         dtb[:4] = b"\xd0\x0d\xfe\xed"
         struct.pack_into(">I", dtb, 4, 40)
@@ -274,6 +276,20 @@ class NativeFirmwareTests(unittest.TestCase):
         with self.assertRaisesRegex(boot.ImageError, "padding"):
             boot.split_rg34xx_native_firmware(
                 bytes(damaged), expected_sha256=None, expected_fnv=None
+            )
+
+        bad_dtbo = bytearray(firmware)
+        bad_dtbo[0x1A400] = 0
+        with self.assertRaisesRegex(boot.ImageError, "DTBO has no FDT header"):
+            boot.split_rg34xx_native_firmware(
+                bytes(bad_dtbo), expected_sha256=None, expected_fnv=None
+            )
+
+        bad_dtb_padding = bytearray(firmware)
+        bad_dtb_padding[0x1AE00 + 40] = 1
+        with self.assertRaisesRegex(boot.ImageError, "DTB trailing padding"):
+            boot.split_rg34xx_native_firmware(
+                bytes(bad_dtb_padding), expected_sha256=None, expected_fnv=None
             )
 
     def test_native_firmware_reference_fingerprint_rejects_other_package(self):

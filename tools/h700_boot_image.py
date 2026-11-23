@@ -423,12 +423,14 @@ def split_rg34xx_native_firmware(firmware: bytes, *,
             payload = extent
         if name == "monitor" and _u32(payload, 0) != 0x1400003E:
             raise ImageError("native firmware monitor header/branch word mismatch")
-        if name == "dtb":
+        if name in ("dtbo", "dtb"):
             if len(payload) < 40 or payload[:4] != b"\xd0\x0d\xfe\xed":
-                raise ImageError("native firmware DTB has no FDT header")
+                raise ImageError(f"native firmware {name.upper()} has no FDT header")
             totalsize = int.from_bytes(payload[4:8], "big")
             if totalsize < 40 or totalsize > len(payload):
-                raise ImageError("native firmware DTB totalsize exceeds its extent")
+                raise ImageError(f"native firmware {name.upper()} totalsize exceeds its extent")
+            if any(payload[totalsize:]):
+                raise ImageError(f"native firmware {name.upper()} trailing padding is not zero-filled")
         if name == "loader":
             if _u32(payload, 0) != 0xEA0003FE or payload[4:9] != b"uboot":
                 raise ImageError("native firmware AArch32 loader entry/header mismatch")
