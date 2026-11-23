@@ -177,12 +177,12 @@ int ini_parse(const char* filename, ini_handler handler, void* user)
 """)
     replace_once(config_c, """#elif defined(PSP2) || defined(GEKKO) || defined(__SWITCH__) || defined(__3DS__)
 	UNUSED(outLength);
-	out[0] = '\0';
+	out[0] = '\\0';
 #else
 	getcwd(out, outLength);
 """, """#elif defined(PSP2) || defined(GEKKO) || defined(__SWITCH__) || defined(__3DS__) || defined(ENABLE_LIBRETRO_VFS_REQUIRED)
 	UNUSED(outLength);
-	out[0] = '\0';
+	out[0] = '\\0';
 #else
 	getcwd(out, outLength);
 """)
