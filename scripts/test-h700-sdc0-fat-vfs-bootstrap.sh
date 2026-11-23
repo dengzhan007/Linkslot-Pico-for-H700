@@ -35,6 +35,7 @@ build_variant()
 
     object_dir="$OUT/$variant"
     mkdir -p "$object_dir"
+    objects=""
 
     # Compile each C translation unit separately. Keep the object list explicit
     # at link time instead of relying on a flattened source-list expansion.
@@ -48,6 +49,7 @@ build_variant()
             -I"$ROOT/platform/h700/storage/gpt" \
             -I"$ROOT/platform/h700/storage/fat" \
             -c "$source" -o "$object"
+        objects="$objects $object"
     done
 
     # Verify the two formerly unresolved dependencies are exported from their
@@ -57,9 +59,9 @@ build_variant()
     nm -g "$object_dir/h700_gpt_readonly.o" |
         grep -Eq '[[:space:]]T[[:space:]]h700_gpt_find_unique_name$'
 
-    set -- "$object_dir"/*.o
+    printf 'Link objects (%s):\n%s\n' "$variant" "$objects"
     # shellcheck disable=SC2086
-    cc $flags "$@" -o "$object_dir/test-h700-sdc0-fat-vfs-bootstrap"
+    cc $flags $objects -o "$object_dir/test-h700-sdc0-fat-vfs-bootstrap"
 }
 
 build_variant plain
