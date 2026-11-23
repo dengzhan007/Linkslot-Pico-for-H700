@@ -78,6 +78,12 @@ With the test fixture's 24 MHz OSC and **600 MHz effective PLL6 input** (a fixtu
 
 These are module-clock examples, not direct card-SDCLK claims. The calculator does not enable the CCU bus gate, deassert reset, configure PIO, update CLKCR, issue a card command, or access storage. A future sdc0 driver must obtain the effective PLL6 rate from the actual platform clock state rather than assuming 600 MHz. Run `sh scripts/test-h700-sunxi-mmc-module-clock.sh` for the host regression and optional ASan/UBSan pass.
 
+### SD CSD capacity decoder (host-only)
+
+`sunxi_sd_csd.c` decodes the controller's four-word R2 CSD response (word 0 holds bits 127..96; word 3 holds bits 31..0). It supports CSD structure 0 for SDSC and structure 1 for SDHC/SDXC, rejects SDUC/reserved structures, checks the caller's block-addressing classification, and returns capacity in both 512-byte sectors and bytes. Structure 0 uses C_SIZE, C_SIZE_MULT and READ_BL_LEN; structure 1 uses the 22-bit C_SIZE field and the fixed 512-byte block size. SDSC capacity is bounded by the 32-bit byte-addressed CMD17 argument range.
+
+The synthetic RG34XX regression vector uses C_SIZE 29,663, which decodes to **30,375,936 sectors** and **15,552,479,232 bytes**, matching the live Linux block inventory. This validates the bit-position and capacity arithmetic only; the CSD bytes have not yet been captured from the physical SD card. Run `sh scripts/test-h700-sunxi-sd-csd.sh`.
+
 ### Single-sector read primitive (host-only, not a complete MMC driver)
 
 `sunxi_mmc_pio_read.c` adds a deliberately narrow CMD17 operation for one 512-byte sector. It uses the AHB-accessed CPU FIFO path and keeps IDMA disabled; it never exposes arbitrary command submission and has no write, erase, or multi-block-write operation. The caller must already have completed controller initialization, card identification/OCR negotiation, RCA selection, card selection, bus-width setup, and clock setup. It then supplies the known card capacity and whether the card uses block addressing (SDHC/SDXC) or byte addressing (SDSC).
