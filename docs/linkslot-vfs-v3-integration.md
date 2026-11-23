@@ -20,8 +20,11 @@ The bridge owns only the stable Libretro function table and forwards calls to th
 
 The H700 backend must:
 - Keep a separate, validated handle for every open file and directory.
-- Enforce card-root containment and reject absolute paths, drive prefixes, parent traversal and invalid separators before touching storage.
-- Keep get_path and directory-entry names valid for the lifetimes required by the Libretro API.
+- Resolve paths against explicit frontend-configured roots for game content, system/BIOS, saves, states and cache. Linkslot's `slot-retro` passes ROM paths and system/save directories as paths; do not assume every VFS request is relative to a process working directory.
+- Accept a native absolute path only when component-wise resolution proves that it is inside one of those configured roots; translate it to a card-relative path before calling FAT/exFAT. Reject absolute paths outside allowed roots, unknown URI schemes or drive prefixes, parent traversal, empty/repeated components that could escape the root, and invalid separators.
+- Resolve relative paths only against an explicit configured base (never an implicit process CWD). Do not silently reinterpret an unknown URI such as `http://` or `content://` as a local filename.
+- Preserve the exact path string supplied to `open` for the lifetime of the returned file handle; `get_path` must return that same path string and must not return a temporary buffer. Keep directory-entry names valid for the lifetime required by the Libretro API.
+- For rename/replace, require both paths to resolve to the same mounted volume and enforce the storage layer's documented flush/barrier ordering. A successful `flush` must represent the durability guarantee advertised by the provider, not merely an empty software cache.
 - Map read/write/seek/truncate/stat errors to Libretro return conventions.
 - Implement flush with the required durable-storage semantics; save-state replacement must not report success before its required flush/rename sequence completes.
 - Provide synchronization if any callback can run concurrently. Atomic publication of the backend pointer does not make the backend or LK heap SMP-safe.
