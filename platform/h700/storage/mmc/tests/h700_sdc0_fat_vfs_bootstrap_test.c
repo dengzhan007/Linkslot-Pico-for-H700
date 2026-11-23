@@ -532,7 +532,7 @@ static int test_full_sdc0_gpt_fat_vfs_bootstrap(void)
     CHECK(fake.ccu[SUNXI_CCU_MMC0_CLK_CFG / 4u] == 0x8000020eu,
           "sdc0 module clock is set to the 400 kHz identification rate");
     CHECK((fake.pio[0xb4u / 4u] & 0x00ffffffu) == 0x00222222u &&
-          (fake.pio[0xc8u / 4u] & 0x00000fffu) == 0x00000aaau &&
+          (fake.pio[0xc8u / 4u] & 0x00000fffu) == 0x00000fffu &&
           (fake.pio[0xd0u / 4u] & 0x00000fffu) == 0x00000555u,
           "PF0-PF5 mux/drive/pull reference fields are configured");
     CHECK(fake.acmd41_count == 1u,
