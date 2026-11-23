@@ -410,12 +410,17 @@ static int mock_stat(const char *p, int32_t *size) {
     if (!p) return 0;
     if (!strcmp(p, "card/Saves")) { if (size) *size = 0; return RETRO_VFS_STAT_IS_VALID | RETRO_VFS_STAT_IS_DIRECTORY; }
     if (!strcmp(p, "card/Saves/test.sav") && file_slot.length >= 0) {
-        if (size) *size = (int32_t)file_slot.length; return RETRO_VFS_STAT_IS_VALID;
+        if (size) {
+            *size = (int32_t)file_slot.length;
+        }
+        return RETRO_VFS_STAT_IS_VALID;
     }
     return 0;
 }
 static int mock_mkdir(const char *p) {
-    if (!p || strcmp(p, "card/Saves/new")) return -1; mkdir_count++; return 0;
+    if (!p || strcmp(p, "card/Saves/new")) return -1;
+    mkdir_count++;
+    return 0;
 }
 static retro_vfs_dir_handle *mock_opendir(const char *p, bool hidden) {
     if (!p || strcmp(p, "card/Saves")) return 0;
@@ -553,19 +558,32 @@ static inline int lsvfs_strcmp(const char *a, const char *b) {
 static inline char *lsvfs_strstr(const char *h, const char *n) {
     size_t k;
     if (!*n) return (char *)h;
-    for (; *h; h++) { for (k=0; n[k] && h[k] == n[k]; k++) { } if (!n[k]) return (char *)h; }
+    for (; *h; h++) {
+        for (k=0; n[k] && h[k] == n[k]; k++) { }
+        if (!n[k]) return (char *)h;
+    }
     return 0;
 }
 static inline void *lsvfs_memcpy(void *d, const void *s, size_t n) {
     unsigned char *o=(unsigned char *)d; const unsigned char *i=(const unsigned char *)s;
-    for (size_t k=0;k<n;k++) o[k]=i[k]; return d;
+    for (size_t k=0;k<n;k++) {
+        o[k]=i[k];
+    }
+    return d;
 }
 static inline void *lsvfs_memset(void *d, int v, size_t n) {
-    unsigned char *o=(unsigned char *)d; for (size_t k=0;k<n;k++) o[k]=(unsigned char)v; return d;
+    unsigned char *o=(unsigned char *)d;
+    for (size_t k=0;k<n;k++) {
+        o[k]=(unsigned char)v;
+    }
+    return d;
 }
 static inline int lsvfs_memcmp(const void *a, const void *b, size_t n) {
     const unsigned char *x=(const unsigned char *)a,*y=(const unsigned char *)b;
-    for (size_t k=0;k<n;k++) if (x[k]!=y[k]) return (int)x[k]-(int)y[k]; return 0;
+    for (size_t k=0;k<n;k++) {
+        if (x[k]!=y[k]) return (int)x[k]-(int)y[k];
+    }
+    return 0;
 }
 #define strlen lsvfs_strlen
 #define strcmp lsvfs_strcmp
