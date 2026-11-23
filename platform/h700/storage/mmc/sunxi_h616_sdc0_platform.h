@@ -41,10 +41,11 @@ int sunxi_h616_sdc0_enable_bus(
 /*
  * Configure a conservative SD identification clock.
  *
- * This currently rejects rates above 24 MHz until sampling/output delay and
- * calibration policy have been validated on RG34XX. It programs the MMC0
- * module-clock register, clears the controller's internal divider, then
- * enables the card clock using the H616 MASK_DATA0 update protocol.
+ * Only the confirmed HOSC path up to 24 MHz is enabled. Requests above
+ * 24 MHz are rejected until the sun50iw9p1 SMHC parent (pll_periph1x2),
+ * divider semantics and RG34XX sampling/output delays are validated. It
+ * programs the MMC0 module-clock register, clears the controller divider,
+ * then enables the card clock using the shared H616-family MASK_DATA0 path.
  *
  * Signature intentionally matches sunxi_sd_init_host.set_clock_hz().
  */
