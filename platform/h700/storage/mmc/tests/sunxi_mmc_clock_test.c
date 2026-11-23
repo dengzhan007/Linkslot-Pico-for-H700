@@ -112,7 +112,7 @@ int main(void)
     fake.regs[SUNXI_MMC_REG_CLKCR / 4u] =
         0x23u | SUNXI_MMC_CLKCR_CARD_CLOCK |
         SUNXI_MMC_CLKCR_LOW_POWER | SUNXI_MMC_CLKCR_MASK_DATA0;
-    fake.regs[SUNXI_MMC_REG_RINT / 4u] = 0x00000124u;
+    fake.regs[SUNXI_MMC_REG_RINT / 4u] = 0x00000524u;
 
     result = sunxi_mmc_set_output_clock(&io, false, true, 5u);
     if (!check(result == SUNXI_MMC_CLOCK_OK, "clock-off update completes"))
