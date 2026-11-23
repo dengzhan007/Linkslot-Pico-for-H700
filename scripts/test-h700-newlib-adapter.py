@@ -16,6 +16,9 @@ RENAMES = [
     "_write=h700_test_write", "_gettimeofday=h700_test_gettimeofday",
     "_getpid=h700_test_getpid", "_kill=h700_test_kill",
     "_exit=h700_test_exit",
+    "_malloc_r=h700_test_malloc_r", "_calloc_r=h700_test_calloc_r",
+    "_realloc_r=h700_test_realloc_r", "_free_r=h700_test_free_r",
+    "__malloc_lock=h700_test_malloc_lock", "__malloc_unlock=h700_test_malloc_unlock",
 ]
 
 def run(args, log):
@@ -55,12 +58,14 @@ def main():
     host_flags = [
         "-std=c11", "-D_POSIX_C_SOURCE=200112L", "-D_DEFAULT_SOURCE",
         "-Wall", "-Wextra", "-Werror", "-I", str(src.parent),
+        "-I", str(root / "platform/h700/runtime/tests/include"),
     ] + ["-D" + item for item in RENAMES]
 
     run(["cc", *host_flags, "-c", str(src), "-o", str(host_obj)],
         out / "host-adapter-compile.log")
     run(["cc", "-std=c11", "-D_POSIX_C_SOURCE=200112L", "-D_DEFAULT_SOURCE",
          "-Wall", "-Wextra", "-Werror", "-I", str(src.parent),
+         "-I", str(root / "platform/h700/runtime/tests/include"),
          "-c", str(harness), "-o", str(harness_obj)],
         out / "host-test-compile.log")
     run(["cc", str(host_obj), str(harness_obj), "-o", str(host_exe)],
@@ -113,6 +118,8 @@ def main():
         "malloc", "calloc", "realloc", "free", "_sbrk", "_close", "_fstat",
         "_isatty", "_lseek", "_read", "_write", "_gettimeofday", "_getpid",
         "_kill", "_exit", "h700_newlib_install",
+        "_malloc_r", "_calloc_r", "_realloc_r", "_free_r",
+        "__malloc_lock", "__malloc_unlock",
     }
     missing = sorted(required - defined_names)
     if missing:
@@ -125,7 +132,7 @@ def main():
         "Host regression: PASS. " + output.strip() + "\n\n",
         "AArch32 target compile: PASS. Actual arm-none-eabi/newlib headers, Cortex-A53 ARM state, NEON/VFPv4 softfp; object is ELF32/ARM EABI5.\n\n",
         "Pinned LK heap binding: PASS. lk_bindings.c compiles with -Werror against the exact pinned include/lib/heap.h signatures; heap_alloc/heap_free resolve to LK externals and heap-ready/single-core/console/RTC/fatal services remain explicit platform integration points.\n\n",
-        "Adapter exports: all 16 required allocator/syscall/install symbols are present.\n\n",
+        "Adapter exports: all 22 public and reentrant allocator/syscall/lock/install symbols are present.\n\n",
         "Target object undefined dependencies:\n\n~~~text\n",
         unresolved,
         "~~~\n\n",
