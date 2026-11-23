@@ -76,9 +76,9 @@ References:
 
 ### MMC module-clock divider calculator (host-only)
 
-`sunxi_mmc_module_clock.c` mirrors the pinned U-Boot H616 divider policy as a pure function. For a requested module rate up to 24 MHz it selects OSC24M; above 24 MHz it selects the effective PLL6 rate. It calculates `div = ceil(parent / target)`, folds factors of two into the two-bit N exponent while M exceeds 16, and encodes M as `M-1`. The returned rate is calculated as `parent / 2^N / M` and is rejected if it exceeds the requested rate or cannot fit N=0..3 and M=1..16.
+`sunxi_mmc_module_clock.c` is a pure H616/U-Boot-style divider candidate, not yet the RG34XX high-speed clock implementation. For a requested module rate up to 24 MHz it selects HOSC/OSC24M; above 24 MHz it uses the H616 effective-PLL input model. It calculates `div = ceil(parent / target)`, folds factors of two into the two-bit N exponent while M exceeds 16, and encodes M as `M-1`. The returned rate is calculated as `parent / 2^N / M` and is rejected if it exceeds the requested rate or cannot fit N=0..3 and M=1..16.
 
-With the test fixture's 24 MHz OSC and **600 MHz effective PLL6 input** (a fixture matching the U-Boot clock calculation model, not a measured constant for every boot), the tested examples are:
+With the test fixture's 24 MHz HOSC and **600 MHz effective PLL6 input** (a fixture matching the pinned U-Boot/H616 calculator model, not an RG34XX clock measurement), the pure-function test vectors are:
 
 | Requested module rate | Parent | N | M | Calculated module rate | CCU register value |
 |---:|---|---:|---:|---:|---:|
@@ -86,7 +86,7 @@ With the test fixture's 24 MHz OSC and **600 MHz effective PLL6 input** (a fixtu
 | 25 MHz | effective PLL6 600 MHz | 1 | 12 | 25 MHz | `0x8100010b` |
 | 50 MHz | effective PLL6 600 MHz | 0 | 12 | 50 MHz | `0x8100000b` |
 
-These are module-clock examples, not direct card-SDCLK claims. The calculator does not enable the CCU bus gate, deassert reset, configure PIO, update CLKCR, issue a card command, or access storage. A future sdc0 driver must obtain the effective PLL6 rate from the actual platform clock state rather than assuming 600 MHz. Run `sh scripts/test-h700-sunxi-mmc-module-clock.sh` for the host regression and optional ASan/UBSan pass.
+These are module-clock examples, not direct card-SDCLK claims. The calculator does not enable the CCU bus gate, deassert reset, configure PIO, update CLKCR, issue a card command, or access storage. More importantly, the RG34XX `sun50iw9p1` vendor DTS supplies the MMC `pll_periph` input from `pll_periph1x2`; that is a fixed factor of 2 from `pll_periph1`. Its SMHC parent list is `hosc`, `pll_periph0x2`, `pll_periph1x2` (mux indices 0, 1, 2), which is not the same as assuming the H616 U-Boot `PLL6` 600 MHz effective input. The current H700 platform wrapper therefore uses only the confirmed HOSC path at or below 24 MHz and deliberately rejects higher rates. The 400 kHz read-only bring-up has no PLL-rate prerequisite; the full host sdc0→GPT→FAT→VFS regressions run with `pll6_effective_hz = 0`. Do not use the 25/50 MHz H616 vectors as RG34XX clock settings. Run `sh scripts/test-h700-sunxi-mmc-module-clock.sh` for the pure H616 candidate regression and optional ASan/UBSan pass.
 
 ### SD CSD capacity decoder (host-only)
 
@@ -158,7 +158,7 @@ Run `sh scripts/test-h700-h616-sdc0-pins.sh` for register-layout, field-preserva
 
 `sunxi_h616_sdc0_platform.c` binds the existing pure divider calculator and H616 `MASK_DATA0` clock-update helper to the documented CCU-relative offsets. The caller maps CCU base `0x03001000` from the H616 device tree and provides read/write callbacks. `sunxi_h616_sdc0_enable_bus()` sets only MMC0 bus gate bit 0 and reset-deassert bit 16 in CCU `0x84c`. `sunxi_h616_sdc0_set_clock_hz()` currently accepts only rates up to 24 MHz, disables card output, writes `MMC0_CLK_CFG` at `0x830`, clears the controller divider, and reenables the card clock through the shared `MASK_DATA0` update path. The 400 kHz regression expects module-clock register value `0x8000020e`.
 
-The high-speed path above 24 MHz is deliberately rejected until H616-family sampling/output timing and calibration are validated for the RG34XX board. The clock helper does not itself program PIO mux/bias/drive, card power, or physical MMIO; pin configuration is handled by the separate PIO helper using the decoded RG34XX settings (ALT2, 40 mA, pull-up). All helpers remain host-tested only, and actual register access on the device is still unverified.
+The high-speed path above 24 MHz is deliberately rejected until both the `sun50iw9p1` SMHC parent/divider mapping and RG34XX sampling/output timing are implemented and validated. In particular, the H616 PLL6 calculator is not yet a valid source for the H700 `pll_periph1x2` parent. The clock helper does not itself program PIO mux/bias/drive, card power, or physical MMIO; pin configuration is handled by the separate PIO helper using the decoded RG34XX settings (ALT2, 40 mA, pull-up). All helpers remain host-tested only, and actual register access on the device is still unverified.
 
 Run `sh scripts/test-h700-h616-sdc0-platform.sh` for host register-model tests covering CCU gate/reset, exact 400 kHz divider value, H616 update sequencing, timeout cleanup, and deliberate rejection of unvalidated high-speed requests.
 
@@ -166,7 +166,7 @@ Run `sh scripts/test-h700-h616-sdc0-platform.sh` for host register-model tests c
 
 `sunxi_sd_card_init.c` adds a closed, read-only command sequence for SD v2 memory cards: CMD0, CMD8, repeated CMD55/ACMD41, CMD2, CMD3, CMD9, CMD7, and CMD16 only for byte-addressed SDSC. It performs controller soft/FIFO/DMA reset, initializes timeout and H616 FIFO-threshold registers, keeps the bus at 1-bit mode, requests a 400 kHz identification clock through a platform callback, waits at least 1 ms for the required power-up clock cycles, negotiates OCR, records CID/RCA/CSD, decodes capacity, selects the card, and waits for DAT0 busy to clear. It rejects invalid CMD8 echo, unsupported CSD/addressing combinations, and SD cards that do not complete OCR power-up. SDUC and MMC/eMMC are outside the current supported profile.
 
-The clock callback must configure both the module clock and card clock using the measured effective parent frequency and the common H616 MASK_DATA0 clock-update path. Board code must already have mapped the sdc0 registers, enabled its CCU bus/reset resources, configured PF0–PF5, and powered the card. Those board operations are deliberately not guessed or performed here. The implementation stays at 400 kHz after initialization; clock-up to 25/50 MHz is a later, separately validated step.
+The current clock callback configures the module clock and card clock from the confirmed 24 MHz HOSC path for 400 kHz identification and uses the shared H616-family `MASK_DATA0` update protocol. It does not require a PLL-rate measurement. Board code must still provide valid sdc0/CCU/PIO MMIO mappings, enable CCU bus/reset resources, configure PF0–PF5 and power the card; those board operations are not performed by the card-identification state machine itself. The implementation stays at 400 kHz after initialization; higher transfer clocks remain disabled until the H700 `pll_periph1x2` path and timing are validated.
 
 The host regression simulates the controller registers and SD responses. It covers the complete SDHC command order and the RG34XX capacity vector, ACMD41 readiness polling, SDSC byte addressing plus CMD16, CMD8 rejection, CMD55/ACMD41 rejection, OCR/command/busy timeouts, and the invariant that no command sets the write bit. It is not evidence of a physical card negotiation. Run `sh scripts/test-h700-sunxi-sd-card-init.sh`.
 
