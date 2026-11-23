@@ -110,7 +110,7 @@ C 互操作测试夹具 `tools/vendor/baseos-native-lz4/` 逐字保留 BaseOS-Mu
 
 ## 验证与限制
 
-CI 的 unittest discover 运行 14 项 host tests，覆盖 raw LZ4、BOL4 FNV/长度/损坏输入、AArch64 Image magic、Android v2 layout、image ID、load-address policy、16 MiB image budget、本地分区 dump 的有界提取、提取 hash manifest、原始文件不变性、已审计活动镜像 fingerprint，以及与 BaseOS native C decoder 的互操作。Linux runner 会编译并运行固定版本的 native C decoder；Windows runner 运行纯 Python 测试（若没有 host C compiler 则跳过 C 互操作测试）。
+CI 的 `tools/test_h700_boot_image.py` 包含 17 项 host test methods，覆盖 raw LZ4、BOL4 FNV/长度/损坏输入、AArch64 Image magic、Android v2 layout、image ID、load-address policy、16 MiB image budget、本地分区 dump 的有界提取、提取 hash manifest、原始文件不变性、已审计活动镜像 fingerprint、与 BaseOS native C decoder 的互操作，以及 +40 MiB 固件四段边界、填充、DTB/loader 头和错误指纹拒绝。Linux runner 会编译并运行固定版本的 native C decoder；Windows runner 运行纯 Python 测试（若没有 host C compiler 则跳过 C 互操作测试）。
 
 **该工具不是完整固件构建器，也不构成实机启动许可。** 它不会生成或修改 Boot0、TOC1、BL31、BL33、SPL、分区表或安装包；不会写 SD/Boot 区；不会执行 payload。Android v2 文件通过结构校验，只代表封装与当前 loader 的文件格式相符，不代表内存归属、SMC 目标地址、watchdog 恢复、UART/显示观察通道或 RG34XX 冷启动已经通过。
 
@@ -138,8 +138,11 @@ py -3 tools/h700_boot_image.py extract-firmware `
 The optional `--active-image` verifies the audited p4+48 MiB Android image and
 requires its DTB bytes to match the p4+40 MiB firmware DTB. It also reports
 byte-pattern offsets for the active image length and FNV in the extracted
-loader. These offsets are search hints only, not instruction-level proof that
-the constants are used by the loader. The full firmware and component binaries
+loader. A32 code may construct these constants with `movw` + `movt`, in which
+case the literal search correctly returns no candidates; inspect the decoded
+instructions and their compare operands before concluding that no check exists.
+The current local report includes that instruction-level disassembly and maps
+the loads back to the native-record ABI. The full firmware and component binaries
 remain local; only `firmware-manifest.json` is needed for report evidence.
 
 The extracted firmware is **not** a rebuilt or installable package. It is the
@@ -147,3 +150,15 @@ exact currently deployed package, useful for confirming the pair and recovering
 its inputs for a future matched build. Rebuilding the p4+40 MiB package and SPL
 with regenerated image length/FNV/generation remains a separate task. No
 hardware validation, device I/O or flash operation is performed.
+
+
+### Distinguish the two firmware package names
+
+The extracted p4+40 MiB `firmware-package.bin` is the deployed native output
+concatenation (monitor + DTBO + DTB + A32 loader). It is **not** the
+`work/<target>/boot-gzip/boot-package.bin` consumed by BaseOS `native/build.py`;
+that file is the source TOC1 package whose U-Boot header and components feed
+the native build policy. Exact generation reproduction still needs the pinned
+TOC1 source input and build-time `inventory/prefix.bin`, as well as the rest of
+the pinned source inputs. Matching p4+40/p4+48 deployed identity fields does
+not remove those rebuild requirements.
