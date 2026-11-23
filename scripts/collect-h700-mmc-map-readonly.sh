@@ -74,7 +74,7 @@ dump_attrs() {
         [ -e "$node" ] || continue
         echo "-- $node --"
         echo "device=$(readlink_path "$node/device")"
-        echo "device_of_node=$(readlink_path "$node/device/of_node")"
+        echo "device_of_node=$(readlink_path "$node/device/../../../of_node")"
         dump_attrs "$node" dev size start partition ro removable uevent
     done
     echo
@@ -87,9 +87,6 @@ dump_attrs() {
         echo "host_of_node=$(readlink_path "$host/device/of_node")"
         dump_attrs "$host" uevent
         dump_attrs "$host/device" uevent modalias power/control power/runtime_status
-        for attr in name type cid csd ocr manfid oemid serial date; do
-            dump_attrs "$host"/"$attr" "$attr"
-        done
     done
     echo
     echo "== platform MMC devices and live DT properties =="
