@@ -64,6 +64,20 @@ References:
 - [Pinned U-Boot MMC clock calculation](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/drivers/mmc/sunxi_mmc.c)
 - [Pinned U-Boot H6/H616 clock register definitions](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/arch/arm/include/asm/arch-sunxi/clock_sun50i_h6.h)
 
+### MMC module-clock divider calculator (host-only)
+
+`sunxi_mmc_module_clock.c` mirrors the pinned U-Boot H616 divider policy as a pure function. For a requested module rate up to 24 MHz it selects OSC24M; above 24 MHz it selects the effective PLL6 rate. It calculates `div = ceil(parent / target)`, folds factors of two into the two-bit N exponent while M exceeds 16, and encodes M as `M-1`. The returned rate is calculated as `parent / 2^N / M` and is rejected if it exceeds the requested rate or cannot fit N=0..3 and M=1..16.
+
+With the test fixture's 24 MHz OSC and **600 MHz effective PLL6 input** (a fixture matching the U-Boot clock calculation model, not a measured constant for every boot), the tested examples are:
+
+| Requested module rate | Parent | N | M | Calculated module rate | CCU register value |
+|---:|---|---:|---:|---:|---:|
+| 400 kHz | OSC24M 24 MHz | 2 | 15 | 400 kHz | `0x8000020e` |
+| 25 MHz | effective PLL6 600 MHz | 1 | 12 | 25 MHz | `0x8100010b` |
+| 50 MHz | effective PLL6 600 MHz | 0 | 12 | 50 MHz | `0x8100000b` |
+
+These are module-clock examples, not direct card-SDCLK claims. The calculator does not enable the CCU bus gate, deassert reset, configure PIO, update CLKCR, issue a card command, or access storage. A future sdc0 driver must obtain the effective PLL6 rate from the actual platform clock state rather than assuming 600 MHz. Run `sh scripts/test-h700-sunxi-mmc-module-clock.sh` for the host regression and optional ASan/UBSan pass.
+
 ## sdc0 read-only driver constraints
 
 The first controller implementation should target the `sdc0` register block at `0x04020000` only. The pinned [U-Boot sunxi MMC implementation](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/drivers/mmc/sunxi_mmc.c) provides a portable reference for command/response handling, polling, FIFO transfers through the AHB path, clock setup, and H616 FIFO threshold initialization. Its register map is in [sunxi_mmc.h](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/drivers/mmc/sunxi_mmc.h).
