@@ -44,7 +44,7 @@ def make_candidate(src, dst, name):
     notes = []
     if name == "slot-input":
         p = dst / "src/lib.rs"
-        p.write_text("#![no_std]\n#[macro_use]\nextern crate alloc;\n" + p.read_text(encoding="utf-8"), encoding="utf-8")
+        p.write_text("#![no_std]\nextern crate alloc;\n" + p.read_text(encoding="utf-8"), encoding="utf-8")
         p = dst / "src/gesture.rs"
         p.write_text("use alloc::{vec, vec::Vec};\n" + p.read_text(encoding="utf-8").replace("std::mem::take", "core::mem::take"), encoding="utf-8")
         p = dst / "src/raw.rs"
@@ -85,7 +85,7 @@ def build_candidates(source, out, report):
         report.extend([f"### {name}\n", *[f"- {n}\n" for n in notes]])
         for triple in TARGETS:
             run(["cargo", "check", "--manifest-path", str(dst / "Cargo.toml"), "--target", triple, "--lib"],
-                env={"RUSTFLAGS": "-C panic=abort -C target-cpu=cortex-a53"},
+                env={"RUSTFLAGS": "-C panic=abort -C force-unwind-tables=no -C target-cpu=cortex-a53"},
                 log=out / "logs" / f"{name}-{triple}.log")
             report.append(f"- PASS: cargo check --target {triple}\n")
         report.append("\n")
@@ -157,7 +157,7 @@ void _start(void) {
     (abi / "shim.c").write_text(c, encoding="utf-8")
     for triple, (clang_target, emulation, machine) in TARGETS.items():
         run(["cargo", "build", "--manifest-path", str(abi / "Cargo.toml"), "--target", triple, "--release"],
-            env={"RUSTFLAGS": "-C panic=abort -C target-cpu=cortex-a53"},
+            env={"RUSTFLAGS": "-C panic=abort -C force-unwind-tables=no -C target-cpu=cortex-a53"},
             log=out / "logs" / f"abi-{triple}-cargo.log")
         archive = abi / "target" / triple / "release" / "liblk_linkslot_abi_probe.a"
         obj, elf = abi / f"shim-{triple}.o", abi / f"abi-{triple}.elf"
