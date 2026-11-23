@@ -1,0 +1,18 @@
+# lang	label	href
+zh	能力与授权	#doc-capabilities
+zh	目录与清单	#doc-layout
+zh	Lua API	#doc-lua
+zh	Web 管理页	#doc-web
+zh	主题包	#doc-theme
+zh	示例	#doc-example
+zh	限制与排障	#doc-limits
+zh	AI 提示词	#doc-ai
+zh	内部 API	#doc-internal
+en	Capabilities	#doc-capabilities-en
+en	API reference	#doc-api-en
+en	Lua API	#doc-lua-en
+en	Web bridge	#doc-web-en
+en	Limits	#doc-limits-en
+en	Example	#doc-example-en
+en	Internal API	#doc-internal-en
+en	AI prompt	#doc-ai-en

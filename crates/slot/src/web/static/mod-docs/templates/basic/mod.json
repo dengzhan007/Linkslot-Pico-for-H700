@@ -1,0 +1,10 @@
+{
+  "schema": 2,
+  "name": "My Mod",
+  "version": "1.0.0",
+  "author": "you",
+  "enabled": false,
+  "order": 100,
+  "category": "tool",
+  "permissions": ["context:read"]
+}

@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 260" width="440" height="260">
+  <defs>
+    <linearGradient id="gbShellJ" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e4ded0"/><stop offset=".5" stop-color="#cfc8b8"/><stop offset="1" stop-color="#a9a292"/>
+    </linearGradient>
+    <linearGradient id="gbRimJ" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fbf7ec"/><stop offset=".55" stop-color="#b9b2a2"/><stop offset="1" stop-color="#7f796d"/>
+    </linearGradient>
+    <linearGradient id="gbBezelJ" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5f5b66"/><stop offset="1" stop-color="#35323c"/>
+    </linearGradient>
+    <radialGradient id="gbScreenJ" cx=".45" cy=".4" r=".75">
+      <stop offset="0" stop-color="#3b2d13"/><stop offset="1" stop-color="#0a0907"/>
+    </radialGradient>
+    <linearGradient id="routerBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4b5268"/><stop offset=".4" stop-color="#2f3546"/><stop offset="1" stop-color="#1a1e2a"/>
+    </linearGradient>
+    <linearGradient id="routerFace" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#222837"/><stop offset="1" stop-color="#11151f"/>
+    </linearGradient>
+    <linearGradient id="antenna" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#202532"/><stop offset="1" stop-color="#4a5268"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="220" cy="232" rx="174" ry="16" fill="#000000" opacity=".30"/>
+  <g opacity=".38">
+    <ellipse cx="60" cy="232" rx="44" ry="7" fill="#000000"/>
+    <rect x="14" y="48" width="88" height="168" rx="14" fill="#171b27" stroke="#7c86a0" stroke-width="2"/>
+    <rect x="26" y="66" width="64" height="56" rx="6" fill="#090c13" stroke="#646e86" stroke-width="1.3"/>
+    <path d="M32 150 h10 v-6 h6 v6 h10 v6 h-10 v6 h-6 v-6 h-10 z" fill="none" stroke="#646e86" stroke-width="1.5"/>
+    <circle cx="66" cy="168" r="5" fill="none" stroke="#646e86" stroke-width="1.8"/>
+    <circle cx="80" cy="156" r="5" fill="none" stroke="#646e86" stroke-width="1.8"/>
+    <path d="M24 194 H92" stroke="#3d4558" stroke-width="2"/>
+  </g>
+  <g transform="translate(332 40)">
+    <ellipse cx="46" cy="184" rx="47" ry="7" fill="#000000" opacity=".42"/>
+    <rect x="0" y="0" width="92" height="176" rx="15" fill="url(#gbRimJ)"/>
+    <rect x="2" y="2" width="88" height="172" rx="13" fill="url(#gbShellJ)"/>
+    <path d="M12 9 Q46 3 80 9 L76 18 Q46 14 16 18 Z" fill="#ffffff" opacity=".30"/>
+    <circle cx="14" cy="11" r="2.2" fill="#f2b84b"/>
+    <rect x="11" y="20" width="70" height="62" rx="7" fill="url(#gbBezelJ)" stroke="#1d1b23" stroke-width="1.5"/>
+    <rect x="17" y="26" width="58" height="50" rx="4" fill="url(#gbScreenJ)" stroke="#f2b84b" stroke-width="1.4"/>
+    <circle cx="46" cy="51" r="10" fill="none" stroke="#f2b84b" stroke-width="2"/><path d="M53 58 L62 67" stroke="#f2b84b" stroke-width="2" stroke-linecap="round"/>
+    <path d="M23 88 H69" stroke="#7d7588" stroke-width="1" opacity=".55"/>
+    <!-- D-pad -->
+    <path d="M10 111 h12 v-7 h8 v7 h12 v8 h-12 v7 h-8 v-7 h-12 z" fill="#2c2a32" stroke="#4b4750" stroke-width="1"/>
+    <!-- A / B diagonal -->
+    <circle cx="70" cy="119" r="6" fill="#b0763a" stroke="#5f3a1c" stroke-width="1"/>
+    <circle cx="54" cy="134" r="6" fill="#b0763a" stroke="#5f3a1c" stroke-width="1"/>
+    <!-- Select / Start -->
+    <rect x="29" y="150" width="11" height="4" rx="2" fill="#2c2a32"/>
+    <rect x="44" y="150" width="11" height="4" rx="2" fill="#2c2a32"/>
+    <!-- speaker slots -->
+    <g stroke="#7d7588" stroke-width="1.2" opacity=".72">
+      <path d="M60 151 H79"/><path d="M60 156 H79"/><path d="M60 161 H79"/>
+      <path d="M60 166 H79"/>
+    </g>
+    <circle cx="7" cy="166" r="2" fill="#7d7588" opacity=".7"/>
+    <circle cx="85" cy="166" r="2" fill="#7d7588" opacity=".7"/>
+    <path d="M5 33 Q3 80 6 130" stroke="#ffffff" stroke-width="2" opacity=".18" fill="none"/>
+  </g>
+  <circle cx="332" cy="124" r="7" fill="#f2b84b"/>
+  <circle cx="332" cy="124" r="13" fill="none" stroke="#f2b84b" stroke-width="1.5" opacity=".35"/>
+</svg>
