@@ -58,7 +58,7 @@ def main():
     host_exe = out / "newlib_syscalls_host_test"
     host_flags = [
         "-std=c11", "-D_POSIX_C_SOURCE=200112L", "-D_DEFAULT_SOURCE",
-        "-Wall", "-Wextra", "-Werror", "-I", str(src.parent),
+        "-Wall", "-Wextra", "-Werror", "-DH700_HOST_ADAPTER_TEST", "-I", str(src.parent),
         "-I", str(root / "platform/h700/runtime/tests/include"),
     ] + ["-D" + item for item in RENAMES]
 
