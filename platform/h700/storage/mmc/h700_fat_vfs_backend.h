@@ -77,7 +77,8 @@ enum h700_fat_vfs_bootstrap_result {
  *   lookup -> persistent CMD17 block device -> bounded FAT mount -> VFS install.
  *
  * The caller must provide process-lifetime provider/device objects and a
- * process-lifetime GPT scratch array with H700_GPT_MAX_ENTRIES elements.
+ * GPT scratch array with H700_GPT_MAX_ENTRIES elements. The scratch array is
+ * used synchronously and only needs to remain valid for this call.
  * "primary" is the expected RG34XX p7 label; callers may provide another
  * exact GPT name where the board layout differs. The scan result preserves
  * the card/GPT diagnostics. PIO/APB1, card power and MMIO mappings remain
