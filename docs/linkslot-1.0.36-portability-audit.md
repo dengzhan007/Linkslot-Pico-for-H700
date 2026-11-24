@@ -398,3 +398,14 @@ Rust 1.96 的 AArch32 `alloc` 静态库含有 `__aeabi_unwind_cpp_pr0` 符号引
 5. **多核入口仍是硬门槛**：LK 当前 scheduler 的全局 `current_thread`、全局 run queue 与本地 IRQ critical section 不是 SMP scheduler/跨核锁。未证明其他 A53 核保持 parked，或未实现 per-CPU scheduler 和 cross-core synchronization 前，不得开始可能触发多核分配的正式 Linkslot runtime。
 
 因此现有 BL33 host layout pass 只证明“一个特制 A32 wrapper 可保留 header 区并把入口跳到 +0x1000 向量/启动代码”，并没有证明 GammaOS LK 完整 CRT0、`arch_early_init`、platform MMU、heap、线程调度可在 H700 正确运行。实际移植的最小下一步应是对 pinned LK 生成可审计的 H700 source overlay：修正 A53 toolchain flags、统一 vector-base linker contract、隔离 MTK platform objects，并对 SMP/coherency 初始化采取显式 fail-closed；在这些修改进入完整编译与链接前，BL33 仍不是可启动镜像。
+
+
+## AArch32/Thumb-2 H700 编译矩阵与 GammaOS LK overlay（2026-11-24）
+
+- H700 freestanding 编译脚本现在分别检查 AArch64、AArch32 ARM-state 和 AArch32 Thumb-2；三种模式均使用 Cortex-A53 目标，A32 还显式指定 NEON/VFPv4 + softfp。启动/异常汇编探针始终声明 ARM state，C/C++ 的 Thumb-2 模式匹配固定 GammaOS LK 的 `ENABLE_THUMB=true` 默认编译路径。
+- 同一批 H700 MMC、GPT、FAT16/32、exFAT 与 Libretro VFS backend 源文件在三种模式下生成目标对象；这只证明源代码/ABI 可编译，不代表完整 LK 最终链接、MMIO 初始化或实机运行。
+- `scripts/apply-h700-lk-overlay.py` 从固定 GammaOS LK commit 生成三个文件的 source overlay：`arch/arm/crt0.S`、`arch/arm/arch.c`、`arch/arm/rules.mk`。它保留上游 checkout 不变，生成逐文件 SHA256 manifest 和 unified patch，并执行 `git apply --check`。CI 首次实际运行结果尚待工作流完成。
+- overlay 只覆盖 BL33 第一条分支/header 保留、+0x1000 向量符号、`arch_early_init` VBAR 重定位和 Cortex-A53 `-mcpu` 修正；没有写 ACTLR.SMP、secondary-core parking、MMU/DRAM map、heap/stack 地址或 H700 MMIO。
+- 固定 GammaOS LK 源码默认 Thumb-2 C/C++ 与 ARM-state assembly 是两条不同的 codegen 路径。H700 project 必须在 target 层显式选择 NEON/VFPv4、softfp 和 ARM/Thumb interworking 规则，不能把 standalone `-marm` compile probe 当作完整 LK ABI。
+- 本阶段 mGBA 核心静态链接 footprint 为约 1.78 MiB，而 0x4a000000 到 0x4a0e0000 的 host probe 候选槽只有 896 KiB；该槽本身也不是经过 RG34XX 内存 ownership 批准的 RAM 分配。因此完整 Linkslot/mGBA 不应假定常驻在这段 BL33 候选窗口；未来应在批准的内存范围内设计独立可加载 core/payload ABI。
+
