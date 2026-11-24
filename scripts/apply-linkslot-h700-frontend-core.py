@@ -54,7 +54,6 @@ def patch_frontend(source: Path) -> None:
     link_state_dependency = 'slot-link-state = { path = "../slot-link-state" }'
     link_kind_dependency = 'slot-link-kind = { path = "../slot-link-kind" }'
     video_mode_dependency = 'slot-video-mode = { path = "../slot-video-mode" }'
-    quick_menu_dependency = 'slot-quick-menu = { path = "../slot-quick-menu" }'
     rom_id_dependency = 'slot-rom-id = { path = "../slot-rom-id" }'
     game_search_dependency = 'slot-game-search = { path = "../slot-game-search" }'
     hold_state_dependency = 'slot-hold-state = { path = "../slot-hold-state" }'
@@ -106,12 +105,6 @@ def patch_frontend(source: Path) -> None:
         if manifest_text.count(anchor) != 1:
             raise RuntimeError("cannot locate slot-game-search dependency in slot/Cargo.toml")
         manifest_text = manifest_text.replace(anchor, anchor + hold_state_dependency + "\n")
-        changed_manifest = True
-    if quick_menu_dependency not in manifest_text:
-        anchor = video_mode_dependency + chr(10)
-        if manifest_text.count(anchor) != 1:
-            raise RuntimeError("cannot locate slot-video-mode dependency for Quick Menu")
-        manifest_text = manifest_text.replace(anchor, anchor + quick_menu_dependency + chr(10))
         changed_manifest = True
     if changed_manifest:
         slot_manifest.write_text(manifest_text, encoding="utf-8")
@@ -194,6 +187,13 @@ def patch_frontend(source: Path) -> None:
         raise RuntimeError("cannot locate App import insertion point")
     if hold_import not in app:
         app = app.replace(app_import_anchor, app_import_anchor + hold_import)
+
+    quick_row_import_anchor = "QuickMenu, QuickMenuFaces, QuickRow, QuickValue, Refusal"
+    quick_row_import_new = "QuickMenu, QuickMenuFaces, QuickRow, QuickValue, ResumeAction, Refusal"
+    if app.count(quick_row_import_anchor) != 1:
+        raise RuntimeError("App QuickRow import anchor changed")
+    app = app.replace(quick_row_import_anchor, quick_row_import_new)
+
     app_replacements = (
         ("core_picker: Option<CorePicker>,", "core_picker: Option<CorePicker<Core>>,"),
         ("pub fn core_picker_chip(&self) -> Option<Chip> {",
