@@ -248,11 +248,11 @@ mod tests {
         let mut queue = Queue {
             events: [
                 H700InputEvent { button: H700_BTN_MENU, state: H700_INPUT_PRESSED, reserved: 0 },
-                H700InputEvent { button: H700_BTN_MENU, state: H700_INPUT_RELEASED, reserved: 0 },
-                H700InputEvent { button: H700_BTN_POWER, state: H700_INPUT_PRESSED, reserved: 0 },
-                H700InputEvent { button: H700_BTN_POWER, state: H700_INPUT_RELEASED, reserved: 0 },
+                H700InputEvent::default(),
+                H700InputEvent::default(),
+                H700InputEvent::default(),
             ],
-            len: 4,
+            len: 1,
             consumed: 0,
         };
         let service = service(&mut queue);
@@ -265,14 +265,25 @@ mod tests {
         assert_eq!(runtime.poll_actions(100 + crate::MENU_HOLD_MS, &mut actions), 1);
         assert_eq!(actions, alloc::vec![crate::Action::Eject]);
 
+        queue.events[1] = H700InputEvent {
+            button: H700_BTN_MENU, state: H700_INPUT_RELEASED, reserved: 0
+        };
+        queue.events[2] = H700InputEvent {
+            button: H700_BTN_POWER, state: H700_INPUT_PRESSED, reserved: 0
+        };
+        queue.len = 3;
         assert_eq!(runtime.poll_actions(1_000, &mut actions), 1);
         assert_eq!(actions, alloc::vec![crate::Action::PowerPress]);
 
-        assert_eq!(runtime.poll_actions(1_100, &mut actions), 2);
-        assert_eq!(
-            actions,
-            alloc::vec![crate::Action::PowerOff, crate::Action::PowerTap]
-        );
+        assert_eq!(runtime.poll_actions(1_000 + crate::POWER_HOLD_MS, &mut actions), 1);
+        assert_eq!(actions, alloc::vec![crate::Action::PowerHold]);
+
+        queue.events[3] = H700InputEvent {
+            button: H700_BTN_POWER, state: H700_INPUT_RELEASED, reserved: 0
+        };
+        queue.len = 4;
+        assert_eq!(runtime.poll_actions(1_001 + crate::POWER_HOLD_MS, &mut actions), 1);
+        assert_eq!(actions, alloc::vec![crate::Action::PowerOff]);
     }
 
     #[test]
