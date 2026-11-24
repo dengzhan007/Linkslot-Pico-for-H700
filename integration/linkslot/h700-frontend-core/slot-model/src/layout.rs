@@ -4,6 +4,9 @@
 //! 这里不读环境变量，由调用方把值传进来，保持 `slot-model` 无 I/O。
 
 
+#[cfg(feature = "host-compat")]
+use std::path::PathBuf;
+
 /// 设备上的卡根目录（BaseOS 挂载点）。
 pub const DEVICE_ROOT: &str = "/mnt/sdcard";
 
@@ -37,3 +40,14 @@ pub const PUBLIC_DIRS: [&str; 12] = [
     "Music",
 ];
 
+
+/// Resolve the root for the original Linux frontend/CLI host build.
+///
+/// This helper is intentionally omitted from freestanding builds; the LK
+/// runtime receives its card mount through the H700 storage service.
+#[cfg(feature = "host-compat")]
+pub fn resolve_root(explicit: Option<PathBuf>, env_root: Option<PathBuf>) -> PathBuf {
+    explicit
+        .or(env_root)
+        .unwrap_or_else(|| PathBuf::from(DEVICE_ROOT))
+}
