@@ -106,6 +106,16 @@ def main() -> None:
     ):
         raise RuntimeError("top-level makefile does not isolate the MediaTek platform/common stack")
 
+    if not all(
+        item in makefile_text
+        for item in (
+            "TOOLCHAIN_PREFIX ?= arm-none-eabi-",
+            "LD := $(TOOLCHAIN_PREFIX)ld",
+            "TOOLCHAIN_PREFIX =gcc/bin/arm-linux-androideabi-",
+        )
+    ):
+        raise RuntimeError("top-level makefile does not select a separate H700 ARM EABI toolchain")
+
     dev_text = overlay_dev_rules.read_text(encoding="utf-8")
     if not re.search(
         r"ifneq \(\$\(H700_BUILD\),yes\)\s+MODULES \+=.*?\$\(LOCAL_DIR\)/md_com\s+endif",
