@@ -226,6 +226,24 @@ impl Renderer for Compositor {
     frontend_text = frontend_text.replace("&mut Compositor", "&mut dyn Renderer")
     frontend_file.write_text(frontend_text, encoding="utf-8")
 
+    # CartFaces is called by Frontend::render/compose and also uploads the
+    # textures consumed by its draw list, so it must use the same backend seam.
+    cart_faces_file = source / "crates/slot/src/cart_faces.rs"
+    cart_faces_text = cart_faces_file.read_text(encoding="utf-8")
+    cart_faces_text = replace_once(
+        cart_faces_text,
+        "use slot_gfx::{Compositor, TexId};",
+        "use slot_gfx::{Renderer, TexId};",
+        "CartFaces renderer import",
+    )
+    cart_compositor_count = cart_faces_text.count("&mut Compositor")
+    if cart_compositor_count != 2:
+        raise SystemExit(
+            f"expected two CartFaces Compositor parameters, found {cart_compositor_count}"
+        )
+    cart_faces_text = cart_faces_text.replace("&mut Compositor", "&mut dyn Renderer")
+    cart_faces_file.write_text(cart_faces_text, encoding="utf-8")
+
     if "pub struct TexId" in draw_text or "pub enum Draw" in draw_text:
         raise SystemExit("local duplicate Draw/TexId types remain in slot-gfx")
     if "pub use h700_render_core::{Draw, TexId};" not in draw_text:
