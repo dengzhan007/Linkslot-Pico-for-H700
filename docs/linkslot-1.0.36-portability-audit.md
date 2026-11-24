@@ -357,3 +357,31 @@ Rust 1.96 的 AArch32 `alloc` 静态库含有 `__aeabi_unwind_cpp_pr0` 符号引
 6. 继续单独关闭 H700 启动交接/内存 ownership 的 NO-GO 门槛；未关闭前不得执行设备 payload。
 
 仍不生成可刷写镜像、不写 SD、不修改启动区域、不执行 payload。
+
+
+## AArch32 H700 HAL 编译门与核心体积约束（2026-11-24）
+
+### 同一套 HAL 源码的双架构检查
+
+为避免 A64-only scaffold 掩盖 BL33 A32 ABI 问题，`scripts/build-h700-objects.sh` 现在支持两个显式目标：
+
+- `H700_ARCH=aarch64`：保持原有 `aarch64-none-elf` / Cortex-A53 检查。
+- `H700_ARCH=aarch32`：`armv7a-none-eabi`、Cortex-A53、ARM state、NEON/VFPv4、softfp；额外使用独立 A32 C/C++/汇编探针，断言 ILP32 数据模型并检查最终 object architecture。
+
+两种目标编译同一组 H700 SD/MMC、GPT、FAT16/32/exFAT 和只读 Libretro VFS 后端源文件；输出目录按架构隔离。GitHub Actions 的 H700 compile workflow 会顺序运行 A64 与 A32 两套检查。该检查只验证编译器目标、数据模型和 HAL 源码可编译，不提供完整运行时、不完成 LK 最终链接，也不验证 BL33 入口或 H700 实机 MMIO。
+
+独立的 H700 newlib workflow 已使用真实 `arm-none-eabi` 工具链验证 syscall adapter 为 ELF32/ARM/EABI5，并以固定 GammaOS LK commit 的 `include/lib/heap.h` 原型编译 `lk_bindings.c`。这证明适配器和 heap 函数声明在编译层一致；它没有实现 H700 heap-init、secondary-core parking、console 或 RTC 服务。
+
+### BL33 resident image 与 mGBA core 必须分层评估
+
+当前 `scripts/audit-lk-bl33-layout.py` 的布局探针把候选 A32 image end 限制在 `0x4a0e0000`，相对于 `0x4a000000` 只有 **896 KiB**。这是复现 BaseOS loader 研究布局所用的 host-side 上界，不是 RG34XX 已批准的 RAM 分配或可写入范围。
+
+本轮 mGBA whole-archive 诊断链接报告的 footprint 为 text **1,061,848 B**、data **801,140 B**、BSS **5,540 B**，合计 **1,868,528 B**（约 1.78 MiB）；它是 mGBA 核心在测试 newlib/linker 环境下的静态链接尺寸，且该轮使用的 `libnosys` 仅用于诊断闭合符号，不可作为正式 runtime。单是这份 mGBA footprint 就约为 896 KiB 候选 BL33 预算的 **2.04 倍**，尚未计入 GammaOS LK、H700 HAL、Linkslot UI、启动记录与运行栈。
+
+因此不应把“LK-as-BL33”误解为把完整 Linkslot + mGBA 全部塞进 1 MiB 入口槽。后续更合理的候选分层是：小型 A32 LK/BL33 常驻层负责启动、平台服务与装载；模拟器核心作为独立 A32 payload，从已确认的 ROM 卡加载到经过内存 ownership 审计批准的运行区。此方案尚未实现：必须先确认目标机 BL33 入口/可用 RAM/secure 与 DMA carveout，再定义可重定位的 core/payload ABI、装载边界、缓存维护及失败回退。当前仍不批准任何 payload 地址，不构建或执行猜测地址的镜像。
+
+### 当前状态与后续门槛
+
+- A32 HAL 双目标 CI 已加入 PR #16；以对应 workflow 最终 conclusion 为准，不能把 queued/in-progress 描述为 pass。
+- mGBA A32 archive、VFS v3、newlib 和 LK layout 探针在完整可行性工作流中按步骤执行；只有整个 workflow 成功且报告上传后才更新为通过。
+- 真正 BL33 bring-up 前仍需完成：真实 GammaOS LK A32 build flags / CRT0 / VBAR 适配、A53 secondary-core 停驻证明、真实 LK heap 初始化与锁语义、完整镜像 header/entry、RG34XX non-SP 实机冷启动和失败恢复，以及安全 RAM owner map。
