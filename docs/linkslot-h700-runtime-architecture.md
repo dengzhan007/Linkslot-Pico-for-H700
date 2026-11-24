@@ -143,6 +143,7 @@ Runtime services must be explicit interfaces, not hidden std assumptions:
 | Display | Renderer-independent framebuffer descriptor and cache/scanout handoff; no `/dev/fb0`, EGL or dynamic loading. |
 | Audio | PCM producer interface with measured rate, format and bounded buffering; no ALSA/CPAL. |
 | Power | Explicit battery/charger/backlight/LED/poweroff service; no sysfs or shell execution. |
+| CPU performance | C-owned H700 DVFS/OPP service with board/silicon/thermal clamps; Rust/Linkslot may request a policy mode but cannot program PLL/PMIC registers. Keep hardware writes disabled until the RG34XX AXP2202 rail, H700 speed bin, thermal limits and BL31 secondary-core state are verified. |
 | Network | Omit from the first bootable vertical slice. Add Wi-Fi, TCP/TLS, WebDAV and LAN server after local play/save works. |
 
 ### Runtime performance and clock parity with GammaOS Pico
@@ -158,6 +159,12 @@ The H700 port should preserve the mechanisms behind the reference implementation
 Current H700 status: the versioned C time ABI currently exports **monotonic milliseconds only**; Rust `H700EventLoop::step()` consumes that clock and ordered input edges. The newlib adapter has an RTC `gettimeofday` callback slot, but the H700 platform callback is still external/unimplemented and returns `ENOSYS` when absent. The GPIO/ADC input producer, actual H700 hardware timer, panel scanout/TE/VBlank driver and PCM DMA audio backend are also pending. Therefore the 1.0.45 frontend and mGBA cross-build results do not yet demonstrate GammaOS Pico-equivalent startup time, input latency, frame pacing or calendar-time support.
 
 Acceptance evidence must include: cold-boot milestone timings; input-edge-to-core-consumption latency distribution; panel period/jitter and missed-frame counts at GB/GBA/SNES/PAL modes as applicable; PCM underrun counts; run-ahead state/audio determinism tests; and RTC accuracy/set/power-cycle tests on the actual RG34XX. Record percentiles and worst cases, not just averages.
+
+### CPU performance modes and DVFS
+
+The CPU performance mode is a separate platform service, not a Linkslot-core feature. The initial model is Power Saver / Balanced / Performance / Auto, with Boost hidden until explicitly validated. A later Linkslot setting may request one of these modes; H700 C HAL owns OPP selection, shared CPU PLL/CCU and the board-specific PMIC regulator. The service must return actual frequency and clamp reason, and must never accept arbitrary MHz values.
+
+The RG34XX field inventory identifies AXP2202 (not the AXP717 found in the related RG35XX-2024 mainline DTS). See [H700 CPU performance modes and DVFS service](h700-cpu-performance-service.md). No CPU supply rail is yet assigned from the current report, no H700 OPP table is approved for this board, and CPU1–CPU3 handoff state remains unknown. Therefore frequency/voltage writes remain disabled. Do not copy the MT6785 reference's PLL-only frequency setter or its CPU Clock values; the reference code does not perform DVFS voltage scaling.
 
 Do not add Linux syscall shims for `open`, `read`, `pthread`, `dlopen`, `ioctl` or `syncfs` merely to make the old application compile. Implement the small services that the selected Linkslot modules genuinely need.
 
