@@ -428,7 +428,7 @@ def main():
     source, out, lk_source = args.source.resolve(), args.out.resolve(), args.lk_source.resolve()
     out.mkdir(parents=True, exist_ok=True)
     report = [
-        "# Linkslot 1.0.36 no_std / LK ABI feasibility build\n\n",
+        "# Linkslot 1.0.45 no_std / LK ABI feasibility build\n\n",
         "- Scope: host-only cross-compile and static link; no device, SD, boot media, or payload execution.\n",
         "- Rust: " + run(["rustc", "--version"]).strip() + "\n",
         "- Cargo: " + run(["cargo", "--version"]).strip() + "\n",
