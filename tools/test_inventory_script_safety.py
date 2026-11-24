@@ -107,6 +107,8 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertIn('/sys/kernel/debug/clk/clk_summary', self.source)
         self.assertIn('/sys/bus/nvmem/devices/*', self.source)
         self.assertIn('sunxi-sid-ng@03006000', self.source)
+        self.assertIn('case "${SID_OF_NODE##*/}" in', self.source)
+        self.assertNotIn('case "\\${SID_OF_NODE##*/}" in', self.source)
         self.assertIn('SID_NVMEM_PATH="$node/nvmem"', self.source)
         self.assertIn('dd if="$SID_NVMEM_PATH" bs=1 skip=0 count=2', self.source)
         self.assertIn('dd if="$SID_NVMEM_PATH" bs=1 skip=20 count=8', self.source)
