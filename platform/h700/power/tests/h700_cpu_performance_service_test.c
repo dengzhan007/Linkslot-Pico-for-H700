@@ -67,6 +67,19 @@ int main(void)
     CHECK(h700_cpu_perf_service_init_v1(&service, (uint32_t)sizeof(service),
           &config) == H700_CPU_PERF_SERVICE_OK,
           "service initializes with copied board profile");
+
+    config.abi_version++;
+    CHECK(h700_cpu_perf_service_init_v1(&service, (uint32_t)sizeof(service),
+          &config) == H700_CPU_PERF_SERVICE_ERR_ABI,
+          "invalid reinitialization is rejected");
+    CHECK(h700_cpu_perf_service_get_state_v1(&service, &state, (uint32_t)sizeof(state)) ==
+          H700_CPU_PERF_SERVICE_ERR_NOT_INITIALIZED,
+          "failed reinitialization revokes the previous service instance");
+    config.abi_version--;
+    CHECK(h700_cpu_perf_service_init_v1(&service, (uint32_t)sizeof(service),
+          &config) == H700_CPU_PERF_SERVICE_OK,
+          "service can be safely initialized again with a valid profile");
+
     CHECK(h700_cpu_perf_service_get_state_v1(&service, &state, (uint32_t)sizeof(state)) ==
           H700_CPU_PERF_SERVICE_OK && state.hardware_applied == 0u &&
           state.planned_frequency_hz == 0u,
