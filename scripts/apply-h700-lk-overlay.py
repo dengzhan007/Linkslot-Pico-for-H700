@@ -161,12 +161,20 @@ def main() -> None:
 
     patch_path = out / "h700-bl33-overlay.patch"
     patch_path.write_text("".join(diff_parts), encoding="utf-8")
+    check = subprocess.run(
+        ["git", "-C", str(source), "apply", "--check", str(patch_path)],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if check.returncode:
+        raise RuntimeError("generated overlay patch failed git apply --check:\\n" + check.stdout)
     manifest = {
         "schema": "gammaos-lk-h700-overlay-v1",
         "source_repository": "TheGammaSqueeze/lk-mt6785",
         "source_commit": revision,
         "status": "host-generated-source-overlay-only",
-        "source_tree_modified": False,
+        "source_tree_modified": False,\n        "git_apply_check": "pass",
         "files": records,
         "patch_sha256": sha256(patch_path.read_bytes()),
         "explicitly_not_changed": [
