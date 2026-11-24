@@ -37,8 +37,9 @@
 - [x] 确认现有 `Draw::{Rect,Tex,Turned,Game,Shot}` 已提供可复用的 CPU 绘制命令边界；但 `Compositor` 和 `Frontend` 目前仍具体绑定 OpenGL compositor，需要先抽出 renderer contract。
 - [x] 制定 LK 软件 framebuffer 的分层方案：先实现 RGBA 软件 2D 基线，再逐步补屏幕滤镜；不依赖 LK 内的 Linux fbdev/EGL/GLES/Mali userspace。
 - [x] 记录 Rust 运行时边界和 R0–R6 可验收垂直切片，见 [Linkslot H700 LK runtime architecture](linkslot-h700-runtime-architecture.md)。
-- [ ] 抽出 renderer-independent Draw/texture 接口并增加 host golden-image tests；保持 `upstream/linkslot` 原样不变。
-- [ ] 在 host buffer 上实现软件 raster backend，覆盖 Rect/Tex/Turned/Game/Shot 和裁剪/alpha/旋转；暂不连接物理 framebuffer。
+- [x] 在 `integration/linkslot/h700-render-core` 建立独立 `no_std + alloc` 软件 rasterizer 首轮代码，覆盖 Rect/Tex/Turned/Game/Shot、裁剪、alpha、最近邻采样、RGBA/BGRA byte order；9 项 host regression test 已编写。该 crate 不修改 `upstream/linkslot`，也不映射物理 framebuffer。
+- [ ] 运行 renderer 的 `cargo check` 与 9 项 `cargo test` 并取得 Actions 成功结果；当前代码尚无本轮 CI 执行结果，不能标记测试通过。
+- [ ] 将 upstream `Draw`/texture API 抽成共享 renderer-independent contract，并把真实 `Frontend` 从具体 `Compositor` 依赖改为可注入 backend；当前 standalone rasterizer 只是兼容数据形状的独立原型。
 - [ ] 将 framebuffer descriptor/scanout ownership、stride/像素格式与缓存维护审计单独关闭后，再连接 H700 显示 HAL。
 - [ ] 把 `slot-input` 与 `slot-model` 的纯逻辑整合进窄 no_std + alloc crate；不引入完整 Linux 应用依赖树。
 - [ ] 完成首个静态 UI → 本地 ROM → mGBA → 视频帧的 LK vertical slice；随后才接入输入、保存写入、音频/电源及网络服务。
