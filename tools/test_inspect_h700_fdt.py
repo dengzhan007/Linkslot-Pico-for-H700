@@ -226,7 +226,7 @@ class FdtInspectorTests(unittest.TestCase):
         self.assertEqual(cpu["clock_frequency_hz"], 1512000000)
         self.assertEqual(cpu["cpu_supply"][0]["node"], "/soc@03000000/pmu/regulator@0")
         self.assertEqual(cpu["cpu_supply"][0]["regulator"]["name"], "CPU_VDD")
-        self.assertEqual(cpu["operating_points_v2"][0]["node"], "/opp-table@0")
+        self.assertEqual(cpu["operating_points_v2"][0]["node"], "/soc@03000000/opp-table@0")
         self.assertEqual(cpu["nvmem_cells"][0]["node"], "/soc@03000000/efuse@03006000/speed-bin@0")
         self.assertEqual(cpu["nvmem_cells"][0]["name"], "speed-bin")
         self.assertEqual(cpu["thermal_sensors"][0]["node"], "/soc@03000000/thermal@05070400")
