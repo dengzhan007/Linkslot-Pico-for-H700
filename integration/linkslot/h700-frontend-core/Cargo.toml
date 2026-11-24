@@ -1,0 +1,8 @@
+[workspace]
+resolver = "2"
+members = ["slot-input", "slot-model"]
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = false
