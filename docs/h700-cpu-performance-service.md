@@ -244,3 +244,5 @@ Important constraints now explicit in the design record:
 - Do not switch to `pll_periph0` until its actual rate, divider tree and timer continuity are verified on the target.
 
 This audit does not change the policy-only service ABI, runtime owner or QuickRow. Actual DVFS remains unavailable; no PLL/CCU/PMIC writes were added.
+
+The read-only inventory collector now also emits a focused, indentation-preserving excerpt for `pll_cpu`, `pll_periph0`, `cpux` and `cpu` entries from Linux `/sys/kernel/debug/clk/clk_summary`. This can make Linux clock-tree/rate evidence easier to review when debugfs exports it, but it is not a direct `PLL_CPU`/`CPU_CFG` MMIO read and does not prove the BL33-entry clock state. Its static safety regression is wired into `.github/workflows/h700-arch-check.yml`; the new push run has not yet been confirmed.
