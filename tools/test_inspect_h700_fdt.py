@@ -32,7 +32,7 @@ def make_fdt():
         "regulator-max-microvolt", "regulator-always-on", "regulator-boot-on",
         "operating-points-v2", "opp-hz", "opp-microvolt", "opp-supported-hw",
         "opp-shared", "nvmem-cells", "nvmem-cell-names", "thermal-sensors",
-        "clock-frequency", "turbo-mode",
+        "clock-frequency", "turbo-mode", "#thermal-sensor-cells",
     )
     strings = bytearray()
     name_offsets = {}
@@ -89,7 +89,7 @@ def make_fdt():
     prop("operating-points-v2", be32(0x30))
     prop("nvmem-cells", be32(0x40))
     prop("nvmem-cell-names", b"speed-bin\0")
-    prop("thermal-sensors", be32(0x50))
+    prop("thermal-sensors", cells(0x50, 1))
     end()
     end()
 
@@ -233,6 +233,8 @@ class FdtInspectorTests(unittest.TestCase):
         self.assertEqual(cpu["nvmem_cells"][0]["node_details"]["reg_cells"], [0, 2])
         self.assertEqual(cpu["thermal_sensors"][0]["node"], "/soc@03000000/thermal@05070400")
         self.assertEqual(cpu["thermal_sensors"][0]["node_details"]["compatible"], ["allwinner,sun50i-thermal"])
+        self.assertEqual(cpu["thermal_sensors"][0]["arguments"], [1])
+        self.assertEqual(len(cpu["thermal_sensors"]), 1)
         opp_entries = cpu_power["cpu_opp_tables"][0]["entries"]
         self.assertEqual([entry["frequency_hz"] for entry in opp_entries], [1000000000, 1512000000])
         self.assertEqual(opp_entries[1]["voltage_microvolt_cells"], [1100000, 1050000, 1150000])
