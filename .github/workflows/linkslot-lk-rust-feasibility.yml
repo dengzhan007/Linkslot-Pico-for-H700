@@ -62,6 +62,7 @@ on:
       - "scripts/test-h700-lk-project-guard.py"
       - "scripts/apply-linkslot-render-core.py"
       - "scripts/apply-linkslot-h700-frontend-core.py"
+      - "scripts/test-h700-input-service-abi.py"
       - "docs/h700-lk-project.md"
       - "integration/linkslot/h700-render-core/**"
       - "integration/linkslot/h700-frontend-core/**"
@@ -209,6 +210,9 @@ jobs:
         run: |
           cargo check --manifest-path .ci/upstream-linkslot/Cargo.toml \
             -p slot --no-default-features --features device,h700-software
+
+      - name: Cross-compile H700 input service C ABI layouts
+        run: python3 scripts/test-h700-input-service-abi.py --clang clang --out build/audit-work/linkslot-1.0.36/input-service-abi
 
       - name: Test slot-i18n static no_std tables
         run: |
