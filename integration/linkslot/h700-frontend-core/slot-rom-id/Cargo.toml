@@ -1,0 +1,10 @@
+[package]
+name = "slot-rom-id"
+version = "1.0.36"
+edition = "2021"
+rust-version = "1.96"
+license = "GPL-3.0-or-later"
+description = "Linkslot ROM SHA-256 identity helpers for no_std runtimes"
+
+[dependencies]
+sha2 = { version = "0.10", default-features = false }

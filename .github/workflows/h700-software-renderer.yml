@@ -1,0 +1,29 @@
+name: H700 software renderer
+
+on:
+  push:
+    branches:
+      - main
+      - porting/linkslot-1.0.36-feasibility
+    paths:
+      - "integration/linkslot/h700-render-core/**"
+      - ".github/workflows/h700-software-renderer.yml"
+  pull_request:
+    paths:
+      - "integration/linkslot/h700-render-core/**"
+      - ".github/workflows/h700-software-renderer.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check no_std library build
+        run: cargo check --manifest-path integration/linkslot/h700-render-core/Cargo.toml
+      - name: Run rasterizer regression tests
+        run: cargo test --manifest-path integration/linkslot/h700-render-core/Cargo.toml

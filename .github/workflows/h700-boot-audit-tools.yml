@@ -39,6 +39,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Run host-tool unit tests on Windows
+        run: python -m unittest discover -s tools -p "test_*.py" -v
+
       - name: Validate Windows inventory wrapper syntax
         shell: pwsh
         run: |

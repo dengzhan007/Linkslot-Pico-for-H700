@@ -1,0 +1,17 @@
+[package]
+name = "h700-render-core"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+license = "GPL-3.0-or-later"
+description = "no_std software rasterizer core for the H700 Linkslot port"
+
+[dependencies]
+libm = "0.2"
+
+[features]
+default = []
+test-support = []
+
+[lib]
+path = "src/lib.rs"

@@ -1,0 +1,85 @@
+name: H700 Linkslot runtime slices
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "integration/linkslot/h700-frontend-core/**"
+      - "platform/h700/runtime/input_*.h"
+      - "platform/h700/runtime/input_*.c"
+      - "scripts/apply-linkslot-render-core.py"
+      - "scripts/apply-linkslot-h700-frontend-core.py"
+      - "scripts/test-h700-input-*.py"
+      - "scripts/test-h700-input-queue.c"
+      - ".github/workflows/h700-linkslot-runtime.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust-business:
+    name: no_std business + Linkslot integration
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout feasibility branch
+        uses: actions/checkout@v4
+
+      - name: Checkout immutable Linkslot 1.0.36 snapshot
+        uses: actions/checkout@v4
+        with:
+          ref: upstream/linkslot
+          path: .ci/upstream-linkslot
+
+      - name: Install pinned Rust and freestanding targets
+        uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          targets: armv7a-none-eabi,aarch64-unknown-none
+
+      - name: Test persistent no_std frontend business crates
+        run: |
+          cargo test --manifest-path integration/linkslot/h700-frontend-core/Cargo.toml --workspace
+          cargo test --manifest-path integration/linkslot/h700-frontend-core/Cargo.toml --workspace --no-default-features
+          for target in armv7a-none-eabi aarch64-unknown-none; do
+            cargo check --manifest-path integration/linkslot/h700-frontend-core/Cargo.toml \
+              --workspace --no-default-features --target "$target"
+          done
+
+      - name: Apply renderer and no_std business overlays to isolated Linkslot tree
+        run: |
+          python3 scripts/apply-linkslot-render-core.py \
+            --source .ci/upstream-linkslot \
+            --crate integration/linkslot/h700-render-core
+          python3 scripts/apply-linkslot-h700-frontend-core.py \
+            --source .ci/upstream-linkslot \
+            --crate-root integration/linkslot/h700-frontend-core
+
+      - name: Run upstream input/model regression tests against H700 no_std sources
+        run: |
+          cargo test --manifest-path .ci/upstream-linkslot/Cargo.toml \
+            -p slot-input -p slot-model
+
+      - name: Compile full Linkslot Frontend with H700 software renderer and business overlay
+        run: |
+          cargo check --manifest-path .ci/upstream-linkslot/Cargo.toml \
+            -p slot --no-default-features --features device,h700-software
+
+  c-input-service:
+    name: H700 C input service ABI + queue
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout feasibility branch
+        uses: actions/checkout@v4
+
+      - name: Check compiler availability
+        run: |
+          command -v cc
+          command -v clang
+          cc --version
+          clang --version
+
+      - name: Test bounded input queue
+        run: python3 scripts/test-h700-input-queue.py --cc cc --out build/h700-input-queue
+
+      - name: Cross-compile input ABI and queue for AArch32/AArch64
+        run: python3 scripts/test-h700-input-service-abi.py --clang clang --out build/h700-input-abi

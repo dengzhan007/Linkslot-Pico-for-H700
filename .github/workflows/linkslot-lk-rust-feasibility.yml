@@ -1,0 +1,448 @@
+name: Linkslot LK Rust feasibility
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - ".github/workflows/linkslot-lk-rust-feasibility.yml"
+      - "scripts/audit-linkslot-nostd.py"
+      - "scripts/audit-lk-bl33-layout.py"
+      - "scripts/apply-h700-lk-overlay.py"
+      - "scripts/test-h700-lk-overlay.py"
+      - "scripts/audit-slot-i18n-nostd.py"
+      - "scripts/audit-libretro-static-abi.py"
+      - "scripts/build-mgba-aarch32-static.py"
+      - "scripts/build-mgba-aarch32-generic-static.py"
+      - "scripts/build-mgba-libretro-vfs3-static.py"
+      - "scripts/build-mgba-arm-none-eabi-vfs3.py"
+      - "scripts/probe-mgba-newlib-whole-archive-link.py"
+      - "scripts/test-mgba-vdir-vfs3-host.py"
+      - "scripts/test-h700-newlib-adapter.py"
+      - "platform/h700/runtime/lk_bindings.c"
+      - "platform/h700/runtime/newlib_syscalls.h"
+      - "scripts/audit-libretro-vfs-v3-abi.py"
+      - "scripts/test-linkslot-slot-retro-vfs.py"
+      - "scripts/test-linkslot-static-core-api.py"
+      - "scripts/test-linkslot-mgba-static-rust-binding.py"
+      - "scripts/test-linkslot-static-mgba-selection.py"
+      - "platform/h700/runtime/storage_path.rs"
+      - "scripts/test-h700-storage-path.py"
+      - "scripts/test-h700-fat-compile.py"
+      - "scripts/test-h700-fat-images.sh"
+      - "platform/h700/storage/fat/**"
+      - "platform/h700/storage/mmc/**"
+      - "docs/h700-mmc-board-profile.md"
+      - "docs/h700-gpt-readonly.md"
+      - "scripts/test-h700-mmc-board-profile.sh"
+      - "scripts/test-h700-gpt-readonly.sh"
+      - "scripts/test-h700-sunxi-mmc-clock.sh"
+      - "scripts/test-h700-sunxi-mmc-module-clock.sh"
+      - "scripts/test-h700-sunxi-mmc-pio-read.sh"
+      - "scripts/test-h700-sunxi-sd-csd.sh"
+      - "scripts/test-h700-sunxi-sd-card-init.sh"
+      - "scripts/test-h700-h616-sdc0-platform.sh"
+      - "scripts/test-h700-h616-sdc0-pins.sh"
+      - "scripts/test-h700-sunxi-mmc-gpt-adapter.sh"
+      - "scripts/test-h700-sunxi-mmc-gpt-integration.sh"
+      - "scripts/test-h700-sdc0-readonly-scan.sh"
+      - "platform/h700/storage/fat/**"
+      - "scripts/test-h700-fat-partition-bounds.sh"
+      - "scripts/test-h700-sunxi-mmc-fat.sh"
+      - "scripts/test-h700-sunxi-mmc-fat-scan.sh"
+      - "scripts/test-h700-fat-vfs-backend.sh"
+      - "scripts/test-h700-sdc0-fat-vfs-bootstrap.sh"
+      - "platform/h700/runtime/mgba_static.rs"
+      - "platform/h700/runtime/tests/mgba_static_stub.c"
+      - "scripts/probe-mgba-static-api-link.py"
+      - "platform/h700/**"
+      - "scripts/build-h700-objects.sh"
+      - "project/rg34xx_h700.mk"
+      - "target/rg34xx_h700/rules.mk"
+      - "scripts/test-h700-lk-project-guard.py"
+      - "scripts/apply-linkslot-render-core.py"
+      - "scripts/apply-linkslot-h700-frontend-core.py"
+      - "scripts/test-h700-input-service-abi.py"
+      - "scripts/test-h700-input-queue.py"
+      - "scripts/test-h700-input-queue.c"
+      - "docs/h700-lk-project.md"
+      - "integration/linkslot/h700-render-core/**"
+      - "integration/linkslot/h700-frontend-core/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linkslot-lk-rust-feasibility-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cross-compile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CARGO_TERM_COLOR: always
+      RUST_BACKTRACE: 1
+    steps:
+      - name: Checkout feasibility branch
+        uses: actions/checkout@v4
+
+      - name: Checkout immutable Linkslot 1.0.36 snapshot
+        uses: actions/checkout@v4
+        with:
+          ref: upstream/linkslot
+          path: .ci/upstream-linkslot
+          persist-credentials: false
+
+      - name: Checkout pinned mGBA source
+        uses: actions/checkout@v4
+        with:
+          repository: libretro/mgba
+          ref: e31759b24e7a4e3899285ff720d7b573ac328ae7
+          path: .ci/mgba-source
+          persist-credentials: false
+
+      - name: Checkout pinned GammaOS LK reference
+        uses: actions/checkout@v4
+        with:
+          repository: TheGammaSqueeze/lk-mt6785
+          ref: 9bf1419a49e0af6dba8b05916df382c9c9c6d0a8
+          path: .ci/lk-reference
+          persist-credentials: false
+
+      - name: Generate H700 BL33 source overlay from pinned GammaOS LK
+        run: |
+          python3 scripts/apply-h700-lk-overlay.py \
+            --lk-source .ci/lk-reference \
+            --out build/audit-work/linkslot-1.0.36/h700-lk-overlay
+
+      - name: Apply shared H700 render contract to isolated Linkslot snapshot
+        run: |
+          python3 scripts/apply-linkslot-render-core.py \
+            --source .ci/upstream-linkslot \
+            --crate integration/linkslot/h700-render-core
+
+      - name: Install LLVM cross-link tools
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          sudo timeout --signal=TERM --kill-after=30s 300s env DEBIAN_FRONTEND=noninteractive \
+            apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=45 -o Acquire::https::Timeout=45 update
+          sudo timeout --signal=TERM --kill-after=30s 1800s env DEBIAN_FRONTEND=noninteractive \
+            apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=45 -o Acquire::https::Timeout=45 \
+            install -y --no-install-recommends clang llvm lld cmake \
+              gcc-arm-linux-gnueabi g++-arm-linux-gnueabi libc6-dev-armel-cross \
+              gcc-arm-none-eabi libnewlib-arm-none-eabi libnewlib-dev \
+              libstdc++-arm-none-eabi-dev dosfstools mtools exfatprogs
+          for tool in clang ld.lld llvm-nm llvm-objcopy arm-none-eabi-gcc arm-linux-gnueabi-gcc mkfs.fat mcopy mkfs.exfat; do
+            command -v "$tool" >/dev/null || { echo "Missing required tool: $tool"; exit 1; }
+          done
+
+      - name: Compile/link actual GammaOS LK H700 BL33 overlay CRT0 and exception vectors
+        run: |
+          python3 scripts/test-h700-lk-overlay.py \
+            --lk-source .ci/lk-reference \
+            --overlay build/audit-work/linkslot-1.0.36/h700-lk-overlay \
+            --out build/audit-work/linkslot-1.0.36/h700-lk-overlay-build
+
+      - name: Test RG34XX native BL33 header packaging contract
+        run: python3 scripts/test-package-h700-bl33.py
+
+      - name: Test RG34XX H700 LK project and memory-layout fail-closed gate
+        run: |
+          python3 scripts/test-h700-lk-project-guard.py \
+            --lk-source .ci/lk-reference \
+            --overlay build/audit-work/linkslot-1.0.36/h700-lk-overlay \
+            --out build/audit-work/linkslot-1.0.36/h700-lk-project-guard
+
+      - name: Install pinned Rust toolchain and freestanding targets
+        uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          targets: armv7a-none-eabi,aarch64-unknown-none
+
+      - name: Check H700 no_std software renderer
+        run: cargo check --manifest-path integration/linkslot/h700-render-core/Cargo.toml
+
+      - name: Run H700 software renderer host regressions
+        run: cargo test --manifest-path integration/linkslot/h700-render-core/Cargo.toml
+
+      - name: Compile H700 SoftwareCompositor and shared Linkslot slot-gfx render contract
+        run: |
+          cargo check --manifest-path .ci/upstream-linkslot/Cargo.toml \
+            -p slot-gfx --no-default-features --features device,test-support,h700-software
+
+      - name: Test H700 SoftwareCompositor framebuffer integration
+        run: |
+          cargo test --manifest-path .ci/upstream-linkslot/Cargo.toml \
+            -p slot-gfx --no-default-features --features device,test-support,h700-software
+
+      - name: Compile Linkslot Frontend against H700 SoftwareCompositor Renderer trait
+        run: |
+          cargo check --manifest-path .ci/upstream-linkslot/Cargo.toml \
+            -p slot --no-default-features --features device,h700-software
+
+      - name: Compile existing H700 AArch64 scaffold
+        run: bash scripts/build-h700-objects.sh
+
+      - name: Cross-compile Linkslot candidate logic and C ABI probes
+        run: |
+          python3 scripts/audit-linkslot-nostd.py \
+            --source .ci/upstream-linkslot \
+            --lk-source .ci/lk-reference \
+            --out build/audit-work/linkslot-1.0.36
+
+      - name: Apply persistent H700 no_std Linkslot business crates to isolated snapshot
+        run: |
+          python3 scripts/apply-linkslot-h700-frontend-core.py \
+            --source .ci/upstream-linkslot \
+            --crate-root integration/linkslot/h700-frontend-core
+
+      - name: Test persistent H700 no_std frontend business crates
+        run: |
+          cargo test --manifest-path integration/linkslot/h700-frontend-core/Cargo.toml --workspace
+          cargo test --manifest-path integration/linkslot/h700-frontend-core/Cargo.toml --workspace --no-default-features
+          for target in armv7a-none-eabi aarch64-unknown-none; do
+            cargo check --manifest-path integration/linkslot/h700-frontend-core/Cargo.toml \
+              --workspace --no-default-features --target "$target"
+          done
+          cargo test --manifest-path .ci/upstream-linkslot/Cargo.toml \
+            -p slot-input -p slot-model
+
+      - name: Compile Linkslot Frontend with persistent H700 business crates
+        run: |
+          cargo check --manifest-path .ci/upstream-linkslot/Cargo.toml \
+            -p slot --no-default-features --features device,h700-software
+
+      - name: Cross-compile H700 input service C ABI layouts
+        run: python3 scripts/test-h700-input-service-abi.py --clang clang --out build/audit-work/linkslot-1.0.36/input-service-abi
+
+      - name: Test H700 input queue host regressions
+        run: python3 scripts/test-h700-input-queue.py --cc cc --out build/audit-work/linkslot-1.0.36/input-queue
+
+      - name: Test slot-i18n static no_std tables
+        run: |
+          python3 scripts/audit-slot-i18n-nostd.py \
+            --source .ci/upstream-linkslot \
+            --out build/audit-work/linkslot-1.0.36/slot-i18n
+
+      - name: Test static Libretro core ABI registry
+        run: |
+          python3 scripts/audit-libretro-static-abi.py \
+            --out build/audit-work/linkslot-1.0.36/static-libretro
+
+      - name: Test no_std Libretro VFS v3 service ABI
+        run: |
+          python3 scripts/audit-libretro-vfs-v3-abi.py \
+            --out build/audit-work/linkslot-1.0.36/libretro-vfs-v3
+
+      - name: Patch Linkslot 1.0.36 slot-retro with VFS v3 and run host regression
+        run: |
+          python3 scripts/test-linkslot-slot-retro-vfs.py \
+            --source .ci/upstream-linkslot \
+            --module platform/h700/runtime/linkslot_vfs.rs \
+            --out build/audit-work/linkslot-1.0.36/slot-retro-vfs-v3
+
+      - name: Add static Libretro API entry to slot-retro and test both loader modes
+        run: |
+          python3 scripts/test-linkslot-static-core-api.py \
+            --source .ci/upstream-linkslot \
+            --out build/audit-work/linkslot-1.0.36/slot-retro-static-api
+
+      - name: Bind namespaced mGBA exports to the Rust slot-retro API type
+        run: |
+          python3 scripts/test-linkslot-mgba-static-rust-binding.py \
+            --source .ci/upstream-linkslot \
+            --module platform/h700/runtime/mgba_static.rs \
+            --stub platform/h700/runtime/tests/mgba_static_stub.c \
+            --out build/audit-work/linkslot-1.0.36/slot-retro-static-mgba
+
+      - name: Test slot frontend selection of built-in static mGBA
+        run: |
+          python3 scripts/test-linkslot-static-mgba-selection.py \
+            --source .ci/upstream-linkslot \
+            --stub platform/h700/runtime/tests/mgba_static_stub.c \
+            --out build/audit-work/linkslot-1.0.36/slot-static-mgba-selection
+
+      - name: Export and validate cumulative Linkslot 1.0.36 H700 source overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          source=.ci/upstream-linkslot
+          out=build/audit-work/linkslot-1.0.36/linkslot-h700-overlay
+          mkdir -p "$out"
+
+          snapshot="$(git -C "$source" rev-parse HEAD)"
+          test "$snapshot" = "8590d6ff1b2caa26118051069c975106fbb14bd3"
+          grep -q 'version = "1.0.36"' "$source/Cargo.toml"
+
+          # Include the VFS and mGBA bridge files created by the preceding
+          # temporary source-integration tests in the exported patch.
+          git -C "$source" add -N -A
+          git -C "$source" diff --check HEAD
+          git -C "$source" diff --binary HEAD -- > "$out/linkslot-1.0.36-h700-overlay.patch"
+          git -C "$source" diff --name-status HEAD -- > "$out/changed-files.txt"
+          git -C "$source" diff --stat HEAD -- > "$out/diff-stat.txt"
+          printf '%s\n' "$snapshot" > "$out/base-commit.txt"
+
+          grep -q 'crates/slot-retro/src/vfs.rs' "$out/changed-files.txt"
+          grep -q 'crates/slot-retro/src/mgba_static.rs' "$out/changed-files.txt"
+          grep -q 'crates/slot/src/core.rs' "$out/changed-files.txt"
+          test -s "$out/linkslot-1.0.36-h700-overlay.patch"
+
+          # Verify the generated patch applies to a clean extraction of the
+          # immutable baseline, without touching the checked-out snapshot.
+          verify="$(mktemp -d)"
+          trap 'rm -rf "$verify"' EXIT
+          git -C "$source" archive --format=tar HEAD | tar -xf - -C "$verify"
+          git -C "$verify" init -q
+          git -C "$verify" apply --check "$GITHUB_WORKSPACE/$out/linkslot-1.0.36-h700-overlay.patch"
+
+          cat > "$out/README.md" <<'EOF'
+          # Linkslot 1.0.36 H700 integration patch
+
+          Base: immutable user-supplied snapshot commit 8590d6ff1b2caa26118051069c975106fbb14bd3.
+          Patch covers the tested slot-retro Libretro VFS v3 bridge, static Libretro API seam,
+          namespaced mGBA Rust binding and built-in static mGBA selection in slot.
+
+          The patch is generated from the cumulative temporary checkout after host regressions.
+          It is source integration only: it does not turn the full Linkslot workspace into no_std,
+          provide an H700 display/audio/input/power runtime, or prove a bootable LK application.
+          It has no permission to write an SD card or execute a payload.
+          EOF
+          sha256sum "$out"/* > "$out/SHA256SUMS.txt"
+
+      - name: Test H700 card path containment policy
+        run: |
+          python3 scripts/test-h700-storage-path.py \
+            --module platform/h700/runtime/storage_path.rs \
+            --out build/audit-work/linkslot-1.0.36/h700-storage-path
+
+      - name: Syntax-check read-only H700 MMC inventory collector
+        run: sh -n scripts/collect-h700-mmc-map-readonly.sh
+
+      - name: Test RG34XX H700 MMC board profile (host-only)
+        run: sh scripts/test-h700-mmc-board-profile.sh
+
+      - name: Test H700 primary GPT parser (host-only)
+        run: sh scripts/test-h700-gpt-readonly.sh
+
+      - name: Test H616 MMC DATA0 clock update helper
+        run: sh scripts/test-h700-sunxi-mmc-clock.sh
+
+      - name: Test H616 MMC module clock divider calculator
+        run: sh scripts/test-h700-sunxi-mmc-module-clock.sh
+
+      - name: Test H700 read-only CMD17 PIO sector read
+        run: sh scripts/test-h700-sunxi-mmc-pio-read.sh
+
+      - name: Test H700 SD CSD capacity and addressing parser
+        run: sh scripts/test-h700-sunxi-sd-csd.sh
+
+      - name: Test H700 read-only SD card identification state machine
+        run: sh scripts/test-h700-sunxi-sd-card-init.sh
+
+      - name: Test H616 sdc0 bus gate and 400 kHz clock integration
+        run: sh scripts/test-h700-h616-sdc0-platform.sh
+
+      - name: Test H616 sdc0 PF0-PF5 pinmux and electrical fields
+        run: sh scripts/test-h700-h616-sdc0-pins.sh
+
+      - name: Test H700 SD CMD17 to GPT block-reader adapter
+        run: sh scripts/test-h700-sunxi-mmc-gpt-adapter.sh
+
+      - name: Test synthetic GPT through H700 CMD17 read-only path
+        run: sh scripts/test-h700-sunxi-mmc-gpt-integration.sh
+
+      - name: Test full H700 sdc0 read-only bring-up and GPT scan
+        run: sh scripts/test-h700-sdc0-readonly-scan.sh
+
+      - name: Test CMD17 FAT adapter and GPT partition mount
+        run: sh scripts/test-h700-sunxi-mmc-fat.sh
+
+      - name: Test GPT -> CMD17 -> FAT32 directory and file reads
+        run: sh scripts/test-h700-sunxi-mmc-fat-scan.sh
+
+      - name: Test read-only Libretro VFS v3 FAT/CMD17 backend
+        run: sh scripts/test-h700-fat-vfs-backend.sh
+
+      - name: Test unified sdc0 -> GPT primary -> FAT32 -> Libretro VFS bootstrap
+        run: sh scripts/test-h700-sdc0-fat-vfs-bootstrap.sh
+
+      - name: Host-compile H700 FAT16/FAT32 and exFAT storage candidate
+        run: |
+          python3 scripts/test-h700-fat-compile.py \
+            --source platform/h700/storage/fat \
+            --out build/audit-work/linkslot-1.0.36/h700-fat-compile
+
+      - name: Test FAT16/FAT32/exFAT partition bounds (host-only)
+        run: sh scripts/test-h700-fat-partition-bounds.sh
+
+      - name: Run FAT32 and exFAT real-image host regressions
+        run: bash scripts/test-h700-fat-images.sh
+
+      - name: Build pinned mGBA as AArch32 namespaced static archive
+        run: |
+          python3 scripts/build-mgba-aarch32-static.py \
+            --source .ci/mgba-source \
+            --out build/audit-work/linkslot-1.0.36/mgba-static
+
+      - name: Build mGBA with Generic CMake backend for LK comparison
+        run: |
+          python3 scripts/build-mgba-aarch32-generic-static.py --source .ci/mgba-source --out build/audit-work/linkslot-1.0.36/mgba-generic
+
+      - name: Build mGBA with required Libretro VFS v3 file and directory backend
+        run: |
+          python3 scripts/build-mgba-libretro-vfs3-static.py --source .ci/mgba-source --out build/audit-work/linkslot-1.0.36/mgba-vfs3
+
+      - name: Test actual mGBA VDir adapter against Libretro VFS v3 fake backend
+        run: |
+          python3 scripts/test-mgba-vdir-vfs3-host.py --source .ci/mgba-source --out build/audit-work/linkslot-1.0.36/mgba-vdir-host
+
+      - name: Build mGBA VFS v3 with bare-metal arm-none-eabi/newlib
+        run: |
+          python3 scripts/build-mgba-arm-none-eabi-vfs3.py --source .ci/mgba-source --out build/audit-work/linkslot-1.0.36/mgba-arm-none-eabi --patch-script scripts/build-mgba-libretro-vfs3-static.py
+
+      - name: Test H700 newlib adapter (host regression + AArch32 compile)
+        run: |
+          python3 scripts/test-h700-newlib-adapter.py \
+            --source . \
+            --lk-source .ci/lk-reference \
+            --out build/audit-work/linkslot-1.0.36/h700-newlib-adapter
+
+      - name: Bind real mGBA exports into the Linkslot static API shape
+        run: |
+          python3 scripts/probe-mgba-static-api-link.py \
+            --archive build/audit-work/linkslot-1.0.36/mgba-arm-none-eabi/mgba_libretro-vfs3-arm-none-eabi.a \
+            --adapter-object build/audit-work/linkslot-1.0.36/h700-newlib-adapter/newlib_syscalls-arm-none-eabi.o \
+            --out build/audit-work/linkslot-1.0.36/mgba-static-api-link
+
+      - name: Diagnose whole-archive mGBA link against newlib (not LK)
+        run: |
+          python3 scripts/probe-mgba-newlib-whole-archive-link.py \
+            --archive build/audit-work/linkslot-1.0.36/mgba-arm-none-eabi/mgba_libretro-vfs3-arm-none-eabi.a \
+            --adapter-object build/audit-work/linkslot-1.0.36/mgba-static-api-link/mgba-static-api-and-newlib-adapter.o \
+            --out build/audit-work/linkslot-1.0.36/mgba-newlib-link
+
+      - name: Probe AArch32 LK-as-BL33 image and vector layout
+        run: |
+          python3 scripts/audit-lk-bl33-layout.py \
+            --lk-source .ci/lk-reference \
+            --out build/audit-work/linkslot-1.0.36/lk-bl33-layout
+
+      - name: Publish build report in job summary
+        if: always()
+        run: |
+          if [ -f build/audit-work/linkslot-1.0.36/REPORT.md ]; then
+            cat build/audit-work/linkslot-1.0.36/REPORT.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload maps, ELFs, logs and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linkslot-lk-rust-feasibility-${{ github.run_id }}
+          path: |
+            build/audit-work/linkslot-1.0.36/
+            build/h700-objects/
+          if-no-files-found: warn
+          retention-days: 30

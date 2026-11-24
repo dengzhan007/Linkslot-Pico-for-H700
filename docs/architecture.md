@@ -10,11 +10,22 @@ GammaOS Pico 参考树面向 MT6785，不能原样作为 RG34XX 的 SoC/板级�
 
 ## 2. 启动方式
 
-目标为 RG34XX / Allwinner H700。当前可确认的原厂 SD 启动链为 Allwinner Boot ROM → eGON.BT0 Boot0 → TOC1 → vendor monitor 与 AArch32 U-Boot → AArch64 Linux。Boot0 负责 DRAM training；AArch32 U-Boot 并不是一个可直接跳转到任意 AArch64 程序的通用入口。BaseOS 的 U-Boot 模拟 trace 中 `0x40080000` 和 `0x44000000` 分别是 Linux Image 与 FDT 的研究地址，不是 Linkslot payload 的入口或已确认可用内存。
+目标 RG34XX 非 SP 当前实际运行的启动链已由 2026-11-22 现场取证确认，不再把 stock TOC1 U-Boot 路径当作当前活动路径：
 
-BaseOS-MultiFrontend 还包含一条更深入的 H700 原生启动研究路线：AArch64 mainline SPL 负责 SD、PMIC、DRAM 和预加载；保留 vendor monitor；由 monitor 进入 RAM 中的 AArch32 SVC BL33 适配器；适配器再经厂商 SMC 进入 AArch64。这个路线说明 A32 过渡层与 monitor 可能是实现 AArch64 payload 的可行桥接点，但厂商 SMC 的已验证目标是 Linux 启动契约，不等于通用裸机 ABI。具体证据、地址限制和覆盖范围见 [RG34XX 启动交接审计](rg34xx-boot-handoff-audit.md)。现场只读采集命令与 TOC1 解析步骤见 [RG34XX 只读启动链信息采集](rg34xx-readonly-inventory.md)。
+```text
+Boot ROM / stock Boot0（DRAM training）
+  → BaseOS native SPL（AArch64 EL3，SRAM）
+  → 原厂 vendor BL31 / monitor（0x48000000）
+  → BaseOS AArch32 SVC BL33 loader（0x4a000000，SPSR=0x1d3）
+  → BOL4/LZ4 Android v2 image（p4 + 48 MiB）
+  → AArch64 Linux Image（解压后入口 0x40080000）
+```
 
-本项目不预先决定直接沿用原厂 U-Boot，还是采用 A64 SPL + A32 BL33 的方案。需要先完成 RG34XX 非 SP 的现场只读 inventory，再以最小 A32 handoff adapter + AArch64 freestanding payload 验证入口。入口验收必须覆盖 CurrentEL、SPSR/参数寄存器、栈、异常向量、GIC、MMU/cache/TLB、DTB/FDT 和可用/保留内存；不能只验证 payload 能被读入或代码能编译。
+native SPL 从 p4 + 40 MiB 读取 monitor、DTBO、DTB 与 32 KiB A32 loader，将 loader 放入 BL33 槽位；再从 p4 + 48 MiB 读取活动 Android v2/BOL4 镜像。A32 loader 最后通过厂商 Linux-start SMC（r0=0x8000ff04、r1=0x40080000、r2=0x44000000、r3=1）让 monitor 进入 AArch64 Linux。TOC1 中的 AArch32 U-Boot 与 p4 偏移 0 处的 gzip 镜像仍在介质中，但属于 stock fallback；现有现场证据没有显示本次启动执行了这条路径。完整证据见 [活动 loader provenance 报告](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-active-loader-provenance.md)。
+
+因此，本项目的 GammaOS LK 适配目标应准确定位为：**用 H700 适配后的 AArch32 GammaOS LK 替换活动链中的 A32 BL33 loader**，而不是把 LK 当作 AArch64 Linux kernel 或 A64 payload。monitor → A32 SVC BL33 是移植入口候选；LK 必须先验证该入口的寄存器、栈、cache/MMU、异常向量和 BL33 头区要求。若 Linkslot 以 A32 LK 作为独立裸机运行环境，就不应无条件复用 loader 的 Linux-start SMC；只有需要继续启动 Linux 时，才实现其完整 FDT/镜像验证/SMC 契约。当前 H700 LK project scaffold 是 AArch32，AArch64 编译只作为独立探针，二者不可混为一谈。
+
+已提取的活动 Android v2 镜像确认其 kernel component 解压后为 AArch64 `ARMd` Image；这只说明当前 Linux kernel 的 ISA，不改变 BL33 是 AArch32 的事实，也不构成任意 AArch64 裸机跳转 ABI。内存布局和未归属 reservation 仍须按本审计报告处理；当前没有批准 LK 的 MEMBASE/MEMSIZE 或 payload 地址。
 
 目标设备无 eMMC，本项目只考虑从 SD 卡启动，不设计 eMMC 安装、双系统选择或自动回退到原 Linux/BaseOS 的产品流程。启动失败后的恢复按项目约定通过电脑重写/修复 SD 卡，或使用经确认的实际 Boot ROM/USB 烧录入口；不把其他设备的自动恢复测试当作 RG34XX 已具备的功能。冷启动到第一帧、进入可操作游戏库的耗时必须实测。
 
@@ -22,12 +33,12 @@ BaseOS-MultiFrontend 还包含一条更深入的 H700 原生启动研究路线�
 
 | 层 | 职责 | 设计约束 |
 |---|---|---|
-| Boot handoff | U-Boot / SPL 装载、A32 适配器与 A64 payload 交接 | 只考虑 SD 卡启动；入口契约必须实机验证 |
-| H700 HAL | 时钟、计时器、MMU/cache、GPIO、PMIC、背光、显示、音频、SD、USB、Wi-Fi | 所有寄存器与时序按 Allwinner H700 和 RG34XX 具体板型重新确认 |
-| Runtime | 任务/线程、锁、事件、内存分配、日志、文件系统封装 | 提供 Linkslot 实际需要的服务；不为兼容 Linux 而建设完整 POSIX 模拟层 |
-| Emulator Host | GB/GBC/GBA Core ABI、帧调度、输入、音频、视频、持久化 | 模拟器核心与 Linkslot UI 解耦，核心可替换 |
-| Linkslot App | 唯一前端：卡带 UI、游戏库、配置、MOD、云同步入口 | 尽量跟随上游；平台差异经适配层提供，不散落到业务逻辑 |
-| LAN Services | HTTP Server、云同步 WebDAV 客户端、可选调试服务 | Web 管理仅家庭 LAN；云同步只在用户手动触发时运行 |
+| Boot handoff | native SPL → vendor BL31 → A32 SVC BL33（当前 GammaOS LK 替代候选） | 保留原生 DRAM/monitor 链；A32 入口契约须实机验证；Linux-start SMC 仅用于 Linux 启动 |
+| C/ASM 底层（LK + H700 HAL） | BL33、异常/中断、内存/时钟、GPIO、PMIC、背光、显示、音频、SD、USB、Wi-Fi，以及平台服务 ABI | C 为主、ARM 汇编用于启动/异常等必要路径；寄存器与时序必须按 H700/具体板型取证 |
+| Rust 裸机 runtime | 单核事件循环、时间/分配器封装、服务绑定、VFS、输入事件桥、Core Host | `no_std` 优先；服务通过显式 C ABI 注入；不模拟 Linux 进程/线程/文件描述符 |
+| Rust Linkslot 业务层 | 游戏库、菜单/UI 状态、按键映射、配置、存档策略、MOD/云同步业务规则 | 以 Linkslot 上游行为和数据语义为准；逐 crate 拆出纯逻辑，避免业务层直接访问 MMIO |
+| C/C++ Emulator Core | GB/GBC/GBA 核心、核心时钟、帧生成与核心内部状态 | 静态链接、统一 Core ABI；不让 UI 依赖单个核心的内部符号 |
+| LAN Services | HTTP Server、云同步 WebDAV 客户端、可选调试服务 | 作为 Rust 业务层调用的后续服务；家庭 LAN 限定，云同步只在用户手动触发时运行 |
 
 ## 4. Linkslot 上游同步边界
 
@@ -39,7 +50,16 @@ Linkslot 的 UI 与用户功能是唯一产品前端，不需要为前端切换�
 - 只有无法通过外部适配解决时，才局部修改 subtree 内上游文件；每个改动都要记录原路径、上游基线、原因和测试，持续控制本地补丁规模。
 - 不把整个 Linkslot Cargo workspace 无差别合并为 H700 根 workspace；先逐 crate 审查依赖，再通过窄 feature/path dependency 引入确实需要的部分。
 
-特别注意：Linkslot 目前是 Rust 工作区，部分代码依赖 Rust `std`、线程、文件系统、网络、动态库和 Linux 进程接口；GammaOS Pico/LK 不是 Linux 运行环境。不能假设将 Linkslot crate 直接加入 LK 工程就能编译运行。首先必须验证所需 Rust 运行时服务和工具链方案，确定可原样复用的 crate，以及必须替换的平台后端。不要为了减少几处改动而建设庞大的 Linux syscall/POSIX 兼容层。
+### 3.1 目标语言边界（已确认）
+
+本项目采用**C 底层 + Rust 前端业务层 + C/C++ 模拟器核心**，而不是按源仓库原有语言平均分摊移植任务：
+
+- C/ARM 汇编拥有硬件与启动控制权。LK、board init、寄存器/MMIO、IRQ、timer、DMA、显示 scanout、输入采样、PCM、SD/FAT block provider、PMIC/power 和 newlib syscall hooks 属于底层。
+- Rust `no_std` 承载 Linkslot 的产品业务和 UI 状态。它通过稳定的服务 trait/窄 C ABI 调用底层能力；不得直接读写硬件寄存器，也不以 Linux `std` 后端作为依赖。
+- C/C++ 模拟器作为独立静态核心，通过版本化 Core ABI 与 Rust 前端通信；核心持有内部模拟器状态，Rust 管理核心选择、生命周期、游戏设置和 UI。
+- Python/Shell 是 host tooling，不是固件组件。补丁脚本把修改施加到临时上游工作树，不得成为设备上的解释器依赖。
+
+Linkslot 是 Rust 工作区，但当前 `device` feature 的 AArch64 Linux/`std` 程序不是裸机 runtime。不能把完整 workspace 直接加入 LK，也不能以“Cargo check 通过”声称前端已裸机化。正确路径是逐 crate 提取纯业务逻辑、替换 Linux 服务后端，并在 host 上进行行为回归与 AArch32 freestanding 编译/链接验证。不得为了少量调用而建设庞大的 Linux syscall/POSIX 兼容层。
 
 详细的 subtree 同步规则、源码分级、CI 检查和每次上游更新流程见 [Linkslot 上游同步与移植边界](linkslot-upstream-sync.md)。
 
@@ -109,7 +129,7 @@ H700 设备不能只用一个屏幕分辨率或一套按键定义。至少建立
 
 ## 11. 目标机型
 
-首期只支持 Anbernic RG34XX（非 SP）。其 CPU 是 Cortex-A53，因此所有 H700 C/C++/汇编和模拟器核心交叉编译均使用 AArch64 Cortex-A53 target。不能将 RG34XX SP 的 2 GB LPDDR4、`rg34xxsp_v1` 面板驱动或 Boot0 DRAM 参数套用到 RG34XX。
+首期只支持 Anbernic RG34XX（非 SP），CPU 为 Cortex-A53。但 Cortex-A53 同时支持 AArch32/AArch64，不能把 CPU 型号直接等同于运行 ISA。当前 GammaOS LK H700 BL33 适配使用 AArch32 ARM-state 启动/异常代码，普通 C/C++ 可按 LK 配置使用 Thumb-2；mGBA 静态核心也是 AArch32。AArch32、Thumb-2 与 AArch64 CI 矩阵是独立编译探针，AArch64 探针不表示当前 LK target 已转为 A64。设备活动链最终启动的 Linux kernel 是 AArch64 Image（ARMd），详见启动交接审计及活动镜像提取报告。不能将 RG34XX SP 的 2 GB LPDDR4、`rg34xxsp_v1` 面板驱动或 Boot0 DRAM 参数套用到 RG34XX。
 
 详细硬件基线及证据见 [RG34XX 硬件基线](rg34xx-hardware-profile.md)。
 
