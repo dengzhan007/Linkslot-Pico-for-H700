@@ -12,6 +12,7 @@ This adds a real GammaOS LK project/target/platform selection path for the
   continue unless an explicit memory-layout approval and both memory values
   are supplied.
 - `platform/h700/rules.mk` selects `ARCH=arm` / `ARM_CPU=cortex-a53` and assigns LK's generated `system-onesegment.ld` as the ELF linker script.
+- The same H700 platform rules list the policy-only CPU selector, C service ABI and static runtime owner as LK objects. These C units have no MMIO/PMIC/PLL access and no startup call site; listing them only makes their C ABI symbols available to a future validated H700 startup path.
 - MediaTek `drvgen`/DWS generation is disabled for this non-MediaTek target.
   The separate six-file H700 overlay also excludes the incompatible MediaTek
   platform/common, platform/PAL, device and target-init sources. The MTK PAL
@@ -140,6 +141,11 @@ overlay in a disposable worktree and proves that:
 4. the platform's `LINKER_SCRIPT` variable resolves to
    `./build-rg34xx_h700/system-onesegment.ld`, the script consumed by LK's
    `make/build.mk` ELF link rule.
+5. `platform/h700/rules.mk` contains the policy, service and runtime-owner object
+   entries and each entry has a corresponding C source file.
+
+The fifth assertion is a source/build-graph check only. It does not execute the
+full LK target link or prove the object set fits an approved RG34XX memory map.
 
 The sentinel values are parser fixtures only; they are never written to the
 project defaults or treated as device addresses.
