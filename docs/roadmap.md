@@ -123,15 +123,21 @@
 
 ### C1. CPU performance modes / H700 DVFS (architecture first)
 
-- [x] 建立 [H700 CPU Performance Service / DVFS 设计](h700-cpu-performance-service.md)：定义 Power Saver、Balanced、Performance、Auto、受限 Boost 模式；C HAL 负责 OPP/PLL/PMIC/热限制，Rust/Linkslot 只提交模式请求；上游 Linkslot 以后加入 CPU Clock UI 时可直接接入。
-- [x] 用 RG34XX 现场 inventory 确认实际 PMIC 是 AXP2202，并明确禁止复制相关 RG35XX-2024 AXP717 DTS 的 vdd-cpu 电压配置。
-- [ ] 从 RG34XX live FDT / vendor DTS / 只读 PMIC 读回中确认 AXP2202 哪一路实际供给 CPU cluster，记录总线、地址、调压寄存器、selector、ramp 和稳态范围；未确认前不写 PMIC。
-- [ ] 解析 H700 SID/eFuse speed bin，并复用 Linux sun50i-cpufreq-nvmem 的 bin 解释和适用 OPP 约束；unknown bin 必须关闭提升频点。
-- [ ] 从匹配的 H700/H616 CCU/PLL 源码确认 CPUX PLL、时钟 parent 安全切换、lock 状态与 divider 顺序；BL31→BL33 的 CPU1–CPU3 状态未闭合前，不允许更改共享 CPU PLL。
-- [ ] 实现 H700 thermal sensor / thermal-limit 读取；缺少有效温度数据时隐藏 Boost，并为过温/时钟锁定失败/PMIC 错误定义安全回退。
-- [ ] 先实现只读 clock/voltage/bin/temperature telemetry 和 host-tested policy/OPP selector；完成电压先升后升频、先降频后降压、失败回滚、滞回/最小驻留时间测试后，再允许连接寄存器写入。
-- [ ] 只有目标板 OPP/电压表、温度限制及实机持续负载测试全部通过后，才开放 Balanced/Performance/Boost 的实际 DVFS；模式不得接受任意 MHz 输入，必须报告实际频率和被钳制原因。
-
+- [x] 建立 [H700 CPU Performance Service / DVFS 设计](h700-cpu-performance-service.md)：定义 Power Saver、Balanced、Performance、Auto、受限 Boost 模式；C HAL 负责 OPP/PLL/PMIC/热限制，Rust/Linkslot 只提交模式请求。
+- [x] 用 RG34XX 现场 inventory 确认实际 PMIC 是 AXP2202；现场 Linux 日志确认 I²C-5 / 地址 `0x34`。
+- [x] 从两份 RG34XX 专用 DTS 交叉确认 `cpu@0 cpu-supply` 指向 AXP2202 DCDC1；DCDC1 参考范围和 ramp 参数已记录。仍需对本机 live-FDT 完整 regulator 子树 / phandle 做最终核验。
+- [x] 检查 AXP2202 参考 U-Boot 驱动的 DCDC1 selector/control 结构（`0x83` / `0x80`），但尚未向 PMIC 执行任何写入。
+- [x] 找到 RG34XX SID speed cell (`0x03006000 + 0x00`, 2 bytes) 和 thermal calibration cell (`0x03006000 + 0x14`, 8 bytes) 的设备树位置；尚未从实机读取原始值。
+- [x] 解析 mainline H616/H700 speed-bin decoder、CPU OPP table 和 CPUX PLL/mux 参考偏移；unknown bin 将在本项目中 fail closed，不照抄 Linux 的 bin-0 fallback。
+- [x] 确认目标机有 H700 thermal sensor，但当前内核报告 `avcc is not calibrated`，所以自动温控和 Boost 仍禁止。
+- [x] 实现纯 C OPP policy selector：省电/均衡/性能/自动/增强档位策略、speed-bin mask、板级电压上限、热频率上限、限制原因累计、严格 OPP 表校验和缺少硬件门控时 fail closed；测试使用合成 OPP，不是目标机频点表。
+- [x] GitHub Actions [H700 CPU OPP / AArch32-AArch64 回归 #45381349400](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45381349400) 通过：CPU policy host tests + AArch64 / AArch32 ARM / AArch32 Thumb-2 freestanding object compile。
+- [ ] 从实机 live-FDT 导出完整 regulator subtree，确认 DCDC1 及该板 revision 的 CPU rail / 约束；只读 PMIC 电压与 enable-state readback。
+- [ ] 从实机读取 SID speed-bin 原始值，验证 SoC revision 语义；unknown / unsupported raw values 必须禁用提升频点。
+- [ ] 完成 CPUX PLL parent-switch、lock poll、divider 和 timer-continuity 设计；确认 CCU base；BL31→BL33 的 CPU1–CPU3 状态未闭合之前，不允许更改共享 CPU PLL。
+- [ ] 校准 H700 thermal sensor / AVCC；在有效温度数据缺失时禁用 Auto / Boost 的自动升频分支。
+- [ ] 实现只读 clock/voltage/bin/temperature telemetry；后续硬件 transition 必须通过升频先升压、降频先降压、失败回滚和滞回/最小驻留时间测试。
+- [ ] 只有目标板 OPP/电压表、温度限制、次级 CPU 状态与实机持续负载测试全部通过后，才开放 Balanced/Performance/Boost 的实际 DVFS；模式不接受任意 MHz 输入，必须报告实际频率和被钳制原因。
 ### A. 工具链与工程基础（已完成第一步）
 
 - [x] AArch64 freestanding C、C++ 和汇编编译探针。
