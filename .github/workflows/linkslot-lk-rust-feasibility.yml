@@ -26,6 +26,7 @@ on:
       - "scripts/build-mgba-libretro-vfs3-static.py"
       - "scripts/build-mgba-arm-none-eabi-vfs3.py"
       - "scripts/probe-mgba-newlib-whole-archive-link.py"
+      - "scripts/probe-mgba-rust-static-api-link.py"
       - "scripts/test-mgba-vdir-vfs3-host.py"
       - "scripts/test-h700-newlib-adapter.py"
       - "scripts/probe-mgba-static-api-link.py"
@@ -55,6 +56,7 @@ on:
       - "scripts/build-mgba-libretro-vfs3-static.py"
       - "scripts/build-mgba-arm-none-eabi-vfs3.py"
       - "scripts/probe-mgba-newlib-whole-archive-link.py"
+      - "scripts/probe-mgba-rust-static-api-link.py"
       - "scripts/test-mgba-vdir-vfs3-host.py"
       - "scripts/test-h700-newlib-adapter.py"
       - "platform/h700/runtime/lk_bindings.c"
@@ -460,6 +462,15 @@ jobs:
             --archive build/audit-work/linkslot-1.0.45/mgba-arm-none-eabi/mgba_libretro-vfs3-arm-none-eabi.a \
             --adapter-object build/audit-work/linkslot-1.0.45/mgba-static-api-link/mgba-static-api-and-newlib-adapter.o \
             --out build/audit-work/linkslot-1.0.45/mgba-newlib-link
+
+      - name: Link actual mGBA archive through Linkslot Rust static Api table
+        run: |
+          python3 scripts/probe-mgba-rust-static-api-link.py \
+            --source .ci/upstream-linkslot \
+            --module platform/h700/runtime/mgba_static.rs \
+            --archive build/audit-work/linkslot-1.0.45/mgba-arm-none-eabi/mgba_libretro-vfs3-arm-none-eabi.a \
+            --adapter-object build/audit-work/linkslot-1.0.45/h700-newlib-adapter/newlib_syscalls-arm-none-eabi.o \
+            --out build/audit-work/linkslot-1.0.45/mgba-rust-static-link
 
       - name: Probe AArch32 LK-as-BL33 image and vector layout
         run: |
