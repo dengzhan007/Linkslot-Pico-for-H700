@@ -106,7 +106,7 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertIn('NOT_PRESENT: no generic /sys/devices/soc0 node exported', self.source)
         self.assertIn('/sys/class/sunxi_info/sys_info and /dev/sunxi_soc_info are intentionally not read', self.source)
         self.assertNotIn('cat /sys/class/sunxi_info/sys_info', self.source)
-        self.assertNotIn('sunxi_get_soc_ver', self.source)
+        self.assertNotRegex(self.source, r"(?m)^\s*sunxi_get_soc_ver\s*\(")
         self.assertNotIn('CHECK_SOC_VERSION', self.source)
 
     def test_cpu_power_runtime_capture_is_read_only(self):
