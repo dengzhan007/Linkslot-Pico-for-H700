@@ -68,7 +68,7 @@ This classifier does not change the C policy service, supply an H700 board profi
 - The mainline H616 CPU OPP table includes points up to 1.512 GHz with speed-bin-specific voltages. Those values are useful for comparing the Linux driver model only; they are not a release OPP grid for this RG34XX.
 - The RG34XX DTS DCDC1 range/ramp metadata and AXP2202 selector register definitions are documented in section 2 above. The AXP717-based RG35XX-2024 1.16 V configuration is not the RG34XX voltage policy.
 
-The mainline H616 CCU source gives an initial clock-tree reference: PLL-CPUX is at CCU offset `0x000` (enable bit 31, lock bit 28; multiplier field in the register's low bits), and the CPUX clock mux is at offset `0x500`, bits 24–26, with oscillator / PLL parents. These are offsets within the CCU block, not a complete H700 register-access contract. The exact RG34XX CCU base, safe parent-switch sequence, PLL programming limits, lock wait rules and timer continuity still require source/board verification. No raw MMIO implementation is approved.
+A pinned vendor `sun50iw9` clock-driver audit now supplements the earlier mainline H616-family reference. It identifies source-level `PLL_CPU` offset `0x0000`, `CPU_CFG` offset `0x0500`, the `pll_periph0` alternate-parent switch before PLL rate changes, the post-change restore to `pll_cpu`, and a new-mode PLL-lock polling path. It also finds a critical source comment that PLL enable bit 31 is boot-enabled and must not be changed dynamically, while bit 27 is used for PLL output gating. The lock-status bit is compile-configuration dependent (`LOCKBIT(x)` differs for EVB and non-EVB builds), so it cannot be hardcoded from a generic source review. The vendor CPU factor table is explicitly marked incorrect and is not an OPP source. See [H700 CPUX / sun50iw9 clock-source audit](h700-cpux-clock-source-audit.md) for pinned file hashes, sequence details and remaining gates. This is still source-level evidence only; exact RG34XX runtime mapping, register readback, `pll_periph0` rate, timer continuity and secondary-core state remain unverified. No raw MMIO implementation is approved.
 
 Source references:
 - https://github.com/knulli-cfw/knulli-linux/blob/57afa662009641d181f57241bcc480119b131530/package/boot/uboot-h700/rg34xx/boot_package/rg34xx.dts
@@ -229,3 +229,18 @@ Therefore:
 - the **architecture and UI capability can be prepared now**;
 - read-only CPU frequency / thermal telemetry can be added after its registers are verified;
 - actual frequency/voltage writes and high-performance modes remain disabled until the gates above are closed.
+
+
+## 8. Fixed vendor CPUX clock-source audit (2026-11-25)
+
+The additional pinned `sun50iw9` vendor-source review is recorded in [`docs/h700-cpux-clock-source-audit.md`](h700-cpux-clock-source-audit.md). This narrows the investigation to the CPU PLL register, CPU mux/divider fields, `pll_periph0` alternate-parent sequence and lock-mode implementation. It does **not** prove that the exact RG34XX unit exposes these settings identically at BL33 entry.
+
+Important constraints now explicit in the design record:
+
+- Treat all CPU0–CPU3 frequency changes as shared-cluster operations; the reference DTS uses one `clk_pll_cpu` and `opp-shared`.
+- Do not toggle PLL enable bit 31 dynamically; the vendor source says it is enabled during boot and uses bit 27 for output gating.
+- Do not hardcode the PLL lock-status bit. The vendor `LOCKBIT(x)` macro changes by EVB build configuration, and the exact shipping build setting is not established.
+- Do not use `factor_pllcpu_tbl` as an OPP list: the source itself marks that table incorrect, and it contains no validated CPU voltage pairs.
+- Do not switch to `pll_periph0` until its actual rate, divider tree and timer continuity are verified on the target.
+
+This audit does not change the policy-only service ABI, runtime owner or QuickRow. Actual DVFS remains unavailable; no PLL/CCU/PMIC writes were added.
