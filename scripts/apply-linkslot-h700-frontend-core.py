@@ -56,6 +56,7 @@ def patch_frontend(source: Path) -> None:
     video_mode_dependency = 'slot-video-mode = { path = "../slot-video-mode" }'
     rom_id_dependency = 'slot-rom-id = { path = "../slot-rom-id" }'
     game_search_dependency = 'slot-game-search = { path = "../slot-game-search" }'
+    hold_state_dependency = 'slot-hold-state = { path = "../slot-hold-state" }'
     changed_manifest = False
     if dependency not in manifest_text:
         anchor = 'slot-model = { path = "../slot-model" }\n'
@@ -99,6 +100,12 @@ def patch_frontend(source: Path) -> None:
             raise RuntimeError("cannot locate slot-rom-id dependency in slot/Cargo.toml")
         manifest_text = manifest_text.replace(anchor, anchor + game_search_dependency + "\n")
         changed_manifest = True
+    if hold_state_dependency not in manifest_text:
+        anchor = game_search_dependency + "\n"
+        if manifest_text.count(anchor) != 1:
+            raise RuntimeError("cannot locate slot-game-search dependency in slot/Cargo.toml")
+        manifest_text = manifest_text.replace(anchor, anchor + hold_state_dependency + "\n")
+        changed_manifest = True
     if changed_manifest:
         slot_manifest.write_text(manifest_text, encoding="utf-8")
 
@@ -132,6 +139,12 @@ def patch_frontend(source: Path) -> None:
 
     app_path = source / "crates/slot/src/app.rs"
     app = app_path.read_text(encoding="utf-8")
+    hold_import = "pub use slot_hold_state::{HoldPrompt as FolderHold, TimedHold};" + chr(10)
+    app_import_anchor = "use crate::audio::Sfx;\\n"
+    if app_import_anchor not in app:
+        raise RuntimeError("cannot locate App import insertion point")
+    if hold_import not in app:
+        app = app.replace(app_import_anchor, app_import_anchor + hold_import)
     app_replacements = (
         ("core_picker: Option<CorePicker>,", "core_picker: Option<CorePicker<Core>>,"),
         ("pub fn core_picker_chip(&self) -> Option<Chip> {",
@@ -145,6 +158,131 @@ def patch_frontend(source: Path) -> None:
         if app.count(old) != 1:
             raise RuntimeError(f"expected exactly one App core-picker type: {old}")
         app = app.replace(old, new)
+
+    old_hold_type = """#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct FolderHold {
+    pub progress: f32,
+    pub alpha: f32,
+}
+"""
+    if app.count(old_hold_type) != 1:
+        raise RuntimeError("original FolderHold type block does not match pinned Linkslot source")
+    app = app.replace(old_hold_type, "")
+
+    field_old = "    folder_hold_since: Option<Millis>,\\n    folder_hold_fade: Option<(Millis, f32)>,\\n"
+    field_new = "    folder_hold: TimedHold,\\n"
+    if app.count(field_old) != 1:
+        raise RuntimeError("App folder hold fields do not match pinned source")
+    app = app.replace(field_old, field_new)
+
+    init_old = "            folder_hold_since: None,\\n            folder_hold_fade: None,\\n"
+    init_new = "            folder_hold: TimedHold::new(FOLDER_HINT_DELAY_MS, FOLDER_HOLD_MS, FOLDER_HOLD_FADE_MS),\\n"
+    if app.count(init_old) != 1:
+        raise RuntimeError("App folder hold initializer does not match pinned source")
+    app = app.replace(init_old, init_new)
+
+    prompt_old = """    pub fn folder_hold_prompt(&self) -> Option<FolderHold> {
+        let now = self.now();
+        if let Some(since) = self.folder_hold_since {
+            let elapsed = now.saturating_sub(since);
+            if elapsed < FOLDER_HINT_DELAY_MS {
+                return None;
+            }
+            let span = FOLDER_HOLD_MS - FOLDER_HINT_DELAY_MS;
+            let progress = ((elapsed - FOLDER_HINT_DELAY_MS) as f32 / span as f32).clamp(0.0, 1.0);
+            return Some(FolderHold {
+                progress,
+                alpha: 1.0,
+            });
+        }
+        let (at, progress) = self.folder_hold_fade?;
+        let gone = now.saturating_sub(at) as f32 / FOLDER_HOLD_FADE_MS as f32;
+        (gone < 1.0).then_some(FolderHold {
+            progress,
+            alpha: 1.0 - gone,
+        })
+    }
+"""
+    prompt_new = """    pub fn folder_hold_prompt(&self) -> Option<FolderHold> {
+        self.folder_hold.prompt(self.now())
+    }
+"""
+    if app.count(prompt_old) != 1:
+        raise RuntimeError("folder_hold_prompt implementation does not match pinned source")
+    app = app.replace(prompt_old, prompt_new)
+
+    cancel_old = """    fn cancel_folder_hold(&mut self) {
+        self.folder_hold_since = None;
+        self.folder_hold_fade = None;
+    }
+"""
+    cancel_new = """    fn cancel_folder_hold(&mut self) {
+        self.folder_hold.cancel();
+    }
+"""
+    if app.count(cancel_old) != 1:
+        raise RuntimeError("cancel_folder_hold implementation does not match pinned source")
+    app = app.replace(cancel_old, cancel_new)
+
+    release_old = """    fn release_folder_hold(&mut self) {
+        let now = self.now();
+        if let Some(since) = self.folder_hold_since.take() {
+            let elapsed = now.saturating_sub(since);
+            if elapsed >= FOLDER_HINT_DELAY_MS && elapsed < FOLDER_HOLD_MS {
+                let span = FOLDER_HOLD_MS - FOLDER_HINT_DELAY_MS;
+                let progress = (elapsed - FOLDER_HINT_DELAY_MS) as f32 / span as f32;
+                self.folder_hold_fade = Some((now, progress.clamp(0.0, 1.0)));
+            }
+        }
+    }
+"""
+    release_new = """    fn release_folder_hold(&mut self) {
+        self.folder_hold.release(self.now());
+    }
+"""
+    if app.count(release_old) != 1:
+        raise RuntimeError("release_folder_hold implementation does not match pinned source")
+    app = app.replace(release_old, release_new)
+
+    tick_old = """    fn tick_folder_hold(&mut self, now: Millis) {
+        if let Some((at, _)) = self.folder_hold_fade {
+            if now.saturating_sub(at) >= FOLDER_HOLD_FADE_MS {
+                self.folder_hold_fade = None;
+            }
+        }
+        let Some(since) = self.folder_hold_since else {
+            return;
+        };
+        if !self.folder_hold_allowed() {
+            self.cancel_folder_hold();
+            return;
+        }
+        if now.saturating_sub(since) < FOLDER_HOLD_MS {
+            return;
+        }
+        self.folder_hold_since = None;
+        self.folder_hold_fade = None;
+        self.toggle_folder_mode();
+    }
+"""
+    tick_new = """    fn tick_folder_hold(&mut self, now: Millis) {
+        let allowed = self.folder_hold_allowed();
+        if self.folder_hold.tick(now, allowed) {
+            self.toggle_folder_mode();
+        }
+    }
+"""
+    if app.count(tick_old) != 1:
+        raise RuntimeError("tick_folder_hold implementation does not match pinned source")
+    app = app.replace(tick_old, tick_new)
+
+    app = app.replace("        self.folder_hold_fade = None;\\n", "        self.folder_hold.cancel();\\n")
+    app = app.replace("        self.folder_hold_since = None;\\n        self.folder_hold_fade = None;\\n", "        self.folder_hold.cancel();\\n")
+    app = app.replace("                self.folder_hold_since = Some(self.now());\\n                self.folder_hold_fade = None;\\n", "                self.folder_hold.begin(self.now());\\n")
+    app = app.replace("self.folder_hold_since.is_some()", "self.folder_hold.is_active()")
+    if "folder_hold_since" in app or "folder_hold_fade" in app:
+        raise RuntimeError("unconverted folder hold fields remain in App")
+
     app_path.write_text(app, encoding="utf-8")
 
 
@@ -180,6 +318,7 @@ def apply(source: Path, crate_root: Path) -> None:
     add_new_package(crate_root / "slot-video-mode", source / "crates/slot-video-mode")
     add_new_package(crate_root / "slot-rom-id", source / "crates/slot-rom-id")
     add_new_package(crate_root / "slot-game-search", source / "crates/slot-game-search")
+    add_new_package(crate_root / "slot-hold-state", source / "crates/slot-hold-state")
 
     video_mode_path = source / "crates/slot/src/video_mode.rs"
     video_mode_path.write_text(
@@ -335,6 +474,7 @@ pub fn sha256_reader<R: Read>(reader: R) -> std::io::Result<String> {
         "crates/slot-video-mode",
         "crates/slot-rom-id",
         "crates/slot-game-search",
+        "crates/slot-hold-state",
         "crates/slot/src/game_search.rs",
         "crates/slot/src/rom_id.rs",
         "crates/slot/src/video_mode.rs",
