@@ -2,11 +2,11 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-24 11:43 UTC  
+**最后核对时间：** 2026-11-24 11:49 UTC  
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **工作分支：** `porting/linkslot-1.0.45-feasibility`  
-**创建本文前的分支 HEAD：** `760ceecae40cb686ddc74235e3986476ddfd1d17`  
-**本轮代码验证基线：** `bdb229e6a3fae8f00f4d3e25d9128e108576250e`
+**本次状态刷新前的分支 HEAD：** `da03b9f331f0bb11d00a5f8d18f88644df2b998f`  
+**本轮最新代码验证提交：** `0437e37859eee40095d0210725a92910aa4783d6`
 
 ## 1. 项目目标与固定约束
 
@@ -60,6 +60,7 @@
 - `scripts/test-h700-cpu-performance-service.sh`：主机测试入口。
 - `scripts/build-h700-objects.sh`：已将 Service C 源纳入 AArch64、AArch32 ARM-state、AArch32 Thumb-2 编译矩阵。
 - `.github/workflows/h700-arch-check.yml`：Push / Pull Request 均纳入服务 host regression 和架构编译。
+- `integration/linkslot/h700-frontend-core/slot-cpu-performance`：新建 Rust `no_std` typed client；C service 作为不透明指针传入，模式通过固定枚举映射，C ABI v1 的 64-byte state 结构按 `repr(C)` 解码。
 
 ### ABI v1 语义
 
@@ -69,13 +70,18 @@
 - 状态结构把 `planned_frequency_hz/planned_voltage_uv` 与 `actual_frequency_hz/actual_voltage_uv/temperature_mc` 分开。
 - `hardware_applied` 在 ABI v1 中固定为 0。没有实际硬件读回时，不得把计划频率显示为实测 MHz。
 - 更新温度/电压/频率限制后，当前有效请求会重新经过 policy selector。
-- 当前测试使用合成 OPP 值，不是 RG34XX 已批准的运行频点表。
+- Rust 客户端把 C service pointer 作为 opaque pointer；把 planned OPP、actual clock/voltage/temperature 遥测、policy flags 和错误码转换为 Rust 类型。
+- Rust 客户端校验 ABI version、struct size、reserved bits、telemetry valid flags 和 `hardware_applied == 0`；C 侧 `_Static_assert` 固定 state size=64、`hardware_applied` offset=48、reserved offset=52。
+- 当前测试使用合成 OPP 值，不是 RG34XX 已批准的运行频点表。Rust 客户端尚未接入 Linkslot `App` 设置界面，也没有在目标机初始化 C service。
 
 ### 本轮 CI 验证
 
 - [H700 AArch32/AArch64 compile check #45386479380](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45386479380)：**成功**。两个 jobs 均成功：
   - `storage-host-regression`：包含 CPU Service v1 host runner 和现有只读存储回归。
   - `compile-freestanding-objects`：包含新 CPU Service C 源的 AArch64、AArch32 ARM-state 和 AArch32 Thumb-2 编译。
+- [H700 Linkslot 1.0.45 runtime slices #45387192778](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45387192778)：**成功**。两个 jobs 均成功；新增 Rust CPU performance crate 的 workspace host tests、AArch32/AArch64 `no_std` check 和 Linkslot renderer/business overlay compile 均通过。
+- [H700 AArch32/AArch64 compile check #45387293421](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45387293421)：**成功**。包含 C Service ABI v1 状态布局 `_Static_assert`、host regressions 和 AArch64/AArch32 ARM/Thumb-2 compile。
+- 初次 runtime-slices 运行 #45387187588 在仅提交 workspace manifest、Rust crate 源文件尚未提交的中间 commit 上失败（找不到 `slot-cpu-performance/src/lib.rs`）；完整 crate 提交后的 #45387192778 已通过，该中间态失败不代表最终 crate 测试失败。
 - [此前完整 Linkslot 1.0.45 feasibility #45381590503](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45381590503)：成功；这是旧的 69-step 综合基线，证明 host/cross-build 范围，不证明实机运行。
 - [CPU OPP policy 专项 #45381349400](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45381349400)：成功。
 
@@ -94,8 +100,8 @@
 
 ## 6. 下一步任务（按顺序执行）
 
-1. **实现 Rust `no_std` 侧的 CPU Service ABI adapter。** 把模式/状态映射为 Rust 类型，保留 policy-only 与 actual telemetry 的区别；增加 ABI layout、错误码、状态转换和 AArch32/AArch64 编译回归。
-2. 将 Linkslot 设置/quick menu 的 CPU 模式请求映射到该 adapter；硬件未接入前只显示请求模式和“频率遥测不可用”，不显示伪实测频率。
+1. **把 `slot-cpu-performance` 接入 Linkslot App/设置菜单**，把模式选择和运行状态显示接上 typed client；硬件未接入前只显示所选策略及“频率遥测不可用”，不显示伪实测 MHz。
+2. 增加 C service 初始化/注册的 H700 platform glue，但在没有 board-approved OPP 表时保持 service 未就绪/拒绝升频，不填入合成 OPP 或网上频点。
 3. 增加 RG34XX 只读硬件 inventory：导出完整 live-FDT regulator 子树、SID 原始 speed-bin、thermal calibration、CPU rail 映射和当前 clock/PMIC 状态。优先使用 Linux/已有只读工具取证，不在 LK 侧猜地址。
 4. 证明 BL31→BL33 CPU1–CPU3 状态和安全的单核 invariant；审计 CPUX PLL parent-switch/lock/分频及 timer continuity。
 5. 只有前述证据闭合后，才实现 C HAL 只读 telemetry 与最终受控硬件 transition；升频先升压，降频先降频后降压，必须有 readback、超时、故障回滚、热 clamp、滞回和实机持续负载验收。
