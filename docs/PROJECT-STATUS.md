@@ -2,10 +2,10 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-24 14:28 UTC  
+**最后核对时间：** 2026-11-24 15:48 UTC  
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **工作分支：** `porting/linkslot-1.0.45-feasibility`  
-**本轮已验证代码 HEAD：** `e1044df1515b95243cdf83499d41f191b60f190d`（完整综合 workflow #45413653400；本轮随后只更新文档）。  
+**本轮已验证代码 HEAD：** `0e33da4a50b28583aac8c7e815dac7857b6ef43a`（完整综合 workflow #45428664653，71/71 steps）。当前文档 HEAD：`380854b8107bcf91a934f9a6d7fa0f2963a277c6`。  
 **本轮 CPU runtime owner 最新代码提交：** `072793f8b4bfce00683aa3d303eee62613fe41ab`（7 个连续提交）  
 **本轮 Rust runtime bridge 最新代码提交：** `0d381d7ba66592b5ab64ba67e0b228039bb9eec0`  
 **本轮 H700 build graph / guard 最新代码提交：** `6e847c0121431c681062053c52f28824715e78a6`（platform OBJS）与 `ef07a0e06c1d55e2d2f49175d4e976e8337e1ee4`（project guard）。  
@@ -17,6 +17,7 @@
 **本轮 SID JSON SoC identity：** `sid-cell-report.json` 现附带 generic SoC bus 的 machine/family/soc_id/revision 原始字符串（可用时），仅用于识别，不参与 OPP 放行；相关 host/Windows tests #45402936876、#45402977130 与 inventory audit #45403070519/#45403377522 均通过。  
 **本轮 mainline speed-bin reference decode：** 固定上游 Linux `8d7fe9885c62fc9a95bf55d9db244d9672a8aadc` 的候选映射现加入 `sid-cell-report.json`，但所有结果仍 `opp_authorization=not_approved`；#45404785874/#45405024561 已通过。  
 **本轮 Linkslot/mGBA 静态闭环：** #45413653400 成功（70/70）；真实 Linkslot 1.0.45 `slot-retro::Api` Rust `no_std` AArch32 staticlib、21 个 mGBA namespaced exports、真实 mGBA VFS v3 archive、H700 newlib adapter 与 `newlib/libm/libgcc` 最终 ELF32/ARM 链接通过；artifact `14929808289`。该探针不执行核心，也不是完整 LK/固件/设备验证。  
+**本轮 CPU Performance QuickRow App regression：** 两条 workflow 都实际执行 `h700_cpu_performance_quick_row_tests`，2 passed / 0 failed；runtime-slices #45428654903 成功（20/20），完整 feasibility #45428664653 成功（71/71）。测试验证 unavailable 显示、左右请求不改变值、不创建持久化配置。  
 
 
 ## 1. 项目目标与固定约束
@@ -61,15 +62,15 @@
 - 实际 H700 显示扫描输出、GPIO/ADC 输入 producer、硬件 timer、PCM DMA audio、RTC、关机和真实存储写入服务尚未形成完整运行时。
 - 无经 RG34XX 实机验证的 CPU OPP 表、PMIC 调压流程、CPU PLL 切换流程或温控闭环。
 
-### 最新 Linkslot 1.0.45 综合验收（2026-11-24 14:28 UTC）
+### 最新 Linkslot 1.0.45 综合验收（2026-11-24 15:48 UTC）
 
-- [Linkslot LK Rust feasibility #45413653400](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45413653400)：**成功，70/70 steps**，本轮已验证代码 HEAD 为 `e1044df1515b95243cdf83499d41f191b60f190d`。
+- [H700 Linkslot runtime-slices #45428654903](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45428654903)：**成功，20/20 steps**。no_std business + Linkslot integration job 13/13，C input service ABI + queue job 7/7。
+- [Linkslot LK Rust feasibility #45428664653](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45428664653)：**成功，71/71 steps**，代码 HEAD `0e33da4a50b28583aac8c7e815dac7857b6ef43a`。artifact [14937338188](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45428664653/artifacts/14937338188) 已上传，约 387 MB，包含 maps、ELFs、日志和报告。
 - 覆盖 GammaOS LK H700 BL33 overlay/CRT0/exception vector、native BL33 header contract、memory/project fail-closed guard、H700 software renderer/SoftwareCompositor、完整 Linkslot 1.0.45 frontend + no_std business crates、Input ABI/queue、slot-retro VFS v3/static API、mGBA static Rust binding/前端选择、SD→GPT→FAT16/32/exFAT→VFS host path，以及 mGBA AArch32/newlib 构建和链接。
-- **新增关键闭环：** `scripts/probe-mgba-rust-static-api-link.py` 使用真实 Linkslot 1.0.45 `slot-retro/src/ffi.rs` 的 `Api` 类型定义和 `platform/h700/runtime/mgba_static.rs`，构建 `no_std` AArch32 Rust staticlib；确认 21 个 `mgba_retro_*` 入口引用完整，再将真实 mGBA VFS v3 archive、Rust staticlib、H700 newlib adapter object、`libc/libm/libgcc` 链接为 ELF32/ARM；`--no-undefined` 和最终无 undefined-symbol 检查通过。
-- C entry stub 会通过 Rust function table 调用 `retro_api_version`，但本轮只完成编译/链接，**没有执行该 ELF**，没有调用 mGBA init/load/run，也没有把它链接进完整 LK kernel。
-- 构建完整产物 artifact [14929808289](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45413653400/artifacts/14929808289)，大小约 386.6 MB，包含 Rust+mGBA ELF/map、编译日志和各阶段报告。BL33 image 仍只是 tiny `kmain`/exception stub 布局探针。
-- 本轮探针曾发现并修复隔离 checkout 的 rustup override 和 GNU ld 静态 archive 抽取顺序问题；最终 run 在修正后全绿。no_std 构建报告标题也已修正为 Linkslot 1.0.45。
-
+- **CPU QuickRow App tests 现已真实执行：** `cargo test --manifest-path .ci/upstream-linkslot/Cargo.toml -p slot --lib --no-default-features --features device,h700-software h700_cpu_performance_quick_row_tests -- --nocapture`；两项测试 `cpu_performance_row_is_visible_but_explicitly_unavailable` 和 `unavailable_cpu_performance_request_does_not_write_to_storage` 均通过（2 passed / 0 failed，486 filtered out）。runtime-slices 与 full feasibility 两条 workflow 都包含此步骤。
+- 第一次新增测试的 run [#45428037808](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45428037808) 曾失败，因为默认 `cargo test -p slot` 额外编译了上游 `tests/core_picker.rs`，该旧 integration test 与 1.0.45 `CorePicker<C>` 泛型 API 不匹配（E0107/E0308），不是本次 CPU App 测试失败。命令改为 `--lib` 后，[runtime-slices #45428654903](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45428654903) 和 [full feasibility #45428664653](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45428664653) 均成功。
+- 真实 Rust `slot-retro::Api` `no_std` AArch32 staticlib、21 个 mGBA namespaced exports、真实 mGBA VFS v3 archive、H700 newlib adapter 和 `newlib/libm/libgcc` 最终 ELF32/ARM `--no-undefined` 链接通过；BL33 header/vector layout probe 通过。mGBA ELF 仍未执行，BL33 image 仍只是 tiny `kmain`/exception stub 布局探针。
+- 这些结果仍是 host/cross-build 验收，不是完整 LK target link、可刷写固件或 RG34XX 实机启动。
 ### 现阶段仍然未完成
 
 - 没有完整 GammaOS LK H700 target link、可刷写 BL33 image 或实机启动。
@@ -175,9 +176,9 @@
 ## 6. 下一步任务（按顺序执行）
 
 1. **在真实启动路径调用 owner，但不提供虚构板级配置**：H700 `target_init()` hook 已实现，下一步是在硬件证据齐备后接入 board-profile 加载；当前必须保持 hook 空实现、runtime unavailable。SoC revision 只能来自已验证的只读来源；不要调用会临时改变 CE clock/reset 的 vendor `sunxi_get_soc_ver()` 路径。
-2. 完成 Rust typed client → C static owner → Linkslot App 的 adapter，并按专项文档 7.2 追加 QuickRow/QuickValue、双语 translation 和 index parity tests。未具备实际 hardware readback 时只能显示所选策略和“frequency telemetry unavailable / policy not applied”，不能显示计划 MHz 作为实测值。
+2. CPU Performance QuickRow 已完成 display-only/unavailable 接入和 App 回归测试。后续只有在 board-approved RG34XX profile、C owner 初始化和真实只读 telemetry 路径齐备后，才把 `CpuPerformanceRuntime` typed client 接入 App；在此之前继续保持不可选、不可 persist、无计划 MHz 展示。
 
-Linkslot 1.0.45 UI 已审查：`QuickRow::SYSTEM_SETTINGS` 当前 6 行，`QuickRow::ALL`/`QuickValue::ALL` 存在 index 兼容约束。新 CPU row/value 必须追加，不得重排既有 discriminant；`App::quick_value`、`change_setting`、双语 translation、icon/label/parent/page 以及 QuickRow parity tests 需在同一个 overlay 里原子升级。
+Linkslot 1.0.45 UI 当前已追加 display-only CPU row：`SYSTEM_SETTINGS` 为 7 行，`QuickRow::ALL` 为 88 项，Language index=86、CPU Performance index=87；`QuickValue::ALL` 为 38 项，新 unavailable value index=37。两项 App unit tests 已在 runtime-slices/full feasibility CI 实际通过；Rust typed client 仍未接入 App。
 3. **在 RG34XX 实机重新运行新版只读 inventory**：收集新的 `live-fdt.json`、`cpu-power-runtime.txt` 和自动生成的 `sid-cell-report.json`，核对 CPU supply/regulator、OPP 声明、CPUFreq、温度、regulator/clock readback 与 SID 原始 cell；不读取整个 NVMEM 节点，不在 LK 侧猜地址。
 4. 证明 BL31→BL33 CPU1–CPU3 状态和安全的单核 invariant；审计 CPUX PLL parent-switch/lock/分频及 timer continuity。
 5. 只有前述证据闭合后，才实现 C HAL 只读 telemetry 与最终受控硬件 transition；升频先升压，降频先降频后降压，必须有 readback、超时、故障回滚、热 clamp、滞回和实机持续负载验收。
