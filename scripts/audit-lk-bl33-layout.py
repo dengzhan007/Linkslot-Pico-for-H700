@@ -80,11 +80,11 @@ _start:
     .balign 32
 .global __lk_vectors_start
 __lk_vectors_start:
+    b reset
     b arm_undefined
     b arm_syscall
     b arm_prefetch_abort
     b arm_data_abort
-    b arm_reserved
     b arm_reserved
     b arm_irq
     b arm_fiq
