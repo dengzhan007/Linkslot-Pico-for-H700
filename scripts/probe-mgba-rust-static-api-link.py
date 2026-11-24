@@ -219,13 +219,20 @@ __attribute__((noreturn)) void _start(void) {
         out / "entry-compile.log",
     )
 
+    rust_defined = subprocess.check_output(
+        ["arm-none-eabi-nm", "-g", "--defined-only", str(rust_archive)], text=True
+    )
+    for symbol in ("linkslot_mgba_static_api_table", "linkslot_mgba_static_api_version"):
+        if symbol not in rust_defined:
+            raise RuntimeError("Rust static library does not export required C entry point: " + symbol)
+
     elf = out / "linkslot-mgba-rust-static.elf"
     mapfile = out / "linkslot-mgba-rust-static.map"
     command = [
         "arm-none-eabi-gcc", *flags, "-nostartfiles", "-static",
         "-Wl,-e,_start", "-Wl,--no-undefined", "-Wl,-Map=" + str(mapfile),
         "-Wl,--whole-archive", str(archive), "-Wl,--no-whole-archive",
-        str(rust_archive), str(adapter), str(entry_object),
+        str(entry_object), str(rust_archive), str(adapter),
         "-Wl,--start-group", "-lc", "-lm", "-lgcc", "-Wl,--end-group",
         "-o", str(elf),
     ]
