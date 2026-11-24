@@ -55,6 +55,7 @@ def patch_frontend(source: Path) -> None:
     link_kind_dependency = 'slot-link-kind = { path = "../slot-link-kind" }'
     video_mode_dependency = 'slot-video-mode = { path = "../slot-video-mode" }'
     rom_id_dependency = 'slot-rom-id = { path = "../slot-rom-id" }'
+    game_search_dependency = 'slot-game-search = { path = "../slot-game-search" }'
     changed_manifest = False
     if dependency not in manifest_text:
         anchor = 'slot-model = { path = "../slot-model" }\n'
@@ -91,6 +92,12 @@ def patch_frontend(source: Path) -> None:
         if manifest_text.count(anchor) != 1:
             raise RuntimeError("cannot locate slot-video-mode dependency in slot/Cargo.toml")
         manifest_text = manifest_text.replace(anchor, anchor + rom_id_dependency + "\n")
+        changed_manifest = True
+    if game_search_dependency not in manifest_text:
+        anchor = rom_id_dependency + "\\n"
+        if manifest_text.count(anchor) != 1:
+            raise RuntimeError("cannot locate slot-rom-id dependency in slot/Cargo.toml")
+        manifest_text = manifest_text.replace(anchor, anchor + game_search_dependency + "\\n")
         changed_manifest = True
     if changed_manifest:
         slot_manifest.write_text(manifest_text, encoding="utf-8")
@@ -172,6 +179,7 @@ def apply(source: Path, crate_root: Path) -> None:
 
     add_new_package(crate_root / "slot-video-mode", source / "crates/slot-video-mode")
     add_new_package(crate_root / "slot-rom-id", source / "crates/slot-rom-id")
+    add_new_package(crate_root / "slot-game-search", source / "crates/slot-game-search")
 
     video_mode_path = source / "crates/slot/src/video_mode.rs"
     video_mode_path.write_text(
@@ -216,6 +224,63 @@ pub fn source_rect(platform: Platform, mode: VideoMode) -> [f32; 4] {
         "CLOSE_MS, HOP_MS, LIFT_MS, OPEN_MS, SLIDE_MS};" + chr(10),
         encoding="utf-8",
     )
+    game_search_path = source / "crates/slot/src/game_search.rs"
+    original_game_search = game_search_path.read_text(encoding="utf-8")
+    test_start = original_game_search.find("#[cfg(test)]")
+    test_block = original_game_search[test_start:] if test_start >= 0 else ""
+    game_search_path.write_text(
+        """use slot_game_search::{GameSearchIndex as NoStdGameSearchIndex, PinyinProvider, SearchEntry};
+use slot_store::{pinyin, Cart, Platform};
+
+pub use slot_game_search::{CandidatePage, CANDIDATES_PER_PAGE};
+pub type SearchHit = slot_game_search::SearchHit<Platform>;
+
+struct SlotStorePinyin;
+
+impl PinyinProvider for SlotStorePinyin {
+    fn first_reading(&self, ch: char) -> Option<String> {
+        pinyin::first_reading(ch).map(str::to_string)
+    }
+
+    fn readings(&self, ch: char) -> Vec<String> {
+        pinyin::readings(ch)
+            .split(',')
+            .filter(|reading| !reading.is_empty())
+            .map(str::to_string)
+            .collect()
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct GameSearchIndex(NoStdGameSearchIndex<Platform>);
+
+impl GameSearchIndex {
+    pub fn build<'a>(
+        carts: impl Iterator<Item = (usize, usize, Platform, &'a Cart)>,
+    ) -> GameSearchIndex {
+        let entries = carts.map(|(shelf, index, platform, cart)| SearchEntry {
+            shelf,
+            index,
+            platform,
+            stem: cart.stem.as_str(),
+            title: cart.title.as_str(),
+        });
+        GameSearchIndex(NoStdGameSearchIndex::build(entries, &SlotStorePinyin))
+    }
+
+    pub fn candidates(&self, composition: &str, page: usize, per_page: usize) -> CandidatePage {
+        self.0.candidates(composition, page, per_page)
+    }
+
+    pub fn hits(&self, query: &str) -> Vec<SearchHit> {
+        self.0.hits(query)
+    }
+}
+
+""" + test_block,
+        encoding="utf-8",
+    )
+
     rom_id_path = source / "crates/slot/src/rom_id.rs"
     original_rom_id = rom_id_path.read_text(encoding="utf-8")
     test_start = original_rom_id.find("#[cfg(test)]")
@@ -269,6 +334,8 @@ pub fn sha256_reader<R: Read>(reader: R) -> std::io::Result<String> {
         "crates/slot-link-kind",
         "crates/slot-video-mode",
         "crates/slot-rom-id",
+        "crates/slot-game-search",
+        "crates/slot/src/game_search.rs",
         "crates/slot/src/rom_id.rs",
         "crates/slot/src/video_mode.rs",
         "crates/slot/src/link_kind.rs",
