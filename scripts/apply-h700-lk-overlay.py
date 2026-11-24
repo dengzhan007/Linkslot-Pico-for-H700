@@ -83,7 +83,7 @@ def patch_target_rules(original: str) -> str:
         raise RuntimeError("unexpected generic target object list")
     new = (
         "ifneq ($(H700_BUILD),yes)\n"
-        "\tOBJS += $(LOCAL_DIR)/init.o\n"
+        "OBJS += $(LOCAL_DIR)/init.o\n"
         "endif\n"
         "OBJS += $(LOCAL_DIR)/target_display.o"
     )
