@@ -67,7 +67,7 @@ def main() -> None:
         command.extend(["-f", "makefile", "PROJECT=rg34xx_h700"])
         command.extend(variables)
         if dry_run:
-            command.append("build-rg34xx_h700/system-onesegment.ld")
+            command.append("./build-rg34xx_h700/system-onesegment.ld")
         result = run(command, cwd=worktree)
         log = result.stdout
         (out / f"{name}.log").write_text(
