@@ -9,6 +9,7 @@ on:
       - "platform/h700/runtime/input_*.c"
       - "scripts/apply-linkslot-render-core.py"
       - "scripts/apply-linkslot-h700-frontend-core.py"
+      - "scripts/audit-slot-i18n-nostd.py"
       - "scripts/test-h700-input-*.py"
       - "scripts/test-h700-input-queue.c"
       - ".github/workflows/h700-linkslot-runtime.yml"
@@ -20,6 +21,7 @@ on:
       - "platform/h700/runtime/input_*.c"
       - "scripts/apply-linkslot-render-core.py"
       - "scripts/apply-linkslot-h700-frontend-core.py"
+      - "scripts/audit-slot-i18n-nostd.py"
       - "scripts/test-h700-input-*.py"
       - "scripts/test-h700-input-queue.c"
       - ".github/workflows/h700-linkslot-runtime.yml"
@@ -46,6 +48,13 @@ jobs:
         uses: dtolnay/rust-toolchain@1.96.0
         with:
           targets: armv7a-none-eabi,aarch64-unknown-none
+
+      - name: Generate no_std slot-i18n package from pinned translations
+        run: |
+          python3 scripts/audit-slot-i18n-nostd.py \
+            --source .ci/upstream-linkslot \
+            --out build/slot-i18n \
+            --persist-crate-root integration/linkslot/h700-frontend-core/slot-i18n
 
       - name: Test persistent no_std frontend business crates
         run: |
