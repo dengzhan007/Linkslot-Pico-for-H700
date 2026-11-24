@@ -99,8 +99,8 @@ def main() -> None:
         rules_text,
         re.S,
     )
-    if not a53_branch or "-mcpu=cortex-a53" not in a53_branch.group(1):
-        raise RuntimeError("Cortex-A53 rules branch is not using -mcpu=cortex-a53")
+    if not a53_branch or not all(flag in a53_branch.group(1) for flag in ("-mcpu=cortex-a53", "-mfpu=neon-vfpv4", "-mfloat-abi=softfp")):
+        raise RuntimeError("Cortex-A53 rules branch lacks the Cortex-A53 + NEON/VFPv4 + softfp ABI flags")
     if "ARM_CPU_CORTEX_A53" in overlay_crt0.read_text(encoding="utf-8"):
         raise RuntimeError("overlay unexpectedly guesses Cortex-A53 ACTLR.SMP setup")
 
