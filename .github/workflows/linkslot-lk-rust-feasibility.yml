@@ -481,6 +481,7 @@ jobs:
           name: linkslot-lk-rust-feasibility-${{ github.run_id }}
           path: |
             build/audit-work/linkslot-1.0.45/
+            !build/audit-work/linkslot-1.0.45/**/CMakeFiles/Progress/**
             build/h700-objects/
           if-no-files-found: warn
           retention-days: 30
