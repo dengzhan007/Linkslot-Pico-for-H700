@@ -469,6 +469,21 @@ def patch_frontend(source: Path) -> None:
         raise RuntimeError("App CPU Performance exhaustive match anchor changed")
     app = app.replace(cpu_match_old, cpu_match_new)
 
+    open_row_old = (
+        "            | QuickRow::LidTimeout\\n"
+        "            | QuickRow::Language\\n"
+        "            | QuickRow::Rewind\\n"
+    )
+    open_row_new = (
+        "            | QuickRow::LidTimeout\\n"
+        "            | QuickRow::Language\\n"
+        "            | QuickRow::CpuPerformance\\n"
+        "            | QuickRow::Rewind\\n"
+    )
+    if app.count(open_row_old) != 1:
+        raise RuntimeError("App open_quick_row CPU no-op anchor changed")
+    app = app.replace(open_row_old, open_row_new)
+
     app_path.write_text(app, encoding="utf-8")
 
 
