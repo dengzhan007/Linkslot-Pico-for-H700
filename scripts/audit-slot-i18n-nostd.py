@@ -241,6 +241,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument(
+        "--persist-crate-root",
+        type=Path,
+        default=None,
+        help="also materialize the generated no_std crate at this workspace package path",
+    )
     args = parser.parse_args()
     source, out = args.source.resolve(), args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -249,6 +255,26 @@ def main():
         env={"CARGO_TARGET_DIR": str(out / "upstream-target")},
         log=out / "upstream-host-tests.log")
     key_count, domain_count, entries_per_language = build_candidate(source, out)
+
+    if args.persist_crate_root is not None:
+        persistent = args.persist_crate_root.resolve()
+        persistent_src = persistent / "src"
+        persistent_src.mkdir(parents=True, exist_ok=True)
+        (persistent / "Cargo.toml").write_text(
+            "[package]\\n"
+            'name = "slot-i18n"\\n'
+            'version = "1.0.45"\\n'
+            'edition = "2021"\\n'
+            'rust-version = "1.96"\\n'
+            'license = "GPL-3.0-or-later"\\n\\n'
+            "[lib]\\n"
+            'path = "src/lib.rs"\\n',
+            encoding="utf-8",
+        )
+        (persistent_src / "lib.rs").write_text(
+            (out / "src/lib.rs").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
     report = [
         "# slot-i18n no_std static-table feasibility\n\n",
         "Upstream source snapshot: " + str(source) + "\n",
