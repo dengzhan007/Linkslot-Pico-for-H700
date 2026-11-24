@@ -86,14 +86,17 @@ A separate crate now exists at `integration/linkslot/h700-render-core`. It is in
 
 - RGBA8888 or BGRA8888 framebuffer byte order, with explicit width/height/stride validation;
 - stable texture IDs, create/update/delete, and tightly packed RGBA texture data;
-- clipped solid rectangles, nearest-neighbour texture blits and source-over alpha blending;
+- clipped solid rectangles, nearest-neighbour and bilinear texture sampling, and source-over alpha blending;
 - centre-based texture rotation;
 - game-frame insertion and screenshot (`Shot`) insertion in draw-list order;
-- XRGB8888/GL_BGRA-compatible game-frame byte conversion.
+- XRGB8888/GL_BGRA-compatible game-frame byte conversion;
+- fallible texture-buffer reservations reported as `RenderError::TextureTooLarge`.
 
-Nine host regression tests cover framebuffer bounds, clipping, nearest sampling, alpha, rotation, Game/Shot ordering, byte order and texture-handle lifetime. The crate's `cargo check` and `cargo test` commands have been added to the Linkslot/LK feasibility workflow. The current GitHub connector session has not produced a run result for these new commits, so **the implementation is not yet marked CI-passed**. It has not been linked into `Frontend`, connected to the H700 scanout buffer, or benchmarked on the device.
+Texture filtering matches Linkslot's current API convention: `create_texture()` is linear, `create_texture_nearest()` is nearest, and `update_texture()` preserves the handle's current filter. Eleven host regression tests cover framebuffer bounds, clipping, both sampling modes, filter persistence, alpha, rotation, Game/Shot ordering, byte order and texture-handle lifetime.
 
-The first renderer is nearest-neighbour only and deliberately omits the GL shader effects, bezel, rotation of the full display, double buffering and physical cache maintenance. It is a host-testable raster core, not a display driver.
+The crate's `cargo check` and `cargo test` commands are included in the Linkslot/LK feasibility workflow. The current GitHub connector session has not returned an Actions run for the updated PR head, and this environment has no Rust compiler installed, so the implementation is **not yet marked build- or test-passed**. It has not been linked into `Frontend`, connected to the H700 scanout buffer, or benchmarked on the device.
+
+The first renderer deliberately omits the GL shader effects, bezel, full-display rotation, double buffering and physical cache maintenance. It is a host-testable raster core, not a display driver. Its `Draw` and `TexId` data shapes mirror upstream, but they remain separate Rust types until an integration patch makes both sides share the same crate types. and deliberately omits the GL shader effects, bezel, rotation of the full display, double buffering and physical cache maintenance. It is a host-testable raster core, not a display driver.
 
 ### Display memory facts and limits
 
