@@ -87,10 +87,10 @@ def patch_frontend(source: Path) -> None:
         manifest_text = manifest_text.replace(anchor, anchor + video_mode_dependency + "\n")
         changed_manifest = True
     if rom_id_dependency not in manifest_text:
-        anchor = video_mode_dependency + "\\n"
+        anchor = video_mode_dependency + "\n"
         if manifest_text.count(anchor) != 1:
             raise RuntimeError("cannot locate slot-video-mode dependency in slot/Cargo.toml")
-        manifest_text = manifest_text.replace(anchor, anchor + rom_id_dependency + "\\n")
+        manifest_text = manifest_text.replace(anchor, anchor + rom_id_dependency + "\n")
         changed_manifest = True
     if changed_manifest:
         slot_manifest.write_text(manifest_text, encoding="utf-8")
