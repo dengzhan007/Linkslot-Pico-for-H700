@@ -99,6 +99,15 @@ def main() -> int:
         + draw_text[end:]
     )
 
+    # The local tuple-struct constructor is now private to the shared crate.
+    # Route the GL backend's new texture handle through its public constructor.
+    sc = "TexId(self.textures.len() - 1)"
+    if draw_text.count(sc) != 1:
+        raise SystemExit("expected one GL texture-handle constructor")
+    draw_text = draw_text.replace(
+        sc, "TexId::from_raw(self.textures.len() - 1)", 1
+    )
+
     for field, expected in (("id.0", 3), ("tex.0", 2)):
         actual = draw_text.count(field)
         if actual != expected:
