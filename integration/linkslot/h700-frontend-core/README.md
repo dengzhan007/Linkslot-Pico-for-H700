@@ -15,8 +15,9 @@ This is the persistent Rust business-layer extraction for the H700/LK port. Sour
 | `slot-video-mode` | `VideoMode` values and normalized source-frame crop geometry | Allocation-free parse/crop policy. INI file access remains in the host-side wrapper. |
 | `slot-rom-id` | SHA-256 ROM identity, fixed-width hex encoding/decoding and incremental `RomHasher` | Pure hashing is `no_std`; file/stream acquisition stays in the host/VFS wrapper. The hasher supports bounded chunk-by-chunk hashing. |
 | `slot-game-search` | Pinyin IME candidate index, candidate ranking/pagination and cross-platform game-name hits | Accepts an injected `PinyinProvider` and generic platform identifier; game-directory scanning and the large pinyin table stay outside the crate. |
+| `slot-hold-state` | Timed hold progress, completion and release-fade state | Generic `no_std` state machine. The owner still decides whether the hold is allowed and what action completion triggers. |
 
-All nine packages are `no_std`; APIs that own collections use `alloc`. The H700 target must not call allocation-bearing interfaces until the LK heap and approved memory arena are initialized. `slot-model` host path helpers require its default `host-compat` feature; freestanding builds use `--no-default-features`. The `slot-core-picker` crate uses the small `libm` dependency; `slot-rom-id` uses no_std `sha2`; the other seven crates have no external runtime dependencies.
+All ten packages are `no_std`; APIs that own collections use `alloc`. The H700 target must not call allocation-bearing interfaces until the LK heap and approved memory arena are initialized. `slot-model` host path helpers require its default `host-compat` feature; freestanding builds use `--no-default-features`. The `slot-core-picker` crate uses the small `libm` dependency; `slot-rom-id` uses no_std `sha2`; the other eight crates have no external runtime dependencies.
 
 ## C/Rust boundary and current limits
 
@@ -24,7 +25,7 @@ The H700 input service is a versioned C ABI with a 64-entry C FIFO. The queue cu
 
 These crates do not perform MMIO, read physical clocks, mount storage, own framebuffer memory or drive display/audio hardware. They are selected business-logic slices, not a complete Linkslot frontend. The Linux `device_app`, the full `slot::App` state graph, filesystem workers, network/WebDAV, SQLite, dynamic loading, full artwork/font stack and the LK main event loop are not yet a bootable device application.
 
-The temporary integration overlay keeps `upstream/linkslot` immutable and injects the extracted crates back into the original Linkslot workspace. The focused CI workflow [H700 Linkslot runtime slices](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/workflows/h700-linkslot-runtime.yml) verifies host tests, AArch32/AArch64 `no_std` compilation, upstream input/model regression, and complete `slot` Frontend compilation with the renderer and business overlays. Its latest verified run is [45360763842](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45360763842), which verifies all nine packages, reusable gesture output and the full Frontend integration.
+The temporary integration overlay keeps `upstream/linkslot` immutable and injects the extracted crates back into the original Linkslot workspace. The focused CI workflow [H700 Linkslot runtime slices](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/workflows/h700-linkslot-runtime.yml) verifies host tests, AArch32/AArch64 `no_std` compilation, upstream input/model regression, and complete `slot` Frontend compilation with the renderer and business overlays. Its latest verified run is [45362859979](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45362859979), which verifies all ten packages, reusable gesture output, timed folder-hold integration and the full Frontend.
 
 ## Upstream provenance
 
@@ -45,10 +46,12 @@ The temporary integration overlay keeps `upstream/linkslot` immutable and inject
 | `crates/slot/src/video_mode.rs` | `6cf21c2cae7fecfb2c090ab8c726fabf38442838` |
 | `crates/slot/src/rom_id.rs` | `2479194beb9a055ad064fbab39009c4c4a0a4337` |
 | `crates/slot/src/game_search.rs` | `167bc3d03ca02db7ec2cbe5f132b7a3ad5f3603b` |
+| `crates/slot/src/app.rs` (`FolderHold`) | `74401b9599b24bdfacef4bd913f96e8de8d88bf1` |
 
 The generic `FacesLang` state machine has six tests. `CorePicker<C>` has six tests for open timing, navigation, edge refusal, reversal continuity, single-core behavior and write outcome. The paired-state codec has seven tests; link-kind policy has eight; video-mode parsing/cropping has six. The input adapter and gesture bridge have host regressions covering event order, bounded draining, invalid service tables, menu long-press and power long-press behavior. Every package is checked for both `armv7a-none-eabi` and `aarch64-unknown-none`.
 The ROM identity crate has four tests for the standard SHA-256 vector, upper/lowercase hex round trips, malformed hex rejection and incremental-versus-single-buffer equivalence. The host wrapper retains the original file/reader tests.
 The game-search crate has four host tests for full pinyin and initials, cross-platform hits, candidate pagination, empty dictionaries and stable shelf indices; it is checked on both AArch32 and AArch64. Its runtime-facing API is generic over platform IDs and obtains pinyin through an injected provider.
 The gesture adapter also compares `feed_into()`/`tick_into()` against the original allocating API across menu, power, volume/mute, fast-forward, rewind and Select/chord sequences, and checks that the reusable action buffer does not grow.
+The timed-hold crate has seven tests for hidden tap feedback, progress timing, one-shot completion, release fade, disallowed cancellation, replacement/cancel, and backwards monotonic timestamps.
 
 The upstream workspace declares GPL-3.0-or-later. Preserve that license and attribution in redistributed builds.
