@@ -1,6 +1,6 @@
 # Linkslot 1.0.36 on H700 LK: runtime and renderer integration plan
 
-**Status:** architecture plan plus host-only renderer/frontend and input integration proofs. The project has persistent `no_std + alloc` Linkslot `slot-input` / `slot-model` crates, a C input service/queue and Rust gesture bridge; the complete patched `slot` crate compiles in the temporary source tree with the renderer and business overlay. It still has no bootable Linkslot runtime, physical GPIO/input or display/audio driver, or on-device execution. The upstream snapshot on `upstream/linkslot` remains immutable.
+**Status:** architecture plan plus host-only renderer/frontend/input integration proofs. The project has persistent `no_std + alloc` `slot-input`, `slot-model`, and `slot-frontend-state` crates; a C input service/queue and Rust gesture bridge; and a generic UI resource-build state machine injected into the real Frontend. Focused CI compiles the complete patched Linkslot `slot` crate with all overlays. It still has no bootable Linkslot runtime, physical GPIO/input or display/audio driver, or on-device execution. The upstream snapshot on `upstream/linkslot` remains immutable.
 
 This plan resolves a practical integration question: which parts of Linkslot can become LK-resident logic, and which Linux services must be replaced rather than emulated.
 
@@ -121,6 +121,7 @@ Create a narrow LK integration crate rather than adding the current complete Car
 The first no_std + alloc boundary should contain only:
 
 - stable button/key enums, raw events, the H700 C Input Service v1 adapter, and the `slot-input` gesture/state machine;
+- the generic `slot-frontend-state::FacesLang<L>` state machine, extracted from the real `Frontend` language-face build coordinator; resource rasterization and worker/thread orchestration remain outside this crate;
 - pure machine/core/layout identifiers from `slot-model`; filesystem path helpers remain behind the host-only `host-compat` feature;
 - generated/static i18n lookup tables, not runtime JSON parsing through `OnceLock`;
 - a renderer-independent `Draw` / texture-ID / geometry contract;
@@ -161,9 +162,10 @@ R1 does not require the entire 1.0.36 application to be ported first. R2/R3 esta
 1. Keep the original `upstream/linkslot` tree immutable. Record every extracted source file and upstream path in the integration manifest.
 2. Golden-test the H700 SoftwareCompositor against the real GL backend for draw order, crop/rotation, brightness/power, bezel and texture sampling; treat unsupported shader effects as explicit capability gaps.
 3. [Completed] Extract `slot-input` and pure `slot-model` into `integration/linkslot/h700-frontend-core`; preserve upstream tests, prove AArch32/AArch64 `no_std` compilation, and compile the complete Linkslot `slot` Frontend against the persistent overlay in a temporary upstream worktree.
-4. [Input slice completed] Implement versioned C input service, bounded single-context queue, allocation-free Rust raw-event drain and a thin adapter into upstream `Gestures`. Next extract pure menu/game-library state and build a bounded Rust LK event loop over C-provided time, VFS, display and core services. Keep GPIO/framebuffer hardware ownership in C.
-5. Connect the H700 framebuffer/display handoff only after live scanout and BL33 resource ownership are proven; similarly defer audio/input/power MMIO until each board service has its own evidence.
-6. Keep mGBA/Gambatte/gpSP as separate C/C++ static cores. Their linker map, BSS, stack, heap and ROM/save buffers must fit inside a subsequently approved application arena.
+4. [Completed] Extract the pure `FacesLang<L>` coordinator from `Frontend` into `slot-frontend-state`; six state-machine tests pass, the original Frontend imports the generic type through the temporary overlay, and the complete Frontend compiles with the overlay.
+5. [Input slice completed] Implement versioned C input service, bounded single-context queue, allocation-free Rust raw-event drain and adapter into upstream `Gestures`. Next extract pure menu/game-library state and build a bounded Rust LK event loop over C-provided time, input, VFS, display and core services. Keep GPIO/framebuffer hardware ownership in C.
+6. Connect the H700 framebuffer/display handoff only after live scanout and BL33 resource ownership are proven; similarly defer audio/input/power MMIO until each board service has its own evidence.
+7. Keep mGBA/Gambatte/gpSP as separate C/C++ static cores. Their linker map, BSS, stack, heap and ROM/save buffers must fit inside a subsequently approved application arena.
 
 ## 7. Explicit non-goals at this stage
 
