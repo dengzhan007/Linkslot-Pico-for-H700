@@ -290,7 +290,7 @@ def patch_frontend(source: Path) -> None:
     open_three_old = "CorePicker::open_three(seat, options, alt, now)"
     open_three_new = """{
                 let slot2 = if seat == Core::Mgba {
-                    alt.unwrap_or(Core::Gpsp)
+                    alt.filter(|core| *core != Core::Mgba).unwrap_or(Core::Gpsp)
                 } else {
                     seat
                 };
