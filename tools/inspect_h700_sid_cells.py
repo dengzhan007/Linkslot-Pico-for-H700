@@ -15,6 +15,43 @@ from typing import Any
 SPEED_RE = re.compile(r"^speed_bin_raw_le_bytes=([0-9a-fA-F]+)\s*$", re.MULTILINE)
 THERMAL_RE = re.compile(r"^thermal_calibration_raw_bytes=([0-9a-fA-F]+)\s*$", re.MULTILINE)
 
+SOC_BLOCK_MARKER = "== generic SoC identity (read-only sysfs attributes; no serial/chipid) =="
+SOC_ATTRIBUTE_RE = re.compile(
+    r"^\[(machine|family|soc_id|revision)\]\s*\n([^\r\n]*)",
+    re.MULTILINE,
+)
+
+
+def _generic_soc_identity(text: str) -> dict[str, Any]:
+    start = text.find(SOC_BLOCK_MARKER)
+    if start < 0:
+        return {
+            "status": "unavailable",
+            "reason": "The collector did not emit the generic SoC identity block.",
+            "attributes": {},
+            "opp_authorization": "not_approved",
+        }
+
+    block_end = text.find("\n== ", start + len(SOC_BLOCK_MARKER))
+    block = text[start:] if block_end < 0 else text[start:block_end]
+    attributes: dict[str, list[str]] = {}
+    for name, value in SOC_ATTRIBUTE_RE.findall(block):
+        attributes.setdefault(name, []).append(value.strip())
+
+    status = "captured" if attributes else "unavailable"
+    return {
+        "status": status,
+        "attributes": attributes,
+        "opp_authorization": "not_approved",
+        "note": (
+            "These are generic SoC bus sysfs strings only. They are not substituted "
+            "for the vendor sunxi_get_soc_ver() result and do not certify a speed bin "
+            "or authorize any OPP."
+        ),
+    }
+
+
+
 # These literals appear in the pinned vendor cpufreq consumer. They are
 # reported only as reference matches: that source reads a 2-byte NVMEM cell
 # through a u32 pointer, while the pinned NVMEM core allocates exactly cell->bytes.
@@ -125,6 +162,7 @@ def inspect_sid_cells(path: Path) -> dict[str, Any]:
         "source_file": path.name,
         "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
         "sid_provider": "sunxi-sid-ng@03006000",
+        "generic_soc_identity": _generic_soc_identity(text),
         "cells": {
             "speed": {
                 "dts_provider_offset": "0x0",
