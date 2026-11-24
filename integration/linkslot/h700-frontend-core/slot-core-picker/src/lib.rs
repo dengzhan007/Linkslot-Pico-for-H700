@@ -273,6 +273,7 @@ impl<C: Copy + PartialEq> CorePicker<C> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::vec;
 
     #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     enum Core {
