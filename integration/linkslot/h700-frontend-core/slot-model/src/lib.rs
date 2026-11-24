@@ -1,14 +1,14 @@
 #![no_std]
-extern crate alloc;
-
-#[cfg(feature = "host-compat")]
-extern crate std;
-
 //! linkSlot 领域契约（L1）。
 //!
 //! 这里只放**纯数据与派生函数**：机种表、核心表、存档单元布局、协议常量。
 //! 不读文件、不碰环境、不依赖任何 crate —— 这样 `slot-store`、`slot-ui`、
 //! `linkslot` 都能共用同一份事实，而不必各自维护影子表。
+
+extern crate alloc;
+
+#[cfg(feature = "host-compat")]
+extern crate std;
 
 pub mod core;
 pub mod layout;
