@@ -385,3 +385,16 @@ Rust 1.96 的 AArch32 `alloc` 静态库含有 `__aeabi_unwind_cpp_pr0` 符号引
 - A32 HAL 双目标 CI 已加入 PR #16；以对应 workflow 最终 conclusion 为准，不能把 queued/in-progress 描述为 pass。
 - mGBA A32 archive、VFS v3、newlib 和 LK layout 探针在完整可行性工作流中按步骤执行；只有整个 workflow 成功且报告上传后才更新为通过。
 - 真正 BL33 bring-up 前仍需完成：真实 GammaOS LK A32 build flags / CRT0 / VBAR 适配、A53 secondary-core 停驻证明、真实 LK heap 初始化与锁语义、完整镜像 header/entry、RG34XX non-SP 实机冷启动和失败恢复，以及安全 RAM owner map。
+
+
+### GammaOS LK 固定版本的 H700 A32 适配差异（源码核对）
+
+已对 pinned GammaOS LK `TheGammaSqueeze/lk-mt6785@9bf1419a49e0af6dba8b05916df382c9c9c6d0a8` 的真实文件逐项核对，以下不是泛化风险，而是当前源码中的具体差异：
+
+1. **A53 编译选项不匹配**：`arch/arm/rules.mk` 虽有 `ifeq ($(ARM_CPU),cortex-a53)` 分支并打开 CP15/MMU/ARMv7/VFP/NEON 特性宏，但实际 CFLAGS 仍为 `-mcpu=cortex-a9`。H700 overlay 必须显式纠正 CPU codegen 与 ARM-state / NEON-VFPv4 / softfp ABI；不能把“宏定义是 A53”当成编译器已按 A53 生成代码。
+2. **A53 coherency 初始化尚未覆盖**：`arch/arm/crt0.S` 的 ACTLR.SMP bit 设置只受 `ARM_CPU_CORTEX_A7` 控制；A53 分支没有对应处理。不能直接机械地把 A7 的写操作复制到 A53；需要依据 Cortex-A53 TRM、H700 vendor startup 与 monitor 交接状态决定该寄存器由谁配置，并在确认后加入平台初始化/检查。
+3. **VBAR 与 BL33 header/vector layout 冲突**：当前 BL33 布局探针保留 `[MEMBASE+4, MEMBASE+0x640)` 给厂商不透明 header，并把 A32 异常向量放在 `MEMBASE+0x1000`；但 pinned `arch/arm/arch.c::arch_early_init()` 会再次执行 `set_vector_base(MEMBASE)`。若不为 H700 增加 vector-base linker symbol/offset hook，前面入口 wrapper 对 VBAR 的设置会被覆盖，最终指向 header 保留页而不是异常向量表。该冲突必须在真实 LK 链接前修复并加入静态回归。
+4. **平台目录不可复用**：GammaOS 参考项目/target/platform 规则包含 MTK PMIC、GPIO、LCM、SSUSB、CONNSYS、存储和电源配置。Konkr/Pocket Air 的 `MEMBASE/MEMSIZE/SCRATCH_ADDR` 也是 MediaTek 板级布局，不是 H700 可用值。H700 必须提供独立 project/target/platform 规则，并只逐项复用已确认通用的 LK core / generic library。
+5. **多核入口仍是硬门槛**：LK 当前 scheduler 的全局 `current_thread`、全局 run queue 与本地 IRQ critical section 不是 SMP scheduler/跨核锁。未证明其他 A53 核保持 parked，或未实现 per-CPU scheduler 和 cross-core synchronization 前，不得开始可能触发多核分配的正式 Linkslot runtime。
+
+因此现有 BL33 host layout pass 只证明“一个特制 A32 wrapper 可保留 header 区并把入口跳到 +0x1000 向量/启动代码”，并没有证明 GammaOS LK 完整 CRT0、`arch_early_init`、platform MMU、heap、线程调度可在 H700 正确运行。实际移植的最小下一步应是对 pinned LK 生成可审计的 H700 source overlay：修正 A53 toolchain flags、统一 vector-base linker contract、隔离 MTK platform objects，并对 SMP/coherency 初始化采取显式 fail-closed；在这些修改进入完整编译与链接前，BL33 仍不是可启动镜像。
