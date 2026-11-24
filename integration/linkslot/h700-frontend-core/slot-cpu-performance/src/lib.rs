@@ -76,6 +76,7 @@ pub enum CpuPerformanceError {
     ModeUnavailable,
     InvalidOppTable,
     InvalidState,
+    RuntimeUnavailable(i32),
     UnknownMode(u32),
     UnknownStatus(i32),
 }
@@ -187,6 +188,57 @@ extern "C" {
         state: *mut CpuPerformanceStateV1,
         state_size: u32,
     ) -> i32;
+
+    fn h700_cpu_perf_runtime_status_v1() -> i32;
+    fn h700_cpu_perf_runtime_get_service_v1() -> *mut c_void;
+}
+
+/// Exclusive Rust token for the statically owned H700 C runtime service.
+///
+/// Acquire this token only after the C platform startup has initialized the
+/// runtime owner. The token is intentionally not Clone, Send or Sync; obtain
+/// temporary service clients by mutable borrow so Rust callers cannot create
+/// overlapping mutable clients through this API.
+pub struct CpuPerformanceRuntime {
+    service: NonNull<c_void>,
+    _exclusive: PhantomData<*mut c_void>,
+}
+
+impl CpuPerformanceRuntime {
+    /// Acquire the C platform runtime after board startup has initialized it.
+    ///
+    /// # Safety
+    /// The caller must ensure that:
+    /// - h700_cpu_perf_runtime_init_v1() has completed successfully;
+    /// - the platform will not reinitialize/revoke the service for the
+    ///   lifetime of this token;
+    /// - no C or Rust caller outside this token mutates the service.
+    ///
+    /// If the runtime is not ready, this returns RuntimeUnavailable and
+    /// does not manufacture a fallback profile.
+    pub unsafe fn acquire() -> Result<Self, CpuPerformanceError> {
+        let status = unsafe { h700_cpu_perf_runtime_status_v1() };
+        if status != 0 {
+            return Err(CpuPerformanceError::RuntimeUnavailable(status));
+        }
+
+        let service = unsafe { h700_cpu_perf_runtime_get_service_v1() };
+        let service = NonNull::new(service)
+            .ok_or(CpuPerformanceError::RuntimeUnavailable(-200))?;
+
+        Ok(Self {
+            service,
+            _exclusive: PhantomData,
+        })
+    }
+
+    /// Borrow the initialized service for one exclusive business-layer access.
+    pub fn client(&mut self) -> CpuPerformanceClient<'_> {
+        CpuPerformanceClient {
+            service: self.service,
+            _exclusive: PhantomData,
+        }
+    }
 }
 
 /// Exclusive, borrowed access to a caller-owned C service instance.
@@ -357,6 +409,18 @@ mod tests {
         raw = state();
         raw.hardware_applied = 1;
         assert_eq!(raw.decode(), Err(CpuPerformanceError::AbiMismatch));
+    }
+
+    #[test]
+    fn unavailable_platform_runtime_has_a_distinct_error() {
+        assert_eq!(
+            CpuPerformanceError::RuntimeUnavailable(-200),
+            CpuPerformanceError::RuntimeUnavailable(-200)
+        );
+        assert_ne!(
+            CpuPerformanceError::RuntimeUnavailable(-200),
+            CpuPerformanceError::NotInitialized
+        );
     }
 
     #[test]
