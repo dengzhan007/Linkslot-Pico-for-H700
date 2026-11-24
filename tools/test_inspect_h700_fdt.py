@@ -143,6 +143,7 @@ def make_fdt():
     begin("efuse@03006000")
     begin("speed-bin@0")
     prop("phandle", be32(0x40))
+    prop("reg", cells(0x00, 2))
     end()
     end()
 
@@ -229,7 +230,9 @@ class FdtInspectorTests(unittest.TestCase):
         self.assertEqual(cpu["operating_points_v2"][0]["node"], "/soc@03000000/opp-table@0")
         self.assertEqual(cpu["nvmem_cells"][0]["node"], "/soc@03000000/efuse@03006000/speed-bin@0")
         self.assertEqual(cpu["nvmem_cells"][0]["name"], "speed-bin")
+        self.assertEqual(cpu["nvmem_cells"][0]["node_details"]["reg_cells"], [0, 2])
         self.assertEqual(cpu["thermal_sensors"][0]["node"], "/soc@03000000/thermal@05070400")
+        self.assertEqual(cpu["thermal_sensors"][0]["node_details"]["compatible"], ["allwinner,sun50i-thermal"])
         opp_entries = cpu_power["cpu_opp_tables"][0]["entries"]
         self.assertEqual([entry["frequency_hz"] for entry in opp_entries], [1000000000, 1512000000])
         self.assertEqual(opp_entries[1]["voltage_microvolt_cells"], [1100000, 1050000, 1150000])
