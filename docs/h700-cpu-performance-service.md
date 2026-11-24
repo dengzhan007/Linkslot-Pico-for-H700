@@ -54,6 +54,16 @@ Pinned `sun50iw9p1` source is useful for mapping the hardware data path, but it 
 - The pinned `drivers/nvmem/core.c` implementation allocates exactly `cell->bytes` with `kzalloc(cell->bytes)`, and returns `*len = cell->bytes`. Thus the speed cell read returns a two-byte buffer.
 - The pinned `drivers/cpufreq/sun50i-cpufreq-nvmem.c` stores that return value in a `u32 *` and evaluates `switch (*efuse_value)` without validating `len`. For a two-byte allocation this is a potential out-of-bounds 32-bit read. Its default branch also maps unrecognized values to a supported-hardware mask. **This project's code must not copy this consumer or trust its raw-value-to-OPP mask.** The collector captures only the two exact speed-cell bytes; the SID decoder reports the little-endian u16 and any literal match for diagnostics, but hard-codes OPP authorization to `not_approved`.
 - The pinned `sunxi-thermal-ng.c` consumer reads the eight-byte calibration cell as four `u16` words, interprets the factory-test temperature plus sensor calibration words, and warns when a derived calibration value is outside its 12-bit range. That size/layout is consistent with the DTS cell declaration; our offline decoder reports the raw fields only and does not infer that the live sensor has passed calibration.
+
+A separate, explicitly diagnostic reference classifier is now implemented in `tools/inspect_h700_sid_cells.py`, pinned to upstream Linux commit [`8d7fe9885c62fc9a95bf55d9db244d9672a8aadc`](https://github.com/torvalds/linux/blob/8d7fe9885c62fc9a95bf55d9db244d9672a8aadc/drivers/cpufreq/sun50i-cpufreq-nvmem.c):
+
+- Direct reference candidates: `0x2000 → bin 0`; `0x5000/0x5400/0x6000 → bin 3`; `0x5c00 → bin 4`; `0x5d00 → bin 0`; `0x6c00 → bin 5`.
+- Ambiguous group: `0x2400/0x7400/0x2c00/0x7c00` requires the **ARM SMCCC ARCH_SOC_ID revision**: upstream uses bin 1 for revision ≤ 1 and bin 2 for later supported revisions. Without that exact source, report `candidate_bin=null` and the candidate set `[1, 2]`.
+- Unknown raw values are reported as unsupported; the upstream driver's permissive default-to-bin-0 behavior is deliberately not copied.
+- Generic Linux `soc0/revision` strings are not accepted as SMCCC revision. The report uses the term `mainline_reference_decode` and keeps `opp_authorization=not_approved` for every path. A reference candidate bin is not an OPP mask, voltage table, hardware setting or approval.
+- Upstream's qualitative bin order comment is `4 → 0/2 → 3 → 1` (0 and 2 appear equivalent in the upstream OPP tables). This ordering is diagnostic only and does not define RG34XX power/performance guarantees.
+
+This classifier does not change the C policy service, supply an H700 board profile or enable DVFS. A real RG34XX OPP table still requires a board-specific validated frequency/voltage relationship, silicon revision proof, PMIC readback, calibrated temperature and secondary-core quiescence evidence.
 - The RG34XX vendor DTS contains its own `opp_l_table` from 480 MHz upwards, with per-speed/silicon variants. These are vendor configuration references, not a validated frequency-voltage table for the current device at BL33 entry.
 - The mainline H616 CPU OPP table includes points up to 1.512 GHz with speed-bin-specific voltages. Those values are useful for comparing the Linux driver model only; they are not a release OPP grid for this RG34XX.
 - The RG34XX DTS DCDC1 range/ramp metadata and AXP2202 selector register definitions are documented in section 2 above. The AXP717-based RG35XX-2024 1.16 V configuration is not the RG34XX voltage policy.
@@ -66,6 +76,7 @@ Source references:
 - https://github.com/CrealityTech/sonic_pad_os/blob/7f37a7fbf4ad59907034715e3d967b9177de1cd4/lichee/brandy-2.0/u-boot-2018/drivers/sunxi_power/pmu_axp2202.c
 - https://github.com/CrealityTech/sonic_pad_os/blob/7f37a7fbf4ad59907034715e3d967b9177de1cd4/lichee/brandy-2.0/u-boot-2018/include/sunxi_power/pmu_axp2202.h
 - https://github.com/torvalds/linux/blob/master/drivers/cpufreq/sun50i-cpufreq-nvmem.c
+- https://github.com/torvalds/linux/blob/8d7fe9885c62fc9a95bf55d9db244d9672a8aadc/drivers/cpufreq/sun50i-cpufreq-nvmem.c
 - https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/arch/arm64/boot/dts/sunxi/sun50iw9p1.dtsi
 - https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/nvmem/core.c
 - https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/nvmem/sun50i_sid.c
