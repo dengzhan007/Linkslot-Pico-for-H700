@@ -117,6 +117,51 @@ static void fake_fatal(int reason)
     }
 }
 
+/*
+ * Host stand-ins for the pinned LK heap and the future H700 platform callbacks.
+ * The test exercises the real lk_bindings.c table construction; it does not
+ * claim these stand-ins are safe target implementations.
+ */
+void *heap_alloc(size_t size, unsigned int alignment)
+{
+    return fake_heap_alloc(size, alignment);
+}
+
+void heap_free(void *ptr)
+{
+    fake_heap_free(ptr);
+}
+
+bool h700_platform_heap_ready(void)
+{
+    return fake_heap_ready();
+}
+
+bool h700_platform_single_cpu_active(void)
+{
+    return fake_single_cpu();
+}
+
+int h700_platform_console_read(char *buffer, size_t length)
+{
+    return fake_console_read(buffer, length);
+}
+
+int h700_platform_console_write(const char *buffer, size_t length)
+{
+    return fake_console_write(buffer, length);
+}
+
+int h700_platform_rtc_gettimeofday(struct timeval *tv)
+{
+    return fake_rtc_gettimeofday(tv);
+}
+
+void h700_platform_fatal(int reason_or_status)
+{
+    fake_fatal(reason_or_status);
+}
+
 #define CHECK(cond, message) do { \
     if (!(cond)) { \
         fprintf(stderr, "FAIL: %s (line %d, errno=%d)\n", message, __LINE__, errno); \
@@ -127,16 +172,6 @@ static void fake_fatal(int reason)
 int main(void)
 {
     struct h700_newlib_ops bad = {0};
-    struct h700_newlib_ops ops = {
-        .heap_alloc = fake_heap_alloc,
-        .heap_free = fake_heap_free,
-        .heap_ready = fake_heap_ready,
-        .single_cpu_active = fake_single_cpu,
-        .console_read = fake_console_read,
-        .console_write = fake_console_write,
-        .rtc_gettimeofday = fake_rtc_gettimeofday,
-        .fatal = fake_fatal,
-    };
     struct stat st;
     struct timeval tv;
     struct _reent reent = {0};
@@ -153,7 +188,11 @@ int main(void)
     errno = 0;
     CHECK(h700_newlib_install(&bad) == -1 && errno == EINVAL,
           "reject incomplete platform services");
-    CHECK(h700_newlib_install(&ops) == 0, "install valid services");
+    CHECK(h700_newlib_install_lk_bindings() == 0,
+          "install services through the real LK binding table");
+    errno = 0;
+    CHECK(h700_newlib_install_lk_bindings() == -1 && errno == EINVAL,
+          "LK binding table cannot be installed twice");
 
     errno = 0;
     CHECK(h700_test_malloc(16) == NULL && errno == ENOMEM,
