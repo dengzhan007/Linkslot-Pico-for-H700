@@ -2,10 +2,10 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-24 13:07 UTC  
+**最后核对时间：** 2026-11-24 13:09 UTC  
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **工作分支：** `porting/linkslot-1.0.45-feasibility`  
-**本次状态刷新前的分支 HEAD：** `f87d1308ec6482acfeb5630748a92a539394366b`  
+**本次状态刷新前的分支 HEAD：** `ef2ab1000558b835bd1f200e0ccd66aca3fd77a3`  
 **本轮 CPU runtime owner 最新代码提交：** `072793f8b4bfce00683aa3d303eee62613fe41ab`（7 个连续提交）  
 **本轮 Rust runtime bridge 最新代码提交：** `0d381d7ba66592b5ab64ba67e0b228039bb9eec0`  
 **本轮 H700 build graph / guard 最新代码提交：** `6e847c0121431c681062053c52f28824715e78a6`（platform OBJS）与 `ef07a0e06c1d55e2d2f49175d4e976e8337e1ee4`（project guard）。  
@@ -99,7 +99,9 @@
 - [H700 AArch32/AArch64 compile check #45392910394](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45392910394)：**成功**；RG34XX H700 target lifecycle hooks 在 AArch64、AArch32 ARM-state、AArch32 Thumb-2 三种方式编译通过。
 - [H700 boot audit tools #45399690374](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45399690374)：**成功**；SID bounded-cell parser、5 项合成测试、Windows inventory runner 接线，Linux 6/6 与 Windows 8/8 jobs 全通过。
 - [H700 boot audit tools #45399902110](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45399902110)：**成功**；当前 SID parser / Windows runner / docs batch 的最新验证，Linux 6/6、Windows 8/8。
-- [Linkslot LK Rust feasibility #45399902083](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45399902083)：截至 13:07 UTC **in progress**，head `f87d1308ec6482acfeb5630748a92a539394366b`；未见失败，完整 68-step cross-compile job 仍运行，不能记为通过。
+- [H700 boot audit tools #45400199923](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45400199923)：**成功**；项目状态文档更新的 Linux 与 Windows 检查均通过。
+- [H700 boot audit tools #45400199923](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45400199923)：**成功**；本轮 PROJECT-STATUS handoff 更新通过，Linux 6/6、Windows 8/8。
+- [Linkslot LK Rust feasibility #45399902083](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45399902083)：截至 13:09 UTC **in progress**，head `f87d1308ec6482acfeb5630748a92a539394366b`；cross-compile job 68 steps 中 21 steps 已完成，未见失败，不能记为通过。
 - 旧中间提交 #45398363057 曾因 safety test 保留“raw fuse bytes are not read”的过时断言而失败；测试已改为只允许两个固定 cell 的 bounded read，之后 #45398460438、#45399690374 和 #45399902110 已成功。
 - 这些 CI 结果不等于真实 CPU speed-bin/OPP 解码通过、board OPP 获批、MEMBASE/MEMSIZE 获批、整机固件或 RG34XX 实机启动。硬件 DVFS 继续关闭。
 ### 本轮 CI 验证
