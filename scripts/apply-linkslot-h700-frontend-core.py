@@ -50,11 +50,21 @@ def patch_frontend(source: Path) -> None:
     slot_manifest = source / "crates/slot/Cargo.toml"
     manifest_text = slot_manifest.read_text(encoding="utf-8")
     dependency = 'slot-frontend-state = { path = "../slot-frontend-state" }'
+    picker_dependency = 'slot-core-picker = { path = "../slot-core-picker" }'
+    changed_manifest = False
     if dependency not in manifest_text:
         anchor = 'slot-model = { path = "../slot-model" }\n'
         if manifest_text.count(anchor) != 1:
             raise RuntimeError("cannot locate slot-model dependency in slot/Cargo.toml")
         manifest_text = manifest_text.replace(anchor, anchor + dependency + "\n")
+        changed_manifest = True
+    if picker_dependency not in manifest_text:
+        anchor = dependency + "\n"
+        if manifest_text.count(anchor) != 1:
+            raise RuntimeError("cannot locate slot-frontend-state dependency in slot/Cargo.toml")
+        manifest_text = manifest_text.replace(anchor, anchor + picker_dependency + "\n")
+        changed_manifest = True
+    if changed_manifest:
         slot_manifest.write_text(manifest_text, encoding="utf-8")
 
     frontend_path = source / "crates/slot/src/frontend.rs"
@@ -84,6 +94,23 @@ def patch_frontend(source: Path) -> None:
     if "pub struct FacesLang" in frontend:
         raise RuntimeError("local FacesLang implementation was not fully removed")
     frontend_path.write_text(frontend, encoding="utf-8")
+
+    app_path = source / "crates/slot/src/app.rs"
+    app = app_path.read_text(encoding="utf-8")
+    app_replacements = (
+        ("core_picker: Option<CorePicker>,", "core_picker: Option<CorePicker<Core>>,"),
+        ("pub fn core_picker_chip(&self) -> Option<Chip> {",
+         "pub fn core_picker_chip(&self) -> Option<Chip<Core>> {"),
+        ("fn core_picker_shown(&self) -> Option<&CorePicker> {",
+         "fn core_picker_shown(&self) -> Option<&CorePicker<Core>> {"),
+        ("fn draw_core_picker(&self, picker: &CorePicker, out: &mut Vec<Draw>) {",
+         "fn draw_core_picker(&self, picker: &CorePicker<Core>, out: &mut Vec<Draw>) {"),
+    )
+    for old, new in app_replacements:
+        if app.count(old) != 1:
+            raise RuntimeError(f"expected exactly one App core-picker type: {old}")
+        app = app.replace(old, new)
+    app_path.write_text(app, encoding="utf-8")
 
 
 def apply(source: Path, crate_root: Path) -> None:
@@ -117,8 +144,10 @@ def apply(source: Path, crate_root: Path) -> None:
         "crates/slot-input",
         "crates/slot-model",
         "crates/slot-frontend-state",
+        "crates/slot-core-picker",
         "crates/slot/Cargo.toml",
         "crates/slot/src/frontend.rs",
+        "crates/slot/src/app.rs",
     ]
     changed = run_git(source, "status", "--short", "--", *paths)
     if not changed:
