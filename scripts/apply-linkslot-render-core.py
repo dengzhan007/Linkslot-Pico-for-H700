@@ -116,6 +116,116 @@ def main() -> int:
 
     draw_file.write_text(draw_text, encoding="utf-8")
 
+    # Add an object-safe renderer boundary so the real Frontend can accept
+    # either the original GL compositor or a future H700 software backend.
+    renderer_rs = source / "crates/slot-gfx/src/renderer.rs"
+    if renderer_rs.exists():
+        raise SystemExit(f"refusing to overwrite {renderer_rs}")
+    renderer_rs.write_text("""use crate::{Compositor, Draw, ScreenEffect, TexId};
+
+/// Renderer contract consumed by Linkslot's frontend. It contains only
+/// immediate rendering, texture and display-state operations; platform
+/// input, audio and frame pacing remain outside this interface.
+pub trait Renderer {
+    fn create_texture(&mut self, w: u32, h: u32, rgba: &[u8]) -> TexId;
+    fn create_texture_nearest(&mut self, w: u32, h: u32, rgba: &[u8]) -> TexId;
+    fn update_texture(&mut self, id: TexId, w: u32, h: u32, rgba: &[u8]);
+    fn delete_texture(&mut self, id: TexId);
+    fn draw_list(&mut self, items: &[Draw]);
+    fn begin_frame(&mut self);
+    fn end_frame(&mut self, window: (u32, u32));
+    fn fit(&mut self, window: (u32, u32));
+    fn set_bezel(&mut self, w: u32, h: u32, rgba: &[u8]);
+    fn set_blue_light(&mut self, step: u8);
+    fn set_frame_lift(&mut self, t: f32);
+    fn set_frame_size(&mut self, w: u32, h: u32);
+    fn set_frame_split(&mut self, canvas_y: Option<f32>);
+    fn set_game_source_rect(&mut self, rect: [f32; 4]);
+    fn set_paper(&mut self, size: u32, gray: &[u8]);
+    fn set_picture(&mut self, rect: [f32; 4]);
+    fn set_screen_effect(&mut self, effect: ScreenEffect);
+    fn set_screen_fit(&mut self, fit: bool);
+    fn set_screen_power(&mut self, t: f32);
+    fn set_shake(&mut self, dx: f32);
+    fn upload_game(&mut self, xrgb8888: &[u8], w: u32, h: u32);
+}
+
+impl Renderer for Compositor {
+    fn create_texture(&mut self, w: u32, h: u32, rgba: &[u8]) -> TexId {
+        Compositor::create_texture(self, w, h, rgba)
+    }
+    fn create_texture_nearest(&mut self, w: u32, h: u32, rgba: &[u8]) -> TexId {
+        Compositor::create_texture_nearest(self, w, h, rgba)
+    }
+    fn update_texture(&mut self, id: TexId, w: u32, h: u32, rgba: &[u8]) {
+        Compositor::update_texture(self, id, w, h, rgba)
+    }
+    fn delete_texture(&mut self, id: TexId) {
+        Compositor::delete_texture(self, id)
+    }
+    fn draw_list(&mut self, items: &[Draw]) {
+        Compositor::draw_list(self, items)
+    }
+    fn begin_frame(&mut self) { Compositor::begin_frame(self) }
+    fn end_frame(&mut self, window: (u32, u32)) { Compositor::end_frame(self, window) }
+    fn fit(&mut self, window: (u32, u32)) { Compositor::fit(self, window) }
+    fn set_bezel(&mut self, w: u32, h: u32, rgba: &[u8]) {
+        Compositor::set_bezel(self, w, h, rgba)
+    }
+    fn set_blue_light(&mut self, step: u8) { Compositor::set_blue_light(self, step) }
+    fn set_frame_lift(&mut self, t: f32) { Compositor::set_frame_lift(self, t) }
+    fn set_frame_size(&mut self, w: u32, h: u32) { Compositor::set_frame_size(self, w, h) }
+    fn set_frame_split(&mut self, canvas_y: Option<f32>) {
+        Compositor::set_frame_split(self, canvas_y)
+    }
+    fn set_game_source_rect(&mut self, rect: [f32; 4]) {
+        Compositor::set_game_source_rect(self, rect)
+    }
+    fn set_paper(&mut self, size: u32, gray: &[u8]) {
+        Compositor::set_paper(self, size, gray)
+    }
+    fn set_picture(&mut self, rect: [f32; 4]) { Compositor::set_picture(self, rect) }
+    fn set_screen_effect(&mut self, effect: ScreenEffect) {
+        Compositor::set_screen_effect(self, effect)
+    }
+    fn set_screen_fit(&mut self, fit: bool) { Compositor::set_screen_fit(self, fit) }
+    fn set_screen_power(&mut self, t: f32) { Compositor::set_screen_power(self, t) }
+    fn set_shake(&mut self, dx: f32) { Compositor::set_shake(self, dx) }
+    fn upload_game(&mut self, xrgb8888: &[u8], w: u32, h: u32) {
+        Compositor::upload_game(self, xrgb8888, w, h)
+    }
+}
+""", encoding="utf-8")
+
+    gfx_lib = source / "crates/slot-gfx/src/lib.rs"
+    gfx_lib_text = gfx_lib.read_text(encoding="utf-8")
+    if "mod renderer;" in gfx_lib_text or "pub use renderer::Renderer;" in gfx_lib_text:
+        raise SystemExit("slot-gfx renderer module already exists")
+    gfx_lib_text = replace_once(
+        gfx_lib_text, "mod quad;\n", "mod quad;\nmod renderer;\n",
+        "slot-gfx renderer module",
+    )
+    gfx_lib_text = replace_once(
+        gfx_lib_text, "pub use power::{screen_brightness, screen_scale, screen_width};\n",
+        "pub use power::{screen_brightness, screen_scale, screen_width};\npub use renderer::Renderer;\n",
+        "slot-gfx Renderer export",
+    )
+    gfx_lib.write_text(gfx_lib_text, encoding="utf-8")
+
+    frontend_file = source / "crates/slot/src/frontend.rs"
+    frontend_text = frontend_file.read_text(encoding="utf-8")
+    frontend_text = replace_once(
+        frontend_text,
+        "use slot_gfx::{Compositor, Draw, ScreenEffect, TexId, OUT_H, OUT_W};",
+        "use slot_gfx::{Draw, Renderer, ScreenEffect, TexId, OUT_H, OUT_W};",
+        "Frontend renderer import",
+    )
+    frontend_count = frontend_text.count("&mut Compositor")
+    if frontend_count < 20:
+        raise SystemExit(f"expected at least 20 Frontend Compositor parameters, found {frontend_count}")
+    frontend_text = frontend_text.replace("&mut Compositor", "&mut dyn Renderer")
+    frontend_file.write_text(frontend_text, encoding="utf-8")
+
     if "pub struct TexId" in draw_text or "pub enum Draw" in draw_text:
         raise SystemExit("local duplicate Draw/TexId types remain in slot-gfx")
     if "pub use h700_render_core::{Draw, TexId};" not in draw_text:
