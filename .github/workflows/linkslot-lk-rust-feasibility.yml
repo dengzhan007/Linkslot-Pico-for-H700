@@ -57,6 +57,10 @@ on:
       - "scripts/probe-mgba-static-api-link.py"
       - "platform/h700/**"
       - "scripts/build-h700-objects.sh"
+      - "project/rg34xx_h700.mk"
+      - "target/rg34xx_h700/rules.mk"
+      - "scripts/test-h700-lk-project-guard.py"
+      - "docs/h700-lk-project.md"
   workflow_dispatch:
 
 permissions:
@@ -117,6 +121,13 @@ jobs:
             --lk-source .ci/lk-reference \
             --overlay build/audit-work/linkslot-1.0.36/h700-lk-overlay \
             --out build/audit-work/linkslot-1.0.36/h700-lk-overlay-build
+
+      - name: Test RG34XX H700 LK project and memory-layout fail-closed gate
+        run: |
+          python3 scripts/test-h700-lk-project-guard.py \\
+            --lk-source .ci/lk-reference \\
+            --overlay build/audit-work/linkslot-1.0.36/h700-lk-overlay \\
+            --out build/audit-work/linkslot-1.0.36/h700-lk-project-guard
 
       - name: Install pinned Rust toolchain and freestanding targets
         uses: dtolnay/rust-toolchain@1.96.0
