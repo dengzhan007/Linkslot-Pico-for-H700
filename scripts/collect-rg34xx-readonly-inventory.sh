@@ -374,6 +374,23 @@ fi
         fi
     done
 
+    # Focused CPUX clock excerpt from the same read-only Linux clk_summary.
+    # Keep leading whitespace so the parent/child clock-tree indentation survives.
+    CPU_CLK_SUMMARY="/sys/kernel/debug/clk/clk_summary"
+    if [ -r "$CPU_CLK_SUMMARY" ]; then
+        echo
+        echo "== CPUX-related clock entries (read-only; indentation preserved) =="
+        while IFS= read -r line; do
+            case "$line" in
+                *pll_cpu*|*pll_periph0*|*cpux*|*cpu*)
+                    printf '%s\\n' "$line"
+                    ;;
+            esac
+        done < "$CPU_CLK_SUMMARY"
+    else
+        echo "NOT_READABLE_OR_ABSENT: CPUX clk_summary focus"
+    fi
+
     echo
     echo "== NVMEM metadata and narrowly scoped SID cell readback =="
     echo "Only the two device-tree-declared SID cells are read; the complete NVMEM range is never dumped."
