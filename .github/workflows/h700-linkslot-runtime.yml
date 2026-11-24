@@ -1,6 +1,17 @@
-name: H700 Linkslot runtime slices
+name: H700 Linkslot 1.0.45 runtime slices
 
 on:
+  push:
+    branches: [porting/linkslot-1.0.45-feasibility]
+    paths:
+      - "integration/linkslot/h700-frontend-core/**"
+      - "platform/h700/runtime/input_*.h"
+      - "platform/h700/runtime/input_*.c"
+      - "scripts/apply-linkslot-render-core.py"
+      - "scripts/apply-linkslot-h700-frontend-core.py"
+      - "scripts/test-h700-input-*.py"
+      - "scripts/test-h700-input-queue.c"
+      - ".github/workflows/h700-linkslot-runtime.yml"
   pull_request:
     branches: [main]
     paths:
@@ -25,7 +36,7 @@ jobs:
       - name: Checkout feasibility branch
         uses: actions/checkout@v4
 
-      - name: Checkout immutable Linkslot 1.0.36 snapshot
+      - name: Checkout immutable Linkslot 1.0.45 snapshot
         uses: actions/checkout@v4
         with:
           ref: upstream/linkslot
