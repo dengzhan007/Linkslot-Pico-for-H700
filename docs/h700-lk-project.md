@@ -84,6 +84,18 @@ heap, stack or Linkslot payload. The 1 MiB arena is a boot-chain allocation
 fact, not a free-memory grant. The host-only BL33 layout check is also not an
 allocation approval.
 
+## BL33 memory lifetime audit
+
+The source-backed runtime inventory is documented in
+[H700 BL33 and application memory ownership](h700-bl33-memory-ownership.md).
+It records two additional facts from the pinned BaseOS loader: the current
+A32 entry sets SP to 0x4a0f0000, and its 4096-entry (16 KiB) translation table
+starts at 0x4a0f8000. These narrow the current BL33 layout, but do not approve
+an LK heap, BSS, stack guard, MMU table or application allocation. The
+0x40080000 kernel destination and 0x45000000 BOL4 staging window are only
+candidate reclaim areas for a standalone LK path that bypasses Linux; neither
+is approved for use.
+
 ## BL33 image packaging
 
 The full GammaOS build's normal `lk.img` is MTK-header wrapped. A future H700
