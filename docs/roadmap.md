@@ -32,7 +32,8 @@
 - [x] 在隔离 Linkslot 1.0.36 源树应用持久化业务 crate overlay，保留原始测试目录；上游 `slot-input` / `slot-model` 测试通过，并以原有 Linux host compatibility feature 编译完整 `slot` Frontend。
 - [x] 从 `Frontend` 抽取通用 `FacesLang<L>` 构建代次状态机为 `slot-frontend-state`（`no_std`）：保留 build coalescing、generation/stale-result 处理、abandon/retry 与 synchronous completion；6 项独立测试通过，并通过临时源 overlay 注入回原版 `Frontend`。
 - [x] 从 `App` 抽取泛型 `CorePicker<C>` 状态机为 `slot-core-picker`（`no_std`）：保留核心选择、单核心只展示、chip hop/中途反向、open/close easing、边界拒绝与最终选择写回；6 项独立测试通过，`App` 类型通过 overlay 替换为 `CorePicker<Core>`。
-- [x] 专项 workflow [45351866340](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45351866340) 验证最新整合：四个持久化 no_std crate（slot-input、slot-model、slot-frontend-state、slot-core-picker）的 host tests/A32/A64 checks、上游输入/模型回归、Renderer + 四个业务 crate overlay、完整 Linkslot `slot` Frontend 编译，以及 C input queue 与 ABI A32/A64 检查全部成功。
+- [x] 从 `slot::link_state` 抽取 `slot-link-state`：保留 `SLK1` 双人状态打包/拆分、BIOS ID 比较，使用借用切片完成校验避免 BIOS 比较时克隆整份 GBA 状态；增加畸形长度与尾随数据拒绝测试。
+- [x] 专项 workflow [45352266888](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45352266888) 验证最新整合：五个持久化 no_std crate（slot-input、slot-model、slot-frontend-state、slot-core-picker、slot-link-state）的 host tests/A32/A64 checks、上游输入/模型回归、Renderer + 五个业务 crate overlay、完整 Linkslot `slot` Frontend 编译，以及 C input queue 与 ABI A32/A64 检查全部成功。
 - [ ] 将更多 Frontend/App 的纯状态、游戏库、菜单、配置和本地存档策略逐步提取成 `no_std` Rust 模块；不能把当前 Linux `device_app` / 完整 `App` 直接链接为 LK 应用。
 - [ ] 在真实 H700 runtime 中验证 mGBA 启动 ROM、视频帧、音频、输入、即时状态和电池存档；host archive/link 结果不能替代运行测试。
 
