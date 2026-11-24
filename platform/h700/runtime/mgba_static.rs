@@ -60,8 +60,7 @@ unsafe extern "C" {
 ///
 /// All function pointers refer to code resident in the statically linked
 /// mGBA archive and remain valid for the lifetime of the process.
-pub fn api() -> Api {
-    Api {
+pub static API: Api = Api {
         cheat_reset: Some(core_cheat_reset),
         cheat_set: Some(core_cheat_set),
         init: core_init,
@@ -83,5 +82,9 @@ pub fn api() -> Api {
         unserialize: core_unserialize,
         get_memory_data: core_get_memory_data,
         get_memory_size: core_get_memory_size,
-    }
+};
+
+/// Return a copy of the resident function table for Linkslot's static core API.
+pub fn api() -> Api {
+    API
 }
