@@ -180,6 +180,124 @@ def _reg_ranges(value: bytes | None, address_cells: int, size_cells: int) -> lis
     return ranges
 
 
+def _phandle_index(nodes: dict[str, dict[str, bytes]]) -> dict[int, str]:
+    index: dict[int, str] = {}
+    for node_path, props in nodes.items():
+        for prop_name in ("phandle", "linux,phandle"):
+            values = _cells(props.get(prop_name))
+            if len(values) == 1 and values[0] != 0:
+                index[values[0]] = node_path
+    return index
+
+
+def _phandle_refs(value: bytes | None, index: dict[int, str]) -> list[dict[str, Any]]:
+    refs = []
+    for handle in _cells(value):
+        refs.append({
+            "phandle": f"0x{handle:x}",
+            "node": index.get(handle),
+        })
+    return refs
+
+
+def _regulator_summary(node_path: str, props: dict[str, bytes]) -> dict[str, Any]:
+    minimum = _number(props.get("regulator-min-microvolt"))
+    maximum = _number(props.get("regulator-max-microvolt"))
+    return {
+        "node": node_path,
+        "name": (_strings(props.get("regulator-name")) or [None])[0],
+        "minimum_microvolt": minimum,
+        "maximum_microvolt": maximum,
+        "always_on": "regulator-always-on" in props,
+        "boot_on": "regulator-boot-on" in props,
+        "status": (_strings(props.get("status")) or ["okay"])[0],
+    }
+
+
+def _cpu_power_inventory(nodes: dict[str, dict[str, bytes]]) -> dict[str, Any]:
+    phandles = _phandle_index(nodes)
+    regulators = {
+        node_path: _regulator_summary(node_path, props)
+        for node_path, props in nodes.items()
+        if "regulator-name" in props
+    }
+    opp_tables: dict[str, dict[str, Any]] = {}
+    cpus = []
+
+    for node_path, props in nodes.items():
+        device_type = (_strings(props.get("device_type")) or [""])[0]
+        leaf = node_path.rsplit("/", 1)[-1].lower()
+        if device_type != "cpu" and not (
+            node_path.startswith("/cpus/") and leaf.startswith("cpu@")
+        ):
+            continue
+
+        supply_refs = _phandle_refs(props.get("cpu-supply"), phandles)
+        for ref in supply_refs:
+            resolved = regulators.get(ref["node"])
+            if resolved:
+                ref["regulator"] = resolved
+
+        opp_refs = _phandle_refs(props.get("operating-points-v2"), phandles)
+        for ref in opp_refs:
+            table_path = ref["node"]
+            if not table_path or table_path not in nodes:
+                continue
+            if table_path not in opp_tables:
+                entries = []
+                prefix = table_path.rstrip("/") + "/"
+                for child_path, child_props in nodes.items():
+                    if not child_path.startswith(prefix):
+                        continue
+                    frequency = _number(child_props.get("opp-hz"))
+                    if frequency is None:
+                        continue
+                    entries.append({
+                        "node": child_path,
+                        "frequency_hz": frequency,
+                        "voltage_microvolt_cells": _cells(child_props.get("opp-microvolt")),
+                        "supported_hw_cells": _cells(child_props.get("opp-supported-hw")),
+                        "turbo": "turbo-mode" in child_props,
+                        "status": (_strings(child_props.get("status")) or ["okay"])[0],
+                    })
+                opp_tables[table_path] = {
+                    "node": table_path,
+                    "compatible": _strings(nodes[table_path].get("compatible")),
+                    "shared": "opp-shared" in nodes[table_path],
+                    "entries": sorted(entries, key=lambda entry: entry["frequency_hz"]),
+                }
+
+        nvmem_names = _strings(props.get("nvmem-cell-names"))
+        nvmem_refs = _phandle_refs(props.get("nvmem-cells"), phandles)
+        for i, ref in enumerate(nvmem_refs):
+            if i < len(nvmem_names):
+                ref["name"] = nvmem_names[i]
+
+        cpus.append({
+            "node": node_path,
+            "compatible": _strings(props.get("compatible")),
+            "status": (_strings(props.get("status")) or ["okay"])[0],
+            "reg_cells": _cells(props.get("reg")),
+            "clock_frequency_hz": _number(props.get("clock-frequency")),
+            "cpu_supply": supply_refs,
+            "operating_points_v2": opp_refs,
+            "nvmem_cells": nvmem_refs,
+            "thermal_sensors": _phandle_refs(props.get("thermal-sensors"), phandles),
+        })
+
+    return {
+        "cpu_nodes": cpus,
+        "regulator_nodes": sorted(regulators.values(), key=lambda item: item["node"]),
+        "cpu_opp_tables": list(opp_tables.values()),
+        "phandle_node_count": len(phandles),
+        "note": (
+            "These are static device-tree declarations only. They do not prove "
+            "the active CPU voltage, current OPP, SID raw value, thermal calibration, "
+            "regulator readback, or that an OPP is safe to apply."
+        ),
+    }
+
+
 def inspect_fdt(path: Path) -> dict[str, Any]:
     blob = path.read_bytes()
     nodes = parse_fdt(blob)
@@ -340,6 +458,7 @@ def inspect_fdt(path: Path) -> dict[str, Any]:
         "usb_controllers": sorted(usb, key=lambda item: item["node"]),
         "debug_modes": debug_modes,
         "boot_framebuffers": boot_framebuffers,
+        "cpu_power": _cpu_power_inventory(nodes),
         "node_count": len(nodes),
     }
 
