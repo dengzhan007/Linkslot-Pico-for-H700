@@ -84,11 +84,19 @@ impl<'a> H700InputSource<'a> {
     }
 }
 
-impl InputSource for H700InputSource<'_> {
-    fn poll(&mut self, _now: Millis) -> Vec<RawEvent> {
+impl H700InputSource<'_> {
+    /// Drain logical button edges into caller-owned storage without allocating.
+    ///
+    /// This is the preferred LK runtime path. A poll reads at most 32 events;
+    /// any remaining events stay queued in the C service for the next call.
+    pub fn drain_into(&mut self, output: &mut [RawEvent]) -> usize {
         let Some(drain) = self.service.drain else {
-            return Vec::new();
+            return 0;
         };
+        let capacity = output.len().min(H700_INPUT_MAX_EVENTS);
+        if capacity == 0 {
+            return 0;
+        }
         let mut raw = [H700InputEvent::default(); H700_INPUT_MAX_EVENTS];
         // The callback contract forbids writes beyond the supplied capacity.
         // Clamp an over-reported count before slicing the local buffer.
@@ -96,23 +104,33 @@ impl InputSource for H700InputSource<'_> {
             drain(
                 self.service.context,
                 raw.as_mut_ptr(),
-                raw.len(),
+                capacity,
             )
         }
-        .min(raw.len());
+        .min(capacity);
 
-        let mut events = Vec::with_capacity(count);
+        let mut written = 0;
         for event in &raw[..count] {
             let Some(button) = decode_button(event.button) else {
                 continue;
             };
-            match event.state {
-                H700_INPUT_PRESSED => events.push(RawEvent::Down(button)),
-                H700_INPUT_RELEASED => events.push(RawEvent::Up(button)),
-                _ => {}
-            }
+            let mapped = match event.state {
+                H700_INPUT_PRESSED => RawEvent::Down(button),
+                H700_INPUT_RELEASED => RawEvent::Up(button),
+                _ => continue,
+            };
+            output[written] = mapped;
+            written += 1;
         }
-        events
+        written
+    }
+}
+
+impl InputSource for H700InputSource<'_> {
+    fn poll(&mut self, _now: Millis) -> Vec<RawEvent> {
+        let mut events = [RawEvent::Up(Btn::Up); H700_INPUT_MAX_EVENTS];
+        let count = self.drain_into(&mut events);
+        events[..count].to_vec()
     }
 }
 
@@ -203,6 +221,29 @@ mod tests {
             ]
         );
         assert!(source.poll(124).is_empty());
+    }
+
+    #[test]
+    fn drain_into_uses_caller_storage_and_leaves_unread_events_queued() {
+        let mut queue = Queue {
+            events: [
+                H700InputEvent { button: H700_BTN_A, state: H700_INPUT_PRESSED, reserved: 0 },
+                H700InputEvent { button: H700_BTN_B, state: H700_INPUT_PRESSED, reserved: 0 },
+                H700InputEvent { button: H700_BTN_X, state: H700_INPUT_RELEASED, reserved: 0 },
+                H700InputEvent { button: H700_BTN_Y, state: H700_INPUT_PRESSED, reserved: 0 },
+            ],
+            len: 4,
+            consumed: 0,
+        };
+        let service = service(&mut queue);
+        let mut source = H700InputSource::new(&service).unwrap();
+        let mut small = [RawEvent::Up(Btn::Up); 2];
+        assert_eq!(source.drain_into(&mut small), 2);
+        assert_eq!(small, [RawEvent::Down(Btn::A), RawEvent::Down(Btn::B)]);
+        let mut rest = [RawEvent::Up(Btn::Up); 4];
+        assert_eq!(source.drain_into(&mut rest), 2);
+        assert_eq!(rest[..2], [RawEvent::Up(Btn::X), RawEvent::Down(Btn::Y)]);
+        assert_eq!(source.drain_into(&mut []), 0);
     }
 
     #[test]
