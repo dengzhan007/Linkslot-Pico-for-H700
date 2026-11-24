@@ -1,6 +1,10 @@
 LOCAL_DIR := $(GET_LOCAL_DIR)
 PLATFORM := h700
 
+# Satisfy LK kernel/main.c's unconditional target lifecycle calls without
+# importing the MediaTek generic target/init.c and its MTK-only services.
+OBJS += $(LOCAL_DIR)/init.o
+
 # This is an intentional hard stop, not a default memory map. A separate
 # board-level review must approve the exact range before a real LK build.
 ifneq ($(strip $(H700_MEMORY_LAYOUT_APPROVED)),yes)
