@@ -28,6 +28,11 @@ def make_fdt():
         "device_type", "reg", "lcd_driver_name", "lcd_x", "lcd_y", "status", "boot_fb0",
         "no-map", "debug_mode", "ranges", "linux,initrd-start", "linux,initrd-end",
         "method", "heap-name", "heap-id", "heap-base", "heap-size", "heap-type",
+        "phandle", "cpu-supply", "regulator-name", "regulator-min-microvolt",
+        "regulator-max-microvolt", "regulator-always-on", "regulator-boot-on",
+        "operating-points-v2", "opp-hz", "opp-microvolt", "opp-supported-hw",
+        "opp-shared", "nvmem-cells", "nvmem-cell-names", "thermal-sensors",
+        "clock-frequency",
     )
     strings = bytearray()
     name_offsets = {}
@@ -72,6 +77,22 @@ def make_fdt():
     prop("reg", cells(0, 0x40000000, 0, 0x40000000))
     end()
 
+    begin("cpus")
+    prop("#address-cells", be32(1))
+    prop("#size-cells", be32(0))
+    begin("cpu@0")
+    prop("device_type", b"cpu\0")
+    prop("compatible", b"arm,cortex-a53\0")
+    prop("reg", cells(0))
+    prop("clock-frequency", be32(1512000000))
+    prop("cpu-supply", be32(0x20))
+    prop("operating-points-v2", be32(0x30))
+    prop("nvmem-cells", be32(0x40))
+    prop("nvmem-cell-names", b"speed-bin\0")
+    prop("thermal-sensors", be32(0x50))
+    end()
+    end()
+
     begin("reserved-memory")
     prop("#address-cells", be32(2))
     prop("#size-cells", be32(2))
@@ -110,6 +131,24 @@ def make_fdt():
 
     begin("pmu")
     prop("compatible", b"x-powers,axp2202\0")
+    begin("regulator@0")
+    prop("phandle", be32(0x20))
+    prop("regulator-name", b"CPU_VDD\0")
+    prop("regulator-min-microvolt", be32(800000))
+    prop("regulator-max-microvolt", be32(1200000))
+    prop("regulator-always-on", b"")
+    end()
+    end()
+
+    begin("efuse@03006000")
+    begin("speed-bin@0")
+    prop("phandle", be32(0x40))
+    end()
+    end()
+
+    begin("thermal@05070400")
+    prop("phandle", be32(0x50))
+    prop("compatible", b"allwinner,sun50i-thermal\0")
     end()
 
     begin("ehci2-controller@05310000")
@@ -120,6 +159,24 @@ def make_fdt():
     begin("ohci1-controller@05200400")
     prop("compatible", b"allwinner,sunxi-ohci1\0")
     prop("status", b"late\0")
+    end()
+
+
+    begin("opp-table@0")
+    prop("phandle", be32(0x30))
+    prop("compatible", b"operating-points-v2\0")
+    prop("opp-shared", b"")
+    begin("opp-1000000000")
+    prop("opp-hz", cells(0, 1000000000))
+    prop("opp-microvolt", cells(900000))
+    prop("opp-supported-hw", cells(1, 0xff))
+    end()
+    begin("opp-1512000000")
+    prop("opp-hz", cells(0, 1512000000))
+    prop("opp-microvolt", cells(1100000, 1050000, 1150000))
+    prop("opp-supported-hw", cells(1, 0xff))
+    prop("turbo-mode", b"")
+    end()
     end()
 
     begin("disp@01000000")
@@ -162,6 +219,21 @@ class FdtInspectorTests(unittest.TestCase):
         self.assertEqual(report["panels"][0]["driver"], "rg34xx_v1")
         self.assertEqual((report["panels"][0]["width"], report["panels"][0]["height"]), (720, 480))
         self.assertEqual(report["pmic_nodes"][0]["compatible"], ["x-powers,axp2202"])
+        cpu_power = report["cpu_power"]
+        self.assertEqual(len(cpu_power["cpu_nodes"]), 1)
+        cpu = cpu_power["cpu_nodes"][0]
+        self.assertEqual(cpu["node"], "/cpus/cpu@0")
+        self.assertEqual(cpu["clock_frequency_hz"], 1512000000)
+        self.assertEqual(cpu["cpu_supply"][0]["node"], "/soc@03000000/pmu/regulator@0")
+        self.assertEqual(cpu["cpu_supply"][0]["regulator"]["name"], "CPU_VDD")
+        self.assertEqual(cpu["operating_points_v2"][0]["node"], "/opp-table@0")
+        self.assertEqual(cpu["nvmem_cells"][0]["node"], "/soc@03000000/efuse@03006000/speed-bin@0")
+        self.assertEqual(cpu["nvmem_cells"][0]["name"], "speed-bin")
+        self.assertEqual(cpu["thermal_sensors"][0]["node"], "/soc@03000000/thermal@05070400")
+        opp_entries = cpu_power["cpu_opp_tables"][0]["entries"]
+        self.assertEqual([entry["frequency_hz"] for entry in opp_entries], [1000000000, 1512000000])
+        self.assertEqual(opp_entries[1]["voltage_microvolt_cells"], [1100000, 1050000, 1150000])
+        self.assertIn("do not prove", cpu_power["note"])
         self.assertEqual([x["status"] for x in report["usb_controllers"]], ["okay", "late"])
         self.assertEqual(report["debug_modes"][0]["value"], 0)
         self.assertEqual(report["chosen_bootargs"], "root=/dev/mmcblk0p5 cma=64M disp_reserve=1382400,0x7bf24800")
