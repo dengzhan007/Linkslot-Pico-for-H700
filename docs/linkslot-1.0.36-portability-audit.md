@@ -409,3 +409,26 @@ Rust 1.96 的 AArch32 `alloc` 静态库含有 `__aeabi_unwind_cpp_pr0` 符号引
 - 固定 GammaOS LK 源码默认 Thumb-2 C/C++ 与 ARM-state assembly 是两条不同的 codegen 路径。H700 project 必须在 target 层显式选择 NEON/VFPv4、softfp 和 ARM/Thumb interworking 规则，不能把 standalone `-marm` compile probe 当作完整 LK ABI。
 - 本阶段 mGBA 核心静态链接 footprint 为约 1.78 MiB，而 0x4a000000 到 0x4a0e0000 的 host probe 候选槽只有 896 KiB；该槽本身也不是经过 RG34XX 内存 ownership 批准的 RAM 分配。因此完整 Linkslot/mGBA 不应假定常驻在这段 BL33 候选窗口；未来应在批准的内存范围内设计独立可加载 core/payload ABI。
 
+
+
+## GammaOS LK H700 build-graph isolation（2026-11-24）
+
+对 pinned makefile / dev/rules.mk / target/rules.mk 继续审计后，确认完整 target 不能只添加一个 H700 platform rules 文件。固定版本的 top-level makefile 还会无条件加载 MediaTek fork 的默认模块：
+
+- platform/common/rules.mk 无条件加入 loader、storage、timer、partition、plinfo、atf、boot 等模块；其中 partition 的默认非 eMMC/UFS 分支会编译 NAND-specific part_nand.o，这些都不是 H700 通用 HAL。
+- dev/rules.mk 无条件加入 dev/video、dev/lcm、dev/gic、dev/md_com，并包含 MTK logo 资源生成规则。dev/gic 只选择 MTK GIC v2/v3 对象；不能因为 H700 有 GIC-400 就直接复用该实现。
+- 通用 target/rules.mk 无条件加入 target/init.o。固定源码 target/init.c 包含 platform/mt_typedefs.h、MTK block/partition interface，并默认提供 NAND/eMMC 语义；H700 不得编译它。
+
+扩展后的 scripts/apply-h700-lk-overlay.py 现在计划生成六个文件的 source overlay：
+
+1. makefile：仅当 H700_BUILD=yes 时跳过整个 MediaTek platform/common/rules.mk；原有 MediaTek 项目行为保持不变。
+2. dev/rules.mk：H700 跳过 MTK video/LCM/GIC/modem/logo 模块；保留空的通用 dev_init object。
+3. target/rules.mk：H700 跳过 MTK target/init.o，保留只提供 weak display stubs 的通用 target_display.o。
+4. arch/arm/crt0.S：BL33 entry/header/vector wrapper。
+5. arch/arm/arch.c：VBAR 绑定 __lk_vectors_start。
+6. arch/arm/rules.mk：Cortex-A53 -mcpu 修正，并显式加入 -mfpu=neon-vfpv4 -mfloat-abi=softfp。
+
+此 overlay 只生成源文件替换和 unified patch，不会修改 pinned LK checkout；它不会添加 H700 project、target、platform 本体，也不会设置 MEMBASE/MEMSIZE。未来 project/rg34xx_h700.mk 必须在 include 发生前设置 H700_BUILD := yes；target/rg34xx_h700/rules.mk 只有在 DRAM/monitor/reserved-region ownership 验收后，才能定义 linker/heap/stack 物理范围；platform/h700/rules.mk 再显式加入已通过编译及硬件验证的 HAL 源文件。不能用 Konkr/Pocket Air 的 MTK target memory constants 作为 H700 默认值。
+
+新增 scripts/test-h700-lk-overlay.py 进一步检查六文件 overlay 结构，并尝试将实际 overlay CRT0、pinned 原始 exception assembly 与小型 stubs 链接为 ELF32/ARM；检查 _start 首分支、+0x1000 向量表、boot argument scratch、arch.c VBAR 符号和 linker bound。它仍是 host-only assembly/link feasibility test，不代表完整 LK target link 或实机启动。该检查在 CI 成功前不得标成 pass。
+
