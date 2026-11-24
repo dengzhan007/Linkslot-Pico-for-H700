@@ -270,7 +270,7 @@ fi
 
     echo
     echo "== per-CPU cpufreq policies =="
-    for node in /sys/devices/system/cpu/cpu[0-9]* /sys/devices/system/cpu/cpufreq/policy[0-9]*; do
+    for node in /sys/devices/system/cpu/cpu[0-9]*/cpufreq /sys/devices/system/cpu/cpufreq/policy[0-9]*; do
         [ -d "$node" ] || continue
         echo "-- $node --"
         for attr in affected_cpus related_cpus scaling_driver scaling_governor \
@@ -305,7 +305,7 @@ fi
 
     echo
     echo "== regulator readback =="
-    for node in /sys/class/regulator/regulator[0-9]*; do
+    for node in /sys/class/regulator/regulator[0-9]* /sys/class/regulator/regulator.[0-9]*; do
         [ -d "$node" ] || continue
         echo "-- $node --"
         for attr in name regulator_name state status type \
