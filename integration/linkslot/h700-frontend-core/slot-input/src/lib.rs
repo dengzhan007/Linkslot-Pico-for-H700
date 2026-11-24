@@ -2,7 +2,7 @@
 extern crate alloc;
 
 mod gesture;
-mod h700;
+pub mod h700;
 mod raw;
 
 pub use h700::{
