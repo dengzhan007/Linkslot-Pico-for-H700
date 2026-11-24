@@ -206,7 +206,7 @@ jobs:
               --workspace --no-default-features --target "$target"
           done
           cargo test --manifest-path .ci/upstream-linkslot/Cargo.toml \
-            -p slot-input -p slot-model --locked
+            -p slot-input -p slot-model
 
       - name: Compile Linkslot Frontend with persistent H700 business crates
         run: |
