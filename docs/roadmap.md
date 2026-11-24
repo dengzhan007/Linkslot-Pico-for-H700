@@ -121,6 +121,17 @@
 - [ ] 实现有界写入、flush、原子替换和断电一致性后，才接入 save/state/battery 写路径。
 - [ ] 逐项增加显示/framebuffer/backlight、GPIO input、timer、PCM audio、PMIC、电源关机、Wi-Fi/USB 调试服务；每项均有独立诊断和实机验收。
 
+### C1. CPU performance modes / H700 DVFS (architecture first)
+
+- [x] 建立 [H700 CPU Performance Service / DVFS 设计](h700-cpu-performance-service.md)：定义 Power Saver、Balanced、Performance、Auto、受限 Boost 模式；C HAL 负责 OPP/PLL/PMIC/热限制，Rust/Linkslot 只提交模式请求；上游 Linkslot 以后加入 CPU Clock UI 时可直接接入。
+- [x] 用 RG34XX 现场 inventory 确认实际 PMIC 是 AXP2202，并明确禁止复制相关 RG35XX-2024 AXP717 DTS 的 vdd-cpu 电压配置。
+- [ ] 从 RG34XX live FDT / vendor DTS / 只读 PMIC 读回中确认 AXP2202 哪一路实际供给 CPU cluster，记录总线、地址、调压寄存器、selector、ramp 和稳态范围；未确认前不写 PMIC。
+- [ ] 解析 H700 SID/eFuse speed bin，并复用 Linux sun50i-cpufreq-nvmem 的 bin 解释和适用 OPP 约束；unknown bin 必须关闭提升频点。
+- [ ] 从匹配的 H700/H616 CCU/PLL 源码确认 CPUX PLL、时钟 parent 安全切换、lock 状态与 divider 顺序；BL31→BL33 的 CPU1–CPU3 状态未闭合前，不允许更改共享 CPU PLL。
+- [ ] 实现 H700 thermal sensor / thermal-limit 读取；缺少有效温度数据时隐藏 Boost，并为过温/时钟锁定失败/PMIC 错误定义安全回退。
+- [ ] 先实现只读 clock/voltage/bin/temperature telemetry 和 host-tested policy/OPP selector；完成电压先升后升频、先降频后降压、失败回滚、滞回/最小驻留时间测试后，再允许连接寄存器写入。
+- [ ] 只有目标板 OPP/电压表、温度限制及实机持续负载测试全部通过后，才开放 Balanced/Performance/Boost 的实际 DVFS；模式不得接受任意 MHz 输入，必须报告实际频率和被钳制原因。
+
 ### A. 工具链与工程基础（已完成第一步）
 
 - [x] AArch64 freestanding C、C++ 和汇编编译探针。
