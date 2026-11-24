@@ -142,6 +142,7 @@ def main():
     report = [
         "# H700 newlib adapter validation\n\n",
         "Host regression: PASS. " + output.strip() + "\n\n",
+        "LK binding behavior: PASS. Host test links and calls the actual lk_bindings.c install entry using explicit fake LK heap/platform functions; those test doubles are not asserted as safe RG34XX target callbacks.\n\n",
         "AArch32 target compile: PASS. Actual arm-none-eabi/newlib headers, Cortex-A53 ARM state, NEON/VFPv4 softfp; object is ELF32/ARM EABI5.\n\n",
         "Pinned LK heap binding: PASS. lk_bindings.c compiles with -Werror against the exact pinned include/lib/heap.h signatures; heap_alloc/heap_free resolve to LK externals and heap-ready/single-core/console/RTC/fatal services remain explicit platform integration points.\n\n",
         "Adapter exports: all 22 public and reentrant allocator/syscall/lock/install symbols are present.\n\n",
