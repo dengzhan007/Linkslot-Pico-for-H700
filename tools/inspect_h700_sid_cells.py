@@ -61,6 +61,70 @@ VENDOR_SPEED_LITERALS = {
 }
 
 
+# Diagnostic-only reference decoder from Linux sun50i-cpufreq-nvmem.c
+# pinned at torvalds/linux commit 8d7fe9885c62fc9a95bf55d9db244d9672a8aadc.
+# Generic /sys/devices/soc0/revision is NOT equivalent to ARM SMCCC
+# ARCH_SOC_ID revision and must never be supplied to the ambiguous cases.
+MAINLINE_H616_DIRECT_BINS = {
+    0x2000: 0,
+    0x5000: 3,
+    0x5400: 3,
+    0x6000: 3,
+    0x5C00: 4,
+    0x5D00: 0,
+    0x6C00: 5,
+}
+MAINLINE_H616_SMCCC_REVISION_BINS = {
+    0x2400: (1, 2),
+    0x7400: (1, 2),
+    0x2C00: (1, 2),
+    0x7C00: (1, 2),
+}
+
+
+def _mainline_reference_speed_decode(raw_u16: int | None) -> dict[str, Any]:
+    if raw_u16 is None:
+        return {
+            "status": "unavailable",
+            "candidate_bin": None,
+            "reason": "No raw speed-bin cell was captured.",
+            "requires_smccc_arch_soc_id_revision": False,
+            "opp_authorization": "not_approved",
+        }
+
+    if raw_u16 in MAINLINE_H616_DIRECT_BINS:
+        return {
+            "status": "recognized_reference_value",
+            "candidate_bin": MAINLINE_H616_DIRECT_BINS[raw_u16],
+            "raw_u16": f"0x{raw_u16:04x}",
+            "requires_smccc_arch_soc_id_revision": False,
+            "opp_authorization": "not_approved",
+            "warning": "This is a Linux mainline reference classification only, not an RG34XX OPP approval.",
+        }
+
+    if raw_u16 in MAINLINE_H616_SMCCC_REVISION_BINS:
+        bins = MAINLINE_H616_SMCCC_REVISION_BINS[raw_u16]
+        return {
+            "status": "recognized_but_revision_ambiguous",
+            "candidate_bin": None,
+            "candidate_bins": list(bins),
+            "raw_u16": f"0x{raw_u16:04x}",
+            "requires_smccc_arch_soc_id_revision": True,
+            "revision_rule": "SMCCC revision <= 1 selects bin 1; later supported revisions select bin 2.",
+            "generic_soc_sysfs_revision_accepted": False,
+            "opp_authorization": "not_approved",
+        }
+
+    return {
+        "status": "unsupported_reference_value",
+        "candidate_bin": None,
+        "raw_u16": f"0x{raw_u16:04x}",
+        "requires_smccc_arch_soc_id_revision": False,
+        "opp_authorization": "not_approved",
+        "reason": "Unknown values are not assigned the mainline driver's permissive default bin.",
+    }
+
+
 class SidCellError(ValueError):
     """Malformed or inconsistent SID cell evidence."""
 
@@ -104,6 +168,7 @@ def inspect_sid_cells(path: Path) -> dict[str, Any]:
             "raw_u16_le": None,
             "matches_pinned_vendor_literal": None,
             "opp_authorization": "not_approved",
+            "mainline_reference_decode": _mainline_reference_speed_decode(None),
         }
     else:
         raw_u16 = int.from_bytes(speed, byteorder="little", signed=False)
@@ -114,6 +179,7 @@ def inspect_sid_cells(path: Path) -> dict[str, Any]:
             "matches_pinned_vendor_literal": raw_u16 in VENDOR_SPEED_LITERALS,
             "pinned_vendor_literal_set": [f"0x{x:04x}" for x in sorted(VENDOR_SPEED_LITERALS)],
             "opp_authorization": "not_approved",
+            "mainline_reference_decode": _mainline_reference_speed_decode(raw_u16),
             "warning": (
                 "Do not use the pinned vendor cpufreq raw-value switch as an OPP "
                 "approval: its consumer casts the NVMEM result to u32* even though "
