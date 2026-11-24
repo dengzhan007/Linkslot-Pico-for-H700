@@ -2,10 +2,10 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-24 15:48 UTC  
+**最后核对时间：** 2026-11-25（新增 CPUX vendor-source audit；代码验证基线未变）  
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **工作分支：** `porting/linkslot-1.0.45-feasibility`  
-**本轮已验证代码 HEAD：** `0e33da4a50b28583aac8c7e815dac7857b6ef43a`（完整综合 workflow #45428664653，71/71 steps）。当前文档 HEAD：`380854b8107bcf91a934f9a6d7fa0f2963a277c6`。  
+**本轮已验证代码 HEAD：** `0e33da4a50b28583aac8c7e815dac7857b6ef43a`（完整综合 workflow #45428664653，71/71 steps；本轮为文档审计，没有新代码或硬件 CI 结果）。  
 **本轮 CPU runtime owner 最新代码提交：** `072793f8b4bfce00683aa3d303eee62613fe41ab`（7 个连续提交）  
 **本轮 Rust runtime bridge 最新代码提交：** `0d381d7ba66592b5ab64ba67e0b228039bb9eec0`  
 **本轮 H700 build graph / guard 最新代码提交：** `6e847c0121431c681062053c52f28824715e78a6`（platform OBJS）与 `ef07a0e06c1d55e2d2f49175d4e976e8337e1ee4`（project guard）。  
@@ -17,7 +17,8 @@
 **本轮 SID JSON SoC identity：** `sid-cell-report.json` 现附带 generic SoC bus 的 machine/family/soc_id/revision 原始字符串（可用时），仅用于识别，不参与 OPP 放行；相关 host/Windows tests #45402936876、#45402977130 与 inventory audit #45403070519/#45403377522 均通过。  
 **本轮 mainline speed-bin reference decode：** 固定上游 Linux `8d7fe9885c62fc9a95bf55d9db244d9672a8aadc` 的候选映射现加入 `sid-cell-report.json`，但所有结果仍 `opp_authorization=not_approved`；#45404785874/#45405024561 已通过。  
 **本轮 Linkslot/mGBA 静态闭环：** #45413653400 成功（70/70）；真实 Linkslot 1.0.45 `slot-retro::Api` Rust `no_std` AArch32 staticlib、21 个 mGBA namespaced exports、真实 mGBA VFS v3 archive、H700 newlib adapter 与 `newlib/libm/libgcc` 最终 ELF32/ARM 链接通过；artifact `14929808289`。该探针不执行核心，也不是完整 LK/固件/设备验证。  
-**本轮 CPU Performance QuickRow App regression：** 两条 workflow 都实际执行 `h700_cpu_performance_quick_row_tests`，2 passed / 0 failed；runtime-slices #45428654903 成功（20/20），完整 feasibility #45428664653 成功（71/71）。测试验证 unavailable 显示、左右请求不改变值、不创建持久化配置。  
+**本轮 CPU Performance QuickRow App regression：** 两条 workflow 都实际执行 `h700_cpu_performance_quick_row_tests`，2 passed / 0 failed；runtime-slices #45428654903 成功（20/20），完整 feasibility #45428664653 成功（71/71）。测试验证 unavailable 显示、左右请求不改变值、不创建持久化配置。
+**本轮 CPUX vendor-source audit（2026-11-25）：** 固定审查 `qiaoweibiao/T507_Kernel@98fcc7d3f112e51b0edfb71536da89cb2115106f` 的 `sun50iw9` clock driver；源码给出 `PLL_CPU=0x0000`、`CPU_CFG=0x0500`、`pll_periph0` pre-rate parent switch / `pll_cpu` post-rate restore、PLL lock 新模式以及 PLL bit31 boot-enable / bit27 output-gate 约束。`LOCKBIT(x)` 受 EVB build config 影响；厂商 CPU factor table 自身标注不正确，禁止用作 RG34XX OPP。审查报告：[H700 CPUX clock-source audit](h700-cpux-clock-source-audit.md)。**仅源码审计，不是目标板寄存器读回，不关闭 DVFS 硬件门，也没有新增 CI 结果。**  
 
 
 ## 1. 项目目标与固定约束
@@ -83,6 +84,7 @@
 
 - `platform/h700/power/h700_cpu_performance_policy.h/.c`：纯策略选择器，不访问 MMIO/PLL/PMIC。
 - `platform/h700/power/h700_cpu_performance_service.h/.c`：版本化 C Service ABI v1。
+- `docs/h700-cpux-clock-source-audit.md`：固定 `sun50iw9` vendor 时钟驱动审查，记录 PLL/mux 偏移、parent-switch 与 lock 参考序列、bit31/bit27 安全约束和 factor table 不可信限制；只作源码证据，不提供 MMIO 实现。
 - `platform/h700/rules.mk`：已把 policy selector、C service ABI 和 static runtime owner 三个对象加入 LK `OBJS`；`scripts/test-h700-lk-project-guard.py` 检查对象项和对应 C 源文件。该项只建立 build graph，不代表完整 LK target 已链接。
 - `target/rg34xx_h700/init.c` / `target/rg34xx_h700/rules.mk`：提供 LK `kernel/main.c` 必须调用的 `target_early_init()` 与 `target_init()`，两者当前为空实现；`scripts/build-h700-objects.sh` 已将其加入 AArch64/AArch32 ARM/Thumb 编译矩阵。H700 overlay 排除 MTK generic `target/init.c`，project guard 验证 MTK boot app 不进入 H700 project。
 - `platform/h700/power/tests/h700_cpu_performance_service_test.c`：服务 ABI、策略门控、遥测分离、温度 clamp、Boost gating 和错误 OPP 测试。
@@ -168,7 +170,7 @@
 - 通用 SoC `soc0` sysfs revision 即使存在，也仅作为 OS 导出的识别线索；vendor `sunxi_get_soc_ver()` 路径当前不调用，因为它在该 H700 配置可能临时切换 CE clock/reset。SID JSON 对 generic revision 值保持原样，不把它映射成 H700 speed-bin 档位。
 - 已从 RG34XX DTS 参考找到 SID speed cell (`0x03006000 + 0x00`, 2 bytes) 和 thermal calibration cell (`0x03006000 + 0x14`, 8 bytes)。FDT parser 会输出 NVMEM phandle 与 cell offset/size；新版 collector 已能限长读取这两个 cell 并生成 `sid-cell-report.json`。**实机原始值尚未读取**，需用户在 RG34XX 上运行新版 inventory 后取得；解析器不授权任何 OPP，也不认证 thermal sensor。
 - 现场内核报告 H700 thermal sensor 存在，但 **AVCC is not calibrated**，因此不能据此开放自动温控升频/Boost。
-- H616/H700 CCU 源码可提供 PLL/mux 初始参考；精确 RG34XX CCU base、安全 parent-switch/lock sequence、divider 和计时连续性尚未完成板级核实。
+- 固定 `sun50iw9` vendor-source audit 已给出 CPUX 源码级候选：`PLL_CPU=0x0000`、`CPU_CFG=0x0500`，改频前切 `pll_periph0`、改频后恢复 `pll_cpu`；lock status bit 随 EVB build macro 改变。厂商源码要求 PLL bit31 在 boot 时启用且不得动态更改，factor lookup table 自称不正确。精确 RG34XX CCU base/访问权限、live register readback、`pll_periph0` 实际频率、divider、timer continuity 和 shipping build lock 配置仍未验证，详见 `docs/h700-cpux-clock-source-audit.md`。
 - CPU1–CPU3 的 BL31→BL33 状态未知；CPU PLL 是共享时钟域，不是每个模拟器核心各自独立的频率。
 
 **禁止事项：** 不复制 MT6785 的 PLL 地址/PCW 算法，不把 GammaOS Pico 600–2000 MHz 档位直接套到 H700，不使用 AXP717 参数替代 AXP2202，不把 H616 OPP 表当作 RG34XX 已批准 OPP，不在缺少次级 CPU 状态证明时写 CPUX PLL，不在缺少电压/热证据时升频。
@@ -180,7 +182,7 @@
 
 Linkslot 1.0.45 UI 当前已追加 display-only CPU row：`SYSTEM_SETTINGS` 为 7 行，`QuickRow::ALL` 为 88 项，Language index=86、CPU Performance index=87；`QuickValue::ALL` 为 38 项，新 unavailable value index=37。两项 App unit tests 已在 runtime-slices/full feasibility CI 实际通过；Rust typed client 仍未接入 App。
 3. **在 RG34XX 实机重新运行新版只读 inventory**：收集新的 `live-fdt.json`、`cpu-power-runtime.txt` 和自动生成的 `sid-cell-report.json`，核对 CPU supply/regulator、OPP 声明、CPUFreq、温度、regulator/clock readback 与 SID 原始 cell；不读取整个 NVMEM 节点，不在 LK 侧猜地址。
-4. 证明 BL31→BL33 CPU1–CPU3 状态和安全的单核 invariant；审计 CPUX PLL parent-switch/lock/分频及 timer continuity。
+4. 证明 BL31→BL33 CPU1–CPU3 状态和安全的单核 invariant；然后依据 vendor-source audit 只读核对 CPUX live mux/PLL、`pll_periph0`、divider、lock-status build config 与 timer continuity。源码层 parent-switch/lock 流程已记录，但不得据此开始写寄存器。
 5. 只有前述证据闭合后，才实现 C HAL 只读 telemetry 与最终受控硬件 transition；升频先升压，降频先降频后降压，必须有 readback、超时、故障回滚、热 clamp、滞回和实机持续负载验收。
 6. 最后才开放实际 Performance/Boost。不得把 ABI v1 的 `POLICY_ONLY` 当作 DVFS 已完成。
 
@@ -191,7 +193,7 @@ Linkslot 1.0.45 UI 当前已追加 display-only CPU row：`SYSTEM_SETTINGS` 为 
 1. 先读取本文和 GitHub 当前分支 HEAD / 最新 Actions 状态；本文的 HEAD 是核对时快照，不应假设之后没有新提交。
 2. 当前代码只在 `porting/linkslot-1.0.45-feasibility` 上推进；先检查分支差异与最新 CI，不重复建立已有分支/文件。
 3. 依任务读取专项文档：
-   - CPU 调频：本文 + [H700 CPU Performance Service / DVFS](h700-cpu-performance-service.md)
+   - CPU 调频：本文 + [H700 CPU Performance Service / DVFS](h700-cpu-performance-service.md) + [H700 CPUX clock-source audit](h700-cpux-clock-source-audit.md)
    - 总体路线： [roadmap](roadmap.md)
    - Linkslot 1.0.45 源码差异： [1.0.45 portability update](linkslot-1.0.45-portability-update.md)
    - LK/H700 runtime 架构： [Linkslot H700 runtime architecture](linkslot-h700-runtime-architecture.md)
