@@ -16,6 +16,8 @@ pub mod machine;
 pub mod power;
 
 pub use core::{core, core_ids, cores_for, ColourSpec, CoreId, CoreSpec, CORES};
+#[cfg(feature = "host-compat")]
+pub use layout::resolve_root;
 pub use layout::DEVICE_ROOT;
 pub use power::{Battery, Charge};
 pub use machine::{
