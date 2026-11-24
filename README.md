@@ -4,6 +4,17 @@
 
 本项目以 GammaOS Pico / LK 的裸机运行架构为底层技术参考，以 [linkSlot](https://github.com/luguiyi/linkslot) 作为唯一前端和用户功能来源；不完整移植 GammaOS Pico 的前端，也不把现有 Linux Linkslot 二进制直接搬进 LK。
 
+## 目标语言与运行时架构
+
+**长期目标：以 C 为底层、Rust 为前端业务层、C/C++ 为模拟器核心的裸机系统。** 这是后续设计、代码归属和验收的统一方向：
+
+- **C + ARM 汇编：** GammaOS LK/BL33、启动交接、H700 BSP/HAL、时钟/中断/内存/显示/输入/音频/SD/电源等硬件服务，以及必要的 newlib/Core ABI 适配。硬件寄存器访问、启动入口和板级资源所有权由这一层控制。
+- **Rust：** Linkslot 前端业务层及 LK 运行时集成，优先复用上游数据模型、输入状态机、UI 状态转换、游戏库/菜单业务、配置和渲染命令；设备目标采用 no_std，只通过明确的 C ABI/HAL 服务访问底层，不携带 Linux std、线程、进程或动态库假设。
+- **C/C++：** GB/GBC/GBA 模拟器核心，以静态链接方式接入统一 Core ABI；核心与 Rust 前端隔离，ROM、输入、视频、音频、即时状态和电池存档通过窄接口传递。
+- **Python/Shell：** 仅用于开发机上的源码审计、补丁生成、构建编排、固件/报告检查和 CI；不得进入设备启动链、常驻进程或游戏运行路径。
+
+目标不是把 Linkslot 全量翻译成 C，也不是让 Rust 重新实现硬件驱动。Rust/C 之间的边界必须显式、可测试；模拟器核心保持独立，避免前端或 HAL 依赖某一个核心的内部实现。当前 renderer、VFS 和 mGBA 结果仍属于 host/CI 验证，不代表裸机系统已完成或可启动。
+
 ## 项目目标
 
 - 开机直接进入 Linkslot 游戏库，首期只支持 GB / GBC / GBA。
@@ -41,7 +52,7 @@
 
 - A32 LK-as-BL33 的镜像入口/头区/向量布局探针通过，但它使用测试 stub 和合成头，不是完整 LK 固件；LK 参考分支目前为单核调度，A53 编译标志/SMP 启动路径未适配，secondary CPU 状态仍未知。
 
-- 当前启动证据显示厂商 BL31 默认进入 AArch32 SVC BL33（`0x4a000000`，SPSR `0x1d3`）。因此正在评估 AArch32 LK 直接作为 BL33 的候选路线；尚未选定架构，也未构建可启动固件。
+- 当前启动证据显示厂商 BL31 默认进入 AArch32 SVC BL33（`0x4a000000`，SPSR `0x1d3`）；当前移植路线按 AArch32 GammaOS LK 替换该 BL33 入口推进。LK 完整 target link、可用内存归属、secondary-core 状态和实机 handoff 仍未通过验收。
 
 本地运行 AArch64 编译检查：
 
@@ -58,7 +69,7 @@ bash scripts/build-h700-objects.sh
 
 **当前源码基线：** 用户提供的 linkSlot 1.0.36 已归档到本仓库 `upstream/linkslot` 分支。原始输入是无 `.git` 的 ZIP，原始上游 commit/tag 不可得；仓库中的 `8590d6ff` 是快照归档 commit，不是上游源码 commit。当前先完成逐 crate 复用审计和 LK Rust ABI/工具链验证，尚不把整个 workspace 导入 `third_party/linkslot`。
 
-特别注意：Linkslot 当前 `device` feature 仍构建为 AArch64 Linux/glibc 程序，不是 LK/bare-metal；GammaOS LK 参考分支本身是 AArch32。两者的 runtime/ABI 选择必须先解决。
+特别注意：Linkslot 当前 `device` feature 仍是 AArch64 Linux/`std` 后端，不是 LK/bare-metal。后续以窄 `no_std` Rust 业务运行时承载前端逻辑，通过 H700 C HAL 和静态 Libretro C ABI 接入设备服务；不得把 Linux `device_app` 当作裸机入口。GammaOS LK 参考分支和当前 BL33 候选为 AArch32，Rust 与模拟器静态核心必须按该 ABI 构建。
 
 具体规则见 [Linkslot 上游同步与移植边界](docs/linkslot-upstream-sync.md) 和 [1.0.36 可移植性审计](docs/linkslot-1.0.36-portability-audit.md)。
 
