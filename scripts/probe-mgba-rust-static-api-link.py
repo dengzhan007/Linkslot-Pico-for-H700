@@ -169,7 +169,6 @@ fn panic(_info: &PanicInfo) -> ! {
         ["cargo", "build", "--manifest-path", str(crate / "Cargo.toml"),
          "--target", "armv7a-none-eabi", "--release"],
         out / "cargo-build.log",
-        cwd=source,
         env=env,
     )
     rust_archive = out / "cargo-target/armv7a-none-eabi/release/"
