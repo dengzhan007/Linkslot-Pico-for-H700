@@ -36,7 +36,8 @@
 - [x] 从 `slot::link_kind` 抽取 `slot-link-kind`：保留 43 项无线游戏代码表、Pokémon clean retail 例外、ROM hack 的 cable fallback、Libretro serial option 选择和 link capability 判定；`slot::link_kind` 保持 public re-export。
 - [x] 从 `slot::video_mode` 抽取 `slot-video-mode`：`VideoMode` 解析与 GB/GBC padded-frame source crop geometry 进入 no_std crate，INI 文件读取/写回留在 host wrapper；原 module API 通过 re-export 及薄文件服务包装保持兼容。
 - [x] 从 `slot::rom_id` 抽取 `slot-rom-id`：SHA-256、hex 编码/解码和 `RomHasher` 增量接口进入 `no_std` crate；文件/reader 读取留在 `slot::rom_id` host/VFS wrapper，保留原 public API 与原测试。
-- [x] 专项 workflow [45359133714](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45359133714) 验证八个持久化 no_std crate（slot-input、slot-model、slot-frontend-state、slot-core-picker、slot-link-state、slot-link-kind、slot-video-mode、slot-rom-id）的 host tests/A32/A64 checks、上游输入/模型回归、Renderer + 八个业务 crate overlay、完整 Linkslot `slot` Frontend 编译，以及 C input queue 与 ABI A32/A64 检查全部成功。
+- [x] 从 `slot::game_search` 抽取 `slot-game-search`：拼音候选索引、排序/分页和跨平台命中算法进入 `no_std` crate；通过 `PinyinProvider` 注入拼音字典，并由 host wrapper 保留 `Cart`/`Platform` API 与原有搜索测试。
+- [x] 专项 workflow [45359818889](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45359818889) 验证九个持久化 no_std crate（slot-input、slot-model、slot-frontend-state、slot-core-picker、slot-link-state、slot-link-kind、slot-video-mode、slot-rom-id、slot-game-search）的 host tests/A32/A64 checks、上游输入/模型回归、Renderer + 九个业务 crate overlay、完整 Linkslot `slot` Frontend 编译，以及 C input queue 与 ABI A32/A64 检查全部成功。
 - [ ] 将更多 Frontend/App 的纯状态、游戏库、菜单、配置和本地存档策略逐步提取成 `no_std` Rust 模块；不能把当前 Linux `device_app` / 完整 `App` 直接链接为 LK 应用。
 - [ ] 在真实 H700 runtime 中验证 mGBA 启动 ROM、视频帧、音频、输入、即时状态和电池存档；host archive/link 结果不能替代运行测试。
 
