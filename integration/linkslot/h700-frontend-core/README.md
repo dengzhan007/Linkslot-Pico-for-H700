@@ -6,7 +6,7 @@ This is the persistent Rust business-layer extraction for the H700/LK port. Sour
 
 | Crate | Extracted responsibility | Device-side boundary |
 |---|---|---|
-| `slot-input` | Linkslot button vocabulary, raw events, gesture state machine and action mapping | Includes H700 Input Service v1 adapter. C supplies ordered logical button edges; Rust `drain_into()` writes into caller-owned storage and `H700GestureInput` forwards events to the original gesture machine. |
+| `slot-input` | Linkslot button vocabulary, raw events, gesture state machine and action mapping | Includes H700 Input Service v1 adapter. C supplies ordered logical button edges; fixed raw-event storage and one preallocated Action buffer are reused per poll. `feed_into()`/`tick_into()` avoid temporary action vectors while original `feed()`/`tick()` APIs remain compatible. |
 | `slot-model` | Machine/core registry, platform metadata, battery/charge types and directory constants | Filesystem helpers are behind optional `host-compat`; LK uses `--no-default-features` and H700 VFS services. |
 | `slot-frontend-state` | Generic `FacesLang<L>` resource-build generation state machine | Owns only baked/building/generation state. Worker threads, texture generation and result delivery stay in the caller. |
 | `slot-core-picker` | Generic `CorePicker<C>` selection and animation state machine | Preserves single-core information-only behavior, edge refusal, hop reversal, easing and selected-core write result. Uses `libm` for no_std trigonometry. |
@@ -20,11 +20,11 @@ All nine packages are `no_std`; APIs that own collections use `alloc`. The H700 
 
 ## C/Rust boundary and current limits
 
-The H700 input service is a versioned C ABI with a 64-entry C FIFO. The queue currently supports one execution context only; it is not ISR-safe or multi-producer safe. The C GPIO/ADC scanner and physical input producer are not yet implemented.
+The H700 input service is a versioned C ABI with a 64-entry C FIFO. The queue currently supports one execution context only; it is not ISR-safe or multi-producer safe. Rust `H700GestureInput` allocates a 72-action buffer once at construction; the maximum 32-event batch plus timer actions fit without per-poll growth. The C GPIO/ADC scanner and physical input producer are not yet implemented.
 
 These crates do not perform MMIO, read physical clocks, mount storage, own framebuffer memory or drive display/audio hardware. They are selected business-logic slices, not a complete Linkslot frontend. The Linux `device_app`, the full `slot::App` state graph, filesystem workers, network/WebDAV, SQLite, dynamic loading, full artwork/font stack and the LK main event loop are not yet a bootable device application.
 
-The temporary integration overlay keeps `upstream/linkslot` immutable and injects the extracted crates back into the original Linkslot workspace. The focused CI workflow [H700 Linkslot runtime slices](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/workflows/h700-linkslot-runtime.yml) verifies host tests, AArch32/AArch64 `no_std` compilation, upstream input/model regression, and complete `slot` Frontend compilation with the renderer and business overlays. Its latest verified run is [45359818889](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45359818889), which verifies all nine packages and the full Frontend integration.
+The temporary integration overlay keeps `upstream/linkslot` immutable and injects the extracted crates back into the original Linkslot workspace. The focused CI workflow [H700 Linkslot runtime slices](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/workflows/h700-linkslot-runtime.yml) verifies host tests, AArch32/AArch64 `no_std` compilation, upstream input/model regression, and complete `slot` Frontend compilation with the renderer and business overlays. Its latest verified run is [45360763842](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45360763842), which verifies all nine packages, reusable gesture output and the full Frontend integration.
 
 ## Upstream provenance
 
@@ -49,5 +49,6 @@ The temporary integration overlay keeps `upstream/linkslot` immutable and inject
 The generic `FacesLang` state machine has six tests. `CorePicker<C>` has six tests for open timing, navigation, edge refusal, reversal continuity, single-core behavior and write outcome. The paired-state codec has seven tests; link-kind policy has eight; video-mode parsing/cropping has six. The input adapter and gesture bridge have host regressions covering event order, bounded draining, invalid service tables, menu long-press and power long-press behavior. Every package is checked for both `armv7a-none-eabi` and `aarch64-unknown-none`.
 The ROM identity crate has four tests for the standard SHA-256 vector, upper/lowercase hex round trips, malformed hex rejection and incremental-versus-single-buffer equivalence. The host wrapper retains the original file/reader tests.
 The game-search crate has four host tests for full pinyin and initials, cross-platform hits, candidate pagination, empty dictionaries and stable shelf indices; it is checked on both AArch32 and AArch64. Its runtime-facing API is generic over platform IDs and obtains pinyin through an injected provider.
+The gesture adapter also compares `feed_into()`/`tick_into()` against the original allocating API across menu, power, volume/mute, fast-forward, rewind and Select/chord sequences, and checks that the reusable action buffer does not grow.
 
 The upstream workspace declares GPL-3.0-or-later. Preserve that license and attribution in redistributed builds.
