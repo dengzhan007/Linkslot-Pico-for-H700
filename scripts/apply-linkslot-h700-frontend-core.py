@@ -470,15 +470,15 @@ def patch_frontend(source: Path) -> None:
     app = app.replace(cpu_match_old, cpu_match_new)
 
     open_row_old = (
-        "            | QuickRow::LidTimeout\\n"
-        "            | QuickRow::Language\\n"
-        "            | QuickRow::Rewind\\n"
+        "            | QuickRow::LidTimeout" + chr(10)
+        + "            | QuickRow::Language" + chr(10)
+        + "            | QuickRow::Rewind" + chr(10)
     )
     open_row_new = (
-        "            | QuickRow::LidTimeout\\n"
-        "            | QuickRow::Language\\n"
-        "            | QuickRow::CpuPerformance\\n"
-        "            | QuickRow::Rewind\\n"
+        "            | QuickRow::LidTimeout" + chr(10)
+        + "            | QuickRow::Language" + chr(10)
+        + "            | QuickRow::CpuPerformance" + chr(10)
+        + "            | QuickRow::Rewind" + chr(10)
     )
     if app.count(open_row_old) != 1:
         raise RuntimeError("App open_quick_row CPU no-op anchor changed")
