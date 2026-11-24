@@ -6,7 +6,9 @@ on:
       - "platform/h700/**"
       - "scripts/build-h700-objects.sh"
       - "scripts/test-h700-cpu-performance-policy.sh"
+      - "scripts/test-h700-cpu-performance-service.sh"
       - "scripts/test-h700-gpt-readonly.sh"
+      - "scripts/test-h700-cpu-performance-service.sh"
       - "scripts/test-h700-sunxi-mmc-clock.sh"
       - "scripts/test-h700-sunxi-mmc-module-clock.sh"
       - "scripts/test-h700-sunxi-mmc-pio-read.sh"
@@ -54,7 +56,7 @@ jobs:
       - name: Run H700 read-only storage host regressions
         run: |
           sh scripts/test-h700-gpt-readonly.sh
-          sh scripts/test-h700-cpu-performance-policy.sh
+          sh scripts/test-h700-cpu-performance-service.sh
           sh scripts/test-h700-sunxi-mmc-clock.sh
           sh scripts/test-h700-sunxi-mmc-module-clock.sh
           sh scripts/test-h700-sunxi-mmc-pio-read.sh
