@@ -1,6 +1,6 @@
 # Linkslot 1.0.36 on H700 LK: runtime and renderer integration plan
 
-**Status:** architecture plan plus host-only renderer/frontend/input integration proofs. The project has persistent `no_std + alloc` `slot-input`, `slot-model`, `slot-frontend-state`, `slot-core-picker`, and `slot-link-state` crates; a C input service/queue and Rust gesture bridge; generic language-resource/core-picker state machines; and the paired-save codec injected into the real Frontend/App source tree. Focused CI compiles the complete patched Linkslot `slot` crate with all overlays. It still has no bootable Linkslot runtime, physical GPIO/input or display/audio driver, or on-device execution. The upstream snapshot on `upstream/linkslot` remains immutable.
+**Status:** architecture plan plus host-only renderer/frontend/input integration proofs. The project has persistent `no_std + alloc` `slot-input`, `slot-model`, `slot-frontend-state`, `slot-core-picker`, `slot-link-state`, and `slot-link-kind` crates; a C input service/queue and Rust gesture bridge; generic language-resource/core-picker state machines; paired-save and link-mode policy modules injected into the real Frontend/App source tree. Focused CI compiles the complete patched Linkslot `slot` crate with all overlays. It still has no bootable Linkslot runtime, physical GPIO/input or display/audio driver, or on-device execution. The upstream snapshot on `upstream/linkslot` remains immutable.
 
 This plan resolves a practical integration question: which parts of Linkslot can become LK-resident logic, and which Linux services must be replaced rather than emulated.
 
@@ -124,6 +124,7 @@ The first no_std + alloc boundary should contain only:
 - the generic `slot-frontend-state::FacesLang<L>` state machine, extracted from the real `Frontend` language-face build coordinator; resource rasterization and worker/thread orchestration remain outside this crate;
 - the generic `slot-core-picker::CorePicker<C>` state machine, extracted from `App`; it produces selected-core outcomes and chip animation geometry without depending on `slot-store`, `slot-ui` or renderer resources;
 - the `slot-link-state` `SLK1` paired-save codec and BIOS identity check, preserving the public `slot::link_state` API while validating the two bounded length-prefixed payloads;
+- the `slot-link-kind` game-code/title classifier and GBA serial-option policy, preserving the `slot::link_kind` API and Pokémon retail/hack behaviour;
 - pure machine/core/layout identifiers from `slot-model`; filesystem path helpers remain behind the host-only `host-compat` feature;
 - generated/static i18n lookup tables, not runtime JSON parsing through `OnceLock`;
 - a renderer-independent `Draw` / texture-ID / geometry contract;
@@ -167,9 +168,10 @@ R1 does not require the entire 1.0.36 application to be ported first. R2/R3 esta
 4. [Completed] Extract the pure `FacesLang<L>` coordinator from `Frontend` into `slot-frontend-state`; six state-machine tests pass, the original Frontend imports the generic type through the temporary overlay, and the complete Frontend compiles with the overlay.
 5. [Completed] Extract the core selection interaction/animation state machine from `App` into generic `slot-core-picker::CorePicker<C>`; six tests cover edge selection, single-core non-write behaviour, hop reversal continuity, easing completion, and write outcome. The temporary overlay replaces App's concrete core-picker module and full `slot` compilation passes.
 6. [Completed] Extract `slot::link_state` into `slot-link-state`; retain the original public functions through a thin module re-export and verify paired-state parsing, player bounds, BIOS matching and malformed input handling in a no_std crate.
-7. [Input slice completed] Implement versioned C input service, bounded single-context queue, allocation-free Rust raw-event drain and adapter into upstream `Gestures`. Next extract pure menu/game-library state and build a bounded Rust LK event loop over C-provided time, input, VFS, display and core services. Keep GPIO/framebuffer hardware ownership in C.
-8. Connect the H700 framebuffer/display handoff only after live scanout and BL33 resource ownership are proven; similarly defer audio/input/power MMIO until each board service has its own evidence.
-9. Keep mGBA/Gambatte/gpSP as separate C/C++ static cores. Their linker map, BSS, stack, heap and ROM/save buffers must fit inside a subsequently approved application arena.
+7. [Completed] Extract the pure GBA cable/wireless policy into `slot-link-kind`, keeping the 43-code wireless table, Pokémon title/clean-ROM exception, serial protocol selection and link-capability rules. The original module remains a public re-export.
+8. [Input slice completed] Implement versioned C input service, bounded single-context queue, allocation-free Rust raw-event drain and adapter into upstream `Gestures`. Next extract pure menu/game-library state and build a bounded Rust LK event loop over C-provided time, input, VFS, display and core services. Keep GPIO/framebuffer hardware ownership in C.
+9. Connect the H700 framebuffer/display handoff only after live scanout and BL33 resource ownership are proven; similarly defer audio/input/power MMIO until each board service has its own evidence.
+10. Keep mGBA/Gambatte/gpSP as separate C/C++ static cores. Their linker map, BSS, stack, heap and ROM/save buffers must fit inside a subsequently approved application arena.
 
 ## 7. Explicit non-goals at this stage
 
