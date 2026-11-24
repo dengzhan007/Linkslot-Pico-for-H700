@@ -1,0 +1,10 @@
+[package]
+name = "slot-cpu-performance"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.96"
+license = "GPL-3.0-or-later"
+description = "no_std Rust client for the H700 CPU Performance Service C ABI"
+
+[lib]
+path = "src/lib.rs"
