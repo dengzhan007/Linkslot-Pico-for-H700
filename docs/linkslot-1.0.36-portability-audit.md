@@ -404,8 +404,11 @@ Rust 1.96 的 AArch32 `alloc` 静态库含有 `__aeabi_unwind_cpp_pr0` 符号引
 
 - H700 freestanding 编译脚本现在分别检查 AArch64、AArch32 ARM-state 和 AArch32 Thumb-2；三种模式均使用 Cortex-A53 目标，A32 还显式指定 NEON/VFPv4 + softfp。启动/异常汇编探针始终声明 ARM state，C/C++ 的 Thumb-2 模式匹配固定 GammaOS LK 的 `ENABLE_THUMB=true` 默认编译路径。
 - 同一批 H700 MMC、GPT、FAT16/32、exFAT 与 Libretro VFS backend 源文件在三种模式下生成目标对象；这只证明源代码/ABI 可编译，不代表完整 LK 最终链接、MMIO 初始化或实机运行。
-- `scripts/apply-h700-lk-overlay.py` 从固定 GammaOS LK commit 生成三个文件的 source overlay：`arch/arm/crt0.S`、`arch/arm/arch.c`、`arch/arm/rules.mk`。它保留上游 checkout 不变，生成逐文件 SHA256 manifest 和 unified patch，并执行 `git apply --check`。CI 首次实际运行结果尚待工作流完成。
-- overlay 只覆盖 BL33 第一条分支/header 保留、+0x1000 向量符号、`arch_early_init` VBAR 重定位和 Cortex-A53 `-mcpu` 修正；没有写 ACTLR.SMP、secondary-core parking、MMU/DRAM map、heap/stack 地址或 H700 MMIO。
+- `scripts/apply-h700-lk-overlay.py` 从固定 GammaOS LK commit 生成六文件 source overlay：`makefile`、`dev/rules.mk`、`target/rules.mk`、`arch/arm/crt0.S`、`arch/arm/arch.c`、`arch/arm/rules.mk`。它保留上游 checkout 不变，生成逐文件 SHA256 manifest 和 unified patch，并执行 `git apply --check`。
+- makefile overlay 在 `H700_BUILD=yes` 时跳过 MTK `platform/common/rules.mk`，并将 H700 默认工具链改为 `arm-none-eabi-`；所有非 H700 项目继续使用原来的 `gcc/bin/arm-linux-androideabi-`。
+- dev/rules.mk 对 H700 跳过 MTK video/LCM/GIC/modem/logo 模块；target/rules.mk 对 H700 跳过 MTK target/init.c，仅保留 generic weak display stubs。H700 project 后续必须显式声明自己的 target/platform 模块。
+- arch/arm/rules.mk 在 Cortex-A53 分支明确设置 `-mcpu=cortex-a53 -mfpu=neon-vfpv4 -mfloat-abi=softfp`；`ENABLE_THUMB=true` 的 Thumb-2 C/C++ 与 ARM-state assembly 编译分离仍由 LK 自己的规则处理。
+- overlay 尚未在最新 CI 中完成真实 CRT0 + exception vector link probe；没有写 ACTLR.SMP、secondary-core parking、MMU/DRAM map、heap/stack 地址或 H700 MMIO。
 - 固定 GammaOS LK 源码默认 Thumb-2 C/C++ 与 ARM-state assembly 是两条不同的 codegen 路径。H700 project 必须在 target 层显式选择 NEON/VFPv4、softfp 和 ARM/Thumb interworking 规则，不能把 standalone `-marm` compile probe 当作完整 LK ABI。
 - 本阶段 mGBA 核心静态链接 footprint 为约 1.78 MiB，而 0x4a000000 到 0x4a0e0000 的 host probe 候选槽只有 896 KiB；该槽本身也不是经过 RG34XX 内存 ownership 批准的 RAM 分配。因此完整 Linkslot/mGBA 不应假定常驻在这段 BL33 候选窗口；未来应在批准的内存范围内设计独立可加载 core/payload ABI。
 
