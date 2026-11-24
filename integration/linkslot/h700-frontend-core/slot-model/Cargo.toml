@@ -8,3 +8,7 @@ description = "Linkslot pure domain tables adapted for the H700 no_std runtime"
 
 [lib]
 path = "src/lib.rs"
+
+[features]
+default = ["host-compat"]
+host-compat = []
