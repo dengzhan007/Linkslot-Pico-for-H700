@@ -8,7 +8,6 @@ on:
       - "scripts/test-h700-cpu-performance-policy.sh"
       - "scripts/test-h700-cpu-performance-service.sh"
       - "scripts/test-h700-gpt-readonly.sh"
-      - "scripts/test-h700-cpu-performance-service.sh"
       - "scripts/test-h700-sunxi-mmc-clock.sh"
       - "scripts/test-h700-sunxi-mmc-module-clock.sh"
       - "scripts/test-h700-sunxi-mmc-pio-read.sh"
@@ -30,6 +29,7 @@ on:
     paths:
       - "platform/h700/**"
       - "scripts/build-h700-objects.sh"
+      - "scripts/test-h700-cpu-performance-service.sh"
       - "scripts/test-h700-gpt-readonly.sh"
       - "scripts/test-h700-sunxi-mmc-clock.sh"
       - "scripts/test-h700-sunxi-mmc-module-clock.sh"
