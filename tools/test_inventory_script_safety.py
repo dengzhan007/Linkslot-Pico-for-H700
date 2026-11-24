@@ -100,6 +100,15 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertNotIn('/alloc"', self.source)
         self.assertNotIn('/free"', self.source)
 
+    def test_soc_revision_probe_uses_only_generic_read_only_attributes(self):
+        self.assertIn('/sys/devices/soc0', self.source)
+        self.assertIn('for attr in machine family soc_id revision', self.source)
+        self.assertIn('NOT_PRESENT: no generic /sys/devices/soc0 node exported', self.source)
+        self.assertIn('/sys/class/sunxi_info/sys_info and /dev/sunxi_soc_info are intentionally not read', self.source)
+        self.assertNotIn('cat /sys/class/sunxi_info/sys_info', self.source)
+        self.assertNotIn('sunxi_get_soc_ver', self.source)
+        self.assertNotIn('CHECK_SOC_VERSION', self.source)
+
     def test_cpu_power_runtime_capture_is_read_only(self):
         self.assertIn('> "$OUTDIR/cpu-power-runtime.txt"', self.source)
         self.assertIn('/sys/devices/system/cpu/cpu[0-9]*/cpufreq', self.source)
