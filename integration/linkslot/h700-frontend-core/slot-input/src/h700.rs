@@ -140,10 +140,15 @@ impl InputSource for H700InputSource<'_> {
 /// each poll. The raw event batch uses fixed stack storage and does not allocate.
 /// The upstream gesture machine remains the single source of truth for chords,
 /// long presses, volume repeat and fast-forward timing.
+/// Upper bound: two actions per raw edge plus six timer-triggered actions.
+/// The Vec is allocated once when the adapter is created and reused per poll.
+pub const H700_ACTION_BUFFER_CAPACITY: usize = H700_INPUT_MAX_EVENTS * 2 + 8;
+
 pub struct H700GestureInput<'a> {
     input: H700InputSource<'a>,
     gestures: crate::Gestures,
     raw: [RawEvent; H700_INPUT_MAX_EVENTS],
+    actions: Vec<crate::Action>,
 }
 
 impl<'a> H700GestureInput<'a> {
@@ -152,31 +157,33 @@ impl<'a> H700GestureInput<'a> {
             input: H700InputSource::new(service)?,
             gestures: crate::Gestures::new(),
             raw: [RawEvent::Up(Btn::Up); H700_INPUT_MAX_EVENTS],
+            actions: Vec::with_capacity(H700_ACTION_BUFFER_CAPACITY),
         })
     }
 
     /// Process queued button edges and time-based gestures.
     ///
     /// The time value must come from the H700 monotonic timer service, not
-    /// wall-clock time. The returned count is the number of actions written.
-    pub fn poll_actions(&mut self, now: Millis, output: &mut Vec<crate::Action>) -> usize {
-        output.clear();
+    /// wall-clock time. Raw and action buffers are reused; no per-poll Vec is
+    /// created and the action buffer is sized for the maximum bounded batch.
+    pub fn poll_actions(&mut self, now: Millis) -> &[crate::Action] {
+        self.actions.clear();
         let count = self.input.drain_into(&mut self.raw);
         for event in &self.raw[..count] {
-            output.extend(self.gestures.feed(*event, now));
+            self.gestures.feed_into(*event, now, &mut self.actions);
         }
-        output.extend(self.gestures.tick(now));
-        output.len()
+        self.gestures.tick_into(now, &mut self.actions);
+        &self.actions
     }
 
     pub fn ff_latched(&self) -> bool {
         self.gestures.ff_latched()
     }
 
-    pub fn drop_ff_latch(&mut self, output: &mut Vec<crate::Action>) -> usize {
-        output.clear();
-        output.extend(self.gestures.drop_ff_latch());
-        output.len()
+    pub fn drop_ff_latch(&mut self) -> &[crate::Action] {
+        self.actions.clear();
+        self.gestures.drop_ff_latch_into(&mut self.actions);
+        &self.actions
     }
 }
 
@@ -257,13 +264,10 @@ mod tests {
         };
         let service = service(&mut queue);
         let mut runtime = H700GestureInput::new(&service).unwrap();
-        let mut actions = Vec::with_capacity(8);
+        let action_capacity = runtime.actions.capacity();
 
-        assert_eq!(runtime.poll_actions(100, &mut actions), 1);
-        assert_eq!(actions, alloc::vec![crate::Action::QuickMenu]);
-
-        assert_eq!(runtime.poll_actions(100 + crate::MENU_HOLD_MS, &mut actions), 1);
-        assert_eq!(actions, alloc::vec![crate::Action::Eject]);
+        assert_eq!(runtime.poll_actions(100), &[crate::Action::QuickMenu]);
+        assert_eq!(runtime.poll_actions(100 + crate::MENU_HOLD_MS), &[crate::Action::Eject]);
 
         queue.events[1] = H700InputEvent {
             button: H700_BTN_MENU, state: H700_INPUT_RELEASED, reserved: 0
@@ -272,18 +276,16 @@ mod tests {
             button: H700_BTN_POWER, state: H700_INPUT_PRESSED, reserved: 0
         };
         queue.len = 3;
-        assert_eq!(runtime.poll_actions(1_000, &mut actions), 1);
-        assert_eq!(actions, alloc::vec![crate::Action::PowerPress]);
+        assert_eq!(runtime.poll_actions(1_000), &[crate::Action::PowerPress]);
 
-        assert_eq!(runtime.poll_actions(1_000 + crate::POWER_HOLD_MS, &mut actions), 1);
-        assert_eq!(actions, alloc::vec![crate::Action::PowerHold]);
+        assert_eq!(runtime.poll_actions(1_000 + crate::POWER_HOLD_MS), &[crate::Action::PowerHold]);
 
         queue.events[3] = H700InputEvent {
             button: H700_BTN_POWER, state: H700_INPUT_RELEASED, reserved: 0
         };
         queue.len = 4;
-        assert_eq!(runtime.poll_actions(1_001 + crate::POWER_HOLD_MS, &mut actions), 1);
-        assert_eq!(actions, alloc::vec![crate::Action::PowerOff]);
+        assert_eq!(runtime.poll_actions(1_001 + crate::POWER_HOLD_MS), &[crate::Action::PowerOff]);
+        assert_eq!(runtime.actions.capacity(), action_capacity);
     }
 
     #[test]
