@@ -140,7 +140,7 @@ def patch_frontend(source: Path) -> None:
     app_path = source / "crates/slot/src/app.rs"
     app = app_path.read_text(encoding="utf-8")
     hold_import = "pub use slot_hold_state::{HoldPrompt as FolderHold, TimedHold};" + chr(10)
-    app_import_anchor = "use crate::audio::Sfx;\\n"
+    app_import_anchor = "use crate::audio::Sfx;\n"
     if app_import_anchor not in app:
         raise RuntimeError("cannot locate App import insertion point")
     if hold_import not in app:
@@ -169,14 +169,14 @@ pub struct FolderHold {
         raise RuntimeError("original FolderHold type block does not match pinned Linkslot source")
     app = app.replace(old_hold_type, "")
 
-    field_old = "    folder_hold_since: Option<Millis>,\\n    folder_hold_fade: Option<(Millis, f32)>,\\n"
-    field_new = "    folder_hold: TimedHold,\\n"
+    field_old = "    folder_hold_since: Option<Millis>,\n    folder_hold_fade: Option<(Millis, f32)>,\n"
+    field_new = "    folder_hold: TimedHold,\n"
     if app.count(field_old) != 1:
         raise RuntimeError("App folder hold fields do not match pinned source")
     app = app.replace(field_old, field_new)
 
-    init_old = "            folder_hold_since: None,\\n            folder_hold_fade: None,\\n"
-    init_new = "            folder_hold: TimedHold::new(FOLDER_HINT_DELAY_MS, FOLDER_HOLD_MS, FOLDER_HOLD_FADE_MS),\\n"
+    init_old = "            folder_hold_since: None,\n            folder_hold_fade: None,\n"
+    init_new = "            folder_hold: TimedHold::new(FOLDER_HINT_DELAY_MS, FOLDER_HOLD_MS, FOLDER_HOLD_FADE_MS),\n"
     if app.count(init_old) != 1:
         raise RuntimeError("App folder hold initializer does not match pinned source")
     app = app.replace(init_old, init_new)
@@ -276,9 +276,9 @@ pub struct FolderHold {
         raise RuntimeError("tick_folder_hold implementation does not match pinned source")
     app = app.replace(tick_old, tick_new)
 
-    app = app.replace("        self.folder_hold_fade = None;\\n", "        self.folder_hold.cancel();\\n")
-    app = app.replace("        self.folder_hold_since = None;\\n        self.folder_hold_fade = None;\\n", "        self.folder_hold.cancel();\\n")
-    app = app.replace("                self.folder_hold_since = Some(self.now());\\n                self.folder_hold_fade = None;\\n", "                self.folder_hold.begin(self.now());\\n")
+    app = app.replace("        self.folder_hold_fade = None;\n", "        self.folder_hold.cancel();\n")
+    app = app.replace("        self.folder_hold_since = None;\n        self.folder_hold_fade = None;\n", "        self.folder_hold.cancel();\n")
+    app = app.replace("                self.folder_hold_since = Some(self.now());\n                self.folder_hold_fade = None;\n", "                self.folder_hold.begin(self.now());\n")
     app = app.replace("self.folder_hold_since.is_some()", "self.folder_hold.is_active()")
     if "folder_hold_since" in app or "folder_hold_fade" in app:
         raise RuntimeError("unconverted folder hold fields remain in App")
@@ -318,6 +318,7 @@ def apply(source: Path, crate_root: Path) -> None:
     add_new_package(crate_root / "slot-video-mode", source / "crates/slot-video-mode")
     add_new_package(crate_root / "slot-rom-id", source / "crates/slot-rom-id")
     add_new_package(crate_root / "slot-game-search", source / "crates/slot-game-search")
+    add_new_package(crate_root / "slot-hold-state", source / "crates/slot-hold-state")
     add_new_package(crate_root / "slot-hold-state", source / "crates/slot-hold-state")
 
     video_mode_path = source / "crates/slot/src/video_mode.rs"
