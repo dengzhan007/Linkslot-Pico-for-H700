@@ -24,7 +24,7 @@ ifneq ($(H700_MEMSIZE_HEX_VALID),yes)
 $(error H700_MEMSIZE must be a hexadecimal 0x... byte count)
 endif
 
-H700_MEMBASE_NONZERO := $(shell digits=$(printf '%s' '$(strip $(H700_MEMBASE))' | sed -E 's/^0[xX]//; s/^0+//'); test -n "$digits" && echo yes)
+H700_MEMBASE_NONZERO := $(shell printf '%s' '$(strip $(H700_MEMBASE))' | sed -E 's/^0[xX]//; s/^0+//' | grep -q '[1-9a-fA-F]' && echo yes)
 ifneq ($(H700_MEMBASE_NONZERO),yes)
 $(error H700_MEMBASE must be non-zero)
 endif
