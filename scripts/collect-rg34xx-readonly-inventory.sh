@@ -383,7 +383,7 @@ fi
         while IFS= read -r line; do
             case "$line" in
                 *pll_cpu*|*pll_periph0*|*cpux*|*cpu*)
-                    printf '%s\\n' "$line"
+                    printf '%s\n' "$line"
                     ;;
             esac
         done < "$CPU_CLK_SUMMARY"
