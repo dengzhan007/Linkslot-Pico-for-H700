@@ -143,7 +143,7 @@ Runtime services must be explicit interfaces, not hidden std assumptions:
 | Display | Renderer-independent framebuffer descriptor and cache/scanout handoff; no `/dev/fb0`, EGL or dynamic loading. |
 | Audio | PCM producer interface with measured rate, format and bounded buffering; no ALSA/CPAL. |
 | Power | Explicit battery/charger/backlight/LED/poweroff service; no sysfs or shell execution. |
-| CPU performance | C-owned H700 DVFS/OPP service with board/silicon/thermal clamps; Rust/Linkslot may request a policy mode but cannot program PLL/PMIC registers. Keep hardware writes disabled until the RG34XX AXP2202 rail, H700 speed bin, thermal limits and BL31 secondary-core state are verified. |
+| CPU performance | Pure C OPP policy selector exists under `platform/h700/power`; it selects only from an externally supplied board-approved table and applies speed-bin, voltage and thermal gates. It contains no MMIO/PMIC code. Future C HAL owns verified CPUX/PMIC transitions; Rust/Linkslot only requests a policy mode. Hardware writes remain disabled pending exact live rail/speed-bin/thermal and BL31 secondary-core evidence. See [CPU performance/DVFS design](h700-cpu-performance-service.md). |
 | Network | Omit from the first bootable vertical slice. Add Wi-Fi, TCP/TLS, WebDAV and LAN server after local play/save works. |
 
 ### Runtime performance and clock parity with GammaOS Pico
