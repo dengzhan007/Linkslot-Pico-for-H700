@@ -40,6 +40,28 @@ class SidCellInspectorTests(unittest.TestCase):
         self.assertEqual(thermal["sensor3_calibration_raw_12bit"], 0x321)
         self.assertEqual(thermal["calibration_status"], "not_certified")
 
+    def test_generic_soc_identity_is_preserved_but_never_approves_opp(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "cpu-power-runtime.txt"
+            source.write_text(
+                "== generic SoC identity (read-only sysfs attributes; no serial/chipid) ==\n"
+                "-- /sys/devices/soc0 --\n"
+                "[machine]\nsun50iw9p1\n"
+                "[family]\nAllwinner\n"
+                "[soc_id]\nsun50iw9p1\n"
+                "[revision]\nA\n"
+                "== CPU topology and online set ==\n"
+                "speed_bin_raw_le_bytes=0024\n",
+                encoding="ascii",
+            )
+            report = MODULE.inspect_sid_cells(source)
+
+        identity = report["generic_soc_identity"]
+        self.assertEqual(identity["status"], "captured")
+        self.assertEqual(identity["attributes"]["machine"], ["sun50iw9p1"])
+        self.assertEqual(identity["attributes"]["revision"], ["A"])
+        self.assertEqual(identity["opp_authorization"], "not_approved")
+
     def test_unknown_speed_value_stays_unapproved(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "cpu-power-runtime.txt"
@@ -62,6 +84,7 @@ class SidCellInspectorTests(unittest.TestCase):
 
         self.assertEqual(report["cells"]["speed"]["report"]["status"], "unavailable")
         self.assertEqual(report["cells"]["thermal_calibration"]["report"]["status"], "unavailable")
+        self.assertEqual(report["generic_soc_identity"]["status"], "unavailable")
 
     def test_rejects_wrong_cell_lengths(self):
         with tempfile.TemporaryDirectory() as tmp:
