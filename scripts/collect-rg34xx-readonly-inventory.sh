@@ -270,57 +270,78 @@ fi
 
     echo
     echo "== per-CPU cpufreq policies =="
+    CPUFREQ_COUNT=0
     for node in /sys/devices/system/cpu/cpu[0-9]*/cpufreq /sys/devices/system/cpu/cpufreq/policy[0-9]*; do
         [ -d "$node" ] || continue
+        CPUFREQ_COUNT=$((CPUFREQ_COUNT + 1))
         echo "-- $node --"
+        ATTR_COUNT=0
         for attr in affected_cpus related_cpus scaling_driver scaling_governor \
                     scaling_available_governors scaling_available_frequencies \
                     scaling_min_freq scaling_max_freq scaling_cur_freq \
                     cpuinfo_min_freq cpuinfo_max_freq cpuinfo_cur_freq \
                     cpuinfo_transition_latency bios_limit; do
             if [ -r "$node/$attr" ]; then
+                ATTR_COUNT=$((ATTR_COUNT + 1))
                 echo "[$attr]"
                 cat "$node/$attr"
             fi
         done
+        [ "$ATTR_COUNT" -gt 0 ] || echo "NO_READABLE_CPUFREQ_ATTRIBUTES"
     done
+    [ "$CPUFREQ_COUNT" -gt 0 ] || echo "NOT_PRESENT: no cpufreq policy directories exported"
 
     echo
     echo "== thermal zones and trip metadata =="
+    THERMAL_COUNT=0
     for node in /sys/class/thermal/thermal_zone[0-9]*; do
         [ -d "$node" ] || continue
+        THERMAL_COUNT=$((THERMAL_COUNT + 1))
         echo "-- $node --"
+        ATTR_COUNT=0
         for attr in type temp mode policy; do
             if [ -r "$node/$attr" ]; then
+                ATTR_COUNT=$((ATTR_COUNT + 1))
                 echo "[$attr]"
                 cat "$node/$attr"
             fi
         done
+        TRIP_COUNT=0
         for attr in "$node"/trip_point_*_temp "$node"/trip_point_*_type; do
             [ -r "$attr" ] || continue
+            TRIP_COUNT=$((TRIP_COUNT + 1))
             echo "[$(basename "$attr")]"
             cat "$attr"
         done
+        [ "$ATTR_COUNT" -gt 0 ] || echo "NO_READABLE_THERMAL_ZONE_ATTRIBUTES"
+        [ "$TRIP_COUNT" -gt 0 ] || echo "NO_READABLE_THERMAL_TRIP_ATTRIBUTES"
     done
+    [ "$THERMAL_COUNT" -gt 0 ] || echo "NOT_PRESENT: no thermal_zone directories exported"
 
     echo
     echo "== regulator readback =="
+    REGULATOR_COUNT=0
     for node in /sys/class/regulator/regulator[0-9]* /sys/class/regulator/regulator.[0-9]*; do
         [ -d "$node" ] || continue
+        REGULATOR_COUNT=$((REGULATOR_COUNT + 1))
         echo "-- $node --"
+        ATTR_COUNT=0
         for attr in name regulator_name state status type \
                     microvolts voltage min_microvolts max_microvolts \
                     num_users requested_microamps; do
             if [ -r "$node/$attr" ]; then
+                ATTR_COUNT=$((ATTR_COUNT + 1))
                 echo "[$attr]"
                 cat "$node/$attr"
             fi
         done
+        [ "$ATTR_COUNT" -gt 0 ] || echo "NO_READABLE_REGULATOR_ATTRIBUTES"
         if [ -e "$node/of_node" ] && command -v readlink >/dev/null 2>&1; then
             echo "[of_node]"
             readlink -f "$node/of_node" 2>/dev/null || true
         fi
     done
+    [ "$REGULATOR_COUNT" -gt 0 ] || echo "NOT_PRESENT: no regulator class directories exported"
 
     echo
     echo "== regulator and clock debugfs summaries =="
@@ -336,20 +357,26 @@ fi
 
     echo
     echo "== NVMEM metadata only (raw fuse bytes are not read) =="
+    NVMEM_COUNT=0
     for node in /sys/bus/nvmem/devices/*; do
         [ -d "$node" ] || continue
+        NVMEM_COUNT=$((NVMEM_COUNT + 1))
         echo "-- $node --"
+        ATTR_COUNT=0
         for attr in name size; do
             if [ -r "$node/$attr" ]; then
+                ATTR_COUNT=$((ATTR_COUNT + 1))
                 echo "[$attr]"
                 cat "$node/$attr"
             fi
         done
+        [ "$ATTR_COUNT" -gt 0 ] || echo "NO_READABLE_NVMEM_METADATA"
         if [ -e "$node/of_node" ] && command -v readlink >/dev/null 2>&1; then
             echo "[of_node]"
             readlink -f "$node/of_node" 2>/dev/null || true
         fi
     done
+    [ "$NVMEM_COUNT" -gt 0 ] || echo "NOT_PRESENT: no NVMEM device metadata directories exported"
 
     echo
     echo "== CPU / regulator / thermal / clock kernel log lines =="
