@@ -32,6 +32,19 @@ pub enum Outcome<C> {
     Write(C),
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub struct ThreeLayout<C> {
+    pub slot1: C,
+    pub slot2: C,
+    pub tray: C,
+}
+
+impl<C> ThreeLayout<C> {
+    pub const fn new(slot1: C, slot2: C, tray: C) -> Self {
+        Self { slot1, slot2, tray }
+    }
+}
+
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct Chip<C> {
     pub across: f32,
@@ -45,6 +58,11 @@ pub struct Chip<C> {
 struct Hop {
     from: usize,
     to: usize,
+    started: Millis,
+}
+
+#[derive(Copy, Clone)]
+struct Swap {
     started: Millis,
 }
 
@@ -82,16 +100,24 @@ fn ease(u: f32) -> f32 {
 
 /// Generic Linkslot core-picker state machine.
 ///
-/// It owns only the list of available core identifiers and animation/input
-/// state. It has no dependency on slot-store, slot-ui, files, or a renderer.
+/// The two-core path retains the original single-chip hop interaction. The
+/// optional three-core path models two board sockets and one tray without
+/// depending on Linkslot's Core enum, slot-store, UI resources, or rendering.
 #[derive(Clone)]
 pub struct CorePicker<C> {
     options: Vec<C>,
-    /// Index into the options vector, never the core's persisted enum/index value.
+    /// Index into options; never a persisted enum/index value.
     seat: usize,
+    /// Core currently marked as running.
+    active: usize,
+    /// Three physical positions: fixed slot 1, hot slot 2, and spare tray.
+    three: Option<ThreeLayout<C>>,
+    /// Highlighted position in the three-core layout: 0, 1, or 2.
+    selected_pos: usize,
     opened: Millis,
     started: Option<Millis>,
     hop: Option<Hop>,
+    swap: Option<Swap>,
     close: Option<Close>,
     refusal: Option<Refusal>,
 }
@@ -102,16 +128,106 @@ impl<C: Copy + PartialEq> CorePicker<C> {
         Self {
             options,
             seat,
+            active: seat,
+            three: None,
+            selected_pos: 0,
             opened: now,
             started: None,
             hop: None,
+            swap: None,
             close: None,
             refusal: None,
         }
     }
 
+    /// Opens a three-position picker using a caller-supplied, domain-neutral
+    /// layout. The layout is enabled only when its three distinct values
+    /// exactly cover the available options; otherwise the legacy picker is
+    /// retained as a safe fallback.
+    ///
+    /// If the currently active core is initially assigned to the tray, it is
+    /// normalized into slot 2 so the running core always remains on the board.
+    pub fn open_three(
+        seat: C,
+        options: Vec<C>,
+        layout: ThreeLayout<C>,
+        now: Millis,
+    ) -> Self {
+        let mut picker = Self::open(seat, options, now);
+        picker.configure_three(layout);
+        picker
+    }
+
+    fn configure_three(&mut self, layout: ThreeLayout<C>) {
+        if self.options.len() != 3 {
+            return;
+        }
+
+        let mut values = [layout.slot1, layout.slot2, layout.tray];
+        if values[0] == values[1] || values[0] == values[2] || values[1] == values[2] {
+            return;
+        }
+        if values.iter().any(|core| !self.options.contains(core))
+            || self.options.iter().any(|core| !values.contains(core))
+        {
+            return;
+        }
+
+        let running = self.options[self.active];
+        if running == values[2] {
+            values.swap(1, 2);
+        }
+        let selected_pos = if running == values[0] {
+            0
+        } else if running == values[1] {
+            1
+        } else {
+            return;
+        };
+
+        self.three = Some(ThreeLayout::new(values[0], values[1], values[2]));
+        self.selected_pos = selected_pos;
+        self.sync_seat_to_selection();
+    }
+
     pub fn options(&self) -> &[C] {
         &self.options
+    }
+
+    /// Currently highlighted core. On the three-core path this is the core at
+    /// selected_pos; on the legacy path it is the selected hop slot.
+    pub fn seat(&self) -> C {
+        match self.three {
+            Some(layout) => match self.selected_pos {
+                0 => layout.slot1,
+                1 => layout.slot2,
+                _ => layout.tray,
+            },
+            None => self.options[self.seat],
+        }
+    }
+
+    pub fn active(&self) -> C {
+        self.options[self.active]
+    }
+
+    pub fn is_three(&self) -> bool {
+        self.three.is_some()
+    }
+
+    pub fn layout(&self) -> Option<ThreeLayout<C>> {
+        self.three
+    }
+
+    pub fn selected_pos(&self) -> usize {
+        self.selected_pos
+    }
+
+    /// Progress of a tray/slot-2 exchange, in the range [0, 1).
+    pub fn swap_progress(&self, now: Millis) -> Option<f32> {
+        let swap = self.swap?;
+        let q = now.saturating_sub(swap.started) as f32 / HOP_MS as f32;
+        (q < 1.0).then_some(q)
     }
 
     pub fn start(&mut self, now: Millis) {
@@ -124,10 +240,6 @@ impl<C: Copy + PartialEq> CorePicker<C> {
 
     pub fn waited(&self, now: Millis) -> Millis {
         now.saturating_sub(self.opened)
-    }
-
-    pub fn seat(&self) -> C {
-        self.options[self.seat]
     }
 
     pub fn is_single(&self) -> bool {
@@ -167,6 +279,10 @@ impl<C: Copy + PartialEq> CorePicker<C> {
                 Press::Left | Press::Right => Outcome::Nothing,
             };
         }
+        if self.three.is_some() {
+            return self.press_three(press, now);
+        }
+
         let target = match press {
             Press::Left => self.seat.checked_sub(1),
             Press::Right => {
@@ -177,6 +293,7 @@ impl<C: Copy + PartialEq> CorePicker<C> {
                 }
             }
             Press::Keep => {
+                self.active = self.seat;
                 self.begin_close(now);
                 return Outcome::Write(self.seat());
             }
@@ -185,6 +302,7 @@ impl<C: Copy + PartialEq> CorePicker<C> {
                 return Outcome::Nothing;
             }
         };
+
         if self.waiting() {
             return Outcome::Nothing;
         }
@@ -202,9 +320,11 @@ impl<C: Copy + PartialEq> CorePicker<C> {
                 started: now.saturating_sub(done),
             });
             self.seat = target;
+            self.active = target;
             self.refusal = None;
             return Outcome::Nothing;
         }
+
         let Some(target) = target else {
             self.refusal = Some(Refusal::started(now));
             return Outcome::Refused;
@@ -215,12 +335,94 @@ impl<C: Copy + PartialEq> CorePicker<C> {
             started: now,
         });
         self.seat = target;
+        self.active = target;
         self.refusal = None;
         Outcome::Nothing
     }
 
+    fn press_three(&mut self, press: Press, now: Millis) -> Outcome<C> {
+        if self.swap.is_some() || self.waiting() {
+            return Outcome::Nothing;
+        }
+
+        match press {
+            Press::Left => {
+                if self.selected_pos == 0 {
+                    self.refusal = Some(Refusal::started(now));
+                    Outcome::Refused
+                } else {
+                    self.selected_pos -= 1;
+                    self.sync_seat_to_selection();
+                    self.refusal = None;
+                    Outcome::Nothing
+                }
+            }
+            Press::Right => {
+                if self.selected_pos >= 2 {
+                    self.refusal = Some(Refusal::started(now));
+                    Outcome::Refused
+                } else {
+                    self.selected_pos += 1;
+                    self.sync_seat_to_selection();
+                    self.refusal = None;
+                    Outcome::Nothing
+                }
+            }
+            Press::Keep => {
+                let selected = self.seat();
+                if self.selected_pos == 2 {
+                    let Some(layout) = self.three else {
+                        return Outcome::Nothing;
+                    };
+                    let swapped = ThreeLayout::new(layout.slot1, layout.tray, layout.slot2);
+                    self.three = Some(swapped);
+                    self.selected_pos = 1;
+                    self.sync_seat_to_selection();
+                    self.active = self.seat;
+                    self.swap = Some(Swap { started: now });
+                    // Preserve the Linkslot tray exchange beat before closing.
+                    self.close = Some(Close {
+                        started: now.saturating_add(HOP_MS),
+                        from: 1.0,
+                    });
+                    Outcome::Write(swapped.slot2)
+                } else {
+                    self.active = self.seat;
+                    self.begin_close(now);
+                    Outcome::Write(selected)
+                }
+            }
+            Press::Back => {
+                self.begin_close(now);
+                Outcome::Nothing
+            }
+        }
+    }
+
+    fn sync_seat_to_selection(&mut self) {
+        if let Some(layout) = self.three {
+            let selected = match self.selected_pos {
+                0 => layout.slot1,
+                1 => layout.slot2,
+                _ => layout.tray,
+            };
+            if let Some(index) = self.options.iter().position(|core| *core == selected) {
+                self.seat = index;
+            }
+        }
+    }
+
     pub fn chip(&self, now: Millis) -> Chip<C> {
         let shake = self.refusal.map_or(0.0, |r| r.offset(now));
+        if self.three.is_some() {
+            return Chip {
+                across: self.selected_pos as f32 / 2.0,
+                lift: 0.0,
+                tip: 0.0,
+                seated: Some(self.seat()),
+                shake,
+            };
+        }
         if let Some((from, to, q)) = self.hop_state(now) {
             let arc = libm::sinf(core::f32::consts::PI * q);
             let lean = if to > from { 1.0 } else { -1.0 };
@@ -277,14 +479,22 @@ mod tests {
 
     #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     enum Core {
-        Mgba,
-        Gpsp,
-        Supafaust,
+        A,
+        B,
+        C,
+    }
+
+    fn three_options() -> Vec<Core> {
+        vec![Core::A, Core::B, Core::C]
+    }
+
+    fn standard_layout() -> ThreeLayout<Core> {
+        ThreeLayout::new(Core::A, Core::B, Core::C)
     }
 
     #[test]
     fn opens_waits_then_starts_animation() {
-        let mut picker = CorePicker::open(Core::Mgba, vec![Core::Mgba, Core::Gpsp], 100);
+        let mut picker = CorePicker::open(Core::A, vec![Core::A, Core::B], 100);
         assert!(picker.waiting());
         assert_eq!(picker.waited(120), 20);
         assert_eq!(picker.openness(120), 0.0);
@@ -296,22 +506,19 @@ mod tests {
 
     #[test]
     fn left_right_selection_and_edge_refusal_are_stable() {
-        let mut picker = CorePicker::open(Core::Mgba, vec![Core::Mgba, Core::Gpsp], 0);
+        let mut picker = CorePicker::open(Core::A, vec![Core::A, Core::B], 0);
         picker.start(0);
         assert_eq!(picker.press(Press::Left, OPEN_MS), Outcome::Refused);
         assert!(picker.chip(OPEN_MS).shake != 0.0);
         assert_eq!(picker.press(Press::Right, OPEN_MS), Outcome::Nothing);
-        assert_eq!(picker.seat(), Core::Gpsp);
+        assert_eq!(picker.seat(), Core::B);
+        assert_eq!(picker.active(), Core::B);
         assert_eq!(picker.press(Press::Right, OPEN_MS + HOP_MS), Outcome::Refused);
     }
 
     #[test]
     fn reversing_mid_hop_is_continuous() {
-        let mut picker = CorePicker::open(
-            Core::Mgba,
-            vec![Core::Mgba, Core::Gpsp, Core::Supafaust],
-            0,
-        );
+        let mut picker = CorePicker::open(Core::A, three_options(), 0);
         picker.start(0);
         let before = picker.chip(0);
         assert_eq!(before.across, 0.0);
@@ -326,7 +533,7 @@ mod tests {
 
     #[test]
     fn single_core_is_information_and_never_rewrites_selection() {
-        let mut picker = CorePicker::open(Core::Mgba, vec![Core::Mgba], 0);
+        let mut picker = CorePicker::open(Core::A, vec![Core::A], 0);
         picker.start(0);
         assert!(picker.is_single());
         assert_eq!(picker.press(Press::Right, 10), Outcome::Nothing);
@@ -338,22 +545,107 @@ mod tests {
 
     #[test]
     fn keep_writes_selected_core_and_closes() {
-        let mut picker = CorePicker::open(Core::Mgba, vec![Core::Mgba, Core::Gpsp], 0);
+        let mut picker = CorePicker::open(Core::A, vec![Core::A, Core::B], 0);
         picker.start(0);
         assert_eq!(picker.press(Press::Right, OPEN_MS), Outcome::Nothing);
-        assert_eq!(picker.press(Press::Keep, OPEN_MS + HOP_MS), Outcome::Write(Core::Gpsp));
+        assert_eq!(picker.press(Press::Keep, OPEN_MS + HOP_MS), Outcome::Write(Core::B));
         assert!(picker.closing());
         assert!(picker.finished(OPEN_MS + HOP_MS + CLOSE_MS));
     }
 
     #[test]
     fn stale_chip_hop_is_removed_after_transition() {
-        let mut picker = CorePicker::open(Core::Mgba, vec![Core::Mgba, Core::Gpsp], 0);
+        let mut picker = CorePicker::open(Core::A, vec![Core::A, Core::B], 0);
         picker.start(0);
         picker.press(Press::Right, 0);
         let landed = picker.chip(HOP_MS);
-        assert_eq!(landed.seated, Some(Core::Gpsp));
+        assert_eq!(landed.seated, Some(Core::B));
         assert_eq!(landed.lift, 0.0);
         assert_eq!(landed.across, 1.0);
+    }
+
+    #[test]
+    fn three_core_layout_keeps_active_core_separate_from_highlight() {
+        let mut picker =
+            CorePicker::open_three(Core::B, three_options(), standard_layout(), 0);
+        assert!(picker.is_three());
+        assert_eq!(picker.layout(), Some(standard_layout()));
+        assert_eq!(picker.active(), Core::B);
+        assert_eq!(picker.seat(), Core::B);
+        assert_eq!(picker.selected_pos(), 1);
+
+        picker.start(0);
+        assert_eq!(picker.press(Press::Right, OPEN_MS), Outcome::Nothing);
+        assert_eq!(picker.seat(), Core::C);
+        assert_eq!(picker.selected_pos(), 2);
+        assert_eq!(picker.active(), Core::B);
+    }
+
+    #[test]
+    fn selecting_slot_two_writes_without_swapping_the_tray() {
+        let mut picker =
+            CorePicker::open_three(Core::A, three_options(), standard_layout(), 0);
+        picker.start(0);
+        assert_eq!(picker.press(Press::Right, OPEN_MS), Outcome::Nothing);
+        assert_eq!(picker.press(Press::Keep, OPEN_MS), Outcome::Write(Core::B));
+        assert_eq!(picker.active(), Core::B);
+        assert_eq!(picker.layout(), Some(standard_layout()));
+        assert!(picker.closing());
+    }
+
+    #[test]
+    fn selecting_tray_swaps_with_slot_two_and_writes_new_active_core() {
+        let mut picker =
+            CorePicker::open_three(Core::A, three_options(), standard_layout(), 0);
+        picker.start(0);
+        assert_eq!(picker.press(Press::Right, OPEN_MS), Outcome::Nothing);
+        assert_eq!(picker.press(Press::Right, OPEN_MS), Outcome::Nothing);
+        assert_eq!(picker.seat(), Core::C);
+        assert_eq!(picker.press(Press::Keep, OPEN_MS), Outcome::Write(Core::C));
+
+        let swapped = ThreeLayout::new(Core::A, Core::C, Core::B);
+        assert_eq!(picker.layout(), Some(swapped));
+        assert_eq!(picker.selected_pos(), 1);
+        assert_eq!(picker.seat(), Core::C);
+        assert_eq!(picker.active(), Core::C);
+        assert_eq!(picker.swap_progress(OPEN_MS), Some(0.0));
+        assert_eq!(picker.swap_progress(OPEN_MS + HOP_MS), None);
+        assert_eq!(picker.press(Press::Left, OPEN_MS + 1), Outcome::Nothing);
+        assert!(!picker.finished(OPEN_MS + HOP_MS));
+        assert!(picker.finished(OPEN_MS + HOP_MS + CLOSE_MS));
+    }
+
+    #[test]
+    fn active_core_initially_in_tray_is_normalized_to_slot_two() {
+        let layout = ThreeLayout::new(Core::A, Core::B, Core::C);
+        let picker = CorePicker::open_three(Core::C, three_options(), layout, 0);
+        assert_eq!(picker.layout(), Some(ThreeLayout::new(Core::A, Core::C, Core::B)));
+        assert_eq!(picker.active(), Core::C);
+        assert_eq!(picker.selected_pos(), 1);
+    }
+
+    #[test]
+    fn invalid_three_layout_falls_back_to_legacy_picker() {
+        let invalid = ThreeLayout::new(Core::A, Core::B, Core::B);
+        let mut picker = CorePicker::open_three(Core::A, three_options(), invalid, 0);
+        assert!(!picker.is_three());
+        picker.start(0);
+        assert_eq!(picker.press(Press::Right, OPEN_MS), Outcome::Nothing);
+        assert_eq!(picker.seat(), Core::B);
+        assert_eq!(picker.active(), Core::B);
+    }
+
+    #[test]
+    fn three_layout_requires_exactly_the_available_three_cores() {
+        let mut picker = CorePicker::open_three(
+            Core::A,
+            vec![Core::A, Core::B, Core::C, Core::A],
+            standard_layout(),
+            0,
+        );
+        assert!(!picker.is_three());
+        picker.start(0);
+        assert_eq!(picker.press(Press::Right, OPEN_MS), Outcome::Nothing);
+        assert_eq!(picker.seat(), Core::B);
     }
 }
