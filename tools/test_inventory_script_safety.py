@@ -138,6 +138,14 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertNotIn('scaling_governor=', self.source)
         self.assertNotIn('regulator_set_voltage', self.source)
 
+    def test_cpux_clock_summary_focus_is_read_only_and_preserves_tree_indent(self):
+        self.assertIn('CPU_CLK_SUMMARY="/sys/kernel/debug/clk/clk_summary"', self.source)
+        self.assertIn('while IFS= read -r line; do', self.source)
+        self.assertIn('*pll_cpu*|*pll_periph0*|*cpux*|*cpu*)', self.source)
+        self.assertIn("printf '%s\\n' \"$line\"", self.source)
+        self.assertIn('done < "$CPU_CLK_SUMMARY"', self.source)
+        self.assertIn('NOT_READABLE_OR_ABSENT: CPUX clk_summary focus', self.source)
+
     def test_tee_ion_runtime_capture_is_read_only(self):
         self.assertIn('> "$OUTDIR/tee-ion-runtime.txt"', self.source)
         self.assertIn('/proc/config.gz', self.source)
