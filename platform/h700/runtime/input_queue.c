@@ -1,7 +1,5 @@
 #include "input_queue.h"
 
-#include <limits.h>
-#include <string.h>
 
 _Static_assert((H700_INPUT_QUEUE_CAPACITY & (H700_INPUT_QUEUE_CAPACITY - 1u)) == 0u,
                "input queue capacity must be a power of two");
@@ -11,7 +9,12 @@ void h700_input_queue_init(h700_input_queue_t *queue) {
     if (queue == NULL) {
         return;
     }
-    memset(queue, 0, sizeof(*queue));
+    queue->head = 0u;
+    queue->tail = 0u;
+    queue->dropped_events = 0u;
+    for (size_t i = 0u; i < H700_INPUT_QUEUE_CAPACITY; ++i) {
+        queue->events[i] = (h700_input_event_t){0};
+    }
 }
 
 bool h700_input_queue_push(h700_input_queue_t *queue, uint16_t button, uint8_t state) {
