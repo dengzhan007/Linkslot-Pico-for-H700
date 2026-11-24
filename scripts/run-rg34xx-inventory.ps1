@@ -15,8 +15,9 @@ $Toc1Parser = Join-Path $RepoRoot "tools\parse_h700_toc1.py"
 $FdtInspector = Join-Path $RepoRoot "tools\inspect_h700_fdt.py"
 $EnvInspector = Join-Path $RepoRoot "tools\inspect_h700_env.py"
 $MemoryMapInspector = Join-Path $RepoRoot "tools\inspect_h700_memory_map.py"
+$SidCellInspector = Join-Path $RepoRoot "tools\inspect_h700_sid_cells.py"
 
-foreach ($path in @($Collector, $Boot0Inspector, $Toc1Parser, $FdtInspector, $EnvInspector, $MemoryMapInspector)) {
+foreach ($path in @($Collector, $Boot0Inspector, $Toc1Parser, $FdtInspector, $EnvInspector, $MemoryMapInspector, $SidCellInspector)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         throw "Required project file not found: $path"
     }
@@ -203,6 +204,12 @@ if (Test-Path -LiteralPath $memorySnapshot -PathType Leaf) {
     $memoryMapCommandArgs += $memoryMapArgs
     & $pythonExe @memoryMapCommandArgs
     if ($LASTEXITCODE -ne 0) { throw "CMA/memblock memory map inspection failed." }
+}
+
+$cpuPowerRuntime = Join-Path $OutputDirectory "cpu-power-runtime.txt"
+if (Test-Path -LiteralPath $cpuPowerRuntime -PathType Leaf) {
+    & $pythonExe @pythonArgs $SidCellInspector $cpuPowerRuntime -o (Join-Path $OutputDirectory "sid-cell-report.json")
+    if ($LASTEXITCODE -ne 0) { throw "SID cell inspection failed." }
 }
 
 Write-Host ""
