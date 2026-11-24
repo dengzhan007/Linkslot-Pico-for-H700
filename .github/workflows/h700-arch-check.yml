@@ -83,5 +83,8 @@ jobs:
       - name: Compile freestanding AArch64 H700 objects
         run: H700_ARCH=aarch64 bash scripts/build-h700-objects.sh
 
-      - name: Compile freestanding AArch32 Cortex-A53 H700 objects
-        run: H700_ARCH=aarch32 bash scripts/build-h700-objects.sh
+      - name: Compile freestanding AArch32 ARM-state Cortex-A53 H700 objects
+        run: H700_ARCH=aarch32 H700_A32_STATE=arm bash scripts/build-h700-objects.sh
+
+      - name: Compile freestanding AArch32 Thumb-2 Cortex-A53 H700 objects (GammaOS LK default C mode)
+        run: H700_ARCH=aarch32 H700_A32_STATE=thumb bash scripts/build-h700-objects.sh
