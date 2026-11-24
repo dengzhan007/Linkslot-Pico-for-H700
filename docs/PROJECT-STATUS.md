@@ -2,13 +2,13 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-24 12:12 UTC  
+**最后核对时间：** 2026-11-24 12:16 UTC  
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **工作分支：** `porting/linkslot-1.0.45-feasibility`  
-**本次代码推进前的分支 HEAD：** `4f87b52fd32d1953454e75fd9ab3b5bb42b1558a`  
+**本次状态刷新前的分支 HEAD：** `60388242bcadeab88335a4f2325fb234f53d77cd`  
 **本轮 CPU runtime owner 最新代码提交：** `072793f8b4bfce00683aa3d303eee62613fe41ab`（7 个连续提交）  
 **本轮 Rust runtime bridge 最新代码提交：** `0d381d7ba66592b5ab64ba67e0b228039bb9eec0`  
-**最近一次已明确由 CI 验证通过的 CPU/Rust 代码提交：** `0437e37859eee40095d0210725a92910aa4783d6`；其后的 owner / runtime-token 代码尚未获得可见 CI 通过记录。  
+**本轮 H700 build graph / guard 代码提交：** `6e847c0121431c681062053c52f28824715e78a6`（platform OBJS）与 `ef07a0e06c1d55e2d2f49175d4e976e8337e1ee4`（project guard）。  
 
 
 ## 1. 项目目标与固定约束
@@ -59,6 +59,7 @@
 
 - `platform/h700/power/h700_cpu_performance_policy.h/.c`：纯策略选择器，不访问 MMIO/PLL/PMIC。
 - `platform/h700/power/h700_cpu_performance_service.h/.c`：版本化 C Service ABI v1。
+- `platform/h700/rules.mk`：已把 policy selector、C service ABI 和 static runtime owner 三个对象加入 LK `OBJS`；`scripts/test-h700-lk-project-guard.py` 检查对象项和对应 C 源文件。该项只建立 build graph，不代表完整 LK target 已链接。
 - `platform/h700/power/tests/h700_cpu_performance_service_test.c`：服务 ABI、策略门控、遥测分离、温度 clamp、Boost gating 和错误 OPP 测试。
 - `scripts/test-h700-cpu-performance-service.sh`：主机测试入口。
 - `scripts/build-h700-objects.sh`：已将 Service C 源纳入 AArch64、AArch32 ARM-state、AArch32 Thumb-2 编译矩阵。
@@ -82,12 +83,16 @@
 - Rust 客户端校验 ABI version、struct size、reserved bits、telemetry valid flags 和 `hardware_applied == 0`；C 侧 `_Static_assert` 固定 state size=64、`hardware_applied` offset=48、reserved offset=52。
 - 当前测试使用合成 OPP 值，不是 RG34XX 已批准的运行频点表。静态 runtime owner 已实现，但没有 board-approved RG34XX profile，也没有 GammaOS LK startup call site；因此目标机 service 仍 unavailable。Rust 客户端尚未接入 Linkslot `App` 设置界面。
 
-### 本轮本地验证与 CI 状态（2026-11-24 12:08 UTC）
+### 本轮本地验证与 CI 状态（2026-11-24 12:16 UTC）
 
-- 本地 GCC 14 主机回归（基于当前 runtime owner / C policy 代码及 service ABI 的本地工作副本）：`h700_cpu_performance_runtime_test` 输出 `PASS: H700 CPU runtime owner, profile validation and fail-closed lifecycle`。
-- 本地 Clang 17 freestanding 编译：`h700_cpu_performance_runtime.c` 分别以 AArch64 Cortex-A53、AArch32 ARM-state、AArch32 Thumb-2 编译；`llvm-objdump -f` 分别报告 `aarch64`、`arm`、`arm`。
-- 这些本地命令只验证 CPU runtime owner 的合成主机测试和该 C 单元的目标架构编译；它们不等于完整 GammaOS LK 链接、完整仓库 CI 或设备验证。
-- 针对本轮最新 Rust runtime bridge push commit `0d381d7ba66592b5ab64ba67e0b228039bb9eec0`，GitHub connector 未返回可见 combined statuses，也未返回关联 workflow runs。该 run 查询接口仅列 PR-triggered runs，所以空结果不能证明 workflow 未触发；本轮 GitHub Actions 结果目前标为**未确认**，不得记为通过。
+- 本地 GCC 14 主机回归：`h700_cpu_performance_runtime_test` 输出 `PASS: H700 CPU runtime owner, profile validation and fail-closed lifecycle`。GitHub Actions #45390257222 也对提交 `072793f` 运行了完整 service script，host regression job 和 freestanding compile job 均成功。
+- 本地 Clang 17 freestanding 编译：runtime owner C 单元在 AArch64 Cortex-A53、AArch32 ARM-state、AArch32 Thumb-2 下均成功，目标文件架构分别为 `aarch64`、`arm`、`arm`。
+- `platform/h700/rules.mk` 已把三项 CPU C 对象放入 LK `OBJS`。#45391642082 对包含该变更的提交 `6e847c0` 执行 AArch64、AArch32 ARM/Thumb 全量 H700 对象编译和 host regression，两个 jobs 均成功。
+- Rust runtime token 提交 `0d381d7` 由 [H700 Linkslot 1.0.45 runtime slices #45391108154](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45391108154) 验证：两个 jobs 均成功，覆盖 workspace host tests、AArch32/AArch64 no_std checks、Linkslot 1.0.45 overlay 和完整 `slot` crate compile。
+- [Linkslot LK Rust feasibility #45391755767](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45391755767)：截至 12:16 UTC 仍为 **in progress**，head 为 `2f5120792c23a3e2e9879ecc7c9a3d04b9471716`；实际 GammaOS LK BL33 overlay 编译、BL33 header contract、RG34XX H700 project/memory fail-closed guard、H700 software renderer 与 framebuffer host checks 均已成功。其余后续步骤仍在运行，不能把完整 workflow 记为通过。
+- [H700 boot audit tools #45391761555](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45391761555) 成功；该 run 的范围是 Windows inventory wrapper syntax 与 host-tool/TOC1 checks，不等于完整 LK target link。
+- 同批次被后续 push 替代的综合 workflow runs 以 `cancelled` 结束；这些取消不代表测试失败。最新完整 feasibility run 以 #45391755767 为准。
+- 以上验证均不等于完整 GammaOS LK H700 target 链接或 RG34XX 设备启动；目标内存映射仍未批准，固件仍不可安装。
 
 ### 本轮 CI 验证
 
@@ -99,7 +104,7 @@
 - [H700 boot audit tools #45387673284](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45387673284)：**成功**，覆盖当轮项目状态文档和报告工具检查。
 - [Linkslot LK Rust feasibility #45387540498](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45387540498)：**cancelled**，由后续提交触发的并发运行取代；没有报告测试失败，不能当作通过或失败证据。
 - [H700 boot audit tools #45388212345](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45388212345)：**成功**，覆盖最新路线图中的 CPU 设置 UI 扩展约束。
-- [Linkslot LK Rust feasibility #45388212358](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45388212358)：截至本次核对处于 **in progress**，head 为 `9bf0962ef938b2ab0e103386c1b78e02340ecafa`；等待该完整 overlay/cross-build 回归结果。
+- [Linkslot LK Rust feasibility #45388212358](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45388212358)：**成功**，是本轮之前的一次完整 overlay/cross-build 综合基线。
 - 初次 runtime-slices 运行 #45387187588 在仅提交 workspace manifest、Rust crate 源文件尚未提交的中间 commit 上失败（找不到 `slot-cpu-performance/src/lib.rs`）；完整 crate 提交后的 #45387192778 已通过，该中间态失败不代表最终 crate 测试失败。
 - [此前完整 Linkslot 1.0.45 feasibility #45381590503](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45381590503)：成功；这是旧的 69-step 综合基线，证明 host/cross-build 范围，不证明实机运行。
 - [CPU OPP policy 专项 #45381349400](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45381349400)：成功。
