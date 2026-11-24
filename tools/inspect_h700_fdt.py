@@ -221,6 +221,18 @@ def _cpu_power_inventory(nodes: dict[str, dict[str, bytes]]) -> dict[str, Any]:
         for node_path, props in nodes.items()
         if "regulator-name" in props
     }
+
+    def node_details(node_path: str | None) -> dict[str, Any] | None:
+        if not node_path or node_path not in nodes:
+            return None
+        props = nodes[node_path]
+        return {
+            "compatible": _strings(props.get("compatible")),
+            "status": (_strings(props.get("status")) or ["okay"])[0],
+            "name": (_strings(props.get("name")) or [None])[0],
+            "reg_cells": _cells(props.get("reg")),
+        }
+
     opp_tables: dict[str, dict[str, Any]] = {}
     cpus = []
 
@@ -272,6 +284,11 @@ def _cpu_power_inventory(nodes: dict[str, dict[str, bytes]]) -> dict[str, Any]:
         for i, ref in enumerate(nvmem_refs):
             if i < len(nvmem_names):
                 ref["name"] = nvmem_names[i]
+            ref["node_details"] = node_details(ref["node"])
+
+        thermal_refs = _phandle_refs(props.get("thermal-sensors"), phandles)
+        for ref in thermal_refs:
+            ref["node_details"] = node_details(ref["node"])
 
         cpus.append({
             "node": node_path,
@@ -282,7 +299,7 @@ def _cpu_power_inventory(nodes: dict[str, dict[str, bytes]]) -> dict[str, Any]:
             "cpu_supply": supply_refs,
             "operating_points_v2": opp_refs,
             "nvmem_cells": nvmem_refs,
-            "thermal_sensors": _phandle_refs(props.get("thermal-sensors"), phandles),
+            "thermal_sensors": thermal_refs,
         })
 
     return {
