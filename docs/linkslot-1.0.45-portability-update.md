@@ -70,7 +70,7 @@ Linkslot 特定枚举的映射留在临时 overlay 的 `App` 适配层：该层�
 - 综合 workflow 首次运行 [45369954559](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45369954559) 在“内置静态 mGBA 前端选择”步骤失败。静态 mGBA 的初始化/释放生命周期测试和显式 `SLOT_CORE` 覆盖优先级测试均通过；失败的是同一测试筛选器同时执行的上游核心颜色配置测试。
 - 失败原因是持久化 H700 `slot-model/src/core.rs` 没有 1.0.45 的 `ARMGBA` 条目，而上游 `slot-store::Core` 已包含 `Core::Armgba`，调用 `Core::spec()` 时因此触发缺失表项 panic。
 - 已同步完整上游 1.0.45 `core.rs`，把 H700 `slot-model` 包版本设为 1.0.45，并增加核心注册表与 armGBA 颜色配置测试。没有删除 armGBA、放宽 `Core::spec()` 或跳过测试。
-- 修复后完整综合 workflow 已由新提交重新触发，当前结果见 [45370886678](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45370886678)。该运行结束前，不将累积 overlay / mGBA 最终构建标记为通过。
+- 修复后完整综合 workflow [45370886678](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45370886678) 已成功，69/69 步全部通过。失败原因被定位并修复；没有删除 armGBA、放宽 `Core::spec()` 或跳过测试。
 
 ## 4. 1.0.43–1.0.45 新上游功能的保留策略
 
@@ -82,14 +82,28 @@ armGBA README 描述为 AArch64 recompiler；当前 LK/BL33 主线为 AArch32，
 
 ## 5. 当前验证边界和下一步
 
-本次已在专用实验分支提交三核心通用状态机、1.0.45 前端/Renderer overlay、VFS 与静态核心集成探针更新。GitHub Actions 中，软件渲染器 workflow [45370068413](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45370068413) 和 runtime slices workflow [45370886590](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45370886590) 已通过；首次完整综合 workflow 因旧 `slot-model` 核心表缺失 armGBA 而失败，修复后的综合 workflow [45370886678](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45370886678) 尚在执行。当前容器没有 Rust/Cargo 工具链，编译验证依赖上述 CI。
+1.0.45 的验证基线现已通过：软件渲染器 workflow [45370068413](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45370068413)、runtime slices workflow [45370886590](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45370886590)，以及完整综合 workflow [45370886678](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45370886678) 全部成功。综合 workflow 共 69 步，覆盖 GammaOS LK H700 BL33 源 overlay CRT0/exception-vector 编译、1.0.45 Renderer/Frontend/no_std overlay、A32/A64 检查、C input ABI、VFS v3、mGBA AArch32 namespaced static archive、newlib 构建/链接诊断、H700 SD→GPT→FAT→Libretro VFS host 路径，以及 BL33 header/vector layout probe。完整产物（约 381 MB，含 map、ELF、报告和日志）已上传：[GitHub Actions artifact 14908469502](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45370886678/artifacts/14908469502)。
 
-下一步按以下顺序推进：
+### 5.1 LK / BL33 当前硬阻塞
 
-1. 在具备工作流触发条件的分支/PR 上执行 no_std workspace host tests、AArch32/AArch64 freestanding checks、renderer overlay 和 Linkslot 1.0.45 完整 `slot` crate check。
-2. 修复编译器暴露的其他 1.0.45 API/类型差异；不能只以 CorePicker 编译通过代表整个前端移植完成。
-3. 对照 1.0.45 上游 UI 行为补充 core picker 状态机测试和渲染 golden tests。
-4. 继续补齐 H700 VFS v3、newlib syscall hooks、真实 SD/FAT backend、输入/显示/音频服务与 LK runtime。
-5. 在 BL31/BL33 ABI、RAM ownership、heap、stack、framebuffer ownership 全部审查前，不生成可刷写镜像、不写卡、不在实机上执行未经审查的 payload。
+综合 workflow 的通过范围是 host/cross-build feasibility，不是完整 LK 内核构建或实机启动。日志中有几项必须先解决的阻塞项：
+
+- **Cortex-A53 编译参数不正确：** GammaOS LK 的 Cortex-A53 `rules.mk` 分支仍实际使用 `-mcpu=cortex-a9`。H700 构建必须改为 Cortex-A53，并单独审查 FPU/NEON/ABI 参数。
+- **A53 一致性/多核启动状态未闭合：** LK `crt0.S` 仅在 `ARM_CPU_CORTEX_A7` 条件下设置 `ACTLR.SMP`，没有 A53 对应路径。BL31→BL33 时 H700 其它 Cortex-A53 核心的状态仍未知。现有 LK scheduler 使用全局 `current_thread`、全局 run queue 和全局 critical-section nesting counter；IRQ mask 只作用于执行中的核心，因此它是单核模型，不能让其它核心进入该 runtime。当前安全策略应是先确认二级核心保持关闭/停驻的固件契约；不能确认之前不得假定 SMP 正常。
+- **BL33 VBAR 需要双阶段修正：** BaseOS header overlay 会覆盖原 LK `crt0.S` 中 `+4..+0x1f` 的异常向量分支以及 `+0x20` 的 boot-argument word。当前通过的 prototype 把 vector table 搬到 `0x4a001000`，在入口设置 VBAR，并把 boot arguments 放在相邻的 scratch 区；但 `arch.c::arch_early_init()` 后续仍会把 VBAR 重置到 `MEMBASE`。真实 LK overlay 必须同时修改它，让 VBAR 始终指向 `__lk_vectors_start`。
+- **RAM 上界不是已批准的内存分配：** 当前 `0x4a000000` link base 和 `0x4a0e0000` 上界来源于已研究的 BaseOS BL33/BSS 界限；上界并不证明完整 DRAM map、heap 范围或 reserved-memory 区域。必须结合 RG34XX 启动链与设备树/Bootloader 现场证据，完成 RAM ownership、stack、heap 和 framebuffer 分区审计。
+- **newlib syscall 仍是诊断 stub：** 综合构建证明 mGBA AArch32 archive 可形成 whole-archive 静态链接；其中通过的 `libnosys` 配置使用 dummy syscall stubs。`_start` 也是 link-test stub，尚未接上 LK heap、console、RTC、每线程 reentrancy 和真实文件服务；这不是设备 runtime。
+
+BL33 layout probe 的原始结果记录在 artifact 的 `lk-bl33-layout/` 下：入口分支目标 `0x4a001024`、向量表 `0x4a001000`、boot-argument scratch `0x4a001020`、prototype `_end=0x4a0033f8`。这些是 host probe 的链接布局结果，不是对整个 H700 RAM 的授权，也不是可刷写 payload。禁止把 artifact 中的 synthetic header/ELF/bin 写入 SD 或设备。
+
+### 5.2 下一步
+
+1. 在 LK overlay 中修正 Cortex-A53 `-mcpu` 参数，并在 map/disassembly 中验证实际编译目标与 ABI。
+2. 在 `crt0.S` 与 `arch.c::arch_early_init()` 两处统一 VBAR 到 relocated vector table；加入构建测试，证明 header overlay 不覆盖入口分支、向量表和 boot arguments。
+3. 取证并明确 BL31→BL33 时其它 A53 核心的状态；若不能证明二级核心已停驻，则保持单核 fail-closed，不启用 scheduler/IRQ 并发，不宣称支持 SMP。
+4. 完成 DRAM/reserved-memory/heap/stack/framebuffer ownership 审计，再实现真正的 LK heap/console/RTC/newlib syscall 服务。
+5. 在完整 LK/H700 BSP 可启动且服务 ABI 稳定后，才把已验证的 mGBA archive 接入 Linkslot runtime，继续 ROM→视频→音频→输入→存档的 playable vertical slice。
+
+**当前仍没有可刷写固件，也没有声称 1.0.45 已在 RG34XX 上启动。**
 
 **当前没有可刷写固件，也没有声称 1.0.45 已在 RG34XX 上启动。**
