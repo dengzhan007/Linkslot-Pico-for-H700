@@ -32,7 +32,7 @@ def make_fdt():
         "regulator-max-microvolt", "regulator-always-on", "regulator-boot-on",
         "operating-points-v2", "opp-hz", "opp-microvolt", "opp-supported-hw",
         "opp-shared", "nvmem-cells", "nvmem-cell-names", "thermal-sensors",
-        "clock-frequency",
+        "clock-frequency", "turbo-mode",
     )
     strings = bytearray()
     name_offsets = {}
