@@ -750,7 +750,7 @@ mod tests {
         let mut fb = [0u8; 4 * 4 * 4];
         let mut r = SoftwareRenderer::new(4, 4, 16, PixelFormat::Rgba8888, &mut fb).unwrap();
         let tex = r
-            .create_texture(
+            .create_texture_nearest(
                 2,
                 1,
                 &[255, 0, 0, 255, 0, 255, 0, 255],
