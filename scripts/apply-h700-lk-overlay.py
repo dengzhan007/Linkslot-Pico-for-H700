@@ -41,6 +41,17 @@ def read_pinned_source(source: Path) -> tuple[str, dict[Path, str]]:
 
 
 def patch_makefile(original: str) -> str:
+    project_include = "include project/$(PROJECT).mk"
+    if original.count(project_include) != 1:
+        raise RuntimeError("expected one project make include")
+    early_toolchain = (
+        project_include + "\\n"
+        "ifeq ($(H700_BUILD),yes)\\n"
+        "TOOLCHAIN_PREFIX ?= arm-none-eabi-\\n"
+        "endif"
+    )
+    original = original.replace(project_include, early_toolchain, 1)
+
     old = "include platform/common/rules.mk"
     if original.count(old) != 1:
         raise RuntimeError("expected one platform/common make include")
