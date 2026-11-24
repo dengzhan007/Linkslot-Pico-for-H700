@@ -1,4 +1,4 @@
-use alloc::{vec, vec::Vec};
+use alloc::vec::Vec;
 use crate::{Btn, Millis, RawEvent};
 
 pub const SELECT_CHORD_MS: Millis = 600;
@@ -105,22 +105,45 @@ impl Gestures {
         self.ff_latched
     }
 
+    /// Compatibility API for host callers that own the returned vector.
     pub fn drop_ff_latch(&mut self) -> Vec<Action> {
-        if !self.ff_latched {
-            return Vec::new();
-        }
-        self.ff_clear()
+        let mut out = Vec::new();
+        self.drop_ff_latch_into(&mut out);
+        out
     }
 
+    /// Append the latch-release action into caller-owned reusable storage.
+    pub fn drop_ff_latch_into(&mut self, out: &mut Vec<Action>) {
+        if self.ff_latched {
+            self.ff_clear_into(out);
+        }
+    }
+
+    /// Compatibility API for host callers that own the returned vector.
     pub fn feed(&mut self, ev: RawEvent, now: Millis) -> Vec<Action> {
+        let mut out = Vec::new();
+        self.feed_into(ev, now, &mut out);
+        out
+    }
+
+    /// Process one raw button edge and append actions without allocating a
+    /// temporary Vec. LK callers should reserve their action buffer once.
+    pub fn feed_into(&mut self, ev: RawEvent, now: Millis, out: &mut Vec<Action>) {
         match ev {
-            RawEvent::Down(b) => self.down(b, now),
-            RawEvent::Up(b) => self.up(b, now),
+            RawEvent::Down(b) => self.down_into(b, now, out),
+            RawEvent::Up(b) => self.up_into(b, now, out),
         }
     }
 
+    /// Compatibility API for host callers that own the returned vector.
     pub fn tick(&mut self, now: Millis) -> Vec<Action> {
         let mut out = Vec::new();
+        self.tick_into(now, &mut out);
+        out
+    }
+
+    /// Advance timers and append any due actions into caller-owned storage.
+    pub fn tick_into(&mut self, now: Millis, out: &mut Vec<Action>) {
         if let Select::ReleaseDue(due) = self.select {
             if now >= due {
                 self.select = Select::Idle;
@@ -134,7 +157,7 @@ impl Gestures {
         } = self.select
         {
             if now.saturating_sub(since) >= SELECT_CHORD_MS {
-                out.extend(self.hand_over_select(now));
+                self.hand_over_select_into(now, out);
             }
         }
         if let Some(d) = self.menu_down_at {
@@ -159,51 +182,50 @@ impl Gestures {
                 out.push(Action::VolumeDown);
             }
         }
-        out
     }
 
-    fn down(&mut self, b: Btn, now: Millis) -> Vec<Action> {
+    fn down_into(&mut self, b: Btn, now: Millis, out: &mut Vec<Action>) {
         if let (true, Some((bit, action))) = (self.chording(now), chord(b)) {
             self.mark_chorded();
             self.chord_held |= bit;
-            return vec![action];
+            out.push(action);
+            return;
         }
         match b {
-            Btn::Select => self.select_down(now),
-            Btn::Menu => self.menu_down(now),
+            Btn::Select => self.select_down_into(now, out),
+            Btn::Menu => self.menu_down_into(now, out),
             Btn::Power => {
                 self.power_down_at = Some(now);
                 self.power_hold_fired = false;
-                vec![Action::PowerPress]
+                out.push(Action::PowerPress);
             }
-            Btn::Lid => vec![Action::LidClose],
-            Btn::VolUp | Btn::VolDown => self.volume_press(b, now),
-            Btn::L2 => self.rewind_start(),
-            Btn::R2 => self.ff_down(now),
+            Btn::Lid => out.push(Action::LidClose),
+            Btn::VolUp | Btn::VolDown => self.volume_press_into(b, now, out),
+            Btn::L2 => self.rewind_start_into(out),
+            Btn::R2 => self.ff_down_into(now, out),
             _ => {
-                let mut out = self.hand_over_select(now);
+                self.hand_over_select_into(now, out);
                 out.push(Action::GbaDown(b));
-                out
             }
         }
     }
 
-    fn up(&mut self, b: Btn, now: Millis) -> Vec<Action> {
+    fn up_into(&mut self, b: Btn, now: Millis, out: &mut Vec<Action>) {
         if let Some((bit, _)) = chord(b) {
             if self.chord_held & bit != 0 {
                 self.chord_held &= !bit;
-                return Vec::new();
+                return;
             }
         }
         match b {
-            Btn::Select => self.select_up(now),
-            Btn::Menu => self.menu_up(),
-            Btn::Power => self.power_up(),
-            Btn::Lid => vec![Action::LidOpen],
+            Btn::Select => self.select_up_into(now, out),
+            Btn::Menu => self.menu_up_into(out),
+            Btn::Power => self.power_up_into(out),
+            Btn::Lid => out.push(Action::LidOpen),
             Btn::VolUp | Btn::VolDown => self.volume_release(b),
-            Btn::L2 => self.rewind_stop(),
-            Btn::R2 => self.ff_up(now),
-            _ => vec![Action::GbaUp(b)],
+            Btn::L2 => self.rewind_stop_into(out),
+            Btn::R2 => self.ff_up_into(now, out),
+            _ => out.push(Action::GbaUp(b)),
         }
     }
 
@@ -222,8 +244,7 @@ impl Gestures {
         }
     }
 
-    fn select_down(&mut self, now: Millis) -> Vec<Action> {
-        let mut out = Vec::new();
+    fn select_down_into(&mut self, now: Millis, out: &mut Vec<Action>) {
         if matches!(self.select, Select::ReleaseDue(_)) {
             out.push(Action::GbaUp(Btn::Select));
         }
@@ -234,10 +255,9 @@ impl Gestures {
                 sent: None,
             };
         }
-        out
     }
 
-    fn hand_over_select(&mut self, now: Millis) -> Vec<Action> {
+    fn hand_over_select_into(&mut self, now: Millis, out: &mut Vec<Action>) {
         match &mut self.select {
             Select::Held {
                 chorded: false,
@@ -245,76 +265,60 @@ impl Gestures {
                 ..
             } => {
                 *sent = Some(now);
-                vec![Action::GbaDown(Btn::Select)]
+                out.push(Action::GbaDown(Btn::Select));
             }
-            _ => Vec::new(),
+            _ => {}
         }
     }
 
-    fn select_up(&mut self, now: Millis) -> Vec<Action> {
+    fn select_up_into(&mut self, now: Millis, out: &mut Vec<Action>) {
         let Select::Held { chorded, sent, .. } = core::mem::take(&mut self.select) else {
-            return Vec::new();
+            return;
         };
         match (sent, chorded) {
             (Some(at), _) if now.saturating_sub(at) >= SELECT_TAP_MS => {
-                vec![Action::GbaUp(Btn::Select)]
+                out.push(Action::GbaUp(Btn::Select));
             }
             (Some(at), _) => {
                 self.select = Select::ReleaseDue(at + SELECT_TAP_MS);
-                Vec::new()
             }
-            (None, true) => Vec::new(),
+            (None, true) => {}
             (None, false) => {
                 self.select = Select::ReleaseDue(now + SELECT_TAP_MS);
-                vec![Action::GbaDown(Btn::Select)]
+                out.push(Action::GbaDown(Btn::Select));
             }
         }
     }
 
-    fn menu_down(&mut self, now: Millis) -> Vec<Action> {
+    fn menu_down_into(&mut self, now: Millis, out: &mut Vec<Action>) {
         if self.chording(now) {
             self.mark_chorded();
             self.menu_down_at = None;
-            return vec![Action::GameMenu];
+            out.push(Action::GameMenu);
+            return;
         }
         self.menu_down_at = Some(now);
         self.menu_eject_fired = false;
-        // The menu opens on the press, not on the release.
-        //
-        // Release-gated it felt unresponsive twice over: nothing happened while
-        // the button was down, and a press that outlived the old 250 ms tap
-        // window was dropped outright. There is no third thing a MENU press can
-        // mean, so the screen answers at once and the hold is left to the eject
-        // timer (whose progress the app draws, so a long press is a visible and
-        // cancellable exit rather than a silent one).
-        vec![Action::QuickMenu]
+        out.push(Action::QuickMenu);
     }
 
-    fn menu_up(&mut self) -> Vec<Action> {
+    fn menu_up_into(&mut self, out: &mut Vec<Action>) {
         if self.menu_down_at.take().is_none() {
-            return Vec::new();
+            return;
         }
-        // The press already opened the menu; releasing it either cancels the
-        // hold that was running (the app's exit prompt) or does nothing at all
-        // when the hold already finished.
-        match core::mem::take(&mut self.menu_eject_fired) {
-            true => Vec::new(),
-            false => vec![Action::MenuUp],
+        if !core::mem::take(&mut self.menu_eject_fired) {
+            out.push(Action::MenuUp);
         }
     }
 
-    fn power_up(&mut self) -> Vec<Action> {
+    fn power_up_into(&mut self, out: &mut Vec<Action>) {
         let held = self.power_hold_fired;
         self.power_down_at = None;
         self.power_hold_fired = false;
-        vec![if held {
-            Action::PowerOff
-        } else {
-            Action::PowerTap
-        }]
+        out.push(if held { Action::PowerOff } else { Action::PowerTap });
     }
 
-    fn volume_press(&mut self, b: Btn, now: Millis) -> Vec<Action> {
+    fn volume_press_into(&mut self, b: Btn, now: Millis, out: &mut Vec<Action>) {
         let (mine, other, action) = match b {
             Btn::VolUp => (&mut self.vol_up_at, self.vol_down_at, Action::VolumeUp),
             _ => (&mut self.vol_down_at, self.vol_up_at, Action::VolumeDown),
@@ -324,16 +328,15 @@ impl Gestures {
             Btn::VolUp => self.vol_up_ramp = None,
             _ => self.vol_down_ramp = None,
         }
-        let mut out = vec![action];
+        out.push(action);
         let paired = other.is_some_and(|t| now.abs_diff(t) <= MUTE_CHORD_MS);
         if paired && !self.mute_fired {
             self.mute_fired = true;
             out.push(Action::MuteToggle);
         }
-        out
     }
 
-    fn volume_release(&mut self, b: Btn) -> Vec<Action> {
+    fn volume_release(&mut self, b: Btn) {
         match b {
             Btn::VolUp => (self.vol_up_at, self.vol_up_ramp) = (None, None),
             _ => (self.vol_down_at, self.vol_down_ramp) = (None, None),
@@ -341,32 +344,29 @@ impl Gestures {
         if self.vol_up_at.is_none() && self.vol_down_at.is_none() {
             self.mute_fired = false;
         }
-        Vec::new()
     }
 
-    fn rewind_start(&mut self) -> Vec<Action> {
+    fn rewind_start_into(&mut self, out: &mut Vec<Action>) {
         if self.rewinding {
-            return Vec::new();
+            return;
         }
-        let mut out = Vec::new();
-        out.extend(self.ff_clear());
+        self.ff_clear_into(out);
         self.rewinding = true;
         out.push(Action::RewindStart);
-        out
     }
 
-    fn rewind_stop(&mut self) -> Vec<Action> {
+    fn rewind_stop_into(&mut self, out: &mut Vec<Action>) {
         if !self.rewinding {
-            return Vec::new();
+            return;
         }
         self.rewinding = false;
-        vec![Action::RewindStop]
+        out.push(Action::RewindStop);
     }
 
-    fn ff_down(&mut self, now: Millis) -> Vec<Action> {
+    fn ff_down_into(&mut self, now: Millis, out: &mut Vec<Action>) {
         if self.rewinding {
             self.r2_refused = true;
-            return Vec::new();
+            return;
         }
         if self.ff_latched {
             self.ff_latching_press = false;
@@ -378,32 +378,32 @@ impl Gestures {
             self.ff_latching_press = double;
         }
         if self.ff_on {
-            return Vec::new();
+            return;
         }
         self.ff_on = true;
-        vec![Action::FfStart]
+        out.push(Action::FfStart);
     }
 
-    fn ff_up(&mut self, now: Millis) -> Vec<Action> {
+    fn ff_up_into(&mut self, now: Millis, out: &mut Vec<Action>) {
         if core::mem::take(&mut self.r2_refused) {
-            return Vec::new();
+            return;
         }
         self.r2_last_release = Some(now);
         if self.ff_latching_press {
             self.ff_latching_press = false;
-            return Vec::new();
+            return;
         }
-        self.ff_clear()
+        self.ff_clear_into(out);
     }
 
-    fn ff_clear(&mut self) -> Vec<Action> {
+    fn ff_clear_into(&mut self, out: &mut Vec<Action>) {
         self.ff_latched = false;
         self.ff_latching_press = false;
         if !self.ff_on {
-            return Vec::new();
+            return;
         }
         self.ff_on = false;
-        vec![Action::FfStop]
+        out.push(Action::FfStop);
     }
 }
 
