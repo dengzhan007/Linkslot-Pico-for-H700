@@ -5,12 +5,15 @@ on:
     branches:
       - main
       - porting/linkslot-1.0.36-feasibility
+      - porting/linkslot-1.0.45-feasibility
     paths:
       - "integration/linkslot/h700-render-core/**"
+      - "scripts/apply-linkslot-render-core.py"
       - ".github/workflows/h700-software-renderer.yml"
   pull_request:
     paths:
       - "integration/linkslot/h700-render-core/**"
+      - "scripts/apply-linkslot-render-core.py"
       - ".github/workflows/h700-software-renderer.yml"
   workflow_dispatch:
 
