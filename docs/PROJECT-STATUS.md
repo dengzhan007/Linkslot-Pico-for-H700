@@ -2,15 +2,16 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-24 12:48 UTC  
+**最后核对时间：** 2026-11-24 12:53 UTC  
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **工作分支：** `porting/linkslot-1.0.45-feasibility`  
-**本次状态刷新前的分支 HEAD：** `6a76694b746926e85d36645cd525aa722dfc04bf`  
+**本次状态刷新前的分支 HEAD：** `82559fec488e252e6b2d4bc0f69886761de1800c`  
 **本轮 CPU runtime owner 最新代码提交：** `072793f8b4bfce00683aa3d303eee62613fe41ab`（7 个连续提交）  
 **本轮 Rust runtime bridge 最新代码提交：** `0d381d7ba66592b5ab64ba67e0b228039bb9eec0`  
 **本轮 H700 build graph / guard 最新代码提交：** `6e847c0121431c681062053c52f28824715e78a6`（platform OBJS）与 `ef07a0e06c1d55e2d2f49175d4e976e8337e1ee4`（project guard）。  
 **本轮 H700 target lifecycle hooks：** `target/rg34xx_h700/init.c` / `target/rg34xx_h700/rules.mk`；三种目标 ISA 编译由 #45392910394 验证通过。  
-**本轮 CPU inventory/FDT parser：** 最新通过 CI 的 CPU inventory/FDT parser 测试提交 `1963854d12f0b485ddf75e2661c11e8f1a0bfd34`，后续纯文档更新仍在继续。  
+**本轮 CPU inventory/FDT parser：** 解析器与 provider argument 测试由 #45396816432 通过。  
+**本轮 CPU power collector missing-state 增强：** `273895925554446bff3eb3f61ca1dde093d15d03`；对应 safety regression 提交 `f2ea2b9d5611b5461546bc4f07fe014f9b4d80b2`，两平台 CI 均通过。  
 
 
 ## 1. 项目目标与固定约束
@@ -73,6 +74,7 @@
 - `platform/h700/power/tests/h700_cpu_performance_runtime_test.c`：覆盖默认 unavailable、NULL/未批准/错误 board/缺少 gate/缺少 OPP 拒绝、静态 owner 稳定性、policy-only 状态和服务撤销。
 - `tools/inspect_h700_fdt.py`：扩展静态 FDT 解析，输出 CPU `cpu-supply` / `operating-points-v2`、regulator phandle、NVMEM cell offset/size 和 thermal-sensor provider arguments；明确标注这些只是 DT 声明，不是动态读回或安全 OPP 认证。
 - `scripts/collect-rg34xx-readonly-inventory.sh`：新增 `cpu-power-runtime.txt`，只读采集 Linux CPUFreq、thermal zone/trips、regulator class/debugfs、`clk_summary` 和 NVMEM 元数据；不读 NVMEM 原始 fuse bytes，不修改 governor、频率、电压或时钟。旧的 2026-11-22 报告未包含该新输出，必须在设备上重新采集。
+- 针对旧 Linux 4.9 sysfs 兼容性，CPUFreq、thermal、regulator、NVMEM 各分组现会明确写 `NOT_PRESENT`（节点类不存在）或 `NO_READABLE_*`（节点存在但没有可读属性）；不会把空列表解释成零频率/零电压。 `tools/test_inventory_script_safety.py` 同步覆盖这些分支。
 - 修复 C service 的失败重初始化语义：对完整 service storage，在校验新配置前先撤销旧实例；ready 检查同时验证 ABI struct size，避免无效重初始化仍保留旧服务。
 - 已核对 Linkslot 1.0.45 `slot-ui/src/quick_menu.rs` / `slot/src/app.rs` 的 CPU 模式 UI 扩展点；当前 System Settings 为 6 行，`QuickRow`/`QuickValue` 使用固定数组和 enum index。UI 扩展要求在末尾追加新 row/value、同步中英文 key 和 parity tests，不能重排既有设置索引。设计约束见 CPU DVFS 文档 7.2。
 
@@ -88,16 +90,21 @@
 - Rust 客户端校验 ABI version、struct size、reserved bits、telemetry valid flags 和 `hardware_applied == 0`；C 侧 `_Static_assert` 固定 state size=64、`hardware_applied` offset=48、reserved offset=52。
 - 当前测试使用合成 OPP 值，不是 RG34XX 已批准的运行频点表。静态 runtime owner 已实现，H700 `target_init()` hook 也已存在，但 hook 保持空实现、没有 board-approved RG34XX profile，也未调用 owner；因此目标机 service 仍 unavailable。Rust 客户端尚未接入 Linkslot `App` 设置界面。
 
-### 本轮本地验证与 CI 状态（2026-11-24 12:48 UTC）
+### 本轮本地验证与 CI 状态（2026-11-24 12:53 UTC）
 
-- 本地 GCC 14 主机回归：`h700_cpu_performance_runtime_test` 输出 `PASS: H700 CPU runtime owner, profile validation and fail-closed lifecycle`。
-- 本地 Clang 17 freestanding 编译：runtime owner 和 target lifecycle C 单元在 AArch64 Cortex-A53、AArch32 ARM-state、AArch32 Thumb-2 下均成功。
-- [Linkslot LK Rust feasibility #45393436818](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45393436818)：**成功，69/69 steps**。H700 BL33 overlay、project/memory fail-closed guard、renderer/framebuffer、Linkslot、mGBA、只读 MMC/GPT/FAT 候选等综合 host/cross-build 全部通过；不是批准的整机镜像或实机启动。
-- [H700 AArch32/AArch64 compile check #45392910394](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45392910394)：**成功**。新增 RG34XX H700 target lifecycle 对象分别生成 AArch64、AArch32 ARM-state、AArch32 Thumb-2 对象，host regression job 也通过。
-- [H700 boot audit tools #45396816432](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45396816432)：**成功**。Linux 与 Windows 两个 job 全部通过，包含 CPU `cpu-supply` / OPP / regulator / NVMEM / thermal phandle 合成测试、CPU power collector 只读安全测试、shell/PowerShell host checks。
-- 同一 inventory 变更中的中间提交曾分别因测试夹具缺少 `turbo-mode`、OPP node path 断言、thermal provider 缺少 `#thermal-sensor-cells` 而失败；这些均是合成测试夹具/断言问题，最终修正后的 #45396816432 已成功。此前 LK project guard 的 #45393189139 也因测试脚本漏导入 Python `re` 失败，已修复并由完整综合 #45393436818 验证通过。
-- 这些 CI 结果仍不代表已批准 MEMBASE/MEMSIZE、完整设备固件、实机运行的 CPU OPP、实际 CPU rail 电压或温度读回。硬件 DVFS 保持关闭。
+- `target/rg34xx_h700/init.c` 的 `target_early_init()` / `target_init()` 在 AArch64、AArch32 ARM-state、AArch32 Thumb-2 freestanding 编译通过；[H700 AArch32/AArch64 compile check #45392910394](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45392910394) 的两个 jobs 均成功。
+- [Linkslot LK Rust feasibility #45393436818](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45393436818)：**成功，69/69 steps**；完成 H700 BL33 overlay、project/memory fail-closed guard、renderer/framebuffer、Linkslot、mGBA 和只读 MMC/GPT/FAT host/cross-build 综合回归。
+- [H700 boot audit tools #45396816432](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45396816432)：**成功**；FDT CPU supply/OPP/regulator/NVMEM/thermal provider phandle 合成测试及 CPU power inventory read-only 检查的 Linux/Windows jobs 全部成功。
+- [H700 boot audit tools #45397765612](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45397765612)：**成功**；验证 collector 对无 cpufreq/thermal/regulator/NVMEM 节点输出显式 `NOT_PRESENT` 的改动，host-tools 和 Windows jobs 全部通过。
+- [H700 boot audit tools #45397788581](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45397788581)：**成功**；验证对应 safety regression，Linux 6/6、Windows 8/8 steps 成功。
+- [H700 boot audit tools #45397828044](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45397828044)：**成功**；最新 inventory 文档/collector 说明改动通过 Linux 与 Windows jobs。
+- 当前仍没有 RG34XX 新版实机 inventory。2026-11-22 旧归档未包含 `cpu-power-runtime.txt`，也没有解析过完整 CPU FDT subtree。CPU rail readback、SID 原始 bin、校准后的 thermal、BL31 CPU1–CPU3 状态和实际 OPP 均未获得实机证据，CPU service 必须保持 unavailable。
+- host/CI 结果不等于完整 GammaOS LK H700 target link、已批准 MEMBASE/MEMSIZE、设备镜像或实机启动。硬件 DVFS 仍关闭。
 ### 本轮 CI 验证
+
+- [H700 boot audit tools #45397765612](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45397765612)：**成功**；collector missing-node `NOT_PRESENT` 状态覆盖测试通过，Linux/Windows jobs 均成功。
+- [H700 boot audit tools #45397788581](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45397788581)：**成功**；明确 missing/unreadable CPU power sysfs status 的安全回归通过。
+- [H700 boot audit tools #45397828044](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45397828044)：**成功**；inventory documentation and read-only semantics checks passed.
 
 - [H700 boot audit tools #45396816432](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45396816432)：**成功**；Ubuntu host-tools 与 Windows PowerShell jobs 均通过，包含新增 CPU FDT phandle 测试、read-only CPU power inventory 测试。
 - [H700 boot audit tools #45396493076](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45396493076)：**成功**；验证 CPU power collector / FDT provider metadata 的主机测试与 Windows wrapper 检查。
