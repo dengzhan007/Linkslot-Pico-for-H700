@@ -30,6 +30,13 @@ class SidCellInspectorTests(unittest.TestCase):
         self.assertTrue(speed["matches_pinned_vendor_literal"])
         self.assertEqual(speed["opp_authorization"], "not_approved")
         self.assertNotIn("supported_hw_mask", speed)
+        reference = speed["mainline_reference_decode"]
+        self.assertEqual(reference["status"], "recognized_but_revision_ambiguous")
+        self.assertIsNone(reference["candidate_bin"])
+        self.assertEqual(reference["candidate_bins"], [1, 2])
+        self.assertTrue(reference["requires_smccc_arch_soc_id_revision"])
+        self.assertFalse(reference["generic_soc_sysfs_revision_accepted"])
+        self.assertEqual(reference["opp_authorization"], "not_approved")
 
         thermal = report["cells"]["thermal_calibration"]["report"]
         self.assertEqual(thermal["u16_le_words"], ["0x0460", "0x1123", "0x2456", "0x3778"])
@@ -72,6 +79,25 @@ class SidCellInspectorTests(unittest.TestCase):
         self.assertEqual(speed["raw_u16_le"], "0xdead")
         self.assertFalse(speed["matches_pinned_vendor_literal"])
         self.assertEqual(speed["opp_authorization"], "not_approved")
+        self.assertEqual(speed["mainline_reference_decode"]["status"], "unsupported_reference_value")
+        self.assertIsNone(speed["mainline_reference_decode"]["candidate_bin"])
+
+    def test_mainline_direct_reference_bins_are_diagnostic_only(self):
+        vectors = {
+            0x2000: 0,
+            0x5000: 3,
+            0x5400: 3,
+            0x6000: 3,
+            0x5C00: 4,
+            0x5D00: 0,
+            0x6C00: 5,
+        }
+        for raw, expected_bin in vectors.items():
+            with self.subTest(raw=hex(raw)):
+                decoded = MODULE._mainline_reference_speed_decode(raw)
+                self.assertEqual(decoded["status"], "recognized_reference_value")
+                self.assertEqual(decoded["candidate_bin"], expected_bin)
+                self.assertEqual(decoded["opp_authorization"], "not_approved")
 
     def test_missing_sid_reads_are_reported_as_unavailable(self):
         with tempfile.TemporaryDirectory() as tmp:
