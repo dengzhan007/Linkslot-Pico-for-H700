@@ -141,6 +141,42 @@ def patch_frontend(source: Path) -> None:
     if quick_menu_text.count(host_import) != 1:
         raise RuntimeError("QuickRow host-only Platform/ResumeKind import changed")
     quick_menu_text = quick_menu_text.replace(host_import, "")
+
+    # Keep the CPU row visible but strictly unavailable until H700 runtime
+    # initialization has an approved board profile and real telemetry.
+    value_enum_anchor = "    LanguageEn,\n}\n\nimpl QuickValue {"
+    value_enum_new = (
+        "    LanguageEn,\n"
+        "    /// H700 policy service is not initialized/approved on this target.\n"
+        "    CpuPerformanceUnavailable,\n"
+        "}\n\nimpl QuickValue {"
+    )
+    if quick_menu_text.count(value_enum_anchor) != 1:
+        raise RuntimeError("QuickValue enum append anchor changed")
+    quick_menu_text = quick_menu_text.replace(value_enum_anchor, value_enum_new)
+
+    value_all_anchor = "        QuickValue::LanguageEn,\n    ];"
+    value_all_new = "        QuickValue::LanguageEn,\n        QuickValue::CpuPerformanceUnavailable,\n    ];"
+    if quick_menu_text.count(value_all_anchor) != 1:
+        raise RuntimeError("QuickValue::ALL append anchor changed")
+    quick_menu_text = quick_menu_text.replace(value_all_anchor, value_all_new)
+    quick_menu_text = quick_menu_text.replace(
+        "pub const ALL: [QuickValue; 37]",
+        "pub const ALL: [QuickValue; 38]",
+    )
+
+    value_text_anchor = (
+        '            QuickValue::LanguageEn => slot_i18n::t(lang, "device.quick.value.language_en"),\n'
+    )
+    value_text_new = value_text_anchor + (
+        '            QuickValue::CpuPerformanceUnavailable => match lang {\n'
+        '                Language::ZhCn => "暂不可用",\n'
+        '                Language::EnUs => "Unavailable",\n'
+        '            },\n'
+    )
+    if quick_menu_text.count(value_text_anchor) != 1:
+        raise RuntimeError("QuickValue::text language append anchor changed")
+    quick_menu_text = quick_menu_text.replace(value_text_anchor, value_text_new)
     quick_menu_path.write_text(quick_menu_text, encoding="utf-8")
 
     slot_ui_lib_path = source / "crates/slot-ui/src/lib.rs"
@@ -396,6 +432,42 @@ def patch_frontend(source: Path) -> None:
     if app.count(resume_old) != 1:
         raise RuntimeError("App per-platform resume QuickRow adapter anchor changed")
     app = app.replace(resume_old, resume_new)
+
+    cpu_value_old = """            QuickRow::Language => Some(match self.language {
+                Language::ZhCn => QuickValue::LanguageZh,
+                Language::EnUs => QuickValue::LanguageEn,
+            }),
+            QuickRow::ButtonLayout => None,
+"""
+    cpu_value_new = """            QuickRow::Language => Some(match self.language {
+                Language::ZhCn => QuickValue::LanguageZh,
+                Language::EnUs => QuickValue::LanguageEn,
+            }),
+            QuickRow::CpuPerformance => Some(QuickValue::CpuPerformanceUnavailable),
+            QuickRow::ButtonLayout => None,
+"""
+    if app.count(cpu_value_old) != 1:
+        raise RuntimeError("App CPU Performance quick_value anchor changed")
+    app = app.replace(cpu_value_old, cpu_value_new)
+
+    cpu_change_old = "        if row == QuickRow::Language {\n"
+    cpu_change_new = (
+        "        if row == QuickRow::CpuPerformance {\n"
+        "            // No approved H700 runtime/profile: this row is display-only.\n"
+        "            // Do not persist a request or imply that hardware changed.\n"
+        "            return;\n"
+        "        }\n"
+        "        if row == QuickRow::Language {\n"
+    )
+    if app.count(cpu_change_old) != 1:
+        raise RuntimeError("App CPU Performance change guard anchor changed")
+    app = app.replace(cpu_change_old, cpu_change_new)
+
+    cpu_match_old = "            | QuickRow::Language => return,\n"
+    cpu_match_new = "            | QuickRow::CpuPerformance\n            | QuickRow::Language => return,\n"
+    if app.count(cpu_match_old) != 1:
+        raise RuntimeError("App CPU Performance exhaustive match anchor changed")
+    app = app.replace(cpu_match_old, cpu_match_new)
 
     app_path.write_text(app, encoding="utf-8")
 
