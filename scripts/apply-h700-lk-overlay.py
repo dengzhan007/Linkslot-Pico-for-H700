@@ -107,7 +107,7 @@ def patch_arm_rules(original: str) -> str:
         r"-mcpu=cortex-a9(\n.*?^HANDLED_CORE := true)",
         re.MULTILINE | re.DOTALL,
     )
-    patched, count = pattern.subn(r"\g<1>-mcpu=cortex-a53\g<2>", original)
+    patched, count = pattern.subn(r"\g<1>-mcpu=cortex-a53 -mfpu=neon-vfpv4 -mfloat-abi=softfp\g<2>", original)
     if count != 1:
         raise RuntimeError(
             f"expected one cortex-a53 branch with -mcpu=cortex-a9, found {count}"
@@ -205,7 +205,7 @@ build; it is not a firmware image.
 - arch/arm/arch.c: keep arch_early_init() VBAR pointed at
   __lk_vectors_start instead of resetting it to MEMBASE.
 - arch/arm/rules.mk: correct the Cortex-A53 branch compiler target from
-  -mcpu=cortex-a9 to -mcpu=cortex-a53.
+  -mcpu=cortex-a9 to -mcpu=cortex-a53 with NEON/VFPv4 and softfp ABI flags.
 
 h700-bl33-overlay.patch can be applied to a fresh checkout of the pinned
 source. files/ contains the resulting replacement files. The generator never
@@ -217,7 +217,7 @@ This overlay does not configure A53 coherency, park secondary CPUs, make LK's
 scheduler or heap SMP-safe, choose H700 RAM/heap/stack addresses, implement
 the H700 project/target/platform, or supply any H700 device drivers. In
 particular, no ACTLR.SMP write is guessed. The H700 project must separately
-select and verify its ARM/Thumb, NEON/VFPv4 and softfp ABI flags.
+select and verify its ARM/Thumb interworking and Thumb-2 policy.
 
 Do not flash, write to an SD card, or execute this source overlay. It has not
 been built as a complete LK image or booted on RG34XX.
