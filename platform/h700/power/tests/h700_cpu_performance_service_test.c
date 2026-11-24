@@ -4,6 +4,13 @@
 
 #include "../h700_cpu_performance_service.h"
 
+_Static_assert(sizeof(h700_cpu_perf_state_v1_t) == 64u,
+               "CPU performance ABI v1 state layout must match the Rust binding");
+_Static_assert(offsetof(h700_cpu_perf_state_v1_t, hardware_applied) == 48u,
+               "hardware_applied offset must remain stable for Rust");
+_Static_assert(offsetof(h700_cpu_perf_state_v1_t, reserved) == 52u,
+               "reserved field offset must remain stable for Rust");
+
 #define CHECK(condition, message) do { \
     if (!(condition)) { \
         fprintf(stderr, "FAIL: %s\n", message); \
