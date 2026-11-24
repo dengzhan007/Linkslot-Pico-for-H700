@@ -2,13 +2,15 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-24 12:18 UTC  
+**最后核对时间：** 2026-11-24 12:48 UTC  
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **工作分支：** `porting/linkslot-1.0.45-feasibility`  
-**本次状态刷新前的分支 HEAD：** `a0e4d474ab988544963b4d047a10e9a1d0c05aca`  
+**本次状态刷新前的分支 HEAD：** `6a76694b746926e85d36645cd525aa722dfc04bf`  
 **本轮 CPU runtime owner 最新代码提交：** `072793f8b4bfce00683aa3d303eee62613fe41ab`（7 个连续提交）  
 **本轮 Rust runtime bridge 最新代码提交：** `0d381d7ba66592b5ab64ba67e0b228039bb9eec0`  
-**本轮 H700 build graph / guard 最新代码提交：** `6e847c0121431c681062053c52f28824715e78a6`（platform OBJS）与 `ef07a0e06c1d55e2d2f49175d4e976e8337e1ee4`（project guard）；对应变更已包含于后续项目综合 CI run。  
+**本轮 H700 build graph / guard 最新代码提交：** `6e847c0121431c681062053c52f28824715e78a6`（platform OBJS）与 `ef07a0e06c1d55e2d2f49175d4e976e8337e1ee4`（project guard）。  
+**本轮 H700 target lifecycle hooks：** `target/rg34xx_h700/init.c` / `target/rg34xx_h700/rules.mk`；三种目标 ISA 编译由 #45392910394 验证通过。  
+**本轮 CPU inventory/FDT parser：** 最新通过 CI 的 CPU inventory/FDT parser 测试提交 `1963854d12f0b485ddf75e2661c11e8f1a0bfd34`，后续纯文档更新仍在继续。  
 
 
 ## 1. 项目目标与固定约束
@@ -60,6 +62,7 @@
 - `platform/h700/power/h700_cpu_performance_policy.h/.c`：纯策略选择器，不访问 MMIO/PLL/PMIC。
 - `platform/h700/power/h700_cpu_performance_service.h/.c`：版本化 C Service ABI v1。
 - `platform/h700/rules.mk`：已把 policy selector、C service ABI 和 static runtime owner 三个对象加入 LK `OBJS`；`scripts/test-h700-lk-project-guard.py` 检查对象项和对应 C 源文件。该项只建立 build graph，不代表完整 LK target 已链接。
+- `target/rg34xx_h700/init.c` / `target/rg34xx_h700/rules.mk`：提供 LK `kernel/main.c` 必须调用的 `target_early_init()` 与 `target_init()`，两者当前为空实现；`scripts/build-h700-objects.sh` 已将其加入 AArch64/AArch32 ARM/Thumb 编译矩阵。H700 overlay 排除 MTK generic `target/init.c`，project guard 验证 MTK boot app 不进入 H700 project。
 - `platform/h700/power/tests/h700_cpu_performance_service_test.c`：服务 ABI、策略门控、遥测分离、温度 clamp、Boost gating 和错误 OPP 测试。
 - `scripts/test-h700-cpu-performance-service.sh`：主机测试入口。
 - `scripts/build-h700-objects.sh`：已将 Service C 源纳入 AArch64、AArch32 ARM-state、AArch32 Thumb-2 编译矩阵。
@@ -68,6 +71,8 @@
 - Rust 客户端新增 `CpuPerformanceRuntime` token：通过 C runtime status/getter ABI 获取静态 owner；在 runtime 尚未 ready 时返回独立的 `RuntimeUnavailable(status)`，并通过 `&mut self` 发放临时 client，减少 Rust 侧重复可变访问。获取 token 是 unsafe 操作，要求 C 启动已成功、生命周期内不得重新初始化 owner，且不得存在其他 C/Rust 写入者。
 - `platform/h700/power/h700_cpu_performance_runtime.h/.c`：新增静态 H700 runtime owner，提供单实例生命周期、RG34XX board profile ABI、四种用户策略预检和 fail-closed accessor；无有效 profile 时返回 unavailable/NULL。
 - `platform/h700/power/tests/h700_cpu_performance_runtime_test.c`：覆盖默认 unavailable、NULL/未批准/错误 board/缺少 gate/缺少 OPP 拒绝、静态 owner 稳定性、policy-only 状态和服务撤销。
+- `tools/inspect_h700_fdt.py`：扩展静态 FDT 解析，输出 CPU `cpu-supply` / `operating-points-v2`、regulator phandle、NVMEM cell offset/size 和 thermal-sensor provider arguments；明确标注这些只是 DT 声明，不是动态读回或安全 OPP 认证。
+- `scripts/collect-rg34xx-readonly-inventory.sh`：新增 `cpu-power-runtime.txt`，只读采集 Linux CPUFreq、thermal zone/trips、regulator class/debugfs、`clk_summary` 和 NVMEM 元数据；不读 NVMEM 原始 fuse bytes，不修改 governor、频率、电压或时钟。旧的 2026-11-22 报告未包含该新输出，必须在设备上重新采集。
 - 修复 C service 的失败重初始化语义：对完整 service storage，在校验新配置前先撤销旧实例；ready 检查同时验证 ABI struct size，避免无效重初始化仍保留旧服务。
 - 已核对 Linkslot 1.0.45 `slot-ui/src/quick_menu.rs` / `slot/src/app.rs` 的 CPU 模式 UI 扩展点；当前 System Settings 为 6 行，`QuickRow`/`QuickValue` 使用固定数组和 enum index。UI 扩展要求在末尾追加新 row/value、同步中英文 key 和 parity tests，不能重排既有设置索引。设计约束见 CPU DVFS 文档 7.2。
 
@@ -81,20 +86,23 @@
 - 更新温度/电压/频率限制后，当前有效请求会重新经过 policy selector。
 - Rust 客户端把 C service pointer 作为 opaque pointer；把 planned OPP、actual clock/voltage/temperature 遥测、policy flags 和错误码转换为 Rust 类型。
 - Rust 客户端校验 ABI version、struct size、reserved bits、telemetry valid flags 和 `hardware_applied == 0`；C 侧 `_Static_assert` 固定 state size=64、`hardware_applied` offset=48、reserved offset=52。
-- 当前测试使用合成 OPP 值，不是 RG34XX 已批准的运行频点表。静态 runtime owner 已实现，但没有 board-approved RG34XX profile，也没有 GammaOS LK startup call site；因此目标机 service 仍 unavailable。Rust 客户端尚未接入 Linkslot `App` 设置界面。
+- 当前测试使用合成 OPP 值，不是 RG34XX 已批准的运行频点表。静态 runtime owner 已实现，H700 `target_init()` hook 也已存在，但 hook 保持空实现、没有 board-approved RG34XX profile，也未调用 owner；因此目标机 service 仍 unavailable。Rust 客户端尚未接入 Linkslot `App` 设置界面。
 
-### 本轮本地验证与 CI 状态（2026-11-24 12:18 UTC）
+### 本轮本地验证与 CI 状态（2026-11-24 12:48 UTC）
 
 - 本地 GCC 14 主机回归：`h700_cpu_performance_runtime_test` 输出 `PASS: H700 CPU runtime owner, profile validation and fail-closed lifecycle`。
-- 本地 Clang 17 freestanding 编译：runtime owner C 单元在 AArch64 Cortex-A53、AArch32 ARM-state、AArch32 Thumb-2 下均成功，目标文件架构分别为 `aarch64`、`arm`、`arm`。
-- [H700 AArch32/AArch64 compile check #45390257222](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45390257222)：**成功**；CPU service/owner host regression 与 AArch64、AArch32 ARM、Thumb-2 compile jobs 均通过。
-- [H700 Linkslot runtime slices #45391108154](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45391108154)：**成功**；Rust workspace tests、AArch32/AArch64 `no_std` checks、Linkslot 1.0.45 business/render overlay apply 和完整 `slot` crate compile 两个 jobs 均通过，包含 `CpuPerformanceRuntime` token。
-- [H700 AArch32/AArch64 compile check #45391642082](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45391642082)：**成功**；H700 read-only host regression 与三种 freestanding 对象编译矩阵均通过，覆盖 `platform/h700/rules.mk` 的 CPU 对象注册变更。
-- [Linkslot LK Rust feasibility #45391755767](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45391755767)：截至 12:18 UTC 仍 **in progress**，head 为 `2f5120792c23a3e2e9879ecc7c9a3d04b9471716`；已通过 GammaOS LK H700 BL33 overlay compile/link probe、BL33 header packaging contract、H700 project/memory fail-closed guard、software renderer 与 framebuffer host checks。最新查询显示 cross-compile job 68 steps 中 30 steps 已完成，其余仍在执行。
-- [H700 boot audit tools #45391761555](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45391761555)：**成功**，仅覆盖 Windows inventory wrapper syntax 和 host-tool / TOC1 测试；不代表完整 LK target link。
-- 以上成功结果验证的是对应的 host / freestanding / overlay 范围；不等于完整 GammaOS LK H700 target 链接、内存分配批准或 RG34XX 实机启动。目标内存审批门仍阻止设备镜像生成。
-
+- 本地 Clang 17 freestanding 编译：runtime owner 和 target lifecycle C 单元在 AArch64 Cortex-A53、AArch32 ARM-state、AArch32 Thumb-2 下均成功。
+- [Linkslot LK Rust feasibility #45393436818](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45393436818)：**成功，69/69 steps**。H700 BL33 overlay、project/memory fail-closed guard、renderer/framebuffer、Linkslot、mGBA、只读 MMC/GPT/FAT 候选等综合 host/cross-build 全部通过；不是批准的整机镜像或实机启动。
+- [H700 AArch32/AArch64 compile check #45392910394](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45392910394)：**成功**。新增 RG34XX H700 target lifecycle 对象分别生成 AArch64、AArch32 ARM-state、AArch32 Thumb-2 对象，host regression job 也通过。
+- [H700 boot audit tools #45396816432](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45396816432)：**成功**。Linux 与 Windows 两个 job 全部通过，包含 CPU `cpu-supply` / OPP / regulator / NVMEM / thermal phandle 合成测试、CPU power collector 只读安全测试、shell/PowerShell host checks。
+- 同一 inventory 变更中的中间提交曾分别因测试夹具缺少 `turbo-mode`、OPP node path 断言、thermal provider 缺少 `#thermal-sensor-cells` 而失败；这些均是合成测试夹具/断言问题，最终修正后的 #45396816432 已成功。此前 LK project guard 的 #45393189139 也因测试脚本漏导入 Python `re` 失败，已修复并由完整综合 #45393436818 验证通过。
+- 这些 CI 结果仍不代表已批准 MEMBASE/MEMSIZE、完整设备固件、实机运行的 CPU OPP、实际 CPU rail 电压或温度读回。硬件 DVFS 保持关闭。
 ### 本轮 CI 验证
+
+- [H700 boot audit tools #45396816432](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45396816432)：**成功**；Ubuntu host-tools 与 Windows PowerShell jobs 均通过，包含新增 CPU FDT phandle 测试、read-only CPU power inventory 测试。
+- [H700 boot audit tools #45396493076](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45396493076)：**成功**；验证 CPU power collector / FDT provider metadata 的主机测试与 Windows wrapper 检查。
+- [H700 AArch32/AArch64 compile check #45392910394](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45392910394)：**成功**；包括 H700 target lifecycle hooks 三种 ISA 编译矩阵。
+- [Linkslot LK Rust feasibility #45393436818](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45393436818)：**成功，69/69 steps**；本轮 target hook 前一版综合 BL33 overlay/Linkslot/mGBA/storage host-cross-build baseline。
 
 - [H700 AArch32/AArch64 compile check #45386479380](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45386479380)：**成功**。两个 jobs 均成功：
   - `storage-host-regression`：包含 CPU Service v1 host runner 和现有只读存储回归。
@@ -114,8 +122,8 @@
 已确认/交叉验证：
 
 - RG34XX 现场 Linux 日志识别 PMIC 为 **AXP2202**，I²C-5、地址 `0x34`。
-- Knulli 与 MustardOS 两份 RG34XX 专用 DTS 都把 `cpu@0 cpu-supply` 指向 AXP2202 DCDC1；这是强交叉证据，但本机 live-FDT 的完整 regulator phandle/subtree 尚未导出核实。
-- 已找到 SID speed cell 参考位置 `0x03006000 + 0x00`（2 bytes）和 thermal calibration cell `0x03006000 + 0x14`（8 bytes）；本机原始值及 SoC revision 语义尚未读取。
+- Knulli 与 MustardOS 两份 RG34XX 专用 DTS 都把 `cpu@0 cpu-supply` 指向 AXP2202 DCDC1；这是强交叉证据，但本机 2026-11-22 的已归档 live-FDT 摘要未保留 CPU 节点/完整 regulator phandle。新 FDT parser 已能解析该关系，尚需设备重采集确认。
+- 已从 RG34XX DTS 参考找到 SID speed cell (`0x03006000 + 0x00`, 2 bytes) 和 thermal calibration cell (`0x03006000 + 0x14`, 8 bytes)。FDT parser 现在会输出其 NVMEM phandle 和 `reg` cell offset/size；实机原始值与 SoC revision 语义尚未读取，collector 目前只记录 NVMEM 元数据，不读取原始 fuse bytes。
 - 现场内核报告 H700 thermal sensor 存在，但 **AVCC is not calibrated**，因此不能据此开放自动温控升频/Boost。
 - H616/H700 CCU 源码可提供 PLL/mux 初始参考；精确 RG34XX CCU base、安全 parent-switch/lock sequence、divider 和计时连续性尚未完成板级核实。
 - CPU1–CPU3 的 BL31→BL33 状态未知；CPU PLL 是共享时钟域，不是每个模拟器核心各自独立的频率。
@@ -124,11 +132,11 @@
 
 ## 6. 下一步任务（按顺序执行）
 
-1. **完成真实启动路径接线，但不提供虚构板级配置**：定位 GammaOS LK H700 AArch32 BL33 的早期单核启动调用点；在没有 board-approved RG34XX profile 时保持 runtime unavailable。只有 live-FDT regulator subtree、SID/SoC revision、经过批准的 OPP/voltage limits、热校准以及 BL31 CPU1–CPU3 quiescence 证据齐备后，才允许加入静态板级 profile。
+1. **在真实启动路径调用 owner，但不提供虚构板级配置**：H700 `target_init()` hook 已实现，下一步是在硬件证据齐备后接入 board-profile 加载；当前必须保持 hook 空实现、runtime unavailable。
 2. 完成 Rust typed client → C static owner → Linkslot App 的 adapter，并按专项文档 7.2 追加 QuickRow/QuickValue、双语 translation 和 index parity tests。未具备实际 hardware readback 时只能显示所选策略和“frequency telemetry unavailable / policy not applied”，不能显示计划 MHz 作为实测值。
 
 Linkslot 1.0.45 UI 已审查：`QuickRow::SYSTEM_SETTINGS` 当前 6 行，`QuickRow::ALL`/`QuickValue::ALL` 存在 index 兼容约束。新 CPU row/value 必须追加，不得重排既有 discriminant；`App::quick_value`、`change_setting`、双语 translation、icon/label/parent/page 以及 QuickRow parity tests 需在同一个 overlay 里原子升级。
-3. 增加 RG34XX 只读硬件 inventory：导出完整 live-FDT regulator 子树、SID 原始 speed-bin、thermal calibration、CPU rail 映射和当前 clock/PMIC 状态。优先使用 Linux/已有只读工具取证，不在 LK 侧猜地址。
+3. **在 RG34XX 实机重新运行新版只读 inventory**：收集新的 `live-fdt.json` 与 `cpu-power-runtime.txt`，核对 CPU supply/regulator、OPP 声明、CPUFreq、温度、regulator/clock readback；随后根据 FDT 输出制定只读 SID/calibration cell 精确读取步骤。不要读取整个 NVMEM 节点，不在 LK 侧猜地址。
 4. 证明 BL31→BL33 CPU1–CPU3 状态和安全的单核 invariant；审计 CPUX PLL parent-switch/lock/分频及 timer continuity。
 5. 只有前述证据闭合后，才实现 C HAL 只读 telemetry 与最终受控硬件 transition；升频先升压，降频先降频后降压，必须有 readback、超时、故障回滚、热 clamp、滞回和实机持续负载验收。
 6. 最后才开放实际 Performance/Boost。不得把 ABI v1 的 `POLICY_ONLY` 当作 DVFS 已完成。
