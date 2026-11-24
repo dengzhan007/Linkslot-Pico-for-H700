@@ -2,9 +2,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT_DIR="${OUT_DIR:-$ROOT/build/h700-arch-check}"
-CC="${AARCH64_CC:-clang}"
-CXX="${AARCH64_CXX:-clang++}"
+H700_ARCH="${H700_ARCH:-aarch64}"
+OUT_DIR="${OUT_DIR:-$ROOT/build/h700-arch-check/$H700_ARCH}"
+CC="${H700_CC:-${AARCH64_CC:-clang}}"
+CXX="${H700_CXX:-${AARCH64_CXX:-clang++}}"
 OBJDUMP="${LLVM_OBJDUMP:-llvm-objdump}"
 
 for tool in "$CC" "$CXX" "$OBJDUMP"; do
@@ -16,8 +17,6 @@ done
 
 mkdir -p "$OUT_DIR"
 
-H700_ARCH="${H700_ARCH:-aarch64}"
-
 case "$H700_ARCH" in
     aarch64)
         TARGET_FLAGS=(
@@ -26,9 +25,9 @@ case "$H700_ARCH" in
             -mgeneral-regs-only
         )
         EXPECTED_ARCH="aarch64"
-        C_PROBE="$C_PROBE"
-        ASM_PROBE="$ASM_PROBE"
-        CPP_PROBE="$CPP_PROBE"
+        C_PROBE="$ROOT/platform/h700/arch/compile_probe.c"
+        ASM_PROBE="$ROOT/platform/h700/arch/compile_probe.S"
+        CPP_PROBE="$ROOT/platform/h700/arch/compile_probe.cpp"
         ;;
     aarch32)
         # Match the GammaOS LK A32 BL33 ABI: ARM state, Cortex-A53, NEON/VFPv4,
@@ -66,7 +65,7 @@ COMMON_FLAGS=(
 )
 
 "$CC" "${COMMON_FLAGS[@]}" -std=c11 \
-    -c "$ROOT/platform/h700/arch/compile_probe.c" \
+    -c "$C_PROBE" \
     -o "$OUT_DIR/compile_probe.o"
 
 "$CC" "${COMMON_FLAGS[@]}" -std=c11 \
@@ -162,7 +161,7 @@ COMMON_FLAGS=(
 
 "$CXX" "${COMMON_FLAGS[@]}" -nostdinc++ -fno-exceptions -fno-rtti \
     -fno-threadsafe-statics -fno-use-cxa-atexit -std=c++17 \
-    -c "$ROOT/platform/h700/arch/compile_probe.cpp" \
+    -c "$CPP_PROBE" \
     -o "$OUT_DIR/compile_probe_cpp.o"
 
 for object in "$OUT_DIR/compile_probe.o" "$OUT_DIR/compile_probe_asm.o" "$OUT_DIR/compile_probe_cpp.o" "$OUT_DIR/h700_mmc_board_profile.o" "$OUT_DIR/sunxi_mmc_clock.o" "$OUT_DIR/sunxi_mmc_module_clock.o" "$OUT_DIR/sunxi_mmc_pio_read.o" "$OUT_DIR/sunxi_sd_csd.o" "$OUT_DIR/sunxi_sd_card_init.o" "$OUT_DIR/sunxi_h616_sdc0_platform.o" "$OUT_DIR/sunxi_h616_sdc0_pins.o" "$OUT_DIR/h700_sunxi_mmc_block_device.o" "$OUT_DIR/h700_sunxi_sdc0_readonly_scan.o" "$OUT_DIR/h700_gpt_readonly.o" "$OUT_DIR/h700_sunxi_mmc_fat.o" "$OUT_DIR/h700_fat_vfs_backend.o" "$OUT_DIR/fat_ro.o" "$OUT_DIR/fat_exfat.o"; do
