@@ -147,6 +147,20 @@ def main() -> None:
             raise RuntimeError("H700 target init object was incorrectly placed in platform rules")
         summary.append("PASS target-lifecycle-hooks: target_early_init/target_init are supplied by the H700 target, not the MTK generic target")
 
+        generic_target_rules = (worktree / "target/rules.mk").read_text(encoding="utf-8")
+        generic_init_excluded = re.search(
+            r"ifneq \\(\\$\\(H700_BUILD\\),yes\\)\\s+"
+            r"OBJS \\+= \\$(LOCAL_DIR)/init\\.o\\s+endif\\s+"
+            r"OBJS \\+= \\$(LOCAL_DIR)/target_display\\.o",
+            generic_target_rules,
+        )
+        if not generic_init_excluded:
+            raise RuntimeError("H700 overlay must exclude the MTK generic target/init.c object")
+        project_text = (root / "project/rg34xx_h700.mk").read_text(encoding="utf-8")
+        if "app/aboot" in project_text or "app/mt_boot" in project_text:
+            raise RuntimeError("H700 project must not enable the MTK aboot/mt_boot application")
+        summary.append("PASS mtk-target-isolation: generic MTK target init and MTK boot apps stay out of the H700 project")
+
         make_case(
             "no-memory-approval",
             [
