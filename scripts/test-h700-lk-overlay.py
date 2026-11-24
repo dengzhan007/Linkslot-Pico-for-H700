@@ -116,6 +116,12 @@ def main() -> None:
     ):
         raise RuntimeError("top-level makefile does not select a separate H700 ARM EABI toolchain")
 
+    project_include = makefile_text.find("include project/$(PROJECT).mk")
+    early_toolchain = makefile_text.find("TOOLCHAIN_PREFIX ?= arm-none-eabi-")
+    arch_include = makefile_text.find("include arch/$(ARCH)/rules.mk")
+    if not (0 <= project_include < early_toolchain < arch_include):
+        raise RuntimeError("H700 ARM EABI toolchain is selected too late for arch/arm/rules.mk LIBGCC detection")
+
     dev_text = overlay_dev_rules.read_text(encoding="utf-8")
     if not re.search(
         r"ifneq \(\$\(H700_BUILD\),yes\)\s+MODULES \+=.*?\$\(LOCAL_DIR\)/md_com\s+endif",
