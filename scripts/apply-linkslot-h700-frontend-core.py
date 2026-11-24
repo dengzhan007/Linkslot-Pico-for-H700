@@ -53,6 +53,7 @@ def patch_frontend(source: Path) -> None:
     picker_dependency = 'slot-core-picker = { path = "../slot-core-picker" }'
     link_state_dependency = 'slot-link-state = { path = "../slot-link-state" }'
     link_kind_dependency = 'slot-link-kind = { path = "../slot-link-kind" }'
+    video_mode_dependency = 'slot-video-mode = { path = "../slot-video-mode" }'
     changed_manifest = False
     if dependency not in manifest_text:
         anchor = 'slot-model = { path = "../slot-model" }\n'
@@ -77,6 +78,12 @@ def patch_frontend(source: Path) -> None:
         if manifest_text.count(anchor) != 1:
             raise RuntimeError("cannot locate slot-link-state dependency in slot/Cargo.toml")
         manifest_text = manifest_text.replace(anchor, anchor + link_kind_dependency + "\n")
+        changed_manifest = True
+    if video_mode_dependency not in manifest_text:
+        anchor = link_kind_dependency + "\n"
+        if manifest_text.count(anchor) != 1:
+            raise RuntimeError("cannot locate slot-link-kind dependency in slot/Cargo.toml")
+        manifest_text = manifest_text.replace(anchor, anchor + video_mode_dependency + "\n")
         changed_manifest = True
     if changed_manifest:
         slot_manifest.write_text(manifest_text, encoding="utf-8")
@@ -156,6 +163,35 @@ def apply(source: Path, crate_root: Path) -> None:
     add_new_package(crate_root / "slot-link-state", source / "crates/slot-link-state")
     add_new_package(crate_root / "slot-link-kind", source / "crates/slot-link-kind")
 
+    add_new_package(crate_root / "slot-video-mode", source / "crates/slot-video-mode")
+
+    video_mode_path = source / "crates/slot/src/video_mode.rs"
+    video_mode_path.write_text(
+        """use std::path::Path;
+
+use slot_store::{ini, Platform};
+pub use slot_video_mode::VideoMode;
+
+pub const VIDEO_MODE_FILE: &str = "linkSlot/Config/video_mode.txt";
+
+pub fn video_mode_for(root: &Path, stem: &str) -> VideoMode {
+    ini::value(root, VIDEO_MODE_FILE, stem)
+        .as_deref()
+        .and_then(VideoMode::parse)
+        .unwrap_or_default()
+}
+
+pub fn write_video_mode(root: &Path, stem: &str, mode: VideoMode) -> std::io::Result<()> {
+    ini::write(root, VIDEO_MODE_FILE, stem, mode.as_str())
+}
+
+pub fn source_rect(platform: Platform, mode: VideoMode) -> [f32; 4] {
+    slot_video_mode::source_rect(platform.frame(), platform.picture(), mode)
+}
+""",
+        encoding="utf-8",
+    )
+
     link_kind_path = source / "crates/slot/src/link_kind.rs"
     link_kind_path.write_text(
         "pub use slot_link_kind::{link_carried, link_kind, serial_option, LinkKind};" + chr(10),
@@ -181,6 +217,8 @@ def apply(source: Path, crate_root: Path) -> None:
         "crates/slot-core-picker",
         "crates/slot-link-state",
         "crates/slot-link-kind",
+        "crates/slot-video-mode",
+        "crates/slot/src/video_mode.rs",
         "crates/slot/src/link_kind.rs",
         "crates/slot/src/link_state.rs",
         "crates/slot/Cargo.toml",
