@@ -46,9 +46,12 @@ Do not port the raw MTK PLL register sequence, the 600–2000 MHz menu list, or 
 
 ## 4. H700 OPP/DVFS evidence
 
-Mainline H700 support is useful source material:
-- Linux's `sun50i-cpufreq-nvmem` driver matches both `allwinner,sun50i-h616` and `allwinner,sun50i-h700`. It uses the H616 speed-bin decoder for this family and reads a two-byte NVMEM cell.
-- The H616/H700 decoder examines raw speed-bin values in the low 16 bits. Known values map to bins 0–5, including a silicon-revision-dependent mapping for `0x2400` / `0x7400` / `0x2c00` / `0x7c00`. Linux falls back to bin 0 for unknown values. This project will **not** inherit that permissive fallback: unknown raw values or unavailable silicon-revision data disable elevated OPPs and report the bin as unknown.
+Pinned `sun50iw9p1` source is useful for mapping the hardware data path, but it exposes a speed-bin consumer defect that blocks direct reuse:
+
+- The pinned `sun50iw9p1.dtsi` declares `speed@00` with a two-byte cell (`reg = <0x0 2>`) and `calib@14` with an eight-byte cell (`reg = <0x14 8>`).
+- The pinned `drivers/nvmem/core.c` implementation allocates exactly `cell->bytes` with `kzalloc(cell->bytes)`, and returns `*len = cell->bytes`. Thus the speed cell read returns a two-byte buffer.
+- The pinned `drivers/cpufreq/sun50i-cpufreq-nvmem.c` stores that return value in a `u32 *` and evaluates `switch (*efuse_value)` without validating `len`. For a two-byte allocation this is a potential out-of-bounds 32-bit read. Its default branch also maps unrecognized values to a supported-hardware mask. **This project's code must not copy this consumer or trust its raw-value-to-OPP mask.** The collector captures only the two exact speed-cell bytes; the SID decoder reports the little-endian u16 and any literal match for diagnostics, but hard-codes OPP authorization to `not_approved`.
+- The pinned `sunxi-thermal-ng.c` consumer reads the eight-byte calibration cell as four `u16` words, interprets the factory-test temperature plus sensor calibration words, and warns when a derived calibration value is outside its 12-bit range. That size/layout is consistent with the DTS cell declaration; our offline decoder reports the raw fields only and does not infer that the live sensor has passed calibration.
 - The RG34XX vendor DTS contains its own `opp_l_table` from 480 MHz upwards, with per-speed/silicon variants. These are vendor configuration references, not a validated frequency-voltage table for the current device at BL33 entry.
 - The mainline H616 CPU OPP table includes points up to 1.512 GHz with speed-bin-specific voltages. Those values are useful for comparing the Linux driver model only; they are not a release OPP grid for this RG34XX.
 - The RG34XX DTS DCDC1 range/ramp metadata and AXP2202 selector register definitions are documented in section 2 above. The AXP717-based RG35XX-2024 1.16 V configuration is not the RG34XX voltage policy.
@@ -61,6 +64,11 @@ Source references:
 - https://github.com/CrealityTech/sonic_pad_os/blob/7f37a7fbf4ad59907034715e3d967b9177de1cd4/lichee/brandy-2.0/u-boot-2018/drivers/sunxi_power/pmu_axp2202.c
 - https://github.com/CrealityTech/sonic_pad_os/blob/7f37a7fbf4ad59907034715e3d967b9177de1cd4/lichee/brandy-2.0/u-boot-2018/include/sunxi_power/pmu_axp2202.h
 - https://github.com/torvalds/linux/blob/master/drivers/cpufreq/sun50i-cpufreq-nvmem.c
+- https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/arch/arm64/boot/dts/sunxi/sun50iw9p1.dtsi
+- https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/nvmem/core.c
+- https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/nvmem/sun50i_sid.c
+- https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/cpufreq/sun50i-cpufreq-nvmem.c
+- https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/thermal/sunxi-thermal-ng.c
 - https://github.com/torvalds/linux/blob/master/drivers/clk/sunxi-ng/ccu-sun50i-h616.c
 - https://github.com/torvalds/linux/blob/master/arch/arm64/boot/dts/allwinner/sun50i-h616-cpu-opp.dtsi
 
