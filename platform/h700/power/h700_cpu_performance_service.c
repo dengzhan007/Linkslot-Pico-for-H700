@@ -21,6 +21,7 @@ static int service_is_ready(const h700_cpu_perf_service_v1_t *service)
     return service != NULL &&
            service->magic == H700_CPU_PERF_SERVICE_MAGIC &&
            service->abi_version == H700_CPU_PERF_SERVICE_ABI_VERSION &&
+           service->struct_size == (uint32_t)sizeof(*service) &&
            service->initialized == 1u;
 }
 
@@ -32,7 +33,20 @@ int h700_cpu_perf_service_init_v1(
 {
     uint32_t i;
 
-    if (service == NULL || config == NULL) {
+    if (service == NULL) {
+        return H700_CPU_PERF_SERVICE_ERR_INVALID_ARGUMENT;
+    }
+
+    /*
+     * Reinitialization is fail-closed: once the caller confirms full storage,
+     * revoke any previous instance before validating the replacement config.
+     * Do not touch storage when the advertised size is too small.
+     */
+    if (service_size >= (uint32_t)sizeof(*service)) {
+        service->initialized = 0u;
+        service->magic = 0u;
+    }
+    if (config == NULL) {
         return H700_CPU_PERF_SERVICE_ERR_INVALID_ARGUMENT;
     }
     if (service_size < (uint32_t)sizeof(*service) ||
