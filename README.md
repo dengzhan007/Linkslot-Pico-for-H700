@@ -41,39 +41,36 @@
 
 ## 当前工程进展
 
-- 已建立 RG34XX / Allwinner H700 / Cortex-A53 的 AArch64 freestanding 编译检查及 GitHub Actions。
-- 当前检查只生成并验证 C11、C++17 和 AArch64 汇编目标文件，不是可启动 payload；加载地址、入口、EL、栈和 AArch32-to-AArch64 交接仍待启动链审计。
-- 已归档用户提供的 linkSlot 1.0.36 源码快照（`upstream/linkslot`，快照 commit `8590d6ff`）；正在审查逐 crate 复用范围和 LK Rust runtime 可行性。该 ZIP 不含原始 Git 历史，不能把快照 commit 当作上游 commit。
-- 已完成第一轮 Linkslot Rust 裸机可行性构建：`slot-input` 与 `slot-model` 的纯逻辑临时副本通过 AArch32/AArch64 `no_std + alloc` 交叉编译；输入手势 47 项和纯机种数据 4 项回归测试通过。
-- 已用固定 GammaOS LK commit 的 `include/lib/heap.h` 完成 AArch32 `heap_alloc/heap_free` 签名/链接兼容探测；这不是真实 LK heap 实现。LK 参考源码的临界区只证明本核 IRQ 屏蔽，不能当作多核堆锁。
-- `slot-i18n` 的 12 份双语 JSON 已通过静态表 no_std 探针：1,763 个 key/语言，原版 18 项测试与候选 13 项测试通过，AArch32/AArch64 编译通过；尚未接入 UI。
-- 已完成静态 Libretro API registry 探针：两个前缀化 mock core 在 AArch32/AArch64 生成无未解析符号的 ELF，主机回调/状态/内存往返通过；这还不是 mGBA/gpSP 实际核心构建。
-- 已将固定版本真实 mGBA 编译为 AArch32 static Libretro archive（Linux、Generic、VFS v3 glibc 及 VFS v3 arm-none-eabi/newlib 变体）；VFS v3 newlib archive 为 94 个对象、ELF32/ARM EABI5、25/25 个 API 导出前缀化、52 个真正外部依赖；旧 stdio/dirent/Linux descriptor/host config directory 依赖已移除。
-- mGBA VFS v3 适配仍是 CI 临时源码改造：Linkslot 的 `slot-retro::environment()` 尚未接入函数表，H700 SD/FAT backend 也未实现。whole-archive 诊断显示 newlib/libm/libgcc 只剩 11 个 syscall hooks；加入 libnosys 后可链接，但只是 dummy syscall stub，不是有效 runtime。真实 mGBA VDir 适配的 host fake-VFS 回归已通过；下一步为 heap/RTC/console 等 hooks 实现 LK/H700 服务。
+**状态入口：** [项目当前状态与续接记录](docs/PROJECT-STATUS.md)。此文件记录当前工作分支、HEAD、最近 CI、已完成工作、硬件门槛和下一步任务；每轮移植后同步更新。
 
+- 当前移植分支：`porting/linkslot-1.0.45-feasibility`；当前正式源码基线为 Linkslot 1.0.45。旧 1.0.36 分支仅保留历史验证。
+- 已完成多个 Linkslot 纯业务 `no_std + alloc` crate 的抽取、三核心 picker 状态机、H700 software renderer、C Input ABI/queue、Libretro VFS v3、真实 mGBA AArch32 静态 archive 构建和 host/cross-build 集成验证。
+- H700 只读存储 host 路径已覆盖 sdc0/CMD17 → GPT → FAT → Libretro VFS；尚未完成目标机真实 sdc0 MMIO、实体卡读扇区和文件写入/断电一致性验证。
+- GammaOS LK AArch32 BL33 的部分 overlay、CRT0/vector、Cortex-A53 编译参数和 VBAR host/cross-build 检查通过；**尚未完成完整 LK target link、可刷写镜像或 RG34XX 实机启动**。
+- 已实现 H700 CPU OPP 纯 C 策略选择器及版本化 CPU Performance Service ABI v1；当前 facade 只做策略规划和遥测字段分离，明确返回 `POLICY_ONLY`，没有 PLL/PMIC 写入。详见 [CPU Performance / DVFS 设计](docs/h700-cpu-performance-service.md)。
+- 最近 CPU Service v1 验证：[H700 AArch32/AArch64 compile check #45386479380](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45386479380) 通过，包含 CPU service host regression、AArch64、AArch32 ARM-state 和 Thumb-2 编译。
+- 启动交接、保留内存、secondary CPU、显示/输入/音频/RTC、温控和真实 CPU OPP 等硬件证据仍未全部闭合；不得把 host compile 说成设备运行通过。
 
-- A32 LK-as-BL33 的镜像入口/头区/向量布局探针通过，但它使用测试 stub 和合成头，不是完整 LK 固件；LK 参考分支目前为单核调度，A53 编译标志/SMP 启动路径未适配，secondary CPU 状态仍未知。
-
-- 当前启动证据显示厂商 BL31 默认进入 AArch32 SVC BL33（`0x4a000000`，SPSR `0x1d3`）；当前移植路线按 AArch32 GammaOS LK 替换该 BL33 入口推进。LK 完整 target link、可用内存归属、secondary-core 状态和实机 handoff 仍未通过验收。
-
-本地运行 AArch64 编译检查：
+本地运行 H700 C/汇编编译矩阵：
 
 ```sh
 sudo apt install clang llvm
 bash scripts/build-h700-objects.sh
+H700_ARCH=aarch32 H700_A32_STATE=arm bash scripts/build-h700-objects.sh
+H700_ARCH=aarch32 H700_A32_STATE=thumb bash scripts/build-h700-objects.sh
 ```
 
-详细说明见 [H700 AArch64 构建基础](docs/h700-build-scaffold.md)。
+详细说明见 [H700 构建基础](docs/h700-build-scaffold.md) 和 [开发路线与阶段验收](docs/roadmap.md)。
 
 ## Linkslot 上游同步
 
 项目不要求直接使用原版 Linkslot Linux 发布包。目标是尽量保持上游业务逻辑和数据语义，将 H700/LK 适配放在独立目录，减少每次更新时需要重新移植的范围。
 
-**当前源码基线：** 用户提供的 linkSlot 1.0.36 已归档到本仓库 `upstream/linkslot` 分支。原始输入是无 `.git` 的 ZIP，原始上游 commit/tag 不可得；仓库中的 `8590d6ff` 是快照归档 commit，不是上游源码 commit。当前先完成逐 crate 复用审计和 LK Rust ABI/工具链验证，尚不把整个 workspace 导入 `third_party/linkslot`。
+**当前源码基线：** Linkslot 1.0.45，归档于 `upstream/linkslot`。归档来源 commit、根目录 main / DEV / test 快照差异和文件 hash 比对见 [1.0.45 移植基线更新](docs/linkslot-1.0.45-portability-update.md)。归档目录不是原始上游 Git 历史的完整 mirror。
 
 特别注意：Linkslot 当前 `device` feature 仍是 AArch64 Linux/`std` 后端，不是 LK/bare-metal。后续以窄 `no_std` Rust 业务运行时承载前端逻辑，通过 H700 C HAL 和静态 Libretro C ABI 接入设备服务；不得把 Linux `device_app` 当作裸机入口。GammaOS LK 参考分支和当前 BL33 候选为 AArch32，Rust 与模拟器静态核心必须按该 ABI 构建。
 
-具体规则见 [Linkslot 上游同步与移植边界](docs/linkslot-upstream-sync.md) 和 [1.0.36 可移植性审计](docs/linkslot-1.0.36-portability-audit.md)。
+具体规则见 [Linkslot 上游同步与移植边界](docs/linkslot-upstream-sync.md)、[1.0.45 移植基线更新](docs/linkslot-1.0.45-portability-update.md) 和 [总体路线图](docs/roadmap.md)。
 
 ## 重要设计文档
 
