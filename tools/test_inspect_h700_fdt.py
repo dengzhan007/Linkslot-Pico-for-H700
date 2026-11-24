@@ -149,6 +149,7 @@ def make_fdt():
 
     begin("thermal@05070400")
     prop("phandle", be32(0x50))
+    prop("#thermal-sensor-cells", be32(1))
     prop("compatible", b"allwinner,sun50i-thermal\0")
     end()
 
