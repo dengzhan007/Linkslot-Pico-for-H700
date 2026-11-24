@@ -17,7 +17,7 @@ Reviewed files at that immutable commit:
 
 | File | Blob SHA | Relevant finding |
 |---|---|---|
-| `arch/arm64/boot/dts/sunxi/sun50iw9p1.dtsi` | `32ddb77d`* | Four Cortex-A53 CPU nodes reference the same CPU PLL and `opp-shared` |
+| `arch/arm64/boot/dts/sunxi/sun50iw9p1.dtsi` | `32ddb772c25aff3bd945bf35271dfdbbd70dade0` | Four Cortex-A53 CPU nodes reference the same CPU PLL and `opp-shared` |
 | `arch/arm64/boot/dts/sunxi/sun50iw9p1-clk.dtsi` | `7708d3083bc6c2f3295aa1d110fc8103088b5b6c` | CPUX clock-init window declared at `0x03001000` |
 | `drivers/clk/sunxi/clk-sun50iw9.h` | `579185376c9271449e02a445d8f5840286f95d42` | PLL_CPU / CPU_CFG offsets |
 | `drivers/clk/sunxi/clk-sun50iw9.c` | `f29be57a194848955260ddcc7afb18682508f9b4` | PLL fields, parent list, factor registration, CPU mux configuration |
@@ -27,8 +27,6 @@ Reviewed files at that immutable commit:
 | `drivers/clk/sunxi/clk-sun50iw9_tbl.c` | `cf0c122aec7bed3ed9000f98abb987514ecce43b` | PLL factor lookup tables; explicitly marked unreliable |
 
 `sun50iw9p1` is a useful, more specific vendor-family reference than treating a generic H616 table as an H700 implementation. Nevertheless, this repository/commit has not been proven byte-for-byte identical to the RG34XX shipping boot firmware or the exact silicon revision in the test unit. Every result below is therefore a **source-level candidate**, not a board-level hardware fact.
-
-* The `sun50iw9p1.dtsi` blob was reviewed in the pinned commit; its full blob hash was not retained in the audit capture. The immutable commit URL is the provenance anchor.
 
 ## 2. Register and clock-tree facts in the pinned source
 
