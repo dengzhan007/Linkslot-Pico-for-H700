@@ -11,43 +11,50 @@
 - [x] 确认目标设备无 eMMC，只设计 SD 卡启动，不做旧系统自动回退。
 - [x] 建立 RG34XX / Allwinner H700 Cortex-A53 的 AArch64 freestanding C、C++ 与汇编编译检查和 CI。
 - [x] 获取并归档用户提供的 linkSlot 1.0.36 源码快照（`upstream/linkslot` @ `8590d6ff`，SHA256 清单完整）；原始 ZIP 无 `.git`，因此真实上游 commit/tag 仍不可得。
-- [x] 完成 Linkslot 1.0.36 第一轮逐 crate 可移植性审计与 host-only Rust `no_std`/`alloc` 构建：`slot-input`、`slot-model` 临时副本均通过 AArch32/AArch64 编译，原版上游 58 项测试、适配手势 47 项、纯模型 4 项通过；Rust/C 静态链接检查通过。真实 runtime 选型仍未完成。
+- [x] 完成 Linkslot 1.0.36 第一轮逐 crate 可移植性审计与 host-only Rust `no_std`/`alloc` 构建：`slot-input`、`slot-model`、`slot-i18n` 候选通过 AArch32/AArch64 编译与行为测试；没有把完整 workspace 改成 `no_std`。
 - [x] 确认目标 SoC 是 Allwinner H700，不是 Rockchip RK3566；AArch64 编译 CPU target 已修正为 Cortex-A53。
 - [x] 锁定第一台实机为 Anbernic RG34XX（非 SP），建立 Allwinner H700 / Cortex-A53 硬件基线。
 
-## 当前工作：不依赖 Linkslot 上游版本的准备
+## 当前工作：GammaOS LK → H700 BL33 → H700 HAL → Linkslot 1.0.36
 
-### A2. Linkslot Rust 裸机可移植性（host-only 第一批验证已完成）
+### A2. Linkslot 1.0.36 裸机可移植性与静态核心接入（host-only 阶段）
 
 - [x] 固定 Linkslot 1.0.36 只读 ZIP 快照及 SHA256 清单，不伪造原始上游 commit。
-- [x] `slot-input` 纯手势逻辑在 AArch32/AArch64 `no_std + alloc` 目标通过编译；保留的 47 项上游行为测试全部通过。
-- [x] `slot-model` 纯领域数据在 AArch32/AArch64 `no_std + alloc` 目标通过编译；4 项纯模型回归测试通过。
-- [x] 验证 Rust 静态库与 AArch32/AArch64 freestanding C shim 的最终 ELF 链接。
-- [x] 按固定 LK 头文件完成 `heap_alloc/heap_free` AArch32 声明/ABI 兼容测试；测试实现为 stub，不是实际 heap。
-- [x] `slot-i18n` 翻译表静态化探针通过：6 个 domain、1,763 个唯一 key、12 份双语 JSON；构建期检查 key/placeholder/元数据，no_std 静态表在 AArch32/AArch64 通过编译，候选 13 项测试与原版 18 项测试全部通过。
-- [x] AArch32 LK-as-BL33 入口/头区布局 host-only 探针通过：入口分支、向量表和启动参数在 BaseOS 不透明头区覆盖下不重叠；这不是完整 LK build 或启动证明。
-- [x] 静态 Libretro API registry host-only 探针通过：两套前缀化 mock core 在 AArch32/AArch64 静态链接，主机回调/状态/内存往返通过；未构建真实 emulator core。
-- [x] 真实 mGBA（固定 manifest commit）AArch32 static Libretro archive 编译通过：Linux 与 Generic 两版均有 115 个对象，25/25 Libretro exports 前缀化；Generic 外部符号从 81 降至 67。
-- [x] mGBA VFS v3 文件/目录 AArch32 archive 通过：114 个对象、25/25 exports 前缀化；旧 vfs-file/vfs-dirent 对象和 POSIX/stdio/host config directory 依赖移除，真正外部符号 51 项。
-- [x] 同一 mGBA VFS v3 变体使用 arm-none-eabi GCC/newlib 构建通过：94 个对象、ELF32/ARM EABI5、52 项真正外部符号；这仍是 static archive，未与 newlib/LK 做 whole-archive link。
-- [x] mGBA VDir VFS v3 adapter 主机回归通过：真实 C 源编译并覆盖枚举、rewind、nested dirs、path traversal、VFileOpen/remove/mkdir。
-- [x] mGBA whole-archive 与 newlib/libm/libgcc 链接诊断：只有 11 个 syscall hooks 未解决；加 libnosys 后 ELF32/ARM 无未解析符号，但 libnosys 是 dummy syscall，不是可运行的 LK/H700 服务。
-- [ ] 为 _sbrk/_gettimeofday/_read/_write/_fstat/_isatty/_close/_lseek/_exit/_kill/_getpid 编写真实 LK/H700 adapter；需要 heap/RTC/console/descriptor 语义和测试。
+- [x] `slot-input`、`slot-model`、`slot-i18n` 的候选副本通过 AArch32/AArch64 `no_std + alloc` 编译和对应行为测试；这些测试使用隔离临时副本，`upstream/linkslot` 快照保持只读。
+- [x] `slot-retro` 静态 Libretro API 入口通过 host regression；静态模式不要求 `libloading`，保留动态模式用于比较。
+- [x] 建立 Rust Libretro VFS v3 服务 ABI、虚拟文件/目录操作和 host fake-backend 测试；AArch32/AArch64 静态链接探针通过。
+- [x] 将真实 mGBA 固定源码构建为 AArch32 namespaced Libretro 静态 archive；VFS v3 文件与目录后端构建通过，25/25 导出符号已前缀化。
+- [x] 将真实 mGBA VDir adapter 接入 fake Libretro VFS v3 backend，覆盖目录遍历、rewind、嵌套目录和路径越界拒绝。
+- [x] 使用 arm-none-eabi GCC/newlib 构建 mGBA VFS v3 archive，并完成 whole-archive/newlib/libm/libgcc 链接诊断；诊断阶段曾用 `libnosys` 对照，但 dummy syscall 不作为正式 runtime。
+- [x] 新增 H700 newlib syscall adapter；host 行为回归、AArch32 EABI5 编译，以及与固定 GammaOS LK `heap_alloc/heap_free` 头文件 ABI 的编译核对通过。真实 heap 初始化、console、RTC 和每线程 newlib reentrancy 服务仍未实现。
+- [x] 在隔离的 Linkslot 1.0.36 候选副本中，完成 namespaced mGBA 导出到 Rust 静态 API 的绑定和前端核心选择回归；未修改上游快照。
+- [ ] 将这些候选适配整合成可由 H700 LK target 构建的完整 Linkslot workspace；当前 UI、配置、存档、输入事件循环和系统服务尚未作为设备程序链接。
+- [ ] 在真实 H700 runtime 中验证 mGBA 启动 ROM、视频帧、音频、输入、即时状态和电池存档；host archive/link 结果不能替代运行测试。
 
-- [ ] 用 newlib/libm/libgcc/libnosys 做 whole-archive 链接探针，区分 newlib 已提供符号与 H700/LK runtime adapter。
+### B. RG34XX / Allwinner H700 启动链与 BL33
 
-- [ ] 同一 mGBA VFS v3 变体改用 arm-none-eabi GCC/newlib 编译，验证是否完全脱离 glibc sysroot；再将 51 个外部符号映射到 LK libc/libm/EABI/RTC/log。
-- [ ] Linkslot `slot-retro::environment()` 仍需实现真实 Libretro VFS v3；H700 SD 块设备与 FAT/exFAT 文件/目录 backend 仍未实现。
+- [x] 完成 RG34XX 非 SP 的 Boot0/TOC1/U-Boot/monitor、Android v2/BOL4、AArch32 loader 和活动启动分区只读取证；活动镜像拆分的 21 项检查和 8 条 SHA256 清单通过。报告明确标记 `not_installable=true`、`not_hardware_validated=true`。
+- [x] 从现场 memblock/FDT 交叉确认 monitor 保留区、CMA 候选、framebuffer、initrd、FDT 和未知高地址保留区；未知区域继续排除，不把 `memory - reserved` 当作可分配 RAM。
+- [x] 固定 GammaOS LK 参考源码 `TheGammaSqueeze/lk-mt6785@9bf1419a49e0af6dba8b05916df382c9c9c6d0a8`，核对 AArch32 CRT0、异常向量、A53 flags、VBAR、多核 scheduler 和 heap 实现。
+- [x] AArch32 LK-as-BL33 入口/头区/向量布局 host-only 探针通过：入口分支位于 image +0，保留 +4..+0x63f 厂商头区，向量候选位于 +0x1000；它使用合成头和 stub，不是完整 LK build 或启动证明。
+- [x] 明确 GammaOS LK 固定版本的 H700 适配点：Cortex-A53 分支原本错误使用 `-mcpu=cortex-a9`；`arch_early_init` 会把 VBAR 重设到 MEMBASE；`ENABLE_THUMB=true` 时普通 C/C++ 对象默认 Thumb-2；现有 scheduler/critical section 是单核设计。
+- [ ] 在固定 LK 源码上运行 H700 overlay 生成器并验证生成补丁可由 `git apply --check` 接受；overlay 只计划修正 CRT0/header/vector、VBAR 和 A53 CPU codegen，不猜测 ACTLR.SMP。
+- [ ] 建立独立 H700 project/target/platform 规则，隔离全部 MediaTek PMIC、GPIO、LCM、USB、CONNSYS、存储和电源对象；明确 ARM/Thumb、NEON/VFPv4、softfp ABI。
+- [ ] 完整编译/链接 GammaOS LK H700 target，并以实际链接 map、ELF、image header 和尺寸检查替代当前 stub 布局探针。
+- [ ] 关闭 RG34XX BL31→BL33 的入口寄存器、CurrentEL/SPSR、栈、MMU/cache/TLB、GIC、VBAR、参数寄存器和 secondary-core 状态验证。
+- [ ] 完成剩余保留区归属审查，尤其 `[0x7ec00000,0x7fc00000)`、顶部碎片、monitor 实际上界和 secure/DRM/DMA/display carveout；未批准前不得给 payload 分配地址。
+- [ ] 实机重复冷启动、失败恢复和从 SD 只读加载测试；在完成内存 ownership 与 secondary-core gate 前，不写启动区、不执行 payload。
 
-- [ ] Linkslot 尚未实现 Libretro `GET_VFS_INTERFACE`；mGBA Generic 目录 backend 仍依赖 dirent/POSIX，需实现 VFS v2 文件+目录接口与 H700 FAT 适配。
+### C. Allwinner H700 基础 HAL
 
-- [ ] 将真实 mGBA 构建为 AArch32 静态核心并接入 registry；首期先让 GB/GBC/GBA 共用 mGBA，gpSP 后续再评估。
+- [x] 实现并 host-test H700 GPT 只读解析、H616-family sdc0 时钟/引脚配置计算、SD v2 识别状态机、CMD17 PIO sector read、FAT16/FAT32/exFAT 分区边界与目录/文件读取。
+- [x] 建立 sdc0 → SD identify → CMD17 → GPT → partition-bounded FAT → Libretro VFS v3 的 fake-device host 端到端测试；明确所有测试均为合成媒体/寄存器，不代表实机 MMIO 或真实卡通讯。
+- [x] 同一组 H700 HAL/存储 C 源码的 AArch64、AArch32 ARM-state、AArch32 Thumb-2 freestanding 编译矩阵通过；Thumb-2 C/C++ + ARM-state assembly 对齐 GammaOS LK 默认编译模式。
+- [ ] 实现并验证目标机真实 sdc0 MMIO、PIO/APB1、CCU gate/reset、PF0-PF5 pinmux、卡供电和 400 kHz SD 初始化；没有现场读回前不得提高时钟或启用 DMA。
+- [ ] 通过真实 CMD17 只读采集卡片 GPT、FAT/exFAT 卷及 ROM/BIOS 文件；验证块设备和分区 extent 与现场 inventory 一致。
+- [ ] 实现有界写入、flush、原子替换和断电一致性后，才接入 save/state/battery 写路径。
+- [ ] 逐项增加显示/framebuffer/backlight、GPIO input、timer、PCM audio、PMIC、电源关机、Wi-Fi/USB 调试服务；每项均有独立诊断和实机验收。
 
-
-- [ ] 编译并验证真实 LK heap implementation；先解决 global critical section 不是跨核锁的风险。
-- [ ] 将 Generic mGBA 的 67 个外部引用逐项映射到 LK libc、Linkslot VFS、H700 RTC、libm/EABI；不能因为 archive 成功生成就认为可以链接或运行。
-
-- [ ] 完成 AArch32 LK-as-BL33 与 AArch64 LK/runtime 两条路线的架构选择；当前参考 LK 是单核调度，A53 编译 flag 和 SMP 初始化也需重做，secondary-core 状态未知。
 ### A. 工具链与工程基础（已完成第一步）
 
 - [x] AArch64 freestanding C、C++ 和汇编编译探针。
