@@ -63,6 +63,7 @@ on:
       - "scripts/apply-linkslot-render-core.py"
       - "docs/h700-lk-project.md"
       - "integration/linkslot/h700-render-core/**"
+      - "integration/linkslot/h700-frontend-core/**"
   workflow_dispatch:
 
 permissions:
@@ -185,6 +186,14 @@ jobs:
             --source .ci/upstream-linkslot \
             --lk-source .ci/lk-reference \
             --out build/audit-work/linkslot-1.0.36
+
+      - name: Test persistent H700 no_std frontend business crates
+        run: |
+          cargo test --manifest-path integration/linkslot/h700-frontend-core/Cargo.toml --workspace
+          for target in armv7a-none-eabi aarch64-unknown-none; do
+            cargo check --manifest-path integration/linkslot/h700-frontend-core/Cargo.toml \
+              --workspace --target "$target"
+          done
 
       - name: Test slot-i18n static no_std tables
         run: |
