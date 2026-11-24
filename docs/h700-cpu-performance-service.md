@@ -120,6 +120,19 @@ Later, Linkslot's run-ahead depth can inform a performance request because each 
 
 Use hysteresis and a minimum dwell interval to avoid frequency oscillation. Do not continuously change PLL settings within a frame loop.
 
+### 7.1 Versioned C service ABI v1 (policy-only implementation)
+
+The first stable C boundary is now implemented under `platform/h700/power`:
+
+- `h700_cpu_performance_service.h` defines ABI v1 configuration, request, telemetry and state structures with explicit version/size fields.
+- `h700_cpu_performance_service.c` owns a caller-allocated, fixed-size OPP table and delegates mode selection to the existing pure C policy selector. No heap, worker thread, MMIO or PMIC access is used.
+- `h700_cpu_perf_service_request_mode_v1()` returns `H700_CPU_PERF_SERVICE_POLICY_ONLY` after selecting an OPP. That return value means only that a target was planned; it never means a clock or voltage change was applied.
+- The state reports `planned_frequency_hz/planned_voltage_uv` separately from read-only `actual_frequency_hz/actual_voltage_uv/temperature_mc` telemetry. `hardware_applied` remains zero in ABI v1.
+- Runtime limits can be refreshed; when a prior mode has a valid plan, the service re-evaluates it against the new voltage/thermal limits.
+- `scripts/test-h700-cpu-performance-service.sh` tests ABI rejection, missing evidence gates, mode selection, telemetry separation, thermal clamping, Boost gating and malformed OPP tables.
+
+The facade is intentionally not wired to a PLL/PMIC actuator. A Rust binding may consume this ABI and show the requested mode/planned OPP while actual clock/voltage remain “unavailable” until a real readback backend exists. Do not show planned MHz as measured MHz and do not expose an applied/success state based only on `POLICY_ONLY`.
+
 ## 8. Required hardware and safety gates
 
 - [ ] Export the complete `cpu-supply` / AXP2202 regulator subtree from the exact RG34XX live FDT and confirm the DCDC1 mapping on this unit/board revision. Knulli and MustardOS RG34XX DTSs already cross-check DCDC1 as cpu0 supply, but live-FDT readback is still outstanding.
@@ -148,7 +161,7 @@ Hardware status remains:
 - CPU1–CPU3 handoff state is still unknown at BL31→BL33.
 
 Therefore:
-- the **mode model and pure policy-selection layer are implemented**;
+- the **mode model, pure policy-selection layer and policy-only C service ABI v1 are implemented and host/architecture CI-validated** (see the current run linked in `docs/PROJECT-STATUS.md`);
 - the board OPP table, runtime telemetry, PMIC/PLL transition sequence and automatic thermal response remain pending;
 - actual frequency/voltage writes and high-performance modes remain disabled until every required evidence gate is closed.
 
