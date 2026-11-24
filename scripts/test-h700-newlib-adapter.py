@@ -62,6 +62,12 @@ def main():
         "-I", str(root / "platform/h700/runtime/tests/include"),
     ] + ["-D" + item for item in RENAMES]
 
+    binding_host_obj = out / "lk_bindings_host.o"
+    host_binding_flags = [
+        "cc", "-std=c11", "-D_POSIX_C_SOURCE=200112L", "-D_DEFAULT_SOURCE",
+        "-Wall", "-Wextra", "-Werror", "-I", str(src.parent),
+        "-idirafter", str(lk_root / "include"),
+    ]
     run(["cc", *host_flags, "-c", str(src), "-o", str(host_obj)],
         out / "host-adapter-compile.log")
     run(["cc", "-std=c11", "-D_POSIX_C_SOURCE=200112L", "-D_DEFAULT_SOURCE",
@@ -69,7 +75,9 @@ def main():
          "-I", str(root / "platform/h700/runtime/tests/include"),
          "-c", str(harness), "-o", str(harness_obj)],
         out / "host-test-compile.log")
-    run(["cc", str(host_obj), str(harness_obj), "-o", str(host_exe)],
+    run([*host_binding_flags, "-c", str(lk_bindings), "-o", str(binding_host_obj)],
+        out / "host-lk-bindings-compile.log")
+    run(["cc", str(host_obj), str(harness_obj), str(binding_host_obj), "-o", str(host_exe)],
         out / "host-link.log")
     output = run([str(host_exe)], out / "host-run.log")
 
