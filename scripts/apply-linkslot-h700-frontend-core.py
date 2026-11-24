@@ -159,15 +159,11 @@ def patch_frontend(source: Path) -> None:
             raise RuntimeError(f"expected exactly one App core-picker type: {old}")
         app = app.replace(old, new)
 
-    old_hold_type = """#[derive(Copy, Clone, Debug, PartialEq)]
-pub struct FolderHold {
-    pub progress: f32,
-    pub alpha: f32,
-}
-"""
-    if app.count(old_hold_type) != 1:
-        raise RuntimeError("original FolderHold type block does not match pinned Linkslot source")
-    app = app.replace(old_hold_type, "")
+    hold_type_start = app.find("#[derive(Clone, Copy, Debug, PartialEq)]\\npub struct FolderHold {")
+    hold_type_end = app.find("\\n}\\n", hold_type_start)
+    if hold_type_start < 0 or hold_type_end < 0:
+        raise RuntimeError("original FolderHold type markers not found in pinned Linkslot source")
+    app = app[:hold_type_start] + app[hold_type_end + 3:]
 
     field_old = "    folder_hold_since: Option<Millis>,\n    folder_hold_fade: Option<(Millis, f32)>,\n"
     field_new = "    folder_hold: TimedHold,\n"
