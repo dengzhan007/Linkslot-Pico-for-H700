@@ -161,15 +161,20 @@ jobs:
       - name: Run H700 software renderer host regressions
         run: cargo test --manifest-path integration/linkslot/h700-render-core/Cargo.toml
 
-      - name: Compile shared Linkslot slot-gfx render contract
+      - name: Compile H700 SoftwareCompositor and shared Linkslot slot-gfx render contract
         run: |
           cargo check --manifest-path .ci/upstream-linkslot/Cargo.toml \
-            -p slot-gfx --no-default-features --features device,test-support
+            -p slot-gfx --no-default-features --features device,test-support,h700-software
 
-      - name: Compile Linkslot Frontend against injectable Renderer trait
+      - name: Test H700 SoftwareCompositor framebuffer integration
+        run: |
+          cargo test --manifest-path .ci/upstream-linkslot/Cargo.toml \
+            -p slot-gfx --no-default-features --features device,test-support,h700-software
+
+      - name: Compile Linkslot Frontend against H700 SoftwareCompositor Renderer trait
         run: |
           cargo check --manifest-path .ci/upstream-linkslot/Cargo.toml \
-            -p slot --no-default-features --features device
+            -p slot --no-default-features --features device,h700-software
 
       - name: Compile existing H700 AArch64 scaffold
         run: bash scripts/build-h700-objects.sh
