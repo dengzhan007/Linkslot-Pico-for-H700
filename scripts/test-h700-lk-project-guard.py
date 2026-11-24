@@ -149,9 +149,9 @@ def main() -> None:
 
         generic_target_rules = (worktree / "target/rules.mk").read_text(encoding="utf-8")
         generic_init_excluded = re.search(
-            r"ifneq \\(\\$\\(H700_BUILD\\),yes\\)\\s+"
-            r"OBJS \\+= \\$(LOCAL_DIR)/init\\.o\\s+endif\\s+"
-            r"OBJS \\+= \\$(LOCAL_DIR)/target_display\\.o",
+            r"ifneq \(\$\(H700_BUILD\),yes\)\s+"
+            r"OBJS \+= \$\(LOCAL_DIR\)/init\.o\s+endif\s+"
+            r"OBJS \+= \$\(LOCAL_DIR\)/target_display\.o",
             generic_target_rules,
         )
         if not generic_init_excluded:
