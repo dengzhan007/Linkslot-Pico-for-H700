@@ -2,12 +2,14 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-24 12:08 UTC  
+**最后核对时间：** 2026-11-24 12:12 UTC  
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **工作分支：** `porting/linkslot-1.0.45-feasibility`  
 **本次代码推进前的分支 HEAD：** `4f87b52fd32d1953454e75fd9ab3b5bb42b1558a`  
-**本轮 CPU runtime owner 最新代码提交：** `072793f8b4bfce00683aa3d303eee62613fe41ab`（7 个连续提交；随后已同步更新专项文档和路线图）  
-**本轮最新代码验证提交：** `0437e37859eee40095d0210725a92910aa4783d6`（C ABI/Rust client）；最新工作包含 UI 接入点审计及文档更新。
+**本轮 CPU runtime owner 最新代码提交：** `072793f8b4bfce00683aa3d303eee62613fe41ab`（7 个连续提交）  
+**本轮 Rust runtime bridge 最新代码提交：** `0d381d7ba66592b5ab64ba67e0b228039bb9eec0`  
+**最近一次已明确由 CI 验证通过的 CPU/Rust 代码提交：** `0437e37859eee40095d0210725a92910aa4783d6`；其后的 owner / runtime-token 代码尚未获得可见 CI 通过记录。  
+
 
 ## 1. 项目目标与固定约束
 
@@ -62,6 +64,7 @@
 - `scripts/build-h700-objects.sh`：已将 Service C 源纳入 AArch64、AArch32 ARM-state、AArch32 Thumb-2 编译矩阵。
 - `.github/workflows/h700-arch-check.yml`：Push / Pull Request 均纳入服务 host regression 和架构编译。
 - `integration/linkslot/h700-frontend-core/slot-cpu-performance`：新建 Rust `no_std` typed client；C service 作为不透明指针传入，模式通过固定枚举映射，C ABI v1 的 64-byte state 结构按 `repr(C)` 解码。
+- Rust 客户端新增 `CpuPerformanceRuntime` token：通过 C runtime status/getter ABI 获取静态 owner；在 runtime 尚未 ready 时返回独立的 `RuntimeUnavailable(status)`，并通过 `&mut self` 发放临时 client，减少 Rust 侧重复可变访问。获取 token 是 unsafe 操作，要求 C 启动已成功、生命周期内不得重新初始化 owner，且不得存在其他 C/Rust 写入者。
 - `platform/h700/power/h700_cpu_performance_runtime.h/.c`：新增静态 H700 runtime owner，提供单实例生命周期、RG34XX board profile ABI、四种用户策略预检和 fail-closed accessor；无有效 profile 时返回 unavailable/NULL。
 - `platform/h700/power/tests/h700_cpu_performance_runtime_test.c`：覆盖默认 unavailable、NULL/未批准/错误 board/缺少 gate/缺少 OPP 拒绝、静态 owner 稳定性、policy-only 状态和服务撤销。
 - 修复 C service 的失败重初始化语义：对完整 service storage，在校验新配置前先撤销旧实例；ready 检查同时验证 ABI struct size，避免无效重初始化仍保留旧服务。
@@ -81,10 +84,10 @@
 
 ### 本轮本地验证与 CI 状态（2026-11-24 12:08 UTC）
 
-- 本地 GCC 14 主机回归：`h700_cpu_performance_runtime_test` 输出 `PASS: H700 CPU runtime owner, profile validation and fail-closed lifecycle`。
+- 本地 GCC 14 主机回归（基于当前 runtime owner / C policy 代码及 service ABI 的本地工作副本）：`h700_cpu_performance_runtime_test` 输出 `PASS: H700 CPU runtime owner, profile validation and fail-closed lifecycle`。
 - 本地 Clang 17 freestanding 编译：`h700_cpu_performance_runtime.c` 分别以 AArch64 Cortex-A53、AArch32 ARM-state、AArch32 Thumb-2 编译；`llvm-objdump -f` 分别报告 `aarch64`、`arm`、`arm`。
 - 这些本地命令只验证 CPU runtime owner 的合成主机测试和该 C 单元的目标架构编译；它们不等于完整 GammaOS LK 链接、完整仓库 CI 或设备验证。
-- 针对本轮最新 push commit `072793f8b4bfce00683aa3d303eee62613fe41ab`，GitHub connector 未返回可见 combined statuses，也未返回关联 workflow runs。该 run 查询接口仅列 PR-triggered runs，所以空结果不能证明 workflow 未触发；本轮 GitHub Actions 结果目前标为**未确认**，不得记为通过。
+- 针对本轮最新 Rust runtime bridge push commit `0d381d7ba66592b5ab64ba67e0b228039bb9eec0`，GitHub connector 未返回可见 combined statuses，也未返回关联 workflow runs。该 run 查询接口仅列 PR-triggered runs，所以空结果不能证明 workflow 未触发；本轮 GitHub Actions 结果目前标为**未确认**，不得记为通过。
 
 ### 本轮 CI 验证
 
