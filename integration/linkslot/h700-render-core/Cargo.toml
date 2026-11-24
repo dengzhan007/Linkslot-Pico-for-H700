@@ -9,5 +9,9 @@ description = "no_std software rasterizer core for the H700 Linkslot port"
 [dependencies]
 libm = "0.2"
 
+[features]
+default = []
+test-support = []
+
 [lib]
 path = "src/lib.rs"
