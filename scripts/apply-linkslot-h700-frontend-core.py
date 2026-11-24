@@ -143,7 +143,7 @@ def apply(source: Path, crate_root: Path) -> None:
     core_picker_path = source / "crates/slot/src/core_picker.rs"
     core_picker_path.write_text(
         "pub use slot_core_picker::{Chip, CorePicker, Outcome, Press, "
-        "CLOSE_MS, HOP_MS, LIFT_MS, OPEN_MS, SLIDE_MS};\\n",
+        "CLOSE_MS, HOP_MS, LIFT_MS, OPEN_MS, SLIDE_MS};" + chr(10),
         encoding="utf-8",
     )
     patch_frontend(source)
