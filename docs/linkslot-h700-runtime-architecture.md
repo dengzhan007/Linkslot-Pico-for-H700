@@ -80,6 +80,21 @@ Initial features:
 
 Add Grid/LCD/CRT/FourPass filters, frame split/lift, bezel and rotation only after the unfiltered baseline passes golden-image tests. The existing GL shaders are behavior references, not code that can be directly executed by LK.
 
+### First host-only implementation slice
+
+A separate crate now exists at `integration/linkslot/h700-render-core`. It is intentionally outside the upstream snapshot and uses `#![no_std] + alloc` for non-test builds. The first implementation accepts a caller-supplied framebuffer slice and supports:
+
+- RGBA8888 or BGRA8888 framebuffer byte order, with explicit width/height/stride validation;
+- stable texture IDs, create/update/delete, and tightly packed RGBA texture data;
+- clipped solid rectangles, nearest-neighbour texture blits and source-over alpha blending;
+- centre-based texture rotation;
+- game-frame insertion and screenshot (`Shot`) insertion in draw-list order;
+- XRGB8888/GL_BGRA-compatible game-frame byte conversion.
+
+Nine host regression tests cover framebuffer bounds, clipping, nearest sampling, alpha, rotation, Game/Shot ordering, byte order and texture-handle lifetime. The crate's `cargo check` and `cargo test` commands have been added to the Linkslot/LK feasibility workflow. The current GitHub connector session has not produced a run result for these new commits, so **the implementation is not yet marked CI-passed**. It has not been linked into `Frontend`, connected to the H700 scanout buffer, or benchmarked on the device.
+
+The first renderer is nearest-neighbour only and deliberately omits the GL shader effects, bezel, rotation of the full display, double buffering and physical cache maintenance. It is a host-testable raster core, not a display driver.
+
 ### Display memory facts and limits
 
 The RG34XX live inventory reports a framebuffer at `0x7bf24800`, 720×480, 32 bpp, stride 2,880 bytes, size 1,382,400 bytes (`0x151800`), range `[0x7bf24800, 0x7c076000)`. That is a Linux live-FDT/bootargs reservation and must remain excluded from general payload allocation.
