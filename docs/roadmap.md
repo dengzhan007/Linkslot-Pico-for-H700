@@ -38,7 +38,7 @@
 - [x] 固定 GammaOS LK 参考源码 `TheGammaSqueeze/lk-mt6785@9bf1419a49e0af6dba8b05916df382c9c9c6d0a8`，核对 AArch32 CRT0、异常向量、A53 flags、VBAR、多核 scheduler 和 heap 实现。
 - [x] AArch32 LK-as-BL33 入口/头区/向量布局 host-only 探针通过：入口分支位于 image +0，保留 +4..+0x63f 厂商头区，向量候选位于 +0x1000；它使用合成头和 stub，不是完整 LK build 或启动证明。
 - [x] 明确 GammaOS LK 固定版本的 H700 适配点：Cortex-A53 分支原本错误使用 `-mcpu=cortex-a9`；`arch_early_init` 会把 VBAR 重设到 MEMBASE；`ENABLE_THUMB=true` 时普通 C/C++ 对象默认 Thumb-2；现有 scheduler/critical section 是单核设计。
-- [ ] 运行扩展后的固定 LK overlay 生成器和 git apply --check；当前候选覆盖 makefile、dev/rules.mk、target/rules.mk、CRT0/header/vector、VBAR 和 A53 NEON/VFPv4/softfp codegen。新增的真实 CRT0 + exception vector 链接检查仍待 CI 验收。
+- [ ] 运行扩展后的固定 LK overlay 生成器和 git apply --check；当前候选覆盖 makefile、dev/rules.mk、target/rules.mk、CRT0/header/vector、VBAR、A53 NEON/VFPv4/softfp codegen，以及 H700 专用 arm-none-eabi 工具链选择。MTK 原项目仍保留原有 Android EABI 工具链。新增的真实 CRT0 + exception vector 链接检查仍待 CI 验收。
 - [ ] 新建独立 RG34XX H700 project/target/platform：项目必须设置 H700_BUILD=yes，由 H700 平台明确加入经审查的 HAL 模块；MTK platform/common、dev video/LCM/GIC/modem/logo 和 MTK target/init.c 不得进入 H700 构建。
 - [ ] 在内存 ownership/BL33 window 归属审计关闭后，才为 H700 target 填写 MEMBASE/MEMSIZE、heap、stack、MMU/linker ranges；目前不填任何猜测地址。
 - [ ] 完整编译/链接 GammaOS LK H700 target，并以实际链接 map、ELF、image header 和尺寸检查替代 stub 布局探针。
