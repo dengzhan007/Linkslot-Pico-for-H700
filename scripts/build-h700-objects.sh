@@ -16,10 +16,43 @@ done
 
 mkdir -p "$OUT_DIR"
 
+H700_ARCH="${H700_ARCH:-aarch64}"
+
+case "$H700_ARCH" in
+    aarch64)
+        TARGET_FLAGS=(
+            --target=aarch64-none-elf
+            -mcpu=cortex-a53
+            -mgeneral-regs-only
+        )
+        EXPECTED_ARCH="aarch64"
+        C_PROBE="$C_PROBE"
+        ASM_PROBE="$ASM_PROBE"
+        CPP_PROBE="$CPP_PROBE"
+        ;;
+    aarch32)
+        # Match the GammaOS LK A32 BL33 ABI: ARM state, Cortex-A53, NEON/VFPv4,
+        # and the base AAPCS float calling convention (softfp).
+        TARGET_FLAGS=(
+            --target=armv7a-none-eabi
+            -mcpu=cortex-a53
+            -marm
+            -mfpu=neon-vfpv4
+            -mfloat-abi=softfp
+        )
+        EXPECTED_ARCH="arm"
+        C_PROBE="$ROOT/platform/h700/arch/compile_probe_a32.c"
+        ASM_PROBE="$ROOT/platform/h700/arch/compile_probe_a32.S"
+        CPP_PROBE="$ROOT/platform/h700/arch/compile_probe_a32.cpp"
+        ;;
+    *)
+        echo "error: H700_ARCH must be 'aarch64' or 'aarch32' (got '$H700_ARCH')" >&2
+        exit 2
+        ;;
+esac
+
 COMMON_FLAGS=(
-    --target=aarch64-none-elf
-    -mcpu=cortex-a53
-    -mgeneral-regs-only
+    "${TARGET_FLAGS[@]}"
     -ffreestanding
     -fno-builtin
     -fno-stack-protector
@@ -134,13 +167,13 @@ COMMON_FLAGS=(
 
 for object in "$OUT_DIR/compile_probe.o" "$OUT_DIR/compile_probe_asm.o" "$OUT_DIR/compile_probe_cpp.o" "$OUT_DIR/h700_mmc_board_profile.o" "$OUT_DIR/sunxi_mmc_clock.o" "$OUT_DIR/sunxi_mmc_module_clock.o" "$OUT_DIR/sunxi_mmc_pio_read.o" "$OUT_DIR/sunxi_sd_csd.o" "$OUT_DIR/sunxi_sd_card_init.o" "$OUT_DIR/sunxi_h616_sdc0_platform.o" "$OUT_DIR/sunxi_h616_sdc0_pins.o" "$OUT_DIR/h700_sunxi_mmc_block_device.o" "$OUT_DIR/h700_sunxi_sdc0_readonly_scan.o" "$OUT_DIR/h700_gpt_readonly.o" "$OUT_DIR/h700_sunxi_mmc_fat.o" "$OUT_DIR/h700_fat_vfs_backend.o" "$OUT_DIR/fat_ro.o" "$OUT_DIR/fat_exfat.o"; do
     format="$("$OBJDUMP" -f "$object")"
-    if ! grep -q "architecture: aarch64" <<<"$format"; then
-        echo "error: $object is not an AArch64 object" >&2
+    if ! grep -q "architecture: $EXPECTED_ARCH" <<<"$format"; then
+        echo "error: $object does not match the requested H700 architecture ($H700_ARCH)" >&2
         printf '%s\n' "$format" >&2
         exit 1
     fi
     echo "$object: AArch64 object OK"
 done
 
-echo "H700 compile-only architecture check passed."
-echo "Note: this does not provide a C/C++ runtime, produce a bootable payload, or validate a U-Boot handoff."
+echo "H700 compile-only $H700_ARCH architecture check passed."
+echo "Note: this is compile-only. It does not provide a C/C++ runtime, link the full LK/HAL image, establish a BL33 load range, execute a payload, or validate H700 hardware."
