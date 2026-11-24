@@ -60,6 +60,9 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertIn("$memoryMapCommandArgs += $memoryMapArgs", source)
         self.assertIn("& $pythonExe @memoryMapCommandArgs", source)
         self.assertIn('memory-map-report.json', source)
+        self.assertIn('$SidCellInspector = Join-Path $RepoRoot "tools\\inspect_h700_sid_cells.py"', source)
+        self.assertIn("& $pythonExe @pythonArgs $SidCellInspector $cpuPowerRuntime", source)
+        self.assertIn('sid-cell-report.json', source)
         forbidden = re.compile(
             r"^\\s*&\\s*adb\\b.*\\bshell\\s+(?:reboot|poweroff|fw_setenv|"
             r"flashcp|flash_erase|nandwrite|sunxi-fel)\\b",
