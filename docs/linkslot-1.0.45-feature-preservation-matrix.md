@@ -107,3 +107,10 @@ Custom bindings take precedence over default bindings. This matters for older co
 - crates/slot-retro/src/libretro.rs
 - crates/slot/src/app.rs
 - CHANGELOG.md (1.0.43–1.0.45)
+
+## 8. Current validation evidence
+
+- The complete 1.0.45 workflow passed 69/69 steps: [run 45373379245](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45373379245).
+- Uploaded build/maps/ELF/log/report bundle: [artifact 14909943545](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45373379245/artifacts/14909943545), 381,283,589 bytes, not expired at the time of this audit.
+- The same workflow validates the 1.0.45 App/Renderer overlay, three-core picker integration, C input ABI, no_std frontend crates, VFS v3, SD/GPT/FAT host path and AArch32 mGBA static build/link diagnostics.
+- These are host/cross-build results. No full H700 LK image, physical SD-controller transaction, ROM-to-frame runtime, or successful RG34XX boot is claimed.
