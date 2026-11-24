@@ -134,6 +134,18 @@ The first stable C boundary is now implemented under `platform/h700/power`:
 
 The C facade is intentionally not wired to a PLL/PMIC actuator. The typed Rust client exists and is host-tested, but it is not yet wired into Linkslot `App`/settings or a C service initialization path. Until a real readback backend exists, actual clock/voltage must remain unavailable. Do not show planned MHz as measured MHz and do not expose an applied/success state based only on `POLICY_ONLY`.
 
+### 7.2 Linkslot 1.0.45 settings integration contract
+
+The upstream UI extension point has been audited in the immutable 1.0.45 snapshot:
+
+- `slot-ui/src/quick_menu.rs` currently has `QuickRow::SYSTEM_SETTINGS: [QuickRow; 6]`: DateTime, Language, LidTimeout, Mods, SystemUpgrade and About.
+- `QuickRow::index()` is its enum discriminant and is also used to address quick-value state. `QuickRow::ALL` is a fixed-size table. The existing Language row was deliberately appended at the end of `QuickRow::ALL` and declared immediately before `SplitLink`, so earlier persisted indices do not move.
+- `QuickValue::ALL` currently has 37 base values. The Language values are the last two entries. A future CPU mode value family must be appended, not inserted between existing variants.
+- The CPU row belongs in System settings, but it should be appended without renumbering existing `QuickRow` or `QuickValue` variants. Update the fixed array lengths, `page()`, `parent()`, `key()`, icon fallback/glyph, value labels, both translation catalogues, App's `quick_value` and `change_setting` matches, and the row/index parity tests together.
+- The visible selectable profiles should initially be **Power Saver / Balanced / Performance / Auto**. Do not expose Boost until the board-specific voltage, thermal and sustained-load gates are approved.
+- Persist only the requested policy (for example, a validated text value under `linkSlot/Config/`); never persist a synthetic MHz target as an actual frequency. The UI must show the chosen policy separately from measured telemetry and make “frequency telemetry unavailable / policy not applied” explicit when the H700 service is not ready.
+- The current C service has caller-owned storage and copied OPP configuration; there is not yet an H700 boot/runtime owner that initializes it from a validated RG34XX board profile and supplies its lifetime to Linkslot App. Therefore the UI row is **not yet implemented**. Add it only together with a real service owner/adapter path, or the user could choose modes that have no effect.
+
 ## 8. Required hardware and safety gates
 
 - [ ] Export the complete `cpu-supply` / AXP2202 regulator subtree from the exact RG34XX live FDT and confirm the DCDC1 mapping on this unit/board revision. Knulli and MustardOS RG34XX DTSs already cross-check DCDC1 as cpu0 supply, but live-FDT readback is still outstanding.
