@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Host-only Rust no_std feasibility probe for Linkslot 1.0.36."""
+"""Host-only Rust no_std feasibility probe for the pinned Linkslot 1.0.45 snapshot."""
 from __future__ import annotations
 import argparse, os, re, shutil, subprocess, sys, textwrap
 from pathlib import Path
