@@ -700,7 +700,7 @@ mod tests {
             )
             .unwrap();
         r.draw_list(&[Draw::Turned {
-            x: 1.0,
+            x: 1.5,
             y: 1.0,
             w: 2.0,
             h: 1.0,
@@ -708,8 +708,8 @@ mod tests {
             alpha: 1.0,
             turn: core::f32::consts::FRAC_PI_2,
         }]);
-        assert_eq!(r.rgba_at(2, 1), Some([255, 0, 0, 255]));
-        assert_eq!(r.rgba_at(2, 2), Some([0, 255, 0, 255]));
+        assert_eq!(r.rgba_at(2, 0), Some([255, 0, 0, 255]));
+        assert_eq!(r.rgba_at(2, 1), Some([0, 255, 0, 255]));
     }
 
     #[test]
