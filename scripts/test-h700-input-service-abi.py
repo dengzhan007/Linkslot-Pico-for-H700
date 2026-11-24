@@ -40,7 +40,11 @@ size_t h700_input_abi_probe(const h700_input_service_v1_t *service) {
     if (service == NULL || service->abi_version != H700_INPUT_ABI_VERSION) {
         return 0u;
     }
-    return service->drain(service->context, events, H700_INPUT_MAX_EVENTS);
+    if (service->drain == NULL) {
+        return 0u;
+    }
+    return service->drain(service->context, events, H700_INPUT_MAX_EVENTS)
+        + fake_drain(NULL, events, H700_INPUT_MAX_EVENTS);
 }
 """
 
