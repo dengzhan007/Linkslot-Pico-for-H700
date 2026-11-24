@@ -317,8 +317,23 @@ SECTIONS
         )
 
     vector_words = struct.unpack_from("<8I", data, VECTOR_OFFSET)
-    for index, word in enumerate(vector_words):
-        decode_arm_branch(word, vectors + index * 4)
+    vector_symbols = (
+        "reset",
+        "arm_undefined",
+        "arm_syscall",
+        "arm_prefetch_abort",
+        "arm_data_abort",
+        "arm_reserved",
+        "arm_irq",
+        "arm_fiq",
+    )
+    for index, (word, symbol) in enumerate(zip(vector_words, vector_symbols, strict=True)):
+        actual_target = decode_arm_branch(word, vectors + index * 4)
+        expected_target = symbol_address(nm, symbol)
+        if actual_target != expected_target:
+            raise RuntimeError(
+                f"vector {index} targets {actual_target:#x}, expected {symbol} at {expected_target:#x}"
+            )
 
     # Exercise the vendor-header replacement contract with synthetic bytes.
     header_material = hashlib.sha256(b"GammaOS-LK-H700-BL33-header-layout-test").digest()
