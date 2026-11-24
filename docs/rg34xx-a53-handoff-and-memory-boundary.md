@@ -1,0 +1,77 @@
+# RG34XX H700 A53 handoff and memory boundary
+
+**Target:** Anbernic RG34XX non-SP, Allwinner H700, four Cortex-A53 CPUs  
+**Status:** read-only evidence synthesis; no handoff contract or payload memory range is approved.
+
+## 1. Facts established by the target-device reports
+
+### CPU and BL31/BL33 chain
+
+- The live RG34XX inventory identifies four CPUs, architecture 8, CPU part 0xd03 (Cortex-A53). This is a Linux-visible topology observation; it does not prove which PEs are powered, released, or parked at the earlier BL31→BL33 handoff.
+- The stock vendor monitor in the current device TOC1 has the same SHA-256 as the monitor pinned by the BaseOS RG34XX evidence. The binary contains Allwinner sun50iw9p1 / H616 platform strings, BL31 context-management paths, and strings naming PSCI CPU_ON, CPU_OFF, and CPU_SUSPEND handlers.
+- Those strings prove that code paths/names exist in the binary, not that the corresponding service is registered, working, or invoked on this boot. The handoff report also records the literal diagnostic string "WARNING: Unimplemented PSCI Call"; it must not be treated as a captured runtime log.
+- The measured BaseOS native chain is: AArch64 EL3 SPL → vendor BL31 at 0x48000000 → AArch32 SVC BL33 at 0x4a000000, with SPSR=0x1d3. The native SPL prepares the monitor header/DRAM parameters, programs RVBAR=0x48000000, and requests an EL3 reset through RMR_EL3; BL31 then returns to the A32 loader.
+- The reports do not establish the secondary-CPU reset/hold state at BL31→BL33. They also do not establish that GammaOS LK can safely bring up the other A53s.
+
+### Runtime DRAM and reservations
+
+The target's live FDT and /proc/iomem agree on 1 GiB DRAM:
+
+\[
+[0x40000000,\;0x80000000)
+\]
+
+The current BaseOS native loader derives this 1 GiB size from the trained Boot0 DRAM block and writes the live FDT. The on-disk TOC1 DTB's 512 MiB default must not be used as the live capacity.
+
+The captured Linux memblock snapshot reports these ranges:
+
+| Range | Observed size | Evidence / interpretation |
+|---|---:|---|
+| [0x40000000, 0x80000000) | 1 GiB | Linux-visible memory window |
+| [0x40080000, 0x411b5000) | 17,620 KiB | reserved by the running kernel |
+| [0x411b6000, 0x411b8000) | 8 KiB | reserved |
+| [0x42000000, 0x42001000) | 4 KiB | initrd vicinity; active loader records a 512-byte initrd at 0x42000000 |
+| [0x44000000, 0x44023240) | 140 KiB | FDT vicinity; live/TOC FDT is staged at 0x44000000 in the recorded boot chain |
+| [0x48000000, 0x49000000) | 16 MiB | vendor BL31 / monitor reservation |
+| [0x77c00000, 0x7bc00000) | 64 MiB | reserved CMA window in the memblock snapshot |
+| [0x7bf24800, 0x7c076000) | 1,382,400 bytes | display framebuffer from boot_fb0 / disp_reserve |
+| [0x7ec00000, 0x7fc00000) | 16 MiB | reserved, owner not established |
+| [0x7fd4a000, 0x7fd4b000) | 4 KiB | reserved |
+| [0x7fd65000, 0x7ff49000) | 1,936 KiB | reserved |
+| additional small ranges near 0x7ff49a00..0x7fffffff | several KiB | reserved firmware/kernel fragments |
+
+The framebuffer range is independently derived from the live boot_fb0 node (720×480, 32 bpp, stride 2880) and matches the disp_reserve=1382400,0x7bf24800 boot argument.
+
+The active BaseOS chain places its A32 BL33 loader at 0x4a000000 in a 1 MiB boot-chain arena; the current loader's SP is 0x4a0f0000, and its 16 KiB translation table begins at 0x4a0f8000. These are observed BaseOS allocation/lifetime facts, not grants to reuse that arena for a replacement LK image, heap, stack, BSS, or Linkslot core.
+
+## 2. What remains unknown
+
+1. Whether CPUs 1–3 are still held in reset, parked in a vendor holding pen, executing secure firmware, or released when BL31 enters the current A32 BL33.
+2. Whether PSCI AFFINITY_INFO and CPU_ON are implemented and available to non-secure BL33, and what entry/context contract they require.
+3. Whether RMR_EL3 reset handling in the current native SPL path implies a single-PE or broader reset sequence on this exact board. Do not infer secondary state from the name of the register or from the single observed BL33 entry.
+4. The complete pre-Linux secure-world, monitor, DMA, CMA, loader and framebuffer ownership map, including lifetimes and cacheability/shareability attributes. Linux memblock is a post-handoff snapshot, not the complete BL33 allocation map.
+5. The owner and purpose of [0x7ec00000, 0x7fc00000). Its presence in memblock.reserved excludes it from an allocation until proven otherwise; the absence of a named /reserved-memory node does not make it free.
+
+## 3. Required runtime policy until those facts are proven
+
+- Treat the initial H700 LK runtime as **single-core only**.
+- Do not release, wake, or schedule work on secondary A53s. Do not add PSCI or Allwinner CPU_ON calls based solely on symbol/string evidence.
+- The LK scheduler currently uses global thread/run-queue and critical-section state with local IRQ masking. It is not an SMP scheduler. The Newlib adapter's single_cpu_active() gate must remain false until a board startup path can positively establish the required single-core invariant.
+- Keep the project H700_MEMORY_LAYOUT_APPROVED gate closed. Do not set H700_MEMBASE/H700_MEMSIZE for a device build from the current Linux map or from the 1 MiB BaseOS BL33 arena.
+- Do not infer that the complement of the memblock reserved ranges is available to LK. A free-at-Linux-runtime interval may have had an earlier SPL/monitor/loader owner or may require special cache/MMU treatment.
+- Host-only synthetic header/link probes and CI artifacts are not firmware; do not write them to SD, Boot0, TOC1, or the device.
+
+## 4. Evidence required before changing the policy
+
+- Capture a boot-stage UART trace or a source/firmware-backed BL31 trace that identifies the primary PE and the state of secondary PEs at the actual BL33 handoff.
+- Establish whether the non-secure BL33 can query PSCI version/affinity and whether a documented secondary-entry contract exists. A monitor binary string is insufficient.
+- Reconcile the live FDT, memblock.reserved, CMA base/size, /proc/iomem, framebuffer ownership, monitor/TEE reservations, and BaseOS SPL/BL33 staging lifetimes into one interval table with explicit owner and release point.
+- Only after that review should LK heap, stack, BSS, page tables, framebuffer, and emulator-core memory be assigned.
+
+## 5. Primary evidence
+
+- [RG34XX live inventory and memory map](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/docs/rg34xx-live-inventory-2026-11-22.md)
+- [Active loader provenance and measured BL31/BL33 path](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-active-loader-provenance.md)
+- [Bootloader/monitor handoff binary audit](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-bootloader-handoff-followup.md)
+- [Captured memblock reservations](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/debugfs-memory-reservations.txt)
+- [H700 LK project fail-closed memory gate](h700-lk-project.md)
