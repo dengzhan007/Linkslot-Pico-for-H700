@@ -22,13 +22,25 @@ def run_git(source: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
-def copy_package(source_crate: Path, destination: Path) -> None:
+def replace_upstream_package(source_crate: Path, destination: Path) -> None:
+    manifest = source_crate / "Cargo.toml"
+    src = source_crate / "src"
+    if not manifest.is_file() or not src.is_dir() or not destination.is_dir():
+        raise RuntimeError(f"incomplete upstream/persistent crate: {source_crate}")
+    old_src = destination / "src"
+    if old_src.exists():
+        shutil.rmtree(old_src)
+    shutil.copytree(src, old_src)
+    shutil.copy2(manifest, destination / "Cargo.toml")
+
+
+def add_new_package(source_crate: Path, destination: Path) -> None:
     manifest = source_crate / "Cargo.toml"
     src = source_crate / "src"
     if not manifest.is_file() or not src.is_dir():
         raise RuntimeError(f"incomplete persistent crate: {source_crate}")
     if destination.exists():
-        shutil.rmtree(destination)
+        raise RuntimeError(f"new package destination already exists: {destination}")
     destination.mkdir(parents=True)
     shutil.copytree(src, destination / "src")
     shutil.copy2(manifest, destination / "Cargo.toml")
@@ -94,11 +106,11 @@ def apply(source: Path, crate_root: Path) -> None:
         dest = source / "crates" / name
         if not dest.is_dir():
             raise RuntimeError(f"upstream crate directory missing: {dest}")
-        copy_package(crate_root / name, dest)
+        replace_upstream_package(crate_root / name, dest)
 
     # This state crate is extracted from the pure FacesLang section of
     # crates/slot/src/frontend.rs; it has no corresponding upstream package.
-    copy_package(crate_root / "slot-frontend-state", source / "crates/slot-frontend-state")
+    add_new_package(crate_root / "slot-frontend-state", source / "crates/slot-frontend-state")
     patch_frontend(source)
 
     paths = [
