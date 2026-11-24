@@ -110,7 +110,7 @@ def _mainline_reference_speed_decode(raw_u16: int | None) -> dict[str, Any]:
             "candidate_bins": list(bins),
             "raw_u16": f"0x{raw_u16:04x}",
             "requires_smccc_arch_soc_id_revision": True,
-            "revision_rule": "SMCCC revision <= 1 selects bin 1; later supported revisions select bin 2.",
+            "revision_rule": "Upstream selects bin 1 when SMCCC is supported and revision <= 1; it selects bin 2 for later revisions and also when SMCCC is not supported. This project deliberately keeps the value ambiguous when a trustworthy SMCCC revision is unavailable.",
             "generic_soc_sysfs_revision_accepted": False,
             "opp_authorization": "not_approved",
         }
