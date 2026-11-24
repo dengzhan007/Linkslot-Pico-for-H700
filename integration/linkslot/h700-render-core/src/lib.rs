@@ -14,8 +14,10 @@ impl TexId {
         self.0
     }
 
-    /// Construct a handle from an existing Linkslot texture-table index.
-    #[cfg(feature = "test-support")]
+    /// Construct a handle from an existing renderer texture-table index.
+    ///
+    /// This is public so backend crates can create the exact same handle type
+    /// that their public Draw command enum carries.
     pub const fn from_raw(index: usize) -> Self {
         Self(index)
     }
