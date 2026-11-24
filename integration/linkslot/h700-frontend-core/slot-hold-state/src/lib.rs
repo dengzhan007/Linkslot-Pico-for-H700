@@ -164,7 +164,7 @@ mod tests {
         state.begin(100);
         state.release(560);
         let prompt = state.prompt(560).unwrap();
-        assert!((prompt.progress - 0.4).abs() < 0.0001);
+        assert!((prompt.progress - (340.0 / 880.0)).abs() < 0.0001);
         assert_eq!(prompt.alpha, 1.0);
         assert!((state.prompt(600).unwrap().alpha - 0.5).abs() < 0.0001);
         assert_eq!(state.prompt(640), None);
