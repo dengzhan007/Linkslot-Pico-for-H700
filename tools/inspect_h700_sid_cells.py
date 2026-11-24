@@ -1,0 +1,171 @@
+#!/usr/bin/env python3
+"""Decode narrowly captured sun50iw9p1 SID cells without approving an OPP."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+import sys
+from pathlib import Path
+from typing import Any
+
+
+SPEED_RE = re.compile(r"^speed_bin_raw_le_bytes=([0-9a-fA-F]+)\s*$", re.MULTILINE)
+THERMAL_RE = re.compile(r"^thermal_calibration_raw_bytes=([0-9a-fA-F]+)\s*$", re.MULTILINE)
+
+# These literals appear in the pinned vendor cpufreq consumer. They are
+# reported only as reference matches: that source reads a 2-byte NVMEM cell
+# through a u32 pointer, while the pinned NVMEM core allocates exactly cell->bytes.
+# Never derive a usable supported_hw mask or authorize an OPP from this table.
+VENDOR_SPEED_LITERALS = {
+    0x2400, 0x5000, 0x5400, 0x7400, 0x2C00, 0x7C00, 0x5C00,
+}
+
+
+class SidCellError(ValueError):
+    """Malformed or inconsistent SID cell evidence."""
+
+
+def _one_hex_cell(pattern: re.Pattern[str], text: str, label: str, size: int) -> bytes | None:
+    matches = pattern.findall(text)
+    if not matches:
+        return None
+    if len(matches) != 1:
+        raise SidCellError(f"expected one {label} record, found {len(matches)}")
+    raw_hex = matches[0]
+    if len(raw_hex) != size * 2:
+        raise SidCellError(
+            f"{label} must contain exactly {size} bytes ({size * 2} hex digits); "
+            f"got {len(raw_hex)} hex digits"
+        )
+    try:
+        return bytes.fromhex(raw_hex)
+    except ValueError as exc:
+        raise SidCellError(f"{label} is not valid hexadecimal") from exc
+
+
+def inspect_sid_cells(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        raise SidCellError(f"CPU power inventory file not found: {path}")
+
+    text = path.read_text(encoding="utf-8", errors="replace")
+    source_bytes = path.read_bytes()
+
+    speed = _one_hex_cell(SPEED_RE, text, "speed-bin cell", 2)
+    thermal = _one_hex_cell(THERMAL_RE, text, "thermal-calibration cell", 8)
+
+    if speed is None:
+        speed_report: dict[str, Any] = {
+            "status": "unavailable",
+            "reason": (
+                "The exact sun50iw9p1 SID provider/cell was not readable or "
+                "was not exported by the running kernel."
+            ),
+            "raw_bytes_hex": None,
+            "raw_u16_le": None,
+            "matches_pinned_vendor_literal": None,
+            "opp_authorization": "not_approved",
+        }
+    else:
+        raw_u16 = int.from_bytes(speed, byteorder="little", signed=False)
+        speed_report = {
+            "status": "captured",
+            "raw_bytes_hex": speed.hex(),
+            "raw_u16_le": f"0x{raw_u16:04x}",
+            "matches_pinned_vendor_literal": raw_u16 in VENDOR_SPEED_LITERALS,
+            "pinned_vendor_literal_set": [f"0x{x:04x}" for x in sorted(VENDOR_SPEED_LITERALS)],
+            "opp_authorization": "not_approved",
+            "warning": (
+                "Do not use the pinned vendor cpufreq raw-value switch as an OPP "
+                "approval: its consumer casts the NVMEM result to u32* even though "
+                "the DTS cell is 2 bytes and the pinned NVMEM core allocates exactly "
+                "cell->bytes. Silicon-revision semantics also remain unverified."
+            ),
+        }
+
+    if thermal is None:
+        thermal_report: dict[str, Any] = {
+            "status": "unavailable",
+            "reason": "The exact sun50iw9p1 thermal calibration cell was not readable.",
+            "raw_bytes_hex": None,
+            "u16_le_words": None,
+            "calibration_status": "unknown",
+        }
+    else:
+        words = [
+            int.from_bytes(thermal[offset:offset + 2], byteorder="little", signed=False)
+            for offset in range(0, 8, 2)
+        ]
+        sensor3 = (
+            ((words[1] >> 12) & 0xF)
+            | (((words[2] >> 12) & 0xF) << 4)
+            | (((words[3] >> 12) & 0xF) << 8)
+        )
+        thermal_report = {
+            "status": "captured",
+            "raw_bytes_hex": thermal.hex(),
+            "u16_le_words": [f"0x{x:04x}" for x in words],
+            "factory_test_temperature_raw_0p1c": words[0] & 0x0FFF,
+            "sensor0_calibration_raw_12bit": words[1] & 0x0FFF,
+            "sensor1_calibration_raw_12bit": words[2] & 0x0FFF,
+            "sensor2_calibration_raw_12bit": words[3] & 0x0FFF,
+            "sensor3_calibration_raw_12bit": sensor3,
+            "calibration_status": "not_certified",
+            "warning": (
+                "The field layout mirrors the pinned sunxi-thermal-ng source "
+                "for sun50iw9p1. Raw fields do not prove that AVCC/thermal "
+                "calibration was accepted, that live temperatures are valid, "
+                "or that closed-loop DVFS is safe."
+            ),
+        }
+
+    return {
+        "source_file": path.name,
+        "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
+        "sid_provider": "sunxi-sid-ng@03006000",
+        "cells": {
+            "speed": {
+                "dts_provider_offset": "0x0",
+                "length_bytes": 2,
+                "report": speed_report,
+            },
+            "thermal_calibration": {
+                "dts_provider_offset": "0x14",
+                "length_bytes": 8,
+                "report": thermal_report,
+            },
+        },
+        "limitations": [
+            "This report decodes only the two bounded NVMEM cells captured by the read-only inventory collector.",
+            "The speed-bin value is raw evidence only. No OPP mask is inferred and no operating point is approved.",
+            "The thermal calibration fields are diagnostic only and do not certify a calibrated sensor or temperature limit.",
+            "No CPU clock, PMIC, regulator, PLL or thermal control register was read or written by this parser.",
+        ],
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("cpu_power_runtime", type=Path)
+    parser.add_argument("-o", "--output", type=Path)
+    args = parser.parse_args()
+
+    try:
+        report = inspect_sid_cells(args.cpu_power_runtime)
+    except (OSError, SidCellError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    output = json.dumps(report, indent=2, sort_keys=True) + "\n"
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(output, encoding="utf-8")
+    else:
+        sys.stdout.write(output)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
