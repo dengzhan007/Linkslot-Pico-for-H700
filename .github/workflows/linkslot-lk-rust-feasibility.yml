@@ -260,6 +260,12 @@ jobs:
           cargo check --manifest-path .ci/upstream-linkslot/Cargo.toml \
             -p slot --no-default-features --features device,h700-software
 
+      - name: Test H700 CPU Performance QuickRow fail-closed App behavior
+        run: |
+          cargo test --manifest-path .ci/upstream-linkslot/Cargo.toml \
+            -p slot --no-default-features --features device,h700-software \
+            h700_cpu_performance_quick_row_tests -- --nocapture
+
       - name: Cross-compile H700 input service C ABI layouts
         run: python3 scripts/test-h700-input-service-abi.py --clang clang --out build/audit-work/linkslot-1.0.45/input-service-abi
 
