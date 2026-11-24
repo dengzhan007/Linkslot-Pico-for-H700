@@ -1,6 +1,6 @@
-# Linkslot 1.0.36 on H700 LK: runtime and renderer integration plan
+# H700 Bare-Metal Runtime and Linkslot Frontend Integration Architecture
 
-**Status:** architecture plan plus host-only renderer/frontend/input integration proofs. The project has persistent `no_std + alloc` `slot-input`, `slot-model`, `slot-frontend-state`, `slot-core-picker`, `slot-link-state`, `slot-link-kind`, `slot-video-mode`, `slot-rom-id`, `slot-game-search`, and `slot-hold-state` crates; a C input service/queue and Rust gesture bridge; generic frontend/core-picker state machines; paired-save, link-mode and source-crop policy modules injected into the real Frontend/App source tree. Focused CI compiles the complete patched Linkslot `slot` crate with all overlays. It still has no bootable Linkslot runtime, physical GPIO/input or display/audio driver, or on-device execution. The upstream snapshot on `upstream/linkslot` remains immutable.
+**Status:** architecture and integration boundaries. The current upstream baseline is Linkslot 1.0.45. Earlier renderer/frontend/input feasibility proofs were made against Linkslot 1.0.36 and are historical until re-run against 1.0.45; see [the 1.0.45 baseline update](linkslot-1.0.45-portability-update.md). The project has persistent `no_std + alloc` `slot-input`, `slot-model`, `slot-frontend-state`, `slot-core-picker`, `slot-link-state`, `slot-link-kind`, `slot-video-mode`, `slot-rom-id`, `slot-game-search`, and `slot-hold-state` crates; a C input service/queue and Rust gesture bridge; generic frontend/core-picker state machines; paired-save, link-mode and source-crop policy modules injected into the real Frontend/App source tree. Focused CI compiles the complete patched Linkslot `slot` crate with all overlays. It still has no bootable Linkslot runtime, physical GPIO/input or display/audio driver, or on-device execution. The upstream snapshot on `upstream/linkslot` remains immutable.
 
 This plan resolves a practical integration question: which parts of Linkslot can become LK-resident logic, and which Linux services must be replaced rather than emulated.
 
@@ -48,7 +48,7 @@ The A32 LK image is the small resident boot/platform layer. The mGBA archive is 
 
 The `device` Cargo feature is a Linux handheld backend selection, not a freestanding runtime selection.
 
-Direct source inspection of the 1.0.36 snapshot confirms:
+The following source-specific findings were first audited against the 1.0.36 snapshot. They describe the migration boundary, not a claim that the 1.0.45 overlay has already passed full compilation:
 
 | Component | Current source behavior | H700/LK treatment |
 |---|---|---|
@@ -78,7 +78,7 @@ The current renderer already exposes a useful CPU-side command vocabulary:
 
 Texture creation and updates already receive CPU RGBA byte slices. This is a clean conceptual seam between UI face generation and the final pixel backend.
 
-The renderer boundary has now been injected in the temporary Linkslot 1.0.36 worktree: the GL Compositor implements an object-safe `Renderer` trait, and the real `Frontend` plus `CartFaces` accept that trait instead of a concrete GL Compositor. The same trait is implemented by the H700 SoftwareCompositor candidate. The immutable `upstream/linkslot` snapshot is unchanged.
+The renderer seam was first injected and validated in a temporary Linkslot 1.0.36 worktree; the same source anchors have since been statically checked against 1.0.45, but the new full overlay build remains pending: the GL Compositor implements an object-safe `Renderer` trait, and the real `Frontend` plus `CartFaces` accept that trait instead of a concrete GL Compositor. The same trait is implemented by the H700 SoftwareCompositor candidate. The immutable `upstream/linkslot` snapshot is unchanged.
 
 ### LK renderer baseline
 
@@ -100,7 +100,7 @@ Add Grid/LCD/CRT/FourPass filters, frame split/lift, bezel and rotation only aft
 
 A separate crate exists at `integration/linkslot/h700-render-core`. It is outside the immutable upstream snapshot and uses `#![no_std] + alloc` for non-test builds. It accepts a caller-supplied framebuffer slice and supports RGBA8888/BGRA8888, explicit width/height/stride validation, stable texture IDs, create/update/delete, clipped rectangles, nearest and bilinear texture sampling, source-over alpha, centre-based rotation, Game/Shot insertion, XRGB8888/GL_BGRA-compatible game-frame conversion, source-rectangle cropping and RGB gain. Its 13 host regression tests and non-test `cargo check` pass in GitHub Actions.
 
-The integration patcher `scripts/apply-linkslot-render-core.py` applies the crate to a temporary checkout pinned to Linkslot 1.0.36 commit `8590d6ff1b2caa26118051069c975106fbb14bd3`. It makes `slot-gfx` re-export the exact shared `Draw/TexId` types, gives the existing GL `Compositor` an object-safe `Renderer` implementation, and changes `Frontend` plus `CartFaces` to consume `&mut dyn Renderer`. All 21 renderer operations used by Linkslot's real `Frontend` are covered by the trait. The original `upstream/linkslot` branch remains unchanged.
+The historical renderer proof used `scripts/apply-linkslot-render-core.py` against Linkslot 1.0.36 snapshot commit `8590d6ff1b2caa26118051069c975106fbb14bd3`. The patcher now targets the archived 1.0.45 source branch HEAD; its new baseline and compatibility checks are tracked in [the 1.0.45 update](linkslot-1.0.45-portability-update.md). It makes `slot-gfx` re-export the exact shared `Draw/TexId` types, gives the existing GL `Compositor` an object-safe `Renderer` implementation, and changes `Frontend` plus `CartFaces` to consume `&mut dyn Renderer`. All 21 renderer operations used by Linkslot's real `Frontend` are covered by the trait. The original `upstream/linkslot` branch remains unchanged.
 
 **Verified:** complete feasibility workflow [45346015251](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45346015251) passed. It compiled the H700 SoftwareCompositor, ran its framebuffer integration regression, and Cargo-checked the full patched Linkslot `slot` crate with `device,h700-software` features. The same workflow also passed A32 BL33/exception-vector linking, header packaging and memory fail-closed tests, H700 read-only storage/VFS host regressions, and the real mGBA A32/newlib static archive build and symbol binding.
 
@@ -159,7 +159,7 @@ Do not add Linux syscall shims for `open`, `read`, `pthread`, `dlopen`, `ioctl` 
 | R5 — audio and power | PCM output, volume, battery, LEDs and orderly shutdown | real hardware loopback/latency, poweroff and repeated cold-start tests |
 | R6 — advanced Linkslot | artwork/font/theme, Wi-Fi/WebDAV, LAN web UI, achievements and MODs | each subsystem gets separate memory, security, compatibility and device regression gates |
 
-R1 does not require the entire 1.0.36 application to be ported first. R2/R3 establish the minimum playable vertical slice. Existing Linkslot behavior tests and golden UI assets should be reused to prevent the LK-specific implementation from drifting.
+R1 does not require the entire Linux Linkslot application to be ported first. R2/R3 establish the minimum playable vertical slice. Existing Linkslot behavior tests and golden UI assets should be reused to prevent the LK-specific implementation from drifting.
 
 ## 6. Immediate engineering order
 
