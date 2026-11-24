@@ -13,8 +13,9 @@ This is the persistent Rust business-layer extraction for the H700/LK port. Sour
 | `slot-link-state` | `SLK1` paired-GBA save-state codec and BIOS identity comparison | Validates exactly two length-prefixed states; BIOS inspection borrows the source slice rather than cloning the whole save state. |
 | `slot-link-kind` | GBA cable/wireless classification and Libretro serial-option mapping | Keeps the 43-code wireless table, clean retail Pokémon exception and ROM-hack cable fallback. |
 | `slot-video-mode` | `VideoMode` values and normalized source-frame crop geometry | Allocation-free parse/crop policy. INI file access remains in the host-side wrapper. |
+| `slot-rom-id` | SHA-256 ROM identity, fixed-width hex encoding/decoding and incremental `RomHasher` | Pure hashing is `no_std`; file/stream acquisition stays in the host/VFS wrapper. The hasher supports bounded chunk-by-chunk hashing. |
 
-All seven packages are `no_std`; APIs that own collections use `alloc`. The H700 target must not call allocation-bearing interfaces until the LK heap and approved memory arena are initialized. `slot-model` host path helpers require its default `host-compat` feature; freestanding builds use `--no-default-features`. The `slot-core-picker` crate uses the small `libm` dependency; the other six crates have no external runtime dependencies.
+All eight packages are `no_std`; APIs that own collections use `alloc`. The H700 target must not call allocation-bearing interfaces until the LK heap and approved memory arena are initialized. `slot-model` host path helpers require its default `host-compat` feature; freestanding builds use `--no-default-features`. The `slot-core-picker` crate uses the small `libm` dependency; the other six crates have no external runtime dependencies.
 
 ## C/Rust boundary and current limits
 
@@ -41,7 +42,9 @@ The temporary integration overlay keeps `upstream/linkslot` immutable and inject
 | `crates/slot/src/link_state.rs` | `4977eb3c563fb3d7b8fede8638b0b96c1fd36502` |
 | `crates/slot/src/link_kind.rs` | `df8cccd1c78b7c88a53e11128c630ff0bfc05ecb` |
 | `crates/slot/src/video_mode.rs` | `6cf21c2cae7fecfb2c090ab8c726fabf38442838` |
+| `crates/slot/src/rom_id.rs` | `2479194beb9a055ad064fbab39009c4c4a0a4337` |
 
 The generic `FacesLang` state machine has six tests. `CorePicker<C>` has six tests for open timing, navigation, edge refusal, reversal continuity, single-core behavior and write outcome. The paired-state codec has seven tests; link-kind policy has eight; video-mode parsing/cropping has six. The input adapter and gesture bridge have host regressions covering event order, bounded draining, invalid service tables, menu long-press and power long-press behavior. Every package is checked for both `armv7a-none-eabi` and `aarch64-unknown-none`.
+The ROM identity crate has four tests for the standard SHA-256 vector, upper/lowercase hex round trips, malformed hex rejection and incremental-versus-single-buffer equivalence. The host wrapper retains the original file/reader tests.
 
 The upstream workspace declares GPL-3.0-or-later. Preserve that license and attribution in redistributed builds.
