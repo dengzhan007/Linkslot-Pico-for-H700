@@ -174,7 +174,8 @@ def main() -> None:
         "source_repository": "TheGammaSqueeze/lk-mt6785",
         "source_commit": revision,
         "status": "host-generated-source-overlay-only",
-        "source_tree_modified": False,\n        "git_apply_check": "pass",
+        "source_tree_modified": False,
+        "git_apply_check": "pass",
         "files": records,
         "patch_sha256": sha256(patch_path.read_bytes()),
         "explicitly_not_changed": [
