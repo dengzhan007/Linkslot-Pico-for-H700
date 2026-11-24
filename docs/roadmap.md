@@ -37,13 +37,15 @@
 - [x] 确认现有 `Draw::{Rect,Tex,Turned,Game,Shot}` 已提供可复用的 CPU 绘制命令边界；并在临时 Linkslot 源码补丁中抽出对象安全 `Renderer` trait。
 - [x] 制定 LK 软件 framebuffer 的分层方案：先实现 RGBA 软件 2D 基线，再逐步补屏幕滤镜；不依赖 LK 内的 Linux fbdev/EGL/GLES/Mali userspace。
 - [x] 记录 Rust 运行时边界和 R0–R6 可验收垂直切片，见 [Linkslot H700 LK runtime architecture](linkslot-h700-runtime-architecture.md)。
-- [x] 在 `integration/linkslot/h700-render-core` 建立独立 `no_std + alloc` 软件 rasterizer 首轮代码，覆盖 Rect/Tex/Turned/Game/Shot、裁剪、alpha、最近邻/双线性采样、RGBA/BGRA byte order；11 项 host regression test 已编写。该 crate 不修改 `upstream/linkslot`，也不映射物理 framebuffer。
-- [x] 运行 renderer 的 `cargo check` 与 11 项 `cargo test`；GitHub Actions run `45340553836` 全部通过。
-- [x] 新增隔离源补丁脚本：将 `h700-render-core` 加入临时 Linkslot 工作树，并让 `slot-gfx` 重新导出同一 `Draw/TexId` 类型；上游快照保持只读。
-- [x] 让 GL `Compositor` 实现 `Renderer`，并将真实 `Frontend` 和 `CartFaces` 的绘制/纹理参数改为 `&mut dyn Renderer`；临时 Linkslot 的 `slot-gfx` 与完整 `slot` crate 均通过 Cargo check（Actions run `45345375995`）。
-- [ ] 实现 `slot-gfx::SoftwareCompositor`，用 `h700-render-core` 提供基础菜单和游戏画面；明确标注尚未支持的 GL 滤镜、边框、全屏旋转和帧缓冲双缓冲效果。
-- [ ] 将 framebuffer descriptor/scanout ownership、stride/像素格式与缓存维护审计单独关闭后，再连接 H700 显示 HAL。
-- [ ] 把 `slot-input` 与 `slot-model` 的纯逻辑整合进窄 no_std + alloc crate；不引入完整 Linux 应用依赖树。
+- [x] 在 `integration/linkslot/h700-render-core` 建立独立 `no_std + alloc` 软件 rasterizer，覆盖 Rect/Tex/Turned/Game/Shot、裁剪、alpha、最近邻/双线性采样、RGBA/BGRA byte order、Game source-rect crop 和 RGB gain；13 项 host regression test 通过。该 crate 不修改 `upstream/linkslot`，也不映射物理 framebuffer。
+- [x] 新增隔离源补丁脚本：将 `h700-render-core` 注入临时 Linkslot 工作树，让 `slot-gfx` 与 renderer 共享唯一的 `Draw/TexId` 类型；上游快照保持只读。
+- [x] 让 GL `Compositor` 实现对象安全 `Renderer` trait，并将真实 `Frontend` 与 `CartFaces` 的绘制/纹理接口改为 `&mut dyn Renderer`。
+- [x] 实现并编译 `slot-gfx::SoftwareCompositor`：调用者提供 framebuffer slice，支持基础菜单/游戏命令、texture upload/draw/delete、BGRA/RGBA、游戏画面缩放/裁切、power/brightness、RGB gain 和 bezel 纹理接入点；未实现的 shader/filter/高级 frame effects 必须通过 unsupported 状态显式报告。
+- [x] 完成 SoftwareCompositor framebuffer host integration regression，并在同一隔离 Linkslot 源树中编译完整 `slot` Frontend + `h700-software` feature。
+- [x] 最新完整 feasibility workflow [45346015251](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45346015251) 通过：13 项 rasterizer 测试、SoftwareCompositor framebuffer integration、完整 Frontend Renderer 注入编译、A32 BL33/头区/memory fail-closed 检查、H700 SD→GPT→FAT→VFS host 路径、真实 mGBA A32/newlib archive 构建和静态 API 绑定均成功。
+- [ ] 对 SoftwareCompositor 做与上游 GL backend 的 golden-image/逐命令语义对照，尤其核实 Draw 顺序、begin/end frame、brightness/power、Bezel 合成与纹理采样；当前通过的是基础 framebuffer 集成测试，不是完整视觉一致性。
+- [ ] 将 framebuffer descriptor/scanout ownership、stride/像素格式、cache clean/invalidate、double-buffer 与 panel handoff 审计关闭后，再连接 H700 显示 HAL。
+- [ ] 把 `slot-input` 与 `slot-model` 的纯逻辑整合进独立 `no_std + alloc` Rust 业务 crate，保留上游行为回归；不引入完整 Linux 应用依赖树。
 - [ ] 完成首个静态 UI → 本地 ROM → mGBA → 视频帧的 LK vertical slice；随后才接入输入、保存写入、音频/电源及网络服务。
 
 ### B. RG34XX / Allwinner H700 启动链与 BL33
