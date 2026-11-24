@@ -1,5 +1,7 @@
 # Linkslot Pico for H700
 
+> **移植任务续接入口：** [当前项目状态、分支 HEAD、CI 验证和下一步任务](docs/PROJECT-STATUS.md)。开始新的工作轮次前请先阅读此文件。
+
 面向 Anbernic H700 系列掌机的低功耗裸机游戏平台，首台目标设备为 **Anbernic RG34XX（非 SP）**。
 
 本项目以 GammaOS Pico / LK 的裸机运行架构为底层技术参考，以 [linkSlot](https://github.com/luguiyi/linkslot) 作为唯一前端和用户功能来源；不完整移植 GammaOS Pico 的前端，也不把现有 Linux Linkslot 二进制直接搬进 LK。
