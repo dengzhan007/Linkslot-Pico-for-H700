@@ -61,6 +61,7 @@ on:
       - "target/rg34xx_h700/rules.mk"
       - "scripts/test-h700-lk-project-guard.py"
       - "docs/h700-lk-project.md"
+      - "integration/linkslot/h700-render-core/**"
   workflow_dispatch:
 
 permissions:
@@ -146,6 +147,12 @@ jobs:
         uses: dtolnay/rust-toolchain@1.96.0
         with:
           targets: armv7a-none-eabi,aarch64-unknown-none
+
+      - name: Check H700 no_std software renderer
+        run: cargo check --manifest-path integration/linkslot/h700-render-core/Cargo.toml
+
+      - name: Run H700 software renderer host regressions
+        run: cargo test --manifest-path integration/linkslot/h700-render-core/Cargo.toml
 
       - name: Compile existing H700 AArch64 scaffold
         run: bash scripts/build-h700-objects.sh
