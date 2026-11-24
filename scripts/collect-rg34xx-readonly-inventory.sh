@@ -258,6 +258,25 @@ fi
 # sysfs/debugfs readbacks only: this block never changes cpufreq policy,
 # regulator voltage, clocks, thermal trips, or NVMEM contents.
 {
+    echo "== generic SoC identity (read-only sysfs attributes; no serial/chipid) =="
+    SOC_NODE_COUNT=0
+    for node in /sys/devices/soc0 /sys/bus/soc/devices/soc0; do
+        [ -d "$node" ] || continue
+        SOC_NODE_COUNT=$((SOC_NODE_COUNT + 1))
+        echo "-- $node --"
+        SOC_ATTR_COUNT=0
+        for attr in machine family soc_id revision; do
+            if [ -r "$node/$attr" ]; then
+                SOC_ATTR_COUNT=$((SOC_ATTR_COUNT + 1))
+                echo "[$attr]"
+                cat "$node/$attr"
+            fi
+        done
+        [ "$SOC_ATTR_COUNT" -gt 0 ] || echo "NO_READABLE_GENERIC_SOC_ID_ATTRIBUTES"
+    done
+    [ "$SOC_NODE_COUNT" -gt 0 ] || echo "NOT_PRESENT: no generic /sys/devices/soc0 node exported"
+    echo "NOTE: /sys/class/sunxi_info/sys_info and /dev/sunxi_soc_info are intentionally not read; the pinned sun50iw9 vendor sunxi_get_soc_ver() path may toggle CE clock/reset and the sys_info output includes serial/chipid."
+
     echo "== CPU topology and online set =="
     for path in /sys/devices/system/cpu/online /sys/devices/system/cpu/possible /sys/devices/system/cpu/present; do
         if [ -r "$path" ]; then
