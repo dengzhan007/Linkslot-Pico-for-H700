@@ -99,6 +99,7 @@ pub struct SoftwareRenderer<'a> {
     textures: Vec<Option<Texture>>,
     game: Option<Texture>,
     game_rect: [f32; 4],
+    game_source_rect: [f32; 4],
 }
 
 impl<'a> SoftwareRenderer<'a> {
@@ -134,6 +135,7 @@ impl<'a> SoftwareRenderer<'a> {
             textures: Vec::new(),
             game: None,
             game_rect: [0.0, 0.0, width as f32, height as f32],
+            game_source_rect: [0.0, 0.0, 1.0, 1.0],
         };
         renderer.clear([0, 0, 0, 255]);
         Ok(renderer)
@@ -157,6 +159,28 @@ impl<'a> SoftwareRenderer<'a> {
 
     pub fn framebuffer(&self) -> &[u8] {
         self.framebuffer
+    }
+
+    /// Apply an RGB multiplier to the current frame, preserving alpha and
+    /// respecting the caller's stride and native byte order.
+    pub fn apply_rgb_gain(&mut self, gain: [f32; 3]) {
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let offset = y as usize * self.stride + x as usize * 4;
+                let mut rgba = read_pixel(self.framebuffer, offset, self.format);
+                for channel in 0..3 {
+                    let factor = if gain[channel].is_finite() {
+                        gain[channel].max(0.0)
+                    } else {
+                        1.0
+                    };
+                    rgba[channel] = libm::roundf(rgba[channel] as f32 * factor)
+                        .max(0.0)
+                        .min(255.0) as u8;
+                }
+                write_pixel(self.framebuffer, offset, self.format, rgba);
+            }
+        }
     }
 
     pub fn rgba_at(&self, x: u32, y: u32) -> Option<[u8; 4]> {
@@ -278,6 +302,16 @@ impl<'a> SoftwareRenderer<'a> {
         self.game_rect = [x, y, width, height];
     }
 
+    /// Set normalized source UV coordinates for Draw::Game.
+    pub fn set_game_source_rect(&mut self, rect: [f32; 4]) {
+        if rect.iter().all(|value| value.is_finite())
+            && rect[2] > 0.0
+            && rect[3] > 0.0
+        {
+            self.game_source_rect = rect;
+        }
+    }
+
     pub fn draw_list(&mut self, items: &[Draw]) {
         for item in items {
             match *item {
@@ -362,6 +396,7 @@ impl<'a> SoftwareRenderer<'a> {
             width,
             height,
             filter,
+            [0.0, 0.0, 1.0, 1.0],
             x,
             y,
             w,
@@ -390,6 +425,7 @@ impl<'a> SoftwareRenderer<'a> {
             width,
             height,
             filter,
+            self.game_source_rect,
             r[0],
             r[1],
             r[2],
@@ -484,6 +520,7 @@ fn blit_texture(
     tex_width: u32,
     tex_height: u32,
     filter: TextureFilter,
+    source_rect: [f32; 4],
     x: f32,
     y: f32,
     w: f32,
@@ -559,9 +596,17 @@ fn blit_texture(
             if !(0.0..1.0).contains(&u) || !(0.0..1.0).contains(&v) {
                 continue;
             }
+            let sample_u = source_rect[0] + u * source_rect[2];
+            let sample_v = source_rect[1] + v * source_rect[3];
+            if !sample_u.is_finite() || !sample_v.is_finite()
+                || sample_u < 0.0 || sample_u >= 1.0
+                || sample_v < 0.0 || sample_v >= 1.0
+            {
+                continue;
+            }
             let mut rgba = match filter {
-                TextureFilter::Nearest => sample_nearest(texture, tex_width, tex_height, u, v),
-                TextureFilter::Linear => sample_linear(texture, tex_width, tex_height, u, v),
+                TextureFilter::Nearest => sample_nearest(texture, tex_width, tex_height, sample_u, sample_v),
+                TextureFilter::Linear => sample_linear(texture, tex_width, tex_height, sample_u, sample_v),
             };
             rgba[3] = ((rgba[3] as u32 * global_alpha as u32 + 127) / 255) as u8;
             if rgba[3] == 0 { continue; }
@@ -744,6 +789,28 @@ mod tests {
         r.draw_list(&[Draw::Tex { x: 0.0, y: 0.0, w: 4.0, h: 1.0, tex, alpha: 1.0 }]);
         assert_eq!(r.rgba_at(1, 0), Some([255, 0, 0, 255]));
         assert_eq!(r.rgba_at(2, 0), Some([0, 0, 255, 255]));
+    }
+
+    #[test]
+    fn game_source_rect_crops_the_uploaded_frame() {
+        let mut fb = [0u8; 4];
+        let mut r = SoftwareRenderer::new(1, 1, 4, PixelFormat::Rgba8888, &mut fb).unwrap();
+        r.upload_game_rgba(2, 1, &[255, 0, 0, 255, 0, 255, 0, 255]).unwrap();
+        r.set_game_source_rect([0.5, 0.0, 0.5, 1.0]);
+        r.draw_list(&[Draw::Game]);
+        assert_eq!(r.rgba_at(0, 0), Some([0, 255, 0, 255]));
+    }
+
+    #[test]
+    fn rgb_gain_respects_bgra_order_and_preserves_alpha() {
+        let mut fb = [0u8; 4];
+        let mut r = SoftwareRenderer::new(1, 1, 4, PixelFormat::Bgra8888, &mut fb).unwrap();
+        r.draw_list(&[Draw::Rect {
+            x: 0.0, y: 0.0, w: 1.0, h: 1.0,
+            colour: [0.8, 0.6, 0.4, 0.5],
+        }]);
+        r.apply_rgb_gain([0.5, 1.0, 1.5]);
+        assert_eq!(r.rgba_at(0, 0), Some([102, 153, 153, 255]));
     }
 
     #[test]
