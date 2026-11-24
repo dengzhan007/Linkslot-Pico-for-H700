@@ -31,6 +31,18 @@
 - [ ] 将这些候选适配整合成可由 H700 LK target 构建的完整 Linkslot workspace；当前 UI、配置、存档、输入事件循环和系统服务尚未作为设备程序链接。
 - [ ] 在真实 H700 runtime 中验证 mGBA 启动 ROM、视频帧、音频、输入、即时状态和电池存档；host archive/link 结果不能替代运行测试。
 
+### A3. Linkslot LK runtime 与显示渲染边界
+
+- [x] 对照 Linkslot 1.0.36 原始 `device_app`、`Frontend`、`App`、`slot-gfx`、`slot-ui`、输入、音频与电源实现，确认 `device` feature 仍是 Linux/std 后端，不是 LK/no_std 运行模式。
+- [x] 确认现有 `Draw::{Rect,Tex,Turned,Game,Shot}` 已提供可复用的 CPU 绘制命令边界；但 `Compositor` 和 `Frontend` 目前仍具体绑定 OpenGL compositor，需要先抽出 renderer contract。
+- [x] 制定 LK 软件 framebuffer 的分层方案：先实现 RGBA 软件 2D 基线，再逐步补屏幕滤镜；不依赖 LK 内的 Linux fbdev/EGL/GLES/Mali userspace。
+- [x] 记录 Rust 运行时边界和 R0–R6 可验收垂直切片，见 [Linkslot H700 LK runtime architecture](linkslot-h700-runtime-architecture.md)。
+- [ ] 抽出 renderer-independent Draw/texture 接口并增加 host golden-image tests；保持 `upstream/linkslot` 原样不变。
+- [ ] 在 host buffer 上实现软件 raster backend，覆盖 Rect/Tex/Turned/Game/Shot 和裁剪/alpha/旋转；暂不连接物理 framebuffer。
+- [ ] 将 framebuffer descriptor/scanout ownership、stride/像素格式与缓存维护审计单独关闭后，再连接 H700 显示 HAL。
+- [ ] 把 `slot-input` 与 `slot-model` 的纯逻辑整合进窄 no_std + alloc crate；不引入完整 Linux 应用依赖树。
+- [ ] 完成首个静态 UI → 本地 ROM → mGBA → 视频帧的 LK vertical slice；随后才接入输入、保存写入、音频/电源及网络服务。
+
 ### B. RG34XX / Allwinner H700 启动链与 BL33
 
 - [x] 完成 RG34XX 非 SP 当前活动链与 fallback 的只读取证：stock Boot0 → BaseOS AArch64 native SPL → vendor BL31 → AArch32 SVC BL33 loader → p4+48 MiB BOL4 Android v2 → AArch64 Linux。TOC1 U-Boot 与 p4+0 gzip 镜像保留为 stock fallback，不是本次活动启动路径。
