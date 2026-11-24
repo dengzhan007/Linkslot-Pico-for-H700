@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Add a static Libretro API entry to the temporary Linkslot 1.0.36 checkout."""
+"""Add a static Libretro API entry to the temporary Linkslot 1.0.45 checkout."""
 from __future__ import annotations
 import argparse
 import os
@@ -25,8 +25,8 @@ def patch_checkout(source: Path) -> None:
         raise RuntimeError("slot-retro source files are missing")
 
     workspace = (source / "Cargo.toml").read_text(encoding="utf-8")
-    if 'version = "1.0.36"' not in workspace:
-        raise RuntimeError("expected immutable Linkslot 1.0.36 source snapshot")
+    if 'version = "1.0.45"' not in workspace:
+        raise RuntimeError("expected immutable Linkslot 1.0.45 source snapshot")
 
     cargo = cargo_file.read_text(encoding="utf-8")
     lib = lib_file.read_text(encoding="utf-8")
@@ -198,6 +198,7 @@ def patch_checkout(source: Path) -> None:
                 sample_rate: 0.0,
             },
             loaded: false,
+            six_button: false,
             state_size: None,
             _library: library,
         })
