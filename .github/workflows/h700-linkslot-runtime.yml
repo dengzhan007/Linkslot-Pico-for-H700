@@ -87,7 +87,7 @@ jobs:
       - name: Test H700 CPU Performance QuickRow fail-closed App behavior
         run: |
           cargo test --manifest-path .ci/upstream-linkslot/Cargo.toml \
-            -p slot --no-default-features --features device,h700-software \
+            -p slot --lib --no-default-features --features device,h700-software \
             h700_cpu_performance_quick_row_tests -- --nocapture
 
   c-input-service:
