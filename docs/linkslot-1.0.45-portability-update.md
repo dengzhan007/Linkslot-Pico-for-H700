@@ -10,13 +10,13 @@ Linkslot 源码快照现存放于本仓库 `upstream/linkslot` 分支根目录�
 
 | 快照位置 | 上游分支 | 源仓库 commit | Linkslot 版本 | 文件数 |
 |---|---|---|---:|---:|
-| `upstream/linkslot` 根目录 | `main` | `25664ecd2a712279dfa840fbc1ea896ebc0ef0ba` | 1.0.45 | 851 |
-| `upstream/linkslot/DEV` | `DEV` | `3cf0b04a1d31344bc05972cbc829fc2b69ff84c7` | 1.0.42 | 851 |
-| `upstream/linkslot/test` | `test` | `fbe9fcab8ad26da8cf767d4ad820579682ca10dd` | 1.0.45 | 851 |
+| `upstream/linkslot` 根目录 | `main` | `25664ecd2a712279dfa840fbc1ea896ebc0ef0ba` | 1.0.45 | 852 |
+| `upstream/linkslot/DEV` | `DEV` | `3cf0b04a1d31344bc05972cbc829fc2b69ff84c7` | 1.0.42 | 852 |
+| `upstream/linkslot/test` | `test` | `fbe9fcab8ad26da8cf767d4ad820579682ca10dd` | 1.0.45 | 852 |
 
 归档分支的 GitHub HEAD 为 `3b06d96adadd0375f071555ecb3cc20c3a5b53db`。这是本项目的归档提交，不是上游 GitCode commit。overlay patcher 应固定归档 HEAD，同时在报告中保留原始来源 commit，不能混为一谈。
 
-main 与 test 快照的 851 个源码文件逐 blob 一致；DEV 是更早的 1.0.42，与 1.0.45 相比有 26 个文件内容不同。DEV/test 是快照目录，不是 git branch 历史，不能对这些目录执行 merge/rebase。
+main 与 test 快照的 852 个源码文件逐 blob 一致；DEV 是更早的 1.0.42，与 1.0.45 相比有 26 个文件内容不同。DEV/test 是快照目录，不是 git branch 历史，不能对这些目录执行 merge/rebase。
 
 ## 2. 裸机架构和语言分工
 
