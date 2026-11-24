@@ -1,6 +1,6 @@
 # Linkslot 1.0.36 on H700 LK: runtime and renderer integration plan
 
-**Status:** source-audited architecture proposal. No Linkslot frontend binary, software renderer, H700 display/input/audio driver, or on-device runtime is implemented by this document. The upstream snapshot on `upstream/linkslot` remains immutable.
+**Status:** architecture plan plus host-only renderer/frontend integration proof. The project has a `no_std + alloc` raster core, a temporary Linkslot `SoftwareCompositor` injection, and a successful compile of the complete patched `slot` crate; it still has no bootable Linkslot runtime, physical display/input/audio driver, or on-device execution. The upstream snapshot on `upstream/linkslot` remains immutable.
 
 This plan resolves a practical integration question: which parts of Linkslot can become LK-resident logic, and which Linux services must be replaced rather than emulated.
 
@@ -8,23 +8,39 @@ This plan resolves a practical integration question: which parts of Linkslot can
 
 Do **not** port the current Linux `device` application as a whole and do not build a POSIX/Linux compatibility layer inside LK.
 
-Use a split runtime:
+Use the confirmed three-language split:
 
 ```
-GammaOS LK (AArch32 BL33, Cortex-A53)
-  ├─ H700 board services
-  │    timer / console / allocator / display / input / audio / SD
-  ├─ Linkslot LK runtime
-  │    bounded single-core event loop, path/VFS service, save manager
-  ├─ Linkslot reusable logic
-  │    selected domain models, input state machine, UI state transitions
-  ├─ software 2D renderer
-  │    Draw list + RGBA texture store + H700 framebuffer output
-  └─ static Libretro host
-       mGBA A32 archive + VFS v3 + newlib/LK service bindings
+AArch32 GammaOS LK / BL33 (C + ARM assembly)
+  ├─ H700 C BSP/HAL and runtime services
+  │    boot / IRQ / timer / memory / display / input / audio / SD / power
+  ├─ C ABI service boundary
+  │    framebuffer / VFS / monotonic time / input / PCM / power / allocator
+  ├─ Rust no_std Linkslot runtime + frontend business
+  │    event loop / game library / menu state / config / UI / save workflow
+  │    no Linux device_app, std threads, process or dynamic .so loader
+  ├─ Rust no_std software renderer
+  │    Linkslot Draw contract → caller-owned framebuffer slice
+  └─ C/C++ static emulator cores
+       mGBA / Gambatte / gpSP → Libretro/Core ABI → VFS v3 + newlib services
+
+Host-only Python/Shell tooling
+  └─ source audit / patch application / build orchestration / test reporting
 ```
 
 The first runtime remains single-active-core and fails closed until the BL31-to-BL33 secondary-core state is proven. LK's current scheduler is not assumed to be SMP-safe.
+
+### Language ownership and interface rules
+
+| Layer | Language | Owns | Must not own |
+|---|---|---|---|
+| Boot + H700 hardware | C / ARM assembly | entry/exception code, MMIO, clocks, IRQ, memory map, timer, display scanout, GPIO, PCM, MMC, PMIC, low-level diagnostics | Linkslot menu/game policy or emulator internals |
+| Platform runtime | C services + narrow C ABI | allocator/syscalls, monotonic time, bounded input/audio queues, VFS and board service adapters | Linux process model or full POSIX compatibility |
+| Linkslot frontend | Rust `no_std` | application state, game library, menu/UI transitions, config semantics, key mapping, user save/sync workflow, renderer orchestration | raw MMIO, guessed physical addresses, Linux `std` services |
+| Emulator cores | C/C++ | emulation, core-owned state, video/audio generation and core options | frontend UI, board register access or private filesystem paths |
+| Development tools | Python/Shell | host-only source transformation, test generation, analysis and packaging checks | any firmware/runtime dependency |
+
+The C↔Rust boundary must be a small versioned ABI with explicit ownership/lifetime rules, fixed-width types and error returns. C owns device resources and DMA/scanout buffers; Rust borrows service handles and bounded buffers only for documented call lifetimes. A C++ core must export a C-compatible entry table. The frontend calls a core only through the stable Core ABI, not through C++ symbols.
 
 The A32 LK image is the small resident boot/platform layer. The mGBA archive is approximately 1.87 MB in the measured diagnostic link, over twice the current 896 KiB host-side BL33 package ceiling; it remains a separate static-core/application payload. Its runtime load address is **not approved**. See [BL33 memory ownership](h700-bl33-memory-ownership.md).
 
@@ -62,7 +78,7 @@ The current renderer already exposes a useful CPU-side command vocabulary:
 
 Texture creation and updates already receive CPU RGBA byte slices. This is a clean conceptual seam between UI face generation and the final pixel backend.
 
-The current seam is incomplete for LK: `Frontend` and many helper methods take the concrete GL `Compositor` type, not a renderer trait. Refactor the renderer boundary before the full UI can select a backend. The common contract needs texture create/update/delete, frame begin/end, draw-list submission, emulator-frame upload, screen geometry/effect controls and an optional readback operation for diagnostics.
+The renderer boundary has now been injected in the temporary Linkslot 1.0.36 worktree: the GL Compositor implements an object-safe `Renderer` trait, and the real `Frontend` plus `CartFaces` accept that trait instead of a concrete GL Compositor. The same trait is implemented by the H700 SoftwareCompositor candidate. The immutable `upstream/linkslot` snapshot is unchanged.
 
 ### LK renderer baseline
 
@@ -82,13 +98,13 @@ Add Grid/LCD/CRT/FourPass filters, frame split/lift, bezel and rotation only aft
 
 ### First host-only implementation and Frontend injection
 
-A separate crate exists at `integration/linkslot/h700-render-core`. It is outside the immutable upstream snapshot and uses `#![no_std] + alloc` for non-test builds. It accepts a caller-supplied framebuffer slice and supports RGBA8888/BGRA8888, explicit width/height/stride validation, stable texture IDs, create/update/delete, clipped rectangles, nearest and bilinear texture sampling, source-over alpha, centre-based rotation, Game/Shot insertion and XRGB8888/GL_BGRA-compatible game-frame conversion. Texture allocation failures are reported through `RenderError`. Its 11 host regression tests and non-test `cargo check` pass in GitHub Actions.
+A separate crate exists at `integration/linkslot/h700-render-core`. It is outside the immutable upstream snapshot and uses `#![no_std] + alloc` for non-test builds. It accepts a caller-supplied framebuffer slice and supports RGBA8888/BGRA8888, explicit width/height/stride validation, stable texture IDs, create/update/delete, clipped rectangles, nearest and bilinear texture sampling, source-over alpha, centre-based rotation, Game/Shot insertion, XRGB8888/GL_BGRA-compatible game-frame conversion, source-rectangle cropping and RGB gain. Its 13 host regression tests and non-test `cargo check` pass in GitHub Actions.
 
 The integration patcher `scripts/apply-linkslot-render-core.py` applies the crate to a temporary checkout pinned to Linkslot 1.0.36 commit `8590d6ff1b2caa26118051069c975106fbb14bd3`. It makes `slot-gfx` re-export the exact shared `Draw/TexId` types, gives the existing GL `Compositor` an object-safe `Renderer` implementation, and changes `Frontend` plus `CartFaces` to consume `&mut dyn Renderer`. All 21 renderer operations used by Linkslot's real `Frontend` are covered by the trait. The original `upstream/linkslot` branch remains unchanged.
 
-**Verified:** the temporary `slot-gfx` and full `slot` crates both pass Cargo check with the injected renderer boundary in Actions run [45345375995](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45345375995). The same run also passed the GammaOS LK A32 BL33 entry/vector link check, header packaging contract, and H700 project/memory fail-closed gate before continuing into the remaining Linkslot integration tests.
+**Verified:** complete feasibility workflow [45346015251](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45346015251) passed. It compiled the H700 SoftwareCompositor, ran its framebuffer integration regression, and Cargo-checked the full patched Linkslot `slot` crate with `device,h700-software` features. The same workflow also passed A32 BL33/exception-vector linking, header packaging and memory fail-closed tests, H700 read-only storage/VFS host regressions, and the real mGBA A32/newlib static archive build and symbol binding.
 
-This proves that the real Linkslot frontend can be compiled against an interchangeable renderer interface while preserving the original GL backend. It does **not** yet provide an H700 `SoftwareCompositor`, connect a physical framebuffer, port the Linux `device_app` scheduler/services, or prove a device boot. The next implementation is an H700 renderer adapter over this raster core; advanced GL effects, bezel composition, full-panel rotation, double buffering and cache maintenance remain separate acceptance items.
+This proves an interchangeable renderer seam and a host-tested software framebuffer backend, not full GL feature parity or device scanout. The compositor test covers the current integration contract and does not replace golden-image comparison against the upstream GL backend. Advanced shaders/filters, all frame effects, full-panel rotation, display ownership, double buffering and cache maintenance remain separate acceptance items. No physical framebuffer is mapped or written.
 
 ### Display memory facts and limits
 
@@ -143,11 +159,11 @@ R1 does not require the entire 1.0.36 application to be ported first. R2/R3 esta
 ## 6. Immediate engineering order
 
 1. Keep the original `upstream/linkslot` tree immutable. Record every extracted source file and upstream path in the integration manifest.
-2. Define a renderer-independent `Draw` crate/trait contract and write host golden tests for `Rect`, `Tex`, `Turned`, `Game` and `Shot`.
-3. Implement the software raster backend against a host buffer first; do not connect it to the physical framebuffer yet.
-4. Split `slot-input` and the pure portion of `slot-model` into isolated no_std + alloc-compatible modules without changing their public behavior.
-5. Add the H700 framebuffer/display handoff only after the live scanout and BL33 resource-ownership proof; similarly defer audio/input/power MMIO until each board service has its own evidence.
-6. Keep the mGBA core as a separate static payload. Its linker map, BSS, stack, heap and ROM/save buffers must fit inside a subsequently approved application arena.
+2. Golden-test the H700 SoftwareCompositor against the real GL backend for draw order, crop/rotation, brightness/power, bezel and texture sampling; treat unsupported shader effects as explicit capability gaps.
+3. Extract `slot-input` and the pure portions of `slot-model` into a narrow Rust `no_std + alloc` frontend-business crate. Preserve upstream tests/behavior and prove AArch32 compilation; do not make the complete Linux app a dependency.
+4. Build a bounded Rust LK event loop and static menu/game-library model over C-provided time, input, VFS, display and core services. Keep actual GPIO/framebuffer hardware ownership in C and keep memory use bounded.
+5. Connect the H700 framebuffer/display handoff only after live scanout and BL33 resource ownership are proven; similarly defer audio/input/power MMIO until each board service has its own evidence.
+6. Keep mGBA/Gambatte/gpSP as separate C/C++ static cores. Their linker map, BSS, stack, heap and ROM/save buffers must fit inside a subsequently approved application arena.
 
 ## 7. Explicit non-goals at this stage
 
