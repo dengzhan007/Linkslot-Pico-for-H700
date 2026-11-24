@@ -138,18 +138,35 @@ This source review narrows the clock-control investigation and replaces “unkno
 | PLL field model | N/M/P shifts and output-gating field identified |
 | Lock protocol | New-mode flow identified; status bit remains build-config dependent |
 | PLL enable bit | Source explicitly says boot-enable bit 31 must not be dynamically changed |
-| CPU shared-domain semantics | `opp-shared` and shared `clk_pll_cpu` in reference DTS |
-| Usable OPP frequency/voltage grid | **Not established**; factor table is explicitly marked incorrect |
-| Actual RG34XX register values / clock parent | **Not read from the target** |
-| CPU1–CPU3 BL33 state | **Not proven** |
+| CPU shared-domain semantics | Reference DTS has `opp-shared`; live Linux has CPU0–CPU3 in one cpufreq policy |
+| Current Linux CPU parent | **Observed:** `pll_cpu → cpu → cpuapb`; `cpu=pll_cpu` in the capture |
+| Current Linux backup PLL | **Observed:** `pll_periph0=600 MHz`, 4/4 prepare/enable users; separate tree at capture |
+| Physical CPU rate | **Unresolved:** cpufreq and `clk_summary` readings diverge across samples |
+| CPU supply | **Confirmed in live FDT/runtime framework:** AXP2202 DCDC1, CPU0 consumer at 1160 mV in captured sample |
+| Usable OPP frequency/voltage grid | **Not established**; SID raw `0x6c00` is mainline candidate bin 5 only; factor table is explicitly marked incorrect |
+| Actual PLL/CCU register values at BL33 | **Not read**; Linux `clk_summary` is not MMIO readback |
+| CPU1–CPU3 BL33 state | **Not proven**; all four CPUs are online only in the later Linux runtime capture |
 | DVFS write authorization | **Not approved** |
 
 No code path under `platform/h700/power` was changed by this audit. The C service remains `POLICY_ONLY`, `hardware_applied = 0`, and the Linkslot CPU Performance QuickRow remains visibly unavailable and inert.
 
+### 7.1 RG34XX live Linux evidence (2026-11-25)
+
+The new read-only capture is summarized in [RG34XX CPUX live audit](rg34xx-cpux-live-audit-2026-11-25.md), with raw report files under [reports/rg34xx-inventory-20261125-cpux](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261125-cpux).
+
+- Live FDT resolves CPU0 `cpu-supply` phandle `0x4f` to `axp2202-dcdc1`, declared 0.5–1.54 V, `always_on` and `boot_on`. Linux regulator debugfs identifies its consumer as `cpu0` and reports 1.16 V in this sample. This is regulator-framework evidence, not raw PMIC-register readback at BL33.
+- The captured Linux clock tree is `pll_cpu → cpu → cpuapb`; the reported rates are 1512 / 1512 / 378 MHz, with AXI 756 MHz. `pll_periph0` is a distinct 600 MHz parent tree with four prepare/enable users; it is not the current CPU parent in this snapshot.
+- Linux reports CPUs 0–3 online and one cpufreq policy affecting all four. This reinforces the shared-clock design; it does not determine secondary-core state at BL31→BL33.
+- cpufreq sysfs reports 1416 MHz on the per-CPU nodes (and 1320 MHz in a later policy0 read), while `clk_summary` reports `pll_cpu=1512 MHz`. Other repeated samples also diverge. Trust the observed parent relation, not one sampled frequency as the physical CPU rate.
+- The DT declares a shared OPP table with several voltage variants. The raw SID speed cell is `0x6c00`; mainline diagnostic decoding suggests candidate bin 5, but vendor literal matching fails and `opp_authorization` remains `not_approved`. The 1416 MHz / 1160 mV observation is numerically consistent with one DT variant only; it does not prove that the corresponding speed-bin mask was selected.
+- The thermal calibration bytes exist, but the kernel reports `avcc is not calibrated`; the temperature readings are diagnostic only and cannot drive closed-loop DVFS.
+
+These observations reduce uncertainty about the running Linux configuration, but they do not replace BL33-entry register/rail readback, the exact Linux 4.9.170 OPP implementation audit, timer continuity, or secondary-core handoff proof.
+
 ## 8. Next work
 
-1. Regenerate the RG34XX read-only inventory and capture the complete live FDT plus CPUFreq/regulator/thermal/clock state.
-2. Add only source- and permission-verified read-only register capture for `PLL_CPU` / `CPU_CFG`; first establish the live CCU mapping and a safe read method. Do not add MMIO writes.
-3. Extend the BL31→BL33 audit to prove CPU1–CPU3 state and the timer/monotonic-clock path.
-4. Reconcile lock-bit behavior with the exact shipping kernel/U-Boot configuration and authoritative H700 register documentation.
-5. Only after all evidence is complete, design the voltage/clock transition state machine and its host failure-injection tests. Keep the runtime unavailable until board OPP approval.
+1. Audit the exact shipping Linux 4.9.170 cpufreq/OPP code path against the live DT table and raw SID `0x6c00`; do not treat the mainline candidate bin or voltage correlation as approval.
+2. Explain the divergence between cpufreq sysfs and `clk_summary` using synchronized repeated samples and the exact clock/cpufreq driver implementation.
+3. Extend the BL31→BL33 audit to prove CPU1–CPU3 state, the single-core invariant and timer/monotonic-clock continuity.
+4. Reconcile the PLL lock-status bit with the exact shipping kernel/U-Boot configuration and authoritative H700 register documentation; distinguish Linux framework clock data from direct register readback.
+5. Resolve AVCC/thermal calibration or establish an independently verified sensor path. Only after all evidence is complete, design the transition state machine and host failure-injection tests; keep the runtime unavailable until board OPP approval.
