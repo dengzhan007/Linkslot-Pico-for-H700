@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the H700 software-render contract to an isolated Linkslot 1.0.36 tree.
+"""Apply the H700 software-render contract to an isolated Linkslot 1.0.45 tree.
 
 The immutable upstream snapshot is never edited in the repository. CI applies
 this patch to a temporary checkout and later exports the resulting source diff.
@@ -13,7 +13,7 @@ import subprocess
 from pathlib import Path
 
 
-EXPECTED_SOURCE = "8590d6ff1b2caa26118051069c975106fbb14bd3"
+EXPECTED_SOURCE = "3b06d96adadd0375f071555ecb3cc20c3a5b53db"
 
 
 def run_git(source: Path, *args: str) -> str:
@@ -56,8 +56,8 @@ def main() -> int:
         raise SystemExit("refusing to patch an unexpected Linkslot source revision")
 
     root_manifest = source / "Cargo.toml"
-    if 'version = "1.0.36"' not in root_manifest.read_text(encoding="utf-8"):
-        raise SystemExit("source tree is not the pinned Linkslot 1.0.36 snapshot")
+    if 'version = "1.0.45"' not in root_manifest.read_text(encoding="utf-8"):
+        raise SystemExit("source tree is not the pinned Linkslot 1.0.45 snapshot")
 
     if not (crate / "Cargo.toml").is_file() or not (crate / "src/lib.rs").is_file():
         raise SystemExit("render-core crate is incomplete")
@@ -536,7 +536,7 @@ mod tests {
 
     run_git(source, "diff", "--check")
     changed = run_git(source, "status", "--short")
-    print("Applied shared H700 render contract to temporary Linkslot 1.0.36 tree.")
+    print("Applied shared H700 render contract to temporary Linkslot 1.0.45 tree.")
     print(f"Base: {EXPECTED_SOURCE}")
     print("Changed files:")
     print(changed)
