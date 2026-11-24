@@ -34,11 +34,11 @@ native SPL 从 p4 + 40 MiB 读取 monitor、DTBO、DTB 与 32 KiB A32 loader，�
 | 层 | 职责 | 设计约束 |
 |---|---|---|
 | Boot handoff | native SPL → vendor BL31 → A32 SVC BL33（当前 GammaOS LK 替代候选） | 保留原生 DRAM/monitor 链；A32 入口契约须实机验证；Linux-start SMC 仅用于 Linux 启动 |
-| H700 HAL | 时钟、计时器、MMU/cache、GPIO、PMIC、背光、显示、音频、SD、USB、Wi-Fi | 所有寄存器与时序按 Allwinner H700 和 RG34XX 具体板型重新确认 |
-| Runtime | 任务/线程、锁、事件、内存分配、日志、文件系统封装 | 提供 Linkslot 实际需要的服务；不为兼容 Linux 而建设完整 POSIX 模拟层 |
-| Emulator Host | GB/GBC/GBA Core ABI、帧调度、输入、音频、视频、持久化 | 模拟器核心与 Linkslot UI 解耦，核心可替换 |
-| Linkslot App | 唯一前端：卡带 UI、游戏库、配置、MOD、云同步入口 | 尽量跟随上游；平台差异经适配层提供，不散落到业务逻辑 |
-| LAN Services | HTTP Server、云同步 WebDAV 客户端、可选调试服务 | Web 管理仅家庭 LAN；云同步只在用户手动触发时运行 |
+| C/ASM 底层（LK + H700 HAL） | BL33、异常/中断、内存/时钟、GPIO、PMIC、背光、显示、音频、SD、USB、Wi-Fi，以及平台服务 ABI | C 为主、ARM 汇编用于启动/异常等必要路径；寄存器与时序必须按 H700/具体板型取证 |
+| Rust 裸机 runtime | 单核事件循环、时间/分配器封装、服务绑定、VFS、输入事件桥、Core Host | `no_std` 优先；服务通过显式 C ABI 注入；不模拟 Linux 进程/线程/文件描述符 |
+| Rust Linkslot 业务层 | 游戏库、菜单/UI 状态、按键映射、配置、存档策略、MOD/云同步业务规则 | 以 Linkslot 上游行为和数据语义为准；逐 crate 拆出纯逻辑，避免业务层直接访问 MMIO |
+| C/C++ Emulator Core | GB/GBC/GBA 核心、核心时钟、帧生成与核心内部状态 | 静态链接、统一 Core ABI；不让 UI 依赖单个核心的内部符号 |
+| LAN Services | HTTP Server、云同步 WebDAV 客户端、可选调试服务 | 作为 Rust 业务层调用的后续服务；家庭 LAN 限定，云同步只在用户手动触发时运行 |
 
 ## 4. Linkslot 上游同步边界
 
@@ -50,7 +50,16 @@ Linkslot 的 UI 与用户功能是唯一产品前端，不需要为前端切换�
 - 只有无法通过外部适配解决时，才局部修改 subtree 内上游文件；每个改动都要记录原路径、上游基线、原因和测试，持续控制本地补丁规模。
 - 不把整个 Linkslot Cargo workspace 无差别合并为 H700 根 workspace；先逐 crate 审查依赖，再通过窄 feature/path dependency 引入确实需要的部分。
 
-特别注意：Linkslot 目前是 Rust 工作区，部分代码依赖 Rust `std`、线程、文件系统、网络、动态库和 Linux 进程接口；GammaOS Pico/LK 不是 Linux 运行环境。不能假设将 Linkslot crate 直接加入 LK 工程就能编译运行。首先必须验证所需 Rust 运行时服务和工具链方案，确定可原样复用的 crate，以及必须替换的平台后端。不要为了减少几处改动而建设庞大的 Linux syscall/POSIX 兼容层。
+### 3.1 目标语言边界（已确认）
+
+本项目采用**C 底层 + Rust 前端业务层 + C/C++ 模拟器核心**，而不是按源仓库原有语言平均分摊移植任务：
+
+- C/ARM 汇编拥有硬件与启动控制权。LK、board init、寄存器/MMIO、IRQ、timer、DMA、显示 scanout、输入采样、PCM、SD/FAT block provider、PMIC/power 和 newlib syscall hooks 属于底层。
+- Rust `no_std` 承载 Linkslot 的产品业务和 UI 状态。它通过稳定的服务 trait/窄 C ABI 调用底层能力；不得直接读写硬件寄存器，也不以 Linux `std` 后端作为依赖。
+- C/C++ 模拟器作为独立静态核心，通过版本化 Core ABI 与 Rust 前端通信；核心持有内部模拟器状态，Rust 管理核心选择、生命周期、游戏设置和 UI。
+- Python/Shell 是 host tooling，不是固件组件。补丁脚本把修改施加到临时上游工作树，不得成为设备上的解释器依赖。
+
+Linkslot 是 Rust 工作区，但当前 `device` feature 的 AArch64 Linux/`std` 程序不是裸机 runtime。不能把完整 workspace 直接加入 LK，也不能以“Cargo check 通过”声称前端已裸机化。正确路径是逐 crate 提取纯业务逻辑、替换 Linux 服务后端，并在 host 上进行行为回归与 AArch32 freestanding 编译/链接验证。不得为了少量调用而建设庞大的 Linux syscall/POSIX 兼容层。
 
 详细的 subtree 同步规则、源码分级、CI 检查和每次上游更新流程见 [Linkslot 上游同步与移植边界](linkslot-upstream-sync.md)。
 
