@@ -748,7 +748,7 @@ mod tests {
             h: 1.0,
             colour: [0.0, 0.0, 1.0, 1.0],
         }]);
-        assert_eq!(&fb, &[255, 0, 0, 255]);
+        assert_eq!(r.framebuffer(), &[255, 0, 0, 255]);
         assert_eq!(r.rgba_at(0, 0), Some([0, 0, 255, 255]));
     }
 
