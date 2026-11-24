@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["slot-input", "slot-model", "slot-frontend-state", "slot-core-picker"]
+members = ["slot-input", "slot-model", "slot-frontend-state", "slot-core-picker", "slot-link-state"]
 
 [profile.release]
 panic = "abort"
