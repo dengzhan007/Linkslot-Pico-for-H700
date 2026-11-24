@@ -182,7 +182,8 @@ impl<'a> SoftwareRenderer<'a> {
         if rgba.len() < bytes {
             return Err(RenderError::InvalidTextureData);
         }
-        let mut pixels = Vec::with_capacity(bytes);
+        let mut pixels = Vec::new();
+        pixels.try_reserve_exact(bytes).map_err(|_| RenderError::TextureTooLarge)?;
         pixels.extend_from_slice(&rgba[..bytes]);
         let id = TexId(self.textures.len());
         self.textures.push(Some(Texture { width, height, rgba: pixels, filter }));
@@ -230,7 +231,8 @@ impl<'a> SoftwareRenderer<'a> {
         if bgra.len() < bytes {
             return Err(RenderError::InvalidTextureData);
         }
-        let mut rgba = Vec::with_capacity(bytes);
+        let mut rgba = Vec::new();
+        rgba.try_reserve_exact(bytes).map_err(|_| RenderError::TextureTooLarge)?;
         for px in bgra[..bytes].chunks_exact(4) {
             rgba.extend_from_slice(&[px[2], px[1], px[0], px[3]]);
         }
@@ -248,7 +250,8 @@ impl<'a> SoftwareRenderer<'a> {
         if rgba.len() < bytes {
             return Err(RenderError::InvalidTextureData);
         }
-        let mut pixels = Vec::with_capacity(bytes);
+        let mut pixels = Vec::new();
+        pixels.try_reserve_exact(bytes).map_err(|_| RenderError::TextureTooLarge)?;
         pixels.extend_from_slice(&rgba[..bytes]);
         self.game = Some(Texture { width, height, rgba: pixels, filter: TextureFilter::Nearest });
         Ok(())
