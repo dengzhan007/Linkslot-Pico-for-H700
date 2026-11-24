@@ -60,6 +60,7 @@ on:
       - "project/rg34xx_h700.mk"
       - "target/rg34xx_h700/rules.mk"
       - "scripts/test-h700-lk-project-guard.py"
+      - "scripts/apply-linkslot-render-core.py"
       - "docs/h700-lk-project.md"
       - "integration/linkslot/h700-render-core/**"
   workflow_dispatch:
@@ -111,6 +112,12 @@ jobs:
             --lk-source .ci/lk-reference \
             --out build/audit-work/linkslot-1.0.36/h700-lk-overlay
 
+      - name: Apply shared H700 render contract to isolated Linkslot snapshot
+        run: |
+          python3 scripts/apply-linkslot-render-core.py \
+            --source .ci/upstream-linkslot \
+            --crate integration/linkslot/h700-render-core
+
       - name: Install LLVM cross-link tools
         run: |
           export DEBIAN_FRONTEND=noninteractive
@@ -153,6 +160,11 @@ jobs:
 
       - name: Run H700 software renderer host regressions
         run: cargo test --manifest-path integration/linkslot/h700-render-core/Cargo.toml
+
+      - name: Compile shared Linkslot slot-gfx render contract
+        run: |
+          cargo check --manifest-path .ci/upstream-linkslot/Cargo.toml \
+            -p slot-gfx --no-default-features --features device,test-support
 
       - name: Compile existing H700 AArch64 scaffold
         run: bash scripts/build-h700-objects.sh
