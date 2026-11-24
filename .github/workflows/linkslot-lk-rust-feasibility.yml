@@ -61,6 +61,7 @@ on:
       - "target/rg34xx_h700/rules.mk"
       - "scripts/test-h700-lk-project-guard.py"
       - "scripts/apply-linkslot-render-core.py"
+      - "scripts/apply-linkslot-h700-frontend-core.py"
       - "docs/h700-lk-project.md"
       - "integration/linkslot/h700-render-core/**"
       - "integration/linkslot/h700-frontend-core/**"
@@ -118,6 +119,12 @@ jobs:
           python3 scripts/apply-linkslot-render-core.py \
             --source .ci/upstream-linkslot \
             --crate integration/linkslot/h700-render-core
+
+      - name: Apply persistent H700 no_std Linkslot business crates to isolated snapshot
+        run: |
+          python3 scripts/apply-linkslot-h700-frontend-core.py \
+            --source .ci/upstream-linkslot \
+            --crate-root integration/linkslot/h700-frontend-core
 
       - name: Install LLVM cross-link tools
         run: |
@@ -190,10 +197,13 @@ jobs:
       - name: Test persistent H700 no_std frontend business crates
         run: |
           cargo test --manifest-path integration/linkslot/h700-frontend-core/Cargo.toml --workspace
+          cargo test --manifest-path integration/linkslot/h700-frontend-core/Cargo.toml --workspace --no-default-features
           for target in armv7a-none-eabi aarch64-unknown-none; do
             cargo check --manifest-path integration/linkslot/h700-frontend-core/Cargo.toml \
-              --workspace --target "$target"
+              --workspace --no-default-features --target "$target"
           done
+          cargo test --manifest-path .ci/upstream-linkslot/Cargo.toml \
+            -p slot-input -p slot-model --locked
 
       - name: Test slot-i18n static no_std tables
         run: |
