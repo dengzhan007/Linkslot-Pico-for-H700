@@ -7,7 +7,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-PINNED_SNAPSHOT = "8590d6ff1b2caa26118051069c975106fbb14bd3"
+PINNED_SNAPSHOT = "3b06d96adadd0375f071555ecb3cc20c3a5b53db"
 UPSTREAM_CRATES = ("slot-input", "slot-model")
 
 
@@ -149,6 +149,8 @@ def patch_frontend(source: Path) -> None:
         ("core_picker: Option<CorePicker>,", "core_picker: Option<CorePicker<Core>>,"),
         ("pub fn core_picker_chip(&self) -> Option<Chip> {",
          "pub fn core_picker_chip(&self) -> Option<Chip<Core>> {"),
+        ("pub fn core_picker_layout(&self) -> Option<ThreeLayout> {",
+         "pub fn core_picker_layout(&self) -> Option<ThreeLayout<Core>> {"),
         ("fn core_picker_shown(&self) -> Option<&CorePicker> {",
          "fn core_picker_shown(&self) -> Option<&CorePicker<Core>> {"),
         ("fn draw_core_picker(&self, picker: &CorePicker, out: &mut Vec<Draw>) {",
@@ -285,6 +287,35 @@ def patch_frontend(source: Path) -> None:
     if "folder_hold_since" in app or "folder_hold_fade" in app:
         raise RuntimeError("unconverted folder hold fields remain in App")
 
+    open_three_old = "CorePicker::open_three(seat, options, alt, now)"
+    open_three_new = """{
+                let slot2 = if seat == Core::Mgba {
+                    alt.unwrap_or(Core::Gpsp)
+                } else {
+                    seat
+                };
+                let layout = if options.contains(&Core::Mgba)
+                    && options.contains(&Core::Gpsp)
+                    && options.contains(&Core::Armgba)
+                {
+                    let tray = if slot2 == Core::Gpsp {
+                        Core::Armgba
+                    } else {
+                        Core::Gpsp
+                    };
+                    Some(ThreeLayout::new(Core::Mgba, slot2, tray))
+                } else {
+                    None
+                };
+                match layout {
+                    Some(layout) => CorePicker::open_three(seat, options, layout, now),
+                    None => CorePicker::open(seat, options, now),
+                }
+            }"""
+    if app.count(open_three_old) != 1:
+        raise RuntimeError("Linkslot 1.0.45 three-core constructor call does not match source")
+    app = app.replace(open_three_old, open_three_new)
+
     app_path.write_text(app, encoding="utf-8")
 
 
@@ -299,8 +330,8 @@ def apply(source: Path, crate_root: Path) -> None:
             f"Linkslot snapshot pin mismatch: expected {PINNED_SNAPSHOT}, got {actual}"
         )
     workspace = (source / "Cargo.toml").read_text(encoding="utf-8")
-    if 'version = "1.0.36"' not in workspace:
-        raise RuntimeError("source workspace is not Linkslot 1.0.36")
+    if 'version = "1.0.45"' not in workspace:
+        raise RuntimeError("source workspace is not Linkslot 1.0.45")
     if 'members = ["crates/*"]' not in workspace:
         raise RuntimeError("Linkslot workspace no longer uses crates/* auto-members")
 
@@ -361,7 +392,7 @@ pub fn source_rect(platform: Platform, mode: VideoMode) -> [f32; 4] {
     )
     core_picker_path = source / "crates/slot/src/core_picker.rs"
     core_picker_path.write_text(
-        "pub use slot_core_picker::{Chip, CorePicker, Outcome, Press, "
+        "pub use slot_core_picker::{Chip, CorePicker, Outcome, Press, ThreeLayout, "
         "CLOSE_MS, HOP_MS, LIFT_MS, OPEN_MS, SLIDE_MS};" + chr(10),
         encoding="utf-8",
     )
