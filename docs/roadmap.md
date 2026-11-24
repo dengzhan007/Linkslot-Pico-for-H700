@@ -15,9 +15,19 @@
 - [x] 确认目标 SoC 是 Allwinner H700，不是 Rockchip RK3566；AArch64 编译 CPU target 已修正为 Cortex-A53。
 - [x] 锁定第一台实机为 Anbernic RG34XX（非 SP），建立 Allwinner H700 / Cortex-A53 硬件基线。
 
-## 当前工作：GammaOS LK → H700 BL33 → H700 HAL → Linkslot 1.0.36
+## 当前工作：GammaOS LK → H700 BL33 → H700 HAL → Linkslot 1.0.45
 
-### A2. Linkslot 1.0.36 裸机可移植性与静态核心接入（host-only 阶段）
+### 当前源码基线升级：Linkslot 1.0.45（进行中）
+
+- [x] 归档并比较 `upstream/linkslot` 根目录 main、`DEV/`、`test/` 三份源码：正式基线为 1.0.45；DEV 为 1.0.42；main 与 test 的 851 个源码文件逐 blob 一致。原始来源 commit、归档 commit 与目录快照的关系见 [1.0.45 移植基线更新](linkslot-1.0.45-portability-update.md)。
+- [x] 保留旧 `porting/linkslot-1.0.36-feasibility` 作为历史验证分支，另建 `porting/linkslot-1.0.45-feasibility`，不改写旧分支或上游快照。
+- [x] 将 `slot-core-picker` 扩展为通用三座位 `ThreeLayout<C>` 状态机：保留单/双核心路径，覆盖运行核心与高亮位置分离、托盘/槽 2 交换、非法布局回退，并补充对应单测。
+- [x] 更新 Frontend/App overlay 和 Renderer overlay 的 source pin/workspace version 到归档 1.0.45；App 层负责将 Linkslot Core 枚举映射到通用布局，避免 no_std crate 依赖 `slot-store`。
+- [x] 将 runtime workflow 的 Linkslot checkout 更新到 1.0.45，并在新实验分支添加 push path trigger。
+- [ ] 在 GitHub Actions 中执行 no_std crate host tests、A32/A64 freestanding checks、两个 overlay 应用、原版 input/model 回归和完整 Linkslot `slot` crate check。以上变更已提交，但在 workflow 成功前不标记为构建通过。
+- [ ] 按 1.0.45 对照完整 App/UI/核心 adapter，审查 transfer/save、remap、session、mGBA ABI 变化；仅 GB/GBC/GBA 首期功能可延后，但不能丢失上游行为语义。
+
+### A2（历史验证）：Linkslot 1.0.36 裸机可移植性与静态核心接入（host-only 阶段）
 
 - [x] 固定 Linkslot 1.0.36 只读 ZIP 快照及 SHA256 清单，不伪造原始上游 commit。
 - [x] `slot-input`、`slot-model`、`slot-i18n` 的候选副本通过 AArch32/AArch64 `no_std + alloc` 编译和对应行为测试；这些测试使用隔离临时副本，`upstream/linkslot` 快照保持只读。
@@ -42,7 +52,7 @@
 - [ ] 将更多 Frontend/App 的纯状态、游戏库、菜单、配置和本地存档策略逐步提取成 `no_std` Rust 模块；不能把当前 Linux `device_app` / 完整 `App` 直接链接为 LK 应用。
 - [ ] 在真实 H700 runtime 中验证 mGBA 启动 ROM、视频帧、音频、输入、即时状态和电池存档；host archive/link 结果不能替代运行测试。
 
-### A3. Linkslot LK runtime 与显示渲染边界
+### A3（1.0.36 历史验证，待 1.0.45 重新验收）. Linkslot LK runtime 与显示渲染边界
 
 - [x] 对照 Linkslot 1.0.36 原始 `device_app`、`Frontend`、`App`、`slot-gfx`、`slot-ui`、输入、音频与电源实现，确认 `device` feature 仍是 Linux/std 后端，不是 LK/no_std 运行模式。
 - [x] 确认现有 `Draw::{Rect,Tex,Turned,Game,Shot}` 已提供可复用的 CPU 绘制命令边界；并在临时 Linkslot 源码补丁中抽出对象安全 `Renderer` trait。
