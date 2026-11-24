@@ -52,6 +52,7 @@ def patch_frontend(source: Path) -> None:
     dependency = 'slot-frontend-state = { path = "../slot-frontend-state" }'
     picker_dependency = 'slot-core-picker = { path = "../slot-core-picker" }'
     link_state_dependency = 'slot-link-state = { path = "../slot-link-state" }'
+    link_kind_dependency = 'slot-link-kind = { path = "../slot-link-kind" }'
     changed_manifest = False
     if dependency not in manifest_text:
         anchor = 'slot-model = { path = "../slot-model" }\n'
@@ -70,6 +71,12 @@ def patch_frontend(source: Path) -> None:
         if manifest_text.count(anchor) != 1:
             raise RuntimeError("cannot locate slot-core-picker dependency in slot/Cargo.toml")
         manifest_text = manifest_text.replace(anchor, anchor + link_state_dependency + "\n")
+        changed_manifest = True
+    if link_kind_dependency not in manifest_text:
+        anchor = link_state_dependency + "\n"
+        if manifest_text.count(anchor) != 1:
+            raise RuntimeError("cannot locate slot-link-state dependency in slot/Cargo.toml")
+        manifest_text = manifest_text.replace(anchor, anchor + link_kind_dependency + "\n")
         changed_manifest = True
     if changed_manifest:
         slot_manifest.write_text(manifest_text, encoding="utf-8")
@@ -147,7 +154,13 @@ def apply(source: Path, crate_root: Path) -> None:
     add_new_package(crate_root / "slot-frontend-state", source / "crates/slot-frontend-state")
     add_new_package(crate_root / "slot-core-picker", source / "crates/slot-core-picker")
     add_new_package(crate_root / "slot-link-state", source / "crates/slot-link-state")
+    add_new_package(crate_root / "slot-link-kind", source / "crates/slot-link-kind")
 
+    link_kind_path = source / "crates/slot/src/link_kind.rs"
+    link_kind_path.write_text(
+        "pub use slot_link_kind::{link_carried, link_kind, serial_option, LinkKind};" + chr(10),
+        encoding="utf-8",
+    )
     link_state_path = source / "crates/slot/src/link_state.rs"
     link_state_path.write_text(
         "pub use slot_link_state::{is_pair, local, pair, same_bios};" + chr(10),
@@ -167,6 +180,8 @@ def apply(source: Path, crate_root: Path) -> None:
         "crates/slot-frontend-state",
         "crates/slot-core-picker",
         "crates/slot-link-state",
+        "crates/slot-link-kind",
+        "crates/slot/src/link_kind.rs",
         "crates/slot/src/link_state.rs",
         "crates/slot/Cargo.toml",
         "crates/slot/src/frontend.rs",
