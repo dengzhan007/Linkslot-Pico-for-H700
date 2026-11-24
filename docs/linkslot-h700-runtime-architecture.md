@@ -1,6 +1,6 @@
 # Linkslot 1.0.36 on H700 LK: runtime and renderer integration plan
 
-**Status:** architecture plan plus host-only renderer/frontend integration proof. The project has a `no_std + alloc` raster core, a temporary Linkslot `SoftwareCompositor` injection, and a successful compile of the complete patched `slot` crate; it still has no bootable Linkslot runtime, physical display/input/audio driver, or on-device execution. The upstream snapshot on `upstream/linkslot` remains immutable.
+**Status:** architecture plan plus host-only renderer/frontend and input integration proofs. The project has persistent `no_std + alloc` Linkslot `slot-input` / `slot-model` crates, a C input service/queue and Rust gesture bridge; the complete patched `slot` crate compiles in the temporary source tree with the renderer and business overlay. It still has no bootable Linkslot runtime, physical GPIO/input or display/audio driver, or on-device execution. The upstream snapshot on `upstream/linkslot` remains immutable.
 
 This plan resolves a practical integration question: which parts of Linkslot can become LK-resident logic, and which Linux services must be replaced rather than emulated.
 
@@ -120,8 +120,8 @@ Create a narrow LK integration crate rather than adding the current complete Car
 
 The first no_std + alloc boundary should contain only:
 
-- stable button/key enums, raw events and the `slot-input` gesture/state machine;
-- pure machine/core/layout identifiers from `slot-model`, after separating path and filesystem helpers;
+- stable button/key enums, raw events, the H700 C Input Service v1 adapter, and the `slot-input` gesture/state machine;
+- pure machine/core/layout identifiers from `slot-model`; filesystem path helpers remain behind the host-only `host-compat` feature;
 - generated/static i18n lookup tables, not runtime JSON parsing through `OnceLock`;
 - a renderer-independent `Draw` / texture-ID / geometry contract;
 - the static Libretro core descriptors and VFS v3 ABI already under test.
@@ -134,7 +134,7 @@ Runtime services must be explicit interfaces, not hidden std assumptions:
 | Time | Monotonic tick counter and bounded delay; no `Instant` or wall-clock dependency in the frame loop. |
 | Work scheduling | Single-core cooperative jobs/steps initially; no `std::thread`, mpsc or condvar emulation. |
 | Storage | H700 SD/FAT VFS for ROM/core reads. Add save/state writes only after flush, atomic replace, directory update and power-loss consistency are proven. |
-| Input | Poll a bounded event queue from the GPIO/ADC input driver; reuse Linkslot's logical mapping and gesture behavior. |
+| Input | C H700 Input Service v1 provides ordered logical edges from the bounded C queue; Rust `H700InputSource::drain_into()` maps them into Linkslot `RawEvent`, and `H700GestureInput` invokes the upstream `Gestures` state machine. The GPIO/ADC scanner and hardware producer are still pending. |
 | Display | Renderer-independent framebuffer descriptor and cache/scanout handoff; no `/dev/fb0`, EGL or dynamic loading. |
 | Audio | PCM producer interface with measured rate, format and bounded buffering; no ALSA/CPAL. |
 | Power | Explicit battery/charger/backlight/LED/poweroff service; no sysfs or shell execution. |
@@ -160,8 +160,8 @@ R1 does not require the entire 1.0.36 application to be ported first. R2/R3 esta
 
 1. Keep the original `upstream/linkslot` tree immutable. Record every extracted source file and upstream path in the integration manifest.
 2. Golden-test the H700 SoftwareCompositor against the real GL backend for draw order, crop/rotation, brightness/power, bezel and texture sampling; treat unsupported shader effects as explicit capability gaps.
-3. Extract `slot-input` and the pure portions of `slot-model` into a narrow Rust `no_std + alloc` frontend-business crate. Preserve upstream tests/behavior and prove AArch32 compilation; do not make the complete Linux app a dependency.
-4. Build a bounded Rust LK event loop and static menu/game-library model over C-provided time, input, VFS, display and core services. Keep actual GPIO/framebuffer hardware ownership in C and keep memory use bounded.
+3. [Completed] Extract `slot-input` and pure `slot-model` into `integration/linkslot/h700-frontend-core`; preserve upstream tests, prove AArch32/AArch64 `no_std` compilation, and compile the complete Linkslot `slot` Frontend against the persistent overlay in a temporary upstream worktree.
+4. [Input slice completed] Implement versioned C input service, bounded single-context queue, allocation-free Rust raw-event drain and a thin adapter into upstream `Gestures`. Next extract pure menu/game-library state and build a bounded Rust LK event loop over C-provided time, VFS, display and core services. Keep GPIO/framebuffer hardware ownership in C.
 5. Connect the H700 framebuffer/display handoff only after live scanout and BL33 resource ownership are proven; similarly defer audio/input/power MMIO until each board service has its own evidence.
 6. Keep mGBA/Gambatte/gpSP as separate C/C++ static cores. Their linker map, BSS, stack, heap and ROM/save buffers must fit inside a subsequently approved application arena.
 
