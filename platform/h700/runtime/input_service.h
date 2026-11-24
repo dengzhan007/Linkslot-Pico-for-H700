@@ -40,6 +40,7 @@ typedef struct h700_input_event {
     uint8_t reserved;
 } h700_input_event_t;
 
+/* Drain at most capacity events, oldest first; retain any remainder for next poll. */
 typedef size_t (*h700_input_drain_fn)(
     void *context,
     h700_input_event_t *output,
