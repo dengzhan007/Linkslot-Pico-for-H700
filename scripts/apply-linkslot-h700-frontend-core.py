@@ -276,9 +276,15 @@ pub struct FolderHold {
         raise RuntimeError("tick_folder_hold implementation does not match pinned source")
     app = app.replace(tick_old, tick_new)
 
+    app = app.replace(
+        "                self.folder_hold_since = Some(self.now());\n                self.folder_hold_fade = None;\n",
+        "                self.folder_hold.begin(self.now());\n",
+    )
+    app = app.replace(
+        "        self.folder_hold_since = None;\n        self.folder_hold_fade = None;\n",
+        "        self.folder_hold.cancel();\n",
+    )
     app = app.replace("        self.folder_hold_fade = None;\n", "        self.folder_hold.cancel();\n")
-    app = app.replace("        self.folder_hold_since = None;\n        self.folder_hold_fade = None;\n", "        self.folder_hold.cancel();\n")
-    app = app.replace("                self.folder_hold_since = Some(self.now());\n                self.folder_hold_fade = None;\n", "                self.folder_hold.begin(self.now());\n")
     app = app.replace("self.folder_hold_since.is_some()", "self.folder_hold.is_active()")
     if "folder_hold_since" in app or "folder_hold_fade" in app:
         raise RuntimeError("unconverted folder hold fields remain in App")
@@ -318,7 +324,6 @@ def apply(source: Path, crate_root: Path) -> None:
     add_new_package(crate_root / "slot-video-mode", source / "crates/slot-video-mode")
     add_new_package(crate_root / "slot-rom-id", source / "crates/slot-rom-id")
     add_new_package(crate_root / "slot-game-search", source / "crates/slot-game-search")
-    add_new_package(crate_root / "slot-hold-state", source / "crates/slot-hold-state")
     add_new_package(crate_root / "slot-hold-state", source / "crates/slot-hold-state")
 
     video_mode_path = source / "crates/slot/src/video_mode.rs"
