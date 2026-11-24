@@ -48,6 +48,7 @@
 - H700 只读存储 host 路径已覆盖 sdc0/CMD17 → GPT → FAT → Libretro VFS；尚未完成目标机真实 sdc0 MMIO、实体卡读扇区和文件写入/断电一致性验证。
 - GammaOS LK AArch32 BL33 的部分 overlay、CRT0/vector、Cortex-A53 编译参数和 VBAR host/cross-build 检查通过；**尚未完成完整 LK target link、可刷写镜像或 RG34XX 实机启动**。
 - 已实现 H700 CPU OPP 纯 C 策略选择器及版本化 CPU Performance Service ABI v1；当前 facade 只做策略规划和遥测字段分离，明确返回 `POLICY_ONLY`，没有 PLL/PMIC 写入。详见 [CPU Performance / DVFS 设计](docs/h700-cpu-performance-service.md)。
+- 已加入 Rust `no_std` CPU Service 客户端，并通过 [runtime slices #45387192778](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45387192778) 验证；目前仍未接入 Linkslot 设置界面、实际 service 初始化或硬件 DVFS actuator。
 - 最近 CPU Service v1 验证：[H700 AArch32/AArch64 compile check #45386479380](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45386479380) 通过，包含 CPU service host regression、AArch64、AArch32 ARM-state 和 Thumb-2 编译。
 - 启动交接、保留内存、secondary CPU、显示/输入/音频/RTC、温控和真实 CPU OPP 等硬件证据仍未全部闭合；不得把 host compile 说成设备运行通过。
 
