@@ -1,0 +1,10 @@
+[package]
+name = "slot-core-picker"
+version = "1.0.36"
+edition = "2021"
+rust-version = "1.96"
+license = "GPL-3.0-or-later"
+description = "Pure Linkslot core-picker state machine for no_std frontends"
+
+[dependencies]
+libm = "0.2"
