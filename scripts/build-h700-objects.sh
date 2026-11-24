@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 H700_ARCH="${H700_ARCH:-aarch64}"
-OUT_DIR="${OUT_DIR:-$ROOT/build/h700-arch-check/$H700_ARCH}"
+H700_A32_STATE="${H700_A32_STATE:-arm}"
 CC="${H700_CC:-${AARCH64_CC:-clang}}"
 CXX="${H700_CXX:-${AARCH64_CXX:-clang++}}"
 OBJDUMP="${LLVM_OBJDUMP:-llvm-objdump}"
@@ -15,8 +15,6 @@ for tool in "$CC" "$CXX" "$OBJDUMP"; do
     fi
 done
 
-mkdir -p "$OUT_DIR"
-
 case "$H700_ARCH" in
     aarch64)
         TARGET_FLAGS=(
@@ -25,20 +23,31 @@ case "$H700_ARCH" in
             -mgeneral-regs-only
         )
         EXPECTED_ARCH="aarch64"
+        OUTPUT_VARIANT="aarch64"
         C_PROBE="$ROOT/platform/h700/arch/compile_probe.c"
         ASM_PROBE="$ROOT/platform/h700/arch/compile_probe.S"
         CPP_PROBE="$ROOT/platform/h700/arch/compile_probe.cpp"
         ;;
     aarch32)
-        # Match the GammaOS LK A32 BL33 ABI: ARM state, Cortex-A53, NEON/VFPv4,
-        # and the base AAPCS float calling convention (softfp).
+        # GammaOS LK defaults ENABLE_THUMB=true: normal C/C++ objects use
+        # Thumb-2, while its startup/exception assembly remains ARM state.
+        # Exercise both modes so the HAL is not accidentally ARM-state-only.
+        case "$H700_A32_STATE" in
+            arm)   A32_STATE_FLAGS=(-marm) ;;
+            thumb) A32_STATE_FLAGS=(-mthumb) ;;
+            *)
+                echo "error: H700_A32_STATE must be 'arm' or 'thumb' (got '$H700_A32_STATE')" >&2
+                exit 2
+                ;;
+        esac
         TARGET_FLAGS=(
             --target=armv7a-none-eabi
             -mcpu=cortex-a53
-            -marm
+            "${A32_STATE_FLAGS[@]}"
             -mfpu=neon-vfpv4
             -mfloat-abi=softfp
         )
+        OUTPUT_VARIANT="aarch32-$H700_A32_STATE"
         EXPECTED_ARCH="arm"
         C_PROBE="$ROOT/platform/h700/arch/compile_probe_a32.c"
         ASM_PROBE="$ROOT/platform/h700/arch/compile_probe_a32.S"
@@ -50,7 +59,10 @@ case "$H700_ARCH" in
         ;;
 esac
 
-COMMON_FLAGS=(
+OUT_DIR="${OUT_DIR:-$ROOT/build/h700-arch-check/$OUTPUT_VARIANT}"
+mkdir -p "$OUT_DIR"
+
+COMMON_FLAGS=
     "${TARGET_FLAGS[@]}"
     -ffreestanding
     -fno-builtin
@@ -171,8 +183,12 @@ for object in "$OUT_DIR/compile_probe.o" "$OUT_DIR/compile_probe_asm.o" "$OUT_DI
         printf '%s\n' "$format" >&2
         exit 1
     fi
-    echo "$object: AArch64 object OK"
+    echo "$object: $H700_ARCH object OK"
 done
 
-echo "H700 compile-only $H700_ARCH architecture check passed."
+if [[ "$H700_ARCH" == "aarch32" ]]; then
+    echo "H700 compile-only AArch32 $H700_A32_STATE C/C++ + ARM-state assembly check passed."
+else
+    echo "H700 compile-only AArch64 architecture check passed."
+fi
 echo "Note: this is compile-only. It does not provide a C/C++ runtime, link the full LK/HAL image, establish a BL33 load range, execute a payload, or validate H700 hardware."
