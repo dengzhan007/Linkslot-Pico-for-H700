@@ -192,9 +192,9 @@ impl<'a> SoftwareRenderer<'a> {
         let Some(slot) = self.textures.get_mut(id.0) else {
             return Ok(false);
         };
-        let Some(old) = slot.as_ref() else {
+        if slot.is_none() {
             return Ok(false);
-        };
+        }
         let mut pixels = Vec::with_capacity(bytes);
         pixels.extend_from_slice(&rgba[..bytes]);
         *slot = Some(Texture {
@@ -202,7 +202,6 @@ impl<'a> SoftwareRenderer<'a> {
             height,
             rgba: pixels,
         });
-        let _ = old;
         Ok(true)
     }
 
@@ -709,8 +708,8 @@ mod tests {
             alpha: 1.0,
             turn: core::f32::consts::FRAC_PI_2,
         }]);
-        assert_eq!(r.rgba_at(1, 1), Some([255, 0, 0, 255]));
-        assert_eq!(r.rgba_at(1, 2), Some([0, 255, 0, 255]));
+        assert_eq!(r.rgba_at(2, 1), Some([255, 0, 0, 255]));
+        assert_eq!(r.rgba_at(2, 2), Some([0, 255, 0, 255]));
     }
 
     #[test]
@@ -723,9 +722,18 @@ mod tests {
             .unwrap();
         r.draw_list(&[
             Draw::Game,
-            Draw::Shot { tex: shot },
+            Draw::Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 1.0,
+                h: 1.0,
+                colour: [1.0, 0.0, 0.0, 1.0],
+            },
         ]);
-        assert_eq!(r.rgba_at(0, 0), Some([0, 0, 255, 255]));
+        assert_eq!(r.rgba_at(0, 0), Some([255, 0, 0, 255]));
+        assert_eq!(r.rgba_at(1, 0), Some([0, 0, 255, 255]));
+        r.draw_list(&[Draw::Shot { tex: shot }]);
+        assert_eq!(r.rgba_at(0, 0), Some([255, 0, 0, 255]));
         assert_eq!(r.rgba_at(1, 0), Some([255, 0, 0, 255]));
     }
 
