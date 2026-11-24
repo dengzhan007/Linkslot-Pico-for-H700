@@ -231,6 +231,13 @@ jobs:
             --lk-source .ci/lk-reference \
             --out build/audit-work/linkslot-1.0.45
 
+      - name: Generate and validate no_std slot-i18n package
+        run: |
+          python3 scripts/audit-slot-i18n-nostd.py \
+            --source .ci/upstream-linkslot \
+            --out build/audit-work/linkslot-1.0.45/slot-i18n \
+            --persist-crate-root integration/linkslot/h700-frontend-core/slot-i18n
+
       - name: Apply persistent H700 no_std Linkslot business crates to isolated snapshot
         run: |
           python3 scripts/apply-linkslot-h700-frontend-core.py \
@@ -258,12 +265,6 @@ jobs:
 
       - name: Test H700 input queue host regressions
         run: python3 scripts/test-h700-input-queue.py --cc cc --out build/audit-work/linkslot-1.0.45/input-queue
-
-      - name: Test slot-i18n static no_std tables
-        run: |
-          python3 scripts/audit-slot-i18n-nostd.py \
-            --source .ci/upstream-linkslot \
-            --out build/audit-work/linkslot-1.0.45/slot-i18n
 
       - name: Test static Libretro core ABI registry
         run: |
