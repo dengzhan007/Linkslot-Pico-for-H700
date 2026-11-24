@@ -52,6 +52,17 @@ def patch_makefile(original: str) -> str:
     )
     original = original.replace(project_include, early_toolchain, 1)
 
+    old_pal = "include platform/pal/rules.mk"
+    if original.count(old_pal) != 1:
+        raise RuntimeError("expected one platform/pal make include")
+    new_pal = (
+        "ifneq ($(H700_BUILD),yes)\n"
+        "# The MediaTek PAL uses MTK GPT timing and a placeholder mutex implementation.\n"
+        + old_pal + "\n"
+        "endif"
+    )
+    patched = original.replace(old_pal, new_pal, 1)
+
     old = "include platform/common/rules.mk"
     if original.count(old) != 1:
         raise RuntimeError("expected one platform/common make include")
@@ -309,6 +320,7 @@ build; it is not a firmware image.
 - arch/arm/rules.mk: correct the Cortex-A53 branch compiler target from
   -mcpu=cortex-a9 to -mcpu=cortex-a53 with NEON/VFPv4 and softfp ABI flags.
 - makefile: use the arm-none-eabi toolchain by default for H700 while preserving the MTK Android EABI prefix for all non-H700 projects.
+- makefile: skip the MediaTek platform/pal objects for H700; its timer is tied to MTK GPT and its PAL mutex is a no-op placeholder.
 - makefile: do not include the MediaTek platform/common stack when H700_BUILD=yes.
 - dev/rules.mk: do not pull in MediaTek video, LCM, GIC, modem communication or logo modules for H700.
 - target/rules.mk: do not compile the MediaTek-specific target/init.c for H700; keep only the generic weak display stubs.

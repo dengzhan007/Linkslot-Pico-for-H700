@@ -160,6 +160,15 @@ def main() -> None:
             "H700_MEMSIZE must be a hexadecimal",
         )
         make_case(
+            "zero-membase",
+            [
+                "H700_MEMORY_LAYOUT_APPROVED=yes",
+                "H700_MEMBASE=0x00000000",
+                "H700_MEMSIZE=0x10000",
+            ],
+            "H700_MEMBASE must be non-zero",
+        )
+        make_case(
             "zero-memsize",
             [
                 "H700_MEMORY_LAYOUT_APPROVED=yes",

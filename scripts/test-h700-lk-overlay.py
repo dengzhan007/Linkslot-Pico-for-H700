@@ -106,6 +106,13 @@ def main() -> None:
     ):
         raise RuntimeError("top-level makefile does not isolate the MediaTek platform/common stack")
 
+    if not re.search(
+        r"ifneq \(\$\(H700_BUILD\),yes\)\s+.*?include platform/pal/rules\.mk\s+endif",
+        makefile_text,
+        re.S,
+    ):
+        raise RuntimeError("top-level makefile still includes MediaTek PAL timer/log/mutex objects for H700")
+
     if not all(
         item in makefile_text
         for item in (
@@ -368,10 +375,10 @@ SECTIONS
         f"- BL33 entry wrapper: 0x{entry:08x}.\n",
         f"- Linked _end: 0x{end:08x}; upper probe bound 0x{IMAGE_END:08x}.\n",
         "- All eight vector instructions decode as A32 branch instructions; all required exception symbols resolve.\n",
-        "- The generated LK make rules exclude MTK platform/common, MTK dev modules and MTK target/init.c when H700_BUILD=yes; H700 must provide its own platform/target module lists.\n",
+        "- The generated LK make rules exclude MTK platform/common, platform/pal, MTK dev modules and MTK target/init.c when H700_BUILD=yes; H700 must provide its own platform/target module lists.\n",
         "- Synthetic bytes +4..+0x63f replace cleanly without changing the first BL33 branch; the synthetic bytes are not a vendor header.\n\n",
         "## Explicit limits\n\n",
-        "- This links the actual modified GammaOS LK CRT0 and original exception assembly with tiny stubs. It is not the full LK kernel/platform build, does not include MTK/H700 platform objects, and is not a bootable image.\n",
+        "- This links the actual modified GammaOS LK CRT0 and original exception assembly with tiny stubs. It is not the full LK kernel/platform build, does not include H700 platform or PAL service objects, and is not a bootable image.\n",
         "- The 0x4a000000..0x4a0e0000 boundary is only the previously researched BaseOS loader image bound; it is not an approved RAM allocation or payload arena.\n",
         "- The overlay intentionally does not set ACTLR.SMP, release or park secondary CPUs, choose H700 MMU/heap/stack ranges, initialize GIC/CCU/GPIO/SD, or implement console/RTC services.\n",
         "- No firmware is flashed, no SD/boot sector is written, and no payload is executed.\n",

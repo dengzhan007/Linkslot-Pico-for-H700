@@ -14,7 +14,9 @@ This adds a real GammaOS LK project/target/platform selection path for the
 - `platform/h700/rules.mk` selects `ARCH=arm` / `ARM_CPU=cortex-a53`.
 - MediaTek `drvgen`/DWS generation is disabled for this non-MediaTek target.
   The separate six-file H700 overlay also excludes the incompatible MediaTek
-  platform/common, device and target-init sources.
+  platform/common, platform/PAL, device and target-init sources. The MTK PAL
+  timer uses MTK GPT, and its mutex implementation is only a no-op placeholder;
+  H700 must provide its own timer, logging and synchronization services.
 
 The project currently enables **no H700 device drivers**. It is a build-system
 entry point and a memory-guard test, not a completed LK port.
@@ -45,8 +47,8 @@ reservation, the frame buffer, or the host-only BL33 linker probe. Setting the
 approval variable is not a substitute for the separate evidence and review;
 it is a gate that makes this decision explicit and auditable.
 
-The make rules validate that the values are hexadecimal and that size is
-non-zero. They do not prove that a range is physically free, large enough,
+The make rules validate that the values are hexadecimal and that base and
+size are non-zero. They do not prove that a range is physically free, large enough,
 aligned, outside secure/DMA carveouts, or compatible with the vendor monitor.
 
 ## What the RG34XX evidence actually says
@@ -111,7 +113,7 @@ overlay in a disposable worktree and proves that:
 
 1. the project refuses to parse without explicit memory approval;
 2. it separately refuses missing base, missing size, malformed hexadecimal
-   values and zero size;
+   values, zero base and zero size;
 3. with test-only sentinel values, GNU Make can dry-run the linker-script
    target without creating a build directory or firmware file.
 
