@@ -1,0 +1,10 @@
+[package]
+name = "slot-input"
+version = "1.0.36-h700.1"
+edition = "2021"
+rust-version = "1.96"
+license = "GPL-3.0-or-later"
+description = "Linkslot input and gesture logic adapted for the H700 no_std runtime"
+
+[lib]
+path = "src/lib.rs"
