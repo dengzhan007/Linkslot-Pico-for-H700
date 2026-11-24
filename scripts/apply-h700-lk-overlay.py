@@ -12,6 +12,9 @@ from pathlib import Path
 
 LK_PIN = "9bf1419a49e0af6dba8b05916df382c9c9c6d0a8"
 FILES = (
+    Path("makefile"),
+    Path("dev/rules.mk"),
+    Path("target/rules.mk"),
     Path("arch/arm/crt0.S"),
     Path("arch/arm/arch.c"),
     Path("arch/arm/rules.mk"),
@@ -35,6 +38,56 @@ def read_pinned_source(source: Path) -> tuple[str, dict[Path, str]]:
             raise RuntimeError(f"required pinned LK source is missing: {path}")
         texts[rel] = path.read_text(encoding="utf-8")
     return revision, texts
+
+
+def patch_makefile(original: str) -> str:
+    old = "include platform/common/rules.mk"
+    if original.count(old) != 1:
+        raise RuntimeError("expected one platform/common make include")
+    new = (
+        "ifneq ($(H700_BUILD),yes)\n"
+        "# The MediaTek common platform stack is not an H700 HAL.\n"
+        + old + "\n"
+        "endif"
+    )
+    return original.replace(old, new, 1)
+
+
+def patch_dev_rules(original: str) -> str:
+    old_modules = "\n".join((
+        "MODULES += \\",
+        "\t$(LOCAL_DIR)/video \\",
+        "\t$(LOCAL_DIR)/lcm \\",
+        "\t$(LOCAL_DIR)/gic \\",
+        "\t$(LOCAL_DIR)/md_com",
+    ))
+    if original.count(old_modules) != 1:
+        raise RuntimeError("unexpected dev/rules.mk MTK module list")
+    new_modules = "ifneq ($(H700_BUILD),yes)\n" + old_modules + "\nendif"
+    patched = original.replace(old_modules, new_modules, 1)
+
+    old_logo = "include $(LOCAL_DIR)/logo/rules.mk"
+    if patched.count(old_logo) != 1:
+        raise RuntimeError("expected one dev logo rules include")
+    new_logo = "ifneq ($(H700_BUILD),yes)\n" + old_logo + "\nendif"
+    return patched.replace(old_logo, new_logo, 1)
+
+
+def patch_target_rules(original: str) -> str:
+    old = "\n".join((
+        "OBJS += \\",
+        "\t$(LOCAL_DIR)/init.o \\",
+        "\t$(LOCAL_DIR)/target_display.o",
+    ))
+    if original.count(old) != 1:
+        raise RuntimeError("unexpected generic target object list")
+    new = (
+        "ifneq ($(H700_BUILD),yes)\n"
+        "\tOBJS += $(LOCAL_DIR)/init.o\n"
+        "endif\n"
+        "OBJS += $(LOCAL_DIR)/target_display.o"
+    )
+    return original.replace(old, new, 1)
 
 
 def patch_crt0(original: str) -> str:
@@ -125,6 +178,9 @@ def main() -> None:
     out = args.out.resolve()
     revision, originals = read_pinned_source(source)
     patched = {
+        Path("makefile"): patch_makefile(originals[Path("makefile")]),
+        Path("dev/rules.mk"): patch_dev_rules(originals[Path("dev/rules.mk")]),
+        Path("target/rules.mk"): patch_target_rules(originals[Path("target/rules.mk")]),
         Path("arch/arm/crt0.S"): patch_crt0(originals[Path("arch/arm/crt0.S")]),
         Path("arch/arm/arch.c"): patch_arch_c(originals[Path("arch/arm/arch.c")]),
         Path("arch/arm/rules.mk"): patch_arm_rules(originals[Path("arch/arm/rules.mk")]),
@@ -183,6 +239,7 @@ def main() -> None:
             "secondary-core parking or PSCI",
             "platform MMU mappings or memory reservations",
             "MEMBASE, MEMSIZE, heap or stack addresses",
+            "H700 project/target/platform rules or a physical memory map",
             "H700 MMIO, clocks, GPIO, PMIC, UART or display drivers",
             "newlib syscall providers and LK heap initialization",
         ],
@@ -206,6 +263,12 @@ build; it is not a firmware image.
   __lk_vectors_start instead of resetting it to MEMBASE.
 - arch/arm/rules.mk: correct the Cortex-A53 branch compiler target from
   -mcpu=cortex-a9 to -mcpu=cortex-a53 with NEON/VFPv4 and softfp ABI flags.
+- makefile: do not include the MediaTek platform/common stack when H700_BUILD=yes.
+- dev/rules.mk: do not pull in MediaTek video, LCM, GIC, modem communication or logo modules for H700.
+- target/rules.mk: do not compile the MediaTek-specific target/init.c for H700; keep only the generic weak display stubs.
+
+The H700 project must set H700_BUILD=yes before the top-level makefile loads
+these rules. It must add its own target/platform modules explicitly.
 
 h700-bl33-overlay.patch can be applied to a fresh checkout of the pinned
 source. files/ contains the resulting replacement files. The generator never
