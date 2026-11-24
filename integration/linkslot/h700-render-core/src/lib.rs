@@ -59,10 +59,14 @@ pub enum RenderError {
     InvalidTextureData,
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum TextureFilter { Linear, Nearest }
+
 struct Texture {
     width: u32,
     height: u32,
     rgba: Vec<u8>,
+    filter: TextureFilter,
 }
 
 /// A deterministic CPU rasterizer. The framebuffer is supplied by the caller:
@@ -157,11 +161,22 @@ impl<'a> SoftwareRenderer<'a> {
         }
     }
 
+    /// Match Linkslot's default GL_LINEAR texture creation.
     pub fn create_texture(
-        &mut self,
-        width: u32,
-        height: u32,
-        rgba: &[u8],
+        &mut self, width: u32, height: u32, rgba: &[u8],
+    ) -> Result<TexId, RenderError> {
+        self.create_texture_with_filter(width, height, rgba, TextureFilter::Linear)
+    }
+
+    /// Match Linkslot's explicit GL_NEAREST texture creation.
+    pub fn create_texture_nearest(
+        &mut self, width: u32, height: u32, rgba: &[u8],
+    ) -> Result<TexId, RenderError> {
+        self.create_texture_with_filter(width, height, rgba, TextureFilter::Nearest)
+    }
+
+    fn create_texture_with_filter(
+        &mut self, width: u32, height: u32, rgba: &[u8], filter: TextureFilter,
     ) -> Result<TexId, RenderError> {
         let bytes = texture_bytes(width, height)?;
         if rgba.len() < bytes {
@@ -170,11 +185,7 @@ impl<'a> SoftwareRenderer<'a> {
         let mut pixels = Vec::with_capacity(bytes);
         pixels.extend_from_slice(&rgba[..bytes]);
         let id = TexId(self.textures.len());
-        self.textures.push(Some(Texture {
-            width,
-            height,
-            rgba: pixels,
-        }));
+        self.textures.push(Some(Texture { width, height, rgba: pixels, filter }));
         Ok(id)
     }
 
@@ -192,16 +203,11 @@ impl<'a> SoftwareRenderer<'a> {
         let Some(slot) = self.textures.get_mut(id.0) else {
             return Ok(false);
         };
-        if slot.is_none() {
-            return Ok(false);
-        }
+        let Some(existing) = slot.as_ref() else { return Ok(false); };
+        let filter = existing.filter;
         let mut pixels = Vec::with_capacity(bytes);
         pixels.extend_from_slice(&rgba[..bytes]);
-        *slot = Some(Texture {
-            width,
-            height,
-            rgba: pixels,
-        });
+        *slot = Some(Texture { width, height, rgba: pixels, filter });
         Ok(true)
     }
 
@@ -228,11 +234,7 @@ impl<'a> SoftwareRenderer<'a> {
         for px in bgra[..bytes].chunks_exact(4) {
             rgba.extend_from_slice(&[px[2], px[1], px[0], px[3]]);
         }
-        self.game = Some(Texture {
-            width,
-            height,
-            rgba,
-        });
+        self.game = Some(Texture { width, height, rgba, filter: TextureFilter::Nearest });
         Ok(())
     }
 
@@ -248,11 +250,7 @@ impl<'a> SoftwareRenderer<'a> {
         }
         let mut pixels = Vec::with_capacity(bytes);
         pixels.extend_from_slice(&rgba[..bytes]);
-        self.game = Some(Texture {
-            width,
-            height,
-            rgba: pixels,
-        });
+        self.game = Some(Texture { width, height, rgba: pixels, filter: TextureFilter::Nearest });
         Ok(())
     }
 
@@ -334,6 +332,7 @@ impl<'a> SoftwareRenderer<'a> {
         let width = texture.width;
         let height = texture.height;
         let pixels = texture.rgba.as_slice();
+        let filter = texture.filter;
         blit_texture(
             self.framebuffer,
             self.width,
@@ -343,6 +342,7 @@ impl<'a> SoftwareRenderer<'a> {
             pixels,
             width,
             height,
+            filter,
             x,
             y,
             w,
@@ -359,6 +359,7 @@ impl<'a> SoftwareRenderer<'a> {
         let width = texture.width;
         let height = texture.height;
         let pixels = texture.rgba.as_slice();
+        let filter = texture.filter;
         let r = self.game_rect;
         blit_texture(
             self.framebuffer,
@@ -369,6 +370,7 @@ impl<'a> SoftwareRenderer<'a> {
             pixels,
             width,
             height,
+            filter,
             r[0],
             r[1],
             r[2],
@@ -462,6 +464,7 @@ fn blit_texture(
     texture: &[u8],
     tex_width: u32,
     tex_height: u32,
+    filter: TextureFilter,
     x: f32,
     y: f32,
     w: f32,
@@ -537,23 +540,50 @@ fn blit_texture(
             if !(0.0..1.0).contains(&u) || !(0.0..1.0).contains(&v) {
                 continue;
             }
-            let sx = ((u * tex_width as f32) as u32).min(tex_width - 1);
-            let sy = ((v * tex_height as f32) as u32).min(tex_height - 1);
-            let src = ((sy as usize * tex_width as usize) + sx as usize) * 4;
-            let src_alpha = ((texture[src + 3] as u32 * global_alpha as u32 + 127) / 255) as u8;
-            if src_alpha == 0 {
-                continue;
-            }
-            let rgba = [
-                texture[src],
-                texture[src + 1],
-                texture[src + 2],
-                src_alpha,
-            ];
+            let mut rgba = match filter {
+                TextureFilter::Nearest => sample_nearest(texture, tex_width, tex_height, u, v),
+                TextureFilter::Linear => sample_linear(texture, tex_width, tex_height, u, v),
+            };
+            rgba[3] = ((rgba[3] as u32 * global_alpha as u32 + 127) / 255) as u8;
+            if rgba[3] == 0 { continue; }
             let offset = py as usize * stride + px as usize * 4;
             blend_pixel(framebuffer, offset, format, rgba);
         }
     }
+}
+
+fn sample_nearest(texture: &[u8], width: u32, height: u32, u: f32, v: f32) -> [u8; 4] {
+    let x = ((u * width as f32) as u32).min(width - 1);
+    let y = ((v * height as f32) as u32).min(height - 1);
+    let i = (y as usize * width as usize + x as usize) * 4;
+    [texture[i], texture[i + 1], texture[i + 2], texture[i + 3]]
+}
+
+/// Normalized GL_LINEAR sampling with CLAMP_TO_EDGE and half-texel centres.
+fn sample_linear(texture: &[u8], width: u32, height: u32, u: f32, v: f32) -> [u8; 4] {
+    let fx = u * width as f32 - 0.5;
+    let fy = v * height as f32 - 0.5;
+    let ix = libm::floorf(fx) as i32;
+    let iy = libm::floorf(fy) as i32;
+    let tx = fx - ix as f32;
+    let ty = fy - iy as f32;
+    let cx = |x: i32| x.max(0).min(width as i32 - 1) as u32;
+    let cy = |y: i32| y.max(0).min(height as i32 - 1) as u32;
+    let at = |x: u32, y: u32| {
+        let i = (y as usize * width as usize + x as usize) * 4;
+        [texture[i], texture[i + 1], texture[i + 2], texture[i + 3]]
+    };
+    let p00 = at(cx(ix), cy(iy));
+    let p10 = at(cx(ix + 1), cy(iy));
+    let p01 = at(cx(ix), cy(iy + 1));
+    let p11 = at(cx(ix + 1), cy(iy + 1));
+    let mut out = [0u8; 4];
+    for channel in 0..4 {
+        let top = p00[channel] as f32 + (p10[channel] as f32 - p00[channel] as f32) * tx;
+        let bottom = p01[channel] as f32 + (p11[channel] as f32 - p01[channel] as f32) * tx;
+        out[channel] = libm::roundf(top + (bottom - top) * ty).max(0.0).min(255.0) as u8;
+    }
+    out
 }
 
 fn read_pixel(framebuffer: &[u8], offset: usize, format: PixelFormat) -> [u8; 4] {
@@ -654,7 +684,7 @@ mod tests {
         let mut fb = [0u8; 4 * 4];
         let mut r = SoftwareRenderer::new(4, 1, 16, PixelFormat::Rgba8888, &mut fb).unwrap();
         let tex = r
-            .create_texture(
+            .create_texture_nearest(
                 2,
                 1,
                 &[255, 0, 0, 255, 0, 255, 0, 255],
@@ -672,6 +702,29 @@ mod tests {
         assert_eq!(r.rgba_at(1, 0), Some([255, 0, 0, 255]));
         assert_eq!(r.rgba_at(2, 0), Some([0, 255, 0, 255]));
         assert_eq!(r.rgba_at(3, 0), Some([0, 255, 0, 255]));
+    }
+
+    #[test]
+    fn create_texture_matches_linkslot_linear_default() {
+        let mut fb = [0u8; 16];
+        let mut r = SoftwareRenderer::new(4, 1, 16, PixelFormat::Rgba8888, &mut fb).unwrap();
+        let tex = r.create_texture(2, 1, &[255, 0, 0, 255, 0, 0, 255, 255]).unwrap();
+        r.draw_list(&[Draw::Tex { x: 0.0, y: 0.0, w: 4.0, h: 1.0, tex, alpha: 1.0 }]);
+        assert_eq!(r.rgba_at(0, 0), Some([255, 0, 0, 255]));
+        assert_eq!(r.rgba_at(1, 0), Some([191, 0, 64, 255]));
+        assert_eq!(r.rgba_at(2, 0), Some([64, 0, 191, 255]));
+        assert_eq!(r.rgba_at(3, 0), Some([0, 0, 255, 255]));
+    }
+
+    #[test]
+    fn update_texture_preserves_original_filter_mode() {
+        let mut fb = [0u8; 16];
+        let mut r = SoftwareRenderer::new(4, 1, 16, PixelFormat::Rgba8888, &mut fb).unwrap();
+        let tex = r.create_texture_nearest(2, 1, &[255, 0, 0, 255, 0, 255, 0, 255]).unwrap();
+        assert!(r.update_texture(tex, 2, 1, &[255, 0, 0, 255, 0, 0, 255, 255]).unwrap());
+        r.draw_list(&[Draw::Tex { x: 0.0, y: 0.0, w: 4.0, h: 1.0, tex, alpha: 1.0 }]);
+        assert_eq!(r.rgba_at(1, 0), Some([255, 0, 0, 255]));
+        assert_eq!(r.rgba_at(2, 0), Some([0, 0, 255, 255]));
     }
 
     #[test]
