@@ -87,8 +87,23 @@ def main() -> None:
             "-o",
             str(args.out / output),
         ])
+        run([
+            args.clang,
+            f"--target={triple}",
+            f"-mcpu={cpu}",
+            "-std=c11",
+            "-ffreestanding",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            f"-I{header_dir}",
+            "-c",
+            str(header_dir / "input_queue.c"),
+            "-o",
+            str(args.out / (output.replace("abi", "queue"))),
+        ])
 
-    print("H700 input service C ABI layout passed for AArch32 and AArch64.")
+    print("H700 input service ABI and queue compile passed for AArch32 and AArch64.")
 
 
 if __name__ == "__main__":
