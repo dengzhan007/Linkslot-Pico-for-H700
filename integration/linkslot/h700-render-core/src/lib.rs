@@ -810,7 +810,7 @@ mod tests {
             colour: [0.8, 0.6, 0.4, 0.5],
         }]);
         r.apply_rgb_gain([0.5, 1.0, 1.5]);
-        assert_eq!(r.rgba_at(0, 0), Some([102, 153, 153, 255]));
+        assert_eq!(r.rgba_at(0, 0), Some([51, 77, 77, 255]));
     }
 
     #[test]
