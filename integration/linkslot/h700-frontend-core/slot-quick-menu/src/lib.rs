@@ -121,15 +121,18 @@ pub enum QuickRow {
     /// discriminant: keeping `SplitLink` last keeps `Language` inside the value
     /// table.
     HotspotBand,
-    /// The system language row.  It stays last in QuickRow::ALL.
+    /// The system language row. Its existing discriminant remains stable.
     Language,
-    /// The link session page: who is on the other end, and start/stop.  This
+    /// H700 CPU performance policy. The row is visible, but stays unavailable
+    /// until the platform runtime has an approved board profile and telemetry.
+    CpuPerformance,
+    /// The link session page: who is on the other end, and start/stop. This
     /// row is intentionally absent from QuickRow::ALL.
     SplitLink,
 }
 
 impl QuickRow {
-    pub const ALL: [QuickRow; 87] = [
+    pub const ALL: [QuickRow; 88] = [
         QuickRow::FastForward,
         QuickRow::FastForwardSound,
         QuickRow::Screen,
@@ -217,6 +220,7 @@ impl QuickRow {
         QuickRow::ThemeWarm,
         QuickRow::HotspotBand,
         QuickRow::Language,
+        QuickRow::CpuPerformance,
     ];
 
     pub const MAIN: [QuickRow; 6] = [
@@ -279,13 +283,14 @@ impl QuickRow {
     /// Order matters: 系统升级 sits right above 关于 at the bottom.
     /// 语言 comes second so it is one press below the date, the row people
     /// reach for first when the screen is in a language they cannot read.
-    pub const SYSTEM_SETTINGS: [QuickRow; 6] = [
+    pub const SYSTEM_SETTINGS: [QuickRow; 7] = [
         QuickRow::DateTime,
         QuickRow::Language,
         QuickRow::LidTimeout,
         QuickRow::Mods,
         QuickRow::SystemUpgrade,
         QuickRow::About,
+        QuickRow::CpuPerformance,
     ];
 
     pub const NETWORK: [QuickRow; 6] = [
@@ -445,7 +450,8 @@ impl QuickRow {
             | QuickRow::LidTimeout
             | QuickRow::Mods
             | QuickRow::SystemUpgrade
-            | QuickRow::About => &QuickRow::SYSTEM_SETTINGS,
+            | QuickRow::About
+            | QuickRow::CpuPerformance => &QuickRow::SYSTEM_SETTINGS,
             QuickRow::ShelfPrev | QuickRow::ShelfNext | QuickRow::ShelfFav => {
                 &QuickRow::SHELF_KEYS
             }
@@ -526,6 +532,7 @@ impl QuickRow {
     fn icon_text_zh(self) -> &'static str {
         match self {
             QuickRow::Language => "语",
+            QuickRow::CpuPerformance => "频",
             QuickRow::FastForward => "快",
             QuickRow::FastForwardSound => "音",
             QuickRow::Screen => "画",
@@ -619,6 +626,7 @@ impl QuickRow {
     fn icon_text_en(self) -> &'static str {
         match self {
             QuickRow::Language => "L",
+            QuickRow::CpuPerformance => "P",
             QuickRow::FastForward => "F",
             QuickRow::FastForwardSound => "S",
             QuickRow::Screen => "D",
@@ -762,6 +770,8 @@ impl QuickRow {
             | QuickRow::ThemeWarm => '\u{f1fc}',
             // fa-language; the tile fallback above covers a font without it.
             QuickRow::Language => '\u{f1ab}',
+            // fa-microchip; the tile fallback above covers a font without it.
+            QuickRow::CpuPerformance => '\u{f2db}',
             QuickRow::ShelfKeys | QuickRow::ShelfPrev | QuickRow::ShelfNext | QuickRow::ShelfFav => {
                 '\u{f11c}'
             }
@@ -877,7 +887,8 @@ impl QuickRow {
             | QuickRow::LidTimeout
             | QuickRow::Mods
             | QuickRow::SystemUpgrade
-            | QuickRow::About => Some(QuickRow::SystemSettings),
+            | QuickRow::About
+            | QuickRow::CpuPerformance => Some(QuickRow::SystemSettings),
             _ => None,
         }
     }
@@ -1001,12 +1012,19 @@ impl QuickRow {
             QuickRow::ThemeWeb => "device.quick.label.theme_web",
             QuickRow::ThemeWarm => "device.quick.label.theme_warm",
             QuickRow::Language => "device.quick.label.language",
+            QuickRow::CpuPerformance => "h700.quick.label.cpu_performance",
             QuickRow::SplitLink => "device.quick.label.split_link",
         }
     }
 
     /// The row's label in `lang`.
     pub fn label(self, lang: Language) -> &'static str {
+        if self == QuickRow::CpuPerformance {
+            return match lang {
+                Language::ZhCn => "CPU 性能",
+                Language::EnUs => "CPU Performance",
+            };
+        }
         slot_i18n::t(lang, self.key())
     }
 
@@ -1078,7 +1096,7 @@ mod tests {
 
     #[test]
     fn quick_row_indices_preserve_the_fixed_value_table_contract() {
-        assert_eq!(QuickRow::ALL.len(), 87);
+        assert_eq!(QuickRow::ALL.len(), 88);
         for (index, row) in QuickRow::ALL.iter().enumerate() {
             assert_eq!(row.index(), index, "row index drift: {row:?}");
             assert!(!QuickRow::ALL[..index].contains(row), "duplicate row: {row:?}");
@@ -1087,6 +1105,7 @@ mod tests {
             assert_eq!(row.down().up(), *row);
         }
         assert_eq!(QuickRow::Language.index(), 86);
+        assert_eq!(QuickRow::CpuPerformance.index(), 87);
         assert_eq!(QuickRow::SplitLink.index(), QuickRow::ALL.len());
         assert!(!QuickRow::ALL.contains(&QuickRow::SplitLink));
     }
@@ -1098,6 +1117,10 @@ mod tests {
         assert_eq!(QuickRow::Language.page(), &QuickRow::SYSTEM_SETTINGS[..]);
         assert_eq!(QuickRow::Language.label(Language::ZhCn), "语言");
         assert_eq!(QuickRow::Language.label(Language::EnUs), "Language");
+        assert_eq!(QuickRow::CpuPerformance.parent(), Some(QuickRow::SystemSettings));
+        assert_eq!(QuickRow::CpuPerformance.page(), &QuickRow::SYSTEM_SETTINGS[..]);
+        assert_eq!(QuickRow::CpuPerformance.label(Language::ZhCn), "CPU 性能");
+        assert_eq!(QuickRow::CpuPerformance.label(Language::EnUs), "CPU Performance");
         for index in 0..QuickRow::QUICK_PAGES {
             assert_ne!(QuickRow::page_title_at(index, Language::ZhCn),
                        QuickRow::page_title_at(index, Language::EnUs));
@@ -1119,5 +1142,6 @@ mod tests {
         assert_eq!(QuickRow::ALL[86], QuickRow::Language);
         assert_eq!(QuickRow::SYSTEM_SETTINGS[0], QuickRow::DateTime);
         assert_eq!(QuickRow::SYSTEM_SETTINGS[1], QuickRow::Language);
+        assert_eq!(QuickRow::SYSTEM_SETTINGS[6], QuickRow::CpuPerformance);
     }
 }
