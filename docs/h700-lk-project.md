@@ -84,6 +84,15 @@ heap, stack or Linkslot payload. The 1 MiB arena is a boot-chain allocation
 fact, not a free-memory grant. The host-only BL33 layout check is also not an
 allocation approval.
 
+## BL33 image packaging
+
+The full GammaOS build's normal `lk.img` is MTK-header wrapped. A future H700
+BL33 image must use `lk-no-mtk-header.bin` and the verified RG34XX reference
+loader header, not the standard `lk.img`. The host wrapper and remaining gates
+are documented in [H700 BL33 image packaging](h700-bl33-image-format.md).
+The output remains non-installable until the complete LK target link, memory
+approval, matching native firmware pairing, and live BL31 handoff are proven.
+
 ## Handoff and runtime limits
 
 The vendor monitor's `0x8000ff04` service is evidenced as the Linux-start

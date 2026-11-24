@@ -18,34 +18,46 @@
 
 BaseOS 参考源本次按 `main` 快照审查，commit：[`cbe253a43f46cf551cc9a6c79a84015bde3686cf`](https://github.com/dengzhan007/BaseOS-MultiFrontend/commit/cbe253a43f46cf551cc9a6c79a84015bde3686cf)。
 
-## 3. RG34XX 原厂启动链
+## 3. RG34XX 当前实际启动链与 stock fallback
 
-已知启动结构：
+2026-11-22 的 RG34XX 非 SP 现场 provenance 审计已将本节原先的“stock U-Boot → Linux”描述修正为实际执行链。当前启动路径（证据等级 A）：
 
 ```text
 Allwinner Boot ROM
-  └─ SD / eGON.BT0 Boot0（镜像长度按头部声明，现场读回覆盖 64/128 KiB）
-       ├─ 选择 DRAM 参数并完成 training
-       └─ 读取 TOC1 启动包
-            ├─ vendor monitor（BL31 路径）
-            ├─ AArch32 vendor U-Boot（2018.05 系）
-            ├─ DTB / DTBO 等板级数据
-            └─ 后续由 U-Boot 加载 boot 分区中的 Android boot image
-                 └─ 通过 vendor monitor 进入 AArch64 Linux
+  └─ stock eGON.BT0 Boot0（DRAM training）
+       └─ BaseOS native SPL（AArch64 EL3，SRAM）
+            ├─ 从 p4 + 40 MiB 读取 native firmware package
+            │    ├─ vendor BL31 / monitor → 0x48000000
+            │    ├─ DTBO → 0x4a100000
+            │    ├─ TOC1 DTB → 0x4a200000
+            │    └─ AArch32 SVC BL33 loader → 0x4a000000
+            ├─ 从 p4 + 48 MiB 读取 BOL4 Android v2 image → staging 0x45000000
+            ├─ 校验镜像长度/FNV，并更新 BL33 header / native handoff record
+            └─ 进入 vendor BL31 / monitor
+                 └─ ERET 到 AArch32 SVC BL33（SPSR=0x1d3）
+                      └─ BaseOS A32 loader
+                           ├─ BOL4 raw-LZ4 → AArch64 Image @ 0x40080000
+                           ├─ 准备 initrd @ 0x42000000 与 live FDT @ 0x44000000
+                           └─ SMC #0：r0=0x8000ff04, r1=0x40080000,
+                                      r2=0x44000000, r3=1
+                                └─ vendor monitor ERET → AArch64 Linux
+                                     （SPSR=0x3c5，x0=0x44000000）
 ```
 
-Boot0 会根据候选参数训练 DRAM，并把选择结果传给后续阶段。不能在 Linkslot 主程序中重新初始化 DRAM，也不能把某一台机器训练出来的参数写死给所有同型号设备。
+当前介质中仍存在 TOC1 AArch32 U-Boot 和 p4 偏移 0 的 gzip Android image，但它们是 stock compatibility/fallback path；现场的 `/chosen/baseos,*` markers、Boot0 trained DRAM → live `/dram` 对应关系、live bootargs 与 loader 生成模板匹配、p4+40 MiB loader/firmware package 和 p4+48 MiB BOL4 image 的身份共同证明本次启动执行的是 native path B，而不是 stock U-Boot path A。详细逐项证据见 [活动 loader provenance 报告](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-active-loader-provenance.md)。
 
-BaseOS 对 RG34XX 的固件记录确认其原厂 U-Boot 是 AArch32；BaseOS 的 U-Boot trace 在模拟器中到达 Linux 跳转点 `0x40080000`，FDT 研究地址为 `0x44000000`。这些地址是 Linux 启动流程中的位置，不是已验证的 Linkslot payload 地址。该模拟器 trace 不是 RG34XX 实机启动验证，也不能单独证明 monitor 的完整现场状态。
+这对 Linkslot 移植的直接含义：GammaOS LK 的 H700 candidate 是替换当前 A32 BL33 loader 的候选程序。vendor BL31 → A32 SVC BL33 是启动入口，不等于 A32 BL33 必须继续执行 Linux-start SMC。若 LK 直接作为独立 A32 裸机系统运行，应留在 AArch32；只有兼容原有 Linux 启动时才复刻 loader 的 BOL4/FDT/SMC 逻辑。不能把 `0x8000ff04` 改写成未经证明的通用 A64 payload jump。
+
+Boot0 负责 DRAM training；不得在 Linkslot 主程序里重新初始化 DRAM，也不能把某台设备训练出的参数写死到同型号所有设备。当前 BL33 slot 的装载地址是活动链事实，但不代表其 1 MiB 研究 arena 全部可供 LK 任意使用；必须结合 monitor、native SPL、reserved-memory 和链接 map 审核实际尺寸与覆盖。
 
 参考：
-- [BaseOS 启动链与分区说明](https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/main/docs/00-boot-chain-and-partitions.md)
-- [H700 Boot0/DRAM/面板差异调查](https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/main/experiments/h700-boot-speed/variant-survey/README.md)
-- [U-Boot 模拟 trace 边界](https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/main/experiments/h700-boot-speed/evidence/uboot-trace-notes.md)
+- [活动 loader provenance](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-active-loader-provenance.md)
+- [BaseOS 原生 SPL 设计与交接 ABI](https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/main/experiments/h700-boot-speed/DESIGN.md)
+- [BaseOS 当前原生启动实验状态](https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/main/experiments/h700-boot-speed/HANDOFF.md)
 
-## 4. BaseOS 原生 SPL 研究提供的候选交接结构
+## 4. BaseOS native SPL / BL31 / A32 BL33 的已部署交接结构
 
-BaseOS 的深入研究没有采用“让 AArch32 U-Boot 直接跳 AArch64”这种未经验证的捷径，而是形成了两段式交接：
+该结构已经不只是其他设备的研究候选：前述 RG34XX 非 SP 现场 provenance 将 Boot0 → native SPL → vendor BL31 → A32 SVC BL33 确认为当前实际活动链。BaseOS 的深入研究没有采用“让 AArch32 U-Boot 直接跳 AArch64”这种未经验证的捷径，而是形成并在本机运行了两段式交接：
 
 ```text
 Boot ROM
@@ -135,28 +147,32 @@ RG34XX profile 是 1 GiB LPDDR4。不要因 RG34XX SP 实验也使用 LPDDR4，�
 
 ## 7. 实机覆盖与当前状态
 
-BaseOS 的 native SPL / monitor / A32 loader 是当前最有价值的技术参考。其公开实验记录覆盖其他 H700 实验设备，包括 RG34XX SP 与 RG40XX V，并报告了原生链启动、恢复、显示及休眠相关测试。**本次可访问的记录没有证明 RG34XX（非 SP）的 1 GiB LPDDR4 机型已经完成同等的 native SPL 冷启动和完整 Linkslot payload 验收。**
+目标 RG34XX（非 SP）的活动 native boot path 已有 A 级现场证据，不再把它描述为“仅在其他 H700 设备运行”：
 
-因此，本项目当前可以确认的是：
+- 当前运行链为 stock Boot0 → BaseOS AArch64 native SPL（EL3）→ vendor BL31 → AArch32 SVC BL33 loader → AArch64 Linux。
+- 当前 A32 loader 位于 `0x4a000000`，由 native SPL 从 p4+40 MiB package 装入；BL31 交接时 SPSR 为 `0x1d3`（AArch32 SVC）。该 loader 最终使用厂商 Linux-start SMC 进入 A64 Linux。
+- 活动 p4+48 MiB Android v2/BOL4 image 的 kernel component 解压后为 AArch64 `ARMd` Image；BOL4 长度、packed/unpacked 长度、FNV、解压结果、DTB 等均完成 byte-level 校验。
+- TOC1 A32 U-Boot 与 p4+0 gzip image 仍在设备介质上，但作为 stock fallback；没有证据表明它们在当前 captured boot 中执行。
 
-- H700 的 AArch32 BL33 → vendor monitor → AArch64 Linux 交接机制已被深入分析。
-- 存在一条经过其他 H700 实验机验证的 A64 SPL + vendor monitor + A32 BL33 方案。
-- 目标 RG34XX 固件的 Boot0 DRAM 候选、monitor 指纹、屏幕驱动名称等已有静态资料。
+这项证明的是当前 native boot flow 与 Linux handoff，不是任意 A64 bare-metal payload 的入口 ABI，也不是 GammaOS LK 已经在该机运行。GammaOS LK H700 target scaffold 是 AArch32，应定位为替换活动 BL33 loader 的候选；真实 LK image 尚未完整链接，BL31→LK 的寄存器/缓存/异常环境也尚未实机确认。
 
-当前仍不能宣称：
+仍未关闭：
 
-- RG34XX 非 SP 的 live Boot0/TOC1/U-Boot/monitor 与准备镜像完全一致；
-- 该机实测的 payload 入口 EL、寄存器、栈、cache/MMU、异常向量和可用 DRAM 区域已确认；
-- 厂商 Linux SMC 已被证明可无 Linux 地启动任意 AArch64 裸机程序；
-- Linkslot Pico 已在 RG34XX 上启动。
+- deployed native SPL 的精确构建输入/32-byte generation 尚不能完全从已上传仓库重建；当前 provenance 报告指出 build-time inventory prefix 与 Boot0 bytes 缺失。
+- vendor monitor 的 `0x8000ff04` 只证明既有 Linux-start 用法，不证明它接受任意 `r1` A64 入口。
+- `[0x7ec00000,0x7fc00000)`、RAM 顶部碎片、secure/DRM/DMA 和其他未标名 reservation 的 owner 仍未知。
+- 本项目没有完成 GammaOS LK 完整 target link、实机 BL33 替换、冷启动与恢复验收。
+- Linkslot UI/runtime 与 mGBA 尚未在目标设备执行。
+
 
 ## 8. 对 Linkslot Pico 的实施建议
 
-1. RG34XX 非 SP 三轮只读采集已完成，见[现场报告](rg34xx-live-inventory-2026-11-22.md)。完整 16 MiB env 分区已读取；其中 128 KiB 环境映像 CRC 有效，25 个变量解析无警告，完整 p3 hash 与 BaseOS prepared env 区域一致。
-2. 已完成 TOC1、U-Boot、monitor、DTB 和 Boot0 的组件/镜像指纹对比，并将现场 Boot0 三组 DRAM 参数与 BaseOS RG34XX profile 逐 word 对照；LBA16 主块与 LBA512 两个备用块均全量匹配。继续确认 BROM 实际选择及 DRAM training 结果。
-3. 对比两种入口方案：保留原厂链并修改/替换 A32 BL33，或采用 BaseOS 的 A64 SPL + 原厂 monitor + A32 BL33。前者改动面可能更小；后者对 SD/DRAM/恢复路径控制更强，但会接管 Boot0/SPL 职责，验证和恢复复杂度更高。
-4. 不论选择哪条路径，先建立一个最小 A32 handoff adapter 和纯 AArch64 payload。payload 只输出早期日志、CurrentEL、寄存器参数和安全范围内的内存信息；不启动 Linkslot、模拟器、Wi-Fi、音频或显示驱动。
-5. 先在目标 RG34XX 验证重复冷启动、失败恢复及完整入口契约，再开始 H700 HAL。不得把编译探针、Unicorn 模拟或其他机型的成功记录当成这一步的通过条件。
+1. **以现场已运行的 native path B 为基线。** 当前目标不是从 stock TOC1 U-Boot 重新发明 A64 启动链，而是评估将 AArch32 GammaOS LK 放入现有 A32 BL33 slot，保留 stock Boot0、native SPL 与 vendor BL31。
+2. **明确产品执行状态。** 若 Linkslot 直接作为独立裸机系统运行，优先让 A32 LK 接管后停留在 AArch32；不要为了“转成 A64”而调用 `0x8000ff04`。若仍要启动原有 A64 Linux，则必须实现 native loader 的完整 BOL4/header/FNV、DTB/FDT 编辑、native record 和 SMC contract，而不只是复制一条 SMC 指令。
+3. 保留活动链已证明的 monitor/BL33/DTB/initrd/image 区间作为占用或交接信息：monitor `[0x48000000,0x49000000)`、BL33 load base `0x4a000000`、DTBO `0x4a100000`、TOC1 DTB `0x4a200000`、handoff record `0x4a300000`、活动 image staging `0x45000000`、Linux Image `0x40080000`、initrd `0x42000000`、live FDT `0x44000000`。这些地址用于描述现有链，不构成 LK heap/stack/payload 的安全分配许可。
+4. 完成 reserved-memory ownership 及 monitor/native SPL/BL33 实际覆盖范围审计后，才填写 H700 linker script 的 `MEMBASE/MEMSIZE`、heap、stack、MMU 和 payload ranges。未知 16 MiB 区域 `[0x7ec00000,0x7fc00000)` 与 top-of-RAM fragments 继续排除。
+5. 先在主机侧完成完整 LK ELF/map/image size 与 header 检查，再评估目标机最小 A32 BL33 handoff 测试。未证明恢复路径前不改写 Boot0/TOC1/SD 启动区；不要把其他机型实验当作 RG34XX 现场验收。
+
 
 ## 9. 安全边界
 
@@ -187,3 +203,41 @@ live FDT 同时具有 `/firmware/optee`，`compatible="linaro,optee-tz"`、`meth
 FDT 的 Allwinner ION heap 声明包括 `ion_system`（`sys_user`）、`ion_cma` 和 `ion_secure` 三类节点；三者的 `heap-base/heap-size` 都是零，没有给出固定物理范围；FDT 也没有标准 `/reserved-memory` 节点。故未知区间 `[0x7ec00000,0x7fc00000)` 不能因为存在名为 secure 的 ION heap 就自动归类为 secure carveout，必须继续排除直至找到 owner/访问证据。硬件日志筛选没有提供 CMA、BL31 或 secure carveout 的地址证据。
 
 对应的 FDT 解析器已扩充为输出 `initrd`、`firmware_nodes` 和 `ion_heaps`，合成测试覆盖 initrd 边界、OP-TEE conduit 和零尺寸 ION heap。**本轮交叉分析仍未批准 payload 地址或入口。**
+
+## 11.2 活动 Android v2 / BOL4 镜像的原生拆分与校验（2026-11-24）
+
+用户最近上传的 `reports/rg34xx-active-inputs/` 包含 manifest、independent verification 和 SHA256SUMS；原始二进制仍只保留在本地，未上传。采集来自 RG34XX p4/boot 64 MiB 只读 dump（SHA-256 `41cfaa8f9ade4a5e05a89188abb7db154243e38b8e19c53b730f0a45ff325516`），提取偏移 `0x03000000`、长度 `0x829000`，没有对设备、SD、Boot0 或 TOC1 执行写操作。
+
+21 项独立检查全部通过：
+
+- 活动镜像与原始 p4 dump 的 `[0x03000000,0x03829000)` 区间逐字节相等，长度 `0x829000`，FNV-1a32 `0x04762a5f`。
+- BOL4 frame 长度 `0x80474e`，packed 长度 `0x80473e`，解压长度 `0x010a7008`，packed FNV `0xb4c47d39`；解压输出与 kernel.Image 逐字节相同。
+- kernel.Image 长度 `0x010a7008`，magic `ARMd`，Android Image header 字段 `text_offset=0x80000`、`image_size=0x1138000`、`flags=0xa`，确认活动 Linux kernel 是 AArch64 Image。
+- Android v2 header 2,048 B，page size 2,048，version 2，header_size 1,660；组件长度按 `[kernel, ramdisk, second, recovery_dtbo, dtb]` 为 `[8406862,512,0,0,144384]`。
+- 512-byte initrd 是合法空 `newc` CPIO（含 `TRAILER!!!`），DTB FDT magic 正确，totalsize 139,822 B，小于 144,384 B component extent。
+- 本地 SHA256SUMS 包含 8 条记录（六个拆分件及 manifest/verification 自身），本地 `sha256sum -c` 8/8 通过。
+
+工具 `tools/h700_boot_image.py` 来源为当前 porting 分支提交 `b6c3667`，SHA-256 `5c75dc3805ef50117fa19ca0de1896ee82965f4100a68fed0619a0e1ced76c3a`；自测 14 项通过，1 项因宿主缺少 C compiler 跳过。全部属于 host-only 取证。它确认的是活动镜像容器与 kernel ISA，并不验证可刷写性、冷启动、BL33 入口或任意 A64 payload handoff。二进制未上传，因此当前仓库只能复核报告中的长度/hash/校验结果，无法重新对本地原始二进制计算。
+
+报告索引：
+- [拆分与验证 README](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-active-inputs/README.md)
+- [extracted manifest](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-active-inputs/extracted-manifest.json)
+- [21 项 verification](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-active-inputs/verification.json)
+- [SHA256SUMS](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-active-inputs/SHA256SUMS.txt)
+
+## 11.3 Allwinner secure-heap / DRM-info SMC 路径的源码线索（2026-11-24）
+
+RG34XX #19 运行时报告确认 `Linux 4.9.170`、`CONFIG_ION_SUNXI=y`、`CONFIG_TEE=y`，并在 kallsyms 名称列表中发现 `sunxi_ion_probe` 与 `optee_probe_drm_configure`；ION secure heap 节点存在但当前 FDT base/size 为零，debugfs secure heap allocations 为 0。现场 dmesg 摘录没有 `drm_base` / `drm_size` / `tee_base` 或 `drm config service not available` 字符串。
+
+另一个可访问的 Allwinner T507 BSP 参考树（`qiaoweibiao/T507_Kernel@98fcc7d3f112e51b0edfb71536da89cb2115106f`，版本同为 Linux 4.9.170，日期 2021-06-03）呈现以下候选代码路径：
+
+1. `sunxi_ion_probe()` 仅在 `CONFIG_TEE` 条件下，遇到 `ION_HEAP_TYPE_SECURE` 时调用 `optee_probe_drm_configure()`。
+2. `optee_probe_drm_configure()` 通过 `optee_smccc_smc(OPTEE_SMC_GET_DRM_INFO,...)` 直接执行 SMC；返回 `a0` 非 `OPTEE_SMC_RETURN_OK` 时记录 `drm config service not available`，否则从 `a1/a2/a3` 读出 DRM base、DRM size、TEE base 并打印。
+3. 这条 DRM-info SMC 是独立的直接调用路径，不依赖 Linux 标准 OP-TEE 驱动已经通过 `api uid mismatch` 探测。故 `optee: api uid mismatch` 不能证明 DRM-info SMC 已失败。
+
+**证据边界：** 该公开 4.9.170 BSP 不是已确认与 RG34XX #19 完全一致的源码快照；目标机上函数符号存在也只证明代码被编译进内核，不能证明该分支在本次启动中实际执行。活动 provenance 报告还指出 bootargs 最后一个 `loglevel=1`，因此 console capture 对默认级别 `printk` 的可见性有限；没有 success/failure 文本不能作为 SMC 未调用的证明。需要取得匹配 #19 的源码/符号交叉引用，或通过安全、只读的既有日志渠道证明调用和返回值；不得从用户态主动发该 SMC、不得试探未知 carveout。
+
+无论该 SMC 是否执行，`[0x7ec00000,0x7fc00000)` 的 16 MiB reservation 仍无已验证 owner。它不得分配给 LK、heap、stack、mGBA、DMA 或 payload；secure ION heap 的名字和零 base/size 都不构成物理归属证据。参考代码只用于定位待核对的调用链：
+- [T507 sunxi_ion.c](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/staging/android/ion/sunxi/sunxi_ion.c)
+- [T507 optee core.c](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/tee/optee/core.c)
+- [T507 optee_smc.h](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/tee/optee/optee_smc.h)

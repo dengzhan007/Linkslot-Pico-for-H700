@@ -1,6 +1,9 @@
-# H700 AArch64 构建基础（第一阶段）
+# H700 AArch64 freestanding 编译探针（第一阶段）
 
 ## 当前交付
+
+本文件记录项目最早建立的 AArch64 编译探针，不是当前 GammaOS LK H700 target 的最终 ISA 选择。当前 LK/BL33 scaffold 采用 AArch32 `arm-none-eabi-`；C/C++ 可按 LK 配置使用 Thumb-2，startup/exception 代码使用 ARM state。AArch64 检查保留为独立的编译能力探针，也用于分析活动 Android kernel Image；不能据此推断 LK 已作为 A64 BL33 运行。
+
 
 本阶段建立可重复的 AArch64 freestanding 编译检查：
 

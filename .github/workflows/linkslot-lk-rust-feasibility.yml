@@ -132,6 +132,9 @@ jobs:
             --overlay build/audit-work/linkslot-1.0.36/h700-lk-overlay \
             --out build/audit-work/linkslot-1.0.36/h700-lk-overlay-build
 
+      - name: Test RG34XX native BL33 header packaging contract
+        run: python3 scripts/test-package-h700-bl33.py
+
       - name: Test RG34XX H700 LK project and memory-layout fail-closed gate
         run: |
           python3 scripts/test-h700-lk-project-guard.py \

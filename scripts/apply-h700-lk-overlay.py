@@ -315,6 +315,11 @@ build; it is not a firmware image.
   the opaque vendor header window [+4,+0x640), put the A32 vector table at
   +0x1000, preserve the r4 boot-argument scratch word, and enter the original
   reset path after setting VBAR.
+- Packaging: the normal GammaOS lk.img includes an MTK image header. Use
+  the raw lk-no-mtk-header.bin intermediate and run
+  scripts/package-h700-bl33.py with the SHA-pinned active RG34XX loader.bin
+  as the vendor-header source. Do not install without firmware pairing,
+  memory approval and hardware handoff checks.
 - arch/arm/arch.c: keep arch_early_init() VBAR pointed at
   __lk_vectors_start instead of resetting it to MEMBASE.
 - arch/arm/rules.mk: correct the Cortex-A53 branch compiler target from
