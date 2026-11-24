@@ -166,6 +166,11 @@ jobs:
           cargo check --manifest-path .ci/upstream-linkslot/Cargo.toml \
             -p slot-gfx --no-default-features --features device,test-support
 
+      - name: Compile Linkslot Frontend against injectable Renderer trait
+        run: |
+          cargo check --manifest-path .ci/upstream-linkslot/Cargo.toml \
+            -p slot --no-default-features --features device
+
       - name: Compile existing H700 AArch64 scaffold
         run: bash scripts/build-h700-objects.sh
 
