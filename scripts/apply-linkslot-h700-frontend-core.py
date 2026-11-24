@@ -484,6 +484,54 @@ def patch_frontend(source: Path) -> None:
         raise RuntimeError("App open_quick_row CPU no-op anchor changed")
     app = app.replace(open_row_old, open_row_new)
 
+    cpu_quick_row_tests = r"""
+#[cfg(test)]
+mod h700_cpu_performance_quick_row_tests {
+    use super::*;
+
+    #[test]
+    fn cpu_performance_row_is_visible_but_explicitly_unavailable() {
+        let mut app = App::new(Vec::new());
+        assert_eq!(
+            QuickValue::ALL.len(),
+            38,
+            "CPU unavailable value must append without shifting previous values"
+        );
+        assert_eq!(QuickValue::CpuPerformanceUnavailable.index(), 37);
+        assert_eq!(
+            app.quick_value(QuickRow::CpuPerformance),
+            Some(QuickValue::CpuPerformanceUnavailable)
+        );
+        assert!(!QuickRow::CpuPerformance.opens());
+        app.change_setting(QuickRow::CpuPerformance, true);
+        app.change_setting(QuickRow::CpuPerformance, false);
+        assert_eq!(
+            app.quick_value(QuickRow::CpuPerformance),
+            Some(QuickValue::CpuPerformanceUnavailable)
+        );
+    }
+
+    #[test]
+    fn unavailable_cpu_performance_request_does_not_write_to_storage() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = App::new(Vec::new());
+        app.root = Some(dir.path().to_path_buf());
+
+        app.change_setting(QuickRow::CpuPerformance, true);
+        app.change_setting(QuickRow::CpuPerformance, false);
+
+        assert_eq!(
+            std::fs::read_dir(dir.path()).unwrap().count(),
+            0,
+            "an unavailable performance request must not create or persist settings"
+        );
+    }
+}
+"""
+    if "mod h700_cpu_performance_quick_row_tests" in app:
+        raise RuntimeError("CPU QuickRow regression tests already injected")
+    app += chr(10) + cpu_quick_row_tests
+
     app_path.write_text(app, encoding="utf-8")
 
 
