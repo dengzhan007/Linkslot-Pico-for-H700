@@ -190,13 +190,40 @@ def _phandle_index(nodes: dict[str, dict[str, bytes]]) -> dict[int, str]:
     return index
 
 
-def _phandle_refs(value: bytes | None, index: dict[int, str]) -> list[dict[str, Any]]:
+def _phandle_refs(
+    value: bytes | None,
+    index: dict[int, str],
+    nodes: dict[str, dict[str, bytes]] | None = None,
+    argument_count_property: str | None = None,
+) -> list[dict[str, Any]]:
+    values = _cells(value)
     refs = []
-    for handle in _cells(value):
-        refs.append({
+    offset = 0
+    while offset < len(values):
+        handle = values[offset]
+        offset += 1
+        node_path = index.get(handle)
+        argument_count = 0
+        if argument_count_property and nodes and node_path in nodes:
+            count = _number(nodes[node_path].get(argument_count_property))
+            argument_count = count if count is not None else 0
+        if argument_count < 0 or offset + argument_count > len(values):
+            refs.append({
+                "phandle": f"0x{handle:x}",
+                "node": node_path,
+                "arguments": values[offset:],
+                "arguments_truncated": True,
+            })
+            break
+        arguments = values[offset:offset + argument_count]
+        offset += argument_count
+        ref = {
             "phandle": f"0x{handle:x}",
-            "node": index.get(handle),
-        })
+            "node": node_path,
+        }
+        if argument_count:
+            ref["arguments"] = arguments
+        refs.append(ref)
     return refs
 
 
@@ -280,13 +307,23 @@ def _cpu_power_inventory(nodes: dict[str, dict[str, bytes]]) -> dict[str, Any]:
                 }
 
         nvmem_names = _strings(props.get("nvmem-cell-names"))
-        nvmem_refs = _phandle_refs(props.get("nvmem-cells"), phandles)
+        nvmem_refs = _phandle_refs(
+            props.get("nvmem-cells"),
+            phandles,
+            nodes,
+            "#nvmem-cell-cells",
+        )
         for i, ref in enumerate(nvmem_refs):
             if i < len(nvmem_names):
                 ref["name"] = nvmem_names[i]
             ref["node_details"] = node_details(ref["node"])
 
-        thermal_refs = _phandle_refs(props.get("thermal-sensors"), phandles)
+        thermal_refs = _phandle_refs(
+            props.get("thermal-sensors"),
+            phandles,
+            nodes,
+            "#thermal-sensor-cells",
+        )
         for ref in thermal_refs:
             ref["node_details"] = node_details(ref["node"])
 
