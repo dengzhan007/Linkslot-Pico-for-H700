@@ -8,6 +8,19 @@ use alloc::vec::Vec;
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct TexId(usize);
 
+impl TexId {
+    /// Stable texture-table index used by renderer backends.
+    pub const fn index(self) -> usize {
+        self.0
+    }
+
+    /// Construct a handle from an existing Linkslot texture-table index.
+    #[cfg(feature = "test-support")]
+    pub const fn from_raw(index: usize) -> Self {
+        Self(index)
+    }
+}
+
 /// Renderer-independent drawing commands matching Linkslot's current draw vocabulary.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Draw {
