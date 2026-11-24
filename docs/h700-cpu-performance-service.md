@@ -134,6 +134,19 @@ The first stable C boundary is now implemented under `platform/h700/power`:
 
 The C facade is intentionally not wired to a PLL/PMIC actuator. The typed Rust client exists and is host-tested, but it is not yet wired into Linkslot `App`/settings or a C service initialization path. Until a real readback backend exists, actual clock/voltage must remain unavailable. Do not show planned MHz as measured MHz and do not expose an applied/success state based only on `POLICY_ONLY`.
 
+#### 7.1.1 Static H700 runtime owner (fail-closed, no board profile)
+
+The platform-owned lifetime boundary now exists in `h700_cpu_performance_runtime.h/.c`:
+
+- One zero-initialized, static `h700_cpu_perf_service_v1_t` is owned by the H700 C runtime. The accessor returns `NULL` until initialization succeeds; the owner is intended to be initialized once during single-core startup, before the Linkslot event loop.
+- Initialization requires a board-owned profile with ABI/size, RG34XX board ID, non-zero board revision, an explicit approval marker, zero reserved fields, a structurally valid OPP table and all mandatory CPU evidence gates. It preflights Power Saver, Balanced, Performance and Auto against the policy selector before publishing the service pointer.
+- The approval marker is an assertion by trusted platform code, **not** a hardware proof or security boundary. The profile must be immutable board-owned source/configuration and must not be provided by user data, a ROM, an untrusted file or the Linkslot UI.
+- Every initialization attempt first revokes prior readiness. A missing, rejected or incomplete profile leaves the runtime unavailable and does not preserve a stale service handle. The underlying service ABI also revokes its prior initialized state before validating a full-size reinitialization request.
+- Host regression tests use clearly labelled synthetic data only. No RG34XX profile has been checked in, because the real board OPP table and evidence gates are still missing. There is also no GammaOS LK startup hook or Linkslot App wiring calling this owner yet. Consequently the real RG34XX runtime remains unavailable and the UI row remains intentionally absent.
+- The owner performs no MMIO, PMIC read/write, PLL operation or telemetry sampling. Successful initialization only exposes the policy-only service; it does not apply hardware performance changes.
+
+The new host test covers unavailable-by-default state, NULL/unapproved/wrong-board/missing-gate/missing-OPP rejection, stable static ownership, policy-only reporting and revocation of a previously borrowed handle. Local GCC host execution and local AArch64/AArch32 ARM/AArch32 Thumb-2 freestanding compile probes passed for this slice; the corresponding GitHub Actions result for the latest push has not yet been confirmed.
+
 ### 7.2 Linkslot 1.0.45 settings integration contract
 
 The upstream UI extension point has been audited in the immutable 1.0.45 snapshot:
@@ -144,7 +157,7 @@ The upstream UI extension point has been audited in the immutable 1.0.45 snapsho
 - The CPU row belongs in System settings, but it should be appended without renumbering existing `QuickRow` or `QuickValue` variants. Update the fixed array lengths, `page()`, `parent()`, `key()`, icon fallback/glyph, value labels, both translation catalogues, App's `quick_value` and `change_setting` matches, and the row/index parity tests together.
 - The visible selectable profiles should initially be **Power Saver / Balanced / Performance / Auto**. Do not expose Boost until the board-specific voltage, thermal and sustained-load gates are approved.
 - Persist only the requested policy (for example, a validated text value under `linkSlot/Config/`); never persist a synthetic MHz target as an actual frequency. The UI must show the chosen policy separately from measured telemetry and make “frequency telemetry unavailable / policy not applied” explicit when the H700 service is not ready.
-- The current C service has caller-owned storage and copied OPP configuration; there is not yet an H700 boot/runtime owner that initializes it from a validated RG34XX board profile and supplies its lifetime to Linkslot App. Therefore the UI row is **not yet implemented**. Add it only together with a real service owner/adapter path, or the user could choose modes that have no effect.
+- The C service now has a static H700 runtime owner and a fail-closed board-profile validation API. However, no approved RG34XX OPP/profile is checked in and no GammaOS LK startup path calls the owner; the Rust client is not yet wired into Linkslot `App`/settings. Therefore the UI row is **not yet implemented**. Add it only after a real board profile and boot-to-App adapter path exist, or the user could choose modes that have no effect.
 
 ## 8. Required hardware and safety gates
 
@@ -165,7 +178,7 @@ The upstream UI extension point has been audited in the immutable 1.0.45 snapsho
 
 ## 9. Current project status
 
-The H700 scaffold still has **no hardware DVFS driver and no register-write path**. The pure C policy selector under `platform/h700/power` consumes externally supplied, board-approved OPP data and evidence gates. Its host fixture uses synthetic values only and is not the RG34XX operating-point table. The host regression and AArch64/AArch32 ARM/Thumb-2 compile jobs passed in [workflow #45381349400](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45381349400). This validates the policy-selection layer only; it does not validate a physical OPP, PMIC/PLL transition, thermal response or device runtime.
+The H700 scaffold still has **no hardware DVFS driver and no register-write path**. The pure C policy selector under `platform/h700/power` consumes externally supplied, board-approved OPP data and evidence gates. A static runtime owner now exists, but it remains unavailable on the target because no validated RG34XX profile is checked in and no LK startup call site is wired. Host fixtures use synthetic values only and are not the RG34XX operating-point table. The host regression and AArch64/AArch32 ARM/Thumb-2 compile jobs passed in [workflow #45381349400](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45381349400). This validates the policy-selection layer only; it does not validate a physical OPP, PMIC/PLL transition, thermal response or device runtime.
 
 Hardware status remains:
 - AXP2202 on I²C-5 / `0x34` is confirmed by the live Linux log.
