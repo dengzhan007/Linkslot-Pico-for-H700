@@ -2,7 +2,13 @@
 extern crate alloc;
 
 mod gesture;
+mod h700;
 mod raw;
+
+pub use h700::{
+    H700InputDrain, H700InputError, H700InputEvent, H700InputServiceV1, H700InputSource,
+    H700_INPUT_ABI_VERSION, H700_INPUT_MAX_EVENTS,
+};
 
 pub use gesture::{
     Action, Gestures, FF_DOUBLE_TAP_MS, MENU_HOLD_MS, MUTE_CHORD_MS, POWER_HOLD_MS, SELECT_CHORD_MS,
