@@ -7,7 +7,7 @@ This directory is the first persistent device-side Rust business slice. It is de
 - `slot-input`: Linkslot raw button events, button enum, gesture state machine and action vocabulary. The only runtime substitutions are `std::mem::take` → `core::mem::take` and explicit `alloc` imports.
 - `slot-model`: Linkslot static machine/core tables, platform metadata, battery/charge types and card directory constants. Filesystem-specific `resolve_root(PathBuf)` and `Platform::accepts(&Path)` helpers are intentionally excluded; device path access belongs to the H700 VFS/runtime service, not the pure business model.
 
-The upstream source files are recorded by their Git blob IDs in the source manifest below. The packages have no third-party crate dependencies and compile as `no_std`; allocation-bearing APIs use `alloc`. `slot-model` enables its `host-compat` default feature for the original Linux path helper API. Freestanding checks and the LK candidate must use `--no-default-features`, which removes those `std::path` helpers while preserving the domain data API.
+The upstream source files are recorded by their Git blob IDs in the source manifest below. The packages have no third-party crate dependencies and compile as `no_std`; allocation-bearing APIs use `alloc`. `slot-model` enables its `host-compat` default feature for the original Linux path helper API. Freestanding checks and the LK candidate must use `--no-default-features`, which removes those `std::path` helpers while preserving the domain data API. `slot-input` also contains a versioned H700 C service-table adapter: C supplies ordered logical button edges, Rust maps them to the upstream `RawEvent` type. The ABI table's context and callback remain owned by C.
 
 ## Target boundary
 
