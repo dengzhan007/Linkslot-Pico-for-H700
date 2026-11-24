@@ -95,7 +95,7 @@ def main() -> None:
     )
     ffi = ffi.replace("use libloading::Library;\n", "", 1)
     ffi = ffi.replace("use crate::core::CoreError;\n", "", 1)
-    dynamic_impl = "\nimpl Api {\n"
+    dynamic_impl = '\n#[cfg(feature = "dynamic")]\nimpl Api {\n'
     if ffi.count(dynamic_impl) != 1:
         raise RuntimeError("could not isolate dynamic Api loader from pinned FFI types")
     ffi = ffi[:ffi.index(dynamic_impl)].rstrip() + "\n"
