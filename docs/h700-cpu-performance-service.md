@@ -131,13 +131,13 @@ Use hysteresis and a minimum dwell interval to avoid frequency oscillation. Do n
 - [ ] Implement/read the H700 thermal sensor path and validate AVCC calibration; the current RG34XX kernel capture reports “avcc is not calibrated”, so automatic thermal DVFS is blocked.
 - [ ] Establish cold-boot voltage/clock readback and a conservative board-approved OPP table before adding any write path.
 - [x] Implement a pure C OPP policy selector with no MMIO/PMIC access, strict speed-bin masks, board-voltage and thermal caps, and fail-closed evidence gates; add host regression tests and AArch64/AArch32 compile coverage.
-- [ ] Pass the new GitHub Actions host-test and AArch64/AArch32 compile jobs before treating the policy slice as validated.
+- [x] GitHub Actions [H700 CPU OPP / AArch32-AArch64 regression #45381349400](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45381349400) passed: policy host regressions plus AArch64, AArch32 ARM-state and AArch32 Thumb-2 freestanding object compilation.
 - [ ] Add transition-ordering tests for voltage-before-frequency on upshift and frequency-before-voltage on downshift, plus PLL timeout and PMIC failure handling when a hardware transition layer is eventually introduced.
 - [ ] Add on-device sustained-load, cold/warm boot, battery/charger, audio-underrun, frame-pacing and thermal-soak tests before enabling Performance/Boost in release builds.
 
 ## 9. Current project status
 
-The H700 scaffold still has **no hardware DVFS driver and no register-write path**. This iteration adds a pure C policy selector under `platform/h700/power`; it consumes externally supplied, board-approved OPP data and evidence gates. Its host fixture uses synthetic values only and is not the RG34XX operating-point table. The new test runner and AArch64/AArch32 object compilation are wired into the H700 CI workflow; the workflow result must pass before this slice is marked validated.
+The H700 scaffold still has **no hardware DVFS driver and no register-write path**. The pure C policy selector under `platform/h700/power` consumes externally supplied, board-approved OPP data and evidence gates. Its host fixture uses synthetic values only and is not the RG34XX operating-point table. The host regression and AArch64/AArch32 ARM/Thumb-2 compile jobs passed in [workflow #45381349400](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45381349400). This validates the policy-selection layer only; it does not validate a physical OPP, PMIC/PLL transition, thermal response or device runtime.
 
 Hardware status remains:
 - AXP2202 on I²C-5 / `0x34` is confirmed by the live Linux log.
