@@ -57,7 +57,7 @@ jobs:
       - name: Run upstream input/model regression tests against H700 no_std sources
         run: |
           cargo test --manifest-path .ci/upstream-linkslot/Cargo.toml \
-            -p slot-input -p slot-model --locked
+            -p slot-input -p slot-model
 
       - name: Compile full Linkslot Frontend with H700 software renderer and business overlay
         run: |
