@@ -80,23 +80,15 @@ Initial features:
 
 Add Grid/LCD/CRT/FourPass filters, frame split/lift, bezel and rotation only after the unfiltered baseline passes golden-image tests. The existing GL shaders are behavior references, not code that can be directly executed by LK.
 
-### First host-only implementation slice
+### First host-only implementation and Frontend injection
 
-A separate crate now exists at `integration/linkslot/h700-render-core`. It is intentionally outside the upstream snapshot and uses `#![no_std] + alloc` for non-test builds. The first implementation accepts a caller-supplied framebuffer slice and supports:
+A separate crate exists at `integration/linkslot/h700-render-core`. It is outside the immutable upstream snapshot and uses `#![no_std] + alloc` for non-test builds. It accepts a caller-supplied framebuffer slice and supports RGBA8888/BGRA8888, explicit width/height/stride validation, stable texture IDs, create/update/delete, clipped rectangles, nearest and bilinear texture sampling, source-over alpha, centre-based rotation, Game/Shot insertion and XRGB8888/GL_BGRA-compatible game-frame conversion. Texture allocation failures are reported through `RenderError`. Its 11 host regression tests and non-test `cargo check` pass in GitHub Actions.
 
-- RGBA8888 or BGRA8888 framebuffer byte order, with explicit width/height/stride validation;
-- stable texture IDs, create/update/delete, and tightly packed RGBA texture data;
-- clipped solid rectangles, nearest-neighbour and bilinear texture sampling, and source-over alpha blending;
-- centre-based texture rotation;
-- game-frame insertion and screenshot (`Shot`) insertion in draw-list order;
-- XRGB8888/GL_BGRA-compatible game-frame byte conversion;
-- fallible texture-buffer reservations reported as `RenderError::TextureTooLarge`.
+The integration patcher `scripts/apply-linkslot-render-core.py` applies the crate to a temporary checkout pinned to Linkslot 1.0.36 commit `8590d6ff1b2caa26118051069c975106fbb14bd3`. It makes `slot-gfx` re-export the exact shared `Draw/TexId` types, gives the existing GL `Compositor` an object-safe `Renderer` implementation, and changes `Frontend` plus `CartFaces` to consume `&mut dyn Renderer`. All 21 renderer operations used by Linkslot's real `Frontend` are covered by the trait. The original `upstream/linkslot` branch remains unchanged.
 
-Texture filtering matches Linkslot's current API convention: `create_texture()` is linear, `create_texture_nearest()` is nearest, and `update_texture()` preserves the handle's current filter. Eleven host regression tests cover framebuffer bounds, clipping, both sampling modes, filter persistence, alpha, rotation, Game/Shot ordering, byte order and texture-handle lifetime.
+**Verified:** the temporary `slot-gfx` and full `slot` crates both pass Cargo check with the injected renderer boundary in Actions run [45345375995](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45345375995). The same run also passed the GammaOS LK A32 BL33 entry/vector link check, header packaging contract, and H700 project/memory fail-closed gate before continuing into the remaining Linkslot integration tests.
 
-The crate's `cargo check` and `cargo test` commands are included in the Linkslot/LK feasibility workflow. The new `scripts/apply-linkslot-render-core.py` copies this crate into an isolated checkout of the pinned Linkslot snapshot, makes `slot-gfx` re-export the same `Draw/TexId` types, and updates the GL sprite backend to use the shared handle index. The workflow now Cargo-checks that patched `slot-gfx` crate. The immutable `upstream/linkslot` branch is not modified. The standalone crate's CI build and all eleven host tests have now passed in GitHub Actions (run 45340553836). The larger feasibility workflow is separately checking the patched `slot-gfx` integration; until that compile step passes, shared-type integration remains pending. It has not been linked into `Frontend` with a software Compositor, connected to the H700 scanout buffer, or benchmarked on the device.
-
-The first renderer deliberately omits the GL shader effects, bezel, full-display rotation, double buffering and physical cache maintenance. It is a host-testable raster core, not a display driver. Its `Draw` and `TexId` data shapes mirror upstream, but they remain separate Rust types until an integration patch makes both sides share the same crate types. and deliberately omits the GL shader effects, bezel, rotation of the full display, double buffering and physical cache maintenance. It is a host-testable raster core, not a display driver.
+This proves that the real Linkslot frontend can be compiled against an interchangeable renderer interface while preserving the original GL backend. It does **not** yet provide an H700 `SoftwareCompositor`, connect a physical framebuffer, port the Linux `device_app` scheduler/services, or prove a device boot. The next implementation is an H700 renderer adapter over this raster core; advanced GL effects, bezel composition, full-panel rotation, double buffering and cache maintenance remain separate acceptance items.
 
 ### Display memory facts and limits
 
