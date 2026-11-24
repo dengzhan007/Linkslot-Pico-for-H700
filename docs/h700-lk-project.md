@@ -11,6 +11,13 @@ This adds a real GammaOS LK project/target/platform selection path for the
 - `target/rg34xx_h700/rules.mk` selects the H700 platform and refuses to
   continue unless an explicit memory-layout approval and both memory values
   are supplied.
+- `target/rg34xx_h700/init.c` supplies side-effect-free `target_early_init()`
+  and `target_init()` hooks. LK `kernel/main.c` invokes both unconditionally;
+  the generic `target/init.c` is excluded because it includes MTK-only
+  defaults. The H700 hooks intentionally do not create fake fastboot/eMMC or
+  memory-scratch capabilities. Future board service initialization belongs
+  in `target_init()`, after `platform_init()` and before `apps_init()`, once
+  its hardware and memory prerequisites are validated.
 - `platform/h700/rules.mk` selects `ARCH=arm` / `ARM_CPU=cortex-a53` and assigns LK's generated `system-onesegment.ld` as the ELF linker script.
 - The same H700 platform rules list the policy-only CPU selector, C service ABI and static runtime owner as LK objects. These C units have no MMIO/PMIC/PLL access and no startup call site; listing them only makes their C ABI symbols available to a future validated H700 startup path.
 - MediaTek `drvgen`/DWS generation is disabled for this non-MediaTek target.
@@ -19,8 +26,7 @@ This adds a real GammaOS LK project/target/platform selection path for the
   timer uses MTK GPT, and its mutex implementation is only a no-op placeholder;
   H700 must provide its own timer, logging and synchronization services.
 
-The project currently enables **no H700 device drivers**. It is a build-system
-entry point and a memory-guard test, not a completed LK port.
+The project currently enables **no H700 device drivers**. Its only target-owned lifecycle code is the two no-op LK hooks described above; its CPU policy/service/owner objects are policy-only C units with no hardware IO. This remains a build-system entry point and a memory-guard test, not a completed LK port.
 
 ## Memory approval is deliberately fail-closed
 
@@ -143,6 +149,8 @@ overlay in a disposable worktree and proves that:
    `make/build.mk` ELF link rule.
 5. `platform/h700/rules.mk` contains the policy, service and runtime-owner object
    entries and each entry has a corresponding C source file.
+6. `target/rg34xx_h700/rules.mk` links its target lifecycle object and the
+   source defines exactly one `target_early_init()` and `target_init()`.
 
 The fifth assertion is a source/build-graph check only. It does not execute the
 full LK target link or prove the object set fits an approved RG34XX memory map.
