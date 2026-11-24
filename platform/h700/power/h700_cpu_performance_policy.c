@@ -107,14 +107,20 @@ int h700_cpu_perf_select_opp(
             continue;
         }
 
+        int rejected_by_limits = 0;
+
         voltage_uv = opp->voltage_uv[limits->speed_bin];
         if (voltage_uv > limits->board_max_voltage_uv) {
             result_flags |= H700_CPU_PERF_RESULT_BOARD_VOLTAGE_CLAMPED;
-            continue;
+            rejected_by_limits = 1;
         }
 
         if (opp->frequency_hz > limits->thermal_max_frequency_hz) {
             result_flags |= H700_CPU_PERF_RESULT_THERMAL_CLAMPED;
+            rejected_by_limits = 1;
+        }
+
+        if (rejected_by_limits) {
             continue;
         }
 
