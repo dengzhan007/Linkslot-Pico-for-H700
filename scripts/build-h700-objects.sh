@@ -156,7 +156,7 @@ COMMON_FLAGS=(
     -o "$OUT_DIR/fat_exfat.o"
 
 "$CC" "${COMMON_FLAGS[@]}" -c \
-    "$ROOT/platform/h700/arch/compile_probe.S" \
+    "$ASM_PROBE" \
     -o "$OUT_DIR/compile_probe_asm.o"
 
 "$CXX" "${COMMON_FLAGS[@]}" -nostdinc++ -fno-exceptions -fno-rtti \
