@@ -27,7 +27,7 @@
 | gpt-sfdisk.txt 或 gpt-fdisk.txt | 系统提供 sfdisk 或 fdisk 时生成分区表文本 |
 | dmesg-hardware-lines.txt | 与 DRAM、面板、PMIC、MMC、串口、保留内存相关的内核日志行 |
 | tee-ion-runtime.txt | 只读采集运行内核 identity/config（若导出）、ION/TEE 设备节点、ION debugfs heaps、ion-sunxi platform driver 绑定、/proc/modules 及 ION/TEE/DRM/CMA 相关 dmesg；不会调用 ION ioctl、SMC 或写 debugfs 控制节点 |
-| cpu-power-runtime.txt | 只读采集 CPU online/present、cpufreq policy/当前频率、thermal zone/trip、regulator class/debugfs 电压状态、clk_summary，以及 NVMEM device name/size/of_node 元数据和相关 dmesg；**不读取 NVMEM 原始熔丝字节**，不改 governor、频率、电压、时钟或热 trip |
+| cpu-power-runtime.txt | 只读采集 CPU online/present、cpufreq policy/当前频率、thermal zone/trip、regulator class/debugfs 电压状态、clk_summary，以及 NVMEM device name/size/of_node 元数据和相关 dmesg；**不读取 NVMEM 原始熔丝字节**，不改 governor、频率、电压、时钟或热 trip | 对每类 sysfs 接口会区分节点不存在、节点存在但无可读属性和实际读到数据，避免将旧内核未导出接口误判成零值。
 | raw-sha256.txt | 原始启动区文件 SHA-256 与两份 Boot0 比较结果 |
 
 LBA 16、512、32800 和 TOC1 长度 0x140000 来自 BaseOS-MultiFrontend 的 H700 启动链采集/装载代码。采集器只适用于与这些布局一致的 RG34XX/BaseOS SD 镜像；如果现场读取结果和固件清单不一致，应先解释布局差异，不要直接把镜像视为损坏。
@@ -45,7 +45,7 @@ LBA 16、512、32800 和 TOC1 长度 0x140000 来自 BaseOS-MultiFrontend 的 H7
 
     powershell -ExecutionPolicy Bypass -File .\scripts\run-rg34xx-inventory.ps1
 
-脚本会确认只连接了一台已授权的 ADB 设备、确认 ADB shell 为 root、读取 /proc/cmdline 并校验整盘设备与 root 分区一致，然后自动 push 采集器、运行只读采集、pull 报告、解析两份 Boot0、解包 TOC1，并用 FDT 检查器分别输出 live-fdt.json 与 TOC1 内 dtb-report.json。采集器会优先通过 sysfs 中的精确 PARTNAME=env 查找环境分区并读取完整分区（限制 64 MiB），不硬编码 p3；若找不到且存在 by-partlabel/env 链接，才使用该链接作为兼容回退。Windows runner 会自动运行 env 解析器并输出 env-report.json；只要 debugfs 快照存在就运行 memory map parser 输出 memory-map-report.json。PAGE_SIZE 可用时将 CMA PFN/count 换算为 byte range；PAGE_SIZE 缺失时仍解析 memblock（其地址本身是 byte address），CMA 仅保留原始 PFN/count。 新增的 tee-ion-runtime.txt 会检查运行内核 config 导出、ION/TEE 设备节点、ION heaps debugfs 与 ion-sunxi driver 绑定，并筛选 vendor DRM/TEE SMC 日志；该步骤只读文件/节点，不触发 ION ioctl 或任何 SMC。 新增的 `cpu-power-runtime.txt` 只读采集 Linux CPUFreq、thermal、regulator 和 clock readback；对 NVMEM 只记录设备元数据，绝不导出原始 fuse 内容。live-FDT 解析器会将 CPU 的 regulator/OPP/NVMEM/thermal phandle 与 provider cell arguments 关联，但这些仍是 DT 静态配置，不是当前硬件读回。默认结果保存在 build/rg34xx-inventory-时间戳/。多个 ADB 设备同时连接时用 -DeviceSerial 指定；root 参数不是 /dev 块设备时，在确认真实启动 SD 整盘后用 -BlockDevice 显式指定。
+脚本会确认只连接了一台已授权的 ADB 设备、确认 ADB shell 为 root、读取 /proc/cmdline 并校验整盘设备与 root 分区一致，然后自动 push 采集器、运行只读采集、pull 报告、解析两份 Boot0、解包 TOC1，并用 FDT 检查器分别输出 live-fdt.json 与 TOC1 内 dtb-report.json。采集器会优先通过 sysfs 中的精确 PARTNAME=env 查找环境分区并读取完整分区（限制 64 MiB），不硬编码 p3；若找不到且存在 by-partlabel/env 链接，才使用该链接作为兼容回退。Windows runner 会自动运行 env 解析器并输出 env-report.json；只要 debugfs 快照存在就运行 memory map parser 输出 memory-map-report.json。PAGE_SIZE 可用时将 CMA PFN/count 换算为 byte range；PAGE_SIZE 缺失时仍解析 memblock（其地址本身是 byte address），CMA 仅保留原始 PFN/count。 新增的 tee-ion-runtime.txt 会检查运行内核 config 导出、ION/TEE 设备节点、ION heaps debugfs 与 ion-sunxi driver 绑定，并筛选 vendor DRM/TEE SMC 日志；该步骤只读文件/节点，不触发 ION ioctl 或任何 SMC。 新增的 `cpu-power-runtime.txt` 只读采集 Linux CPUFreq、thermal、regulator 和 clock readback；对 NVMEM 只记录设备元数据，绝不导出原始 fuse 内容。live-FDT 解析器会将 CPU 的 regulator/OPP/NVMEM/thermal phandle 与 provider cell arguments 关联，但这些仍是 DT 静态配置，不是当前硬件读回。 若目标 Linux 4.9 内核未导出某类 cpufreq/thermal/regulator/NVMEM sysfs 节点，报告会写入 `NOT_PRESENT`；若目录存在但属性不可读，会写入 `NO_READABLE_...`，两者都不应被解释为电压/温度/频率为零。默认结果保存在 build/rg34xx-inventory-时间戳/。多个 ADB 设备同时连接时用 -DeviceSerial 指定；root 参数不是 /dev 块设备时，在确认真实启动 SD 整盘后用 -BlockDevice 显式指定。
 
 该快捷脚本要求 Windows PowerShell 5.1 或 PowerShell 7、Android platform-tools 和 Python 3。ADB shell 必须为 root；若设备 ADB 不是 root，请按下方方法在 root SSH shell 执行采集器。
 
