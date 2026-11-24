@@ -134,6 +134,8 @@
 - [x] 解析 mainline H616/H700 speed-bin decoder、CPU OPP table 和 CPUX PLL/mux 参考偏移；unknown bin 将在本项目中 fail closed，不照抄 Linux 的 bin-0 fallback。
 - [x] 固定并审查 `qiaoweibiao/T507_Kernel@98fcc7d3f112e51b0edfb71536da89cb2115106f` 的 `sun50iw9` CPUX 时钟驱动：确认 `PLL_CPU=0x0000`、`CPU_CFG=0x0500`、CPU mux bits 24–26、AXI/CPUAPB divider fields、`pll_periph0` pre-rate 切换/`pll_cpu` post-rate 恢复，以及新模式 PLL lock polling 的实现；记录 PLL enable bit31 不应动态更改、锁定位受 EVB build macro 影响。审计详情见 [H700 CPUX clock-source audit](h700-cpux-clock-source-audit.md)。这是固定源码证据，不代表 RG34XX 实机 readback 或已授权 MMIO。
 - [x] 确认该固定 vendor `clk-sun50iw9_tbl.c` 明确注释频率因子表不正确；因此不从该表生成 RG34XX MHz 档位或 OPP，也不把表格数值与 AXP2202 电压推断拼接。
+- [x] 扩展 RG34XX 只读 inventory：从 Linux `clk_summary` 单独摘录 `pll_cpu`、`pll_periph0`、`cpux` 和 `cpu` 条目并保留父子树缩进；不执行 devmem、不触碰 CCU MMIO、不修改 clock policy。对应静态只读安全测试已加入 H700 AArch32/AArch64 workflow。
+- [ ] 确认本轮 push 对应的 H700 workflow 执行结果；在 Actions 明确通过前，不把新增 collector regression 标为已验证。
 - [x] 确认目标机有 H700 thermal sensor，但当前内核报告 `avcc is not calibrated`，所以自动温控和 Boost 仍禁止。
 - [x] 实现纯 C OPP policy selector：省电/均衡/性能/自动/增强档位策略、speed-bin mask、板级电压上限、热频率上限、限制原因累计、严格 OPP 表校验和缺少硬件门控时 fail closed；测试使用合成 OPP，不是目标机频点表。
 - [x] GitHub Actions [H700 CPU OPP / AArch32-AArch64 回归 #45381349400](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45381349400) 通过：CPU policy host tests + AArch64 / AArch32 ARM / AArch32 Thumb-2 freestanding object compile。
