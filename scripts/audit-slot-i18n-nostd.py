@@ -261,14 +261,14 @@ def main():
         persistent_src = persistent / "src"
         persistent_src.mkdir(parents=True, exist_ok=True)
         (persistent / "Cargo.toml").write_text(
-            "[package]\\n"
-            'name = "slot-i18n"\\n'
-            'version = "1.0.45"\\n'
-            'edition = "2021"\\n'
-            'rust-version = "1.96"\\n'
-            'license = "GPL-3.0-or-later"\\n\\n'
-            "[lib]\\n"
-            'path = "src/lib.rs"\\n',
+            "[package]\n"
+            'name = "slot-i18n"\n'
+            'version = "1.0.45"\n'
+            'edition = "2021"\n'
+            'rust-version = "1.96"\n'
+            'license = "GPL-3.0-or-later"\n\n'
+            "[lib]\n"
+            'path = "src/lib.rs"\n',
             encoding="utf-8",
         )
         (persistent_src / "lib.rs").write_text(
