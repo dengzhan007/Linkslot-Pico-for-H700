@@ -82,7 +82,18 @@ armGBA README 描述为 AArch64 recompiler；当前 LK/BL33 主线为 AArch32，
 
 ## 5. 当前验证边界和下一步
 
-1.0.45 的验证基线现已通过：软件渲染器 workflow [45370068413](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45370068413)、runtime slices workflow [45370886590](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45370886590)，以及完整综合 workflow [45370886678](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45370886678) 全部成功。综合 workflow 共 69 步，覆盖 GammaOS LK H700 BL33 源 overlay CRT0/exception-vector 编译、1.0.45 Renderer/Frontend/no_std overlay、A32/A64 检查、C input ABI、VFS v3、mGBA AArch32 namespaced static archive、newlib 构建/链接诊断、H700 SD→GPT→FAT→Libretro VFS host 路径，以及 BL33 header/vector layout probe。完整产物（约 381 MB，含 map、ELF、报告和日志）已上传：[GitHub Actions artifact 14908469502](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45370886678/artifacts/14908469502)。
+1.0.45 的最新完整验证基线为综合 workflow [#45413653400](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45413653400)，**70/70 steps 全部成功**；完整产物（约 386.6 MB，含 map、ELF、报告和日志）已上传：[GitHub Actions artifact 14929808289](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45413653400/artifacts/14929808289)。覆盖 GammaOS LK H700 BL33 source overlay CRT0/exception-vector、1.0.45 Renderer/Frontend/no_std overlay、A32/A64、C input ABI/queue、slot-retro VFS v3/static API、mGBA AArch32 static archive/newlib、H700 SD→GPT→FAT→Libretro VFS host path 和 BL33 header/vector layout probe。新一轮把真实 Linkslot Rust `slot-retro::Api` 表与 mGBA archive/newlib adapter 链接为 ELF32/ARM，`--no-undefined` 通过；仍只是 host/cross-build feasibility，不是完整 LK build 或实机运行。早期 [45370886678](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45370886678) 作为 69-step 历史基线保留。
+
+### 5.0 最新 Rust static mGBA / newlib 链接验收
+
+完整综合 workflow [#45413653400](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45413653400) 新增并通过了实际 Rust API 最终链接步骤：
+
+- 脚本 `scripts/probe-mgba-rust-static-api-link.py` 从隔离的 Linkslot 1.0.45 checkout 读取 `crates/slot-retro/src/ffi.rs` 的真实 `Api` 定义；只将静态函数表依赖的 FFI 类型切片改为 `core::ffi`，不使用手写 C 结构替代 Rust API。
+- 编译仓库内 `platform/h700/runtime/mgba_static.rs` 为 AArch32 `no_std` staticlib，静态表中的 21 个 `mgba_retro_*` namespaced symbols 都在 Rust archive 中得到引用。
+- 把真实 mGBA VFS v3 AArch32 archive、Rust staticlib、H700 newlib adapter object 和 `libc/libm/libgcc` 做最终静态链接；entry object 放在 Rust archive 之前，遵循 GNU ld archive member 抽取顺序。
+- 最终得到 ELF32/ARM；使用 `--no-undefined` 链接，且 `arm-none-eabi-nm -u` 无任何未解析符号。artifact 中保留 `mgba-rust-static-link/linkslot-mgba-rust-static.elf`、map、Cargo/link logs 和专项 REPORT。
+- 探针的 C `_start` 通过 Rust API 表调用 `retro_api_version`，但本轮不执行 ELF；不调用 mGBA init/load/run，不代表 Linkslot App、LK kernel 或 H700 HAL 已经运行。
+- H700 newlib adapter 已参与链接，但 heap/console/RTC 回调尚未由真实 LK target startup 安装，VFS 文件服务尚未接入核心生命周期；这仍是待完成的 runtime 阶段。
 
 ### 5.1 已修复的 BL33 overlay 项与剩余阻塞
 

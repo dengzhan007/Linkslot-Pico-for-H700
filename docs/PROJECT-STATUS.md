@@ -2,10 +2,10 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-24 13:41 UTC  
+**最后核对时间：** 2026-11-24 14:28 UTC  
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **工作分支：** `porting/linkslot-1.0.45-feasibility`  
-**本次状态刷新前的分支 HEAD：** `a15fef882ac5e27add647ab22787ebbf18964517`  
+**本轮已验证代码 HEAD：** `e1044df1515b95243cdf83499d41f191b60f190d`（完整综合 workflow #45413653400；本轮随后只更新文档）。  
 **本轮 CPU runtime owner 最新代码提交：** `072793f8b4bfce00683aa3d303eee62613fe41ab`（7 个连续提交）  
 **本轮 Rust runtime bridge 最新代码提交：** `0d381d7ba66592b5ab64ba67e0b228039bb9eec0`  
 **本轮 H700 build graph / guard 最新代码提交：** `6e847c0121431c681062053c52f28824715e78a6`（platform OBJS）与 `ef07a0e06c1d55e2d2f49175d4e976e8337e1ee4`（project guard）。  
@@ -16,6 +16,7 @@
 **本轮 SoC revision 取证边界：** collector 只探测通用 `/sys/devices/soc0/{machine,family,soc_id,revision}`；不调用 vendor `sunxi_get_soc_ver()` / `sunxi_info`，因为固定 `sun50iw9` 驱动路径可能短暂写 CE CCU clock/reset 且 sys_info 暴露 serial/chipid。新 safety regression #45401913670 与最新版 inventory audit #45402146927 均通过。  
 **本轮 SID JSON SoC identity：** `sid-cell-report.json` 现附带 generic SoC bus 的 machine/family/soc_id/revision 原始字符串（可用时），仅用于识别，不参与 OPP 放行；相关 host/Windows tests #45402936876、#45402977130 与 inventory audit #45403070519/#45403377522 均通过。  
 **本轮 mainline speed-bin reference decode：** 固定上游 Linux `8d7fe9885c62fc9a95bf55d9db244d9672a8aadc` 的候选映射现加入 `sid-cell-report.json`，但所有结果仍 `opp_authorization=not_approved`；#45404785874/#45405024561 已通过。  
+**本轮 Linkslot/mGBA 静态闭环：** #45413653400 成功（70/70）；真实 Linkslot 1.0.45 `slot-retro::Api` Rust `no_std` AArch32 staticlib、21 个 mGBA namespaced exports、真实 mGBA VFS v3 archive、H700 newlib adapter 与 `newlib/libm/libgcc` 最终 ELF32/ARM 链接通过；artifact `14929808289`。该探针不执行核心，也不是完整 LK/固件/设备验证。  
 
 
 ## 1. 项目目标与固定约束
@@ -46,7 +47,7 @@
 - 1.0.45 上游审查、三核心 GBA picker 状态机升级、Renderer overlay 基线更新。
 - 多个纯业务 Rust crate 已拆为 `no_std + alloc` 形式；输入手势、核心选择、状态转换等有独立回归测试。
 - Linkslot Renderer 抽象和 H700 软件 framebuffer compositor 已可在隔离上游工作树编译；尚未接入已授权的真实 scanout buffer。
-- Linkslot `slot-retro` 静态核心接口、Libretro VFS v3 ABI、mGBA AArch32 静态 archive/newlib 构建和 host link probes 已完成。
+- Linkslot `slot-retro` 静态核心接口、Libretro VFS v3 ABI、mGBA AArch32 静态 archive/newlib 构建和 host link probes 已完成；另已把真实 Linkslot Rust `Api` 表与真实 mGBA archive/newlib adapter 链接为无未解析符号的 AArch32 ELF（仅链接探针，不执行核心）。
 - H700 SD→CMD17→GPT→FAT→VFS 的合成设备/主机端到端只读路径通过；尚未在 RG34XX 上完成真实 sdc0 MMIO 和实体卡读扇区。
 - GammaOS LK H700 BL33 overlay 的部分 CRT0/异常向量、Cortex-A53 编译参数和 VBAR 处理通过 host/cross-build 检查；**不是完整 LK 镜像，也不是实机启动证明**。
 - CPU OPP 纯 C 选择器已实现，覆盖 Power Saver、Balanced、Performance、Auto、受门控的 Boost、Speed Bin mask、电压/温度上限和 fail-closed 证据门。
@@ -60,6 +61,21 @@
 - 实际 H700 显示扫描输出、GPIO/ADC 输入 producer、硬件 timer、PCM DMA audio、RTC、关机和真实存储写入服务尚未形成完整运行时。
 - 无经 RG34XX 实机验证的 CPU OPP 表、PMIC 调压流程、CPU PLL 切换流程或温控闭环。
 
+### 最新 Linkslot 1.0.45 综合验收（2026-11-24 14:28 UTC）
+
+- [Linkslot LK Rust feasibility #45413653400](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45413653400)：**成功，70/70 steps**，本轮已验证代码 HEAD 为 `e1044df1515b95243cdf83499d41f191b60f190d`。
+- 覆盖 GammaOS LK H700 BL33 overlay/CRT0/exception vector、native BL33 header contract、memory/project fail-closed guard、H700 software renderer/SoftwareCompositor、完整 Linkslot 1.0.45 frontend + no_std business crates、Input ABI/queue、slot-retro VFS v3/static API、mGBA static Rust binding/前端选择、SD→GPT→FAT16/32/exFAT→VFS host path，以及 mGBA AArch32/newlib 构建和链接。
+- **新增关键闭环：** `scripts/probe-mgba-rust-static-api-link.py` 使用真实 Linkslot 1.0.45 `slot-retro/src/ffi.rs` 的 `Api` 类型定义和 `platform/h700/runtime/mgba_static.rs`，构建 `no_std` AArch32 Rust staticlib；确认 21 个 `mgba_retro_*` 入口引用完整，再将真实 mGBA VFS v3 archive、Rust staticlib、H700 newlib adapter object、`libc/libm/libgcc` 链接为 ELF32/ARM；`--no-undefined` 和最终无 undefined-symbol 检查通过。
+- C entry stub 会通过 Rust function table 调用 `retro_api_version`，但本轮只完成编译/链接，**没有执行该 ELF**，没有调用 mGBA init/load/run，也没有把它链接进完整 LK kernel。
+- 构建完整产物 artifact [14929808289](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45413653400/artifacts/14929808289)，大小约 386.6 MB，包含 Rust+mGBA ELF/map、编译日志和各阶段报告。BL33 image 仍只是 tiny `kmain`/exception stub 布局探针。
+- 本轮探针曾发现并修复隔离 checkout 的 rustup override 和 GNU ld 静态 archive 抽取顺序问题；最终 run 在修正后全绿。no_std 构建报告标题也已修正为 Linkslot 1.0.45。
+
+### 现阶段仍然未完成
+
+- 没有完整 GammaOS LK H700 target link、可刷写 BL33 image 或实机启动。
+- newlib adapter 虽已参与 ABI 级最终链接，但其 LK heap/console/RTC 回调仍未在目标启动路径安装；文件 I/O VFS 与核心启动生命周期尚未接入完整 LK App。
+- 没有执行 Rust+mGBA ELF、没有 ROM gameplay、无视频/音频/输入/存档实机验证；当前工作只证明 AArch32 静态符号闭合。
+- CPU runtime/真实 DVFS 仍受第 4–6 节的硬件证据门控约束，不因 mGBA/Linkslot CI 成功而改变。
 ## 4. 当前 CPU 调频切片（本轮重点）
 
 ### 已有代码
