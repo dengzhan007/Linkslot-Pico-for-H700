@@ -1,0 +1,3 @@
+{
+  "note": "Copy content into a config.json file at the mod root. The Lua action can read it through ctx.mod.config, and the Web page can edit it through files.read/files.write."
+}

@@ -1,0 +1,72 @@
+/* Standalone mod documentation page: it reuses /app.css for the dark theme and
+ * the doc widgets, and only adds the page chrome. */
+body.docs-page {
+  padding: 0;
+}
+
+.docs-top {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 20px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.docs-top .docs-back {
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.docs-top .docs-back:hover {
+  text-decoration: underline;
+}
+
+.docs-top .spacer {
+  flex: 1 1 auto;
+}
+
+.docs-page .container {
+  max-width: 1100px;
+  padding: 18px 20px 56px;
+}
+
+.docs-page .docs-card {
+  margin-top: 0;
+}
+
+.docs-page .docs-card + .docs-card {
+  margin-top: 14px;
+}
+
+/* The page header is sticky; keep a jumped-to section clear of it. */
+.docs-page .doc-section {
+  scroll-margin-top: 72px;
+}
+
+@media (max-width: 720px) {
+  .docs-top {
+    padding: 8px 12px;
+  }
+  .docs-page .container {
+    padding: 12px 10px 40px;
+  }
+  /* Long API lines and the AI prompt must stay readable on a phone. */
+  .docs-page .doc-section pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  /* Code/tree blocks keep their shape and scroll instead of breaking every
+     line; the AI prompt above stays wrapped because it is prose. */
+  .docs-page .doc-section pre.md-code {
+    white-space: pre;
+    overflow-wrap: normal;
+    overflow-x: auto;
+  }
+}

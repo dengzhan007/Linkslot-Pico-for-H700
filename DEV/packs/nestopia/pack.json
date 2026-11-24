@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "kind": "core",
+  "id": "nestopia",
+  "name": "FC 核心 · Nestopia",
+  "version": "1.0.0",
+  "min_app": "1.0.0",
+  "license": "GPL-2.0",
+  "source": "https://github.com/libretro/nestopia",
+  "files": []
+}

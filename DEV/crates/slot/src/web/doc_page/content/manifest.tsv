@@ -1,0 +1,15 @@
+# lang	mode	id	title	file	open	pre_id
+zh	section	doc-capabilities	能力、授权与 Web API bridge	CAPABILITIES.md	1	
+zh	section	doc-api	API 参考	API.md	0	
+zh	section	doc-web	Web 管理页（bridge）	WEB-BRIDGE.md	0	
+zh	section	doc-example	示例	EXAMPLES.md	0	
+zh	pre	doc-ai	AI 开发提示词（复制给任意 AI）	AI-PROMPT.md	1	mod-ai-prompt
+zh	section	doc-internal	linkSlot mods 管理 API（内部）	INTERNAL-API.md	0	
+en	section	doc-capabilities-en	Capabilities and the restricted API bridge	CAPABILITIES.md	1	
+en	section	doc-api-en	API reference	API.md	0	
+en	pre-section	doc-lua-en	Lua API	QUICK.md	0	mod-api-quick-en
+en	section	doc-web-en	Mod management page (bridge)	WEB-BRIDGE.md	0	
+en	section	doc-example-en	Example	EXAMPLES.md	0	
+en	section	doc-internal-en	Management API (internal)	INTERNAL-API.md	0	
+en	pre	doc-ai-en	AI prompt	AI-PROMPT.md	0	mod-ai-prompt-en
+zh	hidden-pre	mod-api-quick	—	QUICK.md	0	mod-api-quick

@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 260" width="440" height="260">
+  <defs>
+    <linearGradient id="gbShellH" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6a5796"/><stop offset=".5" stop-color="#4a3c70"/><stop offset="1" stop-color="#2b2345"/>
+    </linearGradient>
+    <linearGradient id="gbRimH" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#bda9e8"/><stop offset=".55" stop-color="#6b5796"/><stop offset="1" stop-color="#302748"/>
+    </linearGradient>
+    <linearGradient id="gbBezelH" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#39324b"/><stop offset="1" stop-color="#1d1928"/>
+    </linearGradient>
+    <radialGradient id="gbScreenH" cx=".45" cy=".4" r=".75">
+      <stop offset="0" stop-color="#13384b"/><stop offset="1" stop-color="#060b12"/>
+    </radialGradient>
+    <linearGradient id="routerBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4b5268"/><stop offset=".4" stop-color="#2f3546"/><stop offset="1" stop-color="#1a1e2a"/>
+    </linearGradient>
+    <linearGradient id="routerFace" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#222837"/><stop offset="1" stop-color="#11151f"/>
+    </linearGradient>
+    <linearGradient id="antenna" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#202532"/><stop offset="1" stop-color="#4a5268"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="220" cy="232" rx="174" ry="16" fill="#000000" opacity=".30"/>
+  <g transform="translate(16 40)">
+    <ellipse cx="46" cy="184" rx="47" ry="7" fill="#000000" opacity=".42"/>
+    <rect x="0" y="0" width="92" height="176" rx="15" fill="url(#gbRimH)"/>
+    <rect x="2" y="2" width="88" height="172" rx="13" fill="url(#gbShellH)"/>
+    <path d="M12 9 Q46 3 80 9 L76 18 Q46 14 16 18 Z" fill="#ffffff" opacity=".30"/>
+    <circle cx="14" cy="11" r="2.2" fill="#4fc3f7"/>
+    <rect x="11" y="20" width="70" height="62" rx="7" fill="url(#gbBezelH)" stroke="#1d1b23" stroke-width="1.5"/>
+    <rect x="17" y="26" width="58" height="50" rx="4" fill="url(#gbScreenH)" stroke="#4fc3f7" stroke-width="1.4"/>
+    <path d="M38 40 L58 51 L38 62 Z" fill="#4fc3f7" opacity=".92"/>
+    <path d="M23 88 H69" stroke="#7d7588" stroke-width="1" opacity=".55"/>
+    <!-- D-pad -->
+    <path d="M10 111 h12 v-7 h8 v7 h12 v8 h-12 v7 h-8 v-7 h-12 z" fill="#2c2a32" stroke="#4b4750" stroke-width="1"/>
+    <!-- A / B diagonal -->
+    <circle cx="70" cy="119" r="6" fill="#3d8ba8" stroke="#1d4c5e" stroke-width="1"/>
+    <circle cx="54" cy="134" r="6" fill="#3d8ba8" stroke="#1d4c5e" stroke-width="1"/>
+    <!-- Select / Start -->
+    <rect x="29" y="150" width="11" height="4" rx="2" fill="#2c2a32"/>
+    <rect x="44" y="150" width="11" height="4" rx="2" fill="#2c2a32"/>
+    <!-- speaker slots -->
+    <g stroke="#7d7588" stroke-width="1.2" opacity=".72">
+      <path d="M60 151 H79"/><path d="M60 156 H79"/><path d="M60 161 H79"/>
+      <path d="M60 166 H79"/>
+    </g>
+    <circle cx="7" cy="166" r="2" fill="#7d7588" opacity=".7"/>
+    <circle cx="85" cy="166" r="2" fill="#7d7588" opacity=".7"/>
+    <path d="M5 33 Q3 80 6 130" stroke="#ffffff" stroke-width="2" opacity=".18" fill="none"/>
+  </g>
+  <g opacity=".38">
+    <ellipse cx="382" cy="232" rx="44" ry="7" fill="#000000"/>
+    <rect x="336" y="48" width="88" height="168" rx="14" fill="#171b27" stroke="#7c86a0" stroke-width="2"/>
+    <rect x="348" y="66" width="64" height="56" rx="6" fill="#090c13" stroke="#646e86" stroke-width="1.3"/>
+    <path d="M354 150 h10 v-6 h6 v6 h10 v6 h-10 v6 h-6 v-6 h-10 z" fill="none" stroke="#646e86" stroke-width="1.5"/>
+    <circle cx="388" cy="168" r="5" fill="none" stroke="#646e86" stroke-width="1.8"/>
+    <circle cx="402" cy="156" r="5" fill="none" stroke="#646e86" stroke-width="1.8"/>
+    <path d="M346 194 H414" stroke="#3d4558" stroke-width="2"/>
+  </g>
+  <circle cx="110" cy="124" r="7" fill="#4fc3f7"/>
+  <circle cx="110" cy="124" r="13" fill="none" stroke="#4fc3f7" stroke-width="1.5" opacity=".35"/>
+</svg>

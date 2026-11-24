@@ -1,0 +1,13 @@
+[package]
+name = "slot-cheevos"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Minimal rcheevos runtime binding for linkSlot achievements"
+
+[lib]
+path = "src/lib.rs"
+
+[build-dependencies]
+cc = "1"

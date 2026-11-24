@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "name": "示例动作",
+  "timing": "manual",
+  "enabled": true,
+  "order": 100,
+  "ui": {
+    "animation": "cloud_sync",
+    "title": "示例同步",
+    "units": ["sav"],
+    "show_cloud": true
+  },
+  "capabilities": ["fs:saves", "fs:mod", "ui:confirm"]
+}

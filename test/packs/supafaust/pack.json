@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "kind": "core",
+  "id": "supafaust",
+  "name": "SFC 核心 · supafaust",
+  "version": "1.0.0",
+  "min_app": "1.0.0",
+  "license": "unknown",
+  "source": "https://github.com/libretro/supafaust",
+  "files": []
+}

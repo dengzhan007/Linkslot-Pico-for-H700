@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#1a1a2e">
+<title>mod 开发文档 · linkSlot</title>
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/mod-docs/app.css">
+</head>
+<body class="docs-page">
+<header class="docs-top">
+  <a class="docs-back" href="/#mods" title="返回管理页 / Back to the manager">← linkSlot</a>
+  <span class="pill">Mod API 1.1</span>
+  <span class="muted small">linkSlot <b data-doc-version>—</b></span>
+  <span class="spacer"></span>
+  <span class="muted small">离线可用 / Offline</span>
+  <span class="muted small" id="docCopyStatus" role="status"></span>
+</header>
+<main class="container">
+<section class="card docs-card" id="docsZh">
+  <div class="docs-head">
+    <h2><span>mod 开发文档</span> <span class="pill">Mod API 1.1</span></h2>
+    <div class="doc-actions">
+      <button class="btn primary small" type="button" data-export-mod-docs title="导出 API、AI 提示词、模板和 Web Bridge 文档">导出开发文档</button>
+      <button class="btn ghost small" type="button" data-copy="mod-ai-prompt" title="把整段提示词和你的想法一起发给 AI">复制 AI 提示词</button>
+      <button class="btn ghost small" type="button" data-copy="mod-api-quick" title="复制 Lua API 速查">复制 API 速查</button>
+    </div>
+  </div>
+  <p class="hint">面向社区 mod 作者。当前 linkSlot <span class="mono" data-doc-version>—</span> / Mod API <span class="mono">1.1</span>。本页离线可用；点「导出开发文档」可得到 API、AI 提示词、模板和 Web Bridge 文档包。</p>
+  {{ZH_TOC}}
+  {{ZH_SECTIONS}}
+  {{ZH_QUICK}}
+</section>
+<section class="card docs-card" id="docsEn" hidden>
+  <div class="docs-head">
+    <h2><span>Mod development docs</span> <span class="pill">Mod API 1.1</span></h2>
+    <div class="doc-actions">
+      <button class="btn primary small" type="button" data-export-mod-docs>Export mod docs</button>
+      <button class="btn ghost small" type="button" data-copy="mod-ai-prompt-en">Copy AI prompt</button>
+      <button class="btn ghost small" type="button" data-copy="mod-api-quick-en">Copy API reference</button>
+    </div>
+  </div>
+  <p class="hint">For community mod authors. linkSlot <span class="mono" data-doc-version>—</span> / Mod API 1.1. This page works offline; “Export mod docs” downloads the API, AI prompt, templates and Web Bridge reference.</p>
+  {{EN_TOC}}
+  {{EN_SECTIONS}}
+  {{EN_QUICK}}
+</section>
+</main>
+<script src="/mod-docs/app.js"></script>
+</body>
+</html>

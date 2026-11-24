@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#1a1a2e">
+<title data-i18n="web.page.title">linkSlot · Slot 掌机管理</title>
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="topbar">
+    <div class="brand">
+      <span class="logo"><img src="/icon.svg" alt=""></span>
+      <span class="brand-text">
+        <span class="brand-name">linkSlot</span>
+        <span class="brand-sub" data-i18n="web.page.brandSub">Slot 掌机管理</span>
+      </span>
+      <span class="version" id="slotVersion">v—</span>
+    </div>
+    <div class="topbar-right">
+      <span class="status-chip" id="statusChip"><i class="dot"></i><span id="statusText" data-i18n="web.shell.connecting">连接中…</span></span>
+      <span class="version mono" id="linkslotVersion" title="linkSlot CLI 版本" data-i18n-title="web.shell.cliVersionTitle">CLI —</span>
+    </div>
+  </div>
+  <nav class="tabs" id="tabs" aria-label="页面导航" data-i18n-aria="web.nav.aria">
+    <a class="tab" href="#overview" data-tab="overview" data-i18n="web.nav.overview">概览</a>
+    <a class="tab" href="#roms" data-tab="roms" data-i18n="web.nav.roms">游戏库</a>
+    <a class="tab" href="#saves" data-tab="saves" data-i18n="web.nav.saves">存档</a>
+    <a class="tab" href="#sync" data-tab="sync" data-i18n="web.nav.sync">云同步</a>
+    <a class="tab" href="#mods" data-tab="mods" data-i18n="web.nav.mods">扩展</a>
+    <a class="tab" href="#files" data-tab="files" data-i18n="web.nav.files">文件</a>
+    <a class="tab" href="#settings" data-tab="settings" data-i18n="web.nav.settings">设置</a>
+  </nav>
+</header>
+
+<main class="container">
+  <div class="banner warn hidden" id="writeBanner" role="status" data-i18n="web.banner.readonly">
+    设备正在游戏中或同步中，当前为只读状态：可以浏览游戏库、文件与下载存档，暂不能上传、保存设置或发起同步。
+  </div>
+
+  <!-- ============================ 概览 ============================ -->
+  <section class="page" data-page="overview">
+    <div class="grid stats">
+      <div class="card stat">
+        <span class="k">WiFi</span>
+        <span class="v" id="ovWifi">—</span>
+        <span class="sub" id="ovIp">—</span>
+      </div>
+      <div class="card stat">
+        <span class="k" data-i18n="web.overview.address">访问地址</span>
+        <span class="v small mono" id="ovUrl">—</span>
+        <span class="sub" data-i18n="web.overview.addressHint">手机与电脑连接同一 WiFi 后打开</span>
+      </div>
+      <div class="card stat">
+        <span class="k" data-i18n="web.overview.units">游戏</span>
+        <span class="v" id="ovGames">—</span>
+        <span class="sub" id="ovCounts" data-i18n="web.overview.unitsValue">即时存档 — · 电池存档 —</span>
+      </div>
+      <div class="card stat">
+        <span class="k" data-i18n="web.overview.playtime">游戏总时长</span>
+        <span class="v small" id="ovPlaytime">—</span>
+        <span class="sub" data-i18n="web.overview.playtimeHint">所有游戏跨设备累计</span>
+      </div>
+      <div class="card stat">
+        <span class="k" data-i18n="web.overview.device">设备状态</span>
+        <span class="v" id="ovWritable">—</span>
+        <span class="sub" id="ovUptime" data-i18n="web.overview.uptime">已运行 —</span>
+      </div>
+    </div>
+
+    <section class="card">
+      <h2><span data-i18n="web.overview.recentLog">最近日志</span> <button class="btn ghost small" type="button" id="ovRefreshLog" data-i18n="web.common.refresh">刷新</button></h2>
+      <pre class="log" id="recentLog" data-i18n="web.common.noLog">暂无日志</pre>
+    </section>
+  </section>
+
+  <!-- ============================ 游戏库 ============================ -->
+  <section class="page" data-page="roms" hidden>
+    <div class="page-switch" role="tablist" aria-label="游戏库视图" data-i18n-aria="web.roms.viewAria">
+      <button class="chip active" type="button" role="tab" aria-selected="true" data-roms-view="library" aria-controls="romsLibrary" data-i18n="web.roms.viewLibrary">游戏</button>
+      <button class="chip" type="button" role="tab" aria-selected="false" data-roms-view="achievements" aria-controls="romsAchievements" data-i18n="web.nav.achievements">成就</button>
+    </div>
+    <div id="romsLibrary" data-roms-panel="library" role="tabpanel">
+    <div class="toolbar rom-toolbar">
+      <button class="btn" type="button" id="refreshRoms" data-i18n="web.roms.refresh">刷新游戏库</button>
+      <span class="muted small" id="romsSummary" data-i18n="web.common.reading">正在读取…</span>
+      <div class="rom-filters" id="romFilters" aria-label="平台筛选" data-i18n-aria="web.roms.filterAria">
+        <button class="chip active" type="button" data-platform="" data-i18n="web.common.all">全部</button>
+        <button class="chip" type="button" data-platform="GBA">GBA</button>
+        <button class="chip" type="button" data-platform="GB">GB</button>
+        <button class="chip" type="button" data-platform="GBC">GBC</button>
+        <button class="chip" type="button" data-platform="FC">FC</button>
+        <button class="chip" type="button" data-platform="SFC">SFC</button>
+        <button class="chip" type="button" data-platform="MD">MD</button>
+      </div>
+      <div class="search-field rom-search">
+        <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4.3-4.3"></path></svg>
+        <input id="romSearch" type="search" placeholder="搜索游戏名或文件名" data-i18n-placeholder="web.roms.searchPlaceholder" data-i18n-aria="web.common.search" autocomplete="off">
+        <button class="search-clear" type="button" data-search-clear="romSearch" aria-label="清除搜索" data-i18n-aria="web.common.clearSearch" data-i18n-title="web.common.clearSearch" title="清除搜索">×</button>
+      </div>
+      <button class="btn primary" type="button" id="addGame" title="选择机种并上传一个 ROM" data-i18n-title="web.roms.addTitle" data-i18n="web.roms.add">添加游戏</button>
+      <button class="btn ghost" type="button" id="collectionImport" title="导入合集，或导入单个游戏包" data-i18n-title="web.roms.importTitle" data-i18n="web.roms.import">导入游戏/合集</button>
+      <button class="btn ghost" type="button" id="collectionExport" disabled title="先在平台上选中一个集合" data-i18n-title="web.roms.exportTitle" data-i18n="web.roms.export">导出合集</button>
+      <input id="collectionImportFile" type="file" accept=".zip,application/zip" hidden>
+    </div>
+    <div class="collection-status" id="collectionStatus" hidden>
+      <div class="collection-status-line">
+        <strong id="collectionStage">—</strong>
+        <span id="collectionCount"></span>
+        <span class="collection-actions">
+          <a class="btn ghost small" id="collectionDownload" hidden data-i18n="web.roms.download">下载合集</a>
+          <button class="btn ghost small" id="collectionCancel" type="button" data-i18n="web.common.cancel">取消</button>
+        </span>
+      </div>
+      <div class="bar"><div id="collectionBar"></div></div>
+      <p class="hint" id="collectionError"></p>
+    </div>
+    <div id="romList" class="rom-grid">
+      <div class="empty" data-i18n="web.roms.loading">正在读取游戏库…</div>
+    </div>
+    </div>
+
+    <div id="romsAchievements" data-roms-panel="achievements" role="tabpanel" hidden>
+      <section class="card">
+      <h2>
+        <span data-i18n="web.achievements.title">成就</span>
+        <button class="btn ghost small" type="button" id="refreshAchievements" data-i18n="web.common.refresh">刷新</button>
+      </h2>
+      <div class="ach-tabs" role="tablist">
+        <button class="ach-tab active" type="button" role="tab" aria-selected="true"
+                data-ach-tab="public" data-i18n="web.achievements.publicTab">通用成就</button>
+        <button class="ach-tab" type="button" role="tab" aria-selected="false"
+                data-ach-tab="pack" data-i18n="web.achievements.packTab">扩展包成就</button>
+      </div>
+
+      <div data-ach-panel="public">
+        <p class="hint" id="publicAchSummary"></p>
+        <div class="public-ach-list" id="publicAchList">
+          <div class="muted small" data-i18n="web.common.reading">正在读取…</div>
+        </div>
+      </div>
+
+      <div data-ach-panel="pack" hidden>
+        <div class="ach-head">
+          <label class="small muted" for="achGameSelect" data-i18n="web.achievements.game">游戏</label>
+          <div class="search-field rom-search">
+            <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4.3-4.3"></path></svg>
+            <input id="achGameFilter" type="search" autocomplete="off" placeholder="搜索游戏" data-i18n-placeholder="web.achievements.search" data-i18n-aria="web.common.search">
+            <button class="search-clear" type="button" data-search-clear="achGameFilter" aria-label="清除搜索" data-i18n-aria="web.common.clearSearch" data-i18n-title="web.common.clearSearch" title="清除搜索">×</button>
+          </div>
+          <select id="achGameSelect"></select>
+          <span id="achSummary" class="muted small"></span>
+        </div>
+        <p class="hint" id="achGameHint"></p>
+        <div class="ach-bar" aria-hidden="true"><div id="achBar"></div></div>
+        <div class="ach-list" id="achList">
+          <div class="muted small" data-i18n="web.common.reading">正在读取…</div>
+        </div>
+      </div>
+    </section>
+    </div>
+  </section>
+
+  <!-- ============================ 存档 ============================ -->
+  <section class="page" data-page="saves" hidden>
+    <div class="toolbar">
+      <button class="btn" type="button" id="refreshSaves" data-i18n="web.saves.refresh">刷新存档</button>
+      <span class="muted small" id="savesSummary" data-i18n="web.common.reading">正在读取…</span>
+      <div class="toolbar-filter">
+        <div class="search-field rom-search">
+          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4.3-4.3"></path></svg>
+          <input id="savesSearch" type="search" placeholder="搜索游戏名、机种或核心" data-i18n-placeholder="web.saves.searchPlaceholder" data-i18n-aria="web.common.search" autocomplete="off">
+          <button class="search-clear" type="button" data-search-clear="savesSearch" aria-label="清除搜索" data-i18n-aria="web.common.clearSearch" data-i18n-title="web.common.clearSearch" title="清除搜索">×</button>
+        </div>
+        <select id="savesSort" class="sort-select" aria-label="排序" data-i18n-aria="web.saves.sortLabel">
+          <option value="recent" data-i18n="web.saves.sortRecent">最近活动</option>
+          <option value="name" data-i18n="web.saves.sortName">名称</option>
+          <option value="playtime" data-i18n="web.saves.sortPlaytime">游戏时长</option>
+          <option value="platform" data-i18n="web.saves.sortPlatform">机种</option>
+        </select>
+      </div>
+    </div>
+    <div id="savesList" class="units">
+      <div class="empty" data-i18n="web.saves.loading">正在读取存档…</div>
+    </div>
+  </section>
+
+  <!-- ============================ 文件 ============================ -->
+  <section class="page" data-page="files" hidden>
+    <section class="card">
+      <h2><span data-i18n="web.files.title">文件浏览</span>
+        <span class="mods-toolbar">
+          <button class="btn ghost small" type="button" id="fileUp" data-i18n="web.files.up">上一级</button>
+          <button class="btn ghost small" type="button" id="fileRefresh" data-i18n="web.common.refresh">刷新</button>
+          <button class="btn ghost small" type="button" id="fileNewFolder" data-file-write data-i18n="web.files.mkdir">新建文件夹</button>
+          <button class="btn ghost small" type="button" id="fileUpload" data-file-write data-i18n="web.files.upload">上传文件</button>
+        </span>
+      </h2>
+      <p class="hint" data-i18n="web.files.hint">浏览存储卡上的游戏、存档、mod 与说明文件。点击文件夹进入；点击文件名预览图片/文本或下载。Config 目录包含凭据，不显示；System 目录只读。</p>
+      <div class="file-tools">
+        <div class="search-field rom-search">
+          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4.3-4.3"></path></svg>
+          <input id="fileSearch" type="search" placeholder="搜索当前目录" data-i18n-placeholder="web.files.searchPlaceholder" data-i18n-aria="web.common.search" autocomplete="off">
+          <button class="search-clear" type="button" data-search-clear="fileSearch" aria-label="清除搜索" data-i18n-aria="web.common.clearSearch" data-i18n-title="web.common.clearSearch" title="清除搜索">×</button>
+        </div>
+        <select id="fileSort" class="sort-select" aria-label="排序" data-i18n-aria="web.files.sortLabel">
+          <option value="name" data-i18n="web.files.sortName">名称</option>
+          <option value="size" data-i18n="web.files.sortSize">大小</option>
+          <option value="modified" data-i18n="web.files.sortModified">修改时间</option>
+        </select>
+      </div>
+      <div class="file-breadcrumb" id="fileBreadcrumb"></div>
+      <p class="muted small" id="fileSummary" data-i18n="web.common.reading">正在读取…</p>
+      <input id="fileUploadInput" type="file" multiple hidden>
+      <div class="file-list-wrap">
+        <table class="file-table file-table-main">
+          <thead><tr><th data-i18n="web.common.name">名称</th><th data-i18n="web.common.size">大小</th><th data-i18n="web.common.modified">修改时间</th><th data-i18n="web.common.actions">操作</th></tr></thead>
+          <tbody id="fileList">
+            <tr><td colspan="4" class="empty" data-i18n="web.files.loading">正在读取目录…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="hint warn" id="fileNotice" hidden></p>
+    </section>
+
+    <dialog id="filePreviewDialog" class="modal file-preview-dialog" aria-labelledby="filePreviewTitle">
+      <div class="dialog-head">
+        <div>
+          <h2 id="filePreviewTitle" data-i18n="web.files.preview">文件预览</h2>
+          <p class="hint mono small" id="filePreviewMeta">—</p>
+        </div>
+        <button class="btn ghost small" type="button" id="filePreviewClose" data-i18n="web.common.close">关闭</button>
+      </div>
+      <div class="file-preview-body">
+        <img id="filePreviewImage" alt="" hidden>
+        <pre id="filePreviewText" hidden></pre>
+      </div>
+      <div class="row-actions">
+        <a class="btn" id="filePreviewDownload" href="#" download data-i18n="web.files.download">下载文件</a>
+      </div>
+    </dialog>
+
+    <dialog id="fileMoveDialog" class="modal file-move-dialog" aria-labelledby="fileMoveTitle">
+      <div class="dialog-head">
+        <div>
+          <h2 id="fileMoveTitle" data-i18n="web.files.moveTitle">移动到</h2>
+          <p class="hint" id="fileMoveSource">—</p>
+        </div>
+        <button class="btn ghost small" type="button" id="fileMoveClose" data-i18n="web.common.close">关闭</button>
+      </div>
+      <div class="file-breadcrumb" id="fileMoveBreadcrumb"></div>
+      <div class="file-move-nav">
+        <button class="btn ghost small" type="button" id="fileMoveUp" data-i18n="web.files.up">上一级</button>
+        <button class="btn ghost small" type="button" id="fileMoveNewFolder" data-i18n="web.files.mkdir">新建文件夹</button>
+        <span class="muted small" id="fileMoveSummary"></span>
+      </div>
+      <div class="file-list-wrap">
+        <table class="file-table">
+          <thead><tr><th data-i18n="web.files.folder">文件夹</th><th data-i18n="web.common.actions">操作</th></tr></thead>
+          <tbody id="fileMoveList">
+            <tr><td colspan="2" class="empty" data-i18n="web.common.reading">正在读取…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="hint" id="fileMoveHint"></p>
+      <div class="row-actions">
+        <button class="btn primary" type="button" id="fileMoveConfirm" data-i18n="web.files.moveHere">移动到此目录</button>
+        <button class="btn ghost" type="button" id="fileMoveCancel" data-i18n="web.common.cancel">取消</button>
+      </div>
+    </dialog>
+
+    <dialog id="fileActionDialog" class="modal file-action-dialog" aria-labelledby="fileActionTitle">
+      <div class="dialog-head">
+        <div>
+          <h2 id="fileActionTitle" data-i18n="web.files.actionsTitle">文件操作</h2>
+          <p class="hint mono small" id="fileActionSource">—</p>
+        </div>
+        <button class="btn ghost small" type="button" id="fileActionClose" data-i18n="web.common.close">关闭</button>
+      </div>
+      <div class="file-action-list">
+        <button class="btn" type="button" id="fileActionOpen" data-file-action="open" data-i18n="web.files.open">打开</button>
+        <button class="btn" type="button" id="fileActionPreview" data-file-action="preview" data-i18n="web.files.preview_download">预览/下载</button>
+        <button class="btn" type="button" id="fileActionDownload" data-file-action="download" data-i18n="web.files.download">下载</button>
+        <button class="btn" type="button" id="fileActionCopy" data-file-action="copy" data-i18n="web.files.copyPath">复制路径</button>
+        <button class="btn" type="button" id="fileActionRename" data-file-action="rename" data-file-write data-i18n="web.files.rename">重命名</button>
+        <button class="btn" type="button" id="fileActionMove" data-file-action="move" data-file-write data-i18n="web.files.move">移动</button>
+        <button class="btn danger" type="button" id="fileActionDelete" data-file-action="delete" data-file-write data-i18n="web.files.delete">删除</button>
+      </div>
+      <p class="hint" data-i18n="web.files.actionsHint">选择要执行的操作。</p>
+    </dialog>
+  </section>
+
+  <!-- =========================== 云同步 =========================== -->
+  <section class="page" data-page="sync" hidden>
+    <div class="grid cols-2">
+      <section class="card">
+        <h2><span data-i18n="web.sync.title">同步方式</span> <button class="btn ghost small" type="button" id="addStorage" data-i18n="web.sync.add">+ 添加 WebDAV</button></h2>
+        <p class="hint" data-i18n="web.sync.hint">同一时间只使用一个同步方式；点选同步方式会立即切换并保存。修改下方 WebDAV 表单后，点「保存设置」生效。</p>
+        <div id="storageList" class="storage-list"><div class="empty" data-i18n="web.common.reading">正在读取…</div></div>
+        <p class="hint warn" id="storageWarning" hidden></p>
+      </section>
+
+      <section class="card">
+        <h2 data-i18n="web.sync.edit">编辑 WebDAV</h2>
+        <form id="webdavForm" autocomplete="off">
+          <div class="field">
+            <label for="wdName" data-i18n="web.common.name">名称</label>
+            <input id="wdName" type="text" spellcheck="false" placeholder="家里 NAS" data-i18n-placeholder="web.sync.urlExample">
+          </div>
+          <div class="field">
+            <label for="wdUrl" data-i18n="web.sync.url">服务器地址</label>
+            <input id="wdUrl" type="text" inputmode="url" spellcheck="false" placeholder="https://nas.example.com/dav">
+          </div>
+          <div class="field">
+            <label for="wdRemoteRoot" data-i18n="web.sync.remoteRoot">远程根目录</label>
+            <input id="wdRemoteRoot" type="text" spellcheck="false" placeholder="/linkSlot">
+          </div>
+          <div class="field">
+            <label for="wdUsername" data-i18n="web.sync.username">用户名</label>
+            <input id="wdUsername" type="text" spellcheck="false" placeholder="WebDAV 用户名" data-i18n-placeholder="web.sync.usernameTitle">
+          </div>
+          <div class="field">
+            <label for="wdPassword" data-i18n="web.sync.password">密码</label>
+            <input id="wdPassword" type="password" autocomplete="new-password" placeholder="留空 = 保留现有密码" data-i18n-placeholder="web.sync.passwordTitle">
+            <p class="hint" id="wdPasswordState"></p>
+          </div>
+          <div class="field">
+            <label for="wdCaCert" data-i18n="web.sync.ca">自签 CA 证书（可选）</label>
+            <input id="wdCaCert" type="text" spellcheck="false" placeholder="Config/linkSlot/ca.pem">
+          </div>
+          <div class="field">
+            <label class="check"><input id="wdInsecure" type="checkbox"><span data-i18n="web.sync.insecure">跳过 TLS 证书校验（仅调试用）</span></label>
+            <label class="check"><input id="wdKeepRemote" type="checkbox"><span data-i18n="web.sync.keepRemote">保留云端旧文件（keep_remote）</span></label>
+            <label class="check"><input id="wdClearPassword" type="checkbox"><span data-i18n="web.sync.clearPassword">清除已保存的密码</span></label>
+          </div>
+          <div class="row-actions">
+            <button class="btn primary" type="submit" id="saveWebdav" data-i18n="web.common.save">保存设置</button>
+            <button class="btn ok" type="button" id="testWebdav" data-i18n="web.sync.test">测试连接</button>
+            <button class="btn ghost" type="button" id="removeStorage" data-i18n="web.sync.delete">删除此项</button>
+          </div>
+          <p class="hint" data-i18n="web.sync.testHint">测试连接使用当前表单（无需先保存）；修改生效配置前仍建议保存后再同步。</p>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2><span data-i18n="web.sync.cache">同步缓存</span> <button class="btn ghost small" type="button" id="refreshSync" data-i18n="web.common.refresh">刷新</button></h2>
+        <div id="cacheList" class="cache-wrap"><div class="empty" data-i18n="web.common.reading">正在读取…</div></div>
+        <h3 data-i18n="web.sync.lastOutput">上次同步输出</h3>
+        <pre class="log" id="syncOutput">—</pre>
+      </section>
+    </div>
+  </section>
+
+  <!-- ============================ mods ============================ -->
+  <section class="page" data-page="mods" hidden>
+    <div class="banner warn hidden" id="modsRuntimeBanner" role="status" data-i18n="web.mods.runtime_missing">
+      设备上的 linkSlot CLI 未报告 mods=1：同步时不会执行 mods，语法检查不可用；请升级设备端 linkSlot 以执行 mods。
+    </div>
+
+    <div class="mod-tabs" id="modTabs" role="tablist">
+      <button class="mod-tab active" type="button" role="tab" aria-selected="true"
+              data-modtab="packs" data-i18n="web.about.packs">扩展包</button>
+      <button class="mod-tab" type="button" role="tab" aria-selected="false"
+              data-modtab="mods" data-i18n="web.mods.list_title">mods 列表</button>
+    </div>
+    <div data-modpanel="packs">
+    <section class="card">
+      <p class="hint" data-i18n="web.about.packsHint">上传 LSP 扩展包（例如 SFC 的 supafaust 核心，或某个游戏的成就包）。安装后不需要解压或手动拷卡。</p>
+      <div class="field">
+        <label for="packFile" data-i18n="web.about.packsFile">扩展包（*.lsp）</label>
+        <input id="packFile" type="file" accept=".lsp,application/zip">
+      </div>
+      <div class="actions">
+        <button id="packInstall" class="btn primary" type="button" data-i18n="web.about.packsInstall">上传并安装</button>
+        <button id="packFolderPick" class="btn ghost" type="button" data-i18n="web.about.packsPickFolder">选择文件夹</button>
+        <input id="packFolder" type="file" accept=".lsp,application/zip" webkitdirectory multiple hidden>
+        <button id="packBatch" class="btn" type="button" data-i18n="web.about.packsBatchInstall" disabled>批量安装</button>
+      </div>
+      <p id="packBatchStatus" class="hint" role="status"></p>
+      <div class="pack-filters" id="packFilters" aria-label="扩展包筛选" data-i18n-aria="web.about.packsFilterAria"></div>
+      <p id="packStatus" class="hint" role="status" data-i18n="web.about.packsEmpty">尚未安装扩展包。</p>
+      <div id="packList"></div>
+      <p class="hint" data-i18n="web.about.packsTrust">
+        只安装可信来源的扩展包：核心是原生代码，会以设备权限运行。
+      </p>
+    </section>
+    </div>
+    <div data-modpanel="mods" hidden>
+    <section class="card">
+      <h2><span data-i18n="web.mods.list_heading">已安装 mod</span>
+        <span class="mods-toolbar">
+          <button class="btn ghost small" type="button" id="refreshMods" data-i18n="web.common.refresh">刷新</button>
+          <button class="btn ghost small" type="button" id="modImport" title="导入完整 mod ZIP 包" data-i18n-title="web.mods.importTitle" data-i18n="web.mods.import">导入</button>
+          <button class="btn ghost small" type="button" id="modExport" title="导出全部 mod（含 web/README/config）为 ZIP 备份包" data-i18n-title="web.mods.exportTitle" data-i18n="web.mods.export">导出</button>
+        </span>
+      </h2>
+      <input id="modImportFile" type="file" accept=".zip,application/zip" hidden>
+      <p class="hint"><span data-i18n="web.mods.list_hint_prefix">mod 必须自带完整管理页面（</span><span class="mono">web/index.html</span><span data-i18n="web.mods.list_hint_tail">）。列表只显示名称、版本、作者和总开关；点击一行查看 README 并打开 mod 自己的管理页面，文件请到「文件」页浏览。mod 的 WebDAV 访问范围是它自己选择的同步方式的远程根目录。</span></p>
+      <p class="muted small" id="modsSummary" data-i18n="web.common.reading">正在读取…</p>
+      <div class="cache-wrap">
+        <table class="mods-table">
+          <thead>
+            <tr><th data-i18n="web.mods.col_name">mod 名称</th><th data-i18n="web.mods.col_author">作者</th><th data-i18n="web.mods.col_enabled">是否启用</th></tr>
+          </thead>
+          <tbody id="modList">
+            <tr><td colspan="3" class="empty" data-i18n="web.mods.loading">正在读取 mod…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card docs-card" id="modsDocsCard">
+      <div class="docs-head">
+        <h2><span data-i18n="web.mods.docs">mod 开发文档</span> <span class="pill">Mod API 1.1</span></h2>
+        <div class="doc-actions">
+          <a class="btn primary small" href="/mod-docs" target="_blank" rel="noopener" data-i18n="web.mods.openDocs">打开开发文档</a>
+          <button class="btn ghost small" type="button" data-export-mod-docs title="导出 API、AI 提示词、模板和 Web Bridge 文档" data-i18n-title="web.mods.exportDocsTitle" data-i18n="web.mods.exportDocs">导出开发文档</button>
+        </div>
+      </div>
+      <p class="hint" data-i18n="web.mods.docsHint">面向 mod 作者的完整 API、AI 提示词、模板和 Web Bridge 文档，在独立页面打开。</p>
+    </section>
+
+    </div>
+  </section>
+  <!-- ============================ 设置 ============================ -->
+  <section class="page" data-page="settings" hidden>
+    <div class="page-switch" role="tablist" aria-label="设置分类" data-i18n-aria="web.settings.tabsAria">
+      <button class="chip active" type="button" role="tab" aria-selected="true" data-settings-tab="general" aria-controls="settingsGeneral" data-i18n="web.settings.tabGeneral">通用</button>
+      <button class="chip" type="button" role="tab" aria-selected="false" data-settings-tab="network" aria-controls="settingsNetwork" data-i18n="web.nav.network">网络</button>
+      <button class="chip" type="button" role="tab" aria-selected="false" data-settings-tab="maintenance" aria-controls="settingsMaintenance" data-i18n="web.settings.tabMaintenance">维护</button>
+      <button class="chip" type="button" role="tab" aria-selected="false" data-settings-tab="about" aria-controls="settingsAbout" data-i18n="web.nav.about">关于</button>
+    </div>
+
+    <div id="settingsGeneral" data-settings-panel="general" role="tabpanel">
+      <div class="grid cols-2">
+        <section class="card">
+        <h2 data-i18n="web.settings.languageTitle">语言</h2>
+        <div class="field">
+          <label for="webLanguage" data-i18n="web.settings.languageLabel">界面语言</label>
+          <select id="webLanguage">
+            <option value="zh-CN">中文</option>
+            <option value="en-US">English</option>
+          </select>
+          <p class="hint" data-i18n="web.settings.languageHint">
+            设备与网页共用同一份语言设置，切换后立即生效。
+          </p>
+        </div>
+        <p id="webLanguageStatus" class="hint" role="status"></p>
+      </section>
+        <section class="card">
+        <h2 data-i18n="web.settings.clockTitle">时间同步</h2>
+        <div class="kv"><span data-i18n="web.settings.clockNow">设备时间</span><b class="mono" id="webClockNow">—</b></div>
+        <div class="kv"><span data-i18n="web.settings.clockZone">时区</span><b class="mono" id="webClockZone">—</b></div>
+        <div class="actions">
+          <button class="btn" type="button" id="syncWebClock" data-i18n="web.settings.clockSync">用浏览器时间校准</button>
+        </div>
+        <p class="hint" data-i18n="web.settings.clockSyncHint">把浏览器当前时间和时区写入设备；会覆盖设备时间，并把时区标记为手动选择。</p>
+        <form id="webClockForm">
+          <div class="field">
+            <label class="check">
+              <input id="webForceTime" type="checkbox">
+              <span data-i18n="web.settings.forceTimeLabel">联网时强制同步时间和时区</span>
+            </label>
+            <p class="hint" data-i18n="web.settings.forceTimeHint">
+              开启后，每次联网都会用网络时间和 IP 定位到的时区覆盖当前设置；默认关闭。
+            </p>
+          </div>
+          <div class="actions">
+            <button class="btn primary" type="submit" id="saveWebClock" data-i18n="web.common.save">保存设置</button>
+          </div>
+          <p id="webClockStatus" class="hint" role="status"></p>
+        </form>
+      </section>
+        <section class="card settings-wide">
+        <h2 data-i18n="web.settings.backdropsTitle">机种背景图</h2>
+        <p class="hint" data-i18n="web.settings.backdropsHint">
+          为每个机种上传一张全屏背景图（PNG/JPEG）。上传后需要重启掌机，才会应用到对应卡带架。
+        </p>
+        <div id="backdropList" class="net-list"><div class="empty" data-i18n="web.common.reading">正在读取…</div></div>
+        <input id="backdropInput" type="file" accept="image/png,image/jpeg" hidden>
+      </section>
+      </div>
+    </div>
+
+    <div id="settingsNetwork" data-settings-panel="network" role="tabpanel" hidden>
+      <div class="grid cols-2">
+        <section class="card">
+        <h2 data-i18n="web.network.current">当前网络</h2>
+        <div class="kv"><span data-i18n="web.network.status">状态</span><b id="netState">—</b></div>
+        <div class="kv"><span>SSID</span><b id="netSsid">—</b></div>
+        <div class="kv"><span>IPv4</span><b class="mono" id="netIp">—</b></div>
+        <div class="row-actions">
+          <button class="btn" type="button" id="scanBtn" data-i18n="web.network.scan">扫描附近 WiFi</button>
+        </div>
+        <p class="hint" id="scanHint" data-i18n="web.network.scanHint">扫描通常需要几秒，期间页面保持可用。</p>
+      </section>
+        <section class="card">
+        <h2 data-i18n="web.network.saveTitle">保存 WiFi</h2>
+        <form id="wifiForm" autocomplete="off">
+          <div class="field">
+            <label for="ssidInput">SSID</label>
+            <input id="ssidInput" type="text" spellcheck="false" placeholder="WiFi 名称" data-i18n-placeholder="web.network.ssidTitle">
+          </div>
+          <div class="field">
+            <label for="pskInput" data-i18n="web.sync.password">密码</label>
+            <input id="pskInput" type="password" autocomplete="new-password" placeholder="开放网络留空" data-i18n-placeholder="web.network.passwordTitle">
+          </div>
+          <div class="banner info" data-i18n="web.network.saveHint">只保存账号信息，不会切换当前网络。保存后，掌机到新地点可在设备的 WiFi 列表中选择这个网络连接。</div>
+          <button class="btn primary" type="submit" id="connectBtn" data-i18n="web.network.save">保存</button>
+        </form>
+      </section>
+      </div>
+    <section class="card">
+      <h2 data-i18n="web.network.saved">已保存 WiFi</h2>
+      <div id="savedList" class="net-list"><div class="empty" data-i18n="web.network.savedEmpty">暂无已保存 WiFi；可在上方保存，掌机连接时会出现在这里。</div></div>
+    </section>
+    <section class="card">
+      <h2 data-i18n="web.network.available">可用网络</h2>
+      <div id="netList" class="net-list"><div class="empty" data-i18n="web.network.availableEmpty">点击「扫描附近 WiFi」获取列表</div></div>
+    </section>
+    </div>
+
+    <div id="settingsMaintenance" data-settings-panel="maintenance" role="tabpanel" hidden>
+    <section class="card">
+      <h2 data-i18n="web.about.upgrade">上传系统更新</h2>
+      <p class="hint"><span data-i18n="web.about.upgradeHintPrefix">先在这里上传新的版本包；上传成功后，请在掌机上打开</span> <b data-i18n="web.about.upgradePath">系统设置 → 安装更新</b> <span data-i18n="web.about.upgradeHintTail">确认安装。安装会重启设备，但保留游戏、存档、配置和 mods。</span></p>
+      <div class="field">
+        <label for="upgradeFile" data-i18n="web.about.upgradeFile">版本包（linkslot-v*.zip）</label>
+        <input id="upgradeFile" type="file" accept=".zip,application/zip">
+      </div>
+      <div class="actions">
+        <button id="upgradeUpload" class="btn primary" type="button" data-i18n="web.about.upgradeUpload">上传版本包</button>
+      </div>
+      <div
+        id="upgradeProgress"
+        class="upload-progress hidden"
+        role="progressbar"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow="0"
+        aria-label="上传进度" data-i18n-aria="web.common.progressTitle"
+      >
+        <div class="upload-progress-track">
+          <div class="upload-progress-bar" id="upgradeProgressBar"></div>
+        </div>
+        <p class="upload-progress-text" id="upgradeProgressText">0%</p>
+      </div>
+      <p id="upgradeStatus" class="hint" role="status" data-i18n="web.about.upgradeEmpty">尚未上传版本包。</p>
+      <p class="hint" data-i18n="web.about.upgradeTrust">
+        只上传可信来源的版本包。网页没有执行升级或重启的按钮；安装必须在掌机上确认。
+      </p>
+    </section>
+      <div class="grid cols-2">
+        <section class="card">
+        <h2 data-i18n="web.settings.uploadTitle">上传限制</h2>
+        <form id="webSettingsForm">
+          <div class="field">
+            <label for="webUploadMb" data-i18n="web.settings.uploadLabel">单个上传文件上限（MB）</label>
+            <input id="webUploadMb" type="number" min="1" max="256" step="1" value="32">
+            <p class="hint" data-i18n="web.settings.uploadHint">
+              默认 32 MB，可设置 1–256 MB。适用于文件浏览、ROM、演示视频和版本包上传；保存后对新的请求生效。
+            </p>
+          </div>
+          <div class="actions">
+            <button class="btn primary" type="submit" id="saveWebSettings" data-i18n="web.common.save">保存设置</button>
+            <button class="btn" type="button" id="resetWebSettings" data-i18n="web.settings.uploadReset">恢复默认 32MB</button>
+          </div>
+          <p id="webSettingsStatus" class="hint" role="status" data-i18n="web.settings.loading">正在读取当前设置…</p>
+        </form>
+      </section>
+        <section class="card">
+        <h2 data-i18n="web.settings.cryptoTitle">加密密钥</h2>
+        <form id="webCryptoForm" autocomplete="off">
+          <div class="field">
+            <label for="webCryptoKey" data-i18n="web.settings.cryptoLabel">用户自定义密钥（可选）</label>
+            <input id="webCryptoKey" type="password" autocomplete="new-password" data-i18n-placeholder="web.settings.cryptoPlaceholder" placeholder="留空使用设备默认密钥">
+            <p class="hint" data-i18n="web.settings.cryptoHint">
+              用于 mod 和应用的敏感字符串加密。修改或清除后，之前用旧密钥加密的数据将无法解密。
+            </p>
+          </div>
+          <div class="actions">
+            <button class="btn primary" type="submit" id="saveWebCrypto" data-i18n="web.settings.cryptoSave">保存密钥</button>
+            <button class="btn" type="button" id="clearWebCrypto" data-i18n="web.settings.cryptoClear">清除自定义密钥</button>
+          </div>
+          <p id="webCryptoStatus" class="hint" role="status"></p>
+        </form>
+      </section>
+      </div>
+    <section class="card">
+      <h2 data-i18n="web.about.logExport">日志导出</h2>
+      <p class="hint"><span data-i18n="web.about.logHintPrefix">一键打包</span> <span class="mono">Logs/</span> <span data-i18n="web.about.logHintMid1">下的运行日志（含</span> <span class="mono">crash/</span> <span data-i18n="web.about.logHintMid2">崩溃记录）与版本信息，文件名带设备型号与本地时间，例如</span> <span class="mono">rg34xx_20261029223000_log.zip</span><span data-i18n="web.about.logHintTail">，便于发回分析。</span></p>
+      <div class="actions">
+        <button id="exportLogs" class="btn primary" type="button" data-i18n="web.about.logExportButton">一键导出日志</button>
+      </div>
+      <p id="exportLogsStatus" class="hint" role="status" data-i18n="web.about.logExportEmpty">尚未导出。</p>
+    </section>
+    <section class="card">
+      <h2 data-i18n="web.sync.serviceLog">服务日志（最后 200 行）</h2>
+      <div class="row-actions">
+        <label for="logLevel" class="muted small" data-i18n="web.sync.logLevel">日志级别</label>
+        <select id="logLevel">
+          <option value="error" data-i18n="web.sync.levelError">错误</option>
+          <option value="warn" data-i18n="web.sync.levelWarn">警告</option>
+          <option value="info" data-i18n="web.sync.levelInfo">信息</option>
+          <option value="debug" data-i18n="web.sync.levelDebug">调试（WiFi 详细）</option>
+        </select>
+        <button class="btn ghost small" type="button" id="saveLogLevel" data-i18n="web.sync.saveLevel">保存级别</button>
+      </div>
+      <p class="hint" data-i18n="web.sync.debugHint">调试级别会记录 WiFi 扫描、关联、DHCP 等细节，日志增长较快；排查完建议切回「信息」。</p>
+      <pre class="log tall" id="syncLog" data-i18n="web.common.noLog">暂无日志</pre>
+    </section>
+    </div>
+
+    <div id="settingsAbout" data-settings-panel="about" role="tabpanel" hidden>
+      <div class="grid cols-2">
+        <section class="card">
+        <h2 data-i18n="web.about.version">版本</h2>
+        <div class="kv"><span>Slot</span><b id="aboutSlot">—</b></div>
+        <div class="kv"><span>linkSlot CLI</span><b id="aboutLinkSlot">—</b></div>
+        <div class="kv"><span data-i18n="web.about.webService">Web 服务</span><b id="aboutWeb">—</b></div>
+        <div class="kv"><span data-i18n="web.overview.address">访问地址</span><b class="mono small" id="aboutUrl">—</b></div>
+      </section>
+        <section class="card">
+        <h2 data-i18n="web.about.license">许可证</h2>
+        <p><span data-i18n="web.about.licensePrefix">Slot 与 linkSlot Web 管理页以</span> <b>GPL-3.0-or-later</b><span data-i18n="web.about.licenseTail">发布。</span></p>
+        <p class="muted small" data-i18n="web.about.embedded">本页面与静态资源全部内嵌在 slot 程序中，不加载任何外部字体、脚本或 CDN 资源。</p>
+      </section>
+      </div>
+    <section class="card">
+      <h2 data-i18n="web.about.usage">使用说明</h2>
+      <ol class="about-steps">
+        <li data-i18n="web.about.usageWifi">设备与手机 / 电脑需要连接同一个 WiFi。</li>
+        <li data-i18n="web.about.usageSaves">「存档」页可以预览即时存档缩略图、下载存档、用上传文件覆盖即时存档 / 电池存档，或删除本机存档；删除不影响云同步或远端备份。</li>
+        <li><span data-i18n="web.about.usageSyncPrefix">「云同步」页配置 WebDAV 后，可对单个存档单元执行</span> <b>linkSlot sync</b><span data-i18n="web.about.usageSyncTail">；设备正在游戏或同步时写入会被拒绝。</span></li>
+        <li data-i18n="web.about.usageRoms">「游戏库」页可替换封面、ROM，也可给当前游戏上传介绍 `.txt` 和演示视频 `.mp4`；详情页可导出单个游戏，工具栏可按平台导出/导入包含 ROM、封面、介绍和视频的合集 ZIP。</li>
+        <li data-i18n="web.about.usageSecurity">本服务无登录鉴权，仅限家庭局域网使用，请勿暴露到公网。</li>
+        <li data-i18n="web.about.usageIp">设备 IP 变化（例如切换 WiFi）后，请用设备上显示的新地址重新访问。</li>
+      </ol>
+    </section>
+    </div>
+  </section>
+
+</main>
+
+<dialog id="romDialog" class="modal rom-dialog" aria-labelledby="romDialogTitle">
+  <div class="dialog-head">
+    <div>
+      <span class="pill" id="romDialogPlatform">—</span>
+      <h2 id="romDialogTitle" data-i18n="web.rom.detail">游戏详情</h2>
+    </div>
+    <button class="icon-btn" type="button" id="closeRomDialog" aria-label="关闭" data-i18n-aria="web.common.close">×</button>
+  </div>
+  <div class="rom-upload hidden" data-upload role="status" aria-live="polite">
+    <div class="rom-upload-line">
+      <strong data-upload-title data-i18n="web.common.uploading">正在上传…</strong>
+      <span class="rom-upload-file mono" data-upload-file></span>
+      <span class="rom-upload-percent mono" data-upload-text>0%</span>
+    </div>
+    <div class="upload-progress-track">
+      <div class="upload-progress-bar" data-upload-bar></div>
+    </div>
+  </div>
+  <div class="rom-detail">
+    <div class="rom-cover-pane">
+      <div class="rom-dialog-cover-wrap">
+        <img id="romDialogCover" class="rom-dialog-cover" alt="游戏封面" data-i18n-alt="web.rom.coverAlt" hidden>
+        <div id="romDialogNoCover" class="rom-cover-empty" data-i18n="web.rom.noCover">暂无封面</div>
+      </div>
+      <button class="btn primary" type="button" id="romReplaceCover" data-i18n="web.rom.replaceCover">替换封面</button>
+      <div id="romAchievements" class="rom-achievements" hidden>
+        <div class="rom-ach-head">
+          <span class="rom-ach-title" data-i18n="web.rom.achievementsTitle">已解锁成就</span>
+          <span class="rom-ach-count" id="romAchCount"></span>
+        </div>
+        <div id="romAchIcons" class="rom-ach-icons"></div>
+      </div>
+    </div>
+    <div class="rom-fields">
+      <div class="rom-tabs" id="romTabs" role="tablist">
+        <button class="rom-tab active" type="button" role="tab" aria-selected="true"
+                data-rom-tab="overview" data-i18n="web.rom.tabOverview">概览</button>
+        <button class="rom-tab" type="button" role="tab" aria-selected="false"
+                data-rom-tab="appearance" data-i18n="web.rom.tabAppearance">外观</button>
+        <button class="rom-tab" type="button" role="tab" aria-selected="false"
+                data-rom-tab="content" data-i18n="web.rom.tabContent">内容</button>
+        <button class="rom-tab" type="button" role="tab" aria-selected="false"
+                data-rom-tab="actions" data-i18n="web.rom.tabActions">操作</button>
+      </div>
+      <div class="rom-panel" data-rom-panel="overview">
+      <div class="field">
+        <label for="romDialogPlatformText" data-i18n="web.rom.platform">平台</label>
+        <input id="romDialogPlatformText" type="text" readonly>
+      </div>
+      <div class="field">
+        <label for="romDialogFile" data-i18n="web.rom.romFile">ROM 文件</label>
+        <input id="romDialogFile" type="text" readonly>
+      </div>
+      <div class="field">
+        <label for="romDialogPath" data-i18n="web.rom.pathFixed">路径（不可修改）</label>
+        <input id="romDialogPath" class="mono" type="text" readonly>
+      </div>
+      <div class="field">
+        <label for="romDialogSize" data-i18n="web.common.size">大小</label>
+        <input id="romDialogSize" type="text" readonly>
+      </div>
+      <div class="field">
+        <label for="romDialogSha256" data-i18n="web.rom.sha256">SHA256</label>
+        <div class="rom-cheat-row">
+          <input id="romDialogSha256" class="mono" type="text" readonly placeholder="—" data-i18n-placeholder="web.rom.sha256Loading">
+          <button class="btn ghost small" type="button" id="romCopySha256" data-i18n="web.common.copy">复制</button>
+        </div>
+        <p class="hint" data-i18n="web.rom.sha256Hint">ROM 内容的 SHA256，可用于校验版本或匹配成就数据。</p>
+      </div>
+      </div>
+      <div class="rom-panel" data-rom-panel="appearance" hidden>
+      <div class="field">
+        <label for="romColor" data-i18n="web.rom.colour">卡带颜色</label>
+        <div class="rom-color-row">
+          <input id="romColor" type="color" value="#8fd6c4" aria-label="卡带颜色" data-i18n-aria="web.rom.colour">
+          <input id="romColorHex" class="mono" type="text" maxlength="7" value="#8fd6c4" aria-label="卡带颜色十六进制" data-i18n-aria="web.rom.colourHex">
+          <button class="btn ghost" type="button" id="romColorRandom" data-i18n="web.rom.random">随机</button>
+          <button class="btn primary" type="button" id="romColorSave" data-i18n="web.rom.saveColour">保存颜色</button>
+        </div>
+        <p class="hint" data-i18n="web.rom.colourHint">修改后立即写入卡带配置；下次启动或重新扫描时生效。</p>
+      </div>
+      <div class="field" id="romFrontField">
+        <label data-i18n="web.rom.fronts">卡带前盖</label>
+        <div class="front-quick">
+          <div class="front-quick-preview">
+            <img id="frontQuickPreview" alt="">
+          </div>
+          <div class="front-quick-main">
+            <div class="front-quick-head">
+              <strong data-i18n="web.rom.quickFrontTitle">快速前盖</strong>
+              <span class="front-quick-count" id="frontQuickCount">0 / 5</span>
+              <span class="hint" data-i18n="web.rom.quickFrontHint">外壳保持不变，只替换封面贴纸。</span>
+            </div>
+            <div class="front-quick-actions">
+              <button class="btn primary" type="button" id="frontQuickUpload" data-i18n-title="web.rom.frontAddUploadDesc" data-i18n="web.rom.quickFrontUpload">上传图片生成前盖</button>
+              <button class="btn secondary" type="button" id="frontAddMore" aria-haspopup="dialog" data-i18n="web.rom.frontAddMore">更多方式</button>
+              <label class="front-quick-fit">
+                <span data-i18n="web.rom.quickFrontFit">封面适配</span>
+                <select id="frontQuickFit">
+                  <option value="contain" data-i18n="web.rom.quickFrontContain">完整显示</option>
+                  <option value="fill" data-i18n="web.rom.quickFrontFill">填满标签</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </div>
+        <input id="frontQuickFile" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
+        <input id="frontQuickImage" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+        <div class="front-list" id="frontList"></div>
+        <div class="rom-cheat-row front-model-row" id="frontModelRow">
+          <label class="muted small" for="frontModel" data-i18n="web.rom.frontModel">前盖机型</label>
+          <select id="frontModel" data-i18n-aria="web.rom.frontModel">
+            <option value="any" data-i18n="web.rom.frontModelAny">通用</option>
+            <option value="famicom" data-i18n="web.rom.frontModelFamicom">FC 卡带</option>
+            <option value="nes" data-i18n="web.rom.frontModelNes">NES 卡带</option>
+          </select>
+        </div>
+        <p class="hint" data-i18n="web.rom.frontHint">最多 5 张；上传后会被裁成当前平台的固定前盖尺寸，空白处保持透明。</p>
+        <input id="frontFile" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+        <input id="frontImportFile" type="file" accept=".json,application/json" hidden>
+      </div>
+      <div class="field" id="romModelField" hidden>
+        <label for="romModel" data-i18n="web.rom.model">卡带模型</label>
+        <div class="rom-cheat-row">
+          <select id="romModel">
+            <option value="famicom" data-i18n="web.rom.modelFamicom">FC 卡带（Famicom）</option>
+            <option value="nes" data-i18n="web.rom.modelNes">NES 卡带</option>
+          </select>
+          <button class="btn primary" type="button" id="romModelSave" data-i18n="web.rom.modelSave">保存模型</button>
+        </div>
+        <p class="hint" data-i18n="web.rom.modelHint">仅 FC 机种可切换；默认 FC 卡带。</p>
+      </div>
+      </div>
+      <div class="rom-panel" data-rom-panel="content" hidden>
+      <div class="field">
+        <label for="romCheatPath" data-i18n="web.rom.cheatFile">金手指文件</label>
+        <div class="rom-cheat-row">
+          <input id="romCheatPath" class="mono" type="text" maxlength="1024" placeholder="Cheats/GBA/mgba/游戏名.cht" data-i18n-placeholder="web.rom.cheatExample">
+          <button class="btn primary" type="button" id="romCheatSave" data-i18n="web.rom.savePath">保存路径</button>
+          <button class="btn secondary" type="button" id="romCheatUpload" data-i18n="web.rom.uploadCheat">上传 .cht</button>
+        </div>
+        <p class="hint" data-i18n="web.rom.cheatHint">可手动填写路径或直接上传 .cht；留空恢复默认的 Cheats/平台/核心/游戏名.cht。</p>
+        <input id="romCheatFile" type="file" accept=".cht,text/plain" hidden>
+      </div>
+      <div class="intro-assets">
+        <div class="intro-asset-row">
+          <div>
+            <strong data-i18n="web.rom.description">游戏介绍</strong>
+            <span id="romIntroState" class="intro-state" data-i18n="web.rom.noDescription">暂无介绍</span>
+          </div>
+          <button class="btn secondary" type="button" id="romIntroPick" data-i18n="web.rom.uploadTxt">上传 .txt</button>
+        </div>
+        <div class="rom-intro-body" id="romIntroBody" hidden></div>
+        <div class="intro-asset-row">
+          <div>
+            <strong data-i18n="web.rom.video">演示视频</strong>
+            <span id="romVideoState" class="intro-state" data-i18n="web.rom.noVideo">暂无视频</span>
+          </div>
+          <button class="btn secondary" type="button" id="romVideoPick" data-i18n="web.rom.uploadMp4">上传 .mp4</button>
+        </div>
+        <p class="hint" data-i18n="web.rom.mediaHint">上传后会自动命名为当前 ROM 的介绍文件；视频只接受 MP4。</p>
+      </div>
+      <div class="field">
+        <label for="romGuidePath" data-i18n="web.rom.guide">游戏攻略</label>
+        <div class="rom-cheat-row">
+          <input id="romGuidePath" class="mono" type="text" maxlength="1024" placeholder="Guides/GBA/游戏名.txt 或 .epub" data-i18n-placeholder="web.rom.guideExample">
+          <button class="btn primary" type="button" id="romGuideSave" data-i18n="web.rom.savePath">保存路径</button>
+        </div>
+        <div class="intro-asset-row">
+          <div>
+            <strong data-i18n="web.rom.guideTitle">TXT / EPUB 攻略</strong>
+            <span id="romGuideState" class="intro-state" data-i18n="web.rom.noGuide">暂无攻略</span>
+          </div>
+          <button class="btn secondary" type="button" id="romGuidePick" data-i18n="web.rom.uploadGuide">上传 .txt/.epub</button>
+        </div>
+        <p class="hint" data-i18n="web.rom.guideHint">相对存储卡根目录的 .txt 或 .epub 文件；留空恢复默认的 Guides/平台/游戏名.txt（没有 TXT 时自动读取 .epub）。</p>
+        <input id="romGuideInput" type="file" accept=".txt,.epub,text/plain,application/epub+zip" hidden>
+      </div>
+      </div>
+      <div class="rom-panel" data-rom-panel="actions" hidden>
+      <div class="rom-export-card">
+        <div class="rom-export-info">
+          <strong data-i18n="web.rom.export">导出游戏包</strong>
+          <span data-i18n="web.rom.exportHint">ROM、封面、介绍、视频、攻略、金手指和元数据（不含存档）</span>
+        </div>
+        <button class="btn primary" type="button" id="romExport" data-i18n="web.rom.export">导出游戏包</button>
+      </div>
+      <div class="rom-transfer-row">
+        <button class="btn primary" type="button" id="romPlayWeb" title="在浏览器里直接游玩（设备只提供文件）" data-i18n-title="web.rom.playTitle" data-i18n="web.rom.play">在浏览器游玩</button>
+        <button class="btn secondary" type="button" id="romReplaceRom" data-i18n="web.rom.replaceRom">替换 ROM</button>
+        <button class="btn secondary" type="button" id="romRename" data-i18n="web.rom.rename">重命名</button>
+        <button class="btn danger-solid" type="button" id="romDelete" data-i18n="web.rom.delete">删除 ROM</button>
+      </div>
+      <p class="hint" id="romPlayWebHint" data-i18n="web.rom.playHint">模拟器在浏览器里运行，电池存档自动读写；目前支持 GBA / GB / GBC / FC。</p>
+      <p class="hint" data-i18n="web.rom.exportTail">导出后使用工具栏的「导入游戏/合集」可恢复完整游戏包；替换 ROM 只改当前文件内容。</p>
+      </div>
+      <input id="romFileInput" type="file" hidden>
+      <input id="romIntroInput" type="file" accept=".txt,text/plain" hidden>
+      <input id="romVideoInput" type="file" accept=".mp4,video/mp4" hidden>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="frontAddDialog" class="modal file-action-dialog front-add-dialog" aria-labelledby="frontAddTitle">
+  <div class="dialog-head">
+    <div>
+      <h2 id="frontAddTitle" data-i18n="web.rom.frontAddTitle">添加前盖</h2>
+      <p class="hint" data-i18n="web.rom.frontAddHint">选择创建方式；都会保存为当前平台的前盖。</p>
+    </div>
+    <button class="btn ghost small" type="button" id="frontAddClose" data-i18n="web.common.close">关闭</button>
+  </div>
+  <div class="front-add-list">
+    <button class="front-add-row" type="button" id="frontQuickCover">
+      <strong data-i18n="web.rom.quickFrontCover">用当前封面创建</strong>
+      <span data-i18n="web.rom.frontAddCurrentDesc">使用游戏列表里已有的封面，自动套外壳。</span>
+    </button>
+    <button class="front-add-row" type="button" id="frontAdd">
+      <strong data-i18n="web.rom.frontAdd">上传前盖</strong>
+      <span data-i18n="web.rom.frontAddReadyDesc">上传已经做好的整张卡面 PNG，不再套外壳。</span>
+    </button>
+    <button class="front-add-row" type="button" id="frontNew">
+      <strong data-i18n="web.rom.frontNew">新建前盖</strong>
+      <span data-i18n="web.rom.frontAddNewDesc">从空外壳打开编辑器，可加图层和文字。</span>
+    </button>
+    <button class="front-add-row" type="button" id="frontImport">
+      <strong data-i18n="web.rom.frontImport">导入前盖</strong>
+      <span data-i18n="web.rom.frontAddImportDesc">继续编辑之前导出的 .json 项目。</span>
+    </button>
+    <button class="front-add-row" type="button" id="frontQuickBatch">
+      <strong data-i18n="web.rom.quickFrontBatch">批量添加封面</strong>
+      <span data-i18n="web.rom.frontAddBatchDesc">一次选多张图片，给当前游戏批量生成（最多 5 张）。</span>
+    </button>
+  </div>
+</dialog>
+
+<dialog id="frontCardDialog" class="modal file-action-dialog" aria-labelledby="frontCardTitle">
+  <div class="dialog-head">
+    <div>
+      <h2 id="frontCardTitle">前盖</h2>
+      <p class="hint mono small" id="frontCardSource">—</p>
+    </div>
+    <button class="btn ghost small" type="button" id="frontCardClose" data-i18n="web.common.close">关闭</button>
+  </div>
+  <div class="file-action-list">
+    <button class="btn" type="button" id="frontCardCopy" data-i18n="web.rom.frontCopy">复制</button>
+    <button class="btn" type="button" id="frontCardExport" data-i18n="web.rom.frontExport">导出</button>
+    <button class="btn danger" type="button" id="frontCardDelete" data-i18n="web.rom.frontDelete">删除</button>
+  </div>
+  <p class="hint" data-i18n="web.files.actionsHint">选择要执行的操作。</p>
+</dialog>
+
+<dialog id="addGameDialog" class="modal add-game-dialog" aria-labelledby="addGameTitle">
+  <div class="dialog-head">
+    <div>
+      <span class="pill" data-i18n="web.addGame.title">新游戏</span>
+      <h2 id="addGameTitle" data-i18n="web.roms.add">添加游戏</h2>
+    </div>
+    <button class="icon-btn" type="button" id="closeAddGame" aria-label="关闭" data-i18n-aria="web.common.close">×</button>
+  </div>
+  <div class="rom-upload hidden" data-upload role="status" aria-live="polite">
+    <div class="rom-upload-line">
+      <strong data-upload-title data-i18n="web.addGame.busy">正在添加游戏…</strong>
+      <span class="rom-upload-file mono" data-upload-file></span>
+      <span class="rom-upload-percent mono" data-upload-text>0%</span>
+    </div>
+    <div class="upload-progress-track">
+      <div class="upload-progress-bar" data-upload-bar></div>
+    </div>
+  </div>
+  <div class="field">
+    <label for="addGamePlatform" data-i18n="web.addGame.platform">机种</label>
+    <select id="addGamePlatform">
+      <option value="GBA">GBA · Game Boy Advance (.gba)</option>
+      <option value="GB">GB · Game Boy (.gb / .gbc)</option>
+      <option value="GBC">GBC · Game Boy Color (.gb / .gbc)</option>
+      <option value="FC">FC · Famicom / NES (.nes)</option>
+      <option value="SFC">SFC · Super Famicom / SNES (.sfc / .smc / .fig)</option>
+      <option value="MD">MD · Mega Drive / Genesis (.md / .gen / .smd / .bin)</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="addGameName" data-i18n="web.rom.romFile">ROM 文件</label>
+    <div class="rom-cheat-row">
+      <input id="addGameName" class="mono" type="text" readonly placeholder="尚未选择文件" data-i18n-placeholder="web.common.noFileChosen">
+      <button class="btn primary" type="button" id="addGamePick" data-i18n="web.addGame.chooseFile">选择文件</button>
+    </div>
+    <p class="hint" id="addGameHint" data-i18n="web.addGame.hint">选择文件后会保存到 Games/GBA/，并立即出现在游戏库里。</p>
+  </div>
+  <div class="row-actions">
+    <button class="btn ghost" type="button" id="addGameCancel" data-i18n="web.common.cancel">取消</button>
+    <button class="btn primary" type="button" id="addGameSubmit" disabled data-i18n="web.addGame.submit">上传并添加</button>
+  </div>
+  <input id="addGameFile" type="file" accept=".gba" hidden>
+</dialog>
+
+<dialog id="coverDialog" class="modal cover-dialog" aria-labelledby="coverTitle">
+  <div class="dialog-head">
+    <div>
+      <h2 id="coverTitle" data-i18n="web.cover.title">编辑封面</h2>
+      <p class="hint" id="coverTargetHint">—</p>
+    </div>
+    <button class="icon-btn" type="button" id="closeCoverDialog" aria-label="关闭" data-i18n-aria="web.common.close">×</button>
+  </div>
+  <div class="cover-editor">
+    <div class="cover-stage">
+      <canvas id="coverCanvas" width="532" height="276"></canvas>
+      <div class="cover-empty" id="coverEmpty" data-i18n="web.cover.pick">选择一张图片作为封面</div>
+    </div>
+    <div class="cover-tools">
+      <button class="btn" type="button" id="coverPick" data-i18n="web.cover.choose">选择图片</button>
+      <button class="btn ghost" type="button" id="coverReset" data-i18n="web.cover.reset">重置位置</button>
+      <button class="btn ghost" type="button" id="coverFit" title="整张图缩进封面框，不裁切" data-i18n-title="web.cover.fitTitle" data-i18n="web.cover.fit">整图显示</button>
+      <label class="cover-zoom" for="coverZoom">
+        <span data-i18n="web.cover.zoom">缩放</span>
+        <input id="coverZoom" type="range" min="0.2" max="3" step="0.01" value="1">
+        <b id="coverZoomText">100%</b>
+      </label>
+      <input id="coverFileInput" type="file" accept="image/*" hidden>
+    </div>
+  </div>
+  <div class="row-actions cover-actions">
+    <button class="btn ghost" type="button" id="coverCancel" data-i18n="web.common.cancel">取消</button>
+    <button class="btn primary" type="button" id="coverSave" data-i18n="web.cover.save">保存封面</button>
+  </div>
+  <p class="hint" data-i18n="web.cover.hint">拖动图片调整位置，滑块缩放；想要整张图不被裁切，点「整图显示」再保存。</p>
+</dialog>
+
+<dialog id="frontEditorDialog" class="modal front-editor-dialog" aria-labelledby="frontEditorTitle">
+  <div class="dialog-head front-editor-head">
+    <div>
+      <h2 id="frontEditorTitle" data-i18n="web.frontEditor.title">前盖编辑器</h2>
+      <p class="hint" id="frontEditorMeta">—</p>
+    </div>
+    <div class="front-editor-head-actions">
+      <button class="btn secondary small only-narrow" type="button" id="frontInspectorToggle" aria-pressed="false" aria-controls="frontInspector" data-i18n="web.frontEditor.properties">属性</button>
+      <button class="btn secondary small" type="button" id="frontEditorFocus" aria-pressed="false" data-i18n="web.frontEditor.focus">全屏</button>
+      <button class="btn ghost small" type="button" id="frontUndo" data-i18n="web.frontEditor.undo">撤销</button>
+      <button class="btn ghost small" type="button" id="frontRedo" data-i18n="web.frontEditor.redo">重做</button>
+      <button class="icon-btn" type="button" id="frontEditorClose" aria-label="关闭" data-i18n-aria="web.common.close">×</button>
+    </div>
+  </div>
+  <div class="front-editor-body">
+    <aside class="front-sidebar front-layer-sidebar">
+      <div class="front-sidebar-title" data-i18n="web.frontEditor.layers">图层</div>
+      <div class="front-layer-list" id="frontLayerList"></div>
+      <div class="front-layer-add">
+        <button class="btn ghost small" type="button" id="frontAddImage" data-i18n="web.frontEditor.addImage">图片</button>
+        <button class="btn ghost small" type="button" id="frontAddCover" data-i18n="web.frontEditor.addCover">当前封面</button>
+        <button class="btn ghost small" type="button" id="frontAddShell" data-i18n="web.frontEditor.addShell">无封面外壳</button>
+        <button class="btn ghost small" type="button" id="frontAddText" data-i18n="web.frontEditor.addText">文字</button>
+        <button class="btn ghost small" type="button" id="frontAddRect" data-i18n="web.frontEditor.addRect">矩形</button>
+        <button class="btn ghost small" type="button" id="frontAddEllipse" data-i18n="web.frontEditor.addEllipse">圆形</button>
+        <button class="btn ghost small" type="button" id="frontAddLine" data-i18n="web.frontEditor.addLine">线条</button>
+      </div>
+      <div class="front-layer-add">
+        <button class="btn ghost small" type="button" id="frontTemplateTitle" data-i18n="web.frontEditor.templateTitle">标题模板</button>
+        <button class="btn ghost small" type="button" id="frontTemplateFrame" data-i18n="web.frontEditor.templateFrame">边框模板</button>
+      </div>
+      <label class="front-colour-row">
+        <span data-i18n="web.frontEditor.background">底色</span>
+        <input id="frontBackground" type="color" value="#202028">
+      </label>
+      <label class="front-check">
+        <input id="frontGradient" type="checkbox">
+        <span data-i18n="web.frontEditor.gradient">渐变背景</span>
+      </label>
+      <label class="front-colour-row">
+        <span data-i18n="web.frontEditor.gradientTo">渐变颜色</span>
+        <input id="frontBackground2" type="color" value="#08080c">
+      </label>
+      <label class="front-colour-row">
+        <span data-i18n="web.frontEditor.gradientAngle">渐变角度</span>
+        <input id="frontGradientAngle" type="number" min="0" max="360" step="1" value="90">
+      </label>
+    </aside>
+    <section class="front-stage">
+      <div class="front-canvas-wrap">
+        <div class="front-canvas-shell">
+          <canvas id="frontCanvas" width="360" height="299"></canvas>
+        </div>
+      </div>
+      <div class="front-stage-tools">
+        <label class="front-check"><input id="frontShowMask" type="checkbox" checked><span data-i18n="web.frontEditor.showMask">显示卡带底图</span></label>
+        <label class="front-check"><input id="frontShowGuides" type="checkbox"><span data-i18n="web.frontEditor.showGuides">标签辅助线</span></label>
+        <label class="front-zoom" for="frontZoom">
+          <span data-i18n="web.frontEditor.zoom">缩放</span>
+          <input id="frontZoom" type="range" min="0.4" max="5" step="0.01" value="1">
+          <b id="frontZoomText">100%</b>
+        </label>
+      </div>
+    </section>
+    <aside class="front-sidebar front-inspector">
+      <div class="front-sidebar-title" data-i18n="web.frontEditor.properties">属性</div>
+      <div id="frontInspector"></div>
+    </aside>
+  </div>
+  <div class="front-editor-foot">
+    <label class="front-name-row">
+      <span data-i18n="web.frontEditor.name">前盖名称</span>
+      <input id="frontNameInput" type="text" maxlength="80">
+    </label>
+    <div class="row-actions">
+      <button class="btn ghost" type="button" id="frontEditorCancel" data-i18n="web.common.cancel">取消</button>
+      <button class="btn primary" type="button" id="frontEditorSave" data-i18n="web.frontEditor.save">保存前盖</button>
+    </div>
+  </div>
+  <p class="hint" data-i18n="web.frontEditor.hint">在固定卡带轮廓内排版；透明区域会显示卡壳颜色，保存后会直接用于设备。</p>
+  <input id="frontImageInput" type="file" accept="image/*" hidden>
+</dialog>
+
+<dialog id="modDetailDialog" class="modal mod-dialog" aria-labelledby="modDetailTitle">
+  <div class="dialog-head">
+    <div>
+      <h2 id="modDetailTitle" data-i18n="web.mod.detail">mod 详情</h2>
+      <p class="hint"><span class="pill dim mono" id="modDetailId" data-i18n="web.mod.unsaved">未保存</span><span class="pill dim" id="modDetailVersion"></span><span class="pill dim" id="modDetailAuthor" data-i18n="web.mod.noAuthor">无作者信息</span></p>
+    </div>
+    <button class="icon-btn" type="button" id="closeModDetail" aria-label="关闭" data-i18n-aria="web.common.close">×</button>
+  </div>
+  <p class="hint" id="modDetailStatus" role="status">—</p>
+  <div class="row-actions">
+    <button class="btn primary" type="button" id="openModUi" data-i18n="web.mod.openPage">打开管理页面</button>
+    <button class="btn danger" type="button" id="uninstallMod" data-i18n="web.mod.uninstall">卸载 mod</button>
+  </div>
+  <div class="battery-block">
+    <h3 data-i18n="web.mod.readme">简介</h3>
+    <pre class="log mod-readme" id="modReadme" data-i18n="web.mod.readingReadme">正在读取 README…</pre>
+  </div>
+  <div class="battery-block">
+    <h3 data-i18n="web.mod.permissions">权限</h3>
+    <p class="hint" data-i18n="web.mod.permissionsHint">
+      mod 只能使用勾选的能力；敏感权限请确认来源后再授权。
+    </p>
+    <div id="modPermissionList"></div>
+    <div class="row-actions">
+      <button class="btn" type="button" id="grantDeclaredPermissions" data-i18n="web.mod.grantAll" data-i18n-title="web.mod.grantAllTitle">一键赋权</button>
+      <button class="btn primary" type="button" id="saveModPermissions" data-i18n="web.mod.savePermissions">保存授权</button>
+    </div>
+    <p class="hint" id="modPermissionStatus" role="status"></p>
+  </div>
+</dialog>
+
+<dialog id="modUiDialog" class="modal mod-ui-dialog" aria-labelledby="modUiTitle">
+  <div class="dialog-head">
+    <div>
+      <h2 id="modUiTitle" data-i18n="web.mod.page">mod 管理页面</h2>
+      <p class="hint" id="modUiHint" data-i18n="web.mod.pageHint">页面在沙箱中运行，只能通过受限 API 操作当前 mod。</p>
+    </div>
+    <button class="icon-btn" type="button" id="closeModUi" aria-label="关闭" data-i18n-aria="web.common.close">×</button>
+  </div>
+  <iframe id="modUiFrame" sandbox="allow-scripts allow-forms" referrerpolicy="no-referrer" title="mod 管理页面" data-i18n-title="web.mod.page"></iframe>
+  <p class="hint" id="modUiStatus" role="status">—</p>
+</dialog>
+
+<div class="upload-overlay hidden" id="uploadProgressOverlay" role="status" aria-live="polite">
+  <div class="upload-overlay-card card">
+    <h2 id="uploadProgressTitle" data-i18n="web.common.uploading">正在上传…</h2>
+    <p class="hint" id="uploadProgressFile" data-i18n="web.mod.keepOpen">请保持页面打开</p>
+    <div class="upload-progress" id="uploadProgressBox">
+      <div class="upload-progress-track">
+        <div class="upload-progress-bar" id="uploadProgressBar"></div>
+      </div>
+      <p class="upload-progress-text" id="uploadProgressText">0%</p>
+    </div>
+  </div>
+</div>
+<div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+<dialog id="saveUploadDialog" class="modal save-upload-dialog" aria-labelledby="saveUploadTitle">
+  <div class="dialog-head">
+    <div>
+      <h2 id="saveUploadTitle" data-i18n="web.saves.upload_title">上传存档</h2>
+      <p class="hint" data-i18n="web.saves.upload_hint">选择要上传的存档类型；文件只会写入当前游戏。</p>
+    </div>
+    <button class="icon-btn" type="button" id="closeSaveUpload" aria-label="关闭" data-i18n-aria="web.common.close">×</button>
+  </div>
+  <p class="hint" id="saveUploadGame">—</p>
+  <div class="row-actions">
+    <button class="btn primary" type="button" data-save-upload="state" id="saveUploadState" data-i18n="web.saves.upload_state">即时存档</button>
+    <button class="btn" type="button" data-save-upload="battery" data-i18n="web.saves.upload_battery">电池存档</button>
+  </div>
+  <div class="actions">
+    <button class="btn ghost" type="button" id="cancelSaveUpload" data-i18n="web.common.cancel">取消</button>
+  </div>
+</dialog>
+<input type="file" id="uploadInput" hidden>
+<script src="/app.js"></script>
+</body>
+</html>

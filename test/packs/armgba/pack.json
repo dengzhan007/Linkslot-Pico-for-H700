@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "kind": "core",
+  "id": "armgba",
+  "name": "GBA 核心 · armGBA",
+  "version": "1.0.0",
+  "min_app": "1.0.38",
+  "license": "GPL-2.0",
+  "source": "https://github.com/MagnominusGit/armGBA/tree/dda6df08cf06509a85c52aca92c24e9abc9b0a3f",
+  "files": []
+}
