@@ -1,0 +1,1 @@
+Extracted Linkslot 1.0.45 QuickRow enum/page/navigation metadata and load/save intent for no_std. Draw commands, textures, fonts and QuickValue presentation remain in slot-ui. Compatibility invariant: QuickRow::ALL remains 87 entries; Language index 86; SplitLink index 87 and outside ALL. Append only; never reorder.

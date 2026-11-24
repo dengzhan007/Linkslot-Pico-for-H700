@@ -1,0 +1,10 @@
+[package]
+name = "slot-quick-menu"
+version = "1.0.45"
+edition = "2021"
+rust-version = "1.96"
+license = "GPL-3.0-or-later"
+
+[dependencies]
+slot-i18n = { path = "../slot-i18n" }
+slot-model = { path = "../slot-model" }

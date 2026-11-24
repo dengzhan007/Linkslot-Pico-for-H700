@@ -1,0 +1,9 @@
+[package]
+name = "slot-i18n"
+version = "1.0.45"
+edition = "2021"
+rust-version = "1.96"
+license = "GPL-3.0-or-later"
+
+[lib]
+path = "src/lib.rs"

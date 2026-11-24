@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["slot-input", "slot-model", "slot-frontend-state", "slot-core-picker", "slot-link-state", "slot-link-kind", "slot-video-mode", "slot-rom-id", "slot-game-search", "slot-hold-state", "slot-cpu-performance"]
+members = ["slot-input", "slot-model", "slot-frontend-state", "slot-core-picker", "slot-link-state", "slot-link-kind", "slot-video-mode", "slot-rom-id", "slot-game-search", "slot-hold-state", "slot-cpu-performance", "slot-i18n", "slot-quick-menu"]
 
 [profile.release]
 panic = "abort"

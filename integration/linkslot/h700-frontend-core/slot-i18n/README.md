@@ -1,0 +1,1 @@
+Generated no_std mirror of the pinned Linkslot 1.0.45 translation catalog. The build-time generator materializes src/lib.rs from the six bilingual JSON domains and checks schema, key and placeholder parity. Runtime uses static lookup tables, not serde_json, std, HashMap or OnceLock.
