@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 
 PINNED_SNAPSHOT = "3b06d96adadd0375f071555ecb3cc20c3a5b53db"
-UPSTREAM_CRATES = ("slot-input", "slot-model")
+UPSTREAM_CRATES = ("slot-input", "slot-model", "slot-i18n")
 
 
 def run_git(source: Path, *args: str) -> str:
@@ -54,6 +54,7 @@ def patch_frontend(source: Path) -> None:
     link_state_dependency = 'slot-link-state = { path = "../slot-link-state" }'
     link_kind_dependency = 'slot-link-kind = { path = "../slot-link-kind" }'
     video_mode_dependency = 'slot-video-mode = { path = "../slot-video-mode" }'
+    quick_menu_dependency = 'slot-quick-menu = { path = "../slot-quick-menu" }'
     rom_id_dependency = 'slot-rom-id = { path = "../slot-rom-id" }'
     game_search_dependency = 'slot-game-search = { path = "../slot-game-search" }'
     hold_state_dependency = 'slot-hold-state = { path = "../slot-hold-state" }'
@@ -106,8 +107,56 @@ def patch_frontend(source: Path) -> None:
             raise RuntimeError("cannot locate slot-game-search dependency in slot/Cargo.toml")
         manifest_text = manifest_text.replace(anchor, anchor + hold_state_dependency + "\n")
         changed_manifest = True
+    if quick_menu_dependency not in manifest_text:
+        anchor = video_mode_dependency + chr(10)
+        if manifest_text.count(anchor) != 1:
+            raise RuntimeError("cannot locate slot-video-mode dependency for Quick Menu")
+        manifest_text = manifest_text.replace(anchor, anchor + quick_menu_dependency + chr(10))
+        changed_manifest = True
     if changed_manifest:
         slot_manifest.write_text(manifest_text, encoding="utf-8")
+
+    # QuickRow is a pure row/page model; rendering and QuickValue faces stay in slot-ui.
+    quick_ui_manifest = source / "crates/slot-ui/Cargo.toml"
+    quick_ui_cargo = quick_ui_manifest.read_text(encoding="utf-8")
+    quick_ui_anchor = 'slot-model = { path = "../slot-model" }' + chr(10)
+    quick_ui_dependency = 'slot-quick-menu = { path = "../slot-quick-menu" }' + chr(10)
+    if quick_ui_dependency not in quick_ui_cargo:
+        if quick_ui_cargo.count(quick_ui_anchor) != 1:
+            raise RuntimeError("cannot locate slot-model dependency in slot-ui/Cargo.toml")
+        quick_ui_manifest.write_text(
+            quick_ui_cargo.replace(quick_ui_anchor, quick_ui_anchor + quick_ui_dependency),
+            encoding="utf-8",
+        )
+
+    quick_menu_path = source / "crates/slot-ui/src/quick_menu.rs"
+    quick_menu_text = quick_menu_path.read_text(encoding="utf-8")
+    row_start = "#[derive(Copy, Clone, PartialEq, Eq, Debug)]" + chr(10) + "pub enum QuickRow {" + chr(10)
+    value_start = "#[derive(Copy, Clone, PartialEq, Eq, Debug)]" + chr(10) + "pub enum QuickValue {" + chr(10)
+    if quick_menu_text.count(row_start) != 1 or quick_menu_text.count(value_start) != 1:
+        raise RuntimeError("Linkslot QuickRow/QuickValue extraction anchors changed")
+    if "pub use slot_quick_menu::{QuickRow, ResumeAction};" in quick_menu_text:
+        raise RuntimeError("QuickRow no_std re-export already appears in quick_menu.rs")
+    row_at = quick_menu_text.index(row_start)
+    value_at = quick_menu_text.index(value_start, row_at)
+    quick_menu_text = (
+        quick_menu_text[:row_at]
+        + "pub use slot_quick_menu::{QuickRow, ResumeAction};" + chr(10) + chr(10)
+        + quick_menu_text[value_at:]
+    )
+    host_import = "use slot_store::{Platform, ResumeKind};" + chr(10)
+    if quick_menu_text.count(host_import) != 1:
+        raise RuntimeError("QuickRow host-only Platform/ResumeKind import changed")
+    quick_menu_text = quick_menu_text.replace(host_import, "")
+    quick_menu_path.write_text(quick_menu_text, encoding="utf-8")
+
+    slot_ui_lib_path = source / "crates/slot-ui/src/lib.rs"
+    slot_ui_lib = slot_ui_lib_path.read_text(encoding="utf-8")
+    export_anchor = "QuickMenuFaces, QuickRow, QuickValue, QUICK_CARD_H,"
+    export_new = "QuickMenuFaces, QuickRow, QuickValue, ResumeAction, QUICK_CARD_H,"
+    if slot_ui_lib.count(export_anchor) != 1:
+        raise RuntimeError("slot-ui QuickMenu re-export block changed")
+    slot_ui_lib_path.write_text(slot_ui_lib.replace(export_anchor, export_new), encoding="utf-8")
 
     frontend_path = source / "crates/slot/src/frontend.rs"
     frontend = frontend_path.read_text(encoding="utf-8")
@@ -316,6 +365,38 @@ def patch_frontend(source: Path) -> None:
         raise RuntimeError("Linkslot 1.0.45 three-core constructor call does not match source")
     app = app.replace(open_three_old, open_three_new)
 
+    default_resume_old = """            QuickRow::DefaultLoad | QuickRow::DefaultSave => row
+                .resume_default()
+                .map(|kind| QuickValue::flag(self.state.resume_default(kind))),
+"""
+    default_resume_new = """            QuickRow::DefaultLoad | QuickRow::DefaultSave => row
+                .resume_default()
+                .map(|action| {
+                    let kind = match action {
+                        ResumeAction::Load => ResumeKind::Load,
+                        ResumeAction::Save => ResumeKind::Save,
+                    };
+                    QuickValue::flag(self.state.resume_default(kind))
+                }),
+"""
+    if app.count(default_resume_old) != 1:
+        raise RuntimeError("App default resume QuickRow adapter anchor changed")
+    app = app.replace(default_resume_old, default_resume_new)
+
+    resume_old = """            | QuickRow::SaveGbc => row.resume().map(|(platform, kind)| {
+                match self.state.resume_override(platform, kind) {
+"""
+    resume_new = """            | QuickRow::SaveGbc => row.resume().map(|(platform, action)| {
+                let kind = match action {
+                    ResumeAction::Load => ResumeKind::Load,
+                    ResumeAction::Save => ResumeKind::Save,
+                };
+                match self.state.resume_override(platform, kind) {
+"""
+    if app.count(resume_old) != 1:
+        raise RuntimeError("App per-platform resume QuickRow adapter anchor changed")
+    app = app.replace(resume_old, resume_new)
+
     app_path.write_text(app, encoding="utf-8")
 
 
@@ -352,6 +433,7 @@ def apply(source: Path, crate_root: Path) -> None:
     add_new_package(crate_root / "slot-rom-id", source / "crates/slot-rom-id")
     add_new_package(crate_root / "slot-game-search", source / "crates/slot-game-search")
     add_new_package(crate_root / "slot-hold-state", source / "crates/slot-hold-state")
+    add_new_package(crate_root / "slot-quick-menu", source / "crates/slot-quick-menu")
 
     video_mode_path = source / "crates/slot/src/video_mode.rs"
     video_mode_path.write_text(
@@ -508,6 +590,11 @@ pub fn sha256_reader<R: Read>(reader: R) -> std::io::Result<String> {
         "crates/slot-rom-id",
         "crates/slot-game-search",
         "crates/slot-hold-state",
+        "crates/slot-i18n",
+        "crates/slot-quick-menu",
+        "crates/slot-ui/Cargo.toml",
+        "crates/slot-ui/src/quick_menu.rs",
+        "crates/slot-ui/src/lib.rs",
         "crates/slot/src/game_search.rs",
         "crates/slot/src/rom_id.rs",
         "crates/slot/src/video_mode.rs",
