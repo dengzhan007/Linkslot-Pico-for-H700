@@ -12,6 +12,7 @@ LK_PIN = "9bf1419a49e0af6dba8b05916df382c9c9c6d0a8"
 SCAFFOLD = (
     Path("project/rg34xx_h700.mk"),
     Path("target/rg34xx_h700/rules.mk"),
+    Path("target/rg34xx_h700/init.c"),
     Path("platform/h700/rules.mk"),
 )
 
@@ -131,6 +132,20 @@ def main() -> None:
             if not source_path.is_file():
                 raise RuntimeError("H700 CPU service object has no source file: " + str(source_path))
         summary.append("PASS cpu-performance-objects: policy, ABI service and static runtime owner are in the H700 link object list")
+
+        target_rules = (worktree / "target/rg34xx_h700/rules.mk").read_text(encoding="utf-8")
+        target_init = root / "target/rg34xx_h700/init.c"
+        if "$(LOCAL_DIR)/init.o" not in target_rules:
+            raise RuntimeError("RG34XX H700 target rules do not link the target lifecycle object")
+        if not target_init.is_file():
+            raise RuntimeError("RG34XX H700 target lifecycle source is missing")
+        target_text = target_init.read_text(encoding="utf-8")
+        for hook in ("void target_early_init(void)", "void target_init(void)"):
+            if target_text.count(hook) != 1:
+                raise RuntimeError("RG34XX H700 target lifecycle source must define exactly one " + hook)
+        if "target/$(TARGET)/init.o" in platform_rules or "$(LOCAL_DIR)/init.o" in platform_rules:
+            raise RuntimeError("H700 target init object was incorrectly placed in platform rules")
+        summary.append("PASS target-lifecycle-hooks: target_early_init/target_init are supplied by the H700 target, not the MTK generic target")
 
         make_case(
             "no-memory-approval",
