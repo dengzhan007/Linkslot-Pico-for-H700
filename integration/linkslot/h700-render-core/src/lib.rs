@@ -206,7 +206,8 @@ impl<'a> SoftwareRenderer<'a> {
         };
         let Some(existing) = slot.as_ref() else { return Ok(false); };
         let filter = existing.filter;
-        let mut pixels = Vec::with_capacity(bytes);
+        let mut pixels = Vec::new();
+        pixels.try_reserve_exact(bytes).map_err(|_| RenderError::TextureTooLarge)?;
         pixels.extend_from_slice(&rgba[..bytes]);
         *slot = Some(Texture { width, height, rgba: pixels, filter });
         Ok(true)
