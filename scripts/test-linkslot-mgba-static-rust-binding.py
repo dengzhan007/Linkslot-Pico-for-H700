@@ -55,8 +55,8 @@ def main() -> None:
     if not all(p.is_file() for p in (cargo_file, lib_file, retro_file, module, stub)):
         raise RuntimeError("slot-retro source or mGBA static binding assets are missing")
     workspace = (source / "Cargo.toml").read_text(encoding="utf-8")
-    if 'version = "1.0.36"' not in workspace:
-        raise RuntimeError("expected immutable Linkslot 1.0.36 source snapshot")
+    if 'version = "1.0.45"' not in workspace:
+        raise RuntimeError("expected immutable Linkslot 1.0.45 source snapshot")
 
     cargo = cargo_file.read_text(encoding="utf-8")
     lib = lib_file.read_text(encoding="utf-8")
