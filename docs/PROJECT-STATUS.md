@@ -2,10 +2,10 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-24 11:51 UTC  
+**最后核对时间：** 2026-11-24 11:53 UTC  
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **工作分支：** `porting/linkslot-1.0.45-feasibility`  
-**本次状态刷新前的分支 HEAD：** `0cd337791b35f8d3433ace27b770291a81719bb6`  
+**本次状态刷新前的分支 HEAD：** `9bf0962ef938b2ab0e103386c1b78e02340ecafa`  
 **本轮最新代码验证提交：** `0437e37859eee40095d0210725a92910aa4783d6`（C ABI/Rust client）；最新工作包含 UI 接入点审计及文档更新。
 
 ## 1. 项目目标与固定约束
@@ -84,6 +84,7 @@
 - [H700 AArch32/AArch64 compile check #45387293421](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45387293421)：**成功**。包含 C Service ABI v1 状态布局 `_Static_assert`、host regressions 和 AArch64/AArch32 ARM/Thumb-2 compile。
 - [H700 boot audit tools #45387673284](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45387673284)：**成功**，覆盖当轮项目状态文档和报告工具检查。
 - [Linkslot LK Rust feasibility #45387540498](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45387540498)：最新一次全量 Linkslot feasibility workflow 在本次核对时仍为 **in progress**，head 为 `5a6f9949f6fd8945cd0a2a6697c5aeb73835a054`；它是更大范围 overlay/cross-build 回归，不改变 #45387192778 和 #45387293421 已通过的专项结果。
+- [H700 boot audit tools #45388092682](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45388092682)：**成功**，覆盖 CPU DVFS/UI 接入契约文档更新。新一轮文档提交触发的 boot audit 运行需以 Actions 最新页为准。
 - 初次 runtime-slices 运行 #45387187588 在仅提交 workspace manifest、Rust crate 源文件尚未提交的中间 commit 上失败（找不到 `slot-cpu-performance/src/lib.rs`）；完整 crate 提交后的 #45387192778 已通过，该中间态失败不代表最终 crate 测试失败。
 - [此前完整 Linkslot 1.0.45 feasibility #45381590503](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45381590503)：成功；这是旧的 69-step 综合基线，证明 host/cross-build 范围，不证明实机运行。
 - [CPU OPP policy 专项 #45381349400](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45381349400)：成功。
@@ -105,6 +106,8 @@
 
 1. **实现 H700 CPU service 的真实初始化/所有权路径**：由平台启动代码提供静态 service storage、通过已核实的 board profile 提供 OPP/limits；在 board-approved OPP 表缺失时保持未就绪，绝不使用合成表当成实机配置。
 2. 把 `slot-cpu-performance` 接入 Linkslot App/设置菜单；按专项文档 7.2 追加 QuickRow/QuickValue 并同步两种语言与 index parity tests，既有行索引不得移动。硬件未接入前只显示所选策略及“频率遥测不可用”，不显示伪实测 MHz。
+
+Linkslot 1.0.45 UI 已审查：`QuickRow::SYSTEM_SETTINGS` 当前 6 行，`QuickRow::ALL`/`QuickValue::ALL` 存在 index 兼容约束。新 CPU row/value 必须追加，不得重排既有 discriminant；`App::quick_value`、`change_setting`、双语 translation、icon/label/parent/page 以及 QuickRow parity tests 需在同一个 overlay 里原子升级。
 3. 增加 RG34XX 只读硬件 inventory：导出完整 live-FDT regulator 子树、SID 原始 speed-bin、thermal calibration、CPU rail 映射和当前 clock/PMIC 状态。优先使用 Linux/已有只读工具取证，不在 LK 侧猜地址。
 4. 证明 BL31→BL33 CPU1–CPU3 状态和安全的单核 invariant；审计 CPUX PLL parent-switch/lock/分频及 timer continuity。
 5. 只有前述证据闭合后，才实现 C HAL 只读 telemetry 与最终受控硬件 transition；升频先升压，降频先降频后降压，必须有 readback、超时、故障回滚、热 clamp、滞回和实机持续负载验收。
