@@ -54,15 +54,9 @@ def apply(source: Path, crate_root: Path) -> None:
     # The immutable checkout is changed only inside the CI workspace. Fail
     # rather than silently broadening the patch to any other upstream files.
     changed = run_git(source, "status", "--short", "--", "crates/slot-input", "crates/slot-model")
-    unexpected = []
-    for line in run_git(source, "status", "--short").splitlines():
-        changed_path = line[3:].strip()
-        if not (changed_path.startswith("crates/slot-input/") or
-                changed_path.startswith("crates/slot-model/")):
-            unexpected.append(line)
-    if unexpected:
-        raise RuntimeError("unexpected files changed while applying the business-crate overlay: "
-                           + "; ".join(unexpected))
+    if not changed:
+        raise RuntimeError("business-crate overlay produced no source changes")
+    run_git(source, "diff", "--check", "--", "crates/slot-input", "crates/slot-model")
     print("Applied H700 no_std business crates to the isolated Linkslot 1.0.36 checkout:")
     print(changed)
     print("The repository's upstream/linkslot branch is not modified by this host-only tool.")
