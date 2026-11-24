@@ -34,13 +34,14 @@
 ### A3. Linkslot LK runtime 与显示渲染边界
 
 - [x] 对照 Linkslot 1.0.36 原始 `device_app`、`Frontend`、`App`、`slot-gfx`、`slot-ui`、输入、音频与电源实现，确认 `device` feature 仍是 Linux/std 后端，不是 LK/no_std 运行模式。
-- [x] 确认现有 `Draw::{Rect,Tex,Turned,Game,Shot}` 已提供可复用的 CPU 绘制命令边界；但 `Compositor` 和 `Frontend` 目前仍具体绑定 OpenGL compositor，需要先抽出 renderer contract。
+- [x] 确认现有 `Draw::{Rect,Tex,Turned,Game,Shot}` 已提供可复用的 CPU 绘制命令边界；并在临时 Linkslot 源码补丁中抽出对象安全 `Renderer` trait。
 - [x] 制定 LK 软件 framebuffer 的分层方案：先实现 RGBA 软件 2D 基线，再逐步补屏幕滤镜；不依赖 LK 内的 Linux fbdev/EGL/GLES/Mali userspace。
 - [x] 记录 Rust 运行时边界和 R0–R6 可验收垂直切片，见 [Linkslot H700 LK runtime architecture](linkslot-h700-runtime-architecture.md)。
 - [x] 在 `integration/linkslot/h700-render-core` 建立独立 `no_std + alloc` 软件 rasterizer 首轮代码，覆盖 Rect/Tex/Turned/Game/Shot、裁剪、alpha、最近邻/双线性采样、RGBA/BGRA byte order；11 项 host regression test 已编写。该 crate 不修改 `upstream/linkslot`，也不映射物理 framebuffer。
 - [x] 运行 renderer 的 `cargo check` 与 11 项 `cargo test`；GitHub Actions run `45340553836` 全部通过。
-- [x] 新增隔离源补丁脚本：将 `h700-render-core` 加入临时 Linkslot 工作树，并让 `slot-gfx` 重新导出同一 `Draw/TexId` 类型；上游快照保持只读。该变更仍待 CI 的真实 Cargo check 验证。
-- [ ] 把真实 `Frontend` 从具体 OpenGL `Compositor` 依赖改为可注入 renderer backend，并实现等价的 LK 软件 Compositor；目前共享 Draw 类型还未打通完整前端绘制入口。
+- [x] 新增隔离源补丁脚本：将 `h700-render-core` 加入临时 Linkslot 工作树，并让 `slot-gfx` 重新导出同一 `Draw/TexId` 类型；上游快照保持只读。
+- [x] 让 GL `Compositor` 实现 `Renderer`，并将真实 `Frontend` 和 `CartFaces` 的绘制/纹理参数改为 `&mut dyn Renderer`；临时 Linkslot 的 `slot-gfx` 与完整 `slot` crate 均通过 Cargo check（Actions run `45345375995`）。
+- [ ] 实现 `slot-gfx::SoftwareCompositor`，用 `h700-render-core` 提供基础菜单和游戏画面；明确标注尚未支持的 GL 滤镜、边框、全屏旋转和帧缓冲双缓冲效果。
 - [ ] 将 framebuffer descriptor/scanout ownership、stride/像素格式与缓存维护审计单独关闭后，再连接 H700 显示 HAL。
 - [ ] 把 `slot-input` 与 `slot-model` 的纯逻辑整合进窄 no_std + alloc crate；不引入完整 Linux 应用依赖树。
 - [ ] 完成首个静态 UI → 本地 ROM → mGBA → 视频帧的 LK vertical slice；随后才接入输入、保存写入、音频/电源及网络服务。
