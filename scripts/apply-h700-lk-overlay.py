@@ -45,9 +45,9 @@ def patch_makefile(original: str) -> str:
     if original.count(project_include) != 1:
         raise RuntimeError("expected one project make include")
     early_toolchain = (
-        project_include + "\\n"
-        "ifeq ($(H700_BUILD),yes)\\n"
-        "TOOLCHAIN_PREFIX ?= arm-none-eabi-\\n"
+        project_include + "\n"
+        "ifeq ($(H700_BUILD),yes)\n"
+        "TOOLCHAIN_PREFIX ?= arm-none-eabi-\n"
         "endif"
     )
     original = original.replace(project_include, early_toolchain, 1)
@@ -269,7 +269,7 @@ def main() -> None:
         stderr=subprocess.STDOUT,
     )
     if check.returncode:
-        raise RuntimeError("generated overlay patch failed git apply --check:\\n" + check.stdout)
+        raise RuntimeError("generated overlay patch failed git apply --check:\n" + check.stdout)
     manifest = {
         "schema": "gammaos-lk-h700-overlay-v1",
         "source_repository": "TheGammaSqueeze/lk-mt6785",
