@@ -50,7 +50,41 @@ def patch_makefile(original: str) -> str:
         + old + "\n"
         "endif"
     )
-    return original.replace(old, new, 1)
+    patched = original.replace(old, new, 1)
+
+    old_tools = "\n".join((
+        "# default to no ccache",
+        "CCACHE ?=",
+        "TOOLCHAIN_PREFIX =gcc/bin/arm-linux-androideabi-",
+        "CC := $(CCACHE) $(TOOLCHAIN_PREFIX)gcc",
+        "#LD := $(TOOLCHAIN_PREFIX)ld",
+        "LD := $(TOOLCHAIN_PREFIX)ld.bfd",
+        "OBJDUMP := $(TOOLCHAIN_PREFIX)objdump",
+        "OBJCOPY := $(TOOLCHAIN_PREFIX)objcopy",
+        "CPPFILT := $(TOOLCHAIN_PREFIX)c++filt",
+        "SIZE := $(TOOLCHAIN_PREFIX)size",
+        "NM := $(TOOLCHAIN_PREFIX)nm",
+    ))
+    if patched.count(old_tools) != 1:
+        raise RuntimeError("unexpected pinned LK toolchain selection block")
+    new_tools = "\n".join((
+        "# default to no ccache",
+        "CCACHE ?=",
+        "ifeq ($(H700_BUILD),yes)",
+        "TOOLCHAIN_PREFIX ?= arm-none-eabi-",
+        "LD := $(TOOLCHAIN_PREFIX)ld",
+        "else",
+        "TOOLCHAIN_PREFIX =gcc/bin/arm-linux-androideabi-",
+        "LD := $(TOOLCHAIN_PREFIX)ld.bfd",
+        "endif",
+        "CC := $(CCACHE) $(TOOLCHAIN_PREFIX)gcc",
+        "OBJDUMP := $(TOOLCHAIN_PREFIX)objdump",
+        "OBJCOPY := $(TOOLCHAIN_PREFIX)objcopy",
+        "CPPFILT := $(TOOLCHAIN_PREFIX)c++filt",
+        "SIZE := $(TOOLCHAIN_PREFIX)size",
+        "NM := $(TOOLCHAIN_PREFIX)nm",
+    ))
+    return patched.replace(old_tools, new_tools, 1)
 
 
 def patch_dev_rules(original: str) -> str:
@@ -263,12 +297,14 @@ build; it is not a firmware image.
   __lk_vectors_start instead of resetting it to MEMBASE.
 - arch/arm/rules.mk: correct the Cortex-A53 branch compiler target from
   -mcpu=cortex-a9 to -mcpu=cortex-a53 with NEON/VFPv4 and softfp ABI flags.
+- makefile: use the arm-none-eabi toolchain by default for H700 while preserving the MTK Android EABI prefix for all non-H700 projects.
 - makefile: do not include the MediaTek platform/common stack when H700_BUILD=yes.
 - dev/rules.mk: do not pull in MediaTek video, LCM, GIC, modem communication or logo modules for H700.
 - target/rules.mk: do not compile the MediaTek-specific target/init.c for H700; keep only the generic weak display stubs.
 
 The H700 project must set H700_BUILD=yes before the top-level makefile loads
-these rules. It must add its own target/platform modules explicitly.
+these rules. It may override TOOLCHAIN_PREFIX, and must add its own
+target/platform modules explicitly.
 
 h700-bl33-overlay.patch can be applied to a fresh checkout of the pinned
 source. files/ contains the resulting replacement files. The generator never
