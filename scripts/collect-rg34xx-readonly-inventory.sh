@@ -254,6 +254,112 @@ fi
     fi
 } > "$OUTDIR/tee-ion-runtime.txt"
 
+# Capture read-only CPU performance and power telemetry. These are Linux
+# sysfs/debugfs readbacks only: this block never changes cpufreq policy,
+# regulator voltage, clocks, thermal trips, or NVMEM contents.
+{
+    echo "== CPU topology and online set =="
+    for path in /sys/devices/system/cpu/online /sys/devices/system/cpu/possible /sys/devices/system/cpu/present; do
+        if [ -r "$path" ]; then
+            echo "-- $path --"
+            cat "$path"
+        else
+            echo "NOT_READABLE_OR_ABSENT: $path"
+        fi
+    done
+
+    echo
+    echo "== per-CPU cpufreq policies =="
+    for node in /sys/devices/system/cpu/cpu[0-9]* /sys/devices/system/cpu/cpufreq/policy[0-9]*; do
+        [ -d "$node" ] || continue
+        echo "-- $node --"
+        for attr in affected_cpus related_cpus scaling_driver scaling_governor \
+                    scaling_available_governors scaling_available_frequencies \
+                    scaling_min_freq scaling_max_freq scaling_cur_freq \
+                    cpuinfo_min_freq cpuinfo_max_freq cpuinfo_cur_freq \
+                    cpuinfo_transition_latency bios_limit; do
+            if [ -r "$node/$attr" ]; then
+                echo "[$attr]"
+                cat "$node/$attr"
+            fi
+        done
+    done
+
+    echo
+    echo "== thermal zones and trip metadata =="
+    for node in /sys/class/thermal/thermal_zone[0-9]*; do
+        [ -d "$node" ] || continue
+        echo "-- $node --"
+        for attr in type temp mode policy; do
+            if [ -r "$node/$attr" ]; then
+                echo "[$attr]"
+                cat "$node/$attr"
+            fi
+        done
+        for attr in "$node"/trip_point_*_temp "$node"/trip_point_*_type; do
+            [ -r "$attr" ] || continue
+            echo "[$(basename "$attr")]"
+            cat "$attr"
+        done
+    done
+
+    echo
+    echo "== regulator readback =="
+    for node in /sys/class/regulator/regulator[0-9]*; do
+        [ -d "$node" ] || continue
+        echo "-- $node --"
+        for attr in name regulator_name state status type \
+                    microvolts voltage min_microvolts max_microvolts \
+                    num_users requested_microamps; do
+            if [ -r "$node/$attr" ]; then
+                echo "[$attr]"
+                cat "$node/$attr"
+            fi
+        done
+        if [ -e "$node/of_node" ] && command -v readlink >/dev/null 2>&1; then
+            echo "[of_node]"
+            readlink -f "$node/of_node" 2>/dev/null || true
+        fi
+    done
+
+    echo
+    echo "== regulator and clock debugfs summaries =="
+    for path in /sys/kernel/debug/regulator/regulator_summary \
+                /sys/kernel/debug/clk/clk_summary; do
+        if [ -r "$path" ]; then
+            echo "-- $path --"
+            cat "$path"
+        else
+            echo "NOT_READABLE_OR_ABSENT: $path"
+        fi
+    done
+
+    echo
+    echo "== NVMEM metadata only (raw fuse bytes are not read) =="
+    for node in /sys/bus/nvmem/devices/*; do
+        [ -d "$node" ] || continue
+        echo "-- $node --"
+        for attr in name size; do
+            if [ -r "$node/$attr" ]; then
+                echo "[$attr]"
+                cat "$node/$attr"
+            fi
+        done
+        if [ -e "$node/of_node" ] && command -v readlink >/dev/null 2>&1; then
+            echo "[of_node]"
+            readlink -f "$node/of_node" 2>/dev/null || true
+        fi
+    done
+
+    echo
+    echo "== CPU / regulator / thermal / clock kernel log lines =="
+    if command -v dmesg >/dev/null 2>&1; then
+        dmesg 2>/dev/null | grep -iE 'cpu|cpufreq|opp|axp2202|dcdc|regulator|thermal|temperature|avcc|sid|efuse|nvmem|cpu.?pll|cpu.?clk' || true
+    else
+        echo "NOT_PRESENT: dmesg utility"
+    fi
+} > "$OUTDIR/cpu-power-runtime.txt"
+
 # Capture physical CMA/memblock layout when the running kernel exposes it via
 # debugfs. These are reads only; do not touch the CMA alloc/free control files.
 {
