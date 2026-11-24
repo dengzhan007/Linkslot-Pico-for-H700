@@ -9,6 +9,7 @@ on:
       - "scripts/audit-linkslot-nostd.py"
       - "scripts/audit-lk-bl33-layout.py"
       - "scripts/apply-h700-lk-overlay.py"
+      - "scripts/test-h700-lk-overlay.py"
       - "scripts/audit-slot-i18n-nostd.py"
       - "scripts/audit-libretro-static-abi.py"
       - "scripts/build-mgba-aarch32-static.py"
@@ -109,6 +110,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y clang llvm lld cmake gcc-arm-linux-gnueabi g++-arm-linux-gnueabi libc6-dev-armel-cross gcc-arm-none-eabi libnewlib-arm-none-eabi libnewlib-dev libstdc++-arm-none-eabi-dev dosfstools mtools exfatprogs
+
+      - name: Compile/link actual GammaOS LK H700 BL33 overlay CRT0 and exception vectors
+        run: |
+          python3 scripts/test-h700-lk-overlay.py \
+            --lk-source .ci/lk-reference \
+            --overlay build/audit-work/linkslot-1.0.36/h700-lk-overlay \
+            --out build/audit-work/linkslot-1.0.36/h700-lk-overlay-build
 
       - name: Install pinned Rust toolchain and freestanding targets
         uses: dtolnay/rust-toolchain@1.96.0
