@@ -23,13 +23,13 @@ The RG34XX live inventory identifies four Cortex-A53 CPUs and **AXP2202** as the
 
 Two independently maintained RG34XX-specific device trees (Knulli and MustardOS) map `cpu@0`'s `cpu-supply` phandle to AXP2202 **DCDC1**. In those references, DCDC1 is named `axp2202-dcdc1`, has a 500000–1540000 µV range, 250 µs ramp delay and 1000 µs enable-ramp delay. This is strong board-specific cross-check evidence, but it is not a live regulator readback for this exact unit/revision.
 
-The first live inventory archive's `live-fdt.json` is a reduced summary and does not contain CPU nodes or the full regulator subtree. The FDT inspector now resolves CPU `cpu-supply`, `operating-points-v2`, referenced regulator nodes, NVMEM cell phandles/offset metadata and thermal-sensor phandles including provider arguments. The device-side collector also creates `cpu-power-runtime.txt` from read-only Linux CPUFreq, thermal, regulator and clock interfaces. **The 2026-11-22 archived report predates these additions and has not yet been regenerated**; DCDC1 remains the leading candidate, not a confirmed live CPU-rail result.
+The first 2026-11-22 inventory's `live-fdt.json` was a reduced summary and did not contain CPU nodes or the full regulator subtree. The updated FDT inspector now resolves CPU `cpu-supply`, `operating-points-v2`, referenced regulator nodes, NVMEM cell phandles/offset metadata and thermal-sensor phandles including provider arguments. The 2026-11-25 read-only capture [reports/rg34xx-inventory-20261125-cpux](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261125-cpux) now resolves CPU0 `cpu-supply` phandle `0x4f` to AXP2202 DCDC1, and Linux regulator debugfs reports `cpu0 @1160mV`. This confirms the CPU rail mapping in the captured live FDT/runtime pairing; it is still Linux regulator-framework evidence, not a raw PMIC I²C register read at BL33 entry or a guarantee across all board revisions.
 
 The new FDT report is intentionally explicit that `opp-hz`/`opp-microvolt` values are static DT declarations. They do not prove the currently selected OPP, PMIC voltage readback, silicon bin, regulator enable state or safety of applying the points. The runtime collector reads only the two exact SID cells declared by the pinned RG34XX-family DTS (speed offset 0, 2 bytes; thermal calibration offset 0x14, 8 bytes), and only after the NVMEM provider `of_node` exactly matches `sunxi-sid-ng@03006000`. The pinned provider driver maps its NVMEM view to SID hardware window offset `0x200`; the collector uses NVMEM-relative cell offsets, not guessed MMIO. It never dumps the complete NVMEM region.
 
 The matching Allwinner AXP2202 U-Boot reference driver describes DCDC1 voltage selector register `0x83` (mask `0x7f`), the DCDC enable register `0x80` (bit 0), 10 mV steps up to 1.2 V and 20 mV steps above 1.2 V, with a declared 0.5–1.54 V control range. These are register-format and driver-range references only; they do not authorize writes or establish the actual regulator voltage left by the stock boot chain. Never copy AXP717 descriptors or regulator limits from RG35XX-2024 into the RG34XX board profile.
 
-The same RG34XX device-tree reference exposes the SID speed cell at `/sunxi-sid-ng@03006000/speed@00` (offset 0, 2 bytes) and thermal calibration cell at `/sunxi-sid-ng@03006000/calib@14` (offset `0x14`, 8 bytes). The device's current kernel log reports the H700 thermal sensor at `0x05070400` with **avcc is not calibrated**. A temperature sensor exists, but current calibration evidence is insufficient for closed-loop automatic DVFS.
+The same RG34XX device-tree reference exposes the SID speed cell at `/sunxi-sid-ng@03006000/speed@00` (offset 0, 2 bytes) and thermal calibration cell at `/sunxi-sid-ng@03006000/calib@14` (offset `0x14`, 8 bytes). The 2026-11-25 bounded capture reads speed raw `0x6c00` and thermal bytes `181113ab191b16bb`; mainline diagnostic classification calls `0x6c00` candidate bin 5, but the pinned vendor literal decoder does not match it, generic SoC identity is unavailable, and OPP authorization stays `not_approved`. The kernel log reports the H700 thermal sensor at `0x05070400` with **avcc is not calibrated**. The calibration bytes exist, but the driver did not accept AVCC calibration; temperatures remain diagnostic only and cannot drive closed-loop automatic DVFS. Full analysis: [RG34XX CPUX live read-only audit](rg34xx-cpux-live-audit-2026-11-25.md).
 
 The current H700 handoff audit also leaves CPU1–CPU3 state unknown at BL31→BL33. CPU frequency is a shared cluster clock domain, not a per-Linkslot-core setting. Changing the shared CPU clock while an unaccounted secondary PE is running is unsafe. Keep the CPU service write path disabled until the single-core handoff invariant is positively proven.
 
@@ -68,7 +68,7 @@ This classifier does not change the C policy service, supply an H700 board profi
 - The mainline H616 CPU OPP table includes points up to 1.512 GHz with speed-bin-specific voltages. Those values are useful for comparing the Linux driver model only; they are not a release OPP grid for this RG34XX.
 - The RG34XX DTS DCDC1 range/ramp metadata and AXP2202 selector register definitions are documented in section 2 above. The AXP717-based RG35XX-2024 1.16 V configuration is not the RG34XX voltage policy.
 
-A pinned vendor `sun50iw9` clock-driver audit now supplements the earlier mainline H616-family reference. It identifies source-level `PLL_CPU` offset `0x0000`, `CPU_CFG` offset `0x0500`, the `pll_periph0` alternate-parent switch before PLL rate changes, the post-change restore to `pll_cpu`, and a new-mode PLL-lock polling path. It also finds a critical source comment that PLL enable bit 31 is boot-enabled and must not be changed dynamically, while bit 27 is used for PLL output gating. The lock-status bit is compile-configuration dependent (`LOCKBIT(x)` differs for EVB and non-EVB builds), so it cannot be hardcoded from a generic source review. The vendor CPU factor table is explicitly marked incorrect and is not an OPP source. See [H700 CPUX / sun50iw9 clock-source audit](h700-cpux-clock-source-audit.md) for pinned file hashes, sequence details and remaining gates. This is still source-level evidence only; exact RG34XX runtime mapping, register readback, `pll_periph0` rate, timer continuity and secondary-core state remain unverified. No raw MMIO implementation is approved.
+A pinned vendor `sun50iw9` clock-driver audit now supplements the earlier mainline H616-family reference. It identifies source-level `PLL_CPU` offset `0x0000`, `CPU_CFG` offset `0x0500`, the `pll_periph0` alternate-parent switch before PLL rate changes, the post-change restore to `pll_cpu`, and a new-mode PLL-lock polling path. It also finds a critical source comment that PLL enable bit 31 is boot-enabled and must not be changed dynamically, while bit 27 is used for PLL output gating. The lock-status bit is compile-configuration dependent (`LOCKBIT(x)` differs for EVB and non-EVB builds), so it cannot be hardcoded from a generic source review. The vendor CPU factor table is explicitly marked incorrect and is not an OPP source. See [H700 CPUX / sun50iw9 clock-source audit](h700-cpux-clock-source-audit.md) for pinned file hashes, sequence details and remaining gates. The 2026-11-25 Linux snapshot now observes `pll_cpu → cpu`, `pll_periph0=600 MHz`, but this is framework clock-summary evidence, not direct CCU readback or the BL33-entry state. Timer continuity and secondary-core state remain unverified. No raw MMIO implementation is approved.
 
 Source references:
 - https://github.com/knulli-cfw/knulli-linux/blob/57afa662009641d181f57241bcc480119b131530/package/boot/uboot-h700/rg34xx/boot_package/rg34xx.dts
@@ -210,11 +210,11 @@ The H700 scaffold still has **no hardware DVFS driver and no register-write path
 
 Hardware status remains:
 - AXP2202 on I²C-5 / `0x34` is confirmed by the live Linux log.
-- DCDC1 as RG34XX CPU supply is corroborated by two dedicated RG34XX DTS references, but the current live-FDT summary does not yet provide the matching regulator phandle tree.
-- The H700 SID speed cell location and generic Linux decoding are known from the reference DTS/driver, but the raw value and correct silicon revision are not read from the target unit.
-- The CPUX PLL and mux offsets are known from mainline H616 CCU source, but the exact H700 register access/clock switching sequence is not implemented.
-- The H700 thermal sensor is present, but current logs say AVCC is not calibrated.
-- CPU1–CPU3 handoff state is still unknown at BL31→BL33.
+- CPU0's live-FDT `cpu-supply` phandle `0x4f` is confirmed to resolve to AXP2202 DCDC1. Linux regulator debugfs identifies the `cpu0` consumer and reports 1160 mV in the 2026-11-25 sample; this is framework state, not raw PMIC register readback.
+- The SID speed cell is read from the exact bounded NVMEM range: raw `0x6c00`. Mainline reference decode suggests candidate bin 5, but vendor literal matching fails, generic SoC revision is unavailable and `opp_authorization` remains `not_approved`.
+- The pinned `sun50iw9` vendor-source audit provides CPUX register offsets and a candidate parent-switch/lock sequence. The live Linux clock summary confirms `pll_cpu → cpu` and observes `pll_periph0=600 MHz`, but cpufreq and clock-summary rate values diverge. Exact BL33 CCU readback/clock state remains unavailable.
+- The H700 thermal sensor is present; raw calibration fields exist, but the kernel says `AVCC is not calibrated`. Current temperature values are diagnostic, not calibrated control input.
+- Linux has CPUs 0–3 online in one shared cpufreq policy. CPU1–CPU3 state at BL31→BL33 remains unknown.
 
 Therefore:
 - the **mode model, pure C policy selector, policy-only C service ABI v1 and typed Rust `no_std` client are implemented and host/architecture CI-validated** (see `docs/PROJECT-STATUS.md` for run links);
@@ -223,7 +223,7 @@ Therefore:
 
 
 
-The H700 scaffold does not yet contain a working CPU DVFS driver. The existing runtime has a monotonic clock ABI and a single-core cooperative event loop, but there is no approved CPU OPP table, no verified AXP2202 CPU-supply mapping, no H700 CPU PLL transition implementation, no thermal policy, and no secondary-core handoff proof.
+The H700 scaffold does not yet contain a working CPU DVFS driver. The existing runtime has a monotonic clock ABI and a single-core cooperative event loop. The live inventory now confirms the CPU0 DCDC1 rail mapping and the Linux CPU clock-parent relationship, but there is no approved RG34XX OPP table, no direct BL33-entry PMIC/CCU readback, no verified thermal calibration, no CPU PLL transition implementation, and no secondary-core handoff proof.
 
 Therefore:
 - the **architecture and UI capability can be prepared now**;
@@ -244,5 +244,18 @@ Important constraints now explicit in the design record:
 - Do not switch to `pll_periph0` until its actual rate, divider tree and timer continuity are verified on the target.
 
 This audit does not change the policy-only service ABI, runtime owner or QuickRow. Actual DVFS remains unavailable; no PLL/CCU/PMIC writes were added.
+
+### 8.1 Live RG34XX inventory result (2026-11-25)
+
+The full evidence and caveats are recorded in [RG34XX CPUX live read-only audit](rg34xx-cpux-live-audit-2026-11-25.md):
+
+- Linux reports CPU0–CPU3 online, with all four in the same cpufreq policy. Available frequencies are 480–1512 MHz, but this list does not itself prove the approved OPP subset.
+- The live FDT maps CPU0's supply to AXP2202 DCDC1; the regulator framework reports the CPU0 consumer at 1160 mV in this sample. This is materially stronger than the earlier two-DTS cross-check but is not direct PMIC register evidence.
+- The Linux clock summary reports a current CPU parent chain of pll_cpu → cpu → cpuapb, with pll_cpu/cpu=1512 MHz, cpuapb=378 MHz, axi=756 MHz; pll_periph0 is a separate 600 MHz tree. cpufreq reports 1416 MHz on per-CPU nodes and 1320 MHz on a later policy0 read, so the physical CPU rate is not yet settled.
+- The static OPP table has voltage/speed-mask variants; a 1416 MHz / 1160 mV variant numerically matches the regulator sample, but SID raw 0x6c00 is only mainline candidate bin 5 and does not match the pinned vendor literal decoder. Do not turn this correlation into an approved OPP.
+- Thermal calibration raw bytes are present, but the kernel explicitly rejects AVCC calibration. The temperature telemetry is not certified for Auto/Boost or closed-loop control.
+- Linux later reports all four cores online; this does not prove the earlier BL31→BL33 secondary-core state. The shared PLL write gate remains closed.
+
+The Linux capture confirms useful runtime properties but does not authorize any PLL/CCU/PMIC writes.
 
 The read-only inventory collector now also emits a focused, indentation-preserving excerpt for `pll_cpu`, `pll_periph0`, `cpux` and `cpu` entries from Linux `/sys/kernel/debug/clk/clk_summary`. This can make Linux clock-tree/rate evidence easier to review when debugfs exports it, but it is not a direct `PLL_CPU`/`CPU_CFG` MMIO read and does not prove the BL33-entry clock state. Its static safety regression is wired into `.github/workflows/h700-arch-check.yml`; the new push run has not yet been confirmed.
