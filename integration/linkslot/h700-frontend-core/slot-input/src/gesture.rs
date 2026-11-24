@@ -430,6 +430,7 @@ fn chord(b: Btn) -> Option<(u16, Action)> {
 #[cfg(test)]
 mod h700_no_std_contract_tests {
     use super::*;
+    use alloc::vec;
 
     #[test]
     fn menu_press_and_hold_keep_linkslot_actions() {
