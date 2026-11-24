@@ -1,4 +1,4 @@
-name: H700 AArch64 compile check
+name: H700 AArch32/AArch64 compile check
 
 on:
   push:
@@ -69,7 +69,7 @@ jobs:
           sh scripts/test-h700-fat-vfs-backend.sh
           sh scripts/test-h700-sdc0-fat-vfs-bootstrap.sh
 
-  compile-aarch64-objects:
+  compile-freestanding-objects:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -80,5 +80,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang llvm
 
-      - name: Compile freestanding AArch64 objects
-        run: bash scripts/build-h700-objects.sh
+      - name: Compile freestanding AArch64 H700 objects
+        run: H700_ARCH=aarch64 bash scripts/build-h700-objects.sh
+
+      - name: Compile freestanding AArch32 Cortex-A53 H700 objects
+        run: H700_ARCH=aarch32 bash scripts/build-h700-objects.sh
