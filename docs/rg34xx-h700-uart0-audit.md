@@ -62,6 +62,43 @@ The exact source selection/rate and whether it is already enabled at the
 vendor monitor-to-BL33 handoff have not been established from the current
 RG34XX live inventory.
 
+## UART IP register layout and inherited-state early console
+
+The pinned `sun50iw9p1` vendor Linux driver in `qiaoweibiao/T507_Kernel`
+provides an additional IP-level reference. Its register header identifies:
+
+| Register | Offset |
+|---|---:|
+| RBR / THR / DLL | 0x00 |
+| DLH / IER | 0x04 |
+| IIR / FCR | 0x08 |
+| LCR | 0x0C |
+| LSR | 0x14 |
+| USR | 0x7C |
+| TFL / RFL | 0x80 / 0x84 |
+
+The same driver's early-console callback polls `USR.TFNF` (bit 1, transmit
+FIFO not full) and writes the next byte to `THR` at offset 0x00. That path
+does not reprogram the CCU or PH0/PH1 pinmux. It assumes the firmware has
+already configured a working UART and only supplies the mapped base address.
+
+This makes an inherited-state, polling-only LK console a reasonable next
+candidate: read the current UART state, then write only THR when USR.TFNF is
+set. It must not reset the peripheral, alter LCR/DLL/DLH, toggle the UART
+clock gate/reset, or change PH0/PH1 mux. The actual handoff state and the
+whether the UART continues clocking at BL33 entry are still unverified, so
+even this minimal console remains a candidate rather than an enabled driver.
+
+The vendor source uses a 24 MHz `uartclk` in its non-EVB build branch; its
+EVB branch derives the clock from clock providers and APB2. The device's
+runtime bootargs only prove the requested Linux baud of 115200, not the
+actual UART input clock or divisor at BL33 handoff. Do not infer a fixed
+divisor from the source's fallback branch.
+
+Sources:
+- [sun50iw9p1 vendor UART register definitions](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/tty/serial/sunxi-uart.h)
+- [sun50iw9p1 vendor UART driver and inherited-state early console](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/tty/serial/sunxi-uart.c)
+
 ## Safe next implementation boundary
 
 The evidence supports treating UART0 as the first candidate for early
