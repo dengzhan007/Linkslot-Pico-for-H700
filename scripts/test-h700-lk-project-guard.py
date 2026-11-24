@@ -114,6 +114,10 @@ def main() -> None:
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
 
+        platform_rules = (worktree / "platform/h700/rules.mk").read_text(encoding="utf-8")
+        if "LINKER_SCRIPT += $(BUILDDIR)/system-onesegment.ld" not in platform_rules:
+            raise RuntimeError("H700 platform does not assign the generated one-segment linker script")
+
         make_case(
             "no-memory-approval",
             [
@@ -188,6 +192,32 @@ def main() -> None:
             None,
             dry_run=True,
         )
+
+        linker_var_command = [
+            "make",
+            "--no-print-directory",
+            "-f",
+            "makefile",
+            "PROJECT=rg34xx_h700",
+            "H700_MEMORY_LAYOUT_APPROVED=yes",
+            "H700_MEMBASE=0x12340000",
+            "H700_MEMSIZE=0x00010000",
+            "--eval=print-h700-linker: ; @printf '%s\\n' '$(LINKER_SCRIPT)'",
+            "print-h700-linker",
+        ]
+        linker_var_result = run(linker_var_command, cwd=worktree)
+        expected_linker = "./build-rg34xx_h700/system-onesegment.ld"
+        if (
+            linker_var_result.returncode != 0
+            or expected_linker not in linker_var_result.stdout.splitlines()
+        ):
+            raise RuntimeError(
+                "H700 linker-script variable is not wired to the generated LK script:\\n"
+                + linker_var_result.stdout[-6000:]
+            )
+        if (worktree / "build-rg34xx_h700").exists():
+            raise RuntimeError("linker variable probe unexpectedly created a build directory")
+        summary.append("PASS linker-script-variable: resolves to the generated one-segment script")
 
         report = [
             "# RG34XX H700 LK project guard",

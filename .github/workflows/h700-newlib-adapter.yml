@@ -26,7 +26,7 @@ concurrency:
 jobs:
   adapter:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - name: Checkout feature branch
         uses: actions/checkout@v4
@@ -41,8 +41,12 @@ jobs:
 
       - name: Install arm-none-eabi/newlib toolchain
         run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi libnewlib-dev
+          export DEBIAN_FRONTEND=noninteractive
+          sudo timeout --signal=TERM --kill-after=30s 300s env DEBIAN_FRONTEND=noninteractive \
+            apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=45 -o Acquire::https::Timeout=45 update
+          sudo timeout --signal=TERM --kill-after=30s 1200s env DEBIAN_FRONTEND=noninteractive \
+            apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=45 -o Acquire::https::Timeout=45 \
+              install -y --no-install-recommends gcc-arm-none-eabi libnewlib-arm-none-eabi libnewlib-dev
 
       - name: Test host behavior and compile AArch32 adapter/LK binding
         run: |
