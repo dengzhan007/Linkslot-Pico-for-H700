@@ -124,9 +124,9 @@ jobs:
 
       - name: Test RG34XX H700 LK project and memory-layout fail-closed gate
         run: |
-          python3 scripts/test-h700-lk-project-guard.py \\
-            --lk-source .ci/lk-reference \\
-            --overlay build/audit-work/linkslot-1.0.36/h700-lk-overlay \\
+          python3 scripts/test-h700-lk-project-guard.py \
+            --lk-source .ci/lk-reference \
+            --overlay build/audit-work/linkslot-1.0.36/h700-lk-overlay \
             --out build/audit-work/linkslot-1.0.36/h700-lk-project-guard
 
       - name: Install pinned Rust toolchain and freestanding targets
