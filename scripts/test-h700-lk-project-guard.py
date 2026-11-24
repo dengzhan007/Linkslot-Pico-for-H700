@@ -118,6 +118,20 @@ def main() -> None:
         if "LINKER_SCRIPT += $(BUILDDIR)/system-onesegment.ld" not in platform_rules:
             raise RuntimeError("H700 platform does not assign the generated one-segment linker script")
 
+        cpu_objects = (
+            "power/h700_cpu_performance_policy.o",
+            "power/h700_cpu_performance_service.o",
+            "power/h700_cpu_performance_runtime.o",
+        )
+        for object_name in cpu_objects:
+            object_entry = f"$(LOCAL_DIR)/{object_name}"
+            if object_entry not in platform_rules:
+                raise RuntimeError("H700 platform does not link CPU service object: " + object_entry)
+            source_path = root / "platform/h700" / Path(object_name).with_suffix(".c")
+            if not source_path.is_file():
+                raise RuntimeError("H700 CPU service object has no source file: " + str(source_path))
+        summary.append("PASS cpu-performance-objects: policy, ABI service and static runtime owner are in the H700 link object list")
+
         make_case(
             "no-memory-approval",
             [
