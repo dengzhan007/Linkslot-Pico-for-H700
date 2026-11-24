@@ -38,7 +38,7 @@
 - [x] 制定 LK 软件 framebuffer 的分层方案：先实现 RGBA 软件 2D 基线，再逐步补屏幕滤镜；不依赖 LK 内的 Linux fbdev/EGL/GLES/Mali userspace。
 - [x] 记录 Rust 运行时边界和 R0–R6 可验收垂直切片，见 [Linkslot H700 LK runtime architecture](linkslot-h700-runtime-architecture.md)。
 - [x] 在 `integration/linkslot/h700-render-core` 建立独立 `no_std + alloc` 软件 rasterizer 首轮代码，覆盖 Rect/Tex/Turned/Game/Shot、裁剪、alpha、最近邻/双线性采样、RGBA/BGRA byte order；11 项 host regression test 已编写。该 crate 不修改 `upstream/linkslot`，也不映射物理 framebuffer。
-- [ ] 运行 renderer 的 `cargo check` 与 9 项 `cargo test` 并取得 Actions 成功结果；当前代码尚无本轮 CI 执行结果，不能标记测试通过。
+- [x] 运行 renderer 的 `cargo check` 与 11 项 `cargo test`；GitHub Actions run `45340553836` 全部通过。
 - [x] 新增隔离源补丁脚本：将 `h700-render-core` 加入临时 Linkslot 工作树，并让 `slot-gfx` 重新导出同一 `Draw/TexId` 类型；上游快照保持只读。该变更仍待 CI 的真实 Cargo check 验证。
 - [ ] 把真实 `Frontend` 从具体 OpenGL `Compositor` 依赖改为可注入 renderer backend，并实现等价的 LK 软件 Compositor；目前共享 Draw 类型还未打通完整前端绘制入口。
 - [ ] 将 framebuffer descriptor/scanout ownership、stride/像素格式与缓存维护审计单独关闭后，再连接 H700 显示 HAL。
