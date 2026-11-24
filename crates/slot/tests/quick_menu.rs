@@ -5,6 +5,7 @@ use common::{
     CLOCK_IS_SET,
 };
 use slot::app::{App, KeyboardPurpose, Phase, WifiUi};
+use slot::cart_transfer::TransferMode;
 use slot_input::{Action, Btn};
 use slot_store::{read_slot_state, write_slot_state, Platform, Recent, ResumeKind, Shader, SlotState};
 use slot_ui::{
@@ -116,6 +117,89 @@ fn cart_transfer_opens_the_matching_choices() {
     );
     press(&mut a, Btn::B);
     assert!(a.utility_text().is_none(), "B left the transfer menu open");
+}
+
+#[test]
+fn the_transfer_room_names_the_side_while_matching() {
+    let (_d, mut a, _) = on_carousel();
+    open_at(&mut a, QuickRow::CartTransfer);
+    press(&mut a, Btn::A);
+    press(&mut a, Btn::A); // 创建匹配
+    let (title, _, _) = a.utility_text().expect("no host matching panel");
+    assert_eq!(title, "卡带传输模式 · 主机");
+    press(&mut a, Btn::B);
+
+    open_at(&mut a, QuickRow::CartTransfer);
+    press(&mut a, Btn::A);
+    press(&mut a, Btn::Down); // 加入匹配
+    press(&mut a, Btn::A);
+    let (title, _, _) = a.utility_text().expect("no joiner matching panel");
+    assert_eq!(title, "卡带传输模式 · 副机");
+    press(&mut a, Btn::B);
+}
+
+#[test]
+fn y_opens_the_transfer_content_panel() {
+    let (_d, mut a, _) = on_carousel();
+    open_at(&mut a, QuickRow::CartTransfer);
+    press(&mut a, Btn::A);
+
+    press(&mut a, Btn::Y);
+    let (title, _, selected) = a.utility_text().expect("no content panel");
+    assert_eq!(title, "传输内容");
+    assert_eq!(selected, 0, "the cursor did not start on 仅卡带");
+    assert_eq!(a.transfer_content_menu(), Some(0));
+
+    press(&mut a, Btn::Down);
+    assert_eq!(a.transfer_content_menu(), Some(1));
+    press(&mut a, Btn::A);
+
+    assert!(a.transfer_content_menu().is_none(), "A left the panel open");
+    assert_eq!(a.transfer_content(), TransferMode::SaveOnly);
+    let (title, _, _) = a.utility_text().expect("not back on the transfer menu");
+    assert_eq!(title, "卡带传输模式");
+}
+
+#[test]
+fn the_content_choice_is_written_to_slot_state() {
+    let (d, mut a, _) = on_carousel();
+    open_at(&mut a, QuickRow::CartTransfer);
+    press(&mut a, Btn::A);
+    press(&mut a, Btn::Y);
+    press(&mut a, Btn::Down);
+    press(&mut a, Btn::Down);
+    press(&mut a, Btn::A);
+
+    assert_eq!(a.transfer_content(), TransferMode::All);
+    assert_eq!(read_slot_state(d.path()).transfer_content, 2);
+}
+
+#[test]
+fn y_is_ignored_while_matching() {
+    let (_d, mut a, _) = on_carousel();
+    open_at(&mut a, QuickRow::CartTransfer);
+    press(&mut a, Btn::A);
+    press(&mut a, Btn::A); // 创建匹配: the room is matching, not on the shelf
+
+    press(&mut a, Btn::Y);
+    assert!(
+        a.transfer_content_menu().is_none(),
+        "Y opened the content panel while matching"
+    );
+}
+
+#[test]
+fn the_content_panel_closes_without_changing_the_choice() {
+    let (_d, mut a, _) = on_carousel();
+    let before = a.transfer_content();
+    open_at(&mut a, QuickRow::CartTransfer);
+    press(&mut a, Btn::A);
+    press(&mut a, Btn::Y);
+    press(&mut a, Btn::Down);
+    press(&mut a, Btn::B);
+
+    assert!(a.transfer_content_menu().is_none(), "B left the panel open");
+    assert_eq!(a.transfer_content(), before);
 }
 
 #[test]

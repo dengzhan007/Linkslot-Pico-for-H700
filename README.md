@@ -16,12 +16,16 @@ FC / SFC / MD 机种、Web 管理端与云存档同步（`linkSlot` CLI）。
 |---|---|
 | 设备 | Anbernic H700 系（aarch64 Linux，glibc ≤ 2.31） |
 | 机种 | GBA / GB / GBC / FC(NES) / SFC(SNES) / MD(Genesis) |
-| 核心 | mGBA、gpSP、fceumm、**snes9x**、genesis_plus_gx（SFC 默认 snes9x；可选 supafaust 需自备） |
+| 核心 | mGBA、gpSP、fceumm、**snes9x**、genesis_plus_gx（SFC 默认 snes9x；可选 supafaust / nestopia / armGBA 以 LSP 扩展包安装） |
 | 语言 | 简体中文、English |
 
 > **SFC 说明**：SFC 默认使用随包分发的 **snes9x**（GPL-2.0，随包附对应源码）。
 > 可选的 `supafaust_libretro.so` 因许可证与 GLIBC 兼容性原因不随包分发；把它放入
 > `System/linkSlot/cores/supafaust/` 后会自动出现在核心选择器里。
+>
+> **GBA 第三核心**：`armGBA` 通过 `linkslot-pack-armgba-v1.0.0.lsp` 安装，是 GBA
+> 的第三个可选核心（AArch64 重编译器，GPL-2.0）。它不接 linkSlot 的联机，联机请
+> 继续用 mGBA / gpSP。
 
 ## 安装
 

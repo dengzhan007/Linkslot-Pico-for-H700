@@ -47,7 +47,7 @@ mod toast;
 pub use backdrop::{
     bezel_face, collection_overlay_face, collection_plate_face, draw_backdrop,
     favorite_star_face, favorite_stars_face, shelf_backdrop_face, slot_plate_from_art, slot_plate_from_art_inset, wallpaper_face, CollectionKind, SLOT_PLATE_H,
-    SLOT_PLATE_W,
+    SLOT_PLATE_W, FAVORITE_STAR_INK_RATIO,
 };
 pub use barcode::{code39, CODE39_NARROW, CODE39_WIDE};
 pub use battery::{draw_gauge, gauge_width, BOLT_PX, GAUGE_H, GAUGE_W, WALL};
@@ -56,13 +56,15 @@ pub use board::{
     lid_from, lid_from_for, lift_of, network_chip_face, network_chip_face_scaled, network_chip_face_scaled_cover,
     network_chip_face_scaled_marked, network_chip_face_scaled_unlit, network_spot, on_board, on_board_for, padded, rom_marking, rom_marking_face, shelf_cart, shelf_cart_at,
     NETWORK_H, NETWORK_U, NETWORK_V, NETWORK_W,
-    chip_along, multi_core_slot, single_core_spot, slide_of, slide_up_for, SFC_SLOT_PITCH, socket_face, Placed, BOARD_H, BOARD_W, BOARD_X, BOARD_Y, CAVITIES,
+    chip_along, chip_highlight_face, chip_place, core_chip, core_slot, multi_core_slot, running_badge_face, selection_caret_face, selection_glow_face, single_core_spot, slide_of, slide_up_for, SFC_SLOT_PITCH, socket_face, Placed, BOARD_H, BOARD_W, BOARD_X, BOARD_Y, CAVITIES,
     CHIP_H, CHIP_TIP, CHIP_U, CHIP_V, CHIP_W, HOP_LIFT, LID_TURN, ROM_H, ROM_W, ROM_X, ROM_Y,
     SHADOW_H, SHADOW_W, SLIDE_SHARE, SLIDE_UP, SOCKET_H, SOCKET_U, SOCKET_V, SOCKET_W, TURN_PAD,
+    TRAY_CHIP_U, TRAY_CHIP_V, TRAY_PLATE_H, TRAY_PLATE_U, TRAY_PLATE_V, TRAY_PLATE_W, TRAY_SOCKET_U, TRAY_SOCKET_V,
 };
 pub use cart::{
     cart_art_box, cart_box, cart_face, cart_face_with, cart_shadow, clean_label, fc_label_panel,
-    gb_cart_shadow, gb_label_panel, gb_shell_of, label_colour, label_panel, label_size, label_tags,
+    gb_cart_shadow, gb_label_panel, gb_shell_of, label_colour, label_panel, label_rect, label_size,
+    label_tags,
     label_text, labelled_cart_face, labelled_cart_face_with_sticker, labelled_cart_shadow,
     sync_cart_face_with_sticker, SYNC_SHELL, front_size, fit_front,
     seated_box, CartFace, CartSticker, CART_H, CART_W,

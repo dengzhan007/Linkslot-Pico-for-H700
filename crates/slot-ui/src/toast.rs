@@ -14,6 +14,12 @@ pub enum Toast {
     StateLoaded,
     NeedsGpsp,
     NoLink,
+    /// The selected core (armGBA) has no linkslot-compatible link.
+    CoreNoLink,
+    /// The extension core disappeared while the picker was open.
+    CoreMissing,
+    /// An extension pack was installed/removed through the Web page.
+    PacksChanged,
     LinkEnded,
     ColourOn,
     ColourOff,
@@ -72,11 +78,14 @@ pub enum Toast {
 }
 
 impl Toast {
-    const FIXED: [Toast; 46] = [
+    const FIXED: [Toast; 49] = [
         Toast::StateSaved,
         Toast::StateLoaded,
         Toast::NeedsGpsp,
         Toast::NoLink,
+        Toast::CoreNoLink,
+        Toast::CoreMissing,
+        Toast::PacksChanged,
         Toast::LinkEnded,
         Toast::ColourOn,
         Toast::ColourOff,
@@ -165,6 +174,9 @@ impl Toast {
             Toast::StateLoaded => slot_i18n::t(lang, "device.toast.state_loaded"),
             Toast::NeedsGpsp => slot_i18n::t(lang, "device.toast.needs_gpsp"),
             Toast::NoLink => slot_i18n::t(lang, "device.toast.no_link"),
+            Toast::CoreNoLink => slot_i18n::t(lang, "device.toast.core_no_link"),
+            Toast::CoreMissing => slot_i18n::t(lang, "device.toast.core_missing"),
+            Toast::PacksChanged => slot_i18n::t(lang, "device.toast.packs_changed"),
             Toast::LinkEnded => slot_i18n::t(lang, "device.toast.link_ended"),
             Toast::ColourOn => slot_i18n::t(lang, "device.toast.colour_on"),
             Toast::ColourOff => slot_i18n::t(lang, "device.toast.colour_off"),

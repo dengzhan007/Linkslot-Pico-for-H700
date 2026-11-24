@@ -139,6 +139,8 @@ struct Shared {
     resume_refused: AtomicBool,
     sav_refused: AtomicBool,
     link_lost: AtomicBool,
+    /// One end lost frame lockstep and asked both ends to re-arm the cable.
+    link_resync: AtomicBool,
     linked: AtomicU64,
     peer_ended: AtomicBool,
     bios_mismatch: AtomicBool,
@@ -248,6 +250,7 @@ impl EmuHandle {
             resume_refused: AtomicBool::new(false),
             sav_refused: AtomicBool::new(false),
             link_lost: AtomicBool::new(false),
+            link_resync: AtomicBool::new(false),
             linked: AtomicU64::new(0),
             peer_ended: AtomicBool::new(false),
             bios_mismatch: AtomicBool::new(false),
@@ -324,6 +327,11 @@ impl EmuHandle {
 
     pub fn link_lost(&self) -> bool {
         self.shared.link_lost.load(Ordering::Relaxed)
+    }
+
+    /// Take the "both ends must re-arm the cable" flag, if it was set.
+    pub fn take_link_resync(&self) -> bool {
+        self.shared.link_resync.swap(false, Ordering::Relaxed)
     }
 
     pub fn peer_ended(&self) -> bool {
@@ -512,6 +520,12 @@ impl EmuHandle {
     /// them before the core (and the link peer) ever sees them.
     pub fn set_direct_xy(&self, on: bool) {
         self.shared.direct_xy.store(on, Ordering::Relaxed);
+    }
+
+    /// Whether X/Y reach the core as themselves instead of the turbo keys.
+    /// Exposed for tests and diagnostics.
+    pub fn direct_xy(&self) -> bool {
+        self.shared.direct_xy.load(Ordering::Relaxed)
     }
 
     pub fn set_rewind_recording(&self, on: bool) {
@@ -786,6 +800,10 @@ impl Worker {
                                     .push(buf);
                                 continue;
                             }
+                            if cable::is_resync(&buf) {
+                                self.shared.link_resync.store(true, Ordering::Relaxed);
+                                continue;
+                            }
                             c.accept(&buf);
                         }
                         // A single-machine pair (FC/SFC/MD) is gated on the
@@ -1016,6 +1034,13 @@ impl Worker {
                                 }
                                 if let Some(t) = transport.as_deref_mut() {
                                     while let Some(buf) = t.try_recv() {
+                                        // A re-arm request may land while both
+                                        // ends are stalled in this wait loop; it
+                                        // must reach the session, not the cable.
+                                        if cable::is_resync(&buf) {
+                                            self.shared.link_resync.store(true, Ordering::Relaxed);
+                                            continue;
+                                        }
                                         let accepted = c.accept(&buf);
                                         if cable_rx + cable_tx < 40 {
                                             cable_rx += 1;
@@ -1085,6 +1110,25 @@ impl Worker {
                                                     t.send(NETPACKET_RELIABLE, &packet);
                                                 }
                                             }
+                                        }
+                                        // A pair that lost frame lockstep cannot be
+                                        // rescued by resending masks: one end has
+                                        // run past the other's delay window. Only the
+                                        // host asks (both ends are stalled together);
+                                        // the session then drops this cable and
+                                        // re-attaches from a fresh state.
+                                        if c.player() == 0
+                                            && stalls == cable::RESYNC_AFTER
+                                            && c.request_resync()
+                                        {
+                                            if let Some(t) = transport.as_deref_mut() {
+                                                t.send(NETPACKET_RELIABLE, &cable::resync_packet());
+                                            }
+                                            self.shared.link_resync.store(true, Ordering::Relaxed);
+                                            crate::link_log::warn(format!(
+                                                "cable: no peer masks for {stalls} frames at frame {}; asking both ends to re-arm",
+                                                c.frame()
+                                            ));
                                         }
                                         if stalls % 30 == 0 {
                                             crate::link_log::debug(format!(
@@ -1583,7 +1627,9 @@ fn drain_transport(transport: &mut dyn LinkChannel, link: &Link, cap: u32) {
 }
 
 /// The one place a physical mask becomes the mask the core (and the cable)
-/// sees. MD keeps X/Y as real buttons; FC/SFC still use them for turbo A/B.
+/// sees.  A `direct_xy` platform (the Mega Drive's six-button X/Z, the Super
+/// Famicom's X/Y) keeps those bits; the Famicom and the Game Boys use them
+/// for turbo A/B instead.
 fn frame_input(input: ButtonMask, turbo: bool, direct_xy: bool, frame: u32) -> ButtonMask {
     if direct_xy {
         input
@@ -1602,14 +1648,14 @@ mod tests {
     const PANEL: Duration = Duration::from_micros(16_760);
 
     #[test]
-    fn md_keeps_x_and_y_as_real_buttons() {
+    fn a_direct_xy_platform_keeps_x_and_y_as_real_buttons() {
         let x_and_y = ButtonMask(ButtonMask::X | ButtonMask::Y);
         assert_eq!(frame_input(x_and_y, false, true, 0), x_and_y);
         assert_eq!(frame_input(x_and_y, true, true, 0), x_and_y);
     }
 
     #[test]
-    fn fc_and_sfc_still_use_x_and_y_for_turbo() {
+    fn the_famicom_still_uses_x_and_y_for_turbo() {
         let x_and_y = ButtonMask(ButtonMask::X | ButtonMask::Y);
         let off = frame_input(x_and_y, false, false, 0);
         assert_eq!(off.0 & (ButtonMask::X | ButtonMask::Y), 0);

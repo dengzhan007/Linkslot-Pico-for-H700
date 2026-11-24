@@ -80,6 +80,11 @@ fn only_a_cart_whose_core_can_link_is_announced() {
     assert!(plain.game_can_link(), "a cable cart on mGBA must be linkable");
     plain.set_core(slot_store::Core::Gpsp);
     assert!(!plain.game_can_link(), "a plain cart must not link on gpSP");
+    plain.set_core(slot_store::Core::Armgba);
+    assert!(
+        !plain.game_can_link(),
+        "armGBA has no linkslot cable/netpacket transport"
+    );
 
     // A Pokémon card is a wireless cart: gpSP can carry it.
     let mut wireless = common::app_playing_in(d.path(), "POKEMON Emerald");

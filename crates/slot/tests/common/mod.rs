@@ -67,6 +67,18 @@ pub fn tmp_root_with_md_carts(stems: &[&str]) -> TempDir {
     d
 }
 
+pub fn tmp_root_with_sfc_carts(stems: &[&str]) -> TempDir {
+    let d = tmp_root();
+    for stem in stems {
+        std::fs::write(
+            d.path().join("Games/SFC").join(format!("{stem}.sfc")),
+            vec![0u8; 0x200],
+        )
+        .expect("write sfc rom");
+    }
+    d
+}
+
 pub fn write_gb_cart(d: &TempDir, stem: &str, title: &str) {
     assert!(
         title.len() <= 11,

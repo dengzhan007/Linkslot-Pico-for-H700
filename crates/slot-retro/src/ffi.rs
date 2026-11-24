@@ -26,6 +26,10 @@ pub const RUMBLE_WEAK: c_uint = 1;
 pub const PIXEL_FORMAT_XRGB8888: c_uint = 1;
 pub const PIXEL_FORMAT_RGB565: c_uint = 2;
 pub const DEVICE_JOYPAD: c_uint = 1;
+/// `RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 1)`: the Mega Drive's
+/// six-button pad.  genesis_plus_gx only emulates the extra X/Y/Z buttons and
+/// MODE when the port is set to this subclass.
+pub const DEVICE_MDPAD_6B: c_uint = (DEVICE_JOYPAD << 8) | 1;
 pub const MEMORY_SAVE_RAM: c_uint = 0;
 pub const MEMORY_RTC: c_uint = 1;
 /// 主机工作内存：NES 2 KB、GBA EWRAM/IWRAM、SFC WRAM 等。

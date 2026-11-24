@@ -726,6 +726,24 @@ pub fn label_size(cart: &Cart) -> (u32, u32) {
     (lw, lh)
 }
 
+/// The printable label window in the cart face's own pixels: `(x, y, w, h)`.
+/// Overlays such as the favorite star anchor to this rectangle so they sit on
+/// the cover instead of on the plastic shell.
+pub fn label_rect(platform: Platform, model: CartModel) -> (u32, u32, u32, u32) {
+    if let Some(art) = reference_art_model(platform, model) {
+        return art.label;
+    }
+    let shape = match (platform, model) {
+        (Platform::Fc, CartModel::Nes) => Shape::Nes,
+        (Platform::Fc, _) => Shape::Fc,
+        (Platform::Sfc, _) => Shape::Sfc,
+        (Platform::Md, _) => Shape::Md,
+        (Platform::Gb | Platform::Gbc, _) => Shape::Gb(GbShell::Notched),
+        (Platform::Gba, _) => Shape::Gba,
+    };
+    spec(shape).label
+}
+
 pub fn cart_face_with(cart: &Cart, art: Option<Vec<u8>>) -> CartFace {
     let shape = shape_of(cart);
     let is_fc = matches!(shape, Shape::Fc | Shape::Nes);

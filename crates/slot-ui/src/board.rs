@@ -347,6 +347,65 @@ pub fn chip_along(platform: Platform, across: f32) -> Option<(f32, f32)> {
         first.3 + (second.3 - first.3) * across,
     ))
 }
+
+/// GBA 第三核心（armGBA）的扩展托盘位，单位与 `SOCKET_U/V` 相同（板坐标）。
+///
+/// 托盘不在主板上：它在板下 30px 的独立座上，所以 v 会超过板图高度 135；
+/// `on_board_for` 的线性映射正好把它放在板下。
+pub const TRAY_SOCKET_U: f32 = 171.5;
+pub const TRAY_SOCKET_V: f32 = 142.1;
+pub const TRAY_CHIP_U: f32 = 173.0;
+pub const TRAY_CHIP_V: f32 = 143.6;
+/// 托盘底板的左上角（板坐标）与屏幕尺寸（板缩放为 1 时 200×64）。
+pub const TRAY_PLATE_U: f32 = 127.7;
+pub const TRAY_PLATE_V: f32 = 138.3;
+pub const TRAY_PLATE_W: f32 = 200.0;
+pub const TRAY_PLATE_H: f32 = 64.0;
+
+/// 选择器第 `position` 个选项的 socket 位置（板坐标），按 `count` 个选项布局。
+///
+/// 2 个选项与以前完全一致；GBA 的第 3 个选项落到板下的扩展托盘位。
+pub fn core_slot(platform: Platform, count: usize, position: usize) -> Option<(f32, f32)> {
+    if count > 2 && platform == Platform::Gba && position == 2 {
+        return Some((TRAY_SOCKET_U, TRAY_SOCKET_V));
+    }
+    multi_core_slot(platform, position).map(|(u, v, _, _)| (u, v))
+}
+
+/// 3 核选择器里第 `position` 个座位的芯片位置（板坐标）。
+///
+/// 0 = 槽 1，1 = 槽 2，2 = 托盘。其它平台 / 越界返回 `None`。
+pub fn core_chip(platform: Platform, position: usize) -> Option<(f32, f32)> {
+    if platform != Platform::Gba {
+        return None;
+    }
+    match position {
+        0 => Some((CHIP_U[0], CHIP_V)),
+        1 => Some((CHIP_U[1], CHIP_V)),
+        2 => Some((TRAY_CHIP_U, TRAY_CHIP_V)),
+        _ => None,
+    }
+}
+
+/// 芯片在选择器中的位置（板坐标），`across` ∈ 0..=1，按 `count` 个选项分段。
+///
+/// 2 个选项沿用两槽插值；GBA 的第 3 个选项从槽 2 继续向下落到托盘位。
+pub fn chip_place(platform: Platform, count: usize, across: f32) -> Option<(f32, f32)> {
+    if count <= 2 || platform != Platform::Gba {
+        return chip_along(platform, across);
+    }
+    let t = across.clamp(0.0, 1.0) * 2.0;
+    let (u1, v1) = (CHIP_U[0], CHIP_V);
+    let (u2, v2) = (CHIP_U[1], CHIP_V);
+    if t <= 1.0 {
+        Some((u1 + (u2 - u1) * t, v1 + (v2 - v1) * t))
+    } else {
+        Some((
+            u2 + (TRAY_CHIP_U - u2) * (t - 1.0),
+            v2 + (TRAY_CHIP_V - v2) * (t - 1.0),
+        ))
+    }
+}
 pub fn single_core_spot(platform: Platform) -> (f32, f32, f32, f32) {
     // GBA is normally a two-socket board, but the desktop host may expose only
     // one available core.  Use its first physical socket rather than falling
@@ -1020,6 +1079,129 @@ pub fn chip_shadow_face() -> CartFace {
         }
     }
     CartFace { rgba, w, h }
+}
+
+/// The selected chip on a 3-core picker: dark outer rim, ice inner rim, and a
+/// soft teal glow.  Deliberately larger than the 41px chip body so the dark
+/// ring separates it from the green PCB.
+pub fn chip_highlight_face() -> CartFace {
+    const W: u32 = 75;
+    const H: u32 = 57;
+    const DARK: [u8; 4] = [6, 9, 13, 232];
+    const ICE: [u8; 4] = [219, 252, 243, 255];
+    const GLOW: [u8; 4] = [47, 212, 176, 0];
+    let mut rgba = vec![0u8; (W * H * 4) as usize];
+    for y in 0..H {
+        for x in 0..W {
+            let px = x as f32 + 0.5;
+            let py = y as f32 + 0.5;
+            let outer = rounded_distance(px, py, 2.0, 2.0, 71.0, 53.0, 10.0);
+            let inner = rounded_distance(px, py, 7.0, 7.0, 61.0, 43.0, 7.0);
+            let (colour, alpha) = if inner.abs() <= 1.2 {
+                (ICE, 255.0)
+            } else if outer.abs() <= 2.2 {
+                (DARK, 232.0)
+            } else if outer > 0.0 && outer <= 5.0 {
+                (GLOW, 85.0 * (1.0 - outer / 5.0))
+            } else {
+                continue;
+            };
+            let at = ((y * W + x) * 4) as usize;
+            rgba[at..at + 4].copy_from_slice(&[colour[0], colour[1], colour[2], alpha as u8]);
+        }
+    }
+    CartFace { rgba, w: W, h: H }
+}
+
+/// The soft pool of light under the selected socket.
+pub fn selection_glow_face() -> CartFace {
+    const W: u32 = 100;
+    const H: u32 = 76;
+    let mut rgba = vec![0u8; (W * H * 4) as usize];
+    for y in 0..H {
+        for x in 0..W {
+            let dx = (x as f32 + 0.5 - W as f32 / 2.0) / (W as f32 / 2.0);
+            let dy = (y as f32 + 0.5 - H as f32 / 2.0) / (H as f32 / 2.0);
+            let fall = (1.0 - (dx * dx + dy * dy)).max(0.0);
+            let alpha = (fall * fall * 95.0) as u8;
+            if alpha == 0 {
+                continue;
+            }
+            let at = ((y * W + x) * 4) as usize;
+            rgba[at..at + 4].copy_from_slice(&[47, 212, 176, alpha]);
+        }
+    }
+    CartFace { rgba, w: W, h: H }
+}
+
+/// A little downward caret above the selected chip.  Shape is the selection
+/// cue that survives poor contrast, not just colour.
+pub fn selection_caret_face() -> CartFace {
+    const W: u32 = 16;
+    const H: u32 = 10;
+    let mut rgba = vec![0u8; (W * H * 4) as usize];
+    for y in 0..H {
+        for x in 0..W {
+            let px = x as f32 + 0.5;
+            let py = y as f32 + 0.5;
+            // White outer triangle, teal inner triangle.
+            let outer = px >= 1.0 + py * 0.2 && px <= 15.0 - py * 0.2 && py <= 9.0;
+            if !outer {
+                continue;
+            }
+            let inner = px >= 3.0 + py * 0.25 && px <= 13.0 - py * 0.25 && py >= 1.5 && py <= 7.0;
+            let at = ((y * W + x) * 4) as usize;
+            if inner {
+                rgba[at..at + 4].copy_from_slice(&[47, 212, 176, 255]);
+            } else {
+                rgba[at..at + 4].copy_from_slice(&[219, 252, 243, 255]);
+            }
+        }
+    }
+    CartFace { rgba, w: W, h: H }
+}
+
+/// A small running lamp + 8px "运行" label.  Deliberately quieter than the
+/// selection ring: selection is the interaction focus, running is status.
+pub fn running_badge_face(text: &str) -> CartFace {
+    let Some(font) = text::label_font() else {
+        return CartFace {
+            rgba: Vec::new(),
+            w: 0,
+            h: 0,
+        };
+    };
+    let px = 8.0;
+    let ink_w = text::line_width(font, text, px, text::tracking(px));
+    let w = (13.0 + ink_w + 4.0).ceil().max(24.0) as u32;
+    let h = 12u32;
+    let mut rgba = vec![0u8; (w * h * 4) as usize];
+    // Lamp at the top-right corner of the chip: dark bezel + green centre.
+    for y in 0..h {
+        for x in 0..10 {
+            let dx = x as f32 + 0.5 - 5.0;
+            let dy = y as f32 + 0.5 - 6.0;
+            let d = (dx * dx + dy * dy).sqrt();
+            let at = ((y * w + x) * 4) as usize;
+            if d <= 4.8 {
+                rgba[at..at + 4].copy_from_slice(&[14, 22, 18, 235]);
+            }
+            if d <= 3.2 {
+                rgba[at..at + 4].copy_from_slice(&[91, 231, 155, 255]);
+            }
+        }
+    }
+    let layout = text::fit(font, text, (w - 13) as f32, 1, px, 7.0);
+    // A dark 1px shadow keeps the tiny word readable on the green board.
+    text::draw_left(&mut rgba, w, h, &layout, [4, 10, 6], 13.0);
+    text::draw_left(&mut rgba, w, h, &layout, [231, 247, 239], 12.0);
+    CartFace { rgba, w, h }
+}
+
+fn rounded_distance(px: f32, py: f32, x: f32, y: f32, w: f32, h: f32, r: f32) -> f32 {
+    let qx = (px - (x + w / 2.0)).abs() - (w / 2.0 - r);
+    let qy = (py - (y + h / 2.0)).abs() - (h / 2.0 - r);
+    qx.max(0.0).hypot(qy.max(0.0)) + qx.max(qy).min(0.0) - r
 }
 
 fn name_layout(core: Core, max_w: f32) -> Option<text::Layout> {

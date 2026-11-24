@@ -6,7 +6,11 @@
 |---|---|---|
 | `linkslot-pack-supafaust-v1.0.0.lsp` | SFC | 第二个 SFC 核心，兼容性选项 |
 | `linkslot-pack-nestopia-v1.0.0.lsp` | FC | 高兼容 FC 核心，适合汉化/特殊 mapper 游戏 |
+| `linkslot-pack-armgba-v1.0.0.lsp` | GBA | 第三个 GBA 核心（AArch64 重编译器），单人；不支持 linkSlot 联机 |
 | `linkslot-pack-contra-1447-v1.0.0.lsp` | FC | 《魂斗罗》RA 中文化成就 + 徽章 |
+
+> `armGBA` 的联机是 RetroArch netplay 自己的一套，linkSlot 的电缆/netpacket
+> 会话不接；要联机请继续用 mGBA / gpSP。
 
 ## 使用
 
@@ -18,8 +22,16 @@
 
 不需要重启，也不需要解压。卸载在同一张卡片里点「卸载」。
 
+卸载核心包时：
+
+- 卡带的 `selected_core` 记录会保留；核心文件不在时，启动暂时回退到机种默认
+  核心并提示一次；重新安装后恢复原来的选择。
+- `Saves/`、`States/`、`Cheats/` 下该核心的存档/状态/金手指不会被删除。
+- 如果核心选择器正开着，会关闭并提示“扩展包已变更”；重新打开时按实际可用
+  核心数显示 2 核或 3 核布局，不会留下已卸载的芯片。
+
 > 只安装可信来源的扩展包：核心是原生代码，会以设备权限运行。设备在游戏中或
-> 同步中时，安装按钮会被拒绝。
+> 同步中时，安装/卸载按钮会被拒绝。
 
 ## 文件格式
 
@@ -59,7 +71,7 @@ System/linkSlot/cores/supafaust/supafaust_libretro.so
 |---|---|
 | `schema` | 固定 `1` |
 | `kind` | `core` 或 `achievements` |
-| `id` | 核心 id，必须是 linkSlot 已知核心（`mgba`/`gpsp`/`fceumm`/`snes9x`/`supafaust`/`genesis_plus_gx`） |
+| `id` | 核心 id，必须是 linkSlot 已知核心（`mgba`/`gpsp`/`fceumm`/`snes9x`/`supafaust`/`genesis_plus_gx`/`nestopia`/`armgba`） |
 | `version` | 扩展包版本（字符串，≤ 32 字符） |
 | `min_app` | 可选；要求的最低 linkSlot 版本，格式 `x.y.z` |
 | `license` / `source` | 可选，便于合规与溯源 |
@@ -98,12 +110,21 @@ python3 build/pack_lsp.py \
   --meta packs/supafaust/pack.json \
   --payload System/linkSlot/cores/supafaust/supafaust_libretro.so=vendor/supafaust_libretro.so \
   --out dist/packs/linkslot-pack-supafaust-v1.0.0.lsp
+
+# armGBA：用 cores/armgba/build.sh 在 bullseye arm64 容器里编出 .so 后再打包
+python3 build/pack_lsp.py \
+  --meta packs/armgba/pack.json \
+  --payload System/linkSlot/cores/armgba/armgba_libretro.so=target/cores/armgba_libretro.so \
+  --out dist/packs/linkslot-pack-armgba-v1.0.0.lsp
 ```
 
 - `pack.json` 模板里的 `files` 留空，脚本按实际文件填 `size`/`sha256`；
 - 可重复 `--payload` 添加多个文件（核心包目前只支持一个 `.so`）；
 - 固定 `SOURCE_DATE_EPOCH` 时，同样的输入产生同样的 `.lsp`；
-- 发布时把 `.lsp` 作为独立附件，不放进卡包。
+- 发布时把 `.lsp` 作为独立附件，不放进卡包；
+- `armGBA` 是 GPL-2.0：发布它的 `.lsp` 时，同时附上
+  `cores/armgba/build.sh` 生成的 `armGBA-<commit>.tar.gz` 与 `licenses/armgba-*`
+  （对应源码与许可证）。
 
 ## 后续扩展
 

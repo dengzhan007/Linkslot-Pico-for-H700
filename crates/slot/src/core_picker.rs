@@ -1,9 +1,14 @@
 //! 主板上的核心选择动画。
 //!
-//! 选择器是"选项驱动"的：打开时传入当前机种**实际可用**的核心列表
+//! 选择器是“选项驱动”的：打开时传入当前机种**实际可用**的核心列表
 //! （`slot_store::available_options`），左右键在列表内切换，芯片落位到
-//! 对应插槽。GBA 用它自己的两个插槽；SFC 复用 Famicom 板上的前两个插槽
+//! 对应插槽。GBA 用它自己的两个插槽；装第三颗核心时多一个板下备用托盘
+//! （mGBA / gpSP / armGBA）。SFC 复用 Famicom 板上的前两个插槽
 //! （snes9x + 可选的 supafaust）。单核心机种列表只有 1 项：板面只作信息展示。
+//!
+//! 2 核及以下沿用旧版“一颗芯片在两个插槽之间 hop”；3 核改用“槽 1 + 槽 2 +
+//! 备用托盘”的高亮选择：槽 1 固定 mGBA，槽 2 是热插槽，托盘只放备用芯片；
+//! A 在托盘上时与槽 2 对调，运行核心始终在板载插槽。
 
 use slot_store::Core;
 use slot_ui::{ease, Millis, Refusal, CHIP_TIP};
@@ -29,9 +34,19 @@ pub enum Outcome {
     Write(Core),
 }
 
+/// 3 核选择器的固定三座位布局。
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub struct ThreeLayout {
+    pub slot1: Core,
+    pub slot2: Core,
+    pub tray: Core,
+}
+
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct Chip {
-    /// 芯片在插槽之间的位置：0 = 第 1 个插槽，1 = 第 2 个插槽（单核心时恒为 0.5）。
+    /// 芯片在选项之间的归一化位置：0 = 第 1 项，1 = 最后一项（单核心恒为 0.5）。
+    /// 2 项时 0/1 就是两个插槽；GBA 3 项时 0/0.5/1 分别是槽 1、槽 2、托盘位。
+    /// 3 核模式下高亮位置由 `selected_pos` 表示，这个字段只用于兼容旧界面。
     pub across: f32,
     pub lift: f32,
     pub tip: f32,
@@ -47,6 +62,11 @@ struct Hop {
 }
 
 #[derive(Copy, Clone)]
+struct Swap {
+    started: Millis,
+}
+
+#[derive(Copy, Clone)]
 struct Close {
     started: Millis,
     from: f32,
@@ -55,11 +75,18 @@ struct Close {
 #[derive(Clone)]
 pub struct CorePicker {
     options: Vec<Core>,
-    /// `options` 里的下标，不是 `Core::index()`。
+    /// 2 核模式下选中的 options 下标；3 核模式下是选中核心的 options 下标。
     seat: usize,
+    /// 正在/将要运行的核心 index（3 核模式下贴“运行”标签）。
+    active: usize,
+    /// 3 核布局；None 表示旧的 1/2 核单芯片模型。
+    three: Option<ThreeLayout>,
+    /// 3 核模式下高亮的位置：0 槽 1，1 槽 2，2 托盘。
+    selected_pos: usize,
     opened: Millis,
     started: Option<Millis>,
     hop: Option<Hop>,
+    swap: Option<Swap>,
     close: Option<Close>,
     refusal: Option<Refusal>,
 }
@@ -67,20 +94,111 @@ pub struct CorePicker {
 impl CorePicker {
     pub fn open(seat: Core, options: Vec<Core>, now: Millis) -> Self {
         let seat = options.iter().position(|core| *core == seat).unwrap_or(0);
-        CorePicker {
+        let mut picker = CorePicker {
             options,
             seat,
+            active: seat,
+            three: None,
+            selected_pos: 0,
             opened: now,
             started: None,
             hop: None,
+            swap: None,
             close: None,
             refusal: None,
+        };
+        if picker.options.len() > 2 {
+            picker.configure_three(None);
         }
+        picker
+    }
+
+    /// 3 核选择器：`alt` 是上次热插槽里的替代核心（gpSP / armGBA）。
+    pub fn open_three(seat: Core, options: Vec<Core>, alt: Option<Core>, now: Millis) -> Self {
+        let mut picker = CorePicker::open(seat, options, now);
+        if picker.three.is_some() {
+            picker.configure_three(alt);
+        }
+        picker
+    }
+
+    fn configure_three(&mut self, alt: Option<Core>) {
+        let opts = &self.options;
+        let Some(mgba) = opts.iter().position(|core| *core == Core::Mgba) else {
+            self.three = None;
+            return;
+        };
+        let Some(gpsp) = opts.iter().position(|core| *core == Core::Gpsp) else {
+            self.three = None;
+            return;
+        };
+        let Some(armgba) = opts.iter().position(|core| *core == Core::Armgba) else {
+            self.three = None;
+            return;
+        };
+        let active = self.active;
+        let (slot2, tray) = if active != mgba {
+            let other = if active == gpsp { armgba } else { gpsp };
+            (active, other)
+        } else {
+            let chosen = alt
+                .and_then(|core| opts.iter().position(|candidate| *candidate == core))
+                .filter(|index| *index == gpsp || *index == armgba)
+                .unwrap_or(gpsp);
+            let other = if chosen == gpsp { armgba } else { gpsp };
+            (chosen, other)
+        };
+        self.three = Some(ThreeLayout {
+            slot1: opts[mgba],
+            slot2: opts[slot2],
+            tray: opts[tray],
+        });
+        self.selected_pos = if active == mgba {
+            0
+        } else {
+            1
+        };
     }
 
     /// 可选项（与板面上的插槽一一对应）。
     pub fn options(&self) -> &[Core] {
         &self.options
+    }
+
+    /// 选中的核心（3 核模式下是高亮的那颗）。
+    pub fn seat(&self) -> Core {
+        match self.three {
+            Some(layout) => match self.selected_pos {
+                0 => layout.slot1,
+                1 => layout.slot2,
+                _ => layout.tray,
+            },
+            None => self.options[self.seat],
+        }
+    }
+
+    /// 当前实际运行的核心（3 核模式的“运行”标签）。
+    pub fn active(&self) -> Core {
+        self.options[self.active]
+    }
+
+    pub fn is_three(&self) -> bool {
+        self.three.is_some()
+    }
+
+    pub fn layout(&self) -> Option<ThreeLayout> {
+        self.three
+    }
+
+    pub fn selected_pos(&self) -> usize {
+        self.selected_pos
+    }
+
+    /// 换芯动画的进度（0..1）；只有按下托盘芯片后的 180ms 内有值。
+    pub fn swap_progress(&self, now: Millis) -> Option<f32> {
+        let swap = self.swap?;
+        let q = now.saturating_sub(swap.started) as f32 / HOP_MS as f32;
+        (q < 1.0).then_some(q)
     }
 
     pub fn start(&mut self, now: Millis) {
@@ -93,10 +211,6 @@ impl CorePicker {
 
     pub fn waited(&self, now: Millis) -> Millis {
         now.saturating_sub(self.opened)
-    }
-
-    pub fn seat(&self) -> Core {
-        self.options[self.seat]
     }
 
     pub fn is_single(&self) -> bool {
@@ -136,6 +250,9 @@ impl CorePicker {
                 Press::Left | Press::Right => Outcome::Nothing,
             };
         }
+        if self.three.is_some() {
+            return self.press_three(press, now);
+        }
         let target = match press {
             Press::Left => self.seat.checked_sub(1),
             Press::Right => {
@@ -146,6 +263,7 @@ impl CorePicker {
                 }
             }
             Press::Keep => {
+                self.active = self.seat;
                 self.begin_close(now);
                 return Outcome::Write(self.seat());
             }
@@ -173,6 +291,7 @@ impl CorePicker {
                 started: now.saturating_sub(done),
             });
             self.seat = target;
+            self.active = target;
             self.refusal = None;
             return Outcome::Nothing;
         }
@@ -187,12 +306,101 @@ impl CorePicker {
             started: now,
         });
         self.seat = target;
+        self.active = target;
         self.refusal = None;
         Outcome::Nothing
     }
 
+    fn press_three(&mut self, press: Press, now: Millis) -> Outcome {
+        // A swap owns the pad until the picker closes.
+        if self.swap.is_some() {
+            return Outcome::Nothing;
+        }
+        if self.waiting() {
+            return Outcome::Nothing;
+        }
+        match press {
+            Press::Left => {
+                if self.selected_pos == 0 {
+                    self.refusal = Some(Refusal::started(now));
+                    Outcome::Refused
+                } else {
+                    self.selected_pos -= 1;
+                    self.seat = self
+                        .options
+                        .iter()
+                        .position(|core| *core == self.seat())
+                        .unwrap_or(self.seat);
+                    self.refusal = None;
+                    Outcome::Nothing
+                }
+            }
+            Press::Right => {
+                if self.selected_pos >= 2 {
+                    self.refusal = Some(Refusal::started(now));
+                    Outcome::Refused
+                } else {
+                    self.selected_pos += 1;
+                    self.seat = self
+                        .options
+                        .iter()
+                        .position(|core| *core == self.seat())
+                        .unwrap_or(self.seat);
+                    self.refusal = None;
+                    Outcome::Nothing
+                }
+            }
+            Press::Keep => {
+                let selected = self.seat();
+                if self.selected_pos == 2 {
+                    let Some(layout) = self.three else {
+                        return Outcome::Nothing;
+                    };
+                    let swapped = ThreeLayout {
+                        slot1: layout.slot1,
+                        slot2: layout.tray,
+                        tray: layout.slot2,
+                    };
+                    self.three = Some(swapped);
+                    self.selected_pos = 1;
+                    self.seat = self
+                        .options
+                        .iter()
+                        .position(|core| *core == swapped.slot2)
+                        .unwrap_or(self.seat);
+                    self.active = self.seat;
+                    self.swap = Some(Swap { started: now });
+                    // Keep the swapped arrangement on screen for the 180ms
+                    // animation, then fade the page out.
+                    self.close = Some(Close {
+                        started: now.saturating_add(HOP_MS),
+                        from: 1.0,
+                    });
+                    Outcome::Write(swapped.slot2)
+                } else {
+                    self.active = self.seat;
+                    self.begin_close(now);
+                    Outcome::Write(selected)
+                }
+            }
+            Press::Back => {
+                self.begin_close(now);
+                Outcome::Nothing
+            }
+        }
+    }
+
     pub fn chip(&self, now: Millis) -> Chip {
         let shake = self.refusal.map_or(0.0, |r| r.offset(now));
+        if self.three.is_some() {
+            return Chip {
+                across: self.selected_pos as f32 / 2.0,
+                lift: 0.0,
+                tip: 0.0,
+                seated: Some(self.seat()),
+                shake,
+            };
+        }
         if let Some((from, to, q)) = self.hop_state(now) {
             let arc = (std::f32::consts::PI * q).sin();
             let rightward = to > from;

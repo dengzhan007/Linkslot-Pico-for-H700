@@ -111,6 +111,7 @@ fn open_named(
                 // the first frame is already sized by it.
                 let (frame_w, frame_h) = platform.frame();
                 opened.set_canvas(frame_w, frame_h);
+                opened.set_six_button_pads(six_button_pads(platform));
                 apply_core_options(
                     &mut opened,
                     core,
@@ -129,6 +130,15 @@ fn open_named(
         }
     }
     None
+}
+
+/// Whether this machine's core has to be told its pads carry six buttons.
+///
+/// Only the Mega Drive: genesis_plus_gx emulates a 3-button pad unless the ROM
+/// header advertises the 6-button one, and then X/Y/Z — two of them on the face
+/// buttons, X/Z on the shoulders — silently do nothing.
+pub fn six_button_pads(platform: Platform) -> bool {
+    platform == Platform::Md
 }
 
 pub fn palette_for(
@@ -231,6 +241,13 @@ pub fn apply_core_options(
                 core.set_option(key, value);
             }
         }
+        Core::Armgba => {
+            // armGBA 默认从 system 目录找 gba_bios.bin（linkslot 的 BIOS 目录
+            // 正好是它要的位置）；找不到时它回退到内置 BIOS。
+            if let Some((key, value)) = colour_option(which, colour) {
+                core.set_option(key, value);
+            }
+        }
         _ => {}
     }
 }
@@ -241,6 +258,23 @@ mod tests {
     use std::sync::Mutex;
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn only_the_mega_drive_asks_for_six_button_pads() {
+        assert!(six_button_pads(Platform::Md));
+        for platform in [
+            Platform::Gba,
+            Platform::Gb,
+            Platform::Gbc,
+            Platform::Fc,
+            Platform::Sfc,
+        ] {
+            assert!(
+                !six_button_pads(platform),
+                "{platform:?} asked its core for six-button pads"
+            );
+        }
+    }
 
     #[test]
     fn each_core_spells_colour_correction_its_own_way() {
@@ -259,6 +293,14 @@ mod tests {
         assert_eq!(
             colour_option(Core::Gpsp, false),
             Some(("gpsp_color_correction", "disabled"))
+        );
+        assert_eq!(
+            colour_option(Core::Armgba, true),
+            Some(("armgba_color_correction", "enabled"))
+        );
+        assert_eq!(
+            colour_option(Core::Armgba, false),
+            Some(("armgba_color_correction", "disabled"))
         );
     }
 

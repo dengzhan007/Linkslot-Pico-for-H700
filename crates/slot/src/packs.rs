@@ -801,6 +801,7 @@ mod tests {
         for (id, file) in [
             ("supafaust", "linkslot-pack-supafaust-v1.0.0.lsp"),
             ("nestopia", "linkslot-pack-nestopia-v1.0.0.lsp"),
+            ("armgba", "linkslot-pack-armgba-v1.0.0.lsp"),
         ] {
             let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../../dist/packs")

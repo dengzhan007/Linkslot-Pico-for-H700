@@ -6,6 +6,14 @@ use crate::rom_id::Digest;
 
 pub const DELAY: u64 = 3;
 
+/// Frames of blocked lockstep before the host asks both ends to re-arm.
+///
+/// Shorter than [`QUIET_FRAMES`]: a pair that has lost frame lockstep (one
+/// end restarted its cable, so their frame counters no longer line up) cannot
+/// be rescued by resending masks, and waiting the full quiet timeout only
+/// makes the freeze longer.
+pub const RESYNC_AFTER: u32 = 60;
+
 const PACKET: usize = 11;
 
 const KIND_MASK: u8 = 0;
@@ -13,6 +21,9 @@ const KIND_STATE: u8 = 1;
 const KIND_STATE_END: u8 = 2;
 const KIND_READY: u8 = 3;
 const KIND_HELLO: u8 = 4;
+/// The two ends lost lockstep; both should drop this cable and let the
+/// session re-arm them from a fresh state (the next attach sends one).
+const KIND_RESYNC: u8 = 0x1c;
 /// Session control, not cable traffic: the two ends talk about *which game* is
 /// running while neither has a cable open. The worker forwards these to the
 /// app instead of feeding them to the cable.
@@ -335,6 +346,15 @@ pub fn ready_packet() -> [u8; 1] {
     [KIND_READY]
 }
 
+/// Ask the peer to re-arm the pair from a fresh state.
+pub fn resync_packet() -> [u8; 1] {
+    [KIND_RESYNC]
+}
+
+pub fn is_resync(buf: &[u8]) -> bool {
+    buf.first() == Some(&KIND_RESYNC)
+}
+
 pub fn state_packets(state: &[u8]) -> Vec<Vec<u8>> {
     let mut out: Vec<Vec<u8>> = state
         .chunks(CHUNK)
@@ -379,6 +399,8 @@ pub struct Cable {
     complete: bool,
     peer_ready: bool,
     peer_hello: Option<Hello>,
+    /// This cable has already asked for one re-arm.
+    resync_sent: bool,
 }
 
 impl Cable {
@@ -397,6 +419,7 @@ impl Cable {
             complete: false,
             peer_ready: player != 0,
             peer_hello: None,
+            resync_sent: false,
         }
     }
 
@@ -446,6 +469,17 @@ impl Cable {
 
     pub fn prime(&mut self) {
         self.primed = true;
+    }
+
+    /// One re-arm request per cable. A fresh `Cable` resets this, so a peer
+    /// that ignores the request falls back to the quiet timeout instead of
+    /// being asked on every stalled frame.
+    pub fn request_resync(&mut self) -> bool {
+        if self.resync_sent {
+            return false;
+        }
+        self.resync_sent = true;
+        true
     }
 
     pub fn player(&self) -> u8 {
@@ -548,3 +582,25 @@ impl Cable {
 /// session keeps the socket anyway, so patience is cheaper than a false
 /// disconnect.
 pub const QUIET_FRAMES: u32 = 180;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_the_first_ask_on_a_cable_is_sent() {
+        let mut cable = Cable::new(0, Pairing::PairedGba);
+        assert!(cable.request_resync());
+        assert!(!cable.request_resync());
+        // The re-attach builds a fresh cable, which may ask once more.
+        let mut fresh = Cable::new(0, Pairing::PairedGba);
+        assert!(fresh.request_resync());
+    }
+
+    #[test]
+    fn a_resync_request_is_not_mistaken_for_a_mask() {
+        assert!(is_resync(&resync_packet()));
+        assert!(decode(&resync_packet()).is_none());
+        assert!(!is_control(&resync_packet()));
+    }
+}

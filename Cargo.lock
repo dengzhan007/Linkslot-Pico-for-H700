@@ -1202,7 +1202,7 @@ dependencies = [
 
 [[package]]
 name = "linkslot"
-version = "1.0.36"
+version = "1.0.45"
 dependencies = [
  "crc32fast",
  "flate2",
@@ -2452,7 +2452,7 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
 name = "slot"
-version = "1.0.36"
+version = "1.0.45"
 dependencies = [
  "base64",
  "cpal",
@@ -2492,18 +2492,18 @@ dependencies = [
 
 [[package]]
 name = "slot-cheevos"
-version = "1.0.36"
+version = "1.0.45"
 dependencies = [
  "cc",
 ]
 
 [[package]]
 name = "slot-device"
-version = "1.0.36"
+version = "1.0.45"
 
 [[package]]
 name = "slot-gfx"
-version = "1.0.36"
+version = "1.0.45"
 dependencies = [
  "gl",
  "glutin",
@@ -2515,22 +2515,22 @@ dependencies = [
 
 [[package]]
 name = "slot-i18n"
-version = "1.0.36"
+version = "1.0.45"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "slot-input"
-version = "1.0.36"
+version = "1.0.45"
 
 [[package]]
 name = "slot-model"
-version = "1.0.36"
+version = "1.0.45"
 
 [[package]]
 name = "slot-mods"
-version = "1.0.36"
+version = "1.0.45"
 dependencies = [
  "base64",
  "ring",
@@ -2542,7 +2542,7 @@ dependencies = [
 
 [[package]]
 name = "slot-power"
-version = "1.0.36"
+version = "1.0.45"
 dependencies = [
  "slot-model",
  "tempfile",
@@ -2550,18 +2550,18 @@ dependencies = [
 
 [[package]]
 name = "slot-retro"
-version = "1.0.36"
+version = "1.0.45"
 dependencies = [
  "libloading",
 ]
 
 [[package]]
 name = "slot-sfxcut"
-version = "1.0.36"
+version = "1.0.45"
 
 [[package]]
 name = "slot-store"
-version = "1.0.36"
+version = "1.0.45"
 dependencies = [
  "libc",
  "rusqlite",
@@ -2575,7 +2575,7 @@ dependencies = [
 
 [[package]]
 name = "slot-ui"
-version = "1.0.36"
+version = "1.0.45"
 dependencies = [
  "fontdue",
  "png 0.17.16",

@@ -5,6 +5,10 @@ use slot_model::{core as model_core, CoreSpec, Platform};
 
 pub const SELECTED_CORE_FILE: &str = "linkSlot/Config/selected_core.txt";
 
+/// Which alternative core (gpSP or armGBA) was last in the GBA hot socket.
+/// The picker uses it so returning to mGBA does not need to swap the spare.
+pub const TRAY_ALT_FILE: &str = "linkSlot/Config/core_tray.txt";
+
 /// 前端可以直接选择/加载的核心。
 ///
 /// 具体的身份与能力（动态库名、显示名、可运行机种、固定选项、颜色校正）
@@ -26,6 +30,8 @@ pub enum Core {
     Snes9x,
     /// Famicom/NES 的高兼容可选核心（LSP 扩展包安装）。
     Nestopia,
+    /// GBA 的第三个核心（LSP 扩展包安装）；单人游玩，联机仍走 mGBA/gpSP。
+    Armgba,
 }
 
 impl Core {
@@ -37,7 +43,7 @@ impl Core {
 
     /// Every core the app can load, including ones with no picker socket
     /// (the Famicom core is chosen by the cart's platform, not by hand).
-    pub const EVERY: [Core; 7] = [
+    pub const EVERY: [Core; 8] = [
         Core::Mgba,
         Core::Gpsp,
         Core::Nes,
@@ -45,6 +51,7 @@ impl Core {
         Core::Gpgx,
         Core::Snes9x,
         Core::Nestopia,
+        Core::Armgba,
     ];
 
     /// 核心 id（与 `slot-model` 表一致）。
@@ -57,6 +64,7 @@ impl Core {
             Core::Gpgx => "genesis_plus_gx",
             Core::Snes9x => "snes9x",
             Core::Nestopia => "nestopia",
+            Core::Armgba => "armgba",
         }
     }
 
@@ -67,10 +75,10 @@ impl Core {
 
     /// The cores offered by the manual core picker for a platform.
     ///
-    /// 这是**选择器策略**（GBA/SFC/FC 各有两个插槽），不是核心能力；能力见
-    /// [`Core::spec().machines`](slot_model::CoreSpec::machines)。
+    /// 这是**选择器策略**（GBA 两个板载插槽 + 一个扩展托盘位；SFC/FC 各有两个
+    /// 插槽），不是核心能力；能力见 [`Core::spec().machines`](slot_model::CoreSpec::machines)。
     pub fn options_for(platform: Platform) -> &'static [Core] {
-        const GBA: [Core; 2] = [Core::Mgba, Core::Gpsp];
+        const GBA: [Core; 3] = [Core::Mgba, Core::Gpsp, Core::Armgba];
         const MGBA: [Core; 1] = [Core::Mgba];
         /// FC 默认 fceumm；Nestopia 为可选核心（LSP 扩展包安装）。
         const FC: [Core; 2] = [Core::Nes, Core::Nestopia];
@@ -122,6 +130,7 @@ impl Core {
             "snes9x" | "snes9x_libretro" => Some(Core::Snes9x),
             "nestopia" | "nestopia_libretro" => Some(Core::Nestopia),
             "genesis_plus_gx" | "genesisplusgx" | "gpgx" | "genplusgx" => Some(Core::Gpgx),
+            "armgba" | "armgba_libretro" => Some(Core::Armgba),
             _ => None,
         }
     }
@@ -184,4 +193,16 @@ pub fn available_options(root: &Path, platform: Platform) -> Vec<Core> {
 
 pub fn write_selected_core(root: &Path, stem: &str, core: Core) -> std::io::Result<()> {
     crate::ini::write(root, SELECTED_CORE_FILE, stem, core.as_str())
+}
+
+/// The remembered alternative core for a platform's hot socket.
+pub fn tray_alt(root: &Path, platform: Platform) -> Option<Core> {
+    crate::ini::value(root, TRAY_ALT_FILE, platform.dir_name())
+        .as_deref()
+        .and_then(Core::parse)
+        .filter(|core| *core != Core::Mgba && core.runs(platform))
+}
+
+pub fn write_tray_alt(root: &Path, platform: Platform, core: Core) -> std::io::Result<()> {
+    crate::ini::write(root, TRAY_ALT_FILE, platform.dir_name(), core.as_str())
 }

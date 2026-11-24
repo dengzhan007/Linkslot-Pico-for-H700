@@ -234,6 +234,30 @@ impl GameButton {
         GameButton::TurboB,
     ];
 
+    /// Every button `controls.txt` can carry: [`ALL`] plus the Super Famicom
+    /// and Mega Drive's X/Y.  Enum order, so X/Y are matched before the turbo
+    /// rows that share their device by default.
+    ///
+    /// This is deliberately wider than [`GameButton::ALL`]: the Advance's key
+    /// screen shows the twelve rows in `ALL`, while a machine with real X/Y
+    /// (SFC / MD) can still be remapped by editing the file.
+    pub const CONFIGURED: [GameButton; 14] = [
+        GameButton::Up,
+        GameButton::Down,
+        GameButton::Left,
+        GameButton::Right,
+        GameButton::A,
+        GameButton::B,
+        GameButton::Select,
+        GameButton::Start,
+        GameButton::L,
+        GameButton::R,
+        GameButton::X,
+        GameButton::Y,
+        GameButton::TurboA,
+        GameButton::TurboB,
+    ];
+
     const GAME_BOY: [GameButton; 10] = [
         GameButton::Up,
         GameButton::Down,
@@ -456,7 +480,7 @@ impl Controls {
     }
 
     fn text(&self) -> String {
-        GameButton::ALL
+        GameButton::CONFIGURED
             .iter()
             .map(|g| format!("{}={}\n", g.key(), Binding::key(self.game(*g))))
             .collect()
@@ -465,7 +489,7 @@ impl Controls {
     fn parse(text: &str) -> Controls {
         let mut c = Controls::default();
         for (key, value) in text.lines().filter_map(|l| l.split_once('=')) {
-            let game = GameButton::ALL
+            let game = GameButton::CONFIGURED
                 .into_iter()
                 .find(|g| g.key().eq_ignore_ascii_case(key.trim()));
             if let (Some(g), Some(binding)) = (game, Binding::parse(value)) {

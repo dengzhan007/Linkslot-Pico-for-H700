@@ -27,12 +27,15 @@ fn a_cart_gpsp_cannot_link_says_there_is_no_link() {
 fn the_banner_says_what_happened_and_never_what_is_on_screen() {
     let all = Toast::all();
     assert_eq!(
-        all[..22],
+        all[..25],
         [
             Toast::StateSaved,
             Toast::StateLoaded,
             Toast::NeedsGpsp,
             Toast::NoLink,
+            Toast::CoreNoLink,
+            Toast::CoreMissing,
+            Toast::PacksChanged,
             Toast::LinkEnded,
             Toast::ColourOn,
             Toast::ColourOff,

@@ -182,6 +182,8 @@ fn both_cores_are_told_about_colour_correction_in_their_own_words() {
             Core::Snes9x => "snes9x_palette",
             Core::Nestopia => "nestopia_palette",
             Core::Gpgx => "genesis_plus_gx_palette",
+            // armGBA owns its colour key; the loop above does not pair it.
+            Core::Armgba => "armgba_color_correction",
         };
         assert_eq!(
             core.option(theirs),

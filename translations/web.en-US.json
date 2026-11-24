@@ -38,7 +38,7 @@
     "web.about.packsReadonly": "The device is in a game or a sync, so a pack cannot be installed right now.",
     "web.about.packsRemove": "Remove",
     "web.about.packsRemoved": "Removed pack {id}",
-    "web.about.packsRemoveConfirm": "Remove pack “{id}”? Its installed definitions/badges/core files will be deleted; unlocked achievement progress is kept.",
+    "web.about.packsRemoveConfirm": "Remove pack “{id}”? Its installed definitions/badges/core files will be deleted. Carts using its core will fall back to the default core until the pack is installed again; unlocked achievement progress is kept.",
     "web.about.packsRemoveFailed": "Could not remove the pack",
     "web.about.packsTooLarge": "The pack exceeds the {limit} limit.",
     "web.about.packsTrust": "Only install packs from a trusted source: cores are native code and run with device privileges.",

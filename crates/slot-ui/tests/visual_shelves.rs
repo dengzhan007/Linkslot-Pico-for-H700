@@ -184,3 +184,31 @@ fn the_backdrop_fallback_without_an_overlay_has_no_texture_draw() {
     assert!(matches!(out[0], Draw::Rect { .. }));
     assert!(!out.iter().any(|draw| matches!(draw, Draw::Tex { .. })));
 }
+
+#[test]
+fn the_favorite_star_has_gold_ink_and_a_dark_rim() {
+    let star = slot_ui::favorite_star_face();
+    assert_eq!((star.w, star.h), (40, 40));
+    let pixel = |x: u32, y: u32| {
+        let at = ((y * star.w + x) * 4) as usize;
+        [
+            star.rgba[at],
+            star.rgba[at + 1],
+            star.rgba[at + 2],
+            star.rgba[at + 3],
+        ]
+    };
+    assert_eq!(pixel(0, 0)[3], 0, "the badge corner is transparent");
+    let centre = pixel(20, 20);
+    assert!(
+        centre[0] > 230 && centre[1] > 190 && centre[3] > 240,
+        "the gold star disappeared: {centre:?}"
+    );
+    assert!(
+        star.rgba
+            .chunks_exact(4)
+            .any(|p| p[0] < 120 && p[1] < 100 && p[3] > 80),
+        "the dark rim/shadow was not drawn"
+    );
+    assert!((slot_ui::FAVORITE_STAR_INK_RATIO - 0.8).abs() < 1e-6);
+}

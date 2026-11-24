@@ -5,7 +5,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
 
-use crate::{Cart, Outline, Platform, ShellChoice, ShellFinish};
+use crate::{Cart, Core, Outline, Platform, ShellChoice, ShellFinish};
 
 /// The metadata database is the runtime source of truth.  Per-game JSON
 /// sidecars are deliberately not read by the app; migration/export is a mod
@@ -784,18 +784,33 @@ pub fn cover_path(root: &Path, cart: &Cart) -> Option<PathBuf> {
 /// cheat menu.  A custom DB path wins; a missing custom file falls back to the
 /// old convention so existing cheat layouts keep working.
 pub fn cheat_path(root: &Path, cart: &Cart, core: &str) -> Option<PathBuf> {
-    read(root, cart.platform, &cart.rom, &cart.stem)
+    if let Some(path) = read(root, cart.platform, &cart.rom, &cart.stem)
         .and_then(|meta| meta.cheat_path(root))
-        .or_else(|| {
-            let dir = root
-                .join("Cheats")
-                .join(cart.platform.dir_name())
-                .join(core);
-            let path = dir.join(format!("{}.cht", cart.stem));
-            path.is_file()
-                .then_some(path)
-                .or_else(|| named_file(&dir, &cart.stem, "cht"))
-        })
+    {
+        return Some(path);
+    }
+    // A third core (armGBA) has no cheat folder of its own yet: the code
+    // format is the same CodeBreaker `.cht`, so fall back to the platform's
+    // default core's folder instead of losing every cheat.
+    let fallback = Core::default_for(cart.platform).as_str();
+    let mut cores = vec![core];
+    if fallback != core {
+        cores.push(fallback);
+    }
+    for core in cores {
+        let dir = root
+            .join("Cheats")
+            .join(cart.platform.dir_name())
+            .join(core);
+        let path = dir.join(format!("{}.cht", cart.stem));
+        if path.is_file() {
+            return Some(path);
+        }
+        if let Some(path) = named_file(&dir, &cart.stem, "cht") {
+            return Some(path);
+        }
+    }
+    None
 }
 
 

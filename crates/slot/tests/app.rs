@@ -1151,6 +1151,169 @@ fn choosing_a_core_writes_it_and_closes() {
     );
 }
 
+fn install_armgba(root: &Path) {
+    let core_dir = root.join(slot::root::SYSTEM_CORES).join("armgba");
+    std::fs::create_dir_all(&core_dir).unwrap();
+    std::fs::write(
+        core_dir.join(format!(
+            "armgba_libretro.{}",
+            std::env::consts::DLL_EXTENSION
+        )),
+        b"",
+    )
+    .unwrap();
+}
+
+#[test]
+fn a_third_gba_core_is_selectable_and_written() {
+    let d = common::tmp_root_with_carts(&["Emerald", "Zzz"]);
+    install_armgba(d.path());
+
+    let mut app = App::boot(d.path());
+    fake_picker_faces(&mut app);
+    app.apply(Action::GbaDown(Btn::Start));
+    assert_eq!(app.core_picker(), Some(Core::Mgba));
+    let layout = app.core_picker_layout().expect("no three-core layout");
+    assert_eq!(
+        (layout.slot1, layout.slot2, layout.tray),
+        (Core::Mgba, Core::Gpsp, Core::Armgba)
+    );
+    assert_eq!(app.core_picker_active(), Some(Core::Mgba));
+
+    app.apply(Action::GbaDown(Btn::Right));
+    assert_eq!(app.core_picker(), Some(Core::Gpsp));
+    assert_eq!(app.core_picker_active(), Some(Core::Mgba));
+    app.apply(Action::GbaDown(Btn::Right));
+    assert_eq!(app.core_picker(), Some(Core::Armgba));
+    assert_eq!(app.core_picker_active(), Some(Core::Mgba));
+
+    app.apply(Action::GbaDown(Btn::A));
+    assert_eq!(
+        slot_store::core_for(d.path(), "Emerald"),
+        Core::Armgba,
+        "the third GBA core was not written"
+    );
+    let layout = app.core_picker_layout().expect("the swap lost the layout");
+    assert_eq!(
+        (layout.slot1, layout.slot2, layout.tray),
+        (Core::Mgba, Core::Armgba, Core::Gpsp),
+        "armGBA did not swap into slot 2"
+    );
+    assert_eq!(app.core_picker_active(), Some(Core::Armgba));
+    assert_eq!(
+        slot_store::tray_alt(d.path(), Platform::Gba),
+        Some(Core::Armgba),
+        "the hot socket's last alternative was not remembered"
+    );
+}
+
+#[test]
+fn the_three_core_picker_draws_through_the_swap() {
+    let d = common::tmp_root_with_carts(&["Emerald", "Zzz"]);
+    install_armgba(d.path());
+    let mut app = App::boot(d.path());
+    fake_picker_faces(&mut app);
+    app.apply(Action::GbaDown(Btn::Start));
+    let _ = frame(&app);
+    app.apply(Action::GbaDown(Btn::Right));
+    let _ = frame(&app);
+    app.apply(Action::GbaDown(Btn::Right));
+    let _ = frame(&app);
+    app.apply(Action::GbaDown(Btn::A));
+    let _ = frame(&app);
+}
+
+#[test]
+fn the_selected_chip_is_lifted_dimmed_and_marked() {
+    let d = common::tmp_root_with_carts(&["Emerald", "Zzz"]);
+    install_armgba(d.path());
+    let mut app = App::boot(d.path());
+    let f = fake_picker_faces(&mut app);
+    let highlight = TexId::from_raw(940);
+    let glow = TexId::from_raw(941);
+    let caret = TexId::from_raw(942);
+    let running = TexId::from_raw(943);
+    app.set_core_highlight_face(highlight);
+    app.set_core_selection_glow(glow);
+    app.set_core_selection_caret(caret);
+    app.set_core_running_face((running, 34, 12));
+    app.apply(Action::GbaDown(Btn::Start));
+
+    let out = frame(&app);
+    let chip = |tex: TexId| {
+        out.iter().find_map(|draw| match *draw {
+            Draw::Turned { y, alpha, tex: t, .. } if t == tex => Some((y, alpha)),
+            _ => None,
+        })
+    };
+    let selected = chip(f.chips[0]).expect("the selected mGBA chip is not drawn");
+    let unselected = chip(f.chips[1]).expect("the unselected gpSP chip is not drawn");
+    assert!(
+        selected.0 < unselected.0,
+        "the selected chip is not lifted: {} vs {}",
+        selected.0,
+        unselected.0
+    );
+    assert!((selected.1 - 1.0).abs() < 1e-4);
+    assert!((unselected.1 - 0.45).abs() < 1e-4);
+
+    for (name, tex) in [
+        ("highlight", highlight),
+        ("glow", glow),
+        ("caret", caret),
+        ("running badge", running),
+    ] {
+        assert!(
+            out.iter().any(|draw| matches!(
+                *draw,
+                Draw::Tex { tex: t, .. } if t == tex
+            )),
+            "the {name} texture is missing"
+        );
+    }
+}
+
+#[test]
+fn removing_the_extension_pack_closes_the_core_picker() {
+    let d = common::tmp_root_with_carts(&["Emerald", "Zzz"]);
+    install_armgba(d.path());
+    let mut app = App::boot(d.path());
+    fake_picker_faces(&mut app);
+    app.apply(Action::GbaDown(Btn::Start));
+    assert!(app.core_picker().is_some());
+
+    std::fs::remove_dir_all(d.path().join(slot::root::SYSTEM_CORES).join("armgba")).unwrap();
+    app.update(0.1);
+
+    assert_eq!(app.core_picker(), None, "the stale picker stayed open");
+    assert_eq!(app.toast(), Some(slot_ui::Toast::PacksChanged));
+    app.apply(Action::GbaDown(Btn::Start));
+    assert_eq!(app.core_picker(), Some(Core::Mgba));
+    assert!(app.core_picker_layout().is_none(), "the 2-core board grew a tray");
+}
+
+#[test]
+fn confirming_a_removed_core_does_not_write_it() {
+    let d = common::tmp_root_with_carts(&["Emerald", "Zzz"]);
+    install_armgba(d.path());
+    let mut app = App::boot(d.path());
+    fake_picker_faces(&mut app);
+    app.apply(Action::GbaDown(Btn::Start));
+    app.apply(Action::GbaDown(Btn::Right));
+    app.apply(Action::GbaDown(Btn::Right));
+
+    std::fs::remove_dir_all(d.path().join(slot::root::SYSTEM_CORES).join("armgba")).unwrap();
+    app.apply(Action::GbaDown(Btn::A));
+
+    assert_eq!(app.core_picker(), None, "the picker stayed on a removed core");
+    assert_eq!(app.toast(), Some(slot_ui::Toast::CoreMissing));
+    assert_eq!(
+        slot_store::core_for(d.path(), "Emerald"),
+        Core::Mgba,
+        "a removed core was written into selected_core"
+    );
+}
+
 #[test]
 fn b_closes_the_picker_without_writing() {
     let (d, mut app) = on_shelf(&["Emerald", "Zzz"]);
@@ -2101,7 +2264,7 @@ fn pad(s: &Session) -> u16 {
 }
 
 #[test]
-fn md_shoulders_reach_the_game_unless_select_is_held() {
+fn md_shoulders_reach_the_game_and_select_keeps_the_state_keys() {
     let d = common::tmp_root_with_md_carts(&["Sonic", "Zzz"]);
     let mut s = session_playing(d.path());
     assert!(!s.app().picture_fit(), "MD opened in fill mode");
@@ -2117,24 +2280,9 @@ fn md_shoulders_reach_the_game_unless_select_is_held() {
         "plain L1 did not reach the MD six-button X"
     );
     s.feed([RawEvent::Up(Btn::L1)], 120);
-
-    s.feed([RawEvent::Down(Btn::Select)], 200);
-    s.feed([RawEvent::Down(Btn::L1)], 220);
+    s.feed([RawEvent::Down(Btn::R1)], 140);
     assert!(
-        s.app().picture_fit(),
-        "SELECT+L1 did not switch MD to fill mode"
-    );
-    assert_eq!(
-        pad(&s) & ButtonMask::L,
-        0,
-        "SELECT+L1 both stretched and reached MD X"
-    );
-    s.feed([RawEvent::Up(Btn::L1)], 240);
-    s.feed([RawEvent::Up(Btn::Select)], 260);
-
-    s.feed([RawEvent::Down(Btn::R1)], 300);
-    assert!(
-        s.app().picture_fit(),
+        !s.app().picture_fit(),
         "plain R1 changed the MD picture instead of reaching MD Z"
     );
     assert_ne!(
@@ -2142,21 +2290,224 @@ fn md_shoulders_reach_the_game_unless_select_is_held() {
         0,
         "plain R1 did not reach the MD six-button Z"
     );
-    s.feed([RawEvent::Up(Btn::R1)], 320);
+    s.feed([RawEvent::Up(Btn::R1)], 160);
 
-    s.feed([RawEvent::Down(Btn::Select)], 400);
-    s.feed([RawEvent::Down(Btn::R1)], 420);
+    // SELECT+R1 is still Save-State.
+    s.feed([RawEvent::Down(Btn::Select)], 200);
+    s.feed([RawEvent::Down(Btn::R1)], 220);
+    assert_eq!(
+        s.app().toast(),
+        Some(slot_ui::Toast::StateSaved),
+        "SELECT+R1 no longer saves a state"
+    );
     assert!(
         !s.app().picture_fit(),
-        "SELECT+R1 did not return MD to actual size"
+        "SELECT+R1 changed the picture instead of saving"
     );
     assert_eq!(
         pad(&s) & ButtonMask::R,
         0,
-        "SELECT+R1 both changed the picture and reached MD Z"
+        "SELECT+R1 changed the picture and reached MD Z"
     );
-    s.feed([RawEvent::Up(Btn::R1)], 440);
-    s.feed([RawEvent::Up(Btn::Select)], 460);
+    s.feed([RawEvent::Up(Btn::R1)], 240);
+
+    // SELECT+L2/R2 is the picture chord, six pixels not shared with the state
+    // shortcuts.
+    s.feed([RawEvent::Down(Btn::L2)], 260);
+    assert!(
+        s.app().picture_fit(),
+        "SELECT+L2 did not switch MD to fill mode"
+    );
+    assert_eq!(
+        pad(&s) & (ButtonMask::L | ButtonMask::R),
+        0,
+        "SELECT+L2 reached the game as a shoulder"
+    );
+    s.feed([RawEvent::Up(Btn::L2)], 280);
+
+    s.feed([RawEvent::Down(Btn::R2)], 300);
+    assert!(
+        !s.app().picture_fit(),
+        "SELECT+R2 did not return MD to actual size"
+    );
+    s.feed([RawEvent::Up(Btn::R2)], 320);
+
+    // SELECT+L1 is still Load-State.
+    s.feed([RawEvent::Down(Btn::L1)], 400);
+    assert_eq!(
+        s.app().toast(),
+        Some(slot_ui::Toast::StateLoaded),
+        "SELECT+L1 no longer loads a state"
+    );
+    assert!(
+        !s.app().picture_fit(),
+        "SELECT+L1 changed the picture instead of loading"
+    );
+    assert_eq!(
+        pad(&s) & ButtonMask::L,
+        0,
+        "SELECT+L1 changed the picture and reached MD X"
+    );
+    s.feed([RawEvent::Up(Btn::L1)], 420);
+    s.feed([RawEvent::Up(Btn::Select)], 440);
+}
+
+#[test]
+fn sfc_shoulders_reach_the_game_and_select_keeps_the_state_keys() {
+    let d = common::tmp_root_with_sfc_carts(&["Mario", "Zzz"]);
+    let mut s = session_playing(d.path());
+    assert!(!s.app().picture_fit(), "SFC opened in fill mode");
+
+    s.feed([RawEvent::Down(Btn::L1)], 100);
+    assert!(
+        !s.app().picture_fit(),
+        "plain L1 changed the SFC picture instead of reaching the game"
+    );
+    assert_ne!(
+        pad(&s) & ButtonMask::L,
+        0,
+        "plain L1 did not reach the SFC L"
+    );
+    s.feed([RawEvent::Up(Btn::L1)], 120);
+    s.feed([RawEvent::Down(Btn::R1)], 140);
+    assert!(
+        !s.app().picture_fit(),
+        "plain R1 changed the SFC picture instead of reaching the game"
+    );
+    assert_ne!(
+        pad(&s) & ButtonMask::R,
+        0,
+        "plain R1 did not reach the SFC R"
+    );
+    s.feed([RawEvent::Up(Btn::R1)], 160);
+
+    // SELECT+R1 is still Save-State.
+    s.feed([RawEvent::Down(Btn::Select)], 200);
+    s.feed([RawEvent::Down(Btn::R1)], 220);
+    assert_eq!(
+        s.app().toast(),
+        Some(slot_ui::Toast::StateSaved),
+        "SELECT+R1 no longer saves a state"
+    );
+    assert!(
+        !s.app().picture_fit(),
+        "SELECT+R1 changed the picture instead of saving"
+    );
+    assert_eq!(
+        pad(&s) & ButtonMask::R,
+        0,
+        "SELECT+R1 changed the picture and reached the SFC R"
+    );
+    s.feed([RawEvent::Up(Btn::R1)], 240);
+
+    // SELECT+L2/R2 is the picture chord.
+    s.feed([RawEvent::Down(Btn::L2)], 260);
+    assert!(
+        s.app().picture_fit(),
+        "SELECT+L2 did not switch SFC to fill mode"
+    );
+    assert_eq!(
+        pad(&s) & (ButtonMask::L | ButtonMask::R),
+        0,
+        "SELECT+L2 reached the game as a shoulder"
+    );
+    s.feed([RawEvent::Up(Btn::L2)], 280);
+
+    s.feed([RawEvent::Down(Btn::R2)], 300);
+    assert!(
+        !s.app().picture_fit(),
+        "SELECT+R2 did not return SFC to actual size"
+    );
+    s.feed([RawEvent::Up(Btn::R2)], 320);
+
+    // SELECT+L1 is still Load-State.
+    s.feed([RawEvent::Down(Btn::L1)], 400);
+    assert_eq!(
+        s.app().toast(),
+        Some(slot_ui::Toast::StateLoaded),
+        "SELECT+L1 no longer loads a state"
+    );
+    assert!(
+        !s.app().picture_fit(),
+        "SELECT+L1 changed the picture instead of loading"
+    );
+    assert_eq!(
+        pad(&s) & ButtonMask::L,
+        0,
+        "SELECT+L1 changed the picture and reached the SFC L"
+    );
+    s.feed([RawEvent::Up(Btn::L1)], 420);
+    s.feed([RawEvent::Up(Btn::Select)], 440);
+}
+
+/// The Super Famicom's X/Y are real buttons: the session opens the core with
+/// `direct_xy`, so the turbo remap leaves them alone.  A GBA cart keeps the
+/// turbo path, where X/Y are the auto-fire keys rather than pad buttons.
+#[test]
+fn sfc_x_and_y_go_to_the_core_instead_of_the_turbo_remap() {
+    let d = common::tmp_root_with_sfc_carts(&["Mario", "Zzz"]);
+    let mut s = session_playing(d.path());
+    assert!(
+        s.emu().expect("no core in the slot").direct_xy(),
+        "the SFC still routes X/Y through the turbo remap"
+    );
+
+    s.feed([RawEvent::Down(Btn::X)], 100);
+    s.feed([RawEvent::Down(Btn::Y)], 116);
+    assert_ne!(pad(&s) & ButtonMask::X, 0, "SFC X never reached the pad");
+    assert_ne!(pad(&s) & ButtonMask::Y, 0, "SFC Y never reached the pad");
+    s.feed([RawEvent::Up(Btn::X)], 132);
+    s.feed([RawEvent::Up(Btn::Y)], 148);
+
+    let g = common::tmp_root_with_carts(&["Emerald", "Zzz"]);
+    let gba = session_playing(g.path());
+    assert!(
+        !gba.emu().expect("no core in the slot").direct_xy(),
+        "the GBA lost its X/Y turbo keys"
+    );
+}
+
+/// Pressing SELECT while a shoulder is already held arms the picture chord.
+/// The shoulder's release must still reach the gesture layer, or the game
+/// keeps fast-forwarding after the key came up.
+#[test]
+fn sfc_fast_forward_released_under_the_picture_chord_stops() {
+    let d = common::tmp_root_with_sfc_carts(&["Mario", "Zzz"]);
+    let mut s = session_playing(d.path());
+    let mut now = run(&mut s, 0, 2);
+
+    s.feed([RawEvent::Down(Btn::R2)], now + 16);
+    now = run(&mut s, now + 16, 2);
+    assert_eq!(
+        s.app().ff_badge(),
+        Some(Icon::FastForward),
+        "hold-to-fast-forward never started"
+    );
+
+    s.feed([RawEvent::Down(Btn::Select)], now + 16);
+    s.feed([RawEvent::Up(Btn::R2)], now + 32);
+    now = run(&mut s, now + 32, 3);
+    assert_eq!(
+        s.app().ff_badge(),
+        None,
+        "the released R2 is still fast-forwarding"
+    );
+    s.feed([RawEvent::Up(Btn::Select)], now + 16);
+}
+
+/// The same release rule for hold-to-rewind.
+#[test]
+fn sfc_rewind_released_under_the_picture_chord_stops() {
+    let d = common::tmp_root_with_sfc_carts(&["Mario", "Zzz"]);
+    let mut s = session_playing(d.path());
+    let now = run(&mut s, 0, 2);
+
+    s.feed([RawEvent::Down(Btn::L2)], now + 16);
+    assert!(s.rewinding(), "hold-to-rewind never started");
+    s.feed([RawEvent::Down(Btn::Select)], now + 32);
+    s.feed([RawEvent::Up(Btn::L2)], now + 48);
+    assert!(!s.rewinding(), "the released L2 is still rewinding");
+    s.feed([RawEvent::Up(Btn::Select)], now + 64);
 }
 
 #[test]

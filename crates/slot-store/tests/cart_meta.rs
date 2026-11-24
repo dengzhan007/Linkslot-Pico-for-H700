@@ -85,6 +85,30 @@ fn a_cheat_path_is_database_backed_with_a_conventional_fallback() {
     );
 }
 
+#[test]
+fn a_core_without_its_own_cheats_uses_the_default_cores_folder() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+    let cart = cart(root);
+    let mgba = root.join("Cheats/GBA/mgba/Game.cht");
+    std::fs::create_dir_all(mgba.parent().unwrap()).unwrap();
+    std::fs::write(&mgba, b"cheat0_code=00").unwrap();
+    assert_eq!(
+        cart_meta::cheat_path(root, &cart, "armgba"),
+        Some(mgba.clone()),
+        "armGBA should inherit the GBA default core's cheat file"
+    );
+
+    let own = root.join("Cheats/GBA/armgba/Game.cht");
+    std::fs::create_dir_all(own.parent().unwrap()).unwrap();
+    std::fs::write(&own, b"cheat0_code=11").unwrap();
+    assert_eq!(
+        cart_meta::cheat_path(root, &cart, "armgba"),
+        Some(own),
+        "a core's own cheat file must win over the fallback"
+    );
+}
+
 #[cfg(not(windows))]
 #[test]
 fn conventional_guide_and_cheat_extensions_are_case_insensitive() {

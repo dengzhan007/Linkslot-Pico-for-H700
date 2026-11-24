@@ -165,6 +165,70 @@ fn a_peer_that_never_speaks_stalls_rather_than_guessing() {
     );
 }
 
+/// Frame numbers cannot be repaired with masks: if one end restarts its cable
+/// mid-stride, the two counters no longer line up and both ends freeze. The
+/// host must ask the pair to drop the cable and re-arm instead of waiting out
+/// the whole quiet timeout.
+#[test]
+fn a_frameskew_asks_both_ends_to_rearm() {
+    let wire = Arc::new(Mutex::new(Wire::default()));
+    let host = spawn(Arc::new(Ring::new(4096)));
+    let join = spawn(Arc::new(Ring::new(4096)));
+
+    host.begin_cable(
+        0,
+        Box::new(End {
+            wire: wire.clone(),
+            first: true,
+        }),
+        Pairing::PairedGba,
+    );
+    join.begin_cable(
+        1,
+        Box::new(End {
+            wire: wire.clone(),
+            first: false,
+        }),
+        Pairing::PairedGba,
+    );
+    host.set_speed(Speed::Normal);
+    join.set_speed(Speed::Normal);
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while host.linked_frames() < 20 {
+        assert!(
+            Instant::now() < deadline,
+            "the pair never started: {} frames",
+            host.linked_frames()
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+
+    // The joiner starts a fresh cable at frame 0 while the host stays at
+    // frame N. The joiner can never catch up on masks alone.
+    join.begin_cable(
+        1,
+        Box::new(End {
+            wire: wire.clone(),
+            first: false,
+        }),
+        Pairing::PairedGba,
+    );
+
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut host_asked = false;
+    let mut join_heard = false;
+    while !(host_asked && join_heard) {
+        host_asked |= host.take_link_resync();
+        join_heard |= join.take_link_resync();
+        assert!(
+            Instant::now() < deadline,
+            "no re-arm request (host asked: {host_asked}, joiner heard: {join_heard})"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
 /// A single-machine hello: `platform`/`core` are the `slot-store`
 /// discriminants. Famicom is 3/2, Super Famicom 4/3.
 fn single(platform: u8, core: u8, rom: [u8; 32]) -> Pairing {

@@ -1,0 +1,28 @@
+armGBA libretro core
+====================
+
+Pinned upstream commit:
+  dda6df08cf06509a85c52aca92c24e9abc9b0a3f
+  https://github.com/MagnominusGit/armGBA/tree/dda6df08cf06509a85c52aca92c24e9abc9b0a3f
+
+The core is built from that source by `cores/armgba/build.sh`.  The same
+script writes `target/cores/armgba-work/armGBA-<commit>.tar.gz`, which is the
+corresponding source for the distributed binary (GPL-2.0 §3(a)).
+
+Licensing of the parts:
+
+  combined libretro core            GPL-2.0   (armgba-GPL-2.0.txt)
+  src/, tests/, libretro/ glue      MPL-2.0   (armgba-MPL-2.0.txt)
+  gambatte/                         GPL-2.0   (gambatte-GPL-2.0.txt)
+  gambatte/.../mem/snes_spc/        LGPL      (armgba-snes_spc-LGPL.txt)
+  libretro/deps/                    MIT / public domain
+                                              (armgba-libretro-deps.txt)
+  libretro/megaduck/                Expat     (armgba-megaduck-Expat.txt)
+
+The core also credits mGBA (MPL-2.0), Gambatte-Speedrun (GPL-2.0), SameBoy
+(MIT), libretro (MIT), RetroArch (MIT) and Super Junior SameDuck (Expat);
+see the upstream README for the full attribution.
+
+armGBA is delivered as an optional LSP extension pack, not in the base image.
+It does not use linkSlot's cable/netpacket session; link play stays on mGBA
+and gpSP.

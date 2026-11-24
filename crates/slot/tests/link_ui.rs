@@ -1581,6 +1581,55 @@ fn a_wireless_adapter_cart_on_mgba_still_says_to_switch_to_gpsp() {
 }
 
 #[test]
+fn armgba_is_told_its_core_has_no_linkslot_link() {
+    let d = common::tmp_root_with_carts(&["Emerald", "Zzz"]);
+    common::write_retail_header(&d, "Emerald", "POKEMON EMER", "BPEE");
+    let mut app = seated_on(&d, Core::Armgba);
+    app.apply(Action::GameMenu);
+    assert!(
+        !app.game_menu_open(),
+        "armGBA opened a link screen its transport cannot drive"
+    );
+    assert_eq!(
+        app.toast(),
+        Some(Toast::CoreNoLink),
+        "armGBA was not told its core has no linkslot link"
+    );
+    assert!(
+        matches!(app.phase(), Phase::Playing { .. }),
+        "the refusal took the game away: {:?}",
+        app.phase()
+    );
+}
+
+/// mGBA's link mode carries the cable only. Offering the SELECT switch here
+/// used to strand the cart on "wireless": both ends connected over TCP and the
+/// session never announced the game, so nothing ever linked.
+#[test]
+fn an_mgba_cable_cart_is_never_switched_to_the_wireless_adapter() {
+    let d = common::tmp_root_with_carts(&["Mario Kart", "Zzz"]);
+    common::write_retail_header(&d, "Mario Kart", "MARIO KART", "AMKE");
+    let mut app = seated_on(&d, Core::Mgba);
+    assert_eq!(
+        app.link_mode("Mario Kart"),
+        (LinkKind::Cable, "auto"),
+        "a cable cart did not start on the cable"
+    );
+    app.apply(Action::GameMenu);
+    assert!(
+        app.game_menu_open(),
+        "mGBA refused a cable cart its link screen"
+    );
+    app.apply(Action::GbaDown(Btn::Select));
+    assert!(app.game_menu_open(), "SELECT left the link screen");
+    assert_eq!(
+        app.link_mode("Mario Kart"),
+        (LinkKind::Cable, "auto"),
+        "SELECT moved an mGBA cable cart to the wireless adapter"
+    );
+}
+
+#[test]
 fn a_game_boy_cart_links_on_mgba_and_is_refused_on_gpsp() {
     for (core, open) in [(Core::Mgba, true), (Core::Gpsp, false)] {
         let d = common::tmp_root_with_gb_carts(&["Pokemon Red", "Zzz"]);

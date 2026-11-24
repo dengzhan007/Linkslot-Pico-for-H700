@@ -254,6 +254,12 @@ impl Session {
         self.emu.as_ref().map_or(0, EmuHandle::frames_taken)
     }
 
+    /// Whether the hold-to-rewind key is down.  The emu thread is told this
+    /// every frame; exposed for tests and diagnostics.
+    pub fn rewinding(&self) -> bool {
+        self.rewinding
+    }
+
     pub fn game_visible(&self) -> bool {
         self.app.game_visible()
     }
@@ -268,24 +274,32 @@ impl Session {
             if let RawEvent::Up(Btn::Select) = ev {
                 self.app.set_select_held(false);
             }
-            // MD's six-button X/Z are plain L/R, so SELECT+L/R is the display
-            // chord. Handle it before the shortcut table: SELECT+L1/R1 are
-            // Load/Save-State by default on every other machine.
-            let md_display_chord = self.app.platform() == Platform::Md
+            // The MD six-button X/Z and the SFC's own L/R reach the game as
+            // plain shoulders; SELECT+L2/R2 is the picture chord on both. Claim
+            // it before the shortcut table: SELECT+L2/R2 are the GB palette
+            // shortcuts, and SELECT+L1/R1 must stay the load/save-state pair.
+            let display_chord = matches!(self.app.platform(), Platform::Md | Platform::Sfc)
                 && matches!(self.app.phase(), Phase::Playing { .. })
                 && self.select_down;
-            if md_display_chord {
+            if display_chord {
                 match ev {
-                    RawEvent::Down(btn @ (Btn::L1 | Btn::R1)) => {
+                    RawEvent::Down(btn @ (Btn::L2 | Btn::R2)) => {
                         self.app.set_select_held(true);
                         self.app.apply(Action::GbaDown(btn));
                         self.pad.apply(Action::GbaUp(btn));
                         continue;
                     }
-                    RawEvent::Up(btn @ (Btn::L1 | Btn::R1)) => {
+                    RawEvent::Up(btn @ (Btn::L2 | Btn::R2)) => {
+                        // Do not swallow the release.  A shoulder that was
+                        // already held (rewind / fast-forward) before SELECT
+                        // armed the chord never came through this branch on
+                        // its press, so the gesture layer still needs the
+                        // release to stop it.  When this branch did swallow
+                        // the press, the remap below has no held key to pair
+                        // the release with and drops it, so it cannot start
+                        // anything.
                         self.app.apply(Action::GbaUp(btn));
                         self.pad.apply(Action::GbaUp(btn));
-                        continue;
                     }
                     _ => {}
                 }
@@ -542,6 +556,7 @@ impl Session {
         if let Some((stem, serial)) = self.app.take_link_reload() {
             self.reload_for_link(&stem, serial);
         }
+        let resync = self.emu.as_ref().is_some_and(EmuHandle::take_link_resync);
         if self.app.link_active() {
             if self.emu.as_ref().is_some_and(EmuHandle::peer_mismatch) {
                 if self.session_link() {
@@ -561,6 +576,17 @@ impl Session {
                     self.detach_link(true);
                 }
                 self.bridge_link(|app| app.peer_ended());
+            } else if resync {
+                if self.session_link() && self.link_attached {
+                    // Frame lockstep was lost (one end restarted its cable).
+                    // Drop this cable; the session re-announces and the next
+                    // attach re-sends a fresh state, so both ends start at
+                    // frame 0 together. No masks can fix a frame-number skew.
+                    crate::link_log::warn(
+                        "link: the cable lost frame lockstep; re-arming from a fresh state",
+                    );
+                    self.detach_link(true);
+                }
             } else if self.emu.as_ref().is_some_and(EmuHandle::link_lost) {
                 if self.session_link() && self.link_attached {
                     // A cable that stalls is not necessarily a dead peer: the
@@ -865,7 +891,13 @@ fn run_marker_text(cart: Option<&str>, linked: bool) -> Option<String> {
         else {
             return;
         };
+        let recorded = slot_store::core_for(&self.root, stem);
         let core = slot_store::core_for_platform(&self.root, stem, platform);
+        if recorded != core && !recorded.is_available(&self.root) {
+            // The selected_core record outlived its extension pack.  Keep the
+            // record (reinstall restores it) but say why this launch changed.
+            self.app.note_missing_core();
+        }
         let sha256 = crate::rom_id::digest_hex(&self.app.cart_hash(stem, &rom));
         let cheevos =
             match crate::cheevos::load_for_game(&self.root, platform.dir_name(), &sha256, stem) {
@@ -918,7 +950,14 @@ fn run_marker_text(cart: Option<&str>, linked: bool) -> Option<String> {
             None => EmuHandle::spawn_with_cheevos(opened.core, rom, ring, sav, resume, rules),
         };
         emu.set_volume(self.app.output_volume());
-        emu.set_direct_xy(platform == Platform::Md);
+        // The Super Famicom has real X/Y buttons, so they go to the core like
+        // the Mega Drive's six-button X/Z instead of becoming turbo A/B.  Only
+        // the Famicom (and the Game Boys) still use X/Y as the turbo keys.
+        let direct_xy = matches!(platform, Platform::Md | Platform::Sfc);
+        emu.set_direct_xy(direct_xy);
+        if direct_xy {
+            eprintln!("slot: input: X/Y reach the core as real buttons");
+        }
         emu.set_driven(self.driven);
         self.app.set_snapshot(Box::new(emu.snapshot()));
         self.emu = Some(emu);
@@ -1419,6 +1458,11 @@ fn run_marker_text(cart: Option<&str>, linked: bool) -> Option<String> {
         for frame in &frames {
             if crate::cable::is_control(frame) {
                 self.link_control(frame);
+            } else if crate::cable::is_resync(frame) {
+                // A re-arm request from the cable we just dropped: the attach
+                // that follows already starts from a fresh state, so replaying
+                // it would only make the new cable detach again.
+                crate::link_log::debug("link: dropped a stale re-arm request");
             } else {
                 // A cable frame that beat the attach: keep it so the hand-over
                 // can replay it. Losing a one-shot hello used to freeze a

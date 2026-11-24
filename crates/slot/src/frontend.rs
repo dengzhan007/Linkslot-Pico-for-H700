@@ -132,9 +132,18 @@ pub struct Frontend {
     utility_tex: Option<TexId>,
     notice_tex: Option<TexId>,
     notice_shown: Option<(String, String, Option<u64>)>,
-    utility_shown: Option<(String, Vec<String>, usize, bool, Option<String>, Option<(usize, bool)>)>,
+    utility_shown: Option<(
+        String,
+        Vec<String>,
+        usize,
+        bool,
+        Option<String>,
+        Option<(usize, bool)>,
+        Option<(usize, usize)>,
+    )>,
     guide_tex: Option<TexId>,
-    guide_shown: Option<(String, usize)>,
+    /// Title, block index, first visible line and scroll range of the face.
+    guide_shown: Option<(String, usize, usize, usize)>,
     /// The hold-to-leave card, built once: only the bar over it moves.
     hold_tex: Option<TexId>,
     nav_title: Option<TexId>,
@@ -143,6 +152,9 @@ pub struct Frontend {
     folder_shown: Option<crate::app::FolderHeader>,
     folder_prev_tex: Option<TexId>,
     folder_prev_shown: Option<crate::app::FolderHeader>,
+    /// The transfer room's top-centre card, swapped in for the shelf title.
+    transfer_header_tex: Option<TexId>,
+    transfer_header_shown: Option<crate::app::TransferHeader>,
     folder_hold_tex: Option<TexId>,
     folder_hold_lang: Option<slot_i18n::Language>,
     session: Session,
@@ -346,6 +358,7 @@ impl Frontend {
             nav_title: None, nav_title_shown: String::new(),
             folder_tex: None, folder_shown: None,
             folder_prev_tex: None, folder_prev_shown: None,
+            transfer_header_tex: None, transfer_header_shown: None,
             folder_hold_tex: None, folder_hold_lang: None,
             session,
             start: now,
@@ -478,25 +491,38 @@ impl Frontend {
     }
 
     fn draw_guide(&mut self, compositor: &mut Compositor) {
-        let Some((title, lines, page, pages)) = self.session.app().guide_page() else {
+        let Some(frame) = self.session.app().guide_frame() else {
             self.guide_shown = None;
             return;
         };
-        let key = (title.clone(), page);
+        let key = (
+            frame.title.clone(),
+            frame.section,
+            frame.scroll,
+            frame.max_scroll,
+        );
         if self.guide_shown.as_ref() != Some(&key) {
             let lang = self.session.app().language();
-            let face = if let Some(image) = self.session.app().guide_image() {
+            let face = if let Some(image) = &frame.image {
                 slot_ui::guide::image_face(
-                    &title,
+                    &frame.title,
                     &image.rgba,
                     image.width,
                     image.height,
-                    page,
-                    pages,
+                    frame.page,
+                    frame.pages,
                     lang,
                 )
             } else {
-                slot_ui::guide::page_face(&title, &lines, page, pages, lang)
+                slot_ui::guide::page_face(
+                    &frame.title,
+                    &frame.lines,
+                    frame.scroll,
+                    frame.max_scroll,
+                    frame.page,
+                    frame.pages,
+                    lang,
+                )
             };
             upload(compositor, &mut self.guide_tex, face);
             self.guide_shown = Some(key);
@@ -732,6 +758,21 @@ impl Frontend {
         self.session
             .app_mut()
             .set_shelf_legend_faces(shelf_left, shelf_right);
+        // The transfer room swaps the shelf hints for its own keys.
+        let transfer_left = sized_legend_faces(
+            compositor,
+            &[
+                ("A", slot_i18n::t(lang, "device.app.transfer.legend_send")),
+                ("Y", slot_i18n::t(lang, "device.app.transfer.legend_content")),
+            ],
+        );
+        let transfer_right = sized_legend_faces(
+            compositor,
+            &[("M", slot_i18n::t(lang, "device.app.transfer.legend_exit"))],
+        );
+        self.session
+            .app_mut()
+            .set_transfer_legend_faces(transfer_left, transfer_right);
         let cloud = sync_face(
             compositor,
             slot_ui::sync_overlay::cloud_face(SYNC_CLOUD_PX),
@@ -881,7 +922,15 @@ impl Frontend {
             .collect();
         let blanks: Vec<TexId> = faces.blank_chips.into_iter().map(&mut cart).collect();
         let shadow = cart(faces.chip_shadow);
+        let highlight = cart(faces.core_highlight);
+        let selection_glow = cart(faces.core_selection_glow);
+        let selection_caret = cart(faces.core_selection_caret);
+        let running_face = faces.core_running;
+        let (running_w, running_h) = (running_face.w, running_face.h);
+        let running = cart(running_face);
         let mut up = |f: UndoFace| (compositor.create_texture(f.w, f.h, &f.rgba), f.w, f.h);
+        let tray = up(faces.tray).0;
+        let tray_label = up(faces.tray_label);
         let lines = faces.shutdown.into_iter().map(&mut up).collect();
         let cards = faces.quick_cards.map(&mut up);
         let power_cards = faces.power_cards.map(&mut up);
@@ -971,6 +1020,12 @@ impl Frontend {
             legend,
         });
         app.set_core_part_faces(sockets, chips, blanks, shadow);
+        app.set_core_tray_face(tray);
+        app.set_core_tray_label(tray_label);
+        app.set_core_highlight_face(highlight);
+        app.set_core_selection_glow(selection_glow);
+        app.set_core_selection_caret(selection_caret);
+        app.set_core_running_face((running, running_w, running_h));
         app.set_core_legend_faces(core_legend);
         app.set_link_menu_faces(roles);
         app.set_link_mode_faces(modes);
@@ -1001,6 +1056,20 @@ impl Frontend {
         self.session
             .app_mut()
             .set_shelf_legend_faces(shelf_left, shelf_right);
+        let transfer_left = sized_legend_faces(
+            compositor,
+            &[
+                ("A", slot_i18n::t(lang, "device.app.transfer.legend_send")),
+                ("Y", slot_i18n::t(lang, "device.app.transfer.legend_content")),
+            ],
+        );
+        let transfer_right = sized_legend_faces(
+            compositor,
+            &[("M", slot_i18n::t(lang, "device.app.transfer.legend_exit"))],
+        );
+        self.session
+            .app_mut()
+            .set_transfer_legend_faces(transfer_left, transfer_right);
     }
 
     fn upload_collection_backdrops(&mut self, compositor: &mut Compositor) {
@@ -1634,7 +1703,35 @@ impl Frontend {
         self.sync_transfer(compositor);
         self.draws.clear();
         self.session.app().draw(&mut self.draws);
-        if self.session.app().navigation_visible() {
+        let transfer_header = self.session.app().transfer_header();
+        if let Some(header) = transfer_header {
+            // A transient HUD toast owns the top strip while it is up.  The
+            // card painted over it hid "connected" / "they already own this
+            // cart"; yield the strip until the message fades.
+            if !self.session.app().hud_toast_visible() {
+                if self.transfer_header_shown.as_ref() != Some(&header) {
+                    let face = slot_ui::navigation::transfer_header(
+                        header.host,
+                        header.game.as_deref(),
+                        header.content.code() as usize,
+                        header.language,
+                    );
+                    upload(compositor, &mut self.transfer_header_tex, face);
+                    self.transfer_header_shown = Some(header);
+                }
+                if let Some(tex) = self.transfer_header_tex {
+                    let y = 14.0 + self.session.app().transfer_header_offset();
+                    self.draws.push(Draw::Tex {
+                        x: 28.0,
+                        y: y.round(),
+                        w: 664.0,
+                        h: 76.0,
+                        tex,
+                        alpha: 1.0,
+                    });
+                }
+            }
+        } else if self.session.app().navigation_visible() {
             let anim = self.session.app().folder_animation();
             let kind = anim.as_ref().map(|anim| anim.kind);
             let progress = anim.as_ref().map(|anim| anim.progress).unwrap_or(1.0);
@@ -1678,7 +1775,7 @@ impl Frontend {
                             previous,
                             1.0 - eased,
                             0.0,
-                            -eased * 6.0,
+                            -eased * crate::app::HEADER_SLIDE_PX,
                         ) {
                             self.draws.push(draw);
                         }
@@ -1722,7 +1819,7 @@ impl Frontend {
                             header,
                             eased,
                             0.0,
-                            (1.0 - eased) * 6.0,
+                            -(1.0 - eased) * crate::app::HEADER_SLIDE_PX,
                         ) {
                             self.draws.push(draw);
                         }
@@ -1791,6 +1888,11 @@ impl Frontend {
                 .app()
                 .link_band_menu_open()
                 .then(|| self.session.app().link_band_state());
+            let content_menu = self
+                .session
+                .app()
+                .transfer_content_menu()
+                .map(|index| (index, self.session.app().transfer_content().code() as usize));
             let key = (
                 content.0.clone(),
                 content.1.clone(),
@@ -1798,11 +1900,18 @@ impl Frontend {
                 notice,
                 menu_mode,
                 band_state,
+                content_menu,
             );
             if self.utility_shown.as_ref() != Some(&key) {
                 let face = if self.session.app().link_band_menu_open() {
                     let (selected, supported) = self.session.app().link_band_state();
                     slot_ui::navigation::band_menu(selected, supported, lang)
+                } else if let Some(index) = self.session.app().transfer_content_menu() {
+                    slot_ui::navigation::transfer_content_menu(
+                        index,
+                        self.session.app().transfer_content().code() as usize,
+                        lang,
+                    )
                 } else if self.session.app().transfer_menu_open() {
                     slot_ui::navigation::transfer_menu(
                         self.session.app().transfer_network_label(lang),
@@ -2531,6 +2640,11 @@ fn draw_notice(&mut self, compositor: &mut Compositor) {
                 .app()
                 .link_band_menu_open()
                 .then(|| self.session.app().link_band_state());
+            let content_menu = self
+                .session
+                .app()
+                .transfer_content_menu()
+                .map(|index| (index, self.session.app().transfer_content().code() as usize));
             let key = (
                 content.0.clone(),
                 content.1.clone(),
@@ -2538,11 +2652,18 @@ fn draw_notice(&mut self, compositor: &mut Compositor) {
                 notice,
                 menu_mode,
                 band_state,
+                content_menu,
             );
             if self.utility_shown.as_ref() != Some(&key) {
                 let face = if self.session.app().link_band_menu_open() {
                     let (selected, supported) = self.session.app().link_band_state();
                     slot_ui::navigation::band_menu(selected, supported, lang)
+                } else if let Some(index) = self.session.app().transfer_content_menu() {
+                    slot_ui::navigation::transfer_content_menu(
+                        index,
+                        self.session.app().transfer_content().code() as usize,
+                        lang,
+                    )
                 } else if self.session.app().transfer_menu_open() {
                     slot_ui::navigation::transfer_menu(
                         self.session.app().transfer_network_label(lang),
@@ -3017,6 +3138,12 @@ struct UiFaces {
     chips: Vec<Vec<CartFace>>,
     blank_chips: Vec<CartFace>,
     chip_shadow: CartFace,
+    tray: UndoFace,
+    tray_label: UndoFace,
+    core_highlight: CartFace,
+    core_selection_glow: CartFace,
+    core_selection_caret: CartFace,
+    core_running: CartFace,
     core_legend: Vec<UndoFace>,
     link_roles: Vec<UndoFace>,
     link_modes: Vec<UndoFace>,
@@ -3106,6 +3233,23 @@ impl UiFaces {
                 .map(|p| chip_face_for(*p, None))
                 .collect(),
             chip_shadow: chip_shadow_face(),
+            tray: slot_ui::switch_style::card_face(
+                slot_ui::TRAY_PLATE_W as u32,
+                slot_ui::TRAY_PLATE_H as u32,
+                false,
+            ),
+            tray_label: slot_ui::large_word_face(
+                slot_i18n::t(lang, "device.app.core.tray"),
+                12.0,
+                [0x7a, 0x80, 0x8f],
+            ),
+            core_highlight: slot_ui::chip_highlight_face(),
+            core_selection_glow: slot_ui::selection_glow_face(),
+            core_selection_caret: slot_ui::selection_caret_face(),
+            core_running: slot_ui::running_badge_face(slot_i18n::t(
+                lang,
+                "device.app.core.running",
+            )),
             core_legend: vec![
                 hint_face("B", slot_i18n::t(lang, "device.app.core.cancel")),
                 arrows_hint_face(slot_i18n::t(lang, "device.app.core.switch")),
@@ -3113,6 +3257,8 @@ impl UiFaces {
                 hint_face("Y", slot_i18n::t(lang, "device.app.core.switch_net_chip")),
                 hint_face("X", slot_i18n::t(lang, "device.app.core.front_cover")),
                 hint_face(slot_i18n::t(lang, "device.app.core.up_down_keys"), slot_i18n::t(lang, "device.app.core.up_down_switch")),
+                arrows_hint_face(slot_i18n::t(lang, "device.app.core.select")),
+                hint_face("A", slot_i18n::t(lang, "device.app.core.swap")),
             ],
             link_roles: LinkRow::ALL.iter().map(|r| menu_face(r.text(lang))).collect(),
             link_modes: [
@@ -3869,6 +4015,8 @@ mod faces_lang_tests {
             "device.app.shelf.hold_sync",
             "device.app.shelf.search",
             "device.app.shelf.hold_intro",
+            "device.app.transfer.legend_send",
+            "device.app.transfer.legend_exit",
         ] {
             let zh = slot_i18n::t(Language::ZhCn, key);
             let en = slot_i18n::t(Language::EnUs, key);

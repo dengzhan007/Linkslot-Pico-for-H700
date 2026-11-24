@@ -56,8 +56,8 @@ fn enter_folder_mode(app: &mut App) {
         app.folder_mode(),
         "the SELECT hold did not enter folder mode"
     );
-    // Let the 180 ms header animation finish before the next key.
-    app.update(0.25);
+    // Let the 450 ms header slide finish before the next key.
+    app.update(0.6);
 }
 
 #[test]
@@ -202,6 +202,25 @@ fn entering_favorites_leaves_folder_mode() {
 }
 
 #[test]
+fn folder_mode_opens_from_the_favorites_rack() {
+    let mut app = app();
+    app.apply(Action::FfStart); // favourite the selected GBA cart
+    app.apply(Action::RewindStart); // L2 jumps to Favorites
+    assert_eq!(app.shelf_platform_name(), Some("收藏"));
+    assert_eq!(app.selected_stem(), Some("阿拉丁"));
+
+    enter_folder_mode(&mut app);
+    assert!(
+        app.folder_mode(),
+        "holding SELECT on Favorites did not open the folder"
+    );
+    let header = app.folder_header().expect("no folder header");
+    assert_eq!(header.platform, "GBA");
+    assert_eq!(header.folder, "动作");
+    assert_eq!(app.selected_stem(), Some("阿拉丁"));
+}
+
+#[test]
 fn search_is_named_after_the_folder() {
     let mut app = app();
     enter_folder_mode(&mut app);
@@ -224,6 +243,56 @@ fn a_platform_with_no_subfolders_refuses_folder_mode() {
     app.update(1.01);
     assert!(!app.folder_mode(), "root-only ROMs entered folder mode");
     assert_eq!(app.toast(), Some(slot_ui::Toast::FolderNone));
+}
+
+/// Entry is not a property of the machine on screen: a rack whose ROMs all
+/// sit in `Games/<platform>/` opens the first machine that does have folders
+/// instead of refusing the hold.
+#[test]
+fn a_machine_without_folders_opens_the_first_machine_that_has_them() {
+    let mut app = App::new(vec![
+        cart(Platform::Gba, "阿拉丁", "动作"),
+        cart(Platform::Gba, "合金弹头", "动作/横版"),
+        cart(Platform::Fc, "魂斗罗", ""),
+    ]);
+    // R1 walks the racks with cartridges: GBA -> FC (GB/GBC are empty).
+    tap(&mut app, Btn::R1);
+    assert_eq!(app.shelf_platform_name(), Some("FC"));
+    assert_eq!(app.selected_stem(), Some("魂斗罗"));
+
+    enter_folder_mode(&mut app);
+    let header = app.folder_header().expect("no folder header");
+    assert_eq!(
+        header.platform, "GBA",
+        "folder mode did not leave the folderless FC rack"
+    );
+    assert_eq!(header.folder, "动作");
+    assert_eq!(app.selected_stem(), Some("阿拉丁"));
+
+    // The view is the card's whole folder list, so R1 still steps folders.
+    tap(&mut app, Btn::R1);
+    assert_eq!(app.folder_header().unwrap().folder, "动作/横版");
+}
+
+/// The same rule from a collection rack: a cart of a machine with no folders
+/// still opens a folder view instead of refusing.
+#[test]
+fn a_folderless_cart_in_favorites_opens_another_machines_folder() {
+    let mut app = App::new(vec![
+        cart(Platform::Gba, "阿拉丁", "动作"),
+        cart(Platform::Fc, "魂斗罗", ""),
+    ]);
+    tap(&mut app, Btn::R1);
+    assert_eq!(app.selected_stem(), Some("魂斗罗"));
+    app.apply(Action::FfStart); // favourite the FC cart
+    app.apply(Action::RewindStart); // L2 jumps to Favorites
+    assert_eq!(app.shelf_platform_name(), Some("收藏"));
+    assert_eq!(app.selected_stem(), Some("魂斗罗"));
+
+    enter_folder_mode(&mut app);
+    let header = app.folder_header().expect("no folder header");
+    assert_eq!(header.platform, "GBA");
+    assert_eq!(header.folder, "动作");
 }
 
 #[test]
@@ -297,7 +366,7 @@ fn entering_and_switching_write_the_folder_to_the_state_file() {
     assert_eq!(app.selected_stem(), Some("阿拉丁"));
     app.apply(Action::GbaDown(Btn::Select));
     app.update(1.01);
-    app.update(0.25);
+    app.update(0.6);
     let state = slot_store::read_slot_state(d.path());
     assert!(state.folder_mode);
     assert_eq!(state.folder_path.as_deref(), Some("动作"));
@@ -308,7 +377,7 @@ fn entering_and_switching_write_the_folder_to_the_state_file() {
 
     app.apply(Action::GbaDown(Btn::Select));
     app.update(1.01);
-    app.update(0.25);
+    app.update(0.6);
     let state = slot_store::read_slot_state(d.path());
     assert!(!state.folder_mode, "leaving the mode was not persisted");
 }

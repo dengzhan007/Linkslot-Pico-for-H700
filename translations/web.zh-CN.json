@@ -38,7 +38,7 @@
     "web.about.packsReadonly": "设备正在游戏中或同步中，暂不能安装扩展包。",
     "web.about.packsRemove": "卸载",
     "web.about.packsRemoved": "已卸载扩展包 {id}",
-    "web.about.packsRemoveConfirm": "卸载扩展包“{id}”？会删除它安装的定义/徽章/核心文件；已解锁的成就进度不会被删除。",
+    "web.about.packsRemoveConfirm": "卸载扩展包“{id}”？会删除它安装的定义/徽章/核心文件；使用该核心的卡带会暂时回退默认核心，重新安装后恢复原来的选择；已解锁的成就进度不会被删除。",
     "web.about.packsRemoveFailed": "卸载扩展包失败",
     "web.about.packsTooLarge": "扩展包超过 {limit} 上限。",
     "web.about.packsTrust": "只安装可信来源的扩展包：核心是原生代码，会以设备权限运行。",

@@ -1,4 +1,4 @@
-//! 核心表：7 个 libretro 核心的元数据。
+//! 核心表：8 个 libretro 核心的元数据。
 //!
 //! 只放**静态事实**：id、动态库名、显示名、芯片短名、可运行的机种、固定选项、
 //! 颜色校正键名、是否支持连机。依赖运行时上下文的部分（调色板、BIOS、序列号、
@@ -148,8 +148,28 @@ pub const GENESIS: CoreSpec = CoreSpec {
     colour: None,
 };
 
+/// GBA 的第三个核心：armGBA（AArch64 重编译器）。以 LSP 扩展包安装，单人游玩；
+/// 它的联机是 RetroArch netplay 自己的一套，linkslot 的电缆/netpacket 会话不接。
+pub const ARMGBA: CoreSpec = CoreSpec {
+    id: CoreId("armgba"),
+    dylib: "armgba",
+    display: "armGBA",
+    chip: "armGBA",
+    machines: &[MachineId("GBA")],
+    frameskip: false,
+    link: false,
+    fixed_options: &[],
+    colour: Some(ColourSpec {
+        key: "armgba_color_correction",
+        on: "enabled",
+        off: "disabled",
+    }),
+};
+
 /// 核心表。顺序用于稳定输出（不是落盘契约）。
-pub const CORES: &[CoreSpec] = &[MGBA, GPSP, FCEUMM, NESTOPIA, SNES9X, SUPAFAUST, GENESIS];
+pub const CORES: &[CoreSpec] = &[
+    MGBA, GPSP, FCEUMM, NESTOPIA, SNES9X, SUPAFAUST, GENESIS, ARMGBA,
+];
 
 pub fn core(id: &str) -> Option<&'static CoreSpec> {
     CORES.iter().find(|c| c.id.0 == id)

@@ -1,4 +1,6 @@
-use slot::core_picker::{CorePicker, Outcome, Press, CLOSE_MS, HOP_MS, LIFT_MS, OPEN_MS, SLIDE_MS};
+use slot::core_picker::{
+    CorePicker, Outcome, Press, ThreeLayout, CLOSE_MS, HOP_MS, LIFT_MS, OPEN_MS, SLIDE_MS,
+};
 use slot_store::Core;
 use slot_ui::Millis;
 
@@ -265,4 +267,111 @@ fn an_fc_board_with_only_fceumm_is_a_single_information_board() {
     assert!(p.is_single());
     let chip = p.chip(0);
     assert_eq!((chip.seated, chip.across), (Some(Core::Nes), 0.5));
+}
+
+fn three(seat: Core, alt: Option<Core>) -> CorePicker {
+    let mut p = CorePicker::open_three(
+        seat,
+        vec![Core::Mgba, Core::Gpsp, Core::Armgba],
+        alt,
+        0,
+    );
+    p.start(0);
+    p
+}
+
+#[test]
+fn a_third_gba_core_is_highlighted_in_the_tray_and_swaps_with_slot_two() {
+    let mut p = three(Core::Mgba, Some(Core::Gpsp));
+    assert!(!p.is_single());
+    assert_eq!(
+        p.layout(),
+        Some(ThreeLayout {
+            slot1: Core::Mgba,
+            slot2: Core::Gpsp,
+            tray: Core::Armgba,
+        })
+    );
+    assert_eq!((p.selected_pos(), p.seat(), p.active()), (0, Core::Mgba, Core::Mgba));
+
+    assert_eq!(p.press(Press::Right, 100), Outcome::Nothing);
+    assert_eq!((p.selected_pos(), p.seat()), (1, Core::Gpsp));
+    assert_eq!(p.active(), Core::Mgba, "the highlight does not run the core");
+    assert_eq!(p.press(Press::Right, 200), Outcome::Nothing);
+    assert_eq!((p.selected_pos(), p.seat()), (2, Core::Armgba));
+    assert_eq!(p.active(), Core::Mgba);
+
+    let at = 300;
+    assert_eq!(p.press(Press::Keep, at), Outcome::Write(Core::Armgba));
+    assert_eq!(
+        p.layout(),
+        Some(ThreeLayout {
+            slot1: Core::Mgba,
+            slot2: Core::Armgba,
+            tray: Core::Gpsp,
+        })
+    );
+    assert_eq!((p.selected_pos(), p.active()), (1, Core::Armgba));
+    assert_eq!(p.swap_progress(at), Some(0.0));
+    assert_eq!(p.swap_progress(at + HOP_MS / 2).map(|q| q > 0.0), Some(true));
+    assert_eq!(p.swap_progress(at + HOP_MS), None);
+    assert!(!p.finished(at + HOP_MS), "the page is still showing the swap");
+    assert!(p.finished(at + HOP_MS + CLOSE_MS));
+}
+
+#[test]
+fn opening_on_the_hot_core_keeps_mgba_in_slot_one() {
+    let p = three(Core::Armgba, None);
+    assert_eq!(
+        p.layout(),
+        Some(ThreeLayout {
+            slot1: Core::Mgba,
+            slot2: Core::Armgba,
+            tray: Core::Gpsp,
+        })
+    );
+    assert_eq!((p.selected_pos(), p.seat(), p.active()), (1, Core::Armgba, Core::Armgba));
+}
+
+#[test]
+fn the_remembered_alternative_is_used_when_the_default_core_is_selected() {
+    let p = three(Core::Mgba, Some(Core::Armgba));
+    assert_eq!(
+        p.layout(),
+        Some(ThreeLayout {
+            slot1: Core::Mgba,
+            slot2: Core::Armgba,
+            tray: Core::Gpsp,
+        })
+    );
+    assert_eq!((p.selected_pos(), p.seat()), (0, Core::Mgba));
+
+    let fallback = three(Core::Mgba, None);
+    assert_eq!(
+        fallback.layout().map(|layout| layout.slot2),
+        Some(Core::Gpsp),
+        "no remembered alternative should fall back to gpSP"
+    );
+}
+
+#[test]
+fn a_three_core_picker_refuses_the_edges_and_back_does_not_write() {
+    let mut p = three(Core::Mgba, Some(Core::Gpsp));
+    assert_eq!(p.press(Press::Left, 100), Outcome::Refused);
+    assert_ne!(p.chip(100).shake, 0.0);
+    assert_eq!(p.press(Press::Right, 200), Outcome::Nothing);
+    assert_eq!(p.press(Press::Right, 300), Outcome::Nothing);
+    assert_eq!(p.press(Press::Right, 400), Outcome::Refused);
+    assert_eq!(p.press(Press::Back, 500), Outcome::Nothing);
+    assert!(p.finished(500 + CLOSE_MS));
+}
+
+#[test]
+fn selecting_a_chip_in_a_socket_writes_it_without_a_swap() {
+    let mut p = three(Core::Mgba, Some(Core::Gpsp));
+    assert_eq!(p.press(Press::Right, 100), Outcome::Nothing);
+    assert_eq!(p.press(Press::Keep, 200), Outcome::Write(Core::Gpsp));
+    assert_eq!(p.active(), Core::Gpsp);
+    assert_eq!(p.swap_progress(200), None, "a socket chip does not swap");
+    assert!(p.finished(200 + CLOSE_MS));
 }

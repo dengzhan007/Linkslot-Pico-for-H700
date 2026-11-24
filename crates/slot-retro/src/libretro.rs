@@ -440,6 +440,8 @@ pub struct LibretroCore {
     rom_path: Option<CString>,
     av: AvInfo,
     loaded: bool,
+    /// Ask for the six-button pad on both ports (Mega Drive).
+    six_button: bool,
     state_size: Option<(usize, usize)>,
     _lib: Library,
 }
@@ -478,6 +480,37 @@ impl LibretroCore {
 
     pub fn reported_save_dir(&self) -> String {
         self.host.save_dir.to_string_lossy().into_owned()
+    }
+
+    /// Ask the core for six-button pads on both ports (the Mega Drive).
+    ///
+    /// Call it before [`RetroCore::load`]: the device is applied when the ROM
+    /// loads, so the first frame already uses the six-button pad.  Without it
+    /// genesis_plus_gx falls back to a 3-button pad for ROMs whose header does
+    /// not advertise the 6-button one, and the extra buttons do nothing.
+    pub fn set_six_button_pads(&mut self, on: bool) {
+        self.six_button = on;
+        if self.loaded {
+            self.apply_port_devices();
+        }
+    }
+
+    fn apply_port_devices(&mut self) {
+        let device = if self.six_button {
+            DEVICE_MDPAD_6B
+        } else {
+            DEVICE_JOYPAD
+        };
+        unsafe {
+            (self.api.set_controller_port_device)(0, device);
+            if self.six_button {
+                // Player two reads port 2; the cable link feeds it.
+                (self.api.set_controller_port_device)(1, device);
+            }
+        }
+        if self.six_button {
+            eprintln!("slot: input: six-button pad on both ports");
+        }
     }
 
     pub fn asked_for_rumble(&self) -> bool {
@@ -568,6 +601,7 @@ impl LibretroCore {
                 sample_rate: 0.0,
             },
             loaded: false,
+            six_button: false,
             state_size: None,
             _lib: lib,
         })
@@ -665,7 +699,7 @@ impl RetroCore for LibretroCore {
             fps: av.timing.fps,
             sample_rate: av.timing.sample_rate,
         };
-        unsafe { (self.api.set_controller_port_device)(0, DEVICE_JOYPAD) };
+        self.apply_port_devices();
         Ok(())
     }
 

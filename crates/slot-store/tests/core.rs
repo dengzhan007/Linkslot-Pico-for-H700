@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use slot_store::{
-    available_options, core_for, core_for_platform, read_selected_cores, write_selected_core, Core,
-    Platform,
+    available_options, core_for, core_for_platform, read_selected_cores, tray_alt,
+    write_selected_core, write_tray_alt, Core, Platform,
 };
 use tempfile::tempdir;
 
@@ -226,7 +226,7 @@ fn the_picker_board_has_exactly_two_sockets() {
 
 #[test]
 fn every_core_we_ship_is_in_the_every_list() {
-    assert_eq!(Core::EVERY.len(), 7);
+    assert_eq!(Core::EVERY.len(), 8);
     assert_eq!(
         Core::EVERY,
         [
@@ -236,7 +236,8 @@ fn every_core_we_ship_is_in_the_every_list() {
             Core::Snes,
             Core::Gpgx,
             Core::Snes9x,
-            Core::Nestopia
+            Core::Nestopia,
+            Core::Armgba
         ]
     );
     for core in Core::EVERY {
@@ -257,6 +258,10 @@ fn every_core_we_ship_is_in_the_every_list() {
     assert_eq!(Core::Gpgx.text(), "Genesis Plus GX");
     assert_eq!(Core::Gpgx.chip_text(), "GPGX");
     assert_eq!(Core::parse("genesis_plus_gx"), Some(Core::Gpgx));
+    assert_eq!(Core::Armgba.as_str(), "armgba");
+    assert_eq!(Core::Armgba.text(), "armGBA");
+    assert_eq!(Core::Armgba.chip_text(), "armGBA");
+    assert_eq!(Core::parse("armgba"), Some(Core::Armgba));
 }
 
 #[test]
@@ -310,6 +315,37 @@ fn a_famicom_core_chosen_for_a_game_boy_cart_is_dropped() {
 }
 
 #[test]
+fn a_recorded_armgba_without_its_binary_falls_back_to_the_default() {
+    let d = tempdir().unwrap();
+    install_core(d.path(), Core::Mgba);
+    install_core(d.path(), Core::Gpsp);
+    install_core(d.path(), Core::Armgba);
+    write_selected_core(d.path(), "Emerald", Core::Armgba).unwrap();
+    assert_eq!(
+        core_for_platform(d.path(), "Emerald", Platform::Gba),
+        Core::Armgba
+    );
+
+    // Web uninstall deletes the pack's .so; the record stays, the launch
+    // falls back to mGBA, and reinstalling makes the record usable again.
+    std::fs::remove_dir_all(d.path().join("System/linkSlot/cores/armgba")).unwrap();
+    assert_eq!(
+        core_for_platform(d.path(), "Emerald", Platform::Gba),
+        Core::Mgba
+    );
+    assert_eq!(
+        available_options(d.path(), Platform::Gba),
+        vec![Core::Mgba, Core::Gpsp],
+        "the picker still offered the removed armGBA"
+    );
+    assert_eq!(
+        read_selected_cores(d.path()).get("Emerald"),
+        Some(&Core::Armgba),
+        "the card's saved choice should survive the uninstall"
+    );
+}
+
+#[test]
 fn a_recorded_core_without_its_binary_falls_back_to_the_default() {
     let d = tempfile::tempdir().unwrap();
     install_core(d.path(), Core::Mgba);
@@ -341,6 +377,51 @@ fn the_picker_only_lists_cores_present_on_the_card() {
         available_options(d.path(), Platform::Sfc),
         vec![Core::Snes9x, Core::Snes]
     );
+}
+
+#[test]
+fn gba_lists_mgba_gpsp_and_the_optional_armgba() {
+    assert_eq!(
+        Core::options_for(Platform::Gba),
+        [Core::Mgba, Core::Gpsp, Core::Armgba]
+    );
+    let d = tempfile::tempdir().unwrap();
+    install_core(d.path(), Core::Mgba);
+    install_core(d.path(), Core::Gpsp);
+    assert_eq!(
+        available_options(d.path(), Platform::Gba),
+        vec![Core::Mgba, Core::Gpsp],
+        "没有 armGBA 扩展包时选择器仍是两槽"
+    );
+    install_core(d.path(), Core::Armgba);
+    assert_eq!(
+        available_options(d.path(), Platform::Gba),
+        vec![Core::Mgba, Core::Gpsp, Core::Armgba],
+        "装包后第三颗核心出现在托盘位"
+    );
+}
+
+#[test]
+fn the_hot_sockets_last_alternative_is_remembered_per_platform() {
+    let d = tempdir().unwrap();
+    assert_eq!(tray_alt(d.path(), Platform::Gba), None);
+    write_tray_alt(d.path(), Platform::Gba, Core::Armgba).unwrap();
+    assert_eq!(
+        tray_alt(d.path(), Platform::Gba),
+        Some(Core::Armgba),
+        "the last armGBA alternative was lost"
+    );
+    write_tray_alt(d.path(), Platform::Gba, Core::Gpsp).unwrap();
+    assert_eq!(tray_alt(d.path(), Platform::Gba), Some(Core::Gpsp));
+
+    // mGBA is the fixed slot 1, never the alternative.
+    write_tray_alt(d.path(), Platform::Gba, Core::Mgba).unwrap();
+    assert_eq!(tray_alt(d.path(), Platform::Gba), None);
+
+    // Another platform's line is independent.
+    write_tray_alt(d.path(), Platform::Fc, Core::Nes).unwrap();
+    assert_eq!(tray_alt(d.path(), Platform::Gba), None);
+    assert_eq!(tray_alt(d.path(), Platform::Fc), Some(Core::Nes));
 }
 
 #[test]

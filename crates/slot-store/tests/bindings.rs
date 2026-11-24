@@ -109,6 +109,23 @@ fn the_buttons_are_one_set_written_and_read_back() {
 }
 
 #[test]
+fn the_super_famicom_extra_buttons_live_in_the_same_file() {
+    let d = card();
+    let mut c = Controls::default();
+    c.set_game(GameButton::X, plain(Device::Y));
+    c.set_game(GameButton::Y, plain(Device::X));
+    write_controls(d.path(), &c).unwrap();
+    let text = std::fs::read_to_string(d.path().join("linkSlot/Config/controls.txt")).unwrap();
+    assert!(text.contains("x=y\n"), "{text}");
+    assert!(text.contains("y=x\n"), "{text}");
+    assert_eq!(
+        read_controls(d.path()),
+        c,
+        "the X/Y swap did not round-trip through controls.txt"
+    );
+}
+
+#[test]
 fn a_hand_written_file_reads_spaces_any_case_and_skips_what_it_cannot() {
     let d = card();
     std::fs::create_dir_all(d.path().join("linkSlot/Config")).unwrap();

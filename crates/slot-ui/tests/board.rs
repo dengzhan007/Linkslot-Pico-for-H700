@@ -604,3 +604,69 @@ fn a_single_core_gba_uses_the_first_physical_socket() {
     );
     assert_ne!(single_core_spot(Platform::Gba), (0.0, 0.0, 0.0, 0.0));
 }
+
+#[test]
+fn the_third_gba_core_gets_the_tray_under_slot_two() {
+    let (u, v) = slot_ui::core_slot(Platform::Gba, 3, 2).expect("no tray seat");
+    assert_eq!((u, v), (slot_ui::TRAY_SOCKET_U, slot_ui::TRAY_SOCKET_V));
+
+    // Two cores keep exactly the old two sockets.
+    for position in 0..2 {
+        let old = slot_ui::multi_core_slot(Platform::Gba, position)
+            .map(|(u, v, _, _)| (u, v));
+        assert_eq!(
+            slot_ui::core_slot(Platform::Gba, 2, position),
+            old,
+            "the 2-core layout moved at position {position}"
+        );
+    }
+
+    // 0 / 0.5 / 1 land in slot 1, slot 2 and the tray.
+    let near = |a: (f32, f32), b: (f32, f32)| {
+        (a.0 - b.0).abs() < 1e-4 && (a.1 - b.1).abs() < 1e-4
+    };
+    assert!(near(
+        slot_ui::chip_place(Platform::Gba, 3, 0.0).unwrap(),
+        (slot_ui::CHIP_U[0], slot_ui::CHIP_V)
+    ));
+    assert!(near(
+        slot_ui::chip_place(Platform::Gba, 3, 0.5).unwrap(),
+        (slot_ui::CHIP_U[1], slot_ui::CHIP_V)
+    ));
+    assert!(near(
+        slot_ui::chip_place(Platform::Gba, 3, 1.0).unwrap(),
+        (slot_ui::TRAY_CHIP_U, slot_ui::TRAY_CHIP_V)
+    ));
+
+    // Between slot 2 and the tray the chip moves down, not back to the board.
+    let halfway = slot_ui::chip_place(Platform::Gba, 3, 0.75).unwrap();
+    assert!(halfway.1 > slot_ui::CHIP_V);
+    assert!(halfway.1 < slot_ui::TRAY_CHIP_V);
+
+    // The 2-core path is byte-for-byte the old interpolation.
+    for across in [0.0, 0.25, 0.5, 1.0] {
+        let new = slot_ui::chip_place(Platform::Gba, 2, across);
+        let old = slot_ui::chip_along(Platform::Gba, across);
+        assert!(near(new.unwrap(), old.unwrap()), "2-core chip moved at {across}");
+    }
+}
+
+#[test]
+fn the_selection_faces_are_big_enough_to_read() {
+    let highlight = slot_ui::chip_highlight_face();
+    assert_eq!((highlight.w, highlight.h), (75, 57));
+    assert!(highlight.rgba.chunks_exact(4).any(|px| px[3] > 0));
+
+    let glow = slot_ui::selection_glow_face();
+    assert_eq!((glow.w, glow.h), (100, 76));
+    assert!(glow.rgba.chunks_exact(4).any(|px| px[3] > 0));
+
+    let caret = slot_ui::selection_caret_face();
+    assert_eq!((caret.w, caret.h), (16, 10));
+    assert!(caret.rgba.chunks_exact(4).any(|px| px[3] > 0));
+
+    let badge = slot_ui::running_badge_face("运行");
+    assert_eq!(badge.h, 12);
+    assert!(badge.w >= 24, "the running badge is too small: {}", badge.w);
+    assert!(badge.rgba.chunks_exact(4).any(|px| px[3] > 0));
+}

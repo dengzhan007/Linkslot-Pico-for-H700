@@ -50,6 +50,10 @@ const FOLDER_INK: [u8; 3] = [0x66, 0xe2, 0xba];
 /// The right-hand status is deliberately brighter than the folder name but
 /// cooler, so it leans back while staying readable.
 const FOLDER_STATUS_INK: [u8; 3] = [0xc2, 0xcd, 0xde];
+/// The transfer room marks which side it is with a dot: teal for the host,
+/// blue for the joiner.  The mode name keeps the folder teal.
+const TRANSFER_HOST_DOT: [u8; 3] = [0x66, 0xe2, 0xba];
+const TRANSFER_JOIN_DOT: [u8; 3] = [0x8a, 0xc8, 0xff];
 
 /// A folder-mode header: a compact single-line status card on top (folder icon,
 /// folder name, then the platform / mode / position right-aligned), with the
@@ -152,6 +156,167 @@ pub fn folder_header(
 
     if let Some(game) = game {
         let (game_line, game_px) = kb::fit_line(game, 540.0, 17.0, 12.0);
+        let text_w = kb::ink_width(&game_line, game_px);
+        let chip_w = (text_w + 90.0).clamp(150.0, 600.0);
+        let chip_x = ((W - chip_w) / 2.0).round();
+        sw::fill_round(
+            &mut face,
+            chip_x,
+            47.0,
+            chip_w,
+            27.0,
+            9.0,
+            [border[0], border[1], border[2], 0xb8],
+        );
+        sw::fill_round(
+            &mut face,
+            chip_x + 1.0,
+            48.0,
+            chip_w - 2.0,
+            25.0,
+            8.0,
+            [surface[0], surface[1], surface[2], 0xd0],
+        );
+        let top = 47.0 + (27.0 - kb::line_height(game_px)) / 2.0;
+        kb::draw_text(
+            &mut face,
+            &game_line,
+            game_px,
+            chip_x + (chip_w - text_w) / 2.0,
+            top.max(47.0),
+            sw::ink(),
+        );
+    }
+    face
+}
+
+/// A transfer-room header: the mode name and the current side (host / joiner)
+/// on one compact card, with the selected cartridge's name and the content
+/// choice on a chip underneath.  Same rectangle as [`folder_header`], so the
+/// frontend can swap the two without moving the shelf.
+pub fn transfer_header(
+    host: bool,
+    game: Option<&str>,
+    content: usize,
+    lang: Language,
+) -> UndoFace {
+    const W: f32 = 664.0;
+    const H: f32 = 76.0;
+    const CARD_H: f32 = 44.0;
+    const PAD: f32 = 22.0;
+    const ICON_W: f32 = 26.0;
+    const GAP: f32 = 22.0;
+    const MIN_CARD_W: f32 = 320.0;
+    /// Same ceiling as the folder header: the status-bar clock and battery
+    /// keep their corners.
+    const MAX_CARD_W: f32 = 520.0;
+    let mut face = kb::blank(W as u32, H as u32, [0, 0, 0, 0]);
+
+    let role = slot_i18n::t(
+        lang,
+        if host {
+            "device.app.transfer.role_host"
+        } else {
+            "device.app.transfer.role_join"
+        },
+    );
+    let role_px = 13.0;
+    let role_text_w = kb::ink_width(role, role_px);
+    // The dot sits 6 px before the text and is followed by the same gap.
+    let role_w = role_text_w + 12.0;
+    let max_title_w = (MAX_CARD_W - 2.0 * PAD - ICON_W - GAP - role_w).max(60.0);
+    let (title_line, title_px) = kb::fit_line(
+        slot_i18n::t(lang, "device.app.transfer.title"),
+        max_title_w,
+        20.0,
+        13.0,
+    );
+    let title_w = kb::ink_width(&title_line, title_px);
+    let card_w = (PAD + ICON_W + title_w + GAP + role_w + PAD).clamp(MIN_CARD_W, MAX_CARD_W);
+    let card_x = ((W - card_w) / 2.0).round();
+
+    let surface = sw::surface();
+    let border = sw::surface_border();
+    sw::fill_round(
+        &mut face,
+        card_x,
+        0.0,
+        card_w,
+        CARD_H,
+        13.0,
+        [border[0], border[1], border[2], 0xcc],
+    );
+    sw::fill_round(
+        &mut face,
+        card_x + 1.0,
+        1.0,
+        card_w - 2.0,
+        CARD_H - 2.0,
+        12.0,
+        [surface[0], surface[1], surface[2], 0xe8],
+    );
+
+    // Exchange arrows: this device sends one card and receives another.
+    let icon_x = card_x + PAD;
+    let icon_y = 11.0;
+    let ink = [FOLDER_INK[0], FOLDER_INK[1], FOLDER_INK[2], 0xff];
+    kb::fill(&mut face, icon_x + 2.0, icon_y + 6.0, 15.0, 2.0, ink);
+    kb::fill(&mut face, icon_x + 14.0, icon_y + 2.0, 2.0, 2.0, ink);
+    kb::fill(&mut face, icon_x + 16.0, icon_y + 4.0, 2.0, 6.0, ink);
+    kb::fill(&mut face, icon_x + 14.0, icon_y + 10.0, 2.0, 2.0, ink);
+    kb::fill(&mut face, icon_x + 7.0, icon_y + 16.0, 15.0, 2.0, ink);
+    kb::fill(&mut face, icon_x + 8.0, icon_y + 12.0, 2.0, 2.0, ink);
+    kb::fill(&mut face, icon_x + 6.0, icon_y + 14.0, 2.0, 6.0, ink);
+    kb::fill(&mut face, icon_x + 8.0, icon_y + 20.0, 2.0, 2.0, ink);
+
+    let title_top = (CARD_H - kb::line_height(title_px)) / 2.0;
+    kb::draw_text(
+        &mut face,
+        &title_line,
+        title_px,
+        icon_x + ICON_W,
+        title_top.max(0.0),
+        FOLDER_INK,
+    );
+
+    let role_x = card_x + card_w - PAD - role_text_w;
+    let dot = if host {
+        TRANSFER_HOST_DOT
+    } else {
+        TRANSFER_JOIN_DOT
+    };
+    sw::fill_round(
+        &mut face,
+        role_x - 12.0,
+        (CARD_H - 6.0) / 2.0,
+        6.0,
+        6.0,
+        3.0,
+        [dot[0], dot[1], dot[2], 0xff],
+    );
+    let role_top = (CARD_H - kb::line_height(role_px)) / 2.0;
+    kb::draw_text(
+        &mut face,
+        role,
+        role_px,
+        role_x,
+        role_top.max(0.0),
+        FOLDER_STATUS_INK,
+    );
+
+    // The chip under the card says what is selected *and* what A will send, so
+    // a player who set 仅存档 an hour ago is not surprised by a save overwrite.
+    let content_key = match content.min(2) {
+        1 => "device.app.transfer.content_save",
+        2 => "device.app.transfer.content_all",
+        _ => "device.app.transfer.content_cart",
+    };
+    let content_label = slot_i18n::t(lang, content_key);
+    // No selected cartridge, no chip: the room keeps the same empty strip it
+    // had before the content choice existed.
+    let chip_text = game.map(|game| format!("{game} · {content_label}"));
+    if let Some(chip_text) = chip_text {
+        let (game_line, game_px) = kb::fit_line(&chip_text, 540.0, 17.0, 12.0);
         let text_w = kb::ink_width(&game_line, game_px);
         let chip_w = (text_w + 90.0).clamp(150.0, 600.0);
         let chip_x = ((W - chip_w) / 2.0).round();
@@ -573,6 +738,143 @@ pub fn transfer_menu(mode: &str, selected: usize, lang: Language) -> UndoFace {
             11.0,
             x,
             HINT_Y + 8.0,
+            [dim[0], dim[1], dim[2]],
+        );
+    }
+    face
+}
+
+/// Cartridge-transfer content chooser: three radio rows under the room's
+/// heading.  `selected` is the cursor, `current` the value already in force;
+/// both are 0 = cart only, 1 = saves only, 2 = cart and saves.
+pub fn transfer_content_menu(selected: usize, current: usize, lang: Language) -> UndoFace {
+    const CARD_X: f32 = 56.0;
+    const CARD_W: f32 = 608.0;
+    const CARD_H: f32 = 78.0;
+    const CARD_GAP: f32 = 9.0;
+    const CARD_TOP: f32 = 108.0;
+    const RADIO_X: f32 = 86.0;
+
+    let mut face = kb::blank(OUT_W, 480, sw::bg());
+    kb::fill(&mut face, 0.0, 0.0, OUT_W as f32, HEADER_H, sw::bg_top());
+    kb::fill(&mut face, 48.0, 20.0, 5.0, 30.0, accent());
+    let ink = sw::ink();
+    kb::draw_text(
+        &mut face,
+        slot_i18n::t(lang, "device.app.transfer.content"),
+        26.0,
+        64.0,
+        18.0,
+        [ink[0], ink[1], ink[2]],
+    );
+    let dim = sw::ink_dim();
+    kb::draw_text(
+        &mut face,
+        slot_i18n::t(lang, "device.app.transfer.content_hint"),
+        12.0,
+        66.0,
+        56.0,
+        [dim[0], dim[1], dim[2]],
+    );
+
+    let rows = [
+        (
+            "device.app.transfer.content_cart",
+            "device.app.transfer.content_cart_hint",
+        ),
+        (
+            "device.app.transfer.content_save",
+            "device.app.transfer.content_save_hint",
+        ),
+        (
+            "device.app.transfer.content_all",
+            "device.app.transfer.content_all_hint",
+        ),
+    ];
+    for (index, (title_key, hint_key)) in rows.iter().enumerate() {
+        let y = CARD_TOP + index as f32 * (CARD_H + CARD_GAP);
+        let lit = index == selected.min(2);
+        card_at(&mut face, CARD_X, y, CARD_W, CARD_H, lit);
+
+        // Radio dot: filled accent for the row that is in force, a ring for
+        // the others.  The cursor is the white card, not the dot.
+        let cy = y + CARD_H / 2.0;
+        let dot_fill = if lit { sw::selected() } else { sw::surface() };
+        if index == current.min(2) {
+            sw::fill_round(&mut face, RADIO_X - 9.0, cy - 9.0, 18.0, 18.0, 9.0, accent());
+            sw::fill_round(
+                &mut face,
+                RADIO_X - 3.5,
+                cy - 3.5,
+                7.0,
+                7.0,
+                3.5,
+                [0xff, 0xff, 0xff, 0xff],
+            );
+        } else {
+            sw::fill_round(
+                &mut face,
+                RADIO_X - 9.0,
+                cy - 9.0,
+                18.0,
+                18.0,
+                9.0,
+                sw::surface_border(),
+            );
+            sw::fill_round(&mut face, RADIO_X - 7.0, cy - 7.0, 14.0, 14.0, 7.0, dot_fill);
+        }
+
+        let title_ink = if lit { sw::ink_selected() } else { sw::ink() };
+        let hint_ink = if lit { sw::ink_selected() } else { sw::ink_dim() };
+        kb::draw_text(
+            &mut face,
+            slot_i18n::t(lang, title_key),
+            21.0,
+            112.0,
+            y + 13.0,
+            title_ink,
+        );
+        kb::draw_text(
+            &mut face,
+            slot_i18n::t(lang, hint_key),
+            12.5,
+            112.0,
+            y + 46.0,
+            hint_ink,
+        );
+
+        if index == current.min(2) {
+            let chip_w = 96.0;
+            let chip_x = CARD_X + CARD_W - chip_w - 12.0;
+            sw::fill_round(&mut face, chip_x, y + 14.0, chip_w, 24.0, 8.0, accent());
+            let label = slot_i18n::t(lang, "device.app.transfer.content_current");
+            let px = 12.0;
+            let w = kb::ink_width(label, px);
+            kb::draw_text(
+                &mut face,
+                label,
+                px,
+                chip_x + (chip_w - w) / 2.0,
+                y + 19.0,
+                [0xff, 0xff, 0xff],
+            );
+        }
+    }
+
+    let hints = [
+        ("device.app.transfer.hint_nav", 56.0),
+        ("device.app.transfer.hint_confirm", 148.0),
+        ("device.app.transfer.hint_back", 228.0),
+        ("device.app.transfer.content_close", 308.0),
+    ];
+    for (key, x) in hints {
+        let dim = sw::ink_dim();
+        kb::draw_text(
+            &mut face,
+            slot_i18n::t(lang, key),
+            12.0,
+            x,
+            HINT_Y + 6.0,
             [dim[0], dim[1], dim[2]],
         );
     }
@@ -1213,6 +1515,51 @@ mod tests {
     }
 
     #[test]
+    fn the_transfer_header_names_the_side_and_keeps_the_cart_chip() {
+        let host = transfer_header(true, Some("阿拉丁"), 0, Language::ZhCn);
+        let joiner = transfer_header(false, Some("阿拉丁"), 0, Language::ZhCn);
+        assert_eq!((host.w, host.h), (664, 76));
+        assert!(alpha(&host, 332, 20) > 0, "the mode card is missing");
+        assert_eq!(
+            alpha(&host, 80, 20),
+            0,
+            "the transfer card covers the clock corner again"
+        );
+        assert!(alpha(&host, 332, 60) > 0, "the cart chip is missing");
+        assert_ne!(host.rgba, joiner.rgba, "the side did not change the header");
+        // The cart chip only appears when the game title is allowed.
+        let bare = transfer_header(false, None, 0, Language::ZhCn);
+        assert_eq!(alpha(&bare, 332, 60), 0, "an empty cart chip was drawn");
+        // The longer English role must not push the card over the status bar.
+        let english = transfer_header(false, Some("Emerald"), 0, Language::EnUs);
+        let row: Vec<u32> = (0..english.w)
+            .filter(|x| alpha(&english, *x, 30) > 0)
+            .collect();
+        let (left, right) = (*row.first().unwrap(), *row.last().unwrap());
+        assert!(
+            right - left < 520,
+            "the transfer card grew over the status bar: {left}..{right}"
+        );
+        assert!(((left as f32 + right as f32) / 2.0 - 332.0).abs() < 2.0);
+    }
+
+    #[test]
+    fn the_transfer_header_right_aligns_the_side() {
+        let face = transfer_header(true, Some("阿拉丁"), 0, Language::ZhCn);
+        let card: Vec<u32> = (0..face.w).filter(|x| alpha(&face, *x, 30) > 0).collect();
+        let (left, right) = (*card.first().unwrap(), *card.last().unwrap());
+        let half = left + (right - left) / 2;
+        // The dot and the side word are the only bright ink in the right half.
+        let last_ink = (half..=right)
+            .rfind(|x| (10..34).any(|y| rgb(&face, *x, y).iter().any(|c| *c > 0x80)))
+            .unwrap_or(0);
+        assert!(
+            right - last_ink <= 30,
+            "the side is not right-aligned to the card ({last_ink} vs {right})"
+        );
+    }
+
+    #[test]
     fn the_hold_prompt_has_a_track_for_the_live_fill() {
         let face = folder_hold_prompt(Language::ZhCn);
         assert_eq!((face.w, face.h), (FOLDER_HOLD_W, FOLDER_HOLD_H));
@@ -1273,5 +1620,32 @@ mod tests {
         let empty: [String; 0] = [];
         let blank = panel("存档相册", &empty, 0, Language::ZhCn);
         assert_eq!(blank.rgba.len(), (720 * 480 * 4) as usize);
+    }
+
+    #[test]
+    fn the_content_chooser_marks_the_row_in_force_and_moves_the_cursor() {
+        let first = transfer_content_menu(0, 0, Language::ZhCn);
+        assert_eq!((first.w, first.h), (720, 480));
+        assert_eq!(rgb(&first, 0, 0), [0x24, 0x24, 0x29]);
+        assert!(
+            white_pixels_below(&first, 88) > 0,
+            "the cursor row is not on a white card"
+        );
+        let moved = transfer_content_menu(1, 0, Language::ZhCn);
+        assert_ne!(first.rgba, moved.rgba, "the cursor did not move");
+        let other_current = transfer_content_menu(0, 2, Language::ZhCn);
+        assert_ne!(
+            first.rgba, other_current.rgba,
+            "the dot did not follow the choice in force"
+        );
+    }
+
+    #[test]
+    fn the_room_header_chip_names_the_content_choice() {
+        let cart = transfer_header(true, Some("阿拉丁"), 0, Language::ZhCn);
+        let saves = transfer_header(true, Some("阿拉丁"), 1, Language::ZhCn);
+        let all = transfer_header(true, Some("阿拉丁"), 2, Language::ZhCn);
+        assert_ne!(cart.rgba, saves.rgba, "the chip ignored 仅存档");
+        assert_ne!(saves.rgba, all.rgba, "the chip ignored 卡带＋存档");
     }
 }

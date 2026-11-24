@@ -201,15 +201,67 @@ fn lerp(a: u8, b: u8, t: f32) -> u8 {
     (a as f32 + (b as f32 - a as f32) * t.clamp(0.0, 1.0)).round() as u8
 }
 
+/// The gold star's diameter as a fraction of the badge face side.  The shelf
+/// uses this to anchor the visible star (not its transparent rim padding) to
+/// the cartridge label's corner.
+pub const FAVORITE_STAR_INK_RATIO: f32 = 0.8;
+
 /// One gold star used as the “favorited” badge on the selected cartridge.
+/// Drawn at 4× and box-filtered down: a 1 px warm-dark rim plus a soft shadow
+/// keeps the gold readable on both light and dark covers.
 pub fn favorite_star_face() -> UndoFace {
-    let mut face = UndoFace {
-        rgba: vec![0u8; (40 * 40 * 4) as usize],
-        w: 40,
-        h: 40,
+    const SCALE: u32 = 4;
+    let side = 40 * SCALE;
+    let mut big = UndoFace {
+        rgba: vec![0u8; (side * side * 4) as usize],
+        w: side,
+        h: side,
     };
-    star(&mut face, 20.0, 20.0, 16.0, 6.8, [0xff, 0xe2, 0x8a], 255);
-    face
+    let c = (side / 2) as f32;
+    // Shadow toward the lower right; the rim covers the upper-left half.
+    for (offset, radius, alpha) in [(6.0, 71.0, 26), (4.0, 69.0, 40), (2.0, 67.0, 55)] {
+        star(&mut big, c + offset, c + offset, radius, radius * 0.425, [0, 0, 0], alpha);
+    }
+    star(&mut big, c, c, 68.0, 68.0 * 0.425, [0x4a, 0x31, 0x0c], 215);
+    star(&mut big, c, c, 64.0, 64.0 * 0.425, [0xff, 0xe2, 0x8a], 255);
+    downsample(&big, SCALE)
+}
+
+/// Box-filter a supersampled face back to 8-bit RGBA.  Colour is weighted by
+/// coverage so transparent pixels do not darken the antialiased edges.
+fn downsample(face: &UndoFace, factor: u32) -> UndoFace {
+    let w = face.w / factor;
+    let h = face.h / factor;
+    let mut out = UndoFace {
+        rgba: vec![0u8; (w * h * 4) as usize],
+        w,
+        h,
+    };
+    let n = factor * factor;
+    for y in 0..h {
+        for x in 0..w {
+            let mut alpha = 0u32;
+            let mut colour = [0u32; 3];
+            for sy in 0..factor {
+                for sx in 0..factor {
+                    let at = (((y * factor + sy) * face.w + x * factor + sx) * 4) as usize;
+                    let a = face.rgba[at + 3] as u32;
+                    alpha += a;
+                    for c in 0..3 {
+                        colour[c] += face.rgba[at + c] as u32 * a;
+                    }
+                }
+            }
+            let dst = ((y * w + x) * 4) as usize;
+            if alpha > 0 {
+                for c in 0..3 {
+                    out.rgba[dst + c] = (colour[c] / alpha) as u8;
+                }
+            }
+            out.rgba[dst + 3] = (alpha / n) as u8;
+        }
+    }
+    out
 }
 
 /// Sparse, low-contrast stars for the Favorites rack.  The texture is uploaded

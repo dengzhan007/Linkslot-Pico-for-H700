@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use slot_store::{scan, Cart, CartModel, Outline, Platform, ShellChoice, ShellFinish};
 use slot_ui::{
     cart_box, cart_face, cart_face_with, clean_label, fc_label_panel, foot_y, gb_label_panel,
-    gb_silhouette, label_size,
+    gb_silhouette, label_rect, label_size,
     label_colour, label_panel, label_text, labelled_cart_face, labelled_cart_shadow, rest_y,
     seated_box, shell_for, silhouette, Finish, GbShell, CART_H, CART_W, DEFAULT_SHELL, FC_BASE_H,
     FC_BASE_W, FC_CART_H,
@@ -772,5 +772,38 @@ fn a_receiver_preview_can_be_a_blank_platform_cart() {
     assert!(
         face.rgba.chunks_exact(4).any(|px| px[3] > 0),
         "blank preview is fully transparent"
+    );
+}
+
+#[test]
+fn label_rects_match_the_reference_windows() {
+    assert_eq!(
+        label_rect(Platform::Gba, CartModel::Famicom),
+        (57, 46, 246, 129)
+    );
+    assert_eq!(
+        label_rect(Platform::Gb, CartModel::Famicom),
+        (27, 77, 186, 166)
+    );
+    assert_eq!(
+        label_rect(Platform::Gbc, CartModel::Famicom),
+        (27, 89, 186, 166)
+    );
+    assert_eq!(
+        label_rect(Platform::Fc, CartModel::Famicom),
+        (31, 31, 296, 202)
+    );
+    assert_eq!(
+        label_rect(Platform::Fc, CartModel::Nes),
+        (154, 2, 121, 200),
+        "the NES portrait label"
+    );
+    assert_eq!(
+        label_rect(Platform::Sfc, CartModel::Famicom),
+        (27, 15, 305, 106)
+    );
+    assert_eq!(
+        label_rect(Platform::Md, CartModel::Famicom),
+        (52, 4, 256, 206)
     );
 }

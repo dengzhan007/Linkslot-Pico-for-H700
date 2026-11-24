@@ -12,7 +12,8 @@ use slot_power::{Battery, Charge, LedState, LidPolicy, Power, RepairResult};
 use slot_retro::LinkChannel;
 use slot_store::{
     format_stamp, read_slot_state, scan, write_slot_state, Binding, CarouselAction, CarouselKeys,
-    Cart, Controls, Core, Device, FolderCatalog, GbPalette, GameButton, Modifier, Platform, Recent,
+    Cart, CartModel, Controls, Core, Device, FolderCatalog, GbPalette, GameButton, Modifier,
+    Platform, Recent,
     ResumeKind, Shader, Shortcut, ShortcutKeys, SlotState, StateEntry, StateRing, Theme,
     ThemePreset, BLUE_LIGHT_MAX, BRIGHTNESS_MAX, FF_SPEEDS, RING_MAX, VOLUME_MAX,
 };
@@ -31,8 +32,8 @@ use crate::audio::Sfx;
 static PREFETCH_SCAN: OnceLock<Mutex<Option<(PathBuf, std::thread::JoinHandle<Vec<Cart>>)>>> =
     OnceLock::new();
 use crate::boot_mods::{BootJob, BootSchedule};
-use crate::cart_transfer::{Stage as TransferStage, Transfer};
-use crate::core_picker::{Chip, CorePicker, Outcome, Press, CLOSE_MS, OPEN_MS};
+use crate::cart_transfer::{Stage as TransferStage, Transfer, TransferMode};
+use crate::core_picker::{Chip, CorePicker, Outcome, Press, ThreeLayout, CLOSE_MS, OPEN_MS};
 use crate::link_kind::{link_carried, link_kind, serial_option, LinkKind};
 use crate::link_radio::{radio_jobs, LinkRole, RadioJob, RadioJobs};
 use crate::link_screen::LinkSprites;
@@ -126,6 +127,12 @@ pub const TRANSFER_DUPLICATE_HOLD_MS: Millis = 1_000;
 /// can read the progress instead of seeing a one-frame flash.
 pub const TRANSFER_MIN_VISIBLE_MS: Millis = 1_000;
 
+/// A status card slides down from this far above the screen when a room or
+/// folder opens.  The transfer room and the folder header share the slow beat
+/// so entering and leaving either screen reads as a deliberate curtain.
+pub const HEADER_SLIDE_PX: f32 = 90.0;
+const HEADER_SLIDE_MS: Millis = 450;
+
 const EJECT_HOLD_S: f32 = 0.35;
 
 const POWER_ON_S: f32 = 0.22;
@@ -159,8 +166,6 @@ const FOLDER_HOLD_MS: Millis = 1_000;
 const FOLDER_HINT_DELAY_MS: Millis = 120;
 /// Releasing before the hold completes fades the bar instead of snapping it off.
 const FOLDER_HOLD_FADE_MS: Millis = 80;
-const FOLDER_ANIM_IN_MS: Millis = 180;
-const FOLDER_ANIM_OUT_MS: Millis = 160;
 const FOLDER_GROUP_ANIM_MS: Millis = 120;
 /// Faces belonging to the filtered shelf use a shelf index outside the real
 /// rack table, so the full library's textures stay keyed as before.
@@ -305,6 +310,9 @@ const HOLD_PROMPT_MS: Millis = 300;
 /// Utility panel kinds for the shortcut mapping popups: capturing a key, and
 /// the "this will set the shortcut to 无" question.
 const SHORTCUT_CAPTURE: u8 = 8;
+/// The cartridge-transfer content chooser ("传输内容").  Kinds 8 and 9 are
+/// the shortcut keys and 11..14 the help pages, so this one takes 15.
+const TRANSFER_CONTENT: u8 = 15;
 const SHORTCUT_CLEAR: u8 = 9;
 
 /// The game-only shortcut page opened from the in-game menu.  The shelf copy
@@ -1293,32 +1301,110 @@ pub struct GuideImage {
 
 #[derive(Debug)]
 enum GuidePage {
+    /// One scrollable text block: the whole TXT file, or one EPUB chapter.
     Text(Vec<String>),
     Image(Arc<GuideImage>),
 }
 
-/// Where the guide reader's page is stored inside a game's metadata.
+/// Where the guide reader's position is stored inside a game's metadata.  The
+/// value is `{"page": n, "scroll": m}`; a bare number is a bookmark written by
+/// the old fixed-page reader and is read as a page number.
 const GUIDE_PAGE_KEY: &str = "guide_page";
+
+/// Holding the D-pad scrolls one line after this beat, then at these rates.
+const GUIDE_REPEAT_DELAY_MS: Millis = 380;
+const GUIDE_REPEAT_MS: [Millis; 4] = [110, 85, 70, 60];
 
 /// A TXT/EPUB guide, opened from the in-game menu.  The game stays paused
 /// underneath; B returns to the menu rather than resuming immediately.
+///
+/// Text is not cut into fixed pages: `scroll` is the first visible line of the
+/// current text block and the D-pad moves it one line at a time, while L/R move
+/// a whole screen.  EPUB images are their own single screen.
 #[derive(Debug)]
 pub struct GuideView {
     title: String,
     pages: Vec<GuidePage>,
+    /// Index into `pages`, i.e. the current text block or image.
     page: usize,
+    /// First visible line of the current text block.
+    scroll: usize,
+    /// D-pad auto-repeat: direction, next step time, steps fired.
+    held: Option<(i32, Millis, usize)>,
 }
 
 impl GuideView {
-    fn page_count(&self) -> usize {
-        self.pages.len().max(1)
+    fn visible(&self) -> usize {
+        slot_ui::guide::visible_lines()
     }
 
-    fn page_lines(&self) -> Vec<String> {
+    fn lines(&self) -> &[String] {
         match self.pages.get(self.page) {
-            Some(GuidePage::Text(lines)) => lines.clone(),
-            _ => Vec::new(),
+            Some(GuidePage::Text(lines)) => lines,
+            _ => &[],
         }
+    }
+
+    fn max_scroll(&self) -> usize {
+        self.lines().len().saturating_sub(self.visible())
+    }
+
+    fn clamp(&mut self) {
+        self.scroll = self.scroll.min(self.max_scroll());
+    }
+
+    /// Screens this block occupies when turning with L/R.  A block whose last
+    /// screen would start exactly on a line boundary needs no extra one; the
+    /// bottom-aligned screen otherwise gets its own page.
+    fn screens_at(&self, page: usize) -> usize {
+        match self.pages.get(page) {
+            Some(GuidePage::Text(lines)) => {
+                let visible = self.visible();
+                let max = lines.len().saturating_sub(visible);
+                max / visible + 1 + usize::from(max % visible != 0)
+            }
+            Some(GuidePage::Image(_)) => 1,
+            None => 0,
+        }
+    }
+
+    fn page_count(&self) -> usize {
+        (0..self.pages.len())
+            .map(|page| self.screens_at(page))
+            .sum::<usize>()
+            .max(1)
+    }
+
+    /// Screen index inside the current block.  The bottom-aligned last screen
+    /// is one past the last line boundary, so it counts as its own page.
+    fn screen_of(&self, scroll: usize) -> usize {
+        let visible = self.visible();
+        let max = self.max_scroll();
+        scroll / visible
+            + usize::from(scroll == max && max % visible != 0)
+    }
+
+    fn scroll_of(&self, screen: usize) -> usize {
+        screen
+            .saturating_mul(self.visible())
+            .min(self.max_scroll())
+    }
+
+    /// Zero-based screen number across the whole guide.
+    fn page_number(&self) -> usize {
+        let before: usize = (0..self.page.min(self.pages.len()))
+            .map(|page| self.screens_at(page))
+            .sum();
+        before + self.screen_of(self.scroll)
+    }
+
+    fn window(&self) -> Vec<String> {
+        self.lines()
+            .iter()
+            .skip(self.scroll)
+            .take(self.visible())
+            .cloned()
+            .collect()
     }
 
     fn image(&self) -> Option<Arc<GuideImage>> {
@@ -1327,18 +1413,114 @@ impl GuideView {
             _ => None,
         }
     }
+
+    fn to_top(&mut self) {
+        self.page = 0;
+        self.scroll = 0;
+    }
+
+    fn scroll_by(&mut self, lines: i32) {
+        let max = self.max_scroll() as i32;
+        self.scroll = (self.scroll as i32 + lines).clamp(0, max) as usize;
+    }
+
+    /// L/R: one screen.  At a boundary the reader crosses into the neighbouring
+    /// block or image instead of stopping dead.  The bottom-aligned last screen
+    /// keeps the final line visible.
+    fn turn(&mut self, forward: bool) {
+        let screen = self.screen_of(self.scroll);
+        let screens = self.screens_at(self.page);
+        if forward {
+            if screen + 1 < screens {
+                self.scroll = self.scroll_of(screen + 1);
+            } else if self.page + 1 < self.pages.len() {
+                self.page += 1;
+                self.scroll = 0;
+            }
+        } else if screen > 0 {
+            self.scroll = self.scroll_of(screen - 1);
+        } else if self.page > 0 {
+            self.page -= 1;
+            self.scroll = self.max_scroll();
+        }
+        self.clamp();
+    }
+
+    /// Restore a bookmark by block and line.
+    fn seek(&mut self, page: usize, scroll: usize) {
+        self.page = page.min(self.pages.len().saturating_sub(1));
+        self.scroll = scroll;
+        self.clamp();
+    }
+
+    /// Restore an old bookmark, which counted whole screens.  It also keeps a
+    /// remembered position from overrunning a guide that got shorter.
+    fn seek_screen(&mut self, screen: usize) {
+        let mut left = screen;
+        for page in 0..self.pages.len() {
+            let screens = self.screens_at(page);
+            if left < screens {
+                self.page = page;
+                self.scroll = self.scroll_of(left);
+                self.clamp();
+                return;
+            }
+            left -= screens;
+        }
+        self.page = self.pages.len().saturating_sub(1);
+        self.scroll = self.max_scroll();
+    }
+
+    fn hold(&mut self, direction: i32, now: Millis) {
+        self.held = Some((direction, now.saturating_add(GUIDE_REPEAT_DELAY_MS), 0));
+    }
+
+    fn release(&mut self) {
+        self.held = None;
+    }
+
+    fn tick(&mut self, now: Millis) {
+        let Some((direction, due, fired)) = self.held else {
+            return;
+        };
+        if now < due {
+            return;
+        }
+        let before = self.scroll;
+        self.scroll_by(direction);
+        if self.scroll == before {
+            // At an edge: stop repeating instead of waking up for nothing.
+            self.held = None;
+            return;
+        }
+        let rate = GUIDE_REPEAT_MS[fired.min(GUIDE_REPEAT_MS.len() - 1)];
+        self.held = Some((direction, now.saturating_add(rate), fired + 1));
+    }
 }
 
-fn guide_text_pages(text: &str) -> Vec<GuidePage> {
+/// Everything one frame of the reader needs: the title, the visible window or
+/// image, and the position that keys the frontend's cached face.
+#[derive(Debug)]
+pub struct GuideFrame {
+    pub title: String,
+    pub lines: Vec<String>,
+    pub image: Option<Arc<GuideImage>>,
+    /// Index of the current text block or image.
+    pub section: usize,
+    /// Zero-based screen number across the whole guide.
+    pub page: usize,
+    pub pages: usize,
+    pub scroll: usize,
+    pub max_scroll: usize,
+}
+
+fn guide_text_page(text: &str) -> Option<GuidePage> {
     let lines = slot_ui::text::wrap_paragraphs(
         text,
         slot_ui::guide::TEXT_PX,
         slot_ui::guide::TEXT_W,
     );
-    lines
-        .chunks(slot_ui::guide::LINES_PER_PAGE)
-        .map(|chunk| GuidePage::Text(chunk.to_vec()))
-        .collect()
+    (!lines.is_empty()).then_some(GuidePage::Text(lines))
 }
 
 fn decode_guide_image(bytes: &[u8]) -> Option<GuideImage> {
@@ -1384,16 +1566,20 @@ fn guide_epub_pages(blocks: Vec<crate::epub::Block>, lang: Language) -> Vec<Guid
     let mut pages = Vec::new();
     for block in blocks {
         match block {
-            crate::epub::Block::Text(text) => pages.extend(guide_text_pages(&text)),
+            crate::epub::Block::Text(text) => {
+                if let Some(page) = guide_text_page(&text) {
+                    pages.push(page);
+                }
+            }
             crate::epub::Block::Image { name, data } => {
                 if let Some(image) = decode_guide_image(&data) {
                     pages.push(GuidePage::Image(Arc::new(image)));
-                } else {
-                    pages.extend(guide_text_pages(&slot_i18n::t_args(
-                        lang,
-                        "device.app.guide.broken_image",
-                        &[("name", name.as_str())],
-                    )));
+                } else if let Some(page) = guide_text_page(&slot_i18n::t_args(
+                    lang,
+                    "device.app.guide.broken_image",
+                    &[("name", name.as_str())],
+                )) {
+                    pages.push(page);
                 }
             }
         }
@@ -1629,6 +1815,14 @@ pub struct App {
     core_picker: Option<CorePicker>,
     core_board_face: Option<TexId>,
     core_lid_face: Option<TexId>,
+    /// The tray plate behind a third GBA core (built from the switch-style
+    /// card face). None until the core page's faces are uploaded.
+    core_tray_face: Option<TexId>,
+    core_tray_label: Option<(TexId, u32, u32)>,
+    core_highlight_face: Option<TexId>,
+    core_selection_glow: Option<TexId>,
+    core_selection_caret: Option<TexId>,
+    core_running_face: Option<(TexId, u32, u32)>,
     core_faces_stem: Option<String>,
     core_socket_faces: Vec<TexId>,
     /// Chip faces keyed by platform, then core index.
@@ -1688,6 +1882,10 @@ pub struct App {
     /// The card is in the slot until a rejection/duplicate/completion ejects it.
     transfer_seated: bool,
     transfer_eject_at: Option<Millis>,
+    /// When the room header first became drawable; drives its drop-in.
+    transfer_header_at: Option<Millis>,
+    /// When a matched room started lifting its header before closing.
+    transfer_leaving_at: Option<Millis>,
     transfer_progress_started: Option<Millis>,
     transfer_done_pending: bool,
     transfer_faces: Option<TransferFaces>,
@@ -1815,6 +2013,9 @@ pub struct App {
     wifi_off_job: Option<WifiJob>,
     wifi_off_retry_at: Millis,
     shelf_legend: (Vec<(TexId, u32)>, Vec<(TexId, u32)>),
+    /// Bottom hints while a transfer room is open: A sends the selected cart,
+    /// M leaves the room.  The shelf's Y/X/B legend is meaningless there.
+    transfer_legend: (Vec<(TexId, u32)>, Vec<(TexId, u32)>),
     /// Gold star pinned to the selected cartridge when it is favorited.
     favorite_star: Option<(TexId, u32, u32)>,
     headphones: bool,
@@ -1883,6 +2084,20 @@ pub struct FolderHeader {
     pub language: Language,
 }
 
+/// The transfer room's top-centre header: the mode name and side (host or
+/// joiner) on the card, plus the selected cartridge on the chip underneath.
+/// Same rectangle as [`FolderHeader`], so the frontend swaps the two faces.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TransferHeader {
+    pub host: bool,
+    /// `None` when `show_rom_title` is off.
+    pub game: Option<String>,
+    pub language: Language,
+    /// What the room sends when the player presses A, shown as a chip so the
+    /// choice stays visible after the content panel closes.
+    pub content: TransferMode,
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum FolderAnimKind {
     Enter,
@@ -1893,8 +2108,7 @@ pub enum FolderAnimKind {
 impl FolderAnimKind {
     fn duration(self) -> Millis {
         match self {
-            FolderAnimKind::Enter => FOLDER_ANIM_IN_MS,
-            FolderAnimKind::Leave => FOLDER_ANIM_OUT_MS,
+            FolderAnimKind::Enter | FolderAnimKind::Leave => HEADER_SLIDE_MS,
             FolderAnimKind::Group => FOLDER_GROUP_ANIM_MS,
         }
     }
@@ -2169,6 +2383,12 @@ impl App {
             core_picker: None,
             core_board_face: None,
             core_lid_face: None,
+            core_tray_face: None,
+            core_tray_label: None,
+            core_highlight_face: None,
+            core_selection_glow: None,
+            core_selection_caret: None,
+            core_running_face: None,
             core_faces_stem: None,
             core_socket_faces: Vec::new(),
             core_chip_faces: Vec::new(),
@@ -2226,6 +2446,8 @@ impl App {
             transfer_insert_stem: None,
             transfer_seated: false,
             transfer_eject_at: None,
+            transfer_header_at: None,
+            transfer_leaving_at: None,
             transfer_progress_started: None,
             transfer_done_pending: false,
             transfer_faces: None,
@@ -2325,6 +2547,7 @@ impl App {
             wifi_off_job: None,
             wifi_off_retry_at: 0,
             shelf_legend: (Vec::new(), Vec::new()),
+            transfer_legend: (Vec::new(), Vec::new()),
             favorite_star: None,
             headphones: false,
             headphones_at: 0,
@@ -2727,26 +2950,53 @@ impl App {
         if self.folder_mode {
             return true;
         }
-        let Some(platform) = self.shelves[self.shelf_at].0.platform() else {
-            self.hud.toast(Toast::FolderNone, self.now());
-            return false;
-        };
-        if !self.folder_catalog.is_browsable(platform) {
-            self.hud.toast(Toast::FolderNone, self.now());
-            return false;
-        }
         let Some(cart) = self.shelf().carts.get(self.shelf().index).cloned() else {
             self.hud.toast(Toast::FolderNone, self.now());
             return false;
         };
-        let Some(group_index) = self
-            .folder_catalog
-            .group_or_first(&cart, self.root.as_deref())
-        else {
+        // Platform racks browse their own folders.  The collection racks
+        // (Recents, Favorites) have no platform of their own, so use the
+        // selected cart's platform and jump to its rack: SELECT still opens
+        // the game's folder from any shelf.
+        let wanted = self.shelves[self.shelf_at]
+            .0
+            .platform()
+            .unwrap_or(cart.platform);
+        // Entry is not a property of the machine on screen: a rack whose ROMs
+        // all sit in `Games/<platform>/` has nothing to browse, so the hold
+        // opens the first machine that does have folders instead of refusing.
+        // Only a card with no folders at all has nothing to show.
+        let platform = if self.folder_catalog.is_browsable(wanted) {
+            wanted
+        } else {
+            match self.folder_catalog.groups.first() {
+                Some(group) => group.platform,
+                None => {
+                    self.hud.toast(Toast::FolderNone, self.now());
+                    return false;
+                }
+            }
+        };
+        let Some(rack_at) = self.rack_at(platform) else {
             self.hud.toast(Toast::FolderNone, self.now());
             return false;
         };
-        let rack_at = self.shelf_at;
+        // A folder of the machine on screen opens the selected cart's own
+        // folder when it has one; a fallback machine opens its first folder
+        // (the selected cart lives elsewhere, so it has no folder here).
+        let group_index = if platform == wanted {
+            self.folder_catalog
+                .group_or_first(&cart, self.root.as_deref())
+        } else {
+            self.folder_catalog.first_index(platform)
+        };
+        let Some(group_index) = group_index else {
+            self.hud.toast(Toast::FolderNone, self.now());
+            return false;
+        };
+        if rack_at != self.shelf_at {
+            self.show_shelf(rack_at);
+        }
         let previous = None;
         if !self.install_folder_view(rack_at, group_index, Some(&cart)) {
             self.hud.toast(Toast::FolderNone, self.now());
@@ -4046,6 +4296,14 @@ impl App {
         self.shelf_legend = (left, right);
     }
 
+    pub fn set_transfer_legend_faces(
+        &mut self,
+        left: Vec<(TexId, u32)>,
+        right: Vec<(TexId, u32)>,
+    ) {
+        self.transfer_legend = (left, right);
+    }
+
     pub fn set_favorite_star(&mut self, face: TexId, w: u32, h: u32) {
         self.favorite_star = Some((face, w, h));
     }
@@ -4313,33 +4571,33 @@ impl App {
 
     /// Whether the frontend owns L1/R1 outright.
     ///
-    /// The Advance's L/R belong to the game. Every other machine has no
-    /// shoulder of its own, so L1/R1 stay the frontend's — except the Mega
-    /// Drive, whose L/R are its six-button X/Z. On MD the frontend only takes
-    /// them during the SELECT+L1/R1 display chord.
+    /// The Advance's L/R belong to the game. The Famicom, Game Boy and Game
+    /// Boy Color have no shoulder of their own, so L1/R1 stay the frontend's.
+    /// The Super Famicom and Mega Drive have real L/R: those go to the game,
+    /// and their picture moves to the SELECT+L2/R2 chord so SELECT+L1/R1 can
+    /// stay the load/save-state shortcut.
     fn slot_owns_the_shoulders(&self) -> bool {
-        matches!(self.phase, Phase::Playing { .. }) && self.platform != Platform::Gba
-            && self.platform != Platform::Md
+        matches!(self.phase, Phase::Playing { .. })
+            && matches!(self.platform, Platform::Fc | Platform::Gb | Platform::Gbc)
     }
 
-    fn md_display_chord(&self) -> bool {
+    /// SELECT+L2/R2 is the picture chord on the machines with real shoulders.
+    fn display_chord(&self) -> bool {
         matches!(self.phase, Phase::Playing { .. })
-            && self.platform == Platform::Md
+            && matches!(self.platform, Platform::Md | Platform::Sfc)
             && self.select_held
     }
 
-    /// Whether L1/R1 select the picture mode rather than going to the game.
+    /// Whether plain L1/R1 select the picture mode rather than going to the game.
     fn shoulders_change_picture(&self) -> bool {
-        if self.platform == Platform::Md {
-            self.md_display_chord()
-        } else {
-            self.slot_owns_the_shoulders()
-        }
+        self.slot_owns_the_shoulders()
     }
 
     pub fn taken_buttons(&self) -> &'static [Btn] {
-        if self.slot_owns_the_shoulders() || self.md_display_chord() {
+        if self.slot_owns_the_shoulders() {
             &[Btn::L1, Btn::R1]
+        } else if self.display_chord() {
+            &[Btn::L2, Btn::R2]
         } else {
             &[]
         }
@@ -5215,6 +5473,14 @@ impl App {
         self.core_picker.as_ref().map(|p| p.chip(self.now()))
     }
 
+    pub fn core_picker_layout(&self) -> Option<ThreeLayout> {
+        self.core_picker.as_ref().and_then(|p| p.layout())
+    }
+
+    pub fn core_picker_active(&self) -> Option<Core> {
+        self.core_picker.as_ref().map(|p| p.active())
+    }
+
     pub fn game_menu_open(&self) -> bool {
         self.game_menu.is_some()
     }
@@ -5471,7 +5737,6 @@ impl App {
         rows.push(slot_i18n::t(lang, "device.app.help.gb_video").to_string());
         rows.push(slot_i18n::t(lang, "device.app.help.sfc_video").to_string());
         rows.push(slot_i18n::t(lang, "device.app.help.md_video").to_string());
-        rows.push(slot_i18n::t(lang, "device.app.help.md_state").to_string());
         rows.push(slot_i18n::t(lang, "device.app.help.volume").to_string());
         rows.push(slot_i18n::t(lang, "device.app.help.chord").to_string());
         rows
@@ -5481,18 +5746,18 @@ impl App {
         self.guide.is_some()
     }
 
-    pub fn guide_page(&self) -> Option<(String, Vec<String>, usize, usize)> {
+    pub fn guide_frame(&self) -> Option<GuideFrame> {
         let guide = self.guide.as_ref()?;
-        Some((
-            guide.title.clone(),
-            guide.page_lines(),
-            guide.page,
-            guide.page_count(),
-        ))
-    }
-
-    pub fn guide_image(&self) -> Option<Arc<GuideImage>> {
-        self.guide.as_ref()?.image()
+        Some(GuideFrame {
+            title: guide.title.clone(),
+            lines: guide.window(),
+            image: guide.image(),
+            section: guide.page,
+            page: guide.page_number(),
+            pages: guide.page_count(),
+            scroll: guide.scroll,
+            max_scroll: guide.max_scroll(),
+        })
     }
 
     fn show_no_guide(&mut self) {
@@ -5531,7 +5796,7 @@ impl App {
                 }
             }
         } else {
-            guide_text_pages(&decode_guide_text(&bytes))
+            guide_text_page(&decode_guide_text(&bytes)).into_iter().collect()
         };
         if pages.is_empty() {
             self.show_no_guide();
@@ -5542,56 +5807,98 @@ impl App {
         } else {
             cart.title.clone()
         };
-        // Resume where this game was left: the page is written on close, and a
-        // shorter guide (or a replaced one) clamps instead of overrunning.
-        let start = slot_store::cart_meta::read(&root, cart.platform, &cart.rom, &cart.stem)
-            .and_then(|meta| meta.extra.get(GUIDE_PAGE_KEY).and_then(|page| page.as_u64()))
-            .unwrap_or(0) as usize;
-        let page = start.min(pages.len().saturating_sub(1));
+        let mut guide = GuideView {
+            title,
+            pages,
+            page: 0,
+            scroll: 0,
+            held: None,
+        };
+        // Resume where this game was left.  The position is written on close,
+        // and a shorter guide (or a replaced one) clamps instead of overrunning.
+        let saved = slot_store::cart_meta::read(&root, cart.platform, &cart.rom, &cart.stem)
+            .and_then(|meta| meta.extra.get(GUIDE_PAGE_KEY).cloned());
+        match saved {
+            Some(serde_json::Value::Object(saved)) => {
+                let page = saved.get("page").and_then(|page| page.as_u64()).unwrap_or(0);
+                let scroll = saved.get("scroll").and_then(|scroll| scroll.as_u64()).unwrap_or(0);
+                guide.seek(page as usize, scroll as usize);
+            }
+            Some(serde_json::Value::Number(number)) => {
+                if let Some(screen) = number.as_u64() {
+                    guide.seek_screen(screen as usize);
+                }
+            }
+            _ => {}
+        }
         self.utility = None;
-        self.guide = Some(GuideView { title, pages, page });
+        self.guide = Some(guide);
     }
 
-    /// Write the reader's page into this game's card metadata.  One small row
-    /// per close, never per turn, so the card is not written while reading.
-    fn save_guide_page(&mut self, page: usize) {
+    /// Write the reader's position into this game's card metadata.  One small
+    /// row per close, never per turn, so the card is not written while reading.
+    fn save_guide_position(&mut self, page: usize, scroll: usize) {
         let (Some(cart), Some(root)) = (self.playing_cart().cloned(), self.root.clone()) else {
             return;
         };
         let _ = slot_store::cart_meta::update(&root, &cart, |meta| {
-            meta.extra
-                .insert(GUIDE_PAGE_KEY.to_string(), serde_json::json!(page));
+            meta.extra.insert(
+                GUIDE_PAGE_KEY.to_string(),
+                serde_json::json!({"page": page, "scroll": scroll}),
+            );
         });
     }
 
     fn guide_input(&mut self, action: Action) {
+        let now = self.now();
         let Some(guide) = &mut self.guide else {
             return;
         };
         match action {
             Action::GbaDown(Btn::B) | Action::GameMenu | Action::QuickMenu => {
-                let page = guide.page;
+                let (page, scroll) = (guide.page, guide.scroll);
                 self.guide = None;
                 self.utility = Some((0, 0));
-                self.save_guide_page(page);
+                self.save_guide_position(page, scroll);
             }
-            // Start jumps back to the first page without losing the bookmark:
-            // closing now stores 0, exactly like reading it again from the top.
+            // Start jumps back to the first line without losing the bookmark:
+            // closing now stores the top, exactly like reading it again from
+            // the beginning.
             Action::GbaDown(Btn::Start) => {
-                guide.page = 0;
+                guide.release();
+                guide.to_top();
             }
-            Action::GbaDown(Btn::Up)
-            | Action::GbaDown(Btn::Left)
-            | Action::GbaDown(Btn::L1) => {
-                guide.page = guide.page.saturating_sub(1);
+            Action::GbaDown(Btn::Down) => {
+                guide.release();
+                guide.scroll_by(1);
+                guide.hold(1, now);
             }
-            Action::GbaDown(Btn::Down)
-            | Action::GbaDown(Btn::Right)
-            | Action::GbaDown(Btn::R1)
-            | Action::GbaDown(Btn::A) => {
-                guide.page = (guide.page + 1).min(guide.page_count().saturating_sub(1));
+            Action::GbaDown(Btn::Up) => {
+                guide.release();
+                guide.scroll_by(-1);
+                guide.hold(-1, now);
             }
-            _ => {}
+            Action::GbaUp(Btn::Down) | Action::GbaUp(Btn::Up) => guide.release(),
+            // Only the shoulder buttons turn pages: the D-pad is the slow
+            // scroll and must never jump a screen.
+            Action::GbaDown(Btn::L1) => {
+                guide.release();
+                guide.turn(false);
+            }
+            Action::GbaDown(Btn::R1) => {
+                guide.release();
+                guide.turn(true);
+            }
+            _ => guide.release(),
+        }
+    }
+
+    /// Run the D-pad auto-repeat.  Called from the frame timers, not from
+    /// input, so a held key keeps scrolling while the face is being rebuilt.
+    fn guide_tick(&mut self) {
+        let now = self.now();
+        if let Some(guide) = &mut self.guide {
+            guide.tick(now);
         }
     }
 
@@ -5944,6 +6251,11 @@ impl App {
                 let selected = index.min(rows.len().saturating_sub(1));
                 (title, rows, selected)
             }
+            TRANSFER_CONTENT => (
+                slot_i18n::t(lang, "device.app.transfer.content").into(),
+                Vec::new(),
+                index.min(2),
+            ),
             10 => {
                 let title = self
                     .shelf()
@@ -6363,7 +6675,7 @@ impl App {
             return self.link_popup_input(action);
         }
         if self.transfer.is_some()
-            || matches!(self.utility, Some((5 | 6 | 7, _)))
+            || matches!(self.utility, Some((5 | 6 | 7 | TRANSFER_CONTENT, _)))
         {
             return self.transfer_input(action);
         }
@@ -6449,6 +6761,12 @@ impl App {
                     self.set_picture(VideoMode::Stretch)
                 }
                 Action::GbaDown(Btn::R1) if self.shoulders_change_picture() => {
+                    self.set_picture(VideoMode::Actual)
+                }
+                Action::GbaDown(Btn::L2) if self.display_chord() => {
+                    self.set_picture(VideoMode::Stretch)
+                }
+                Action::GbaDown(Btn::R2) if self.display_chord() => {
                     self.set_picture(VideoMode::Actual)
                 }
                 Action::Eject => self.eject(),
@@ -6712,7 +7030,11 @@ impl App {
         };
         match transfer.stage {
             TransferStage::Connecting => (
-                slot_i18n::t(lang, "device.app.transfer.title").into(),
+                format!(
+                    "{} · {}",
+                    slot_i18n::t(lang, "device.app.transfer.title"),
+                    self.transfer_role_label(transfer.host)
+                ),
                 vec![slot_i18n::t(lang, "device.app.transfer.matching").into(), slot_i18n::t(lang, "device.app.common.cancel").into()],
                 0,
             ),
@@ -6722,34 +7044,58 @@ impl App {
                 0,
             ),
             TransferStage::Incoming => {
-                let name = transfer
-                    .incoming
-                    .as_ref()
-                    .map(|offer| offer.name.clone())
-                    .unwrap_or_default();
+                let offer = transfer.incoming.as_ref();
+                let name = offer.map(|offer| offer.name.clone()).unwrap_or_default();
+                let mode = offer.map(|offer| offer.mode).unwrap_or_default();
+                let (title, first) = match mode {
+                    TransferMode::SaveOnly => (
+                        slot_i18n::t_args(
+                            lang,
+                            "device.app.transfer.confirm_save",
+                            &[("name", name.as_str())],
+                        ),
+                        slot_i18n::t(lang, "device.app.transfer.confirm_save_detail").into(),
+                    ),
+                    TransferMode::All => (
+                        slot_i18n::t_args(
+                            lang,
+                            "device.app.transfer.confirm_all",
+                            &[("name", name.as_str())],
+                        ),
+                        slot_i18n::t(lang, "device.app.transfer.confirm_all_detail").into(),
+                    ),
+                    TransferMode::CartOnly => (
+                        slot_i18n::t_args(lang, "device.app.confirm.receive", &[("name", name.as_str())]),
+                        slot_i18n::t(lang, "device.app.confirm.receive_yes").into(),
+                    ),
+                };
                 (
-                    slot_i18n::t_args(lang, "device.app.confirm.receive", &[("name", name.as_str())]),
-                    vec![slot_i18n::t(lang, "device.app.confirm.receive_yes").into(), slot_i18n::t(lang, "device.app.common.cancel").into()],
+                    title,
+                    vec![first, slot_i18n::t(lang, "device.app.common.cancel").into()],
                     0,
                 )
             }
-            TransferStage::IncomingMeta => {
+            TransferStage::IncomingPartial => {
                 let name = transfer
                     .incoming
                     .as_ref()
                     .map(|offer| offer.name.clone())
                     .unwrap_or_default();
                 let labels: Vec<&str> = transfer
-                    .metadata_missing
+                    .parts
                     .iter()
                     .copied()
                     .map(crate::cart_transfer::asset_label)
                     .collect();
                 let fields = labels.join("、");
                 (
-                    slot_i18n::t_args(lang, "device.app.confirm.metadata", &[("name", name.as_str())]),
+                    slot_i18n::t_args(lang, "device.app.transfer.confirm_parts", &[("name", name.as_str())]),
                     vec![
-                        slot_i18n::t_args(lang, "device.app.confirm.metadata_detail", &[("fields", fields.as_str())]),
+                        slot_i18n::t_args(
+                            lang,
+                            "device.app.transfer.confirm_parts_detail",
+                            &[("fields", fields.as_str())],
+                        ),
                         slot_i18n::t(lang, "device.app.common.cancel").into(),
                     ],
                     0,
@@ -6770,9 +7116,58 @@ impl App {
         }
         self.wifi_activity_started();
         self.phase = Phase::Shelf;
-        self.transfer = Some(Transfer::start(host, link_port(), self.link_network));
+        let mode = self.transfer_content();
+        self.transfer = Some(Transfer::start(host, link_port(), self.link_network, mode));
         self.utility = Some((5, 0));
         self.hud.toast(Toast::CartTransferWaiting, self.now());
+    }
+
+    /// What the transfer room sends.  Persisted so the choice survives a
+    /// restart; an unset line reads as 仅卡带, which is what older builds did.
+    pub fn transfer_content(&self) -> TransferMode {
+        TransferMode::from_code(self.state.transfer_content)
+    }
+
+    fn set_transfer_content(&mut self, mode: TransferMode) {
+        self.state.transfer_content = mode.code();
+        if let Some(transfer) = &mut self.transfer {
+            transfer.set_mode(mode);
+        }
+        self.persist();
+    }
+
+    /// The content panel is open, with the row the cursor is on.
+    pub fn transfer_content_menu(&self) -> Option<usize> {
+        match self.utility {
+            Some((TRANSFER_CONTENT, index)) => Some(index),
+            _ => None,
+        }
+    }
+
+    fn transfer_content_index(&self) -> usize {
+        match self.transfer_content() {
+            TransferMode::CartOnly => 0,
+            TransferMode::SaveOnly => 1,
+            TransferMode::All => 2,
+        }
+    }
+
+    fn content_at(index: usize) -> TransferMode {
+        match index {
+            1 => TransferMode::SaveOnly,
+            2 => TransferMode::All,
+            _ => TransferMode::CartOnly,
+        }
+    }
+
+    /// Close the content panel: back to the transfer room when one is open,
+    /// otherwise back to the create/join menu it was opened from.
+    fn return_from_content(&self) -> Option<(u8, usize)> {
+        if self.transfer.is_some() {
+            None
+        } else {
+            Some((5, 0))
+        }
     }
 
     fn begin_transfer_insert(&mut self, stem: String) {
@@ -6834,6 +7229,25 @@ impl App {
     }
 
     fn close_cart_transfer(&mut self) {
+        if self.transfer_leaving_at.is_some() {
+            return;
+        }
+        // A matched room keeps its header for one beat so it can lift back
+        // out.  The quick menu / connecting panels have no header to animate,
+        // so they close at once and the black veil covers the swap.
+        let room = self
+            .transfer
+            .as_ref()
+            .is_some_and(|transfer| transfer.stage == TransferStage::Shelf);
+        if room && self.transfer_header_at.is_some() {
+            self.utility = None;
+            self.transfer_leaving_at = Some(self.now());
+            return;
+        }
+        self.finish_cart_transfer_close();
+    }
+
+    fn finish_cart_transfer_close(&mut self) {
         if let Some(transfer) = &mut self.transfer {
             transfer.cancel();
         }
@@ -6847,6 +7261,8 @@ impl App {
         self.transfer_done_pending = false;
         self.transfer_faces = None;
         self.transfer_blank_face = None;
+        self.transfer_header_at = None;
+        self.transfer_leaving_at = None;
         self.phase = Phase::Shelf;
         self.radio.ask(RadioJob::Down);
         self.radio.ask(RadioJob::Cool);
@@ -6854,6 +7270,10 @@ impl App {
     }
 
     fn transfer_input(&mut self, action: Action) {
+        // The header's exit slide owns the screen; ignore keys until it ends.
+        if self.transfer_leaving_at.is_some() {
+            return;
+        }
         let Some((kind, index)) = self.utility else {
             // Matched shelf: A selects the cartridge to send, M asks before
             // leaving the transfer room.
@@ -6864,6 +7284,11 @@ impl App {
             match action {
                 Action::QuickMenu | Action::GameMenu => {
                     self.utility = Some((6, 0));
+                }
+                // Y picks what this transfer carries.  Only the room allows
+                // it: once an offer is out, the choice is already on the wire.
+                Action::GbaDown(Btn::Y) if stage == TransferStage::Shelf => {
+                    self.utility = Some((TRANSFER_CONTENT, self.transfer_content_index()));
                 }
                 Action::GbaUp(Btn::Left) => self.shelf_mut().release_left(),
                 Action::GbaUp(Btn::Right) => self.shelf_mut().release_right(),
@@ -6952,6 +7377,9 @@ impl App {
                         }
                     }
                     Action::GbaDown(Btn::Select) => self.switch_link_network(),
+                    Action::GbaDown(Btn::Y) if self.transfer.is_none() => {
+                        self.utility = Some((TRANSFER_CONTENT, self.transfer_content_index()));
+                    }
                     Action::GbaDown(Btn::B) => self.close_cart_transfer(),
                     Action::QuickMenu => {
                         if self.transfer.is_some() {
@@ -6972,7 +7400,7 @@ impl App {
                         self.close_cart_transfer();
                     } else {
                         self.utility = match self.transfer.as_ref().map(|t| t.stage.clone()) {
-                            Some(TransferStage::Incoming | TransferStage::IncomingMeta) => Some((7, 0)),
+                            Some(TransferStage::Incoming | TransferStage::IncomingPartial) => Some((7, 0)),
                             Some(TransferStage::OfferSent) | Some(TransferStage::Connecting) => {
                                 Some((5, 0))
                             }
@@ -6982,7 +7410,7 @@ impl App {
                 }
                 Action::GbaDown(Btn::B) | Action::QuickMenu => {
                     self.utility = match self.transfer.as_ref().map(|t| t.stage.clone()) {
-                        Some(TransferStage::Incoming | TransferStage::IncomingMeta) => Some((7, 0)),
+                        Some(TransferStage::Incoming | TransferStage::IncomingPartial) => Some((7, 0)),
                         Some(TransferStage::OfferSent) | Some(TransferStage::Connecting) => {
                             Some((5, 0))
                         }
@@ -7003,8 +7431,8 @@ impl App {
                         let Some(transfer) = &mut self.transfer else {
                             return;
                         };
-                        let accepted = if transfer.stage == TransferStage::IncomingMeta {
-                            transfer.accept_metadata(&root)
+                        let accepted = if transfer.stage == TransferStage::IncomingPartial {
+                            transfer.accept_parts(&root)
                         } else {
                             transfer.accept(&root)
                         };
@@ -7039,6 +7467,22 @@ impl App {
                     self.utility = None;
                 }
                 Action::QuickMenu => self.utility = Some((6, 0)),
+                _ => {}
+            },
+            TRANSFER_CONTENT => match action {
+                Action::GbaDown(Btn::Up) => {
+                    self.utility = Some((TRANSFER_CONTENT, (index + 2) % 3));
+                }
+                Action::GbaDown(Btn::Down) => {
+                    self.utility = Some((TRANSFER_CONTENT, (index + 1) % 3));
+                }
+                Action::GbaDown(Btn::A) => {
+                    self.set_transfer_content(Self::content_at(index.min(2)));
+                    self.utility = self.return_from_content();
+                }
+                Action::GbaDown(Btn::B) | Action::GbaDown(Btn::Y) | Action::QuickMenu => {
+                    self.utility = self.return_from_content();
+                }
                 _ => {}
             },
             _ => {}
@@ -7104,6 +7548,16 @@ impl App {
         }
         self.transfer_done_pending = false;
         self.transfer_progress_started = None;
+        if received {
+            if let Some(path) = self.transfer.as_ref().and_then(|t| t.backups.first()) {
+                // A replaced save is one keystroke away from being recovered;
+                // say where it went without blocking the room behind a modal.
+                crate::link_log::warn(format!(
+                    "transfer: 旧存档已备份到 {}",
+                    path.display()
+                ));
+            }
+        }
         self.hud.toast(Toast::CartTransferDone, now);
         self.utility = None;
         self.begin_transfer_eject();
@@ -7134,29 +7588,40 @@ impl App {
         };
         if after == TransferStage::Incoming {
             if let Some(offer) = offer {
-                let metadata = if offer.hash != [0u8; 32] {
+                // What this device still needs: side material it lacks, plus
+                // every save kind the player asked to send.  A save-only offer
+                // is useless without a local cartridge to seat it on.
+                let local = if offer.hash != [0u8; 32] {
                     self.cached_rom_cart(offer.platform, offer.hash)
-                        .map(|cart| (cart.stem.clone(), offer.metadata_missing(&root, cart)))
+                        .map(|cart| (cart.stem.clone(), offer.parts_missing(&root, cart)))
                 } else {
                     None
                 };
-                match metadata {
-                    Some((_stem, missing)) if !missing.is_empty() => {
+                match (offer.mode, local) {
+                    (TransferMode::SaveOnly, None) => {
                         if let Some(transfer) = &mut self.transfer {
-                            transfer.offer_metadata(_stem, missing);
+                            transfer.fail_with(
+                                slot_i18n::t(lang, "device.app.transfer.peer_no_cart"),
+                            );
                         }
-                        after = TransferStage::IncomingMeta;
+                        after = TransferStage::Failed;
                     }
-                    Some(_) => {
-                        // Same ROM and every offered side asset is already
-                        // present: keep the old duplicate refusal.
+                    (_, Some((stem, parts))) if !parts.is_empty() => {
+                        if let Some(transfer) = &mut self.transfer {
+                            transfer.offer_parts(stem, parts);
+                        }
+                        after = TransferStage::IncomingPartial;
+                    }
+                    (_, Some(_)) => {
+                        // Same ROM and every offered part is already present:
+                        // keep the old duplicate refusal.
                         if let Some(transfer) = &mut self.transfer {
                             transfer.mark_duplicate(true);
                         }
                         after = TransferStage::Duplicate;
                         duplicate_receiver = true;
                     }
-                    None => {}
+                    _ => {}
                 }
             }
         }
@@ -7184,7 +7649,7 @@ impl App {
                 self.begin_transfer_eject();
                 self.hud.toast(Toast::CartTransferReady, now);
             }
-            TransferStage::Incoming | TransferStage::IncomingMeta => {
+            TransferStage::Incoming | TransferStage::IncomingPartial => {
                 self.utility = Some((7, 0));
             }
             TransferStage::Sending | TransferStage::Receiving => {
@@ -10056,6 +10521,22 @@ impl App {
         if self.core_picker.as_ref().is_some_and(|p| p.finished(now)) {
             self.core_picker = None;
         }
+        // The Web extension-pack page can add/remove a core while the picker is
+        // open.  The options are a snapshot; when the card changes underneath,
+        // close the page instead of drawing a chip that is already gone.
+        let packs_changed = self.core_picker.as_ref().is_some_and(|picker| {
+            let Some(root) = self.root.as_deref() else {
+                return false;
+            };
+            let Some(cart) = self.shelf().carts.get(self.shelf().index) else {
+                return false;
+            };
+            slot_store::available_options(root, cart.platform).as_slice() != picker.options()
+        });
+        if packs_changed {
+            self.core_picker = None;
+            self.hud.toast(Toast::PacksChanged, now);
+        }
         if !self.on_shelf() {
             self.shelf_mut().release_hold();
         }
@@ -10308,6 +10789,8 @@ impl App {
     fn timers(&mut self) {
         self.poll_follow_ask();
         self.play_hold();
+        self.guide_tick();
+        self.poll_transfer_header_anim();
         self.poll_about_hold();
         self.poll_wifi();
         self.poll_clock_sync();
@@ -11097,10 +11580,18 @@ impl App {
                     || self.keyboard.is_some()
                     || self.search_results.is_some()
                     || self.sync_insert.is_some()
+                    || self.transfer_view().is_some()
                     || !matches!(self.shelf_sync, ShelfSync::Idle);
                 if !covered {
                     self.draw_shelf_playtime(out);
-                    draw_shelf_legend(&self.shelf_legend.0, &self.shelf_legend.1, out);
+                    // The room has its own keys: A sends the selected cart and
+                    // M leaves.  The shelf's Y/X/B hints would be dead there.
+                    let legend = if self.transfer.is_some() {
+                        &self.transfer_legend
+                    } else {
+                        &self.shelf_legend
+                    };
+                    draw_shelf_legend(&legend.0, &legend.1, out);
                 }
             }
             Phase::About => {
@@ -11315,6 +11806,30 @@ impl App {
         self.core_board_face = Some(board);
         self.core_lid_face = Some(lid);
         self.core_faces_stem = self.selected_stem().map(str::to_string);
+    }
+
+    pub fn set_core_tray_face(&mut self, tray: TexId) {
+        self.core_tray_face = Some(tray);
+    }
+
+    pub fn set_core_tray_label(&mut self, label: (TexId, u32, u32)) {
+        self.core_tray_label = Some(label);
+    }
+
+    pub fn set_core_highlight_face(&mut self, face: TexId) {
+        self.core_highlight_face = Some(face);
+    }
+
+    pub fn set_core_selection_glow(&mut self, face: TexId) {
+        self.core_selection_glow = Some(face);
+    }
+
+    pub fn set_core_selection_caret(&mut self, face: TexId) {
+        self.core_selection_caret = Some(face);
+    }
+
+    pub fn set_core_running_face(&mut self, face: (TexId, u32, u32)) {
+        self.core_running_face = Some(face);
     }
 
     pub fn set_network_face(&mut self, face: TexId) {
@@ -12397,6 +12912,172 @@ impl App {
         }
     }
 
+    /// One chip on the 3-core picker, at a board-space anchor (body top-left).
+    #[allow(clippy::too_many_arguments)]
+    fn draw_picker_chip(
+        &self,
+        out: &mut Vec<Draw>,
+        platform: Platform,
+        board: Placed,
+        core: Core,
+        u: f32,
+        v: f32,
+        turn: f32,
+        alpha: f32,
+        lift: f32,
+        shake: f32,
+    ) {
+        let zoom = board_zoom(board);
+        let core_zoom = zoom * slot_ui::core_chip_scale(platform);
+        if lift > 0.0 {
+            if let Some(tex) = self.core_chip_shadow_face {
+                let (cx, cy) = on_board_for(
+                    platform,
+                    board,
+                    u + 19.0 * slot_ui::core_chip_scale(platform),
+                    v + 29.4 * slot_ui::core_chip_scale(platform),
+                );
+                let (w, h) = (SHADOW_W as f32 * core_zoom, SHADOW_H as f32 * core_zoom);
+                out.push(Draw::Tex {
+                    x: cx - w / 2.0,
+                    y: cy - h / 2.0,
+                    w,
+                    h,
+                    tex,
+                    alpha: 0.6 * lift * alpha.min(1.0),
+                });
+            }
+        }
+        let Some(tex) = self
+            .core_chip_faces
+            .get(platform.index())
+            .and_then(|row| row.get(core.index()))
+            .copied()
+        else {
+            return;
+        };
+        let (x, y) = on_board_for(platform, board, u, v - HOP_LIFT * lift);
+        let body = Placed {
+            x: x + shake,
+            y,
+            w: CHIP_W as f32 * core_zoom,
+            h: CHIP_H as f32 * core_zoom,
+        };
+        let at = grown(body, TURN_PAD as f32 * zoom);
+        out.push(Draw::Turned {
+            x: at.x.round(),
+            y: at.y.round(),
+            w: at.w,
+            h: at.h,
+            tex,
+            alpha,
+            turn,
+        });
+    }
+
+    fn draw_picker_highlight(
+        &self,
+        out: &mut Vec<Draw>,
+        platform: Platform,
+        board: Placed,
+        u: f32,
+        v: f32,
+        alpha: f32,
+    ) {
+        let Some(tex) = self.core_highlight_face else {
+            return;
+        };
+        let zoom = board_zoom(board);
+        let (x, y) = on_board_for(platform, board, u, v);
+        out.push(Draw::Tex {
+            x: (x - 8.0 * zoom).round(),
+            y: (y - 8.0 * zoom).round(),
+            w: 75.0 * zoom,
+            h: 57.0 * zoom,
+            tex,
+            alpha,
+        });
+    }
+
+    fn draw_picker_glow(
+        &self,
+        out: &mut Vec<Draw>,
+        platform: Platform,
+        board: Placed,
+        u: f32,
+        v: f32,
+        alpha: f32,
+    ) {
+        let Some(tex) = self.core_selection_glow else {
+            return;
+        };
+        let zoom = board_zoom(board);
+        let core_zoom = zoom * slot_ui::core_chip_scale(platform);
+        let (x, y) = on_board_for(platform, board, u, v);
+        let cx = x + CHIP_W as f32 * core_zoom / 2.0;
+        let cy = y + CHIP_H as f32 * core_zoom / 2.0;
+        let (w, h) = (100.0 * zoom, 76.0 * zoom);
+        out.push(Draw::Tex {
+            x: (cx - w / 2.0).round(),
+            y: (cy - h / 2.0).round(),
+            w,
+            h,
+            tex,
+            alpha,
+        });
+    }
+
+    fn draw_picker_caret(
+        &self,
+        out: &mut Vec<Draw>,
+        platform: Platform,
+        board: Placed,
+        u: f32,
+        v: f32,
+        alpha: f32,
+    ) {
+        let Some(tex) = self.core_selection_caret else {
+            return;
+        };
+        let zoom = board_zoom(board);
+        let core_zoom = zoom * slot_ui::core_chip_scale(platform);
+        let (x, y) = on_board_for(platform, board, u, v);
+        let w = 16.0 * zoom;
+        let h = 10.0 * zoom;
+        out.push(Draw::Tex {
+            x: (x + CHIP_W as f32 * core_zoom / 2.0 - w / 2.0).round(),
+            y: (y - 14.0 * zoom).round(),
+            w,
+            h,
+            tex,
+            alpha,
+        });
+    }
+
+    fn draw_picker_running(
+        &self,
+        out: &mut Vec<Draw>,
+        platform: Platform,
+        board: Placed,
+        u: f32,
+        v: f32,
+        alpha: f32,
+    ) {
+        let Some((tex, w, h)) = self.core_running_face else {
+            return;
+        };
+        let zoom = board_zoom(board);
+        let (x, y) = on_board_for(platform, board, u + 52.0 / 1.55, v + 2.0 / 1.548);
+        out.push(Draw::Tex {
+            x: x.round(),
+            y: y.round(),
+            w: w as f32 * zoom,
+            h: h as f32 * zoom,
+            tex,
+            alpha,
+        });
+    }
+
     fn draw_core_picker(&self, picker: &CorePicker, out: &mut Vec<Draw>) {
         out.push(Draw::Rect {
             x: 0.0,
@@ -12432,6 +13113,7 @@ impl App {
             .unwrap_or(Platform::Gba);
         let options = picker.options();
         let single = options.len() <= 1;
+        let three = picker.is_three();
         let now = self.now();
         let progress = picker.openness(now);
         let lift = lift_of(progress);
@@ -12440,7 +13122,12 @@ impl App {
             .selected_cart_rect()
             .map(|(_, _, (x, y, w, h))| Placed { x, y, w, h })
             .unwrap_or_else(|| shelf_cart_at(rest, scale));
-        let board = board_from_for(platform, shelf, progress);
+        let mut board = board_from_for(platform, shelf, progress);
+        // A third GBA core lives in the tray under the board: lift the board 30px
+        // (within the open animation) to leave it room.
+        if three {
+            board.y -= 30.0 * lift;
+        }
         let zoom = board_zoom(board);
         let core_zoom = zoom * slot_ui::core_chip_scale(platform);
         let ready = self.core_faces_ready();
@@ -12470,81 +13157,254 @@ impl App {
                     alpha: 1.0,
                 });
             }
-            let single_spot = if single {
-                Some(slot_ui::single_core_spot(platform))
-            } else {
-                None
-            };
-            for (position, core) in options.iter().enumerate() {
-                let Some(tex) = self.core_socket_faces.get(core.index()).copied() else {
-                    continue;
-                };
-                let (socket_u, socket_v) = match slot_ui::multi_core_slot(platform, position) {
-                    Some((u, v, _, _)) => (u, v),
-                    None => match single_spot {
-                        Some((u, v, _, _)) => (u, v),
-                        None => (SOCKET_U.get(position).copied().unwrap_or(SOCKET_U[0]), SOCKET_V),
-                    },
-                };
-                let (x, y) = on_board_for(platform, board, socket_u, socket_v);
-                out.push(Draw::Tex {
-                    x: x.round(),
-                    y: y.round(),
-                    w: SOCKET_W as f32 * core_zoom,
-                    h: SOCKET_H as f32 * core_zoom,
-                    tex,
-                    alpha: 1.0,
-                });
-            }
-
-            let chip = picker.chip(now);
-            let (u, chip_v) = match single_spot {
-                Some((_, _, u, v)) => (u, v),
-                None => slot_ui::chip_along(platform, chip.across).unwrap_or((
-                    CHIP_U[0] + (CHIP_U[1] - CHIP_U[0]) * chip.across,
-                    CHIP_V,
-                )),
-            };
-            if chip.lift > 0.0 {
-                if let Some(tex) = self.core_chip_shadow_face {
-                    let (cx, cy) = on_board_for(platform, board, u + 19.0 * slot_ui::core_chip_scale(platform), chip_v + 29.4 * slot_ui::core_chip_scale(platform));
-                    let (w, h) = (SHADOW_W as f32 * core_zoom, SHADOW_H as f32 * core_zoom);
+            if three {
+                if let Some(tex) = self.core_tray_face {
+                    let (u, v) = (slot_ui::TRAY_PLATE_U, slot_ui::TRAY_PLATE_V);
+                    let (x, y) = on_board_for(platform, board, u, v);
                     out.push(Draw::Tex {
-                        x: cx - w / 2.0,
-                        y: cy - h / 2.0,
-                        w,
-                        h,
+                        x: x.round(),
+                        y: y.round(),
+                        w: slot_ui::TRAY_PLATE_W * zoom,
+                        h: slot_ui::TRAY_PLATE_H * zoom,
                         tex,
-                        alpha: 0.6 * chip.lift * lift,
+                        alpha: lift,
+                    });
+                    if let Some((tex, w, h)) = self.core_tray_label {
+                        let (tx, ty) = on_board_for(
+                            platform,
+                            board,
+                            u + 10.0 / 1.55,
+                            v + 3.0 / 1.548,
+                        );
+                        out.push(Draw::Tex {
+                            x: tx.round(),
+                            y: ty.round(),
+                            w: w as f32 * zoom,
+                            h: h as f32 * zoom,
+                            tex,
+                            alpha: lift,
+                        });
+                    }
+                    // A small teal lamp marks the tray as the powered extension
+                    // seat, the way the board's network module has its own LED.
+                    let (lx, ly) = on_board_for(
+                        platform,
+                        board,
+                        u + 192.0 / 1.55,
+                        v + 6.0 / 1.548,
+                    );
+                    out.push(Draw::Rect {
+                        x: lx.round(),
+                        y: ly.round(),
+                        w: 4.0 * zoom,
+                        h: 4.0 * zoom,
+                        colour: [0.18, 0.83, 0.69, 1.0],
                     });
                 }
             }
-            let face = match chip.seated {
-                Some(core) => self
-                    .core_chip_faces
-                    .get(platform.index())
-                    .and_then(|row| row.get(core.index()))
-                    .copied(),
-                None => self.core_blank_chip_faces.get(platform.index()).copied(),
-            };
-            if let Some(tex) = face {
-                let (x, y) = on_board_for(platform, board, u, chip_v - HOP_LIFT * chip.lift);
-                let body = Placed {
-                    x: x + chip.shake,
-                    y,
-                    w: CHIP_W as f32 * core_zoom,
-                    h: CHIP_H as f32 * core_zoom,
+            if three {
+                let layout = picker.layout().expect("three-core picker without a layout");
+                let seats = [layout.slot1, layout.slot2, layout.tray];
+                for (position, core) in seats.iter().enumerate() {
+                    let Some(tex) = self.core_socket_faces.get(core.index()).copied() else {
+                        continue;
+                    };
+                    let Some((socket_u, socket_v)) =
+                        slot_ui::core_slot(platform, 3, position)
+                    else {
+                        continue;
+                    };
+                    let (x, y) = on_board_for(platform, board, socket_u, socket_v);
+                    out.push(Draw::Tex {
+                        x: x.round(),
+                        y: y.round(),
+                        w: SOCKET_W as f32 * core_zoom,
+                        h: SOCKET_H as f32 * core_zoom,
+                        tex,
+                        alpha: 1.0,
+                    });
+                }
+
+                let selected = picker.selected_pos();
+                let shake = picker.chip(now).shake;
+                // The selected chip is physically picked up 5px; the other two
+                // are dimmed so the rim/caret/glow are not competing with three
+                // full-brightness chips.
+                let select_lift = 5.0 / 1.55;
+                let select_lift_norm = select_lift / slot_ui::HOP_LIFT;
+                let breath = 0.78
+                    + 0.22
+                        * (0.5
+                            + 0.5
+                                * (((now % 1400) as f32 / 1400.0
+                                    * std::f32::consts::TAU)
+                                    .sin()));
+                if let Some(q) = picker.swap_progress(now) {
+                    let (u0, v0) = slot_ui::core_chip(platform, 0).unwrap();
+                    self.draw_picker_chip(
+                        out, platform, board, layout.slot1, u0, v0, 0.0, 0.45, 0.0, 0.0,
+                    );
+                    let (from_u, from_v) = slot_ui::core_chip(platform, 2).unwrap();
+                    let (to_u, to_v) = slot_ui::core_chip(platform, 1).unwrap();
+                    let e = ease(q);
+                    let arc = (std::f32::consts::PI * q).sin();
+                    let incoming_u = from_u + (to_u - from_u) * e;
+                    let incoming_v = from_v + (to_v - from_v) * e;
+                    self.draw_picker_chip(
+                        out,
+                        platform,
+                        board,
+                        layout.slot2,
+                        incoming_u,
+                        incoming_v,
+                        slot_ui::CHIP_TIP * arc,
+                        1.0,
+                        arc,
+                        0.0,
+                    );
+                    let outgoing_u = to_u + (from_u - to_u) * e;
+                    let outgoing_v = to_v + (from_v - to_v) * e;
+                    self.draw_picker_chip(
+                        out,
+                        platform,
+                        board,
+                        layout.tray,
+                        outgoing_u,
+                        outgoing_v,
+                        -slot_ui::CHIP_TIP * arc,
+                        1.0,
+                        arc,
+                        0.0,
+                    );
+                } else {
+                    // Underglow behind the selected chip/socket first.
+                    if let Some((u, v)) = slot_ui::core_chip(platform, selected) {
+                        self.draw_picker_glow(out, platform, board, u, v, lift * breath);
+                    }
+                    for (position, core) in seats.iter().enumerate() {
+                        let Some((u, v)) = slot_ui::core_chip(platform, position) else {
+                            continue;
+                        };
+                        let is_selected = position == selected;
+                        let alpha = if is_selected { 1.0 } else { 0.45 };
+                        let chip_lift = if is_selected { select_lift_norm } else { 0.0 };
+                        let chip_shake = if is_selected { shake } else { 0.0 };
+                        self.draw_picker_chip(
+                            out, platform, board, *core, u, v, 0.0, alpha, chip_lift, chip_shake,
+                        );
+                    }
+                    if let Some((u, v)) = slot_ui::core_chip(platform, selected) {
+                        let lifted_v = v - select_lift;
+                        self.draw_picker_highlight(
+                            out,
+                            platform,
+                            board,
+                            u,
+                            lifted_v,
+                            lift * breath,
+                        );
+                        self.draw_picker_caret(
+                            out,
+                            platform,
+                            board,
+                            u,
+                            lifted_v,
+                            lift * breath,
+                        );
+                    }
+                    let active = picker.active();
+                    if let Some(position) = seats.iter().position(|core| *core == active) {
+                        if let Some((u, v)) = slot_ui::core_chip(platform, position) {
+                            let run_v = if position == selected {
+                                v - select_lift
+                            } else {
+                                v
+                            };
+                            self.draw_picker_running(out, platform, board, u, run_v, lift);
+                        }
+                    }
+                }
+            } else {
+                let single_spot = if single {
+                    Some(slot_ui::single_core_spot(platform))
+                } else {
+                    None
                 };
-                let at = grown(body, TURN_PAD as f32 * zoom);
-                out.push(Draw::Turned {
-                    x: at.x.round(),
-                    y: at.y.round(),
-                    w: at.w,
-                    h: at.h,
-                    tex,
-                    alpha: 1.0,
-                    turn: chip.tip,
-                });
+                for (position, core) in options.iter().enumerate() {
+                    let Some(tex) = self.core_socket_faces.get(core.index()).copied() else {
+                        continue;
+                    };
+                    let (socket_u, socket_v) =
+                        match slot_ui::core_slot(platform, options.len(), position) {
+                            Some((u, v)) => (u, v),
+                            None => match single_spot {
+                                Some((u, v, _, _)) => (u, v),
+                                None => (
+                                    SOCKET_U.get(position).copied().unwrap_or(SOCKET_U[0]),
+                                    SOCKET_V,
+                                ),
+                            },
+                        };
+                    let (x, y) = on_board_for(platform, board, socket_u, socket_v);
+                    out.push(Draw::Tex {
+                        x: x.round(),
+                        y: y.round(),
+                        w: SOCKET_W as f32 * core_zoom,
+                        h: SOCKET_H as f32 * core_zoom,
+                        tex,
+                        alpha: 1.0,
+                    });
+                }
+
+                let chip = picker.chip(now);
+                let (u, chip_v) = match single_spot {
+                    Some((_, _, u, v)) => (u, v),
+                    None => slot_ui::chip_place(platform, options.len(), chip.across).unwrap_or((
+                        CHIP_U[0] + (CHIP_U[1] - CHIP_U[0]) * chip.across,
+                        CHIP_V,
+                    )),
+                };
+                if chip.lift > 0.0 {
+                    if let Some(tex) = self.core_chip_shadow_face {
+                        let (cx, cy) = on_board_for(platform, board, u + 19.0 * slot_ui::core_chip_scale(platform), chip_v + 29.4 * slot_ui::core_chip_scale(platform));
+                        let (w, h) = (SHADOW_W as f32 * core_zoom, SHADOW_H as f32 * core_zoom);
+                        out.push(Draw::Tex {
+                            x: cx - w / 2.0,
+                            y: cy - h / 2.0,
+                            w,
+                            h,
+                            tex,
+                            alpha: 0.6 * chip.lift * lift,
+                        });
+                    }
+                }
+                let face = match chip.seated {
+                    Some(core) => self
+                        .core_chip_faces
+                        .get(platform.index())
+                        .and_then(|row| row.get(core.index()))
+                        .copied(),
+                    None => self.core_blank_chip_faces.get(platform.index()).copied(),
+                };
+                if let Some(tex) = face {
+                    let (x, y) = on_board_for(platform, board, u, chip_v - HOP_LIFT * chip.lift);
+                    let body = Placed {
+                        x: x + chip.shake,
+                        y,
+                        w: CHIP_W as f32 * core_zoom,
+                        h: CHIP_H as f32 * core_zoom,
+                    };
+                    let at = grown(body, TURN_PAD as f32 * zoom);
+                    out.push(Draw::Turned {
+                        x: at.x.round(),
+                        y: at.y.round(),
+                        w: at.w,
+                        h: at.h,
+                        tex,
+                        alpha: 1.0,
+                        turn: chip.tip,
+                    });
+                }
             }
         }
 
@@ -12593,10 +13453,19 @@ impl App {
         }
 
         let faces = &self.core_legend_faces;
+        let legend_y = if three { 430.0 } else { CORE_LEGEND_Y };
         if faces.len() >= 3 {
             let cancel = faces[0];
-            let swap = faces[1];
-            let choose = faces[2];
+            let swap = if three {
+                faces.get(6).copied().unwrap_or(faces[1])
+            } else {
+                faces[1]
+            };
+            let choose = if three && picker.selected_pos() == 2 {
+                faces.get(7).copied().unwrap_or(faces[2])
+            } else {
+                faces[2]
+            };
             let right = BOARD_X + BOARD_W as f32;
             let seen = |w: u32| w.saturating_sub(HINT_EDGE) as f32;
             let mut hints = vec![(cancel.0, cancel.1, BOARD_X)];
@@ -12607,7 +13476,7 @@ impl App {
             for (tex, w, x) in hints {
                 out.push(Draw::Tex {
                     x: x.round(),
-                    y: CORE_LEGEND_Y,
+                    y: legend_y,
                     w: w as f32,
                     h: HINT_H as f32,
                     tex,
@@ -12624,7 +13493,7 @@ impl App {
                 for (tex, w) in extras {
                     out.push(Draw::Tex {
                         x,
-                        y: CORE_LEGEND_Y - 26.0,
+                        y: legend_y - 26.0,
                         w: w as f32,
                         h: HINT_H as f32,
                         tex,
@@ -13480,7 +14349,14 @@ impl App {
         let options = slot_store::available_options(&root, cart.platform);
         let now = self.now();
         let seat = slot_store::core_for_platform(&root, &cart.stem, cart.platform);
-        let mut picker = CorePicker::open(seat, options, now);
+        let mut picker = if options.len() > 2 && cart.platform == Platform::Gba {
+            let alt = slot_store::tray_alt(&root, cart.platform)
+                .filter(|core| options.contains(core))
+                .or_else(|| options.contains(&Core::Gpsp).then_some(Core::Gpsp));
+            CorePicker::open_three(seat, options, alt, now)
+        } else {
+            CorePicker::open(seat, options, now)
+        };
         if self.core_faces_ready() {
             picker.start(now);
         }
@@ -13525,7 +14401,24 @@ impl App {
         };
         let outcome = picker.press(press, now);
         if let Outcome::Write(core) = outcome {
+            let Some(root) = self.root.clone() else {
+                return;
+            };
+            // A pack can be removed through the Web while this page is open:
+            // never write a core whose .so is no longer on the card.
+            if !core.is_available(&root) {
+                self.core_picker = None;
+                self.hud.toast(Toast::CoreMissing, now);
+                return;
+            }
             self.write_core(core);
+            if let Some(cart) = self.shelf().carts.get(self.shelf().index) {
+                if cart.platform == Platform::Gba && core != Core::Mgba {
+                    if let Err(error) = slot_store::write_tray_alt(&root, cart.platform, core) {
+                        eprintln!("slot: core: could not write core_tray.txt: {error}");
+                    }
+                }
+            }
         }
     }
 
@@ -13573,6 +14466,18 @@ impl App {
             return;
         }
         if self.core == Core::Mgba {
+            // mGBA links over the cable only. A wireless override left over
+            // from another core would keep this screen shut with no way back,
+            // so drop it first and let the cart's own hardware speak.
+            if let Some(stem) = self.seated().map(str::to_string) {
+                if self.link_mode(&stem).0 == LinkKind::Wireless
+                    && self.link_choices.remove(&stem).is_some()
+                {
+                    crate::link_log::debug(format!(
+                        "link: dropped an mGBA wireless override for {stem:?}"
+                    ));
+                }
+            }
             let wireless = self
                 .seated()
                 .is_some_and(|stem| self.link_mode(stem).0 == LinkKind::Wireless);
@@ -13583,6 +14488,12 @@ impl App {
             self.link_hardware = LinkKind::Cable;
             self.radio.ask(RadioJob::Warm);
             self.game_menu = Some(GameMenu::Pick(self.last_role));
+            return;
+        }
+        if self.core == Core::Armgba {
+            // armGBA's own netplay isn't linkslot's cable/netpacket session:
+            // say so plainly instead of opening a link that can never pair.
+            self.hud.toast(Toast::CoreNoLink, self.now());
             return;
         }
         if self.platform != Platform::Gba {
@@ -14367,6 +15278,82 @@ impl App {
 
     pub fn transfer_menu_open(&self) -> bool {
         self.transfer.is_none() && matches!(self.utility, Some((5, index)) if index < 3)
+    }
+
+    /// The side word shown next to the mode name while matching and in the
+    /// room.  "主机 / 副机" is the same wording the link screens use.
+    fn transfer_role_label(&self, host: bool) -> &'static str {
+        let key = if host {
+            "device.app.transfer.role_host"
+        } else {
+            "device.app.transfer.role_join"
+        };
+        slot_i18n::t(self.language, key)
+    }
+
+    /// The top-centre header for a matched transfer room.  The matching and
+    /// progress screens own the whole panel and say the role themselves, so
+    /// this is only for the shelf the user is left on between cartridges.
+    pub fn transfer_header(&self) -> Option<TransferHeader> {
+        let transfer = self.transfer.as_ref()?;
+        // A failed match has no room left to label; the failure notice owns
+        // that moment and the player leaves the mode from there.
+        if transfer.stage == TransferStage::Failed {
+            return None;
+        }
+        if !self.navigation_visible() || self.utility.is_some() || self.transfer_view().is_some() {
+            return None;
+        }
+        Some(TransferHeader {
+            host: transfer.host,
+            game: self.rom_title().map(str::to_string),
+            language: self.language,
+            content: transfer.mode,
+        })
+    }
+
+    /// True while a transient HUD toast owns the top strip ("connected",
+    /// "they already own this cart", …).  The transfer header yields to it so
+    /// those messages are never painted over.
+    pub fn hud_toast_visible(&self) -> bool {
+        self.hud.toast_visible(self.now())
+    }
+
+    /// The room header's vertical offset: negative while it drops in from
+    /// above or lifts back out, zero at rest.  The frontend adds it to the
+    /// header's normal y (`14`).
+    pub fn transfer_header_offset(&self) -> f32 {
+        if let Some(at) = self.transfer_leaving_at {
+            let t = (self.now().saturating_sub(at) as f32 / HEADER_SLIDE_MS as f32)
+                .clamp(0.0, 1.0);
+            return -ease(t) * HEADER_SLIDE_PX;
+        }
+        let Some(at) = self.transfer_header_at else {
+            return 0.0;
+        };
+        let t = (self.now().saturating_sub(at) as f32 / HEADER_SLIDE_MS as f32)
+            .clamp(0.0, 1.0);
+        -(1.0 - ease(t)) * HEADER_SLIDE_PX
+    }
+
+    /// Arm the room header's drop-in once it is actually drawable (after any
+    /// "connected" toast), and finish an exit slide when its beat is over.
+    fn poll_transfer_header_anim(&mut self) {
+        let now = self.now();
+        if self.transfer.is_none() {
+            // The room is gone; the next one starts its own drop-in.
+            self.transfer_header_at = None;
+        } else if self.transfer_header().is_some() && !self.hud.toast_visible(now) {
+            // A panel or the progress screen may cover the header for a
+            // while; keep the original stamp so it does not re-slide after
+            // every cartridge.
+            self.transfer_header_at.get_or_insert(now);
+        }
+        if let Some(at) = self.transfer_leaving_at {
+            if now.saturating_sub(at) >= HEADER_SLIDE_MS {
+                self.finish_cart_transfer_close();
+            }
+        }
     }
 
     pub fn transfer_network_label(&self, lang: slot_i18n::Language) -> &'static str {
@@ -15197,8 +16184,42 @@ impl App {
         Some((self.shelf().index, cart.platform, (x, y, w, h)))
     }
 
+    /// The visible gold star's top-left and diameter for the selected cart.
+    /// The badge anchors to the printable label's top-right corner, six pixels
+    /// in at the cart's displayed size, and shrinks with the shelf's spring.
+    fn favorite_star_spot(
+        platform: Platform,
+        model: CartModel,
+        (x, y, w, h): (f32, f32, f32, f32),
+    ) -> Option<(f32, f32, f32)> {
+        // `label_rect` is in the face art's own pixels.  The shelf draws the
+        // whole face into `cart_box`, and the Famicom box is only 85% of its
+        // art (`FC_DISPLAY`), so the label needs the face scale — scaling it by
+        // the display box put the star past the label, on the Famicom shell.
+        let (face_w, face_h) = slot_ui::front_size(platform, model);
+        let (box_w, box_h) = slot_ui::cart_box(platform);
+        if face_w == 0 || face_h == 0 || box_w == 0 || box_h == 0 {
+            return None;
+        }
+        let face_x = w / face_w as f32;
+        let face_y = h / face_h as f32;
+        // The badge's own size stays in displayed cart pixels: 30 px at 1:1
+        // (26 on the SFC's shorter label), six px in from the label's edge.
+        let display = w / box_w as f32;
+        let (label_x, label_y, label_w, _) = slot_ui::label_rect(platform, model);
+        let label_right = x + (label_x + label_w) as f32 * face_x;
+        let label_top = y + label_y as f32 * face_y;
+        let visible = if platform == Platform::Sfc {
+            26.0
+        } else {
+            30.0
+        } * display;
+        let inset = 6.0 * display;
+        Some((label_right - inset - visible, label_top + inset, visible))
+    }
+
     fn draw_favorite_star(&self, out: &mut Vec<Draw>) {
-        let Some((_, platform, (x, y, w, _))) = self.selected_cart_rect() else {
+        let Some((index, platform, (x, y, w, h))) = self.selected_cart_rect() else {
             return;
         };
         let Some(stem) = self.selected_stem() else {
@@ -15207,20 +16228,30 @@ impl App {
         if !self.state.is_favorite(platform, stem) {
             return;
         }
+        let Some(cart) = self.shelf().carts.get(index) else {
+            return;
+        };
+        let Some((star_x, star_y, visible)) =
+            Self::favorite_star_spot(platform, cart.model, (x, y, w, h))
+        else {
+            return;
+        };
         let Some((tex, face_w, face_h)) = self.favorite_star else {
             return;
         };
         if face_w == 0 || face_h == 0 {
             return;
         }
-        let size = 34.0;
+        // The face carries transparent rim/shadow padding around the gold
+        // star; draw it larger and offset so the visible star lands exactly
+        // on `star_x/star_y`.
+        let draw = visible / slot_ui::FAVORITE_STAR_INK_RATIO;
+        let pad = (draw - visible) / 2.0;
         out.push(Draw::Tex {
-            // Sit inside the selected shell's top-right corner.  Keeping the
-            // badge inset also works for the narrower GB/GBC boxes.
-            x: x + w - size - 12.0 + self.shelf_shake(),
-            y: y + 8.0,
-            w: size,
-            h: size,
+            x: star_x - pad + self.shelf_shake(),
+            y: star_y - pad,
+            w: draw,
+            h: draw,
             tex,
             alpha: 1.0,
         });
@@ -16429,6 +17460,12 @@ impl App {
         if self.platform != Platform::Gba {
             return false;
         }
+        // mGBA's link mode carries the cable only; offering the switch there
+        // used to strand the cart on a wireless choice the session then
+        // refused to announce (both ends connected and never linked).
+        if self.core == Core::Mgba {
+            return false;
+        }
         self.auto_link(stem).is_some_and(|(cart, auto)| {
             serial_option(self.link_hardware.other(), auto, &cart.code, &cart.title)
                 != serial_option(self.link_hardware, auto, &cart.code, &cart.title)
@@ -16484,6 +17521,13 @@ impl App {
             self.wifi_connected
         ));
         if self.core == Core::Mgba {
+            if kind == LinkKind::Wireless {
+                // mGBA's link mode carries the cable only. The menu no longer
+                // offers the switch, but a stale choice must never start a
+                // session whose game cannot announce itself.
+                self.hud.toast(Toast::NeedsGpsp, self.now());
+                return;
+            }
             let player = role.client_id() as u8;
             if self.link_player == Some(player) {
                 return self.start_link(
@@ -16684,7 +17728,7 @@ impl App {
         self.cancel_shelf_sync();
         self.link_popup = None;
         if self.transfer.is_some() {
-            self.close_cart_transfer();
+            self.finish_cart_transfer_close();
         }
         if self.link_active() {
             self.end_link();
@@ -16983,6 +18027,12 @@ impl App {
 
     pub fn toast(&self) -> Option<Toast> {
         self.hud.said(self.now())
+    }
+
+    /// A cart asked for a core that is no longer on the card (for example an
+    /// extension pack removed from the Web page); the launch fell back.
+    pub(crate) fn note_missing_core(&mut self) {
+        self.hud.toast(Toast::CoreMissing, self.now());
     }
 
     pub fn card_alarm(&self) -> bool {
@@ -17584,14 +18634,10 @@ mod web_refresh_tests {
         assert_eq!(decode_guide_text(&bytes), "中文攻略");
     }
 
-    #[test]
-    fn a_txt_guide_opens_pages_and_returns_to_the_game_menu() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path();
+    fn txt_guide(root: &Path) {
         std::fs::create_dir_all(root.join("Games/GBA")).unwrap();
         std::fs::create_dir_all(root.join("Guides/GBA")).unwrap();
-        let rom = root.join("Games/GBA/Game.gba");
-        std::fs::write(&rom, b"rom").unwrap();
+        std::fs::write(root.join("Games/GBA/Game.gba"), b"rom").unwrap();
         std::fs::write(
             root.join("Guides/GBA/Game.txt"),
             (0..40)
@@ -17599,6 +18645,9 @@ mod web_refresh_tests {
                 .collect::<String>(),
         )
         .unwrap();
+    }
+
+    fn playing_app(root: &Path) -> App {
         let carts = slot_store::scan_quiet(root).unwrap();
         let mut app = App::new(carts);
         app.root = Some(root.to_path_buf());
@@ -17607,19 +18656,107 @@ mod web_refresh_tests {
         app.phase = Phase::Playing {
             cart: "Game".to_string(),
         };
+        app
+    }
+
+    #[test]
+    fn a_txt_guide_scrolls_by_line_and_turns_by_screen() {
+        let dir = tempfile::tempdir().unwrap();
+        txt_guide(dir.path());
+        let mut app = playing_app(dir.path());
 
         app.open_guide();
-        let (_, lines, page, pages) = app.guide_page().expect("guide opened");
-        assert!(!lines.is_empty());
-        assert_eq!(page, 0);
-        assert!(pages > 1);
+        let frame = app.guide_frame().expect("guide opened");
+        assert_eq!(frame.lines.len(), slot_ui::guide::visible_lines());
+        assert_eq!((frame.scroll, frame.page, frame.section), (0, 0, 0));
+        assert!(frame.max_scroll > 0, "the fixture is too short to scroll");
 
         app.guide_input(Action::GbaDown(Btn::Down));
-        assert_eq!(app.guide_page().unwrap().2, 1);
+        assert_eq!(app.guide_frame().unwrap().scroll, 1, "Down did not move a line");
+        app.guide_input(Action::GbaDown(Btn::Up));
+        assert_eq!(app.guide_frame().unwrap().scroll, 0, "Up did not move a line");
+        app.guide_input(Action::GbaDown(Btn::L1));
+        assert_eq!(app.guide_frame().unwrap().scroll, 0, "L left the first screen");
+        app.guide_input(Action::GbaDown(Btn::R1));
+        assert_eq!(
+            app.guide_frame().unwrap().scroll,
+            slot_ui::guide::visible_lines(),
+            "R did not turn a whole screen"
+        );
+        app.guide_input(Action::GbaDown(Btn::A));
+        assert_eq!(
+            app.guide_frame().unwrap().scroll,
+            slot_ui::guide::visible_lines(),
+            "A must not turn pages any more"
+        );
+        app.guide_input(Action::GbaDown(Btn::Start));
+        assert_eq!(app.guide_frame().unwrap().scroll, 0, "Start did not rewind");
 
         app.guide_input(Action::GbaDown(Btn::B));
         assert!(!app.guide_open());
         assert_eq!(app.utility, Some((0, 0)));
+    }
+
+    #[test]
+    fn holding_a_dpad_key_keeps_scrolling() {
+        let dir = tempfile::tempdir().unwrap();
+        txt_guide(dir.path());
+        let mut app = playing_app(dir.path());
+        app.open_guide();
+
+        app.apply_at(Action::GbaDown(Btn::Down), 1_000);
+        assert_eq!(app.guide_frame().unwrap().scroll, 1);
+        app.tick_ms(1_300);
+        assert_eq!(
+            app.guide_frame().unwrap().scroll,
+            1,
+            "the repeat fired before its delay"
+        );
+        app.tick_ms(1_400);
+        assert_eq!(app.guide_frame().unwrap().scroll, 2);
+        app.tick_ms(1_600);
+        assert_eq!(app.guide_frame().unwrap().scroll, 3);
+
+        app.apply_at(Action::GbaUp(Btn::Down), 1_610);
+        app.tick_ms(2_500);
+        assert_eq!(
+            app.guide_frame().unwrap().scroll,
+            3,
+            "the repeat outlived the release"
+        );
+    }
+
+    #[test]
+    fn the_guide_bookmark_remembers_the_line_and_the_old_page_number() {
+        let dir = tempfile::tempdir().unwrap();
+        txt_guide(dir.path());
+        let mut app = playing_app(dir.path());
+
+        app.open_guide();
+        app.guide_input(Action::GbaDown(Btn::Down));
+        app.guide_input(Action::GbaDown(Btn::Down));
+        app.guide_input(Action::GbaDown(Btn::B));
+
+        app.open_guide();
+        let resumed = app.guide_frame().expect("guide reopened");
+        assert_eq!((resumed.page, resumed.scroll), (0, 2), "the line was lost");
+
+        // A bookmark from the fixed-page reader is still a page number.
+        let root = dir.path();
+        let carts = slot_store::scan_quiet(root).unwrap();
+        let cart = &carts[0];
+        slot_store::cart_meta::update(root, cart, |meta| {
+            meta.extra
+                .insert(GUIDE_PAGE_KEY.to_string(), serde_json::json!(1));
+        })
+        .unwrap();
+        app.open_guide();
+        let resumed = app.guide_frame().expect("guide reopened at the old page");
+        assert_eq!(
+            resumed.scroll,
+            slot_ui::guide::visible_lines(),
+            "an old page number did not land on that screen"
+        );
     }
 
     #[test]
@@ -17669,17 +18806,17 @@ mod web_refresh_tests {
         };
 
         app.open_guide();
-        let (_, lines, page, pages) = app.guide_page().expect("EPUB guide opened");
-        assert!(lines.iter().any(|line| line.contains("第一章")));
-        assert_eq!(page, 0);
-        assert!(pages > 1);
+        let frame = app.guide_frame().expect("EPUB guide opened");
+        assert!(frame.lines.iter().any(|line| line.contains("第一章")));
+        assert_eq!(frame.page, 0);
+        assert!(frame.pages > 1, "the EPUB has no second screen: {}", frame.pages);
         let mut found_image = false;
-        for _ in 0..pages {
-            if app.guide_image().is_some() {
+        for _ in 0..=frame.pages {
+            if app.guide_frame().is_some_and(|frame| frame.image.is_some()) {
                 found_image = true;
                 break;
             }
-            app.guide_input(Action::GbaDown(Btn::Down));
+            app.guide_input(Action::GbaDown(Btn::R1));
         }
         assert!(found_image, "EPUB image page was not built");
     }
@@ -18264,7 +19401,7 @@ mod folder_tests {
         app.set_faces(faces.clone());
         enter(&mut app);
         app.take_invalidated_faces();
-        app.update(0.25);
+        app.update(0.6);
 
         app.switch_folder_group(1); // 动作 -> 动作/横版
         let view = app.folder_view.as_ref().unwrap();
@@ -18364,12 +19501,12 @@ mod folder_tests {
     }
 
     #[test]
-    fn the_folder_animations_use_their_own_durations() {
+    fn the_folder_enter_and_leave_use_the_header_slide() {
         let mut app = App::new(library());
         enter(&mut app);
         let anim = app.folder_animation().expect("no enter animation");
         assert_eq!(anim.kind, FolderAnimKind::Enter);
-        app.update(0.2);
+        app.update(0.6);
         assert!(app.folder_animation().is_none(), "the enter animation stuck");
 
         app.switch_folder_group(1);
@@ -18382,7 +19519,7 @@ mod folder_tests {
         app.leave_folder_mode();
         let anim = app.folder_animation().expect("no leave animation");
         assert_eq!(anim.kind, FolderAnimKind::Leave);
-        app.update(0.17);
+        app.update(0.6);
         assert!(app.folder_animation().is_none(), "the leave animation stuck");
     }
 }
@@ -18442,5 +19579,175 @@ mod intro_tests {
         assert!((y - 30.0).abs() < 0.01, "y {y}");
         assert!((w - INTRO_PLATE_W).abs() < 0.01, "w {w}");
         assert!((h - INTRO_PLATE_H).abs() < 0.01, "h {h}");
+    }
+}
+
+#[cfg(test)]
+mod transfer_header_tests {
+    use super::*;
+
+    #[test]
+    fn the_transfer_room_shows_its_side_on_the_shelf() {
+        let mut app = App::new(Vec::new());
+        app.phase = Phase::Shelf;
+        app.transfer = Some(Transfer::stub(true, TransferStage::Shelf));
+        let header = app.transfer_header().expect("no transfer header");
+        assert!(header.host);
+        assert_eq!(header.language, app.language);
+
+        app.transfer = Some(Transfer::stub(false, TransferStage::Shelf));
+        assert!(!app.transfer_header().expect("no joiner header").host);
+
+        // The matching panel and the progress screen carry their own header.
+        app.utility = Some((5, 0));
+        assert!(
+            app.transfer_header().is_none(),
+            "the matching panel kept the shelf header"
+        );
+        app.utility = None;
+        app.transfer = Some(Transfer::stub(true, TransferStage::Sending));
+        assert!(
+            app.transfer_header().is_none(),
+            "the progress screen kept the shelf header"
+        );
+        app.transfer = Some(Transfer::stub(true, TransferStage::Failed));
+        assert!(
+            app.transfer_header().is_none(),
+            "a failed room kept the shelf header"
+        );
+    }
+
+    #[test]
+    fn the_transfer_sides_are_labelled_in_every_language() {
+        let mut app = App::new(Vec::new());
+        app.language = Language::ZhCn;
+        assert_eq!(app.transfer_role_label(true), "主机");
+        assert_eq!(app.transfer_role_label(false), "副机");
+        app.language = Language::EnUs;
+        assert_eq!(app.transfer_role_label(true), "Host");
+        assert_eq!(app.transfer_role_label(false), "Joiner");
+    }
+
+    #[test]
+    fn a_hud_toast_holds_the_top_strip_away_from_the_transfer_header() {
+        let mut app = App::new(Vec::new());
+        app.phase = Phase::Shelf;
+        app.transfer = Some(Transfer::stub(true, TransferStage::Shelf));
+        assert!(app.transfer_header().is_some(), "the room header disappeared");
+        assert!(!app.hud_toast_visible());
+
+        let now = app.now();
+        app.hud.toast(Toast::CartTransferReady, now);
+        assert!(app.hud_toast_visible(), "the toast was not visible");
+        assert!(
+            app.transfer_header().is_some(),
+            "the header state must stay for the frame after the toast"
+        );
+
+        app.tick_ms(now.saturating_add(2_000));
+        assert!(!app.hud_toast_visible(), "the toast outlived its window");
+    }
+
+    #[test]
+    fn the_room_header_drops_in_and_lifts_out() {
+        let mut app = App::new(Vec::new());
+        app.phase = Phase::Shelf;
+        app.transfer = Some(Transfer::stub(true, TransferStage::Shelf));
+        let now = app.now();
+        app.tick_ms(now);
+        assert!(
+            app.transfer_header_offset() <= -80.0,
+            "the header did not start above the screen"
+        );
+        app.tick_ms(now.saturating_add(HEADER_SLIDE_MS + 50));
+        assert_eq!(app.transfer_header_offset(), 0.0, "the header never landed");
+
+        app.close_cart_transfer();
+        assert!(
+            app.transfer.is_some(),
+            "the room closed before the header lifted"
+        );
+        let left = app.now();
+        app.tick_ms(left.saturating_add(HEADER_SLIDE_MS / 2));
+        let rising = app.transfer_header_offset();
+        assert!(rising < -10.0, "the header did not lift: {rising}");
+        app.tick_ms(left.saturating_add(HEADER_SLIDE_MS + 50));
+        assert!(app.transfer.is_none(), "the room never closed");
+    }
+}
+
+#[cfg(test)]
+mod favorite_star_tests {
+    use super::*;
+
+    #[test]
+    fn the_star_sits_on_every_platforms_label_corner() {
+        let cases = [
+            (Platform::Gba, CartModel::Famicom, 30.0),
+            (Platform::Gb, CartModel::Famicom, 30.0),
+            (Platform::Gbc, CartModel::Famicom, 30.0),
+            (Platform::Fc, CartModel::Famicom, 30.0),
+            (Platform::Fc, CartModel::Nes, 30.0),
+            (Platform::Sfc, CartModel::Famicom, 26.0),
+            (Platform::Md, CartModel::Famicom, 30.0),
+        ];
+        for (platform, model, want) in cases {
+            let (fw, fh) = slot_ui::cart_box(platform);
+            let (face_w, face_h) = slot_ui::front_size(platform, model);
+            let (x, y) = (100.0, 50.0);
+            let (star_x, star_y, size) =
+                App::favorite_star_spot(platform, model, (x, y, fw as f32, fh as f32))
+                    .unwrap_or_else(|| panic!("no star spot for {platform:?}"));
+            let (lx, ly, lw, lh) = slot_ui::label_rect(platform, model);
+            // The face art fills the cart box; the Famicom box is 85% of its
+            // art, so the label's art pixels shrink with it.
+            let label_right = x + (lx + lw) as f32 * fw as f32 / face_w as f32;
+            let label_top = y + ly as f32 * fh as f32 / face_h as f32;
+            let label_bottom = label_top + lh as f32 * fh as f32 / face_h as f32;
+            assert!(
+                (label_right - (star_x + size) - 6.0).abs() < 0.01,
+                "{platform:?}: the star is not 6 px from the label's right edge"
+            );
+            assert!(
+                (star_y - label_top - 6.0).abs() < 0.01,
+                "{platform:?}: the star is not 6 px below the label's top edge"
+            );
+            assert!(
+                (size - want).abs() < 0.01,
+                "{platform:?}: the star is {size} px, expected {want}"
+            );
+            let label_left = x + lx as f32 * fw as f32 / face_w as f32;
+            assert!(
+                star_x >= label_left,
+                "{platform:?}: the star left the label"
+            );
+            assert!(
+                star_x + size <= label_right,
+                "{platform:?}: the star left the label"
+            );
+            assert!(star_y >= label_top, "{platform:?}: the star left the label");
+            assert!(
+                star_y + size <= label_bottom,
+                "{platform:?}: the star left the label"
+            );
+        }
+    }
+
+    #[test]
+    fn the_star_follows_the_shelf_scale() {
+        let (fw, fh) = slot_ui::cart_box(Platform::Gba);
+        let (_, _, full) = App::favorite_star_spot(
+            Platform::Gba,
+            CartModel::Famicom,
+            (0.0, 0.0, fw as f32, fh as f32),
+        )
+        .expect("no full-size star");
+        let (_, _, half) = App::favorite_star_spot(
+            Platform::Gba,
+            CartModel::Famicom,
+            (0.0, 0.0, fw as f32 / 2.0, fh as f32 / 2.0),
+        )
+        .expect("no half-size star");
+        assert!((full - 2.0 * half).abs() < 0.01);
     }
 }

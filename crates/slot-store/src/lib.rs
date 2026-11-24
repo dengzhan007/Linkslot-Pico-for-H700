@@ -31,7 +31,8 @@ pub use cart_shell::{Outline, ShellChoice, ShellFinish, CART_SHELL_FILE, LABELS_
 pub use cart_model::CartModel;
 pub use config::{move_config, CONFIG_DIR};
 pub use core::{
-    available_options, core_for, core_for_platform, read_selected_cores, write_selected_core, Core, SELECTED_CORE_FILE,
+    available_options, core_for, core_for_platform, read_selected_cores, tray_alt,
+    write_selected_core, write_tray_alt, Core, SELECTED_CORE_FILE, TRAY_ALT_FILE,
 };
 pub use folders::{relative_folder, FolderCatalog, FolderGroup};
 pub use gb_palette::GbPalette;

@@ -117,51 +117,96 @@ fn open_guide(app: &mut App) {
 }
 
 #[test]
-fn a_guide_reopens_on_the_page_it_was_closed_on() {
+fn a_guide_reopens_on_the_line_it_was_closed_on() {
     let d = common::tmp_root_with_carts(&["Emerald"]);
     let mut a = playing(d.path(), "Emerald");
     write_long_guide(d.path());
 
     open_guide(&mut a);
-    let (_, _, first, pages) = a.guide_page().expect("no page");
-    assert_eq!(first, 0, "the first read did not start at the top");
-    assert!(pages >= 3, "the fixture is not long enough: {pages}");
+    let frame = a.guide_frame().expect("no guide");
+    assert_eq!((frame.page, frame.scroll), (0, 0), "the first read did not start at the top");
+    assert!(frame.pages >= 3, "the fixture is not long enough: {}", frame.pages);
 
     down(&mut a, 2);
-    let (_, _, page, _) = a.guide_page().unwrap();
-    assert_eq!(page, 2);
+    let frame = a.guide_frame().unwrap();
+    assert_eq!((frame.page, frame.scroll), (0, 2), "Down did not scroll line by line");
     a.apply(Action::GbaDown(Btn::B));
     assert!(!a.guide_open(), "B did not close the reader");
 
     // Reopening from the menu resumes instead of rewinding.
     open_guide(&mut a);
-    let (_, _, resumed, _) = a.guide_page().unwrap();
-    assert_eq!(resumed, 2, "the reader forgot the page it was closed on");
+    let resumed = a.guide_frame().unwrap();
+    assert_eq!(
+        (resumed.page, resumed.scroll),
+        (0, 2),
+        "the reader forgot the line it was closed on"
+    );
 }
 
 #[test]
-fn start_takes_the_guide_back_to_the_first_page_and_sticks() {
+fn the_shoulder_buttons_are_the_only_page_turn() {
+    let d = common::tmp_root_with_carts(&["Emerald"]);
+    let mut a = playing(d.path(), "Emerald");
+    write_long_guide(d.path());
+
+    open_guide(&mut a);
+    let visible = a.guide_frame().expect("no guide").lines.len();
+    assert!(visible > 1);
+
+    // Down is a slow scroll: a whole screen of presses is needed to reach the
+    // next page, and it never jumps there on its own.
+    down(&mut a, visible);
+    let frame = a.guide_frame().unwrap();
+    assert_eq!((frame.page, frame.scroll), (1, visible));
+
+    a.apply(Action::GbaDown(Btn::L1));
+    assert_eq!(
+        a.guide_frame().map(|frame| (frame.page, frame.scroll)),
+        Some((0, 0)),
+        "L did not turn back one screen"
+    );
+    a.apply(Action::GbaDown(Btn::R1));
+    assert_eq!(
+        a.guide_frame().map(|frame| (frame.page, frame.scroll)),
+        Some((1, visible)),
+        "R did not turn forward one screen"
+    );
+
+    // The D-pad stops at the end of the text instead of flipping a page.
+    down(&mut a, 40);
+    let end = a.guide_frame().unwrap();
+    assert_eq!(end.scroll, end.max_scroll);
+    down(&mut a, 3);
+    assert_eq!(
+        a.guide_frame().map(|frame| (frame.page, frame.scroll)),
+        Some((end.page, end.max_scroll)),
+        "Down turned a page at the end of the text"
+    );
+}
+
+#[test]
+fn start_takes_the_guide_back_to_the_first_line_and_sticks() {
     let d = common::tmp_root_with_carts(&["Emerald"]);
     let mut a = playing(d.path(), "Emerald");
     write_long_guide(d.path());
 
     open_guide(&mut a);
     down(&mut a, 3);
-    assert_eq!(a.guide_page().map(|(_, _, page, _)| page), Some(3));
+    assert_eq!(a.guide_frame().map(|frame| frame.scroll), Some(3));
     a.apply(Action::GbaDown(Btn::Start));
-    assert_eq!(a.guide_page().map(|(_, _, page, _)| page), Some(0));
+    assert_eq!(a.guide_frame().map(|frame| frame.scroll), Some(0));
     a.apply(Action::GbaDown(Btn::B));
 
     open_guide(&mut a);
     assert_eq!(
-        a.guide_page().map(|(_, _, page, _)| page),
-        Some(0),
+        a.guide_frame().map(|frame| (frame.page, frame.scroll)),
+        Some((0, 0)),
         "从头看 was not saved"
     );
 }
 
 #[test]
-fn a_shorter_guide_clamps_the_remembered_page() {
+fn a_shorter_guide_clamps_the_remembered_line() {
     let d = common::tmp_root_with_carts(&["Emerald"]);
     let mut a = playing(d.path(), "Emerald");
     write_long_guide(d.path());
@@ -173,9 +218,9 @@ fn a_shorter_guide_clamps_the_remembered_page() {
     // The guide is replaced by a one-page file: the bookmark must not overrun.
     std::fs::write(d.path().join("Guides/GBA/Emerald.txt"), "短攻略").unwrap();
     open_guide(&mut a);
-    let (_, _, page, pages) = a.guide_page().unwrap();
-    assert_eq!(pages, 1);
-    assert_eq!(page, 0, "the bookmark overran a shorter guide");
+    let frame = a.guide_frame().unwrap();
+    assert_eq!(frame.pages, 1);
+    assert_eq!((frame.page, frame.scroll), (0, 0), "the bookmark overran a shorter guide");
 }
 
 #[test]
