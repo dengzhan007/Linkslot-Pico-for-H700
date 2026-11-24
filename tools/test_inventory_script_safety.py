@@ -97,6 +97,21 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertNotIn('/alloc"', self.source)
         self.assertNotIn('/free"', self.source)
 
+    def test_cpu_power_runtime_capture_is_read_only(self):
+        self.assertIn('> "$OUTDIR/cpu-power-runtime.txt"', self.source)
+        self.assertIn('/sys/devices/system/cpu/cpu[0-9]*/cpufreq', self.source)
+        self.assertIn('/sys/devices/system/cpu/cpufreq/policy[0-9]*', self.source)
+        self.assertIn('/sys/class/thermal/thermal_zone[0-9]*', self.source)
+        self.assertIn('/sys/class/regulator/regulator.[0-9]*', self.source)
+        self.assertIn('/sys/kernel/debug/regulator/regulator_summary', self.source)
+        self.assertIn('/sys/kernel/debug/clk/clk_summary', self.source)
+        self.assertIn('/sys/bus/nvmem/devices/*', self.source)
+        self.assertIn('raw fuse bytes are not read', self.source)
+        self.assertNotIn('cat "$node/nvmem"', self.source)
+        self.assertNotRegex(self.source, r'>\s*/sys/(?:devices/system/cpu|class/thermal|class/regulator|bus/nvmem)/')
+        self.assertNotIn('scaling_governor=', self.source)
+        self.assertNotIn('regulator_set_voltage', self.source)
+
     def test_tee_ion_runtime_capture_is_read_only(self):
         self.assertIn('> "$OUTDIR/tee-ion-runtime.txt"', self.source)
         self.assertIn('/proc/config.gz', self.source)
