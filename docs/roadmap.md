@@ -38,9 +38,10 @@
 - [x] 固定 GammaOS LK 参考源码 `TheGammaSqueeze/lk-mt6785@9bf1419a49e0af6dba8b05916df382c9c9c6d0a8`，核对 AArch32 CRT0、异常向量、A53 flags、VBAR、多核 scheduler 和 heap 实现。
 - [x] AArch32 LK-as-BL33 入口/头区/向量布局 host-only 探针通过：入口分支位于 image +0，保留 +4..+0x63f 厂商头区，向量候选位于 +0x1000；它使用合成头和 stub，不是完整 LK build 或启动证明。
 - [x] 明确 GammaOS LK 固定版本的 H700 适配点：Cortex-A53 分支原本错误使用 `-mcpu=cortex-a9`；`arch_early_init` 会把 VBAR 重设到 MEMBASE；`ENABLE_THUMB=true` 时普通 C/C++ 对象默认 Thumb-2；现有 scheduler/critical section 是单核设计。
-- [ ] 在固定 LK 源码上运行 H700 overlay 生成器并验证生成补丁可由 `git apply --check` 接受；overlay 只计划修正 CRT0/header/vector、VBAR 和 A53 CPU codegen，不猜测 ACTLR.SMP。
-- [ ] 建立独立 H700 project/target/platform 规则，隔离全部 MediaTek PMIC、GPIO、LCM、USB、CONNSYS、存储和电源对象；明确 ARM/Thumb、NEON/VFPv4、softfp ABI。
-- [ ] 完整编译/链接 GammaOS LK H700 target，并以实际链接 map、ELF、image header 和尺寸检查替代当前 stub 布局探针。
+- [ ] 运行扩展后的固定 LK overlay 生成器和 git apply --check；当前候选覆盖 makefile、dev/rules.mk、target/rules.mk、CRT0/header/vector、VBAR 和 A53 NEON/VFPv4/softfp codegen。新增的真实 CRT0 + exception vector 链接检查仍待 CI 验收。
+- [ ] 新建独立 RG34XX H700 project/target/platform：项目必须设置 H700_BUILD=yes，由 H700 平台明确加入经审查的 HAL 模块；MTK platform/common、dev video/LCM/GIC/modem/logo 和 MTK target/init.c 不得进入 H700 构建。
+- [ ] 在内存 ownership/BL33 window 归属审计关闭后，才为 H700 target 填写 MEMBASE/MEMSIZE、heap、stack、MMU/linker ranges；目前不填任何猜测地址。
+- [ ] 完整编译/链接 GammaOS LK H700 target，并以实际链接 map、ELF、image header 和尺寸检查替代 stub 布局探针。
 - [ ] 关闭 RG34XX BL31→BL33 的入口寄存器、CurrentEL/SPSR、栈、MMU/cache/TLB、GIC、VBAR、参数寄存器和 secondary-core 状态验证。
 - [ ] 完成剩余保留区归属审查，尤其 `[0x7ec00000,0x7fc00000)`、顶部碎片、monitor 实际上界和 secure/DRM/DMA/display carveout；未批准前不得给 payload 分配地址。
 - [ ] 实机重复冷启动、失败恢复和从 SD 只读加载测试；在完成内存 ownership 与 secondary-core gate 前，不写启动区、不执行 payload。
