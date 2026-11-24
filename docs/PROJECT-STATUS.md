@@ -2,10 +2,10 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-24 13:20 UTC  
+**最后核对时间：** 2026-11-24 13:28 UTC  
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **工作分支：** `porting/linkslot-1.0.45-feasibility`  
-**本次状态刷新前的分支 HEAD：** `bf13ac7b1519700f74c4c6628d602369e54c84b4`  
+**本次状态刷新前的分支 HEAD：** `c1a9121ba88f1d3844a988f93d082cbba0260b4e`  
 **本轮 CPU runtime owner 最新代码提交：** `072793f8b4bfce00683aa3d303eee62613fe41ab`（7 个连续提交）  
 **本轮 Rust runtime bridge 最新代码提交：** `0d381d7ba66592b5ab64ba67e0b228039bb9eec0`  
 **本轮 H700 build graph / guard 最新代码提交：** `6e847c0121431c681062053c52f28824715e78a6`（platform OBJS）与 `ef07a0e06c1d55e2d2f49175d4e976e8337e1ee4`（project guard）。  
@@ -14,6 +14,7 @@
 **本轮 CPU power collector missing-state 增强：** `273895925554446bff3eb3f61ca1dde093d15d03`；对应 safety regression 提交 `f2ea2b9d5611b5461546bc4f07fe014f9b4d80b2`，两平台 CI 均通过。  
 **本轮 SID 窄读取与解析器：** `tools/inspect_h700_sid_cells.py` / `tools/test_inspect_h700_sid_cells.py`；PowerShell runner 输出 `sid-cell-report.json`；Linux/Windows CI #45399902110 成功。  
 **本轮 SoC revision 取证边界：** collector 只探测通用 `/sys/devices/soc0/{machine,family,soc_id,revision}`；不调用 vendor `sunxi_get_soc_ver()` / `sunxi_info`，因为固定 `sun50iw9` 驱动路径可能短暂写 CE CCU clock/reset 且 sys_info 暴露 serial/chipid。新 safety regression #45401913670 与最新版 inventory audit #45402146927 均通过。  
+**本轮 SID JSON SoC identity：** `sid-cell-report.json` 现附带 generic SoC bus 的 machine/family/soc_id/revision 原始字符串（可用时），仅用于识别，不参与 OPP 放行；相关 host/Windows tests #45402936876、#45402977130 与 inventory audit #45403070519/#45403377522 均通过。  
 
 
 ## 1. 项目目标与固定约束
@@ -76,7 +77,9 @@
 - `platform/h700/power/tests/h700_cpu_performance_runtime_test.c`：覆盖默认 unavailable、NULL/未批准/错误 board/缺少 gate/缺少 OPP 拒绝、静态 owner 稳定性、policy-only 状态和服务撤销。
 - `tools/inspect_h700_fdt.py`：扩展静态 FDT 解析，输出 CPU `cpu-supply` / `operating-points-v2`、regulator phandle、NVMEM cell offset/size 和 thermal-sensor provider arguments；明确标注这些只是 DT 声明，不是动态读回或安全 OPP 认证。
 - `tools/inspect_h700_sid_cells.py` / `tools/test_inspect_h700_sid_cells.py`：从 `cpu-power-runtime.txt` 验证且解析固定长度 speed 2-byte cell 与 thermal calibration 8-byte cell；speed 仅解码 little-endian raw `u16` 与 vendor literal 匹配标记，输出 `opp_authorization=not_approved`；thermal 拆成四个 `u16` 和诊断字段，输出 `calibration_status=not_certified`。未知值/缺失值不放行 OPP。Windows runner 自动生成 `sid-cell-report.json`。
+- `sid-cell-report.json` 同时保留 generic SoC bus 的 machine/family/soc_id/revision 原始值，缺失时 unavailable；这些字符串不作为 vendor SID revision 语义的替代，也不改变 `opp_authorization=not_approved`。
 - `scripts/collect-rg34xx-readonly-inventory.sh`：新增 `cpu-power-runtime.txt`，只读采集 Linux CPUFreq、thermal zone/trips、regulator class/debugfs、`clk_summary` 和 NVMEM 元数据；仅在 `of_node` 精确匹配 `sunxi-sid-ng@03006000` 时，读取 DTS 声明的 speed cell（provider offset 0、2 bytes）与 thermal calibration cell（offset `0x14`、8 bytes），不 dump 完整 NVMEM 区域，也不修改 governor、频率、电压或时钟。旧的 2026-11-22 报告未包含该新输出，必须在设备上重新采集。
+- 另探测通用 SoC bus 的 `/sys/devices/soc0` 与 `/sys/bus/soc/devices/soc0`，仅读 machine/family/soc_id/revision，不读 serial/chipid。固定 vendor sun50iw9 `sunxi_get_soc_ver()` 可能通过 CE 临时开关 clock/reset，因此明确不调用 `sunxi_info/sys_info` 或 `/dev/sunxi_soc_info` ioctl。
 - 该 collector 另探测通用 SoC bus 的 `/sys/devices/soc0` 与 `/sys/bus/soc/devices/soc0`，仅收集 machine/family/soc_id/revision，不收集 serial/chipid。固定 vendor `sunxi_get_soc_ver()` 在 sun50iw9 可能走 CE clock/reset 暂时开关路径，因此 `sunxi_info/sys_info` 与 `/dev/sunxi_soc_info` ioctl 均明确不调用。
 - 另只读探测通用 SoC bus 的 `/sys/devices/soc0` 与 `/sys/bus/soc/devices/soc0`，仅收集 machine/family/soc_id/revision，不读取 serial/chipid。固定 vendor `sunxi-sid.c` 的 sun50iw9 分支未定义 `SUNXI_SOC_ID_IN_SID`，`sunxi_get_soc_ver()` 可能调用 `sid_rd_soc_ver_from_ce()` 临时写入/恢复 CCU CE clock/reset；`sunxi-sysinfo` 的 `sys_info` 也会输出 serial/chipid，因此 collector 明确不调用 sys_info 或 `/dev/sunxi_soc_info` ioctl。
 - 针对旧 Linux 4.9 sysfs 兼容性，CPUFreq、thermal、regulator、NVMEM 各分组现会明确写 `NOT_PRESENT`（节点类不存在）或 `NO_READABLE_*`（节点存在但没有可读属性）；不会把空列表解释成零频率/零电压。 `tools/test_inventory_script_safety.py` 同步覆盖这些分支。
@@ -96,21 +99,22 @@
 - 当前测试使用合成 OPP 值，不是 RG34XX 已批准的运行频点表。静态 runtime owner 已实现，H700 `target_init()` hook 也已存在，但 hook 保持空实现、没有 board-approved RG34XX profile，也未调用 owner；因此目标机 service 仍 unavailable。Rust 客户端尚未接入 Linkslot `App` 设置界面。
 - 固定 vendor `sun50i-cpufreq-nvmem.c` 对 2-byte speed NVMEM cell 返回值使用 `u32 *` 解引用且未检查 `len`，而同版本 NVMEM core 只分配 `cell->bytes`；这是潜在越界读取风险。该驱动的 raw speed-bin → `supported_hw` 映射与 unknown fallback 不可直接作为本项目 OPP 认证来源。完整证据与固定源码链接见 `docs/h700-cpu-performance-service.md` §4。
 
-### 本轮本地验证与 CI 状态（2026-11-24 13:07 UTC）
+### 本轮本地验证与 CI 状态（2026-11-24 13:28 UTC）
 
 - [Linkslot LK Rust feasibility #45393436818](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45393436818)：**成功，69/69 steps**；H700 BL33 overlay、memory fail-closed guard、renderer/framebuffer、Linkslot、mGBA 和只读 MMC/GPT/FAT candidate host/cross-build 综合回归通过。
+- [Linkslot LK Rust feasibility #45399902083](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45399902083)：**成功，68/68 steps**；SID cell collector/parser 集成前后的完整 H700 BL33/Linkslot/mGBA/storage 综合 host/cross-build 通过。
 - [H700 AArch32/AArch64 compile check #45392910394](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45392910394)：**成功**；RG34XX H700 target lifecycle hooks 在 AArch64、AArch32 ARM-state、AArch32 Thumb-2 三种方式编译通过。
-- [H700 boot audit tools #45399690374](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45399690374)：**成功**；SID bounded-cell parser、5 项合成测试、Windows inventory runner 接线，Linux 6/6 与 Windows 8/8 jobs 全通过。
-- [H700 boot audit tools #45399902110](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45399902110)：**成功**；当前 SID parser / Windows runner / docs batch 的最新验证，Linux 6/6、Windows 8/8。
-- [H700 boot audit tools #45400199923](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45400199923)：**成功**；项目状态文档更新的 Linux 与 Windows 检查均通过。
-- [H700 boot audit tools #45400199923](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45400199923)：**成功**；本轮 PROJECT-STATUS handoff 更新通过，Linux 6/6、Windows 8/8。
-- [H700 boot audit tools #45402081854](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45402081854)：**成功**；CPU revision readback side-effect note 的状态文档 batch 通过，Linux/Windows jobs 均成功。
-- [H700 boot audit tools #45402146927](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45402146927)：**成功**；包含 SoC identity sysfs probe 的最新 inventory audit，Linux 6/6、Windows 8/8。
-- [H700 boot audit tools #45401417124](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45401417124)：**成功**；通用 SoC sysfs 探测的 collector shell syntax 与既有 inventory tests 通过。中间 safety assertions #45401445800/#45401582811/#45401652798 曾错误禁止脚本注释内出现 vendor function 名；已修正为只禁止可执行调用行，修正后的 #45401913670 已成功（Linux 6/6、Windows 8/8）。
-- [Linkslot LK Rust feasibility #45399902083](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45399902083)：**成功，68/68 steps**；H700 BL33 overlay、memory fail-closed guard、renderer/Linkslot/mGBA 与只读存储候选综合回归全部通过。此结果仍不是已批准设备镜像或实机启动。
-- [Linkslot LK Rust feasibility #45402146958](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45402146958)：截至 13:20 UTC **in progress**，head `bf13ac7b1519700f74c4c6628d602369e54c84b4`；68-step cross-compile job 已完成 7 步，未见失败，尚不能记为通过。
-- 旧中间提交 #45398363057 曾因 safety test 保留“raw fuse bytes are not read”的过时断言而失败；测试已改为只允许两个固定 cell 的 bounded read，之后 #45398460438、#45399690374 和 #45399902110 已成功。
-- 这些 CI 结果不等于真实 CPU speed-bin/OPP 解码通过、board OPP 获批、MEMBASE/MEMSIZE 获批、整机固件或 RG34XX 实机启动。硬件 DVFS 继续关闭。
+- [H700 boot audit tools #45399902110](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45399902110)：**成功**；SID parser / Windows inventory runner / bounded cell read host tests，Linux 6/6、Windows 8/8。
+- [H700 boot audit tools #45401913670](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45401913670)：**成功**；通用 SoC revision sysfs probe 的安全回归，Linux 6/6、Windows 8/8。
+- [H700 boot audit tools #45402146927](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45402146927)：**成功**；SoC identity sysfs collector shell/safety tests，Linux 6/6、Windows 8/8。
+- [H700 boot audit tools #45402936876](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45402936876)：**成功**；SID JSON parser 保存 generic SoC identity 的 host/Windows tests，Linux 6/6、Windows 8/8。
+- [H700 boot audit tools #45402977130](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45402977130)：**成功**；SoC identity parser tests 的第二次复核，Linux 6/6、Windows 8/8。
+- [H700 boot audit tools #45403070519](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45403070519)：**成功**；inventory 文档和安全审查，Linux 6/6、Windows 8/8。
+- [H700 boot audit tools #45403377522](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45403377522)：**成功**；最新 roadmap/inventory docs audit，Linux 6/6、Windows 8/8。
+- [Linkslot LK Rust feasibility #45402521919](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45402521919)：**cancelled**，被后续提交触发的并发运行取代；取消时 50/68 steps 已完成且未见失败。不能当作通过或测试失败。
+- [Linkslot LK Rust feasibility #45403377689](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45403377689)：截至 13:28 UTC **in progress**，head `c1a9121ba88f1d3844a988f93d082cbba0260b4e`；等待该完整 68-step cross-compile 回归结果。
+- 中间 SoC revision test commits #45401445800/#45401582811/#45401652798 曾因为错误禁止安全说明注释中出现 `sunxi_get_soc_ver` 名称而失败；修正为只禁止可执行调用行后，#45401913670 已成功。
+- 当前 CI 均不代表 RG34XX 实机 SID 原始值、有效 OPP、PMIC 电压 readback、热传感器校准、内存 map 获批或实机启动。CPU DVFS 保持关闭。
 ### 本轮 CI 验证
 
 - [H700 boot audit tools #45397765612](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45397765612)：**成功**；collector missing-node `NOT_PRESENT` 状态覆盖测试通过，Linux/Windows jobs 均成功。
@@ -141,6 +145,7 @@
 
 - RG34XX 现场 Linux 日志识别 PMIC 为 **AXP2202**，I²C-5、地址 `0x34`。
 - Knulli 与 MustardOS 两份 RG34XX 专用 DTS 都把 `cpu@0 cpu-supply` 指向 AXP2202 DCDC1；这是强交叉证据，但本机 2026-11-22 的已归档 live-FDT 摘要未保留 CPU 节点/完整 regulator phandle。新 FDT parser 已能解析该关系，尚需设备重采集确认。
+- 通用 SoC `soc0` sysfs revision 即使存在，也仅作为 OS 导出的识别线索；vendor `sunxi_get_soc_ver()` 路径当前不调用，因为它在该 H700 配置可能临时切换 CE clock/reset。SID JSON 对 generic revision 值保持原样，不把它映射成 H700 speed-bin 档位。
 - 已从 RG34XX DTS 参考找到 SID speed cell (`0x03006000 + 0x00`, 2 bytes) 和 thermal calibration cell (`0x03006000 + 0x14`, 8 bytes)。FDT parser 会输出 NVMEM phandle 与 cell offset/size；新版 collector 已能限长读取这两个 cell 并生成 `sid-cell-report.json`。**实机原始值尚未读取**，需用户在 RG34XX 上运行新版 inventory 后取得；解析器不授权任何 OPP，也不认证 thermal sensor。
 - 现场内核报告 H700 thermal sensor 存在，但 **AVCC is not calibrated**，因此不能据此开放自动温控升频/Boost。
 - H616/H700 CCU 源码可提供 PLL/mux 初始参考；精确 RG34XX CCU base、安全 parent-switch/lock sequence、divider 和计时连续性尚未完成板级核实。
