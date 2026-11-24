@@ -8,6 +8,7 @@ on:
       - ".github/workflows/linkslot-lk-rust-feasibility.yml"
       - "scripts/audit-linkslot-nostd.py"
       - "scripts/audit-lk-bl33-layout.py"
+      - "scripts/apply-h700-lk-overlay.py"
       - "scripts/audit-slot-i18n-nostd.py"
       - "scripts/audit-libretro-static-abi.py"
       - "scripts/build-mgba-aarch32-static.py"
@@ -97,6 +98,12 @@ jobs:
           ref: 9bf1419a49e0af6dba8b05916df382c9c9c6d0a8
           path: .ci/lk-reference
           persist-credentials: false
+
+      - name: Generate H700 BL33 source overlay from pinned GammaOS LK
+        run: |
+          python3 scripts/apply-h700-lk-overlay.py \
+            --lk-source .ci/lk-reference \
+            --out build/audit-work/linkslot-1.0.36/h700-lk-overlay
 
       - name: Install LLVM cross-link tools
         run: |
