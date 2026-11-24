@@ -433,6 +433,58 @@ mod h700_no_std_contract_tests {
     use alloc::vec;
 
     #[test]
+    fn reusable_action_sink_matches_compat_api_without_capacity_growth() {
+        #[derive(Copy, Clone)]
+        enum Step {
+            Feed(RawEvent, Millis),
+            Tick(Millis),
+        }
+        let steps = [
+            Step::Feed(RawEvent::Down(Btn::Menu), 10),
+            Step::Feed(RawEvent::Up(Btn::Menu), 20),
+            Step::Feed(RawEvent::Down(Btn::Power), 100),
+            Step::Tick(1_100),
+            Step::Feed(RawEvent::Up(Btn::Power), 1_200),
+            Step::Feed(RawEvent::Down(Btn::VolUp), 2_000),
+            Step::Tick(2_400),
+            Step::Feed(RawEvent::Down(Btn::VolDown), 2_450),
+            Step::Tick(2_850),
+            Step::Feed(RawEvent::Up(Btn::VolUp), 2_900),
+            Step::Feed(RawEvent::Up(Btn::VolDown), 2_910),
+            Step::Feed(RawEvent::Down(Btn::R2), 3_000),
+            Step::Feed(RawEvent::Up(Btn::R2), 3_010),
+            Step::Feed(RawEvent::Down(Btn::R2), 3_100),
+            Step::Feed(RawEvent::Up(Btn::R2), 3_200),
+            Step::Feed(RawEvent::Down(Btn::L2), 4_000),
+            Step::Feed(RawEvent::Down(Btn::R2), 4_100),
+            Step::Feed(RawEvent::Up(Btn::R2), 4_200),
+            Step::Feed(RawEvent::Up(Btn::L2), 4_300),
+            Step::Feed(RawEvent::Down(Btn::Select), 5_000),
+            Step::Feed(RawEvent::Down(Btn::Left), 5_100),
+            Step::Feed(RawEvent::Up(Btn::Select), 5_200),
+            Step::Feed(RawEvent::Up(Btn::Left), 5_300),
+        ];
+
+        let mut compatibility = Gestures::new();
+        let mut reusable = Gestures::new();
+        let mut out = Vec::with_capacity(8);
+        let capacity = out.capacity();
+        for step in steps {
+            let expected = match step {
+                Step::Feed(event, now) => compatibility.feed(event, now),
+                Step::Tick(now) => compatibility.tick(now),
+            };
+            out.clear();
+            match step {
+                Step::Feed(event, now) => reusable.feed_into(event, now, &mut out),
+                Step::Tick(now) => reusable.tick_into(now, &mut out),
+            }
+            assert_eq!(out, expected);
+            assert_eq!(out.capacity(), capacity);
+        }
+    }
+
+    #[test]
     fn menu_press_and_hold_keep_linkslot_actions() {
         let mut gestures = Gestures::new();
         assert_eq!(gestures.feed(RawEvent::Down(Btn::Menu), 10), vec![Action::QuickMenu]);
