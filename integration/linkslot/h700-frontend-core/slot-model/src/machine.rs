@@ -8,6 +8,9 @@
 
 use alloc::{string::String, vec::Vec};
 
+#[cfg(feature = "host-compat")]
+use std::path::Path;
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
 pub enum Platform {
     #[default]
@@ -243,6 +246,18 @@ impl Platform {
 
     pub fn extensions(self) -> &'static [&'static str] {
         self.machine().rom_ext
+    }
+
+    /// Filesystem path helper retained only for the original Linux host frontend.
+    #[cfg(feature = "host-compat")]
+    pub fn accepts(self, path: &Path) -> bool {
+        path.extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|ext| {
+                self.extensions()
+                    .iter()
+                    .any(|k| ext.eq_ignore_ascii_case(k))
+            })
     }
 
     /// 封面几何。
