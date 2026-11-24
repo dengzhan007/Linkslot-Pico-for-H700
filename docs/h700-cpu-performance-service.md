@@ -46,6 +46,8 @@ Do not port the raw MTK PLL register sequence, the 600–2000 MHz menu list, or 
 
 ## 4. H700 OPP/DVFS evidence
 
+The pinned vendor SID driver also offers `sunxi_get_soc_ver()`, and `drivers/char/sunxi-sysinfo/sunxi-sysinfo.c` exposes it as `sunxi_batchno` in `/sys/class/sunxi_info/sys_info`. Do **not** use that path for a strictly read-only collector on this H700 target: for `CONFIG_ARCH_SUN50IW9`, `sunxi-sid.c` does not define `SUNXI_SOC_ID_IN_SID`, so `sid_soc_ver_init()` calls `sid_rd_soc_ver_from_ce()`; if CE is not already enabled it temporarily writes CCU clock/reset registers, then restores them. Reading the full `sys_info` class file also emits chip serial/chipid data. The collector therefore probes only generic `/sys/devices/soc0/{machine,family,soc_id,revision}` attributes when present and does not invoke the vendor sys_info or ioctl path.
+
 Pinned `sun50iw9p1` source is useful for mapping the hardware data path, but it exposes a speed-bin consumer defect that blocks direct reuse:
 
 - The pinned `sun50iw9p1.dtsi` declares `speed@00` with a two-byte cell (`reg = <0x0 2>`) and `calib@14` with an eight-byte cell (`reg = <0x14 8>`).
