@@ -63,6 +63,8 @@ on:
       - "scripts/apply-linkslot-render-core.py"
       - "scripts/apply-linkslot-h700-frontend-core.py"
       - "scripts/test-h700-input-service-abi.py"
+      - "scripts/test-h700-input-queue.py"
+      - "scripts/test-h700-input-queue.c"
       - "docs/h700-lk-project.md"
       - "integration/linkslot/h700-render-core/**"
       - "integration/linkslot/h700-frontend-core/**"
@@ -213,6 +215,9 @@ jobs:
 
       - name: Cross-compile H700 input service C ABI layouts
         run: python3 scripts/test-h700-input-service-abi.py --clang clang --out build/audit-work/linkslot-1.0.36/input-service-abi
+
+      - name: Test H700 input queue host regressions
+        run: python3 scripts/test-h700-input-queue.py --cc cc --out build/audit-work/linkslot-1.0.36/input-queue
 
       - name: Test slot-i18n static no_std tables
         run: |
