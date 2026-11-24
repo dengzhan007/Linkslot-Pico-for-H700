@@ -62,7 +62,7 @@ esac
 OUT_DIR="${OUT_DIR:-$ROOT/build/h700-arch-check/$OUTPUT_VARIANT}"
 mkdir -p "$OUT_DIR"
 
-COMMON_FLAGS=
+COMMON_FLAGS=(
     "${TARGET_FLAGS[@]}"
     -ffreestanding
     -fno-builtin
