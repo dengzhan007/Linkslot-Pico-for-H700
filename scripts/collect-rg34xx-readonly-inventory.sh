@@ -378,7 +378,7 @@ fi
             SID_OF_NODE="$(readlink -f "$node/of_node" 2>/dev/null || true)"
             echo "[of_node]"
             echo "$SID_OF_NODE"
-            case "\${SID_OF_NODE##*/}" in
+            case "${SID_OF_NODE##*/}" in
                 sunxi-sid-ng@03006000)
                     SID_PROVIDER_MATCHED=1
                     SID_NVMEM_PATH="$node/nvmem"
