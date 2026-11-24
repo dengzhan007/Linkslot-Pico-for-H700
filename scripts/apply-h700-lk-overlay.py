@@ -64,7 +64,7 @@ def patch_makefile(original: str) -> str:
     patched = original.replace(old_pal, new_pal, 1)
 
     old = "include platform/common/rules.mk"
-    if original.count(old) != 1:
+    if patched.count(old) != 1:
         raise RuntimeError("expected one platform/common make include")
     new = (
         "ifneq ($(H700_BUILD),yes)\n"
@@ -72,7 +72,7 @@ def patch_makefile(original: str) -> str:
         + old + "\n"
         "endif"
     )
-    patched = original.replace(old, new, 1)
+    patched = patched.replace(old, new, 1)
 
     old_tools = "\n".join((
         "# default to no ccache",
