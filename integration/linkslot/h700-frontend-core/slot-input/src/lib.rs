@@ -6,8 +6,8 @@ pub mod h700;
 mod raw;
 
 pub use h700::{
-    H700InputDrain, H700InputError, H700InputEvent, H700InputServiceV1, H700InputSource,
-    H700_INPUT_ABI_VERSION, H700_INPUT_MAX_EVENTS,
+    H700GestureInput, H700InputDrain, H700InputError, H700InputEvent, H700InputServiceV1,
+    H700InputSource, H700_INPUT_ABI_VERSION, H700_INPUT_MAX_EVENTS,
 };
 
 pub use gesture::{
