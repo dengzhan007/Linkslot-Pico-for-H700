@@ -130,8 +130,9 @@ The first stable C boundary is now implemented under `platform/h700/power`:
 - The state reports `planned_frequency_hz/planned_voltage_uv` separately from read-only `actual_frequency_hz/actual_voltage_uv/temperature_mc` telemetry. `hardware_applied` remains zero in ABI v1.
 - Runtime limits can be refreshed; when a prior mode has a valid plan, the service re-evaluates it against the new voltage/thermal limits.
 - `scripts/test-h700-cpu-performance-service.sh` tests ABI rejection, missing evidence gates, mode selection, telemetry separation, thermal clamping, Boost gating and malformed OPP tables.
+- `integration/linkslot/h700-frontend-core/slot-cpu-performance` is the typed Rust `no_std` client. It treats the C service pointer as opaque, maps mode/error codes, checks the 64-byte ABI v1 state layout, and exposes planned OPP separately from optional actual telemetry. It does not own or initialize the C service.
 
-The facade is intentionally not wired to a PLL/PMIC actuator. A Rust binding may consume this ABI and show the requested mode/planned OPP while actual clock/voltage remain “unavailable” until a real readback backend exists. Do not show planned MHz as measured MHz and do not expose an applied/success state based only on `POLICY_ONLY`.
+The C facade is intentionally not wired to a PLL/PMIC actuator. The typed Rust client exists and is host-tested, but it is not yet wired into Linkslot `App`/settings or a C service initialization path. Until a real readback backend exists, actual clock/voltage must remain unavailable. Do not show planned MHz as measured MHz and do not expose an applied/success state based only on `POLICY_ONLY`.
 
 ## 8. Required hardware and safety gates
 
@@ -145,6 +146,8 @@ The facade is intentionally not wired to a PLL/PMIC actuator. A Rust binding may
 - [ ] Establish cold-boot voltage/clock readback and a conservative board-approved OPP table before adding any write path.
 - [x] Implement a pure C OPP policy selector with no MMIO/PMIC access, strict speed-bin masks, board-voltage and thermal caps, and fail-closed evidence gates; add host regression tests and AArch64/AArch32 compile coverage.
 - [x] GitHub Actions [H700 CPU OPP / AArch32-AArch64 regression #45381349400](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45381349400) passed: policy host regressions plus AArch64, AArch32 ARM-state and AArch32 Thumb-2 freestanding object compilation.
+- [x] GitHub Actions [H700 Linkslot 1.0.45 runtime slices #45387192778](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45387192778) passed: the `slot-cpu-performance` Rust workspace tests, `no_std` AArch32/AArch64 checks and full Linkslot renderer/business overlay compile passed.
+- [x] GitHub Actions [H700 AArch32/AArch64 compile check #45387293421](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45387293421) passed after adding C `_Static_assert` checks for the ABI v1 state size/field offsets.
 - [ ] Add transition-ordering tests for voltage-before-frequency on upshift and frequency-before-voltage on downshift, plus PLL timeout and PMIC failure handling when a hardware transition layer is eventually introduced.
 - [ ] Add on-device sustained-load, cold/warm boot, battery/charger, audio-underrun, frame-pacing and thermal-soak tests before enabling Performance/Boost in release builds.
 
@@ -161,7 +164,7 @@ Hardware status remains:
 - CPU1–CPU3 handoff state is still unknown at BL31→BL33.
 
 Therefore:
-- the **mode model, pure policy-selection layer and policy-only C service ABI v1 are implemented and host/architecture CI-validated** (see the current run linked in `docs/PROJECT-STATUS.md`);
+- the **mode model, pure C policy selector, policy-only C service ABI v1 and typed Rust `no_std` client are implemented and host/architecture CI-validated** (see `docs/PROJECT-STATUS.md` for run links);
 - the board OPP table, runtime telemetry, PMIC/PLL transition sequence and automatic thermal response remain pending;
 - actual frequency/voltage writes and high-performance modes remain disabled until every required evidence gate is closed.
 
