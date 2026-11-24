@@ -134,6 +134,52 @@ impl InputSource for H700InputSource<'_> {
     }
 }
 
+/// Complete C-input to Linkslot-gesture adapter for the LK event loop.
+///
+/// The caller supplies a reusable action vector; it is cleared and filled on
+/// each poll. The raw event batch uses fixed stack storage and does not allocate.
+/// The upstream gesture machine remains the single source of truth for chords,
+/// long presses, volume repeat and fast-forward timing.
+pub struct H700GestureInput<'a> {
+    input: H700InputSource<'a>,
+    gestures: crate::Gestures,
+    raw: [RawEvent; H700_INPUT_MAX_EVENTS],
+}
+
+impl<'a> H700GestureInput<'a> {
+    pub fn new(service: &'a H700InputServiceV1) -> Result<Self, H700InputError> {
+        Ok(Self {
+            input: H700InputSource::new(service)?,
+            gestures: crate::Gestures::new(),
+            raw: [RawEvent::Up(Btn::Up); H700_INPUT_MAX_EVENTS],
+        })
+    }
+
+    /// Process queued button edges and time-based gestures.
+    ///
+    /// The time value must come from the H700 monotonic timer service, not
+    /// wall-clock time. The returned count is the number of actions written.
+    pub fn poll_actions(&mut self, now: Millis, output: &mut Vec<crate::Action>) -> usize {
+        output.clear();
+        let count = self.input.drain_into(&mut self.raw);
+        for event in &self.raw[..count] {
+            output.extend(self.gestures.feed(*event, now));
+        }
+        output.extend(self.gestures.tick(now));
+        output.len()
+    }
+
+    pub fn ff_latched(&self) -> bool {
+        self.gestures.ff_latched()
+    }
+
+    pub fn drop_ff_latch(&mut self, output: &mut Vec<crate::Action>) -> usize {
+        output.clear();
+        output.extend(self.gestures.drop_ff_latch());
+        output.len()
+    }
+}
+
 fn decode_button(code: u16) -> Option<Btn> {
     Some(match code {
         H700_BTN_UP => Btn::Up,
@@ -195,6 +241,38 @@ mod tests {
             context: (queue as *mut Queue).cast(),
             drain: Some(drain),
         }
+    }
+
+    #[test]
+    fn c_button_edges_flow_through_upstream_gesture_actions() {
+        let mut queue = Queue {
+            events: [
+                H700InputEvent { button: H700_BTN_MENU, state: H700_INPUT_PRESSED, reserved: 0 },
+                H700InputEvent { button: H700_BTN_MENU, state: H700_INPUT_RELEASED, reserved: 0 },
+                H700InputEvent { button: H700_BTN_POWER, state: H700_INPUT_PRESSED, reserved: 0 },
+                H700InputEvent { button: H700_BTN_POWER, state: H700_INPUT_RELEASED, reserved: 0 },
+            ],
+            len: 4,
+            consumed: 0,
+        };
+        let service = service(&mut queue);
+        let mut runtime = H700GestureInput::new(&service).unwrap();
+        let mut actions = Vec::with_capacity(8);
+
+        assert_eq!(runtime.poll_actions(100, &mut actions), 1);
+        assert_eq!(actions, alloc::vec![crate::Action::QuickMenu]);
+
+        assert_eq!(runtime.poll_actions(100 + crate::MENU_HOLD_MS, &mut actions), 1);
+        assert_eq!(actions, alloc::vec![crate::Action::Eject]);
+
+        assert_eq!(runtime.poll_actions(1_000, &mut actions), 1);
+        assert_eq!(actions, alloc::vec![crate::Action::PowerPress]);
+
+        assert_eq!(runtime.poll_actions(1_100, &mut actions), 2);
+        assert_eq!(
+            actions,
+            alloc::vec![crate::Action::PowerOff, crate::Action::PowerTap]
+        );
     }
 
     #[test]
