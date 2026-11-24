@@ -1,0 +1,10 @@
+[package]
+name = "slot-lk-runtime"
+version = "1.0.36"
+edition = "2021"
+rust-version = "1.96"
+license = "GPL-3.0-or-later"
+description = "Single-core no_std Linkslot event-step runtime for GammaOS LK"
+
+[dependencies]
+slot-input = { path = "../slot-input" }
