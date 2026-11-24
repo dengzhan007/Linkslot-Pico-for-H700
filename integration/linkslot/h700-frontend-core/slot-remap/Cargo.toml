@@ -1,0 +1,10 @@
+[package]
+name = "slot-remap"
+version = "1.0.45"
+edition = "2021"
+rust-version = "1.96"
+license = "GPL-3.0-or-later"
+description = "Allocation-free Linkslot button remapping state machine for no_std frontends"
+
+[dependencies]
+slot-input = { path = "../slot-input" }
