@@ -356,8 +356,11 @@ fi
     done
 
     echo
-    echo "== NVMEM metadata only (raw fuse bytes are not read) =="
+    echo "== NVMEM metadata and narrowly scoped SID cell readback =="
+    echo "Only the two device-tree-declared SID cells are read; the complete NVMEM range is never dumped."
     NVMEM_COUNT=0
+    SID_PROVIDER_MATCHED=0
+    SID_NVMEM_PATH=""
     for node in /sys/bus/nvmem/devices/*; do
         [ -d "$node" ] || continue
         NVMEM_COUNT=$((NVMEM_COUNT + 1))
@@ -372,11 +375,44 @@ fi
         done
         [ "$ATTR_COUNT" -gt 0 ] || echo "NO_READABLE_NVMEM_METADATA"
         if [ -e "$node/of_node" ] && command -v readlink >/dev/null 2>&1; then
+            SID_OF_NODE="$(readlink -f "$node/of_node" 2>/dev/null || true)"
             echo "[of_node]"
-            readlink -f "$node/of_node" 2>/dev/null || true
+            echo "$SID_OF_NODE"
+            case "\${SID_OF_NODE##*/}" in
+                sunxi-sid-ng@03006000)
+                    SID_PROVIDER_MATCHED=1
+                    SID_NVMEM_PATH="$node/nvmem"
+                    ;;
+            esac
         fi
     done
     [ "$NVMEM_COUNT" -gt 0 ] || echo "NOT_PRESENT: no NVMEM device metadata directories exported"
+
+    echo
+    echo "== exact sun50iw9p1 SID cells (read-only, bounded) =="
+    if [ "$SID_PROVIDER_MATCHED" -eq 0 ]; then
+        echo "NOT_PRESENT: no NVMEM provider matched sunxi-sid-ng@03006000"
+    elif [ ! -r "$SID_NVMEM_PATH" ]; then
+        echo "NOT_READABLE: matched SID provider has no readable nvmem binary attribute"
+    elif ! command -v od >/dev/null 2>&1; then
+        echo "NOT_AVAILABLE: od utility missing; SID cell bytes were not read"
+    else
+        echo "provider=$SID_NVMEM_PATH"
+        echo "speed-bin: provider offset 0x00, length 2 (DTS speed@00)"
+        SID_SPEED_HEX="$(dd if="$SID_NVMEM_PATH" bs=1 skip=0 count=2 2>/dev/null | od -An -v -tx1 | tr -d ' \n')"
+        if [ -n "$SID_SPEED_HEX" ]; then
+            echo "speed_bin_raw_le_bytes=$SID_SPEED_HEX"
+        else
+            echo "NOT_READABLE_OR_EMPTY: speed-bin cell"
+        fi
+        echo "thermal-calibration: provider offset 0x14, length 8 (DTS calib@14)"
+        SID_CALIB_HEX="$(dd if="$SID_NVMEM_PATH" bs=1 skip=20 count=8 2>/dev/null | od -An -v -tx1 | tr -d ' \n')"
+        if [ -n "$SID_CALIB_HEX" ]; then
+            echo "thermal_calibration_raw_bytes=$SID_CALIB_HEX"
+        else
+            echo "NOT_READABLE_OR_EMPTY: thermal calibration cell"
+        fi
+    fi
 
     echo
     echo "== CPU / regulator / thermal / clock kernel log lines =="
