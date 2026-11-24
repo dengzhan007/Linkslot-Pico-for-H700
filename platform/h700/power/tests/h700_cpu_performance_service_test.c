@@ -46,7 +46,7 @@ int main(void)
     config.struct_size = (uint32_t)sizeof(config);
     config.opps = test_opps;
     config.opp_count = (uint32_t)(sizeof(test_opps) / sizeof(test_opps[0]));
-    config.limits = ready_limits();
+    memset(&config.limits, 0, sizeof(config.limits));
 
     CHECK(h700_cpu_perf_service_init_v1(&service, (uint32_t)sizeof(service) - 1u,
           &config) == H700_CPU_PERF_SERVICE_ERR_ABI,
@@ -66,7 +66,7 @@ int main(void)
           "initial state does not claim an applied clock");
 
     CHECK(h700_cpu_perf_service_request_mode_v1(&service, H700_CPU_PERF_MODE_PERFORMANCE) ==
-          H700_CPU_PERF_STATUS_OK,
+          H700_CPU_PERF_ERR_NOT_READY,
           "mode request is blocked while evidence gates are not ready");
     CHECK(h700_cpu_perf_service_get_state_v1(&service, &state, (uint32_t)sizeof(state)) ==
           H700_CPU_PERF_SERVICE_OK && state.hardware_applied == 0u &&
