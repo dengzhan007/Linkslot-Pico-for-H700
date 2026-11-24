@@ -1,6 +1,6 @@
 # Linkslot 1.0.36 on H700 LK: runtime and renderer integration plan
 
-**Status:** architecture plan plus host-only renderer/frontend/input integration proofs. The project has persistent `no_std + alloc` `slot-input`, `slot-model`, `slot-frontend-state`, `slot-core-picker`, `slot-link-state`, `slot-link-kind`, `slot-video-mode`, and `slot-rom-id` crates; a C input service/queue and Rust gesture bridge; generic frontend/core-picker state machines; paired-save, link-mode and source-crop policy modules injected into the real Frontend/App source tree. Focused CI compiles the complete patched Linkslot `slot` crate with all overlays. It still has no bootable Linkslot runtime, physical GPIO/input or display/audio driver, or on-device execution. The upstream snapshot on `upstream/linkslot` remains immutable.
+**Status:** architecture plan plus host-only renderer/frontend/input integration proofs. The project has persistent `no_std + alloc` `slot-input`, `slot-model`, `slot-frontend-state`, `slot-core-picker`, `slot-link-state`, `slot-link-kind`, `slot-video-mode`, `slot-rom-id`, and `slot-game-search` crates; a C input service/queue and Rust gesture bridge; generic frontend/core-picker state machines; paired-save, link-mode and source-crop policy modules injected into the real Frontend/App source tree. Focused CI compiles the complete patched Linkslot `slot` crate with all overlays. It still has no bootable Linkslot runtime, physical GPIO/input or display/audio driver, or on-device execution. The upstream snapshot on `upstream/linkslot` remains immutable.
 
 This plan resolves a practical integration question: which parts of Linkslot can become LK-resident logic, and which Linux services must be replaced rather than emulated.
 
@@ -172,9 +172,10 @@ R1 does not require the entire 1.0.36 application to be ported first. R2/R3 esta
 7. [Completed] Extract the pure GBA cable/wireless policy into `slot-link-kind`, keeping the 43-code wireless table, Pokémon title/clean-ROM exception, serial protocol selection and link-capability rules. The original module remains a public re-export.
 8. [Completed] Extract `VideoMode` and normalized source-rectangle geometry into `slot-video-mode`; preserve INI read/write only in the existing host wrapper and re-export the original `slot::video_mode` API. Crop behavior passes regression tests for padded GB/GBC frames and full-frame systems.
 9. [Completed] Extract Linkslot ROM SHA-256 identity, hexadecimal conversion and incremental `RomHasher` into `slot-rom-id`; keep file/reader access in the host/VFS wrapper for bounded chunk-by-chunk hashing.
-9. [Input slice completed] Implement versioned C input service, bounded single-context queue, allocation-free Rust raw-event drain and adapter into upstream `Gestures`. Next extract pure menu/game-library state and build a bounded Rust LK event loop over C-provided time, input, VFS, display and core services. Keep GPIO/framebuffer hardware ownership in C.
-10. Connect the H700 framebuffer/display handoff only after live scanout and BL33 resource ownership are proven; similarly defer audio/input/power MMIO until each board service has its own evidence.
-11. Keep mGBA/Gambatte/gpSP as separate C/C++ static cores. Their linker map, BSS, stack, heap and ROM/save buffers must fit inside a subsequently approved application arena.
+10. [Completed] Extract the game shelf IME/search index into `slot-game-search`: pinyin candidate ranking, pagination and cross-platform hit lookup are pure no_std logic, with dictionary and game catalogue inputs supplied by the host wrapper.
+11. [Input slice completed] Implement versioned C input service, bounded single-context queue, allocation-free Rust raw-event drain and adapter into upstream `Gestures`. Next extract pure menu/game-library state and build a bounded Rust LK event loop over C-provided time, input, VFS, display and core services. Keep GPIO/framebuffer hardware ownership in C.
+12. Connect the H700 framebuffer/display handoff only after live scanout and BL33 resource ownership are proven; similarly defer audio/input/power MMIO until each board service has its own evidence.
+13. Keep mGBA/Gambatte/gpSP as separate C/C++ static cores. Their linker map, BSS, stack, heap and ROM/save buffers must fit inside a subsequently approved application arena.
 
 ## 7. Explicit non-goals at this stage
 
