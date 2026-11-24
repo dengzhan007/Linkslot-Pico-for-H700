@@ -81,12 +81,52 @@ def main() -> None:
     if sha256(patch_path.read_bytes()) != manifest.get("patch_sha256"):
         raise RuntimeError("overlay patch SHA-256 does not match its manifest")
 
+    overlay_makefile = overlay / "files/makefile"
+    overlay_dev_rules = overlay / "files/dev/rules.mk"
+    overlay_target_rules = overlay / "files/target/rules.mk"
     overlay_crt0 = overlay / "files/arch/arm/crt0.S"
     overlay_arch_c = overlay / "files/arch/arm/arch.c"
     overlay_rules = overlay / "files/arch/arm/rules.mk"
-    for path in (overlay_crt0, overlay_arch_c, overlay_rules):
+    for path in (
+        overlay_makefile,
+        overlay_dev_rules,
+        overlay_target_rules,
+        overlay_crt0,
+        overlay_arch_c,
+        overlay_rules,
+    ):
         if not path.is_file():
             raise RuntimeError("overlay replacement file missing: " + str(path))
+
+    makefile_text = overlay_makefile.read_text(encoding="utf-8")
+    if not re.search(
+        r"ifneq \(\$\(H700_BUILD\),yes\)\s+.*?include platform/common/rules\.mk\s+endif",
+        makefile_text,
+        re.S,
+    ):
+        raise RuntimeError("top-level makefile does not isolate the MediaTek platform/common stack")
+
+    dev_text = overlay_dev_rules.read_text(encoding="utf-8")
+    if not re.search(
+        r"ifneq \(\$\(H700_BUILD\),yes\)\s+MODULES \+=.*?\$\(LOCAL_DIR\)/md_com\s+endif",
+        dev_text,
+        re.S,
+    ):
+        raise RuntimeError("dev/rules.mk still adds MediaTek-only device modules to H700")
+    if not re.search(
+        r"ifneq \(\$\(H700_BUILD\),yes\)\s+include \$\(LOCAL_DIR\)/logo/rules\.mk\s+endif",
+        dev_text,
+        re.S,
+    ):
+        raise RuntimeError("dev/rules.mk still includes the MediaTek boot-logo builder for H700")
+
+    target_text = overlay_target_rules.read_text(encoding="utf-8")
+    if not re.search(
+        r"ifneq \(\$\(H700_BUILD\),yes\)\s+OBJS \+= \$\(LOCAL_DIR\)/init\.o\s+endif\s+OBJS \+= \$\(LOCAL_DIR\)/target_display\.o",
+        target_text,
+        re.S,
+    ):
+        raise RuntimeError("target/rules.mk does not exclude MediaTek target/init.c for H700")
 
     arch_text = overlay_arch_c.read_text(encoding="utf-8")
     if "set_vector_base((addr_t)__lk_vectors_start);" not in arch_text:
@@ -297,6 +337,7 @@ SECTIONS
         f"- BL33 entry wrapper: 0x{entry:08x}.\n",
         f"- Linked _end: 0x{end:08x}; upper probe bound 0x{IMAGE_END:08x}.\n",
         "- All eight vector instructions decode as A32 branch instructions; all required exception symbols resolve.\n",
+        "- The generated LK make rules exclude MTK platform/common, MTK dev modules and MTK target/init.c when H700_BUILD=yes; H700 must provide its own platform/target module lists.\n",
         "- Synthetic bytes +4..+0x63f replace cleanly without changing the first BL33 branch; the synthetic bytes are not a vendor header.\n\n",
         "## Explicit limits\n\n",
         "- This links the actual modified GammaOS LK CRT0 and original exception assembly with tiny stubs. It is not the full LK kernel/platform build, does not include MTK/H700 platform objects, and is not a bootable image.\n",
