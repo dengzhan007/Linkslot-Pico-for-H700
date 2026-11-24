@@ -54,6 +54,7 @@ def patch_frontend(source: Path) -> None:
     link_state_dependency = 'slot-link-state = { path = "../slot-link-state" }'
     link_kind_dependency = 'slot-link-kind = { path = "../slot-link-kind" }'
     video_mode_dependency = 'slot-video-mode = { path = "../slot-video-mode" }'
+    rom_id_dependency = 'slot-rom-id = { path = "../slot-rom-id" }'
     changed_manifest = False
     if dependency not in manifest_text:
         anchor = 'slot-model = { path = "../slot-model" }\n'
@@ -84,6 +85,12 @@ def patch_frontend(source: Path) -> None:
         if manifest_text.count(anchor) != 1:
             raise RuntimeError("cannot locate slot-link-kind dependency in slot/Cargo.toml")
         manifest_text = manifest_text.replace(anchor, anchor + video_mode_dependency + "\n")
+        changed_manifest = True
+    if rom_id_dependency not in manifest_text:
+        anchor = video_mode_dependency + "\\n"
+        if manifest_text.count(anchor) != 1:
+            raise RuntimeError("cannot locate slot-video-mode dependency in slot/Cargo.toml")
+        manifest_text = manifest_text.replace(anchor, anchor + rom_id_dependency + "\\n")
         changed_manifest = True
     if changed_manifest:
         slot_manifest.write_text(manifest_text, encoding="utf-8")
@@ -164,6 +171,7 @@ def apply(source: Path, crate_root: Path) -> None:
     add_new_package(crate_root / "slot-link-kind", source / "crates/slot-link-kind")
 
     add_new_package(crate_root / "slot-video-mode", source / "crates/slot-video-mode")
+    add_new_package(crate_root / "slot-rom-id", source / "crates/slot-rom-id")
 
     video_mode_path = source / "crates/slot/src/video_mode.rs"
     video_mode_path.write_text(
@@ -208,6 +216,48 @@ pub fn source_rect(platform: Platform, mode: VideoMode) -> [f32; 4] {
         "CLOSE_MS, HOP_MS, LIFT_MS, OPEN_MS, SLIDE_MS};" + chr(10),
         encoding="utf-8",
     )
+    rom_id_path = source / "crates/slot/src/rom_id.rs"
+    original_rom_id = rom_id_path.read_text(encoding="utf-8")
+    test_start = original_rom_id.find("#[cfg(test)]")
+    test_block = original_rom_id[test_start:] if test_start >= 0 else ""
+    rom_id_path.write_text(
+        """use std::fs::File;
+use std::io::Read;
+use std::path::Path;
+
+pub use slot_rom_id::{digest_bytes, digest_from_hex, digest_hex, is_sha256, sha256_hex, Digest, RomHasher};
+
+const BUFFER: usize = 1024 * 1024;
+
+pub fn digest_file(path: &Path) -> std::io::Result<Digest> {
+    digest_reader(File::open(path)?)
+}
+
+pub fn digest_reader<R: Read>(mut reader: R) -> std::io::Result<Digest> {
+    let mut hasher = RomHasher::new();
+    let mut buffer = vec![0u8; BUFFER];
+    loop {
+        let read = reader.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(hasher.finalize())
+}
+
+pub fn sha256_file(path: &Path) -> std::io::Result<String> {
+    Ok(digest_hex(&digest_file(path)?))
+}
+
+pub fn sha256_reader<R: Read>(reader: R) -> std::io::Result<String> {
+    Ok(digest_hex(&digest_reader(reader)?))
+}
+
+""" + test_block,
+        encoding="utf-8",
+    )
+
     patch_frontend(source)
 
     paths = [
@@ -218,6 +268,8 @@ pub fn source_rect(platform: Platform, mode: VideoMode) -> [f32; 4] {
         "crates/slot-link-state",
         "crates/slot-link-kind",
         "crates/slot-video-mode",
+        "crates/slot-rom-id",
+        "crates/slot/src/rom_id.rs",
         "crates/slot/src/video_mode.rs",
         "crates/slot/src/link_kind.rs",
         "crates/slot/src/link_state.rs",
