@@ -24,7 +24,7 @@
 - [x] 将 `slot-core-picker` 扩展为通用三座位 `ThreeLayout<C>` 状态机：保留单/双核心路径，覆盖运行核心与高亮位置分离、托盘/槽 2 交换、非法布局回退，并补充对应单测。
 - [x] 更新 Frontend/App overlay 和 Renderer overlay 的 source pin/workspace version 到归档 1.0.45；App 层负责将 Linkslot Core 枚举映射到通用布局，避免 no_std crate 依赖 `slot-store`。
 - [x] 将 runtime workflow 的 Linkslot checkout 更新到 1.0.45，并在新实验分支添加 push path trigger。
-- [ ] 完整综合 workflow [45370886678](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45370886678) 已针对 1.0.45 与 armGBA 核心表修复重跑；此前 runtime slices 与软件 Renderer 独立 workflow 已通过。等待综合 workflow 完成后，再更新本项验收状态。
+- [x] 完整综合 workflow [45370886678](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45370886678) 通过（69/69 步）：GammaOS LK H700 BL33 CRT0/vector overlay compile、A32/A64、10 个 no_std 业务 crate、完整 Linkslot 1.0.45 Frontend + Renderer overlay、C Input ABI/queue、VFS v3、真实 mGBA AArch32 namespaced static archive/newlib 构建与链接诊断、SD→GPT→FAT→Libretro VFS host path、BL33 header/vector layout probe 全部成功。artifact [14908469502](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45370886678/artifacts/14908469502) 已上传。
 - [ ] 按 1.0.45 对照完整 App/UI/核心 adapter，审查 transfer/save、remap、session、mGBA ABI 变化；仅 GB/GBC/GBA 首期功能可延后，但不能丢失上游行为语义。
 
 ### A2（历史验证）：Linkslot 1.0.36 裸机可移植性与静态核心接入（host-only 阶段）
@@ -52,8 +52,22 @@
 - [ ] 将更多 Frontend/App 的纯状态、游戏库、菜单、配置和本地存档策略逐步提取成 `no_std` Rust 模块；不能把当前 Linux `device_app` / 完整 `App` 直接链接为 LK 应用。
 - [ ] 在真实 H700 runtime 中验证 mGBA 启动 ROM、视频帧、音频、输入、即时状态和电池存档；host archive/link 结果不能替代运行测试。
 
-### A3（1.0.36 历史验证，待 1.0.45 重新验收）：Linkslot LK runtime 与显示渲染边界
+### A3：Linkslot LK runtime 与显示渲染边界（1.0.36 历史记录 + 1.0.45 当前复验）
 
+### A3.1 Linkslot 1.0.45 综合 host/cross-build 验收
+
+- [x] 运行 [1.0.45 完整 feasibility workflow](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45370886678)：69 个步骤全部成功，完整日志/构建报告/ELF/map 已作为 [artifact 14908469502](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45370886678/artifacts/14908469502) 上传。
+- [x] 真实 GammaOS LK H700 BL33 source overlay CRT0 与 exception-vector 交叉编译/链接通过；RG34XX vendor header packaging 和 fail-closed memory-layout gate 通过。
+- [x] Linkslot 1.0.45 cumulative overlay 通过：Renderer `SoftwareCompositor`、完整 `slot` Frontend、10 个 no_std 业务 crate、A32/A64 freestanding checks、Input Service ABI 与 C queue 均通过。
+- [x] Linkslot 1.0.45 `slot-retro` VFS v3 host integration、static/dynamic Libretro API、21 个 namespaced mGBA Rust bindings、前端 built-in static mGBA 选择与生命周期测试全部通过。
+- [x] H700 host storage vertical path 通过：sdc0/CMD17 read-only、GPT、FAT32 目录/文件读取、Libretro VFS v3；FAT16/FAT32/exFAT bounds 与真实镜像 host regression 通过。
+- [x] 固定版本 mGBA 的 AArch32 namespaced static archive、Generic backend、VFS v3 file/directory backend、VDir fake-backend regression、arm-none-eabi/newlib archive 与 whole-archive link diagnostic 通过。
+- [x] BL33 header/vector host layout prototype 通过，但该 prototype 只覆盖 tiny kmain/exception stubs，不是 full LK kernel 或 boot image。
+- [ ] 修正 GammaOS LK Cortex-A53 `rules.mk` 仍传入 `-mcpu=cortex-a9` 的问题；H700 必须对照 toolchain/map/disassembly 验证真正使用 Cortex-A53 flags。
+- [ ] 修正 `arch/arm/arch.c::arch_early_init()` 将 VBAR 重置为 `MEMBASE` 的行为，确保 header-overlaid BL33 始终使用 relocated `__lk_vectors_start`；当前 crt0 probe 的 relocated vector table 位于 `0x4a001000`。
+- [ ] 明确 BL31→BL33 时其它 Cortex-A53 核心是否停驻。当前 GammaOS LK scheduler/critical-section 是全局单核实现，`ACTLR.SMP` 路径只有 Cortex-A7；在证明其它核停驻之前，保持单核 fail-closed，不开放 SMP/多核执行。
+- [ ] 完成 RG34XX 全部 DRAM/reserved-memory/heap/stack/framebuffer ownership 取证；`0x4a0e0000` 是 BaseOS loader BSS 上界参考，不是已授权 heap 或通用 RAM map。
+- [ ] 把 `libnosys` / newlib link probe 的 dummy syscalls 换成经过 ABI 审查的 LK heap、console、RTC、文件与 reentrancy 服务；当前 whole-archive 成功不等于真实运行环境已经闭合。
 - [x] 对照 Linkslot 1.0.36 原始 `device_app`、`Frontend`、`App`、`slot-gfx`、`slot-ui`、输入、音频与电源实现，确认 `device` feature 仍是 Linux/std 后端，不是 LK/no_std 运行模式。
 - [x] 确认现有 `Draw::{Rect,Tex,Turned,Game,Shot}` 已提供可复用的 CPU 绘制命令边界；并在临时 Linkslot 源码补丁中抽出对象安全 `Renderer` trait。
 - [x] 制定 LK 软件 framebuffer 的分层方案：先实现 RGBA 软件 2D 基线，再逐步补屏幕滤镜；不依赖 LK 内的 Linux fbdev/EGL/GLES/Mali userspace。
