@@ -2,7 +2,7 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-25（新增 CPUX vendor-source audit 和只读 inventory 摘录；新 collector CI 待确认）  
+**最后核对时间：** 2026-11-25（已分析 RG34XX/H700 CPUX live inventory；新 collector CI 待确认）  
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **工作分支：** `porting/linkslot-1.0.45-feasibility`  
 **最近一次成功 CI 验证的代码基线：** `0e33da4a50b28583aac8c7e815dac7857b6ef43a`（完整综合 workflow #45428664653，71/71 steps；早于本轮只读 inventory 脚本增强）。**本轮 collector/CI 配置提交：** `96afe6d2fff811eab4edfa87b3f58606bdaf645c`，含 read-only clock-summary 摘录、静态安全测试和 workflow path/test 接入；随后又有 DVFS 专项文档、路线图和状态入口同步提交。对应 push workflow 尚未取得可核验结果。  
@@ -18,6 +18,7 @@
 **本轮 mainline speed-bin reference decode：** 固定上游 Linux `8d7fe9885c62fc9a95bf55d9db244d9672a8aadc` 的候选映射现加入 `sid-cell-report.json`，但所有结果仍 `opp_authorization=not_approved`；#45404785874/#45405024561 已通过。  
 **本轮 Linkslot/mGBA 静态闭环：** #45413653400 成功（70/70）；真实 Linkslot 1.0.45 `slot-retro::Api` Rust `no_std` AArch32 staticlib、21 个 mGBA namespaced exports、真实 mGBA VFS v3 archive、H700 newlib adapter 与 `newlib/libm/libgcc` 最终 ELF32/ARM 链接通过；artifact `14929808289`。该探针不执行核心，也不是完整 LK/固件/设备验证。  
 **本轮 CPU Performance QuickRow App regression：** 两条 workflow 都实际执行 `h700_cpu_performance_quick_row_tests`，2 passed / 0 failed；runtime-slices #45428654903 成功（20/20），完整 feasibility #45428664653 成功（71/71）。测试验证 unavailable 显示、左右请求不改变值、不创建持久化配置。
+**本轮 RG34XX CPUX live inventory（采集于 2026-11-24 23:37:46 UTC）：** 已分析 `reports/rg34xx-inventory-20261125-cpux/`。live FDT phandle `0x4f` 将 CPU0 `cpu-supply` 指向 AXP2202 DCDC1；Linux regulator debugfs 报告 cpu0 1160 mV。CPU0–CPU3 在 Linux 中属于同一个 cpufreq policy 且全部 online；当前 Linux clock tree 为 `pll_cpu → cpu → cpuapb`（1512/1512/378 MHz），AXI 756 MHz，独立 `pll_periph0` 600 MHz。cpufreq（1416/1320 MHz）与 clk_summary（1512 MHz）存在读数冲突。SID speed raw `0x6c00`，主线参考候选 bin 5，但 vendor literal 不匹配、OPP authorization 未批准。热校准 raw 字段存在，但内核 AVCC 未校准。完整结论：[RG34XX CPUX live read-only audit](rg34xx-cpux-live-audit-2026-11-25.md)；原始文件位于 [reports 分支](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261125-cpux)。**仅确认当前 Linux runtime 观察，不证明 BL33-entry 状态，不开放硬件 DVFS。**
 **本轮 CPUX vendor-source audit（2026-11-25）：** 固定审查 `qiaoweibiao/T507_Kernel@98fcc7d3f112e51b0edfb71536da89cb2115106f` 的 `sun50iw9` clock driver；源码给出 `PLL_CPU=0x0000`、`CPU_CFG=0x0500`、`pll_periph0` pre-rate parent switch / `pll_cpu` post-rate restore、PLL lock 新模式以及 PLL bit31 boot-enable / bit27 output-gate 约束。`LOCKBIT(x)` 受 EVB build config 影响；厂商 CPU factor table 自身标注不正确，禁止用作 RG34XX OPP。审查报告：[H700 CPUX clock-source audit](h700-cpux-clock-source-audit.md)。**仅源码审计，不是目标板寄存器读回，不关闭 DVFS 硬件门，也没有新增 CI 结果。**
 **本轮只读 clock inventory 变更：** `scripts/collect-rg34xx-readonly-inventory.sh` 在原有完整 `clk_summary` 输出外，新增保留缩进的 `pll_cpu` / `pll_periph0` / `cpux` / `cpu` 重点摘录；`tools/test_inventory_script_safety.py` 增加只读回归，`.github/workflows/h700-arch-check.yml` 将两个文件加入 push/PR 路径并执行该测试。新摘录只读 Linux debugfs 文本，不直接读取 `PLL_CPU` / `CPU_CFG` MMIO。摘录片段单独通过 `sh -n` 语法检查；完整 Python 回归/Actions 尚未取得可核验执行结果。相关提交链：collector 摘录 `db9e190619b149901b817b67d899c0e937891190` → printf 格式修正 `c30dceea131f2a1cf168bdf08beac36884ce52a3` → 静态安全测试 `aad8671ece7f39124a58aa659c54bc3a2c0ff661` → workflow 接入 `96afe6d2fff811eab4edfa87b3f58606bdaf645c`；随后同步 DVFS 文档、路线图与状态记录。  
 
@@ -168,12 +169,12 @@
 已确认/交叉验证：
 
 - RG34XX 现场 Linux 日志识别 PMIC 为 **AXP2202**，I²C-5、地址 `0x34`。
-- Knulli 与 MustardOS 两份 RG34XX 专用 DTS 都把 `cpu@0 cpu-supply` 指向 AXP2202 DCDC1；这是强交叉证据，但本机 2026-11-22 的已归档 live-FDT 摘要未保留 CPU 节点/完整 regulator phandle。新 FDT parser 已能解析该关系，尚需设备重采集确认。
+- 2026-11-25 live FDT 已直接确认 CPU0 `cpu-supply` phandle `0x4f` 指向 AXP2202 DCDC1（500000–1540000 µV，always_on/boot_on）；同次 Linux regulator debugfs 显示 `cpu0 @1160mV`。这是本次 live FDT + Linux regulator-framework 证据，不是 BL33-entry PMIC 原始寄存器读回。
 - 通用 SoC `soc0` sysfs revision 即使存在，也仅作为 OS 导出的识别线索；vendor `sunxi_get_soc_ver()` 路径当前不调用，因为它在该 H700 配置可能临时切换 CE clock/reset。SID JSON 对 generic revision 值保持原样，不把它映射成 H700 speed-bin 档位。
-- 已从 RG34XX DTS 参考找到 SID speed cell (`0x03006000 + 0x00`, 2 bytes) 和 thermal calibration cell (`0x03006000 + 0x14`, 8 bytes)。FDT parser 会输出 NVMEM phandle 与 cell offset/size；新版 collector 已能限长读取这两个 cell 并生成 `sid-cell-report.json`。**实机原始值尚未读取**，需用户在 RG34XX 上运行新版 inventory 后取得；解析器不授权任何 OPP，也不认证 thermal sensor。
-- 现场内核报告 H700 thermal sensor 存在，但 **AVCC is not calibrated**，因此不能据此开放自动温控升频/Boost。
-- 固定 `sun50iw9` vendor-source audit 已给出 CPUX 源码级候选：`PLL_CPU=0x0000`、`CPU_CFG=0x0500`，改频前切 `pll_periph0`、改频后恢复 `pll_cpu`；lock status bit 随 EVB build macro 改变。厂商源码要求 PLL bit31 在 boot 时启用且不得动态更改，factor lookup table 自称不正确。精确 RG34XX CCU base/访问权限、live register readback、`pll_periph0` 实际频率、divider、timer continuity 和 shipping build lock 配置仍未验证，详见 `docs/h700-cpux-clock-source-audit.md`。
-- CPU1–CPU3 的 BL31→BL33 状态未知；CPU PLL 是共享时钟域，不是每个模拟器核心各自独立的频率。
+- 2026-11-25 新版 inventory 已按 DTS 声明限长读取 SID speed cell（2 bytes，raw `0x6c00`）与 thermal calibration cell（8 bytes，raw `181113ab191b16bb`）。主线诊断 decoder 给 candidate bin 5，但固定 vendor literal 匹配失败、generic SoC identity unavailable，所有结果仍 `opp_authorization=not_approved`；不能把 candidate bin 当作 speed-bin mask 或 OPP 授权。
+- 现场内核报告 H700 thermal sensor 存在且有 4 个 SID raw calibration fields，但明确提示 **AVCC is not calibrated**；CPU/GPU 当前温度只作诊断，不可用于自动温控升频、Auto 或 Boost。
+- 固定 `sun50iw9` vendor-source audit 给出 `PLL_CPU=0x0000`、`CPU_CFG=0x0500` 和 alternate-parent/lock 流程；2026-11-25 Linux `clk_summary` 观察到 `pll_cpu → cpu → cpuapb`、`pll_periph0=600MHz`，但 cpufreq 和 PLL rate 读数不一致。该输出是 Linux clock-framework 数据，不是 BL33-entry MMIO readback。lock status bit 仍受 EVB build macro 影响，PLL bit31 不得动态更改，vendor factor table 明确不正确。
+- Linux runtime snapshot 显示 CPU0–CPU3 全部 online 且属于一个共享 cpufreq policy，确认 CPU 频率不是按每个模拟器核心独立设置；但 CPU1–CPU3 在更早 BL31→BL33 handoff 时的状态仍未知。
 
 **禁止事项：** 不复制 MT6785 的 PLL 地址/PCW 算法，不把 GammaOS Pico 600–2000 MHz 档位直接套到 H700，不使用 AXP717 参数替代 AXP2202，不把 H616 OPP 表当作 RG34XX 已批准 OPP，不在缺少次级 CPU 状态证明时写 CPUX PLL，不在缺少电压/热证据时升频。
 
@@ -183,9 +184,9 @@
 2. CPU Performance QuickRow 已完成 display-only/unavailable 接入和 App 回归测试。后续只有在 board-approved RG34XX profile、C owner 初始化和真实只读 telemetry 路径齐备后，才把 `CpuPerformanceRuntime` typed client 接入 App；在此之前继续保持不可选、不可 persist、无计划 MHz 展示。
 
 Linkslot 1.0.45 UI 当前已追加 display-only CPU row：`SYSTEM_SETTINGS` 为 7 行，`QuickRow::ALL` 为 88 项，Language index=86、CPU Performance index=87；`QuickValue::ALL` 为 38 项，新 unavailable value index=37。两项 App unit tests 已在 runtime-slices/full feasibility CI 实际通过；Rust typed client 仍未接入 App。
-3. **在 RG34XX 实机重新运行新版只读 inventory**：收集新的 `live-fdt.json`、`cpu-power-runtime.txt` 和自动生成的 `sid-cell-report.json`；其中 `cpu-power-runtime.txt` 现含 `pll_cpu` / `pll_periph0` / `cpux` / `cpu` 的 clock-summary 重点摘录。核对 CPU supply/regulator、OPP 声明、CPUFreq、温度、regulator/clock readback 与 SID 原始 cell；不读取整个 NVMEM 节点，不在 LK 侧猜地址。
-4. 证明 BL31→BL33 CPU1–CPU3 状态和安全的单核 invariant；然后依据 vendor-source audit 只读核对 CPUX live mux/PLL、`pll_periph0`、divider、lock-status build config 与 timer continuity。源码层 parent-switch/lock 流程已记录，但不得据此开始写寄存器。
-5. 只有前述证据闭合后，才实现 C HAL 只读 telemetry 与最终受控硬件 transition；升频先升压，降频先降频后降压，必须有 readback、超时、故障回滚、热 clamp、滞回和实机持续负载验收。
+3. **审计目标机精确 Linux 4.9.170 cpufreq/OPP 实现**：解释 raw SID `0x6c00` 如何进入 live OPP supported-hw 筛选，核对 runtime `scaling_available_frequencies` 与 DT 各 speed-mask/电压 variant；禁止借用 mainline candidate bin 或不安全 vendor u32* consumer 作为授权。
+4. 解释 cpufreq (`1416/1320 MHz`) 与 `clk_summary` (`pll_cpu=1512 MHz`) 读数冲突；设计带时间戳的同步重复只读采样，并确认每个字段的驱动来源。
+5. 证明 BL31→BL33 CPU1–CPU3 状态、单核 invariant、备用父时钟切换和 timer continuity；同时解决 AVCC thermal calibration 或确认独立可信温度来源。前述门槛闭合后才设计 C HAL transition（升频先升压、降频先降频后降压、readback/timeout/rollback/hysteresis）。
 6. 最后才开放实际 Performance/Boost。不得把 ABI v1 的 `POLICY_ONLY` 当作 DVFS 已完成。
 
 ## 7. 续接规则
@@ -195,7 +196,7 @@ Linkslot 1.0.45 UI 当前已追加 display-only CPU row：`SYSTEM_SETTINGS` 为 
 1. 先读取本文和 GitHub 当前分支 HEAD / 最新 Actions 状态；本文的 HEAD 是核对时快照，不应假设之后没有新提交。
 2. 当前代码只在 `porting/linkslot-1.0.45-feasibility` 上推进；先检查分支差异与最新 CI，不重复建立已有分支/文件。
 3. 依任务读取专项文档：
-   - CPU 调频：本文 + [H700 CPU Performance Service / DVFS](h700-cpu-performance-service.md) + [H700 CPUX clock-source audit](h700-cpux-clock-source-audit.md)
+   - CPU 调频：本文 + [H700 CPU Performance Service / DVFS](h700-cpu-performance-service.md) + [H700 CPUX clock-source audit](h700-cpux-clock-source-audit.md) + [RG34XX CPUX live audit](rg34xx-cpux-live-audit-2026-11-25.md)
    - 总体路线： [roadmap](roadmap.md)
    - Linkslot 1.0.45 源码差异： [1.0.45 portability update](linkslot-1.0.45-portability-update.md)
    - LK/H700 runtime 架构： [Linkslot H700 runtime architecture](linkslot-h700-runtime-architecture.md)
