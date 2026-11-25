@@ -69,4 +69,4 @@ Until those conditions are met: retain `hardware_applied=0`, do not write `sunxi
 
 ## Immediate next step
 
-Run the normal **read-only** RG34XX inventory collector again so the new `tools/inspect_h700_fdt.py` output records the live panel timing and interface cells. This determines whether our actual DT timing is compatible with any source-verified 120-Hz table before further HAL work.
+A read-only UI/GAME capture was completed on the actual multi-frontend RG34XX non-SP; see [the live capture analysis](pvaibhav-slot-rg34xx-live-capture-2026-11-25.md). Both phases stayed near 59.6 Hz. The report README records `26 MHz / HT 820 / VT 536`, but the uploaded `live-fdt.json` is missing the parser's `timing` and `interface` fields and the raw DTB was kept local. Re-parse the retained DTB or pull it again with the current `tools/inspect_h700_fdt.py`, then publish a JSON with populated timing fields. The `rg34xx_v1` panel still fails the fork's exact `fog_fj035fhd05_v1` gate; do not weaken that gate or try its register writes.
