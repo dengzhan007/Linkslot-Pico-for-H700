@@ -150,6 +150,18 @@ The two 120-Hz candidates are not the same mode recipe:
 
 The original README reports 119.947/60.006 Hz, slightly above the arithmetic using its integer 54-MHz DT property (about 0.01%); the repository does not publish a raw IRQ/readback capture here that would let us independently establish the exact effective pixel clock. Treat its README rates as reported values and the calculations above as nominal timing arithmetic.
 
+
+### How the original 54-MHz profile maps onto our matched kernel #19
+
+The exact kernel #19 reverse audit makes the clock-path distinction concrete. For live RGB/HV interface (`lcd_if=0`), the divider table default is 6; the special override to 11 only occurs when `lcd_dclk_freq == 26`. Therefore, if the original package's 54-MHz timing reaches this kernel's Linux panel-init path:
+
+- divider remains 6;
+- requested parent rate is 54 MHz × 6 = **324 MHz**;
+- 324 MHz is an exact supported row in the recovered 12-MHz PLL factor table;
+- resulting nominal DCLK is 324 / 6 = **54 MHz**.
+
+Then the timing-only change from HT=1679 to HT=840 changes nominal scanout from about 60.0037 Hz to about 119.9360 Hz without needing the fork's forced 528-MHz / divider-10 pair. This is a source-derived prediction for the matched kernel path, not a measurement after flashing the original package. The package's FDT panel label / boot-package handoff and the live `rg34xx_v1 + lcd_type=old` panel revision remain unresolved compatibility gates.
+
 ### What this means for our RG34XX
 
 Our live BaseOS device is rg34xx_v1 + lcd_type=old, 720×480, 26-MHz property, 820×536. The latest ADB UI/GAME capture measured IRQ proxies of 59.667/59.583 Hz and read PLL 0x88001703 in both states. The TCON divider read failed in that ADB run; do not describe it as directly read back by those new reports (the earlier same-boot readback in the separate runtime report recorded 0xf000000b).
