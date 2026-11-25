@@ -2,6 +2,11 @@
 
 ## Index
 
+### 2026-11-23 — mGBA AArch32 arm-none-eabi/newlib VFS v3 archive (round 8)
+
+- linkslot-lk-rust-feasibility-2026-11-23-round8-arm-none-eabi.md — successful workflow 45114286962. Builds the pinned real mGBA VFS v3 file+directory variant with arm-none-eabi GCC/newlib (not glibc): 2.86 MB archive, 94 objects, ELF32/ARM EABI5 objects, all 25 Libretro exports namespaced, 52 true external references after archive-local resolution, and no POSIX/stdio file-system fallback. This is archive compilation only; no newlib whole-archive final link, no LK integration, no H700 storage backend or device run. [Workflow run 45114286962](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45114286962); [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16).
+
+
 ### 2026-11-23 — mGBA Libretro VFS v3 AArch32 static archive (round 7)
 
 - `linkslot-lk-rust-feasibility-2026-11-23-round7-mgba-libretro-vfs3.md` — successful workflow 45113739310. Builds the pinned real mGBA AArch32 archive with a temporary Libretro VFS v3 file+directory backend; archive has 114 objects, all 25 Libretro exports namespaced, and 51 true external symbols after subtracting internal cross-object references. The old `vfs-file.c`/`vfs-dirent.c` objects and POSIX/stdio/host-config filesystem symbols are absent. The 51 remaining dependencies are heap/string, locale/parser/errno, RTC/time, math/EABI and console/logging; no final LK link or H700 runtime. [Workflow run 45113739310](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45113739310); [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16).
