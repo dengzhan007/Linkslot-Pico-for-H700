@@ -594,7 +594,7 @@ python build/k19f_selfcheck.py
   `clk_info.w4 × divider × lcd_dclk_freq`，其中 `lcd_dclk_freq` 来自 `priv + 0x170`
   （正是 `panel_info + 0x80`）。
 - **120 Hz 的时钟源可达性**：576 MHz 在表内存在，所以 PLL 侧不再是缺口；但落在 576 而非 572，
-  DCLK 会是 `576/11 = 52.3636 MHz`，按 820×536 得 119.15 Hz 而不是 120.13 Hz。结论仍是
+  DCLK 会是 `576/11 = 52.3636 MHz`，按 820×536 得 119.1382 Hz（约 119.14 Hz） 而不是 120.13 Hz。结论仍是
   **未验证 / 不支持启用**，缺的是面板与 TCON 侧证据，而不是表能力。
 
 ### 13.4 未解
