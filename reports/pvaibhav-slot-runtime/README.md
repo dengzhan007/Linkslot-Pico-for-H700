@@ -6,7 +6,7 @@
 
 - 设备：`RG34xx` / `sun50iw9p1`，Linux `4.9.170`，ADB shell `uid=0`（已有 root 权限，**未执行 `adb root`**），
   串号已在下述文本中替换为 `[REDACTED]`
-- 采集脚本：`tools/collect-pvaibhav-slot-runtime.ps1`（仓库 `porting/linkslot-1.0.45-feasibility`）
+- 采集脚本：本次使用的本地 PowerShell 执行副本为 `build/_slot-capture.ps1`；`tools/collect-pvaibhav-slot-runtime.ps1` 在当时本地工作树中有对应版本，但核对当前 GitHub 工作分支时尚未找到已提交文件，不能视为已版本化工具。
 - 输出：`20261125-184406-ui/`（53 文件）、`20261125-184508-game/`（49 文件）
 
 ## 0. 采集命令与两处必要的运行偏差
@@ -129,3 +129,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\collect-pvaibhav-slo
   静态面板 timing、进程映射、CPU 频点与温度。
 - 不构成任何刷新率切换、MMIO 写入、性能调节的可行性依据；不声称任何游戏帧率或掉帧结论。
 - 全程未修改设备状态，未执行 root 提权、重启、写入或绕过任何权限检查。
+
+
+## 7. Artifact and source-path follow-up
+
+The uploaded `live-fdt.json` files currently expose only panel driver and geometry; their `panels[0]` objects do not include the `interface` or `timing` keys emitted by the current project parser. The report's 26 MHz / HT 820 / VT 536 values were extracted from the local raw `live-fdt.dtb`, which was not uploaded. Re-run the parser against that retained DTB or pull it again and publish the populated JSON plus DTB SHA-256 before treating the machine-readable timing record as complete.
+
+Both process environments show `BASEOS_TARGET=rg34xx`, `BASEOS_PLATFORM=h700`, `BASEOS_PACKAGE_ID=slot-pvaibhav`, and `BASEOS_FRONTEND_ID=slot-pvaibhav--default`. The Slot process runs as UID 0 with full effective capabilities. In the reviewed pvaibhav source, `DevicePlatform::new()` reads `BASEOS_TARGET`, `PanelRefresh::probe()` requires `fog_fj035fhd05_v1` for `rg34xx`, and startup mode application is gated by `supports_high_refresh()`. Our observed `rg34xx_v1` panel therefore fails the exact identity gate; the 60-Hz observation is not explained by missing root permission. The installed binary hash/version was not captured, so its exact source revision remains unverified.
