@@ -54,6 +54,17 @@ mode and derives its pacing period from the actual DRM timing. See the
 This is a useful display/HAL separation pattern, not proof of a Slot-provided
 RG34XX 120 Hz mode switch.
 
+
+Additional source comparison sharpens this gate: the BaseOS [panel survey](https://github.com/pvaibhav/BaseOS/blob/63137afeda1c0bc4ff771be6f03012b7f8147aca/experiments/h700-boot-speed/variant-survey/panel-survey.txt)
+and [compatibility manifest](https://github.com/pvaibhav/BaseOS/blob/63137afeda1c0bc4ff771be6f03012b7f8147aca/experiments/h700-boot-speed/evidence/compatibility.json)
+identify RG34XX as `rg34xx_v1` (720×480), while `fog_fj035fhd05_v1` is listed
+for other H700 handheld models. [MustardOS's RG34XX-H DTS](https://github.com/MustardOS/internal/blob/aef38ed9a870419a0fe4f351dac1bac58a84ba5e/device/rg34xx-h/package/sunxi.dts)
+uses the `rg34xx_v1` driver at 54 MHz / `lcd_ht=1679` / `lcd_vt=536`,
+supporting the 60 Hz baseline. It does not validate `lcd_ht=840` for that
+driver. The external 120 Hz package still uses the `fog_*` panel name in its
+U-Boot-package FDT, so do not flash/copy it unchanged; see the detailed
+[panel-driver provenance audit](h700-display-refresh-policy.md#panel-driver-provenance-cross-check).
+
 ## 3.1 BaseOS 已验证固件输入指纹
 
 BaseOS-MultiFrontend 为 RG34XX 准备的输入镜像固定为：

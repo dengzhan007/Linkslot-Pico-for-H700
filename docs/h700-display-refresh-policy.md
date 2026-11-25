@@ -40,6 +40,39 @@ The external 120 Hz FDT identifies `lcd_driver_name = "fog_fj035fhd05_v1"`. Our 
 
 The external repository also documents flashing its signed `boot_package.fex` at disk offset `0x1004000`. This project does **not** copy that flashing process, boot package, or raw disk-writing scripts. Only the timing values and the FDT comparison are used as reference evidence.
 
+### Panel-driver provenance cross-check
+
+The initial name mismatch is now backed by independent RG34XX firmware and
+board-profile evidence; it must not be treated as a cosmetic alias:
+
+- The BaseOS [panel survey](https://github.com/pvaibhav/BaseOS/blob/63137afeda1c0bc4ff771be6f03012b7f8147aca/experiments/h700-boot-speed/variant-survey/panel-survey.txt)
+  records RG34XX as `lcd_driver_name=rg34xx_v1`, 720×480, with kernel panel
+  driver `rg34xx_v1`. The same survey lists `fog_fj035fhd05_v1` for other
+  models such as RG28XX, RG35XX H and RG40XX, not RG34XX.
+- The corresponding [BaseOS compatibility manifest](https://github.com/pvaibhav/BaseOS/blob/63137afeda1c0bc4ff771be6f03012b7f8147aca/experiments/h700-boot-speed/evidence/compatibility.json)
+  also identifies RG34XX as `rg34xx_v1` at 720×480.
+- [MustardOS RG34XX-H DTS](https://github.com/MustardOS/internal/blob/aef38ed9a870419a0fe4f351dac1bac58a84ba5e/device/rg34xx-h/package/sunxi.dts)
+  uses `rg34xx_v1`, 54 MHz, `lcd_ht=1679`, `lcd_vt=536`, matching the
+  candidate 60.006 Hz timing profile. This is useful independent support for
+  the 54 MHz / 1679 / 536 baseline on an RG34XX panel-driver identity.
+- [KNULLI's RG34XX boot-package DTS](https://github.com/knulli-cfw/knulli-linux/blob/57afa662009641d181f57241bcc480119b131530/package/boot/uboot-h700/rg34xx/boot_package/rg34xx.dts)
+  also uses `rg34xx_v1`, but has an older 26 MHz / `lcd_ht=820` /
+  `lcd_vt=536` configuration. The external mod README itself calls this the
+  stock timing and says its kernel may override the 26 MHz clock.
+
+The external 60/120 Hz package sets the U-Boot-package FDT panel name to
+`fog_fj035fhd05_v1` in both variants. Its README says to overwrite the
+boot-package region at disk offset `0x1004000` and reports stock-firmware
+testing. We do not assume that its U-Boot display FDT, the kernel's live FDT,
+and the panel driver's initialization sequence are interchangeable. It is
+not safe to flash or copy that package unchanged into this project.
+
+Current evidence supports the **60 Hz 54 MHz / 1679 / 536 profile** on the
+`rg34xx_v1` identity through the MustardOS DTS. The 120 Hz `lcd_ht=840`
+candidate still needs confirmation that the actual `rg34xx_v1` panel init
+sequence and panel revisions accept it. This is now a stricter gate than
+simply comparing active resolution or matching the `fog_*` profile.
+
 ## 3. C policy API
 
 Files:
