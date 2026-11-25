@@ -79,7 +79,7 @@ fn open_static_mgba(
     serial: &str,
     colour: bool,
     palette: Option<GbPalette>,
-    link: Option<u8>,
+    link: Option<LinkSetup>,
 ) -> Option<Box<dyn RetroCore>> {
     let bios = root::bios_dir(root);
     let saves = root::saves_dir(root);
@@ -87,6 +87,7 @@ fn open_static_mgba(
         Ok(mut opened) => {
             let (frame_w, frame_h) = platform.frame();
             opened.set_canvas(frame_w, frame_h);
+            opened.set_six_button_pads(six_button_pads(platform));
             apply_core_options(
                 &mut opened,
                 Core::Mgba,
@@ -95,8 +96,8 @@ fn open_static_mgba(
                 colour,
                 palette,
             );
-            if let Some(player) = link {
-                apply_link_options(&mut opened, Core::Mgba, player);
+            if let Some(link) = link {
+                apply_link_options(&mut opened, Core::Mgba, link);
             }
             eprintln!("slot: core mgba (built-in static)");
             Some(Box::new(opened))
