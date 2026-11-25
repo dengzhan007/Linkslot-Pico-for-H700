@@ -202,3 +202,31 @@ A November 2, 2026 MustardOS community report describes a different RG34XX-H run
 This is **not** a measurement of our RG34XX non-SP and does not prove that our kernel uses the same divider table. It is evidence that Allwinner's requested `lcd_dclk_freq`, parent PLL selection and final TCON DCLK can diverge, and that even the `rg34xx_v1` driver string is not enough to transfer timing values between hardware revisions. For our live 26 MHz / 820×536 profile, the IRQ rate (~59.63 Hz) is close to the DTB-derived 59.155 Hz but still differs by ~0.48 Hz. The next hardware-analysis step is to recover the **exact running 4.9.170 #19 display clock path** from the byte-matched stock kernel and identify/read back its final DCLK divider without writing anything. Do not import the MustardOS 54 MHz / 1679 timing.
 
 References: [MustardOS RG34XX-H clock-mismatch discussion](https://community.muos.dev/t/rg34xx-h-incorrect-display-refresh-rate/1825) and [the DTS correction commit](https://github.com/MustardOS/internal/commit/76e454dfa9758a99f85115f80a29121dabb13a01).
+
+## TCON DCLK divider: the next decisive read-only check
+
+The pinned Allwinner sun50iw9 BSP reference at [orangepi-xunlong/linux-orangepi@0cd0547ea405b84b5b60fbc92978ac1bc2b68055](https://github.com/orangepi-xunlong/linux-orangepi/commit/0cd0547ea405b84b5b60fbc92978ac1bc2b68055) gives a concrete way to distinguish the DTB request from the actual panel DCLK. This is a related vendor BSP reference, **not yet proven to be the exact source revision behind the running 4.9.170 #19 binary**.
+
+- The sun50iw9 build selects lowlevel_v33x display code (see the pinned [DE Makefile](https://github.com/orangepi-xunlong/linux-orangepi/blob/0cd0547ea405b84b5b60fbc92978ac1bc2b68055/drivers/video/fbdev/sunxi/disp2/disp/de/Makefile)).
+- Its [disp_al_tcon.c](https://github.com/orangepi-xunlong/linux-orangepi/blob/0cd0547ea405b84b5b60fbc92978ac1bc2b68055/drivers/video/fbdev/sunxi/disp2/disp/de/lowlevel_v33x/disp_al_tcon.c) default table maps LCD_IF_HV to tcon_div=6 and lcd_div=1; disp_al_lcd_cfg() passes this divider to tcon0_set_dclk_div().
+- The [TCON register definition](https://github.com/orangepi-xunlong/linux-orangepi/blob/0cd0547ea405b84b5b60fbc92978ac1bc2b68055/drivers/video/fbdev/sunxi/disp2/disp/de/lowlevel_v33x/tcon/de_lcd_type.h) places tcon0_dclk at offset 0x44 after tcon0_ctl at 0x40. Its tcon0_dclk_div field is bits [6:0], and tcon0_dclk_en is bits [31:28]. The [getter/setter](https://github.com/orangepi-xunlong/linux-orangepi/blob/0cd0547ea405b84b5b60fbc92978ac1bc2b68055/drivers/video/fbdev/sunxi/disp2/disp/de/lowlevel_v33x/tcon/de_lcd.c) reads/writes that field.
+- Its [disp_lcd.c](https://github.com/orangepi-xunlong/linux-orangepi/blob/0cd0547ea405b84b5b60fbc92978ac1bc2b68055/drivers/video/fbdev/sunxi/disp2/disp/de/disp_lcd.c) requests pll_rate = requested_DCLK × tcon_div × lcd_div, reads back the PLL and LCD child rates, and derives the actual DCLK as lcd_rate_set / tcon_div. Its frame-period calculation also uses the read-back clock, not just the DTB property.
+- The pvaibhav fork names the TCON DCLK register DIVIDER=0x06511044 and the video PLL register PLL=0x03001040. Its 60-Hz divider word is 0xf000000b (divider field 11); its 120-Hz word is 0xf000000a (divider field 10). We have **not** written either address on this device.
+
+Our current clock summary reports tcon_lcd=288 MHz. If that is the clock immediately before the TCON divider:
+
+| Divider hypothesis | DCLK estimate | Calculated refresh at 820×536 |
+|---|---:|---:|
+| 11 | 26.1818 MHz | 59.569 Hz |
+| 6 | 48.0000 MHz | 109.210 Hz |
+
+The IRQ-derived 59.61–59.65 Hz corresponds to an effective divider close to 11 if each IRQ is one frame, whereas the related source's generic RGB/HV table defaults to 6. These are **competing hypotheses**, not proof of the installed kernel's divider. The public MustardOS ~106.6-Hz RG34XX-H report illustrates the kind of mismatch that can occur, but it was a different unit/kernel profile; do not transplant its 54-MHz/1679 timing.
+
+### Exact next read-only request
+
+The runtime report shows /sys/class/sunxi_dump/dump is present and accessible as root. The pvaibhav source itself reads a register by writing a query string to the **dump request node**, then reading the returned value. The next device capture should request:
+
+- 0x06511044 — TCON0 DCLK divider register (confirm current divider and enable nibble).
+- 0x03001040 — video PLL register used by the reviewed fork (cross-check against clk_summary).
+
+This request must use only /sys/class/sunxi_dump/dump; **never write to /sys/class/sunxi_dump/write**. Writing the query to the dump sysfs control file asks the kernel dump helper to read MMIO; it is not a write to the MMIO register. Capture the unmodified response and kernel clock summary together. Until the values are read back, neither the 6 nor 11 divider is accepted as the actual running configuration.
