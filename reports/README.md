@@ -2,6 +2,11 @@
 
 ## Index
 
+### 2026-11-23 — Real mGBA AArch32 static archive and Generic VFS comparison (round 5)
+
+- linkslot-lk-rust-feasibility-2026-11-23-round5-mgba-static.md — successful run 45108202490. Builds the Linkslot-pinned real mGBA source as Linux and Generic AArch32 static Libretro archives. Both have 115 object members and all 25 Libretro exports namespaced; Generic reduces external undefined symbols from 81 to 67 by removing Linux-specific file-descriptor/mmap/glibc fortified calls. The report compares the remaining symbols with pinned GammaOS LK libc and records that Linkslot does not yet implement RETRO_ENVIRONMENT_GET_VFS_INTERFACE, while mGBA's Generic directory backend still uses POSIX dirent. No final LK link or device runtime. [Workflow run 45108202490](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45108202490); [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16).
+
+
 ### 2026-11-23 — Linkslot 1.0.36 static Libretro core registry ABI (round 4)
 
 - `linkslot-lk-rust-feasibility-2026-11-23-round4-static-core-abi.md` — successful GitHub Actions run 45107173305. Links a no_std Rust table matching Linkslot's current `slot-retro::ffi::Api` shape to two namespaced mock cores (`mgba_retro_*` / `gpsp_retro_*`). AArch32 and AArch64 ELF links have no undefined symbols; x86_64 harness actually exercises environment/video/audio/input callbacks, ROM load/run, save-state, memory, cheats and deinit. This establishes the static function-table pattern only; it does **not** compile mGBA/gpSP. [Workflow run 45107173305](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45107173305); [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16).
