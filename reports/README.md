@@ -2,6 +2,11 @@
 
 ## Index
 
+### 2026-11-23 — mGBA Libretro VFS v3 AArch32 static archive (round 7)
+
+- `linkslot-lk-rust-feasibility-2026-11-23-round7-mgba-libretro-vfs3.md` — successful workflow 45113739310. Builds the pinned real mGBA AArch32 archive with a temporary Libretro VFS v3 file+directory backend; archive has 114 objects, all 25 Libretro exports namespaced, and 51 true external symbols after subtracting internal cross-object references. The old `vfs-file.c`/`vfs-dirent.c` objects and POSIX/stdio/host-config filesystem symbols are absent. The 51 remaining dependencies are heap/string, locale/parser/errno, RTC/time, math/EABI and console/logging; no final LK link or H700 runtime. [Workflow run 45113739310](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45113739310); [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16).
+
+
 ### 2026-11-23 — Linkslot Libretro VFS v3 ABI host validation (round 6)
 
 - `linkslot-lk-rust-feasibility-2026-11-23-round6-libretro-vfs-v3.md` — successful workflow run 45109949583. Adds a no_std Rust registry for the Libretro VFS v3 C interface, version negotiation via `RETRO_ENVIRONMENT_GET_VFS_INTERFACE`, and a fake in-memory backend. AArch32/ARM and AArch64 final ELFs link with no undefined symbols; the x86_64 harness exercises file operations, directory enumeration, metadata and path rejection with exit 0. The report explicitly limits this to a singleton fake backend; no SD/FAT or Linkslot integration yet. [Workflow run 45109949583](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45109949583); [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16).
