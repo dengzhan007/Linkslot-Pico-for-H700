@@ -1,0 +1,16 @@
+Found valid GPT with protective MBR; using GPT
+
+Disk /dev/mmcblk0: 30375936 sectors, 2544M
+Logical sector size: 512
+Disk identifier (GUID): ab6f3888-569a-4926-9668-80941dcb40bc
+Partition table holds up to 8 entries
+First usable sector is 4, last usable sector is 30375932
+
+Number  Start (sector)    End (sector)  Size Name
+     1           73728          204799 64.0M special
+     2          204800          270335 32.0M boot-resource
+     3          270336          303103 16.0M env
+     4          303104          434175 64.0M boot
+     5         1482752         2531327  512M rootfs
+     6         2531328         2793471  128M UDISK
+     7         2793472        30375932 13.1G primary

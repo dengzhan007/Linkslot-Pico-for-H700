@@ -2,6 +2,18 @@
 
 ## Index
 
+### 2026-11-25 — RG34XX/H700 kernel + CPUFreq driver provenance (v4, build-id / OPP source)
+
+- `rg34xx-inventory-20261125-cpux-v4/` — fourth read-only inventory (`porting/linkslot-1.0.45-feasibility`
+  @ `b30fac3`, collector `0366c257…`, same device `sun50iw9p1` / Linux `4.9.170`). Adds
+  `kernel-driver-provenance.txt`: kernel `4.9.170 #19 SMP PREEMPT 2026-05-26`, Linaro GCC 5.3-2016.05,
+  `/sys/kernel/notes` SHA-256 `6065c1a7…` with GNU build-id `a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68`,
+  `CONFIG_CPUFREQ_DT=y` / `CONFIG_CPU_FREQ_STAT` unset, `cpufreq-dt` + `sun50i-cpufreq-nvmem` platform
+  bindings, and filtered kallsyms names (addresses discarded) incl. `sun50i_cpufreq_*` and
+  `dev_pm_opp_set_prop_name` / `dev_pm_opp_set_supported_hw`. All five partition-level captures remain
+  byte-identical to v1-v3. Provenance narrows candidates but does NOT identify the shipping binary, prove
+  `0x6c00 → b1`, or authorize any OPP/clock write. Serial redacted; binaries stay local.
+
 ### 2026-11-25 — RG34XX/H700 CPU clock, OPP, SID and BaseOS FDT handoff (v3, getter reconciliation)
 
 - `rg34xx-inventory-20261125-cpux-v3/` — third read-only inventory (`porting/linkslot-1.0.45-feasibility`
