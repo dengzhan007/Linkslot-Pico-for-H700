@@ -160,6 +160,26 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertNotIn('scaling_min_freq=', self.source)
         self.assertNotIn('scaling_max_freq=', self.source)
 
+
+    def test_cpufreq_path_identity_and_getter_reconciliation_are_read_only(self):
+        self.assertIn('== cpufreq sysfs path identity and transition counters (read-only) ==', self.source)
+        self.assertIn('readlink -f "$node"', self.source)
+        self.assertIn('stats/time_in_state stats/total_trans stats/trans_table', self.source)
+        self.assertIn('== thermal cooling devices and zone bindings (read-only) ==', self.source)
+        self.assertIn('/sys/class/thermal/cooling_device[0-9]*', self.source)
+        self.assertIn('"$zone"/cdev[0-9]*', self.source)
+        self.assertIn('== cpufreq getter reconciliation samples (read-only) ==', self.source)
+        self.assertIn('[scaling_cur_freq_before_getter]', self.source)
+        self.assertIn('[cpuinfo_cur_freq_getter]', self.source)
+        self.assertIn('[scaling_cur_freq_after_getter]', self.source)
+        self.assertIn('[cpu_dcdc1_microvolts]', self.source)
+        self.assertIn('while [ "$SAMPLE" -le 8 ]', self.source)
+        self.assertIn('sleep 0.15', self.source)
+        self.assertNotRegex(self.source, r'>\\s*/sys/(?:devices/system/cpu|class/thermal|class/regulator)/')
+        self.assertNotIn('scaling_governor=', self.source)
+        self.assertNotIn('scaling_min_freq=', self.source)
+        self.assertNotIn('scaling_max_freq=', self.source)
+
     def test_tee_ion_runtime_capture_is_read_only(self):
         self.assertIn('> "$OUTDIR/tee-ion-runtime.txt"', self.source)
         self.assertIn('/proc/config.gz', self.source)

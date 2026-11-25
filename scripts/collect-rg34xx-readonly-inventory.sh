@@ -439,6 +439,141 @@ fi
         [ "$SAMPLE" -le 6 ] && sleep 0.2
     done
 
+    # Distinguish the policy directory from the per-CPU cpufreq path. On
+    # standard cpufreq sysfs they resolve to the same policy object.
+    echo
+    echo "== cpufreq sysfs path identity and transition counters (read-only) =="
+    for node in "$CPUFREQ_POLICY" "$CPUFREQ_CPU0"; do
+        [ -d "$node" ] || continue
+        echo "-- $node --"
+        if command -v readlink >/dev/null 2>&1; then
+            echo "[resolved_path]"
+            readlink -f "$node" 2>/dev/null || echo "UNRESOLVED"
+        else
+            echo "NOT_AVAILABLE: readlink"
+        fi
+        if command -v ls >/dev/null 2>&1; then
+            echo "[directory_link]"
+            ls -ld "$node" 2>/dev/null || true
+        fi
+        for attr in stats/time_in_state stats/total_trans stats/trans_table; do
+            if [ -r "$node/$attr" ]; then
+                echo "[$attr]"
+                cat "$node/$attr"
+            else
+                echo "NOT_READABLE_OR_ABSENT: $node/$attr"
+            fi
+        done
+    done
+
+    echo
+    echo "== thermal cooling devices and zone bindings (read-only) =="
+    COOLING_COUNT=0
+    for node in /sys/class/thermal/cooling_device[0-9]*; do
+        [ -d "$node" ] || continue
+        COOLING_COUNT=$((COOLING_COUNT + 1))
+        echo "-- $node --"
+        for attr in type cur_state max_state stats/time_in_state stats/total_trans; do
+            if [ -r "$node/$attr" ]; then
+                echo "[$attr]"
+                cat "$node/$attr"
+            else
+                echo "NOT_READABLE_OR_ABSENT: $node/$attr"
+            fi
+        done
+        if command -v readlink >/dev/null 2>&1; then
+            echo "[resolved_path]"
+            readlink -f "$node" 2>/dev/null || true
+        fi
+    done
+    [ "$COOLING_COUNT" -gt 0 ] || echo "NOT_PRESENT: no thermal cooling devices exported"
+
+    for zone in /sys/class/thermal/thermal_zone[0-9]*; do
+        [ -d "$zone" ] || continue
+        BINDING_COUNT=0
+        for binding in "$zone"/cdev[0-9]*; do
+            [ -e "$binding" ] || continue
+            BINDING_COUNT=$((BINDING_COUNT + 1))
+            echo "[$zone/$(basename "$binding")]"
+            if command -v readlink >/dev/null 2>&1; then
+                readlink -f "$binding" 2>/dev/null || true
+            else
+                ls -ld "$binding" 2>/dev/null || true
+            fi
+        done
+        [ "$BINDING_COUNT" -gt 0 ] || echo "NO_COOLING_DEVICE_BINDINGS: $zone"
+    done
+
+    # In this 4.9 cpufreq core, cpuinfo_cur_freq invokes the driver getter and
+    # reconciles policy->cur when the hardware-reported rate differs from the
+    # cached scaling_cur_freq value. Capture both sides of that getter.
+    echo
+    echo "== cpufreq getter reconciliation samples (read-only) =="
+    CPUFREQ_SAMPLE_NODE="$CPUFREQ_POLICY"
+    [ -d "$CPUFREQ_SAMPLE_NODE" ] || CPUFREQ_SAMPLE_NODE="$CPUFREQ_CPU0"
+    CPU_DCDC1_PATH=""
+    for node in /sys/class/regulator/regulator[0-9]* /sys/class/regulator/regulator.[0-9]*; do
+        [ -r "$node/name" ] || continue
+        if [ "$(cat "$node/name")" = "axp2202-dcdc1" ]; then
+            CPU_DCDC1_PATH="$node"
+            break
+        fi
+    done
+    SAMPLE=1
+    while [ "$SAMPLE" -le 8 ] && [ -d "$CPUFREQ_SAMPLE_NODE" ]; do
+        echo "-- sample $SAMPLE --"
+        if [ -r /proc/uptime ]; then
+            echo "[uptime_before]"
+            cat /proc/uptime
+        fi
+        if [ -r "$CPUFREQ_SAMPLE_NODE/scaling_cur_freq" ]; then
+            echo "[scaling_cur_freq_before_getter]"
+            cat "$CPUFREQ_SAMPLE_NODE/scaling_cur_freq"
+        else
+            echo "NOT_READABLE_OR_ABSENT: scaling_cur_freq"
+        fi
+        if [ -r "$CPUFREQ_SAMPLE_NODE/cpuinfo_cur_freq" ]; then
+            echo "[cpuinfo_cur_freq_getter]"
+            cat "$CPUFREQ_SAMPLE_NODE/cpuinfo_cur_freq"
+        else
+            echo "NOT_READABLE_OR_ABSENT: cpuinfo_cur_freq"
+        fi
+        if [ -r "$CPUFREQ_SAMPLE_NODE/scaling_cur_freq" ]; then
+            echo "[scaling_cur_freq_after_getter]"
+            cat "$CPUFREQ_SAMPLE_NODE/scaling_cur_freq"
+        fi
+        if [ -r "$CPUFREQ_SAMPLE_NODE/cpuinfo_cur_freq" ]; then
+            echo "[cpuinfo_cur_freq_second_getter]"
+            cat "$CPUFREQ_SAMPLE_NODE/cpuinfo_cur_freq"
+        fi
+        if [ -r "$CPUFREQ_SAMPLE_NODE/scaling_cur_freq" ]; then
+            echo "[scaling_cur_freq_after_second_getter]"
+            cat "$CPUFREQ_SAMPLE_NODE/scaling_cur_freq"
+        fi
+        if [ -r "$CPU_CLK_SUMMARY" ]; then
+            echo "[clock_summary_cpu_tree]"
+            while IFS= read -r line; do
+                case "$line" in
+                    *pll_cpu*|*pll_periph0*|*cpux*|*cpu*|*axi*)
+                        printf '%s\n' "$line"
+                        ;;
+                esac
+            done < "$CPU_CLK_SUMMARY"
+        fi
+        if [ -n "$CPU_DCDC1_PATH" ] && [ -r "$CPU_DCDC1_PATH/microvolts" ]; then
+            echo "[cpu_dcdc1_microvolts]"
+            cat "$CPU_DCDC1_PATH/microvolts"
+        else
+            echo "NOT_READABLE_OR_ABSENT: AXP2202 DCDC1 microvolts"
+        fi
+        if [ -r /proc/uptime ]; then
+            echo "[uptime_after]"
+            cat /proc/uptime
+        fi
+        SAMPLE=$((SAMPLE + 1))
+        [ "$SAMPLE" -le 8 ] && sleep 0.15
+    done
+
     echo
     echo "== NVMEM metadata and narrowly scoped SID cell readback =="
     echo "Only the two device-tree-declared SID cells are read; the complete NVMEM range is never dumped."
