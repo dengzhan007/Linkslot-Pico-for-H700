@@ -32,6 +32,15 @@
   BOL4 frame verification, exact bootargs-template match, live FDT generation/DRAM/timing
   cross-check, active-vs-fallback image distinction, ABI table, corrections to the two
   earlier reports, and unresolved items. No binaries, serial numbers or local paths.
+- `rg34xx-stage0-and-a64-probe.md` — stage-0 identity closure plus a host-only AArch64 entry
+  probe. Establishes that LBA 16 holds a BaseOS 128 KiB **raw capsule** (dispatcher +
+  contract vendor Boot0 at `+0x1000` + 48 KiB BaseOS SPL at `+0x11000`), that LBA 512 is a
+  *different* vendor Boot0 revision, and binds the boot area to the running system by
+  `FNV-1a32(generation) == capsule cookie 0xf7bed1c8`. Publishes the deployed SPL fingerprint
+  (`cdfc6d48…`) and the three extents' hashes, explains why the generation cannot be rebuilt
+  (missing pinned `boot-package.bin` and build-time GPT prefix), resolves the `p6/p7` label
+  drift against `rcS`/`fstab`, and documents a 12,288-byte freestanding AArch64 probe that was
+  built and verified on the host only. No binaries, serial numbers or local paths.
 
 This branch is dedicated to field reports captured from the RG34XX handheld. Source code
 lives on `main`; report archives are kept here because `build/` is gitignored there.
