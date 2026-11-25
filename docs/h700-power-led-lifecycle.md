@@ -65,10 +65,10 @@ PIO MMU 映射只更新已有 ARM section translation table 的一个外设条�
 - 游戏开始/结束切换和重复请求幂等；
 - 无效 ABI、未初始化、pinmux 丢失和读回失败。
 
-Rust no_std state tests 覆盖初始前端态、开始/退出游戏各一次请求，以及 600 次重复状态采样不会重复发出硬件请求。
+Rust no_std state tests 覆盖初始前端态、开始/退出游戏各一次请求，以及 600 次重复状态采样不会重复发出硬件请求。H700 AArch32/AArch64 compile check [#45524236936](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45524236936) 已通过，包括 AArch64、AArch32 ARM 和 Thumb-2 对象编译及 C fake-PIO host test；Linkslot runtime slices [#45524236833](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45524236833) 已通过 no_std tests 与完整 Frontend overlay 编译。
 
 仍需完成：
-- H700 AArch32/AArch64 cross-object 和 GitHub Actions 实际执行结果；
+- 后续完整 LK target link / 固件构建（当前仍受独立内存批准 gate 限制）；
 - RG34XX 冷启动验证灯亮时机是否足够作为松开电源键提示；
 - 实机验证游戏时熄灭、退出后点亮，并确认 PI11 低电量灯不受影响；
 - 验证休眠唤醒是否会重置 pinmux，必要时在 resume hook 恢复；
