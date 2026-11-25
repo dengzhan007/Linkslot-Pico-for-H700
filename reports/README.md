@@ -2,6 +2,17 @@
 
 ## Index
 
+### 2026-11-25 — RG34XX/H700 CPU clock, OPP, SID and BaseOS FDT handoff (v3, getter reconciliation)
+
+- `rg34xx-inventory-20261125-cpux-v3/` — third read-only inventory (`porting/linkslot-1.0.45-feasibility`
+  @ `d9da2e4`, collector `f386360e…`, same device `sun50iw9p1` / Linux `4.9.170`). All five partition-level
+  captures (`boot0` ×2, `toc1`, `env`, live FDT) remain byte-identical to the 07:37 / 08:41 runs. New collector
+  block performs back-to-back cpufreq getter reconciliation: re-reading the SAME sysfs attribute within tens of
+  ms flips 1008 → 1104 MHz while `pll_cpu` and dcdc1 already track 1104 MHz, so the v2 "480 MHz request not
+  applied" window is reclassified as a read-skew/cache artifact, not a governor clamp or clock-driver rejection.
+  OPP table, SID (`0x6c00`, calib 2835/2841/2838/2842), thermal-not-calibrated and BaseOS FDT handoff findings
+  are unchanged. Serial redacted; binaries stay local.
+
 ### 2026-11-25 — RG34XX/H700 CPU clock, OPP table, SID and BaseOS FDT handoff (v2)
 
 - `rg34xx-inventory-20261125-cpux-v2/` — second read-only inventory (`porting/linkslot-1.0.45-feasibility`
