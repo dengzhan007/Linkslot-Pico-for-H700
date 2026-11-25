@@ -2,6 +2,16 @@
 
 ## Index
 
+### 2026-11-24 — RG34XX active boot inputs extracted and checksummed
+
+- `rg34xx-active-inputs/` — host-only extraction of the active Android v2 / BOL4 image at
+  `0x03000000 + 0x829000` from the local 64 MiB p4 dump, with `extracted-manifest.json`,
+  `verification.json` (21/21 cross-checks pass) and `SHA256SUMS.txt`. Confirms the image
+  FNV-1a32 `0x04762a5f`, BOL4 `0x80474e` bytes whose header FNV `0xb4c47d39` matches the packed
+  payload, a `0x10a7008`-byte `kernel.Image` that decompresses byte-identically, page size 2048 /
+  header v2, an empty cpio `initrd`, and a 139,822-byte DTB. Binaries stay local; only the
+  checksum manifest is published. `not_installable`, `not_hardware_validated`.
+
 ### 2026-11-23 — RG34XX H700 live MMC mapping (round 16)
 
 - `linkslot-h700-live-mmc-map-2026-11-23-round16.md` — analyzed the r2 read-only capture and
@@ -15,16 +25,6 @@
   The raw `cd-gpios` cells contain port 4 / pin 22 followed by vendor-specific config cells
   (the trailing `0x06` is not the pin); sysfs p6/p7 names also differ from the cmdline aliases.
   Live pinctrl/CCU debugfs: sdc0 uses PF0–PF5 in default state with sdmmc0 module clock 100 MHz and bus/reset gates enabled; sdc1 uses PG0–PG5 with sdmmc1 module clock 200 MHz; sdc2 was in sleep state with its sdmmc2 clock/gates off. Raw pinconf values remain undecoded. The report corrects H616 MASK_DATA0 handling as a shared clock-update requirement for sdc0 too, not sdc2 only. This is topology/config evidence only: sdc2 was empty, no block read/write or LK card test was done.
-
-### 2026-11-24 — RG34XX active boot inputs extracted and checksummed
-
-- `rg34xx-active-inputs/` — host-only extraction of the active Android v2 / BOL4 image at
-  `0x03000000 + 0x829000` from the local 64 MiB p4 dump, with `extracted-manifest.json`,
-  `verification.json` (21/21 cross-checks pass) and `SHA256SUMS.txt`. Confirms the image
-  FNV-1a32 `0x04762a5f`, BOL4 `0x80474e` bytes whose header FNV `0xb4c47d39` matches the packed
-  payload, a `0x10a7008`-byte `kernel.Image` that decompresses byte-identically, page size 2048 /
-  header v2, an empty cpio `initrd`, and a 139,822-byte DTB. Binaries stay local; only the
-  checksum manifest is published. `not_installable`, `not_hardware_validated`.
 
 ### 2026-11-23 — RG34XX MMC map, second device capture (r2)
 
