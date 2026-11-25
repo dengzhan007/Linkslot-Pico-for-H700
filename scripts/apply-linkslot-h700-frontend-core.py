@@ -7,7 +7,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-PINNED_SNAPSHOT = "3b06d96adadd0375f071555ecb3cc20c3a5b53db"
+PINNED_SNAPSHOT = "241e7c1974926fa22552b200852914ceaccbfd42"
 UPSTREAM_CRATES = ("slot-input", "slot-model", "slot-i18n")
 
 
@@ -398,7 +398,7 @@ def patch_frontend(source: Path) -> None:
                 }
             }"""
     if app.count(open_three_old) != 1:
-        raise RuntimeError("Linkslot 1.0.45 three-core constructor call does not match source")
+        raise RuntimeError("Linkslot 1.0.49 three-core constructor call does not match source")
     app = app.replace(open_three_old, open_three_new)
 
     default_resume_old = """            QuickRow::DefaultLoad | QuickRow::DefaultSave => row
@@ -633,8 +633,8 @@ def apply(source: Path, crate_root: Path) -> None:
             f"Linkslot snapshot pin mismatch: expected {PINNED_SNAPSHOT}, got {actual}"
         )
     workspace = (source / "Cargo.toml").read_text(encoding="utf-8")
-    if 'version = "1.0.45"' not in workspace:
-        raise RuntimeError("source workspace is not Linkslot 1.0.45")
+    if 'version = "1.0.49"' not in workspace:
+        raise RuntimeError("source workspace is not Linkslot 1.0.49")
     if 'members = ["crates/*"]' not in workspace:
         raise RuntimeError("Linkslot workspace no longer uses crates/* auto-members")
 
@@ -833,7 +833,7 @@ pub fn sha256_reader<R: Read>(reader: R) -> std::io::Result<String> {
     if not changed:
         raise RuntimeError("business/state overlay produced no source changes")
     run_git(source, "diff", "--check", "--", *paths)
-    print("Applied persistent H700 no_std Linkslot packages to the isolated 1.0.45 checkout:")
+    print("Applied persistent H700 no_std Linkslot packages to the isolated 1.0.49 checkout:")
     print(changed)
     print("The repository's upstream/linkslot branch is not modified by this host-only tool.")
 
