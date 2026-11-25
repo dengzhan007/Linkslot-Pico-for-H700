@@ -6,6 +6,17 @@
 
 - `rg34xx-boot-partition-deep-audit.md` addendum — decodes the active p4 +48 MiB BOL4 component using the verified extraction report and matches the 17,461,256-byte output SHA-256 to the primary Android image's gzip-decompressed kernel. Resolves the former BOL4-format / secondary-kernel identity unknown; does not change the firmware-pairing blocker or hardware NO-GO.
 
+### 2026-11-24 — RG34XX p4+40 MiB firmware package split
+
+- `rg34xx-native-firmware/` — `firmware-manifest.json` for the 287,232-byte firmware package at
+  p4 `+0x02800000` (SHA-256 `dc9dc3ae…f28e9`, FNV `0xaf0018cb`, both matching the audit record),
+  split into contiguous `monitor` (0x1A400, ATF BL31 v1.0(debug):f30a720), `dtbo` (0xA00),
+  `dtb` (0x23400) and `loader` (0x8000, A32 U-Boot). Firmware DTB is byte-identical to the
+  `+48 MiB` active image DTB. The manifest's literal scan reports no length/FNV candidates because
+  A32 builds those constants with `movw`+`movt`; an instruction-level scan finds `0x00829000` at
+  `0x4A001880/0x4A001888` (tested at `0x4A001890`) and `0x04762a5f` at `0x4A00189C/0x4A0018A0`
+  (tested at `0x4A0018A4`), both branching to the same reject path. Binaries stay local.
+
 ### 2026-11-24 — RG34XX active boot inputs extracted and checksummed
 
 - `rg34xx-active-inputs/` — host-only extraction of the active Android v2 / BOL4 image at
