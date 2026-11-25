@@ -218,3 +218,8 @@ The report README records live FDT timing 26 MHz / HT 820 / VT 536, but the uplo
 The fork's target `rg34xx` path expects `fog_fj035fhd05_v1`; this device identifies as `rg34xx_v1`. Its exact panel gate therefore rejects the device. The timing tuple alone does not authorize the fork's PLL/divider writes. The `sunxi_dump` files exist and are root-writable, but no writes were performed. Do not bypass the model/panel gate, copy register constants, or enable our HAL writer. Retain `hardware_applied=0`.
 
 The capture also exposed first-version collector defects (ADB multi-argument `shell sh -c` quoting, multiline CRLF, IRQ regex variable clobbering, nested IRQ arrays, missing `/mnt/sdcard/System/slot` process path and an `fps` regex that matched `ref_fps`). Version and regression-check a corrected collector before the next capture.
+
+
+### Gate-path verification from the running process
+
+The on-device process environment records `BASEOS_TARGET=rg34xx`, `BASEOS_PLATFORM=h700`, package `slot-pvaibhav` and frontend instance `slot-pvaibhav--default`. Its process runs as UID 0 with effective capabilities. The reviewed fork's `DevicePlatform::new()` reads `BASEOS_TARGET`, then uses `PanelRefresh::probe()`; `supports_high_refresh()` is true only if this probe returns a controller. Its exact `rg34xx` panel string is `fog_fj035fhd05_v1`, while the device reports `rg34xx_v1`. That is the deterministic rejection point; permissions are not the blocker. No `sunxi_dump` or MMIO write was made. The installed binary hash was not captured, so this explains the observed behavior against the reviewed source, not a byte-identity attestation of the deployed executable.
