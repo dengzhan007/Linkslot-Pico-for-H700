@@ -40,6 +40,19 @@ The external 120 Hz FDT identifies `lcd_driver_name = "fog_fj035fhd05_v1"`. Our 
 
 The external repository also documents flashing its signed `boot_package.fex` at disk offset `0x1004000`. This project does **not** copy that flashing process, boot package, or raw disk-writing scripts. Only the timing values and the FDT comparison are used as reference evidence.
 
+
+### Direct implementation comparison and nominal-rate precision
+
+The original repository's rg34xx branch is a boot-package mod, not a Linux/Slot runtime component. Its 60hz and 120hz folders package the same U-Boot, monitor and DTBO with a different sunxi.fex DTB; its build manifest places those pieces into a signed Allwinner boot package. The two timing profiles both request 54 MHz and differ in lcd_ht (1679 for 60 Hz, 840 for 120 Hz). Its flash scripts write the complete package to raw /dev/mmcblk0 offset 0x1004000 and reboot. The upstream README states stock-firmware testing only. This project must not run those scripts or flash that package on BaseOS.
+
+The README-reported rates (60.006 / 119.947 Hz) are not exactly the nominal arithmetic from the integer DT properties:
+- 54 MHz / (1679 × 536) = 60.0037 Hz.
+- 54 MHz / (840 × 536) = 119.9360 Hz.
+
+The difference is small (less than 0.011 Hz), but should remain visible in documentation: refresh_millihz retains the upstream README-reported values; get_period_ns derives a nominal period from the integer DCLK and totals. The repo does not include a raw IRQ/clock readback trace to independently resolve the effective pixel clock.
+
+This differs from pvaibhav/slot: that fork retains the 26-MHz / 820×536 live tuple and attempts to write divider/PLL values at app startup/wake. Its 120-Hz candidate is divider 10 + PLL 528 MHz, not the original boot package's 54-MHz / HT=840 profile. Both reference implementations select a global physical mode; neither implements automatic UI-120 / GAME-60 scene switching.
+
 ### Panel-driver provenance cross-check
 
 The initial name mismatch is now backed by independent RG34XX firmware and
