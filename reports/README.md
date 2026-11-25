@@ -5,15 +5,15 @@
 ### 2026-11-23 — RG34XX H700 live MMC mapping (round 16)
 
 - `linkslot-h700-live-mmc-map-2026-11-23-round16.md` — analyzed the r2 read-only capture and
-  decoded the live controller/host relationships. The ROM-card target is the removable-card
-  candidate `sdc2@0x04022000` (`sunxi-mmc-v4p6x`, Linux `mmc_host1`), with 4-bit bus,
-  GPIO card detect, and `vqmmc-supply` referencing AXP2202 ALDO1. `sdc1@0x04021000`
-  (`mmc_host2`) is the SDIO DDR50 device consistent with Wi-Fi. `sdc0@0x04020000`
-  (`mmc_host0`) owns `mmcblk0` and the running rootfs. Important corrections: `mmcblk0`
-  is identified by Linux as an SDHC card (not confirmed eMMC); raw `cd-gpios` cells contain
-  port 4 / pin 22 before vendor-specific config cells (the trailing `0x06` is not the pin);
-  and sysfs p6/p7 names differ from the cmdline partition aliases. This is topology/config
-  evidence only: sdc2 was empty, no block read/write or card initialization was tested.
+  decoded the live controller/host relationships. The active boot/system SD is `sdc0@0x04020000` (`sunxi-mmc-v4p1x`, Linux `mmc_host0`): it owns
+  `mmcblk0`, the running rootfs p5, and the cmdline-designated `UDISK` p7. This is the first
+  controller to support when implementing the same-card ROM storage path; Linux reports an
+  SDHC card, not eMMC. `sdc2@0x04022000` (`sunxi-mmc-v4p6x`, Linux `mmc_host1`) is the optional
+  second-card-slot candidate, with 4-bit bus, GPIO card detect, and `vqmmc-supply` referencing
+  AXP2202 ALDO1. `sdc1@0x04021000` (`mmc_host2`) is the SDIO DDR50 device consistent with Wi-Fi.
+  The raw `cd-gpios` cells contain port 4 / pin 22 followed by vendor-specific config cells
+  (the trailing `0x06` is not the pin); sysfs p6/p7 names also differ from the cmdline aliases.
+  This is topology/config evidence only: sdc2 was empty, no block read/write or LK card test was done.
 
 ### 2026-11-23 — RG34XX MMC map, second device capture (r2)
 
