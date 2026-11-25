@@ -22,13 +22,10 @@
 ### 当前源码基线升级：从历史 1.0.45 迁移至 main 1.0.49（进行中）
 
 - [x] 归档并比较 Linkslot 最新三分支：main 1.0.49 与 test 1.0.49 的 851 个源码文件逐 blob 一致；DEV 1.1.0 相对 main 新增 21、删除 1、修改 46。当前唯一稳定移植基线为 main 1.0.49；原始来源 commit、归档 commit 和差异见 [上游源码基线](upstream-baselines.md) / [1.0.49 与 1.1.0 更新审查](linkslot-1.0.49-1.1.0-refresh.md)。
-- [x] 保留旧 `porting/linkslot-1.0.36-feasibility` 作为历史验证分支，另建 `porting/linkslot-1.0.45-feasibility`，不改写旧分支或上游快照。
-- [x] 将 `slot-core-picker` 扩展为通用三座位 `ThreeLayout<C>` 状态机：保留单/双核心路径，覆盖运行核心与高亮位置分离、托盘/槽 2 交换、非法布局回退，并补充对应单测。
-- [x] 历史完成：Frontend/App overlay 和 Renderer overlay 曾针对归档 1.0.45 通过 source pin/workspace version 检查；**当前 patcher 仍锁 1.0.45，尚未迁移到 1.0.49**。App 层仍负责将 Linkslot Core 枚举映射到通用布局，避免 no_std crate 依赖 `slot-store`。
-- [x] 历史完成：runtime workflow 曾以 1.0.45 快照通过；目前 workflow checkout 指向 `upstream/linkslot` 最新 1.0.49 归档树，但 patcher 仍检查旧 1.0.45 SHA/version，须先更新 pin/anchors 再运行。
-- [x] 完整综合 workflow [45370886678](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45370886678) 通过（69/69 步）：GammaOS LK H700 BL33 CRT0/vector overlay compile、A32/A64、10 个 no_std 业务 crate、完整 Linkslot 1.0.45 Frontend + Renderer overlay、C Input ABI/queue、VFS v3、真实 mGBA AArch32 namespaced static archive/newlib 构建与链接诊断、SD→GPT→FAT→Libretro VFS host path、BL33 header/vector layout probe 全部成功。artifact [14908469502](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45370886678/artifacts/14908469502) 已上传。
-- [ ] 以 main 1.0.49 重新对照完整 App/UI/核心 adapter，迁移并验证 transfer/save、remap、session、mGBA/armGBA ABI 语义；重点同步 H700 `CoreSpec::netpacket`（gpSP/armGBA=true、mGBA=false），不能丢失 1.0.47 起的 armGBA netpacket 能力。DEV 1.1.0 Arcade/NeoGeo/FBNeo 延后，不进入首期 GB/GBC/GBA。
-
+- [x] H700 no_std `slot-model/core.rs` 已同步 1.0.49 CoreSpec，包括 `netpacket` 字段；gpSP/armGBA netpacket=true、mGBA=false，contract test 已补齐。
+- [x] Frontend 与 renderer patcher source pin 已更新到归档 HEAD `241e7c1974926fa22552b200852914ceaccbfd42` 和 workspace 1.0.49。
+- [ ] 完成首轮 1.0.49 runtime workflow [#45623895416](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45623895416)；截至当前 no_std workspace tests、overlay 和 input/model regression 已通过，完整 Frontend cargo check 正在运行。
+- [ ] 继续解决首轮 CI 出现的 App/UI/Renderer patcher 锚点/API 差异；只有新版本所有 job 通过后才能锁定 1.0.49 综合验证结果。
 ### A2（历史验证）：Linkslot 1.0.36 裸机可移植性与静态核心接入（host-only 阶段）
 
 - [x] 固定 Linkslot 1.0.36 只读 ZIP 快照及 SHA256 清单，不伪造原始上游 commit。
