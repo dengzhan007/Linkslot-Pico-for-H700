@@ -71,11 +71,12 @@ The whole disk reports 30,375,936 sectors (14.48 GiB) with seven partitions. Sys
 
 ## Implications for the H700 LK driver
 
-1. Start the removable-media backend with the `sdc2` hardware node at `0x04022000`, compatible `sunxi-mmc-v4p6x`; do not initialize sdc0 as the ROM card just because it owns `mmcblk0`.
-2. Implement the H616/H700 clock, pinctrl, card-detect and regulator path explicitly. sdc2 is not configured like sdc0: it has a CD GPIO and a vqmmc provider, but no vmmc provider.
-3. Decode the live GPIO provider and clock-provider bindings from the DT before setting pin function, polarity, pull, drive strength, clock parent/rate, or reset sequencing.
-4. Audit and implement the H616 MMC2 `mask_data0` clock-update quirk referenced by the ROCKNIX patch. The live `v4p6x` compatible makes this a required controller-specific review, not a generic optional optimization.
-5. Keep the first LK block-device probe strictly **read-only**. The current capture contains no card in sdc2, so it proves topology and configuration only; it does not prove successful card initialization, block reads, timing stability, or writes.
+1. Implement the first read-only block path for `sdc0` at `0x04020000` (`sunxi-mmc-v4p1x`): it is the active SDHC boot/system medium, and p7 is designated `UDISK` by the bootargs partition map. It has no CD GPIO and is configured as non-removable by this Linux DT/kernel.
+2. Treat `sdc2` at `0x04022000` (`sunxi-mmc-v4p6x`) as the optional second-card slot candidate. Its CD GPIO and vqmmc path must be implemented separately if the intended Linkslot ROM layout uses that slot; it has no vmmc provider.
+3. Keep `sdc1` out of the first storage path: the live kernel identifies it as SDIO DDR50, consistent with Wi-Fi.
+4. Decode the live GPIO provider and clock-provider bindings from the DT before setting pin function, polarity, pull, drive strength, clock parent/rate, or reset sequencing.
+5. Audit and implement the H616 MMC2 `mask_data0` clock-update quirk for sdc2 where applicable. Do not apply it to every controller by assumption; distinguish the v4p1x sdc0 node from v4p6x sdc2 and verify the exact LK/U-Boot configuration.
+6. Keep the first LK block-device probe strictly **read-only**. The current capture proves sdc0 successfully enumerates in Linux and proves sdc2 has a card-detect path but no card is present. It does not prove LK initialization, block reads, timing stability, or writes.
 
 ## Corrections to the preliminary r2 summary
 
