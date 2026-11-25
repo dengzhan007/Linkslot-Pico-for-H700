@@ -1,0 +1,58 @@
+{
+  "format": "RG34XX p4+40 MiB BaseOS native firmware extraction",
+  "host_only": true,
+  "device_io_performed": false,
+  "source_partition_file": "boot-partition.bin",
+  "source_partition_bytes": 67108864,
+  "source_partition_sha256": "41cfaa8f9ade4a5e05a89188abb7db154243e38b8e19c53b730f0a45ff325516",
+  "firmware_offset": "0x2800000",
+  "firmware_bytes": 287232,
+  "firmware_sha256": "dc9dc3ae66b30244911e7054ca66136991626cabb0d59c796c4b253a126f28e9",
+  "firmware_fnv1a32": "0xaf0018cb",
+  "extents": {
+    "monitor": {
+      "offset": "0x0",
+      "extent_bytes": 107520,
+      "payload_bytes": 107216,
+      "destination": "0x48000000",
+      "sha256": "676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31",
+      "extent_sha256": "d5fd5b460b03134aa4c6f82549416dba09449491d575f105d7863387c5a030d3"
+    },
+    "dtbo": {
+      "offset": "0x1a400",
+      "extent_bytes": 2560,
+      "payload_bytes": 2336,
+      "destination": "0x4a100000",
+      "sha256": "4bee281701610f96dcbdd1d38cb8df28386224d8c68b668b9a7a7a9df8e73ec2",
+      "extent_sha256": "cf78f9315ac815cc13f993326f3db6a0bec6c115a1c0888b8d2fc429b9a11e56"
+    },
+    "dtb": {
+      "offset": "0x1ae00",
+      "extent_bytes": 144384,
+      "payload_bytes": 139822,
+      "destination": "0x4a200000",
+      "sha256": "c28c87380ffab00148bf4dc457e70b8c6c576470dcfbc53df64addddf89603a1",
+      "extent_sha256": "c28c87380ffab00148bf4dc457e70b8c6c576470dcfbc53df64addddf89603a1"
+    },
+    "loader": {
+      "offset": "0x3e200",
+      "extent_bytes": 32768,
+      "payload_bytes": 32768,
+      "destination": "0x4a000000",
+      "sha256": "48b2a837ac5d8daad8f524c976f2b3911d26a838f8b68fa695e3283412dd8590",
+      "extent_sha256": "48b2a837ac5d8daad8f524c976f2b3911d26a838f8b68fa695e3283412dd8590"
+    }
+  },
+  "active_image_pair_check": {
+    "bytes": 8556544,
+    "sha256": "d71e5bd87b23fb409d7a837cf90d153ae117af518fe6ee330a96d2c7a5f76fc3",
+    "fnv1a32": "0x04762a5f",
+    "dtb_byte_identical_to_firmware_dtb": true,
+    "loader_image_length_literal_candidate_offsets": [],
+    "loader_image_fnv_literal_candidate_offsets": [],
+    "literal_scan_is_not_instruction_level_proof": true
+  },
+  "not_installable": true,
+  "not_hardware_validated": true,
+  "requires_matching_native_firmware_rebuild": true
+}
