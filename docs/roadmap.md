@@ -146,7 +146,7 @@
 - [x] 对照四个公开 `sun50iw9` cpufreq-NVMEM 候选：T507 / Lineage Linux 4.9.170 的 `0x6c00` 分别映射 mask `0x4` / `0x1`，均不设置 named voltage；Creality Linux 4.9.191 的 `sun50iw9` 路径要求 `speed+Icpu`，而 live OPP table 只有 `speed`，且 `0x6c00` 仍走 mask 1；Radxa speed-only 路径落入 `a0` + mask。四者均无法复现运行态 no-mask + `b1` 指纹。
 - [x] 扩展只读 collector，增加 `kernel-driver-provenance.txt`：kernel release/version、`/sys/kernel/notes` hash/有限 notes bytes、相关 config、cpufreq platform driver/device bindings、模块名与过滤后的 OPP/NVMEM kallsyms symbol names（不输出地址）；H700 Linux/Windows audit + H700 cross-compile/storage regression 全通过 #45543371548、#45543371507。
 - [x] 已运行并分析 RG34XX v4 inventory：GNU Build ID `a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68`；Linux 4.9.170 #19 / Linaro GCC 5.3.1；`sun50i-cpufreq-nvmem` 与 `cpufreq-dt` 平台设备均实际绑定，相关 config 与 kallsyms 符号存在。运行时九档频率与 `b1` named-voltage OPP 子集严格吻合，部分频率/电压读数也吻合。v4 把有效 property-selection 模型收敛到 `b1`，但 Build ID 尚未匹配公开源码，不能声称 raw SID `0x6c00 → b1`。报告见 `reports/rg34xx-inventory-20261125-cpux-v4/`。
-- [ ] 下一步从 stock `boot` 分区 `mmcblk0p4` 或匹配 `vmlinux` 获取内核二进制，离线核对 GNU Build ID 并检查 `sun50i_cpufreq_nvmem_probe()` 中的 `dev_pm_opp_set_prop_name` / SID decode 路径；完整 boot image 不默认上传 reports。
+- [ ] 优先获取官方 [RG34XX V1.0.6-EN16GB-260526 固件](https://win.anbernic.com/download/514.html) 中的 `boot.img`，或从实机 `mmcblk0p4` 只读导出；固件日期与运行内核构建日期相符，但必须以 GNU Build ID `a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68` 实际匹配为准。离线检查 `sun50i_cpufreq_nvmem_probe()` 的 property setter / SID decode；完整 boot image 不默认上传 reports。
 - [ ] 在具备安全 BL33-entry 只读访问依据后读取/验证 AXP2202 DCDC1 与 CPUX PLL/CCU 实际状态；先证明 CPU1–CPU3 handoff、单核所有权和 timer continuity，完成前不允许任何共享 CPU PLL 写入。
 
 ### C1. CPU performance modes / H700 DVFS (architecture first)
