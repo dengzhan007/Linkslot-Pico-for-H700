@@ -254,6 +254,120 @@ fi
     fi
 } > "$OUTDIR/tee-ion-runtime.txt"
 
+# Capture a bounded kernel/build and cpufreq driver provenance snapshot.
+# It reads only kernel metadata, sysfs links, config text and filtered symbol
+# names. Kallsyms addresses are intentionally discarded; no vendor ioctl/SMC,
+# PMIC, PLL, SID or sysfs control interface is invoked.
+{
+    echo "== kernel release and compiler identity =="
+    uname -a 2>&1 || true
+    for path in /proc/version /proc/sys/kernel/osrelease; do
+        if [ -r "$path" ]; then
+            echo "-- $path --"
+            cat "$path"
+        else
+            echo "NOT_READABLE_OR_ABSENT: $path"
+        fi
+    done
+
+    echo
+    echo "== kernel build notes / build-id evidence =="
+    if [ -r /sys/kernel/notes ]; then
+        if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum /sys/kernel/notes 2>&1 || true
+        else
+            echo "NOT_AVAILABLE: sha256sum utility"
+        fi
+        if command -v od >/dev/null 2>&1; then
+            echo "[kernel_notes_first_256_bytes_hex]"
+            od -An -v -tx1 -N256 /sys/kernel/notes 2>&1 || true
+        else
+            echo "NOT_AVAILABLE: od utility; notes bytes not decoded"
+        fi
+    else
+        echo "NOT_PRESENT: /sys/kernel/notes"
+    fi
+    for path in /sys/kernel/build_id /sys/kernel/notes/build-id; do
+        if [ -r "$path" ]; then
+            echo "-- $path --"
+            cat "$path"
+        else
+            echo "NOT_PRESENT: $path"
+        fi
+    done
+
+    echo
+    echo "== relevant kernel configuration =="
+    CONFIG_CAPTURED=0
+    for config in /proc/config.gz "/boot/config-$(uname -r 2>/dev/null)" /boot/config; do
+        [ -r "$config" ] || continue
+        echo "-- $config --"
+        case "$config" in
+            *.gz)
+                if command -v gzip >/dev/null 2>&1; then
+                    gzip -dc "$config" 2>/dev/null | grep -E '^(CONFIG_(CPU_FREQ|CPUFREQ|PM_OPP|NVMEM|SUN50I|REGULATOR|BUILDID|KALLSYMS|IKCONFIG)[A-Z0-9_]*=|# CONFIG_(CPU_FREQ|CPUFREQ|PM_OPP|NVMEM|SUN50I|REGULATOR|BUILDID|KALLSYMS|IKCONFIG)[A-Z0-9_]* is not set)' || true
+                    CONFIG_CAPTURED=1
+                else
+                    echo "NOT_AVAILABLE: gzip utility; config not decoded"
+                fi
+                ;;
+            *)
+                grep -E '^(CONFIG_(CPU_FREQ|CPUFREQ|PM_OPP|NVMEM|SUN50I|REGULATOR|BUILDID|KALLSYMS|IKCONFIG)[A-Z0-9_]*=|# CONFIG_(CPU_FREQ|CPUFREQ|PM_OPP|NVMEM|SUN50I|REGULATOR|BUILDID|KALLSYMS|IKCONFIG)[A-Z0-9_]* is not set)' "$config" || true
+                CONFIG_CAPTURED=1
+                ;;
+        esac
+    done
+    [ "$CONFIG_CAPTURED" -eq 1 ] || echo "NOT_PRESENT: no readable kernel config export"
+
+    echo
+    echo "== cpufreq / OPP platform-driver sysfs binding =="
+    DRIVER_PATH_COUNT=0
+    for path in /sys/bus/platform/drivers/*cpufreq* \
+                /sys/bus/platform/devices/*cpufreq* \
+                /sys/devices/system/cpu/cpufreq/policy0 \
+                /sys/devices/system/cpu/cpu0/cpufreq; do
+        [ -e "$path" ] || [ -L "$path" ] || continue
+        DRIVER_PATH_COUNT=$((DRIVER_PATH_COUNT + 1))
+        echo "-- $path --"
+        if [ -L "$path/driver" ] && command -v readlink >/dev/null 2>&1; then
+            echo "[driver]"
+            readlink -f "$path/driver" 2>&1 || true
+        fi
+        if [ -L "$path/device" ] && command -v readlink >/dev/null 2>&1; then
+            echo "[device]"
+            readlink -f "$path/device" 2>&1 || true
+        fi
+        if [ -L "$path/of_node" ] && command -v readlink >/dev/null 2>&1; then
+            echo "[of_node]"
+            readlink -f "$path/of_node" 2>&1 || true
+        fi
+        if [ -r "$path/uevent" ]; then
+            echo "[uevent]"
+            cat "$path/uevent" 2>&1 || true
+        fi
+        if [ -d "$path" ]; then
+            ls -la "$path" 2>&1 || true
+        fi
+    done
+    [ "$DRIVER_PATH_COUNT" -gt 0 ] || echo "NOT_PRESENT: no cpufreq-related platform/sysfs paths"
+
+    echo
+    echo "== loaded CPUFreq / OPP / NVMEM module names =="
+    if [ -r /proc/modules ]; then
+        awk '{print $1}' /proc/modules | grep -iE 'cpufreq|opp|nvmem|sun50i' || echo "NO_MATCHING_MODULES (drivers may be built-in)"
+    else
+        echo "NOT_PRESENT: /proc/modules"
+    fi
+
+    echo
+    echo "== filtered CPUFreq / OPP kernel symbol names (addresses discarded) =="
+    if [ -r /proc/kallsyms ]; then
+        awk '$3 ~ /(sun50i.*cpufreq|cpufreq.*nvmem|dev_pm_opp_set_prop_name|dev_pm_opp_set_supported_hw|opp_parse)/ { print $3 }' /proc/kallsyms | sort -u
+    else
+        echo "NOT_PRESENT: /proc/kallsyms"
+    fi
+} > "$OUTDIR/kernel-driver-provenance.txt"
+
 # Capture read-only CPU performance and power telemetry. These are Linux
 # sysfs/debugfs readbacks only: this block never changes cpufreq policy,
 # regulator voltage, clocks, thermal trips, or NVMEM contents.

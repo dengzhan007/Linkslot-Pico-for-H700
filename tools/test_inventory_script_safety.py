@@ -180,6 +180,25 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertNotIn('scaling_min_freq=', self.source)
         self.assertNotIn('scaling_max_freq=', self.source)
 
+    def test_cpu_kernel_driver_provenance_capture_is_read_only(self):
+        self.assertIn('> "$OUTDIR/kernel-driver-provenance.txt"', self.source)
+        self.assertIn('/proc/version', self.source)
+        self.assertIn('/sys/kernel/notes', self.source)
+        self.assertIn('/proc/config.gz', self.source)
+        self.assertIn('/sys/bus/platform/drivers/*cpufreq*', self.source)
+        self.assertIn('/sys/bus/platform/devices/*cpufreq*', self.source)
+        self.assertIn('/proc/modules', self.source)
+        self.assertIn('/proc/kallsyms', self.source)
+        self.assertIn('{ print $3 }', self.source)
+        self.assertIn('filtered CPUFreq / OPP kernel symbol names (addresses discarded)', self.source)
+        self.assertNotRegex(self.source, r'>\\s*/sys/(?:kernel/notes|bus/platform|devices/system/cpu)/')
+        self.assertNotRegex(self.source, r'>\\s*/proc/(?:version|config\\.gz|modules|kallsyms)')
+        self.assertNotIn('dev_pm_opp_set_prop_name(', self.source)
+        self.assertNotIn('dev_pm_opp_set_supported_hw(', self.source)
+        self.assertNotIn('modprobe ', self.source)
+        self.assertNotIn('insmod ', self.source)
+        self.assertNotIn('sunxi_get_soc_ver(', self.source)
+
     def test_tee_ion_runtime_capture_is_read_only(self):
         self.assertIn('> "$OUTDIR/tee-ion-runtime.txt"', self.source)
         self.assertIn('/proc/config.gz', self.source)
