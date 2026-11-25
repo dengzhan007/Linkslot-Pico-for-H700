@@ -1,8 +1,218 @@
 {
-  "task": "docs/kernel19-display-reverse-task.md",
-  "mode": "offline static analysis only; no device access, no MMIO, no writes",
-  "generated_at": "2026-11-25T22:05:00+08:00",
-  "input_identity": {
+ "task": "kernel19-clock-factor-table-audit",
+ "generated_at": "2026-11-25T23:11:01+08:00",
+ "mode": "offline static ELF analysis only",
+ "scope": "resolve the factor_pllvideo0x4_tbl size/range/endpoint conflict and prove the rate-selection behaviour of get_factors_pll_video0 for 286 MHz and 572 MHz",
+ "input_identity": {
+  "elf": "build/rg34xx-kernel.elf",
+  "gnu_build_id": "a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68",
+  "build_id_matches_live_kernel": true,
+  "relocation_overlay": "in memory only, .rela.dyn addends; no relocated ELF written to disk"
+ },
+ "pll_factor_table": {
+  "symbol": "factor_pllvideo0x4_tbl",
+  "start": "0xffffff800903d8d8",
+  "end_exclusive": "0xffffff800903deb0",
+  "descriptor_symbol": "sunxi_clk_factor_pll_video0x4",
+  "descriptor_address": "0xffffff800903deb0",
+  "entry_size_bytes": 8,
+  "entry_count": 187,
+  "entry_count_evidence": [
+   {
+    "kind": "symbol gap",
+    "detail": "0xffffff800903deb0 - 0xffffff800903d8d8 = 0x5d8 = 187 x 8"
+   },
+   {
+    "kind": "code immediate",
+    "detail": "get_factors_pll_video0 at 0xffffff800845f790 executes mov x4, #0xbb and passes x4 as the entry count"
+   },
+   {
+    "kind": "sibling table",
+    "detail": "factor_pllvideo1_tbl spans 1496 bytes = 187 entries"
+   }
+  ],
+  "descriptor_not_counted_as_entry": true,
+  "first_row": {
+   "index": 0,
+   "address": "0xffffff800903d8d8",
+   "factor_word": "0x00001702",
+   "N": 23,
+   "D2": 1,
+   "calc_rate_hz": 288000000,
+   "stored_rate_hz": 288000000,
+   "delta_hz": 0
+  },
+  "last_row": {
+   "index": 186,
+   "address": "0xffffff800903dea8",
+   "factor_word": "0x00006800",
+   "N": 104,
+   "D2": 0,
+   "calc_rate_hz": 2520000000,
+   "stored_rate_hz": 2520000000,
+   "delta_hz": 0
+  },
+  "min_stored_rate_hz": 288000000,
+  "max_stored_rate_hz": 2520000000,
+  "step_hz": 12000000,
+  "sorted_ascending": true,
+  "strictly_increasing": true,
+  "unique_rates": true,
+  "non_12mhz_steps": [],
+  "rows_where_formula_mismatches_stored_rate": [],
+  "formula_matches_every_row": true,
+  "encoding_observation": "rows 0-13 use D2=1 only; from row 14 the table alternates D2=0 / D2=1. Both encodings yield the same rate ladder, so N and D2 must be decoded per row and are not monotonic across the table.",
+  "d2_zero_row_count": 87,
+  "claimed_last_word_0x6400": {
+   "is_last_entry": false,
+   "actual_index": 178,
+   "actual_address": "0x0xffffff800903de68",
+   "rate_hz": 2424000000,
+   "verdict": "interior row, 9 rows before the real end; the earlier claim that it was the final entry was a transcription error"
+  },
+  "full_table": "pll-factor-table.json",
+  "full_table_rows": 187
+ },
+ "pll_selection": {
+  "entry": "get_factors_pll_video0 at 0xffffff800845f780",
+  "helper": "sunxi_clk_com_ftr_sr at 0xffffff800845cc24",
+  "search": "sunxi_clk_freq_search at 0xffffff800845b9a0 (recursive binary search)",
+  "round_rate": "sunxi_clk_factors_round_rate at 0xffffff800845b918 -> get_factors + recalc",
+  "set_rate": "sunxi_clk_factors_set_rate at 0xffffff800845c0fc -> get_factors then register write",
+  "max_clamp": {
+   "variable": "pllvideo0x4_max",
+   "address": "0xffffff800918d320",
+   "file_image_value": 0,
+   "runtime_value_hz": 2520000000,
+   "initialiser": "sunxi_clk_factor_initlimits at 0xffffff800845faf0 loads [0xffffff800903deac] (the rate word of the last table entry) and stores it there; the same function seeds pllvideo1_max = 630 MHz",
+   "instruction": "cmp w3, w0 ; csel w3, w3, w0, ls  -> min(max, request)"
+  },
+  "rate_quantisation": "udiv by 1 000 000 truncates the request to whole MHz before the lookup",
+  "policy": "clamp then nearest neighbour, ties resolved to the lower row; requests below the first entry map to row 0 because sunxi_clk_freq_search returns 0 when hi becomes -1",
+  "policy_is_floor": false,
+  "policy_is_ceil": false,
+  "requests": {
+   "baseline_286mhz": {
+    "request_hz": 286000000,
+    "request_origin": "lcd_clk_enable: 1 x divider 11 x lcd_dclk_freq 26 MHz",
+    "chosen_index": 0,
+    "chosen_factor_word": "0x00001702",
+    "chosen_N": 23,
+    "chosen_D2": 1,
+    "chosen_rate_hz": 288000000,
+    "matches_live_clk_summary": true
+   },
+   "hz120_572mhz": {
+    "request_hz": 572000000,
+    "request_origin": "same path with lcd_dclk_freq 52 MHz",
+    "below_row": {
+     "index": 23,
+     "factor_word": "0x00002e02",
+     "rate_hz": 564000000
+    },
+    "above_row": {
+     "index": 24,
+     "factor_word": "0x00001700",
+     "rate_hz": 576000000
+    },
+    "chosen_index": 24,
+    "chosen_factor_word": "0x00001700",
+    "chosen_rate_hz": 576000000,
+    "note": "576 MHz exists in the table, so the clock source is reachable at this request; the CCF lands on 576, not 572, so DCLK would be 576/11 = 52.3636 MHz",
+    "panel_acceptance_verified": false
+   }
+  }
+ },
+ "divider": {
+  "register": "TCON0 base + 0x44",
+  "live_word": "0xf000000b",
+  "low_7_bits": 11,
+  "high_nibble": "0xf, written by tcon0_open via orr w1, w1, #0xf0000000",
+  "writer": "tcon0_set_dclk_div at 0xffffff8008437598 (bfxil w2, w1, #0, #7; no +/-1)",
+  "source": "constant table 0xffffff80089f6070 indexed by lcd_if (not lcd_type), stride 0x14",
+  "baseline_path": "lcd_if = 0 -> table value 6 -> lcd_dclk_freq == 26 override -> 11",
+  "override_instruction": "cmp w0, #0x1a ; mov w0, #0xb ; csel w1, w1, w0, ne",
+  "override_condition": "NE keeps the table value, EQ takes 11: exactly 26 MHz selects 11",
+  "soC_version_or_lcd_type_involved": false
+ },
+ "clock_parent": {
+  "candidate_list": [
+   "pll_video0",
+   "pll_video0x4",
+   "pll_video1",
+   "pll_video1x4",
+   "losc",
+   "periph32k"
+  ],
+  "candidate_table": "tcon_lcd_parents at 0xffffff8009047508",
+  "driver_behavior": "disp_lcd_init captures the boot parent with clk_get_parent; lcd_clk_enable re-applies the same pointer with clk_set_parent",
+  "linux_selects_parent_by_name": false,
+  "active_parent_evidence": "runtime clk_summary (tcon_lcd = pll_video0x4 = 288 MHz); the code only re-applies whatever it inherited",
+  "clk_set_rate_in_lcd_path": "lcd_clk_enable issues clk_set_rate(286 MHz) then clk_get_rate; disp_lcd_init itself does not"
+ },
+ "panel": {
+  "struct": "disp_panel_para, 0x120 bytes at disp_lcd_private + 0xf0",
+  "member_0x80": "lcd_dclk_freq",
+  "dt_keys_mapped": 53,
+  "dead_field": "+0x118 has no writer anywhere in the image; its only reader is gated on lcd_hv_if == 12, which the baseline does not set",
+  "driver_table": "17 entries at 0xffffff8008ffbef0, stride 0x60",
+  "live_entry": "entry 16 -> fog_fj035fhd05_v1_panel, registered name rg34xx_v1",
+  "callbacks": "cfg_panel_info / open_flow / close_flow / user_defined_func, no set_bright"
+ },
+ "frame_period": {
+  "parent_hz": 288000000,
+  "divider": 11,
+  "dclk_hz": 26181818.18,
+  "h_total": 820,
+  "v_total": 536,
+  "refresh_hz": 59.5691,
+  "irq_proxy_hz": "59.61-59.65",
+  "irq_proxy_is_physical_measurement": false
+ },
+ "refresh_120hz": {
+  "verdict": "not verified / do not enable",
+  "clock_source_blocker": false,
+  "reachable_rate_hz": 576000000,
+  "dclk_at_576_hz": 52363636.36,
+  "refresh_at_576_hz": 119.15,
+  "missing": [
+   "a second panel timing set (ht/vt/porches) for the target rate",
+   "evidence that the panel or TCON accepts a 52.36-MHz DCLK",
+   "TE / VBlank boundary handling for a mid-frame switch",
+   "a rollback path if the panel stays blank",
+   "panel-side confirmation, which needs hardware and is not authorized"
+  ],
+  "writer_authorized": false
+ },
+ "unresolved": [
+  "acquisition of the tcon_lcd clk handle (how the struct clk pointers at disp_priv+0x1978 and +0x1998 are obtained) is inferred from use, not from the clk_get call site",
+  "the LCD_OPEN_FUNC / LCD_CLOSE_FUNC executor that runs the registered step list",
+  "semantics of disp_panel_para +0x118, which has no writer",
+  "semantics of the PLL descriptor side fields at +0x0f (0x1b), +0x10 (0x1800), +0x18 (0x140) and +0x20 (0xd1303333); reported by byte position only",
+  "how the lcd_type=old bootarg selects the panel path",
+  "clk_factors_ops has NULL recalc/round/set_rate slots in the file image; the registration that fills them was not traced instruction by instruction",
+  "pllvideo0x4_max is proven only statically (last table rate); no runtime readback",
+  "the lcd_if == 4 (DSI) branch of the rate formula was not expanded"
+ ],
+ "compliance": {
+  "offline_only": true,
+  "device_contacted": false,
+  "sysfs_or_debugfs": false,
+  "mmio_or_devmem_or_sunxi_dump": false,
+  "register_or_clock_or_pmic_writes": false,
+  "p4_reextraction": false,
+  "relocated_elf_written": false,
+  "raw_elf_uploaded": false,
+  "hardware_applied": 0
+ },
+ "first_round_snapshot": {
+  "label": "verbatim copy of the first-round verification.json, superseded by the blocks above",
+  "note": "kept only so the original claims stay auditable; do not read these values as current",
+  "content": {
+   "task": "docs/kernel19-display-reverse-task.md",
+   "mode": "offline static analysis only; no device access, no MMIO, no writes",
+   "generated_at": "2026-11-25T22:05:00+08:00",
+   "input_identity": {
     "elf_path": "build/rg34xx-kernel.elf",
     "elf_sha256": "2f7f36a5f5442fdb9a33dc76f14c53c4626f42ed91edbc4b337d5641c2a9ed44",
     "elf_bytes": 21534197,
@@ -10,251 +220,246 @@
     "build_id_match": true,
     "symbols": 89675,
     "sections": [
-      {
-        "name": ".kernel",
-        "start": "0xffffff8008080000",
-        "end": "0xffffff8008d88298",
-        "file_offset": "0x240"
-      },
-      {
-        "name": ".kernel2",
-        "start": "0xffffff8008fa1d90",
-        "end": "0xffffff8009127008",
-        "file_offset": "0xd084d8"
-      }
+     {
+      "name": ".kernel",
+      "start": "0xffffff8008080000",
+      "end": "0xffffff8008d88298",
+      "file_offset": "0x240"
+     },
+     {
+      "name": ".kernel2",
+      "start": "0xffffff8008fa1d90",
+      "end": "0xffffff8009127008",
+      "file_offset": "0xd084d8"
+     }
     ],
     "build_id_evidence": {
-      "note_header_at_section_offset": "0xc8fe90",
-      "namesz": 4,
-      "descsz": 20,
-      "type": 3,
-      "name": "GNU",
-      "cross_check_report": "reports/rg34xx-inventory-20261125-cpux-v4/kernel-driver-provenance.txt records the same note bytes from /sys/kernel/notes",
-      "kernel_section_prefix_equals_verified_image": true,
-      "verified_image": "build/audit-work/extracted/primary-kernel.Image sha256 39cf8c3eb9a75ff0eda51b4074cd65860c5aa5386093bcaf69339819421d84b7 (17461256 B)",
-      "note_header_note": "file offset 0xc8fe90 (desc at 0xc8fea0, VA 0xffffff8008d0fc50); the first-round value 0xc8fc60 is not reproducible. The build-id value itself is unchanged."
+     "note_header_at_section_offset": "0xc8fc60",
+     "namesz": 4,
+     "descsz": 20,
+     "type": 3,
+     "name": "GNU",
+     "cross_check_report": "reports/rg34xx-inventory-20261125-cpux-v4/kernel-driver-provenance.txt records the same note bytes from /sys/kernel/notes",
+     "kernel_section_prefix_equals_verified_image": true,
+     "verified_image": "build/audit-work/extracted/primary-kernel.Image sha256 39cf8c3eb9a75ff0eda51b4074cd65860c5aa5386093bcaf69339819421d84b7 (17461256 B)"
     },
-    "data_pointer_caveat": "CORRECTED in addendum.method: the pointers are not absent, they are unapplied. .rela.dyn holds 91760 R_AARCH64_RELATIVE entries; every site is zero in place and the link-time target sits in r_addend. Overlaying addends recovers all pointer data."
-  },
-  "input_evidence": [
+    "data_pointer_caveat": "relocation-like pointer fields inside .kernel and .kernel2 are all zero in this ELF; clock/panel descriptor tables can therefore only be read through scalar fields or through code immediates, never by following a pointer"
+   },
+   "input_evidence": [
     {
-      "path": "reports/pvaibhav-slot-runtime/fdt-reparse/live-fdt.json",
-      "sha256": "8d6e6e1477c187a692cd79c473823f39fdd19794aa745fc503012af0b5470c46"
-    },
-    {
-      "path": "reports/pvaibhav-slot-runtime/tcon-readback/tcon-pll-readback.txt",
-      "sha256": "1484563cfddfd65245a396f9232966c89125d9bd30efde0cb3a82f739744acd5"
+     "path": "reports/pvaibhav-slot-runtime/fdt-reparse/live-fdt.json",
+     "sha256": "8d6e6e1477c187a692cd79c473823f39fdd19794aa745fc503012af0b5470c46"
     },
     {
-      "path": "reports/rg34xx-inventory-20261125-163152/display-runtime.txt",
-      "sha256": "eb750634dcafc89d006455b0e6d862fdfeac280d75718d91062f052eec59c3da"
+     "path": "reports/pvaibhav-slot-runtime/tcon-readback/tcon-pll-readback.txt",
+     "sha256": "1484563cfddfd65245a396f9232966c89125d9bd30efde0cb3a82f739744acd5"
     },
     {
-      "path": "reports/rg34xx-inventory-20261125-cpux-v4/kernel-driver-provenance.txt",
-      "sha256": "aac9e1551ed940f98981fae4cec552afc59043d24a23ecc58ada14e554f9be84"
+     "path": "reports/rg34xx-inventory-20261125-163152/display-runtime.txt",
+     "sha256": "eb750634dcafc89d006455b0e6d862fdfeac280d75718d91062f052eec59c3da"
     },
     {
-      "path": "reports/rg34xx-boot-p4-verified.json",
-      "sha256": "4e6eb8f09d5ac918798843f1796e00b4329d4d4bcb431a5c4669a78db237f5cb"
+     "path": "reports/rg34xx-inventory-20261125-cpux-v4/kernel-driver-provenance.txt",
+     "sha256": "aac9e1551ed940f98981fae4cec552afc59043d24a23ecc58ada14e554f9be84"
+    },
+    {
+     "path": "reports/rg34xx-boot-p4-verified.json",
+     "sha256": "4e6eb8f09d5ac918798843f1796e00b4329d4d4bcb431a5c4669a78db237f5cb"
     }
-  ],
-  "functions": [
+   ],
+   "functions": [
     {
-      "name": "calc_rate_video0",
-      "address": "0xffffff800845f3cc",
-      "next_symbol": "0xffffff800845f3f4",
-      "role": "PLL_VIDEO0 recalc callback",
-      "result": "rate = parent(24 MHz default) * (N+1) / (D2+1)"
+     "name": "calc_rate_video0",
+     "address": "0xffffff800845f3cc",
+     "next_symbol": "0xffffff800845f3f4",
+     "role": "PLL_VIDEO0 recalc callback",
+     "result": "rate = parent(24 MHz default) * (N+1) / (D2+1)"
     },
     {
-      "name": "calc_rate_video1",
-      "address": "0xffffff800845f3f4",
-      "next_symbol": "0xffffff800845f420",
-      "role": "PLL_VIDEO1 recalc callback",
-      "result": "same, but the divisor is multiplied by 4 (ubfiz #2)"
+     "name": "calc_rate_video1",
+     "address": "0xffffff800845f3f4",
+     "next_symbol": "0xffffff800845f420",
+     "role": "PLL_VIDEO1 recalc callback",
+     "result": "same, but the divisor is multiplied by 4 (ubfiz #2)"
     },
     {
-      "name": "sunxi_clk_factors_recalc_rate",
-      "address": "0xffffff800845b6f0",
-      "next_symbol": "0xffffff800845b918",
-      "role": "extracts the factor fields from the descriptor and tail-calls the per-PLL calc",
-      "result": "field order n,m,p,d1,d2,frac,predictors; N at shift 8 width 8, D2 at shift 1 width 1 for PLL_VIDEO0"
+     "name": "sunxi_clk_factors_recalc_rate",
+     "address": "0xffffff800845b6f0",
+     "next_symbol": "0xffffff800845b918",
+     "role": "extracts the factor fields from the descriptor and tail-calls the per-PLL calc",
+     "result": "field order n,m,p,d1,d2,frac,predictors; N at shift 8 width 8, D2 at shift 1 width 1 for PLL_VIDEO0"
     },
     {
-      "name": "get_factors_pll_video0",
-      "address": "0xffffff800845f780",
-      "next_symbol": "0xffffff800845f7e4",
-      "role": "target rate to factor word search",
-      "result": "consumes factor_pllvideo0x4_tbl at 0xffffff800903d8d8"
+     "name": "get_factors_pll_video0",
+     "address": "0xffffff800845f780",
+     "next_symbol": "0xffffff800845f7e4",
+     "role": "target rate to factor word search",
+     "result": "consumes factor_pllvideo0x4_tbl at 0xffffff800903d8d8"
     },
     {
-      "name": "disp_al_lcd_get_clk_info",
-      "address": "0xffffff8008434f94",
-      "next_symbol": "0xffffff80084350fc",
-      "role": "fills clk_info (dclk divider + interface constants)",
-      "result": "divider comes from a per-lcd_type constant table, not from the pixel clock"
+     "name": "disp_al_lcd_get_clk_info",
+     "address": "0xffffff8008434f94",
+     "next_symbol": "0xffffff80084350fc",
+     "role": "fills clk_info (dclk divider + interface constants)",
+     "result": "divider comes from a per-lcd_type constant table, not from the pixel clock"
     },
     {
-      "name": "disp_al_lcd_cfg",
-      "address": "0xffffff80084350fc",
-      "next_symbol": "0xffffff8008435230",
-      "role": "programs tcon0 for the active panel",
-      "result": "calls tcon0_set_dclk_div(clk_info.byte4), then tcon0_cfg, tcon0_cfg_ext, tcon0_src_select"
+     "name": "disp_al_lcd_cfg",
+     "address": "0xffffff80084350fc",
+     "next_symbol": "0xffffff8008435230",
+     "role": "programs tcon0 for the active panel",
+     "result": "calls tcon0_set_dclk_div(clk_info.byte4), then tcon0_cfg, tcon0_cfg_ext, tcon0_src_select"
     },
     {
-      "name": "tcon0_set_dclk_div",
-      "address": "0xffffff8008437598",
-      "next_symbol": "0xffffff80084375b8",
-      "role": "writes the dclk divider",
-      "result": "bfxil into TCON base+0x44 bits[6:0]; no +/-1 and no /N adjustment in the code"
+     "name": "tcon0_set_dclk_div",
+     "address": "0xffffff8008437598",
+     "next_symbol": "0xffffff80084375b8",
+     "role": "writes the dclk divider",
+     "result": "bfxil into TCON base+0x44 bits[6:0]; no +/-1 and no /N adjustment in the code"
     },
     {
-      "name": "tcon0_get_dclk_div",
-      "address": "0xffffff80084375b8",
-      "next_symbol": "0xffffff80084375d0",
-      "role": "reads the dclk divider",
-      "result": "readl(TCON base+0x44) & 0x7f"
+     "name": "tcon0_get_dclk_div",
+     "address": "0xffffff80084375b8",
+     "next_symbol": "0xffffff80084375d0",
+     "role": "reads the dclk divider",
+     "result": "readl(TCON base+0x44) & 0x7f"
     },
     {
-      "name": "tcon0_cfg",
-      "address": "0xffffff80084384ec",
-      "role": "writes the timing registers from cfg (DT-derived)"
+     "name": "tcon0_cfg",
+     "address": "0xffffff80084384ec",
+     "role": "writes the timing registers from cfg (DT-derived)"
     },
     {
-      "name": "tcon0_src_select",
-      "address": "0xffffff8008436f80",
-      "role": "selects the tcon0 data source / interface"
+     "name": "tcon0_src_select",
+     "address": "0xffffff8008436f80",
+     "role": "selects the tcon0 data source / interface"
     },
     {
-      "name": "disp_lcd_set_panel_funs",
-      "address": "0xffffff8008404028",
-      "role": "reads lcd_driver_name via disp_sys_script_get_item and binds panel callbacks"
+     "name": "disp_lcd_set_panel_funs",
+     "address": "0xffffff8008404028",
+     "role": "reads lcd_driver_name via disp_sys_script_get_item and binds panel callbacks"
     },
     {
-      "name": "sunxi_lcd_set_panel_funs",
-      "address": "0xffffff800841adcc",
-      "role": "sunxi_lcd wrapper for the same binding"
+     "name": "sunxi_lcd_set_panel_funs",
+     "address": "0xffffff800841adcc",
+     "role": "sunxi_lcd wrapper for the same binding"
     }
-  ],
-  "clock_tree_conclusion": {
+   ],
+   "clock_tree_conclusion": {
     "measured_same_boot": {
-      "source": "reports/rg34xx-inventory-20261125-163152/display-runtime.txt",
-      "tcon_lcd": "288 MHz",
-      "pll_video0x4": "288 MHz",
-      "pll_video0": "72 MHz",
-      "pll_video2_or_tcon_tv": "297 MHz",
-      "display_top": "200 MHz",
-      "de_rate": "696 MHz"
+     "source": "reports/rg34xx-inventory-20261125-163152/display-runtime.txt",
+     "tcon_lcd": "288 MHz",
+     "pll_video0x4": "288 MHz",
+     "pll_video0": "72 MHz",
+     "pll_video2_or_tcon_tv": "297 MHz",
+     "display_top": "200 MHz",
+     "de_rate": "696 MHz"
     },
     "parent_fed_to_tcon_lcd": "pll_video0x4 at 288 MHz (clk_summary at capture time); pll_video0 = 72 MHz is the /4 derived node, not the PLL output",
-    "code_side_parent_selection": "RESOLVED in addendum.clock: the mux candidate list tcon_lcd_parents is recovered (pll_video0, pll_video0x4, pll_video1, pll_video1x4, losc, periph32k). Which candidate is live stays runtime-only, but the driver provably inherits the parent via clk_get_parent at init and re-applies it with clk_set_parent at enable.",
-    "driver_reselects_at_runtime": "CORRECTED in addendum.tcon_register_44: tcon0_open also writes base+0x44 (orr 0xf0000000); tcon0_close and tcon_exit write it too. The low 7 divider bits still have a single init-time writer."
-  },
-  "pll_bitfield": {
+    "code_side_parent_selection": "unresolved: the tcon_lcd mux/parent table is data in .kernel2 whose pointer fields are zero in this ELF, so the parent choice cannot be read statically. The runtime clk_summary is the only evidence for the parent.",
+    "driver_reselects_at_runtime": "not observed in this image: the only writer of TCON base+0x44 is disp_al_lcd_cfg (init path) and disp_al_vdevice_cfg (tv path); there is no runtime refresh-switch path"
+   },
+   "pll_bitfield": {
     "register": "0x03001040 (video PLL, as named in the same-boot readback report)",
     "raw_value": "0x88001703",
     "decode_function": "calc_rate_video0 @ 0xffffff800845f3cc",
     "formula": "rate_hz = parent_hz * (N + 1) / (D2 + 1), parent defaults to 0x016e3600 = 24000000",
     "fields": {
-      "N": {
-        "bits": "[15:8]",
-        "value": 23
-      },
-      "D2": {
-        "bits": "[1]",
-        "value": 1
-      },
-      "bits[0]": {
-        "value": 1,
-        "meaning": "not read by calc_rate_video0 for this PLL"
-      },
-      "bit27": {
-        "value": 1,
-        "meaning": "not read by calc_rate_video0; it is one of the three bits the hardware adds on top of the table word, and the factors descriptor declares bit index 27 at +0x0f, so a status/lock role is likely but still unproven"
-      },
-      "bit31": {
-        "value": 1,
-        "meaning": "PLL enable is the conventional bit for this CCU generation, but the enable field lives in the per-clock factors descriptor whose pointer fields are zero in this ELF, so it is not binary-confirmed"
-      }
+     "N": {
+      "bits": "[15:8]",
+      "value": 23
+     },
+     "D2": {
+      "bits": "[1]",
+      "value": 1
+     },
+     "bits[0]": {
+      "value": 1,
+      "meaning": "not read by calc_rate_video0 for this PLL"
+     },
+     "bit27": {
+      "value": 1,
+      "meaning": "unresolved"
+     },
+     "bit31": {
+      "value": 1,
+      "meaning": "PLL enable is the conventional bit for this CCU generation, but the enable field lives in the per-clock factors descriptor whose pointer fields are zero in this ELF, so it is not binary-confirmed"
+     }
     },
     "decoded_rate": "288000000 Hz",
     "consistency": "matches the measured pll_video0x4 / tcon_lcd = 288 MHz in the same boot",
-    "open_discrepancy": "WITHDRAWN in addendum.pll_table_consistency: factor_pllvideo0x4_tbl is fully consistent with calc_rate_video0 (0x1702 -> 288 MHz). The 2x claim was a mis-read.",
-    "live_word_arithmetic": "the live word equals the table entry for 288 MHz plus exactly three bits: 0x88001703 - 0x00001702 = 0x88000001 = bit31 | bit27 | bit0"
-  },
-  "divider_encoding": {
+    "open_discrepancy": "factor_pllvideo0x4_tbl pairs words with rates 288..336 MHz (step 6 MHz), but the same words evaluate to 576..672 MHz under calc_rate_video0, i.e. exactly 2x. The table therefore is not a usable decode oracle; only calc_rate_video0 is used above, and the 2x relation is recorded as unresolved rather than explained away."
+   },
+   "divider_encoding": {
     "register": "0x06511044 = TCON0 register block base + 0x44",
     "raw_value": "0xf000000b",
     "writer": "tcon0_set_dclk_div @ 0xffffff8008437598",
     "writer_semantics": "val = readl(base+0x44); bfxil val, div, #0, #7; writel(val, base+0x44)",
     "reader": "tcon0_get_dclk_div @ 0xffffff80084375b8 -> readl(base+0x44) & 0x7f",
     "field": "bits[6:0] = 11, written verbatim: no minus-one, no plus-one, no log2 encoding anywhere in the writer or its caller",
-    "upper_bits": "bits[31:28] = 0xf are written by tcon0_open (orr 0xf0000000), not preserved incidentally; see addendum.tcon_register_44",
+    "upper_bits": "bits[31:28] = 0xf are preserved by the read-modify-write and are not touched by the divider path; their meaning is unresolved",
     "where_11_comes_from": {
-      "function": "disp_al_lcd_get_clk_info @ 0xffffff8008434f94",
-      "constant_table": "0xffffff80089f6070, 5 x u32 per entry, stride 0x14",
-      "entries": [
-        {
-          "lcd_if_index": 0,
-          "dclk_div": 6
-        },
-        {
-          "lcd_if_index": 1,
-          "dclk_div": 12
-        },
-        {
-          "lcd_if_index": 2,
-          "dclk_div": 7
-        },
-        {
-          "lcd_if_index": 3,
-          "dclk_div": 4
-        }
-      ],
-      "override_that_yields_11": "for lcd_if index 0, if panel_info.lcd_dclk_freq == 0x1a (26 MHz) the divider is forced to 0x0b = 11: 'cmp w0,#0x1a; mov w0,#0xb; csel w1, w1, w0, ne'. Other frequencies keep the table value. The baseline DT declares exactly 26, so 11 applies.",
-      "consequence": "the divider is still a compile-time constant, not a function of the pixel clock: lcd_dclk_freq only selects the 26 MHz special case. It does nevertheless feed a later clock-rate calculation - see addendum.clock.rate_math."
-    },
-    "superseded_by": "addendum.divider_resolution",
-    "superseded_note": "numeric result (11) and the bfxil write are CONFIRMED. Three mechanism labels are corrected: the index field is lcd_if (not lcd_type); 0x80 is lcd_dclk_freq (not a SoC/version word); and the csel condition is NE, i.e. divider becomes 0xb when lcd_dclk_freq == 26, not when it differs from 26."
-  },
-  "panel_profile_branch": {
+     "function": "disp_al_lcd_get_clk_info @ 0xffffff8008434f94",
+     "constant_table": "0xffffff80089f6070, 5 x u32 per entry, stride 0x14",
+     "entries": [
+      {
+       "lcd_type_index": 0,
+       "dclk_div": 6
+      },
+      {
+       "lcd_type_index": 1,
+       "dclk_div": 12
+      },
+      {
+       "lcd_type_index": 2,
+       "dclk_div": 7
+      },
+      {
+       "lcd_type_index": 3,
+       "dclk_div": 4
+      }
+     ],
+     "override_that_yields_11": "for lcd_type index 0, if the SoC/version word at [table_base_context+0x80] != 0x1a then the divider is forced to 0x0b = 11",
+     "consequence": "the dclk divider is a compile-time constant for the lcd_type branch, not a function of the lane pixel clock; the DT lcd_dclk_freq value never reaches this computation"
+    }
+   },
+   "panel_profile_branch": {
     "panel_name_in_image": {
-      "string": "rg34xx_v1",
-      "address": "0xffffff8008ffc580"
+     "string": "rg34xx_v1",
+     "address": "0xffffff8008ffc580"
     },
     "panel_name_table": {
-      "address": "0xffffff8008ffc4c0",
-      "slots": [
-        "FX070_DHM18BOEL2_1024X600",
-        "bp101wx1",
-        "rg34xx_v1"
-      ],
-      "stride": "0x60",
-      "note": "CORRECTED in addendum.panel_lifecycle: 0x8ffc580 is the inline .name of a 0x60-stride panel struct; the driver table is the pointer array at 0x8ffbef0 (17 entries); the symbol of this entry is fog_fj035fhd05_v1_panel."
+     "address": "0xffffff8008ffc4c0",
+     "slots": [
+      "FX070_DHM18BOEL2_1024X600",
+      "bp101wx1",
+      "rg34xx_v1"
+     ],
+     "stride": "0x60"
     },
     "dt_property_parser": "lcd_driver_name, lcd_dclk_freq, lcd_ht, lcd_vt, lcd_hbp, lcd_hspw, lcd_vbp, lcd_vspw, lcd_if, lcd_hv_if all exist as script/DT lookup keys in .kernel",
     "timing_source": "device tree at runtime (live-fdt.json), not a static kernel panel timing table",
     "static_timing_table": "none found: no 720/480/820/536 integer sequence exists anywhere in .kernel2, so the panel timing cannot come from the kernel image",
-    "lcd_type": "CORRECTED in addendum.struct_members: get_clk_info indexes panel_info+0x00 = lcd_if (DT lcd_if=0), not a lcd_type member. The bootarg lcd_type=old has no statically traceable effect on the divider path."
-  },
-  "refresh_120hz": {
+    "lcd_type": "lcd_type=old reaches the divider selection through cfg->lcd_type index 0; the exact enum mapping from the bootarg string to index 0 is data-driven and not statically resolvable from this ELF"
+   },
+   "refresh_120hz": {
     "exists_as_mode_or_table": false,
     "evidence": [
-      "no high_refresh / refresh_rate / 120hz string in the image",
-      "no alternate timing set in the image (no 720x480 or 820x536 sequences in .kernel2)",
-      "the only dclk-divider writer is the init path disp_al_lcd_cfg; no runtime switch function exists",
-      "the factor table's 288..336 MHz range and the live 288 MHz parent both stay inside the 60 Hz configuration"
+     "no high_refresh / refresh_rate / 120hz string in the image",
+     "no alternate timing set in the image (no 720x480 or 820x536 sequences in .kernel2)",
+     "the only dclk-divider writer is the init path disp_al_lcd_cfg; no runtime switch function exists",
+     "the factor table's 288..336 MHz range and the live 288 MHz parent both stay inside the 60 Hz configuration"
     ],
     "missing_to_support_120hz": [
-      "a second panel timing set for rg34xx_v1 (DT or panel table)",
-      "a supported parent PLL rate for the 120 Hz pixel clock",
-      "a divider value the SoC path accepts for that rate",
-      "TE/VBlank boundary handling and a rollback path",
-      "panel-side confirmation that the module accepts the doubled rate"
+     "a second panel timing set for rg34xx_v1 (DT or panel table)",
+     "a supported parent PLL rate for the 120 Hz pixel clock",
+     "a divider value the SoC path accepts for that rate",
+     "TE/VBlank boundary handling and a rollback path",
+     "panel-side confirmation that the module accepts the doubled rate"
     ],
     "verdict": "not verified, not supported for enablement"
-  },
-  "live_baseline_reconciliation": {
+   },
+   "live_baseline_reconciliation": {
     "tcon_parent_hz": 288000000,
     "divider": 11,
     "derived_dclk_hz": 26181818.18,
@@ -264,19 +469,17 @@
     "dtb_declared_dclk_hz": 26000000,
     "dtb_derived_refresh_hz": 59.1554,
     "irq_proxy_hz": "59.61-59.65 (two 30 s rounds)",
-    "statement": "the IRQ rate is a scanout/vblank proxy only; it is not a game FPS and not an independently measured physical panel refresh rate",
-    "confirmed_by": "addendum.divider_resolution",
-    "confirmation_note": "every number in this table is reproduced by the corrected code path: 26 MHz -> divider 11 -> PLL target 286 MHz -> rounds to 288 MHz (table floor, step 12) -> 288/11 = 26.1818 MHz -> 59.569 Hz. Only the reasoning changed."
-  },
-  "unresolved": [
+    "statement": "the IRQ rate is a scanout/vblank proxy only; it is not a game FPS and not an independently measured physical panel refresh rate"
+   },
+   "unresolved": [
     "meaning of PLL bit27 and of the upper nibble preserved in the TCON divider register",
     "which exact SoC/version field selects the =11 override (the descriptor context at 0xffffff800918c000 has zero pointers in this ELF)",
     "code-side tcon_lcd parent/mux selection: only the runtime clk_summary provides the parent",
     "2x disagreement between factor_pllvideo0x4_tbl rates and calc_rate_video0 on identical factor words",
     "mapping from the bootarg string lcd_type=old to the cfg->lcd_type index 0",
     "whether the 26 MHz DT dclk value is used anywhere besides informational reporting"
-  ],
-  "compliance": {
+   ],
+   "compliance": {
     "device_contacted": false,
     "mmio_or_sysfs_access": false,
     "sunxi_dump_used": false,
@@ -284,590 +487,7 @@
     "elf_or_raw_dtb_uploaded": false,
     "register_or_clock_writes": false,
     "panel_values_copied_from_other_profiles": false
-  },
-  "addendum": {
-    "task": "docs/kernel19-display-reverse-followup-task.md",
-    "generated_at": "2026-11-26T00:20:00+08:00",
-    "mode": "offline static analysis only; no device access, no MMIO, no writes",
-    "document": "ADDENDUM.md",
-    "headline": "the first-round reconciliation numbers are correct; the mechanism behind them was wrong in three places (0x80 identity, lcd_if vs lcd_type, csel direction), and the missing PLL rounding step is now explained",
-    "method": {
-      "finding": "the ELF is pre-relocation: .rela.dyn carries the pointer values",
-      "reloc_entries": 91760,
-      "reloc_types": {
-        "R_AARCH64_RELATIVE": 91760
-      },
-      "sites_zero_in_place": 91760,
-      "sites_zero_in_place_pct": 100.0,
-      "addend_inside_image_pct": 89.2,
-      "addend_equals_symbol_start_pct": 48.2,
-      "samples": [
-        "0xffffff8008cba068 -> saved_command_line",
-        "0xffffff8008cba070 -> __kstrtab_saved_command_line",
-        "0xffffff8008cb6878 -> loops_per_jiffy",
-        "0xffffff8008978338 -> _cpu_resume"
-      ],
-      "how": "read through an in-memory relocation overlay (build/k19f_img.py p64); no rewritten image is written to disk",
-      "build_id": {
-        "note_header_file_offset": "0x00c8fe90",
-        "desc_file_offset": "0x00c8fea0",
-        "note_va": "0xffffff8008d0fc50",
-        "namesz": 4,
-        "descsz": 20,
-        "type": 3,
-        "value": "a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68",
-        "match": true,
-        "second_note_in_image": {
-          "file_offset": "0x009084f8",
-          "value": "fe7e68cd7aa14945d71f36e4fbf8412d959f4cc1",
-          "relevance": "residue, not this device"
-        }
-      }
-    },
-    "struct_members": {
-      "object": "struct disp_panel_para panel_info at disp_lcd_private + 0xf0, size 0x120",
-      "identity_proof": [
-        "disp_lcd_get_panel_info @ 0xffffff8008406820: __memcpy(out, priv + 0xf0, 0x120)",
-        "disp_lcd_init @ 0xffffff8008404214: add x21, x19, 0xf0 then __memset(x21, 0, 0x120)",
-        "disp_lcd_enable @ 0xffffff800840792c and disp_lcd_fake_enable @ 0xffffff800840763c pass x1 = priv + 0xf0 to disp_al_lcd_cfg",
-        "disp_al_lcd_cfg @ 0xffffff8008435140: mov x2, x23 (its own arg 1) -> disp_al_lcd_get_clk_info arg 3"
-      ],
-      "members": [
-        {
-          "offset": "0x00",
-          "name": "lcd_if",
-          "dt_key": "lcd_if",
-          "store_pc": "0xffffff8008404894",
-          "resolved": true
-        },
-        {
-          "offset": "0x04",
-          "name": "lcd_hv_if",
-          "dt_key": "lcd_hv_if",
-          "store_pc": "0xffffff800840495c",
-          "resolved": true
-        },
-        {
-          "offset": "0x30",
-          "name": "lcd_tcon_mode",
-          "dt_key": "lcd_tcon_mode",
-          "store_pc": "0xffffff8008404c08",
-          "resolved": true
-        },
-        {
-          "offset": "0x48",
-          "name": "lcd_dsi_if",
-          "dt_key": "lcd_dsi_if",
-          "store_pc": "0xffffff8008404b14",
-          "resolved": true
-        },
-        {
-          "offset": "0x80",
-          "name": "lcd_dclk_freq",
-          "dt_key": "lcd_dclk_freq",
-          "store_pc": "0xffffff80084047cc",
-          "resolved": true,
-          "note": "replaces the first-round label 'SoC/version word'; the compared constant 0x1a is 26 MHz"
-        },
-        {
-          "offset": "0x118",
-          "name": null,
-          "resolved": false,
-          "note": "last u32 of the 0x120 struct; no DT key writes it, no str with #0x118 or #0x208 exists in display code; its only reader is override 1, guarded by lcd_if==0 && lcd_hv_if==12 which is false on the baseline (lcd_hv_if=0). Dead field on this profile."
-        }
-      ],
-      "dt_key_map_size": 53,
-      "dt_key_map_evidence": "build/k19f_dtkeys.py (adrp/add key pointer + disp_sys_script_get_item + following str)"
-    },
-    "divider_resolution": {
-      "code_side_divider": 11,
-      "csel_condition": "ne",
-      "instruction_window": [
-        "0xffffff80084350d4  ldr  w0, [x19, #0x80]   ; lcd_dclk_freq",
-        "0xffffff80084350d8  cmp  w0, #0x1a         ; 26",
-        "0xffffff80084350dc  mov  w0, #0xb          ; 11",
-        "0xffffff80084350e0  csel w1, w1, w0, ne     ; NE (freq != 26) keeps table, EQ (freq == 26) takes 11"
-      ],
-      "reasoning": "lcd_if=0 -> table idx 0 -> w1=6; override 1 skipped (lcd_hv_if=0); override 2/3 skipped (lcd_if!=4); override 4 fires because lcd_dclk_freq==26 -> w1=11",
-      "closed_chain": [
-        {
-          "step": "TCON base+0x44",
-          "value": "0xf000000b",
-          "detail": "low 7 bits 11 from disp_al_lcd_get_clk_info; high nibble 0xf from tcon0_open",
-          "matches": "first-round register value"
-        },
-        {
-          "step": "PLL target",
-          "value_hz": 286000000,
-          "detail": "26 MHz x 11",
-          "matches": "table floor 288 MHz, step 12 -> rounds up to 288"
-        },
-        {
-          "step": "parent rate",
-          "value_hz": 288000000,
-          "matches": "same-boot clk_summary tcon_lcd = pll_video0x4 = 288 MHz"
-        },
-        {
-          "step": "dclk",
-          "value_hz": 26181818,
-          "detail": "288 / 11"
-        },
-        {
-          "step": "refresh",
-          "value_hz": 59.5691,
-          "detail": "820 x 536 x 1e9 / dclk",
-          "matches": "IRQ scanout slope 59.61-59.65 (0.14% off)"
-        }
-      ],
-      "first_round_numbers": "confirmed",
-      "first_round_mechanism_errors": [
-        "0x80 labelled a SoC/version word - it is lcd_dclk_freq",
-        "table index attributed to lcd_type - it is lcd_if",
-        "csel direction inverted (wrote '!= 0x1a -> 11', actually '== 26 -> 11')"
-      ],
-      "newly_explained": "why the parent lands on 288 MHz: the 286 MHz request is below the factor table floor (288 MHz, step 12 MHz)"
-    },
-    "divider_table": {
-      "address": "0xffffff80089f6070",
-      "stride": "0x14",
-      "fields": "[0]=own lcd_if code, [4]=dclk divider, [8], [12], [16]",
-      "entries": [
-        {
-          "index": 0,
-          "lcd_if": 0,
-          "divider": 6
-        },
-        {
-          "index": 1,
-          "lcd_if": 1,
-          "divider": 12
-        },
-        {
-          "index": 2,
-          "lcd_if": 3,
-          "divider": 7
-        },
-        {
-          "index": 3,
-          "lcd_if": 4,
-          "divider": 4
-        }
-      ],
-      "default_when_unmatched": {
-        "divider": 6,
-        "w2": 4,
-        "w3": 0,
-        "w4": 1
-      }
-    },
-    "pll_table_consistency": {
-      "table": "factor_pllvideo0x4_tbl @ 0xffffff800903d8d8",
-      "entries": 187,
-      "range_mhz": [
-        288,
-        2520
-      ],
-      "step_mhz": 12,
-      "two_x_discrepancy": "does not exist; withdrawn",
-      "checks": [
-        {
-          "word": "0x00001702",
-          "N": 23,
-          "D2": 1,
-          "calc_hz": 288000000,
-          "table_hz": 288000000
-        },
-        {
-          "word": "0x00001802",
-          "N": 24,
-          "D2": 1,
-          "calc_hz": 300000000,
-          "table_hz": 300000000
-        },
-        {
-          "word": "0x00001902",
-          "N": 25,
-          "D2": 1,
-          "calc_hz": 312000000,
-          "table_hz": 312000000
-        },
-        {
-          "word": "0x00006400",
-          "N": 100,
-          "D2": 0,
-          "calc_hz": 2424000000,
-          "table_hz": 2424000000
-        }
-      ],
-      "first_round_example": "0x2f03 does not occur in this table; every word here has bit0=0 and bit1=1 in the D2=1 range"
-    },
-    "pll_descriptor": {
-      "symbol": "sunxi_clk_factor_pll_video0x4",
-      "address": "0xffffff800903deb0",
-      "size_hex": "0x38",
-      "fields": {
-        "0x00": {
-          "name": "nshift",
-          "value": 8
-        },
-        "0x01": {
-          "name": "nwidth",
-          "value": 8
-        },
-        "0x02": {
-          "name": "mshift",
-          "value": 0
-        },
-        "0x03": {
-          "name": "mwidth",
-          "value": 0
-        },
-        "0x04": {
-          "name": "pshift",
-          "value": 0
-        },
-        "0x05": {
-          "name": "pwidth",
-          "value": 0
-        },
-        "0x06": {
-          "name": "d1shift",
-          "value": 0
-        },
-        "0x07": {
-          "name": "d1width",
-          "value": 0
-        },
-        "0x08": {
-          "name": "d2shift",
-          "value": 1
-        },
-        "0x09": {
-          "name": "d2width",
-          "value": 1
-        },
-        "0x0a": {
-          "name": "fshift",
-          "value": 0
-        },
-        "0x0b": {
-          "name": "fwidth",
-          "value": 0
-        },
-        "0x0c": {
-          "name": null,
-          "value": 0
-        },
-        "0x0e": {
-          "name": null,
-          "value": 0
-        },
-        "0x0f": {
-          "name": null,
-          "value": 27,
-          "note": "bit index 27; no rate-path reader; consistent with bit27 being a status/lock bit"
-        },
-        "0x10": {
-          "name": null,
-          "value": "0x1800"
-        },
-        "0x18": {
-          "name": null,
-          "value": "0x140"
-        }
-      },
-      "field_order_evidence": "sunxi_clk_factors_recalc_rate @ 0xffffff800845b6f0 reads shift/width byte pairs at +0/+1, +2/+3, +4/+5, +6/+7, +8/+9, +10/+11",
-      "consequences": "M/P/D1 widths are 0 and fractional is off, so the rate depends only on N and D2 - matching calc_rate_video0 exactly"
-    },
-    "tcon_register_44": {
-      "register": "TCON0 base + 0x44",
-      "writers": [
-        {
-          "function": "tcon0_set_dclk_div",
-          "address": "0xffffff8008437598",
-          "bits": "[6:0]",
-          "semantics": "bfxil val, div, #0, #7; verbatim, no +-1"
-        },
-        {
-          "function": "tcon0_open",
-          "address": "0xffffff8008436fd8",
-          "bits": "[31:28]",
-          "semantics": "orr 0xf0000000 at 0x8437028 and 0x8437090"
-        },
-        {
-          "function": "tcon0_close",
-          "bits": "[31:28]",
-          "note": "shutdown path"
-        },
-        {
-          "function": "tcon_exit",
-          "bits": "[31:28]",
-          "note": "module exit path"
-        }
-      ],
-      "high_nibble_origin": "set by tcon0_open, not preserved incidentally - first-round open item closed",
-      "composed_value_for_baseline": "0xf000000b",
-      "first_round_claim": "only disp_al_lcd_cfg and disp_al_vdevice_cfg write base+0x44",
-      "correction": "tcon0_open (twice), tcon0_close and tcon_exit also write it"
-    },
-    "panel_lifecycle": {
-      "driver_table": {
-        "pointer_array": "0xffffff8008ffbef0",
-        "entries": 17,
-        "struct_stride": "0x60",
-        "callbacks_at": "+0x20",
-        "register_call": "sunxi_lcd_set_panel_funs(panel, panel + 0x20) from lcd_init @ 0xffffff800841a468"
-      },
-      "selected_entry": {
-        "index": 16,
-        "address": "0xffffff8008ffc580",
-        "symbol": "fog_fj035fhd05_v1_panel",
-        "name_string": "rg34xx_v1",
-        "note": "vendor fog_fj035fhd05_v1 driver renamed to rg34xx_v1; the symbol keeps the vendor name",
-        "callbacks": {
-          "cfg_panel_info": "0xffffff8008424294",
-          "open_flow": "0xffffff80084240b0",
-          "close_flow": "0xffffff8008424018",
-          "user_defined_func": "0xffffff80084220e0",
-          "set_bright": null
-        }
-      },
-      "selection_path": "disp_lcd_set_panel_funs @ 0xffffff8008404028: sprintf('lcd%d') -> disp_sys_script_get_item('lcd_driver_name') -> strcmp over the 17 entries -> __memcpy of the callback block",
-      "open_flow": [
-        {
-          "order": 1,
-          "target": "LCD_power_on @ 0xffffff8008424144",
-          "delay_ms": 30,
-          "action": "ioremap 0x0300b124 + 0x0300b130, PIO writes (orr 0x111 / orr 0x8000), sunxi_lcd_power_enable, sunxi_lcd_pin_cfg"
-        },
-        {
-          "order": 2,
-          "target": "LCD_panel_init @ 0xffffff8008422bb8",
-          "delay_ms": 50,
-          "action": "1294-instruction fixed GPIO bit-bang sequence on 0x0300b130 with sunxi_lcd_delay_ms(15) steps; no timing parameters"
-        },
-        {
-          "order": 3,
-          "target": "sunxi_lcd_tcon_enable @ 0xffffff800841a530",
-          "delay_ms": 100
-        },
-        {
-          "order": 4,
-          "target": "LCD_bl_open @ 0xffffff800842411c",
-          "delay_ms": 0,
-          "action": "sunxi_lcd_pwm_enable then sunxi_lcd_backlight_enable"
-        }
-      ],
-      "close_flow": [
-        {
-          "order": 1,
-          "target": "LCD_bl_close @ 0xffffff8008423ff0",
-          "delay_ms": 0
-        },
-        {
-          "order": 2,
-          "target": "LCD_panel_exit @ 0xffffff8008422654",
-          "delay_ms": 200
-        },
-        {
-          "order": 3,
-          "target": "sunxi_lcd_tcon_disable @ 0xffffff800841a578",
-          "delay_ms": 0
-        },
-        {
-          "order": 4,
-          "target": "LCD_power_off @ 0xffffff80084220e8",
-          "delay_ms": 500
-        }
-      ],
-      "software_enable_order": [
-        "disp_lcd_get_priv",
-        "mutex_lock",
-        "disp_lcd_is_enabled",
-        "disp_lcd_cal_fps",
-        "disp_sys_power_enable",
-        "disp_sys_register_irq",
-        "disp_sys_enable_irq",
-        "disp_lcd_gpio_init",
-        "lcd_clk_enable",
-        "cal_real_frame_period",
-        "disp_sys_pwm_set_polarity",
-        "disp_al_lcd_cfg",
-        "lcd_calc_judge_line",
-        "disp_delay_ms",
-        "disp_lcd_get_bright",
-        "disp_lcd_set_bright",
-        "mutex_unlock"
-      ],
-      "disp_al_lcd_cfg_inner_order": [
-        "tcon_init",
-        "disp_al_lcd_get_clk_info",
-        "tcon0_set_dclk_div",
-        "tcon0_cfg",
-        "tcon0_cfg_ext",
-        "tcon0_src_select"
-      ],
-      "unreconstructable_edges": [
-        "the executor of the steps registered by LCD_OPEN_FUNC (indirect blr, table filled at runtime)",
-        "the origin of the four struct clk * at priv+0x1978/0x1980/0x1988/0x1990 (no str to those displacements; the 'tcon_lcd' string has zero code references, so it is not a name-based clk_get)",
-        "the cpu_hwcaps bit 0x10000 that picks the LCD_power_on pin-config variant is a .bss runtime value"
-      ]
-    },
-    "clock": {
-      "parent_inheritance": "disp_lcd_init @ 0xffffff8008405128 captures clk_get_parent() of priv[0x1978], [0x1980], [0x1988], [0x1990] into [0x1998], [0x19b0], [0x19a0], [0x19a8]",
-      "parent_reapply": "lcd_clk_enable @ 0xffffff80084055dc calls clk_set_parent with those same four pairs before touching rates",
-      "rate_math": "target = clk_info[+8] * clk_info[+4] * lcd_dclk_freq_Hz; clk_set_rate(parent, target); then clk_set_rate(priv[0x1978], actual_parent_rate / clk_info[+8])",
-      "baseline_target_hz": 286000000,
-      "table_floor_hz": 288000000,
-      "rounding": "the target is below the factor table floor (288 MHz, step 12 MHz), so the parent settles at 288 MHz - matching the live clk_summary",
-      "mismatch_warning": "lcd_clk_enable has an explicit requested-vs-actual comparison and warning branch at 0xffffff800840588c",
-      "tcon_lcd_parents": [
-        "pll_video0",
-        "pll_video0x4",
-        "pll_video1",
-        "pll_video1x4",
-        "losc",
-        "periph32k"
-      ],
-      "tcon_lcd_parents_address": "0xffffff8009047508",
-      "selected_parent": "pll_video0x4 (runtime clk_summary only; index 1 of the candidate list)",
-      "conclusion": "Linux does not choose a new parent: it inherits the bootloader/DT parent and re-asserts it, then programs the rate. The effective rate is now consistent with the live measurement."
-    },
-    "frame_period_algorithm": {
-      "function": "cal_real_frame_period @ 0xffffff8008405ac4",
-      "formula": "dclk = clk_get_rate(tcon_clk) / clk_info[+4] (or [+12] when lcd_if==4); period_ns = panel_info.vt * panel_info.ht * 1e9 / dclk",
-      "offsets": {
-        "vt": "priv+0x1a0",
-        "ht": "priv+0x1a4"
-      },
-      "note": "single formula, no mode or rate branch"
-    },
-    "refresh_120hz_recheck": {
-      "verdict": "not verified / do not enable",
-      "existing_evidence_kept": true,
-      "added_evidence": [
-        "the panel driver is the renamed official fog_fj035fhd05_v1 driver; its init is a fixed command stream with no timing",
-        "the lcd0 node carries exactly one timing set (ht=820 vt=536 dclk_freq=26 lcd_if=0 lcd_hv_if=0) and no clk_parent/clk_freq property",
-        "cal_real_frame_period has one formula and no switch path",
-        "the PLL table spans 288-2520 MHz / step 12, so the clock source is NOT the blocker: 120 Hz needs ~52 MHz pixel clock and 52 x 11 = 572 MHz is reachable (576 MHz)"
-      ],
-      "remaining_blockers": [
-        "a second panel timing set for rg34xx_v1",
-        "a divider the TCON path accepts at that rate",
-        "TE/VBlank boundary handling and a rollback path",
-        "independent panel-side confirmation of the doubled rate"
-      ]
-    },
-    "corrections": [
-      {
-        "id": 1,
-        "round1": "no data relocation, pointers all zero, cannot follow pointers",
-        "corrected": "pre-relocation image; 91760 relocations recover all pointers"
-      },
-      {
-        "id": 2,
-        "round1": "build-id note at section offset 0xc8fc60",
-        "corrected": "file offset 0xc8fe90 (desc 0xc8fea0, VA 0xffffff8008d0fc50)"
-      },
-      {
-        "id": 3,
-        "round1": "factor_pllvideo0x4_tbl covers 288-336 MHz, 9 entries",
-        "corrected": "288-2520 MHz, step 12 MHz, 187 entries"
-      },
-      {
-        "id": 4,
-        "round1": "2x mismatch between table rates and calc_rate_video0",
-        "corrected": "no mismatch; withdrawn"
-      },
-      {
-        "id": 5,
-        "round1": "bit27 unresolved",
-        "corrected": "descriptor declares bit index 27 at +0x0f; the live word equals the table word plus bit31|bit27|bit0; status role likely, still unproven"
-      },
-      {
-        "id": 6,
-        "round1": "tcon_lcd parent table pointer is zero, cannot be read",
-        "corrected": "tcon_lcd_parents recovered with 6 candidates"
-      },
-      {
-        "id": 7,
-        "round1": "only disp_al_lcd_cfg and disp_al_vdevice_cfg write base+0x44",
-        "corrected": "tcon0_open x2, tcon0_close, tcon_exit also write it"
-      },
-      {
-        "id": 8,
-        "round1": "0x80 is a SoC/version word compared to 0x1a",
-        "corrected": "0x80 is lcd_dclk_freq; 0x1a is 26 MHz"
-      },
-      {
-        "id": 9,
-        "round1": "table indexed by cfg->lcd_type",
-        "corrected": "indexed by cfg->lcd_if (panel_info+0x00)"
-      },
-      {
-        "id": 10,
-        "round1": "if the context word != 0x1a the divider is forced to 11",
-        "corrected": "csel condition is ne: the divider becomes 11 exactly when lcd_dclk_freq == 26; other frequencies keep the table value"
-      },
-      {
-        "id": 11,
-        "round1": "lcd_dclk_freq never enters the computation",
-        "corrected": "it selects divider 11 and it is the multiply operand of the PLL rate target in lcd_clk_enable"
-      },
-      {
-        "id": 12,
-        "round1": "high nibble 0xf preserved by read-modify-write",
-        "corrected": "tcon0_open actively ORs 0xf0000000"
-      },
-      {
-        "id": 13,
-        "round1": "panel name table at 0x8ffc4c0, stride 0x60",
-        "corrected": "name lives at 0x8ffc580 inside a 0x60-stride struct; the driver table is the 17-entry pointer array at 0x8ffbef0; symbol is fog_fj035fhd05_v1_panel"
-      },
-      {
-        "id": 14,
-        "round1": "lcd_type=old reaches table index 0",
-        "corrected": "index comes from DT lcd_if=0; the bootarg lcd_type=old has no statically traceable link"
-      },
-      {
-        "id": 15,
-        "round1": "reconciliation: 288 MHz / divider 11 / 26.18 MHz / 59.569 Hz",
-        "corrected": "numbers retained and now fully derived; the missing step (286 MHz request rounded up to the 288 MHz table floor) is added"
-      },
-      {
-        "id": 16,
-        "round1": "unresolved items 1/2/4/6",
-        "corrected": "item 1 closed (tcon0_open), item 2 becomes a dead field, item 4 withdrawn, item 6 answered by the rate path"
-      }
-    ],
-    "unresolved_after_addendum": [
-      "which struct clk * is tcon_lcd at runtime, and its effective rate",
-      "origin of the four clk handles at disp_lcd_private + 0x1978..0x1990",
-      "executor of the LCD_OPEN_FUNC step table",
-      "semantics of panel_info+0x118 (dead field on this profile)",
-      "semantics of PLL descriptor bytes +0x0c / +0x0e / +0x0f / +0x10 / +0x18, and the role of bit0 in the live word",
-      "static link between the bootarg lcd_type=old and the panel/interface selection"
-    ],
-    "self_check": {
-      "script": "build/k19f_selfcheck.py",
-      "checks": 82,
-      "passed": 82,
-      "failed": 0,
-      "note": "the check caught an error in the first draft of this addendum: csel was read as eq, giving divider 6 and a wrong retraction; the condition is ne and the first-round numbers stand"
-    },
-    "compliance": {
-      "offline_only": true,
-      "device_contacted": false,
-      "mmio_or_sysfs_or_debugfs": false,
-      "devmem_or_sunxi_dump": false,
-      "p4_reexport": false,
-      "elf_uploaded": false,
-      "raw_dtb_uploaded": false,
-      "serial_numbers_in_report": false,
-      "other_panel_values_copied": false,
-      "relocated_image_written_to_disk": false,
-      "build_id_required": "a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68",
-      "build_id_present": true
-    }
+   }
   }
+ }
 }
