@@ -153,7 +153,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: MagnominusGit/armGBA
-          ref: fad6c4b0c0176a76e10667f4aa071a8feb4425c0
+          ref: df6b2631291f249d54a00dd14f49bc893e438feb
           path: .ci/armgba-source
           persist-credentials: false
 
