@@ -65,11 +65,32 @@ also compile this hook. Neither proves a full LK target link or a hardware boot.
 See `platform/h700/arch/h700_pio_mmu_mapping.c` and
 `scripts/test-h700-pio-mmu-mapping.sh`.
 
+
+The pinned LK implementation stores `tt[4096]` as a static, 16-KiB-aligned
+section table in BSS. That table is part of LK's linked image footprint; its
+address and the rest of BSS/stack/heap still require the explicit memory
+ownership review. The mapping function does not allocate a replacement table
+or dynamic DRAM memory.
+
 ## RG34XX PI12 power LED startup
 
 The RG34XX non-SP vendor boot DTS in the pinned [KNULLI RG34XX boot package](https://github.com/knulli-cfw/knulli-linux/blob/57afa662009641d181f57241bcc480119b131530/package/boot/uboot-h700/rg34xx/boot_package/rg34xx.dts) maps `work_led` to PIO bank I / PI12 and `low_pwr_led` to PI11. [MustardOS RG34XX-H DTS](https://github.com/MustardOS/internal/blob/aef38ed9a870419a0fe4f351dac1bac58a84ba5e/device/rg34xx-h/package/sunxi.dts) has the same mapping. PI11 remains untouched. The boot DTS marks UART3 disabled; the active boot console is UART0.
 
 The driver uses PIO base `0x0300b000`, bank stride `0x24`, PI12 CFG1/MUX1 offset `0x124` (function 1 / GPIO output) and DATA offset `0x130` bit 12. It preloads the active-high on-level before pinmux transition and reads both fields back. Mainline H700 RG35XX-2024 configuration is only sibling-board polarity corroboration; exact RG34XX electrical polarity and power-key release timing still require a cold-boot test. See [power LED lifecycle](h700-power-led-lifecycle.md).
+
+
+
+### PIO bus clock boundary
+
+The H616-family reference PIO node binds to `CLK_APB1` and has no separate
+PIO reset property; the reference CCU models APB1 as a mux/divider clock, not
+as a PIO-specific gate. See
+[`sun50i-h616.dtsi`](https://github.com/torvalds/linux/blob/master/arch/arm64/boot/dts/allwinner/sun50i-h616.dtsi)
+and
+[`ccu-sun50i-h616.c`](https://github.com/torvalds/linux/blob/master/drivers/clk/sunxi-ng/ccu-sun50i-h616.c).
+RG34XX v2 Linux runtime reports APB1 at 100 MHz with a PIO consumer. This is
+Linux runtime/reference-family evidence only; BL33-entry APB1 parent/rate is
+not directly read. The PI12 service does not modify CCU/APB1.
 
 ## Memory approval is deliberately fail-closed
 

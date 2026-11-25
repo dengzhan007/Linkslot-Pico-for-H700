@@ -50,6 +50,26 @@ H700 PIO 字段：
 
 PIO MMU 映射只更新已有 ARM section translation table 的一个外设条目，不分配 DRAM，不改变 LK heap/stack/BSS/BL31 保留区，也不写 CCU/APB1、PMIC 或 CPU PLL。v2 Linux 运行态报告中 PIO/APB1 时钟为 100 MHz；LED driver 不改变这个时钟树。
 
+## PIO bus-clock dependency
+
+The H700/H616-family PIO binding in the reference
+[`sun50i-h616.dtsi`](https://github.com/torvalds/linux/blob/master/arch/arm64/boot/dts/allwinner/sun50i-h616.dtsi)
+connects the main pinctrl block to `CLK_APB1` and does not declare a separate
+PIO reset line. The reference
+[`ccu-sun50i-h616.c`](https://github.com/torvalds/linux/blob/master/drivers/clk/sunxi-ng/ccu-sun50i-h616.c)
+models APB1 as a mux/divider clock at CCU offset `0x520`, without a distinct
+PIO gate bit. The pinned vendor-equivalent H616 family uses the same
+`allwinner,sun50i-h616-pinctrl` binding; the v2 RG34XX Linux clock summary
+also reads `apb1=100 MHz` with a PIO consumer.
+
+This supports using the already configured APB1 path without adding a
+speculative PIO gate/reset sequence. It does **not** prove the exact APB1
+parent/rate at the earlier BL33 handoff. The PI12 service deliberately does
+not write CCU registers or alter APB1. Early PIO access still needs cold-boot
+validation; if the board's handoff configuration has APB1 unavailable, keep
+the LED function fail-closed rather than enabling or reparenting clocks based
+on an unverified assumption.
+
 ## Linkslot 游戏生命周期
 
 - `slot-frontend-state::GamePowerLedState` 是 no_std transition latch：首次同步请求前端态（`game_active=false`），之后仅在 `false ↔ true` 变化时发出请求。
