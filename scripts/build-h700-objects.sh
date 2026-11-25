@@ -106,7 +106,9 @@ COMMON_FLAGS=(
 "$CC" "${COMMON_FLAGS[@]}" -std=c11 \
     -I"$ROOT/platform/h700/display" \
     -c "$ROOT/platform/h700/display/h700_display_refresh_policy.c" \
-    -o "$OUT_DIR/h700_display_refresh_policy.o"\n\n"$CC" "${COMMON_FLAGS[@]}" -std=c11 \
+    -o "$OUT_DIR/h700_display_refresh_policy.o"
+
+"$CC" "${COMMON_FLAGS[@]}" -std=c11 \
     -I"$ROOT/platform/h700/arch/tests/freestanding_include" \
     -c "$ROOT/platform/h700/arch/h700_pio_mmu_mapping.c" \
     -o "$OUT_DIR/h700_pio_mmu_mapping.o"
