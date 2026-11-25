@@ -14,6 +14,11 @@
   capture (`audit/rg34xx-ion-drm-followup-20261122` @ `c6da96d`); see
   `boot-partition-local-only.md`. The 64 MiB `boot-partition.bin` and all other binaries
   are kept local only, NOT uploaded.
+- `rg34xx-boot-partition-deep-audit.md` — deep read-only analysis of the local
+  `boot-partition.bin`: two Android images, AArch64 4.9.170 #19 kernel with
+  extracted IKCONFIG, empty ramdisk, DTB cross-comparison (512 MiB on-disk vs
+  1 GiB live), DRM `GET_DRM_INFO` source match to `qiaoweibiao/T507_Kernel`,
+  memory-region attribution and LK hand-off recommendations. No binaries included.
 
 This branch is dedicated to field reports captured from the RG34XX handheld. Source code
 lives on `main`; report archives are kept here because `build/` is gitignored there.
