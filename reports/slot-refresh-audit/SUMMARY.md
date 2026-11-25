@@ -26,21 +26,30 @@
 
 `diff` 显示两份报告的全部实质差异只有三处：时间戳、`armgba_libretro.so` 的 4 条 maps、以及各计数值本身。**显示栈一个字节都没变。**
 
-## 2. 是否匹配面板条件：不匹配
+## 2. 是否匹配 pvaibhav fork 的面板 gate：不匹配
 
-120 Hz 需要面板侧同时具备"第二套 timing + 更高的像素时钟"。本次采集到的是唯一一套 60 Hz 参数：
+固定提交 `5206e3fa39aa4a9b702cd9048a07dab3b5ab95da` 的实现不要求 FDT 中预先存在第二套 timing；它在启动/唤醒路径检查 live panel tuple，通过后才使用 TCON divider 与 PLL 两个寄存器实施模式设置。因此，"FDT 只有一套 timing"本身不能证明设备无法运行时改频。
 
-- `lcd_ht=820`、`lcd_vt=536` 与 60 Hz 名义时序完全一致，DT 中 `lcd_driver_name` 指到的节点没有第二套 timing 分支；
-- `lcd_dclk_freq=26` 仍是 26 MHz，不是 120 Hz 所需的 ~52.36 MHz；
-- `lcd_driver_name=rg34xx_v1`，与 pvaibhav 严格 allowlist 要求的 `fog_fj035fhd05_v1` **不是同一名字**（此项在离线审计中已确认只是驱动表命名差异，但就"是否满足启用条件"而言仍不满足）。
+本机的实际 gate 结果是不匹配：
+
+- `BASEOS_TARGET=rg34xx` 分支要求 `lcd_driver_name=fog_fj035fhd05_v1`；
+- 数值条件为 720×480、HT=820、VT=536、DCLK property=26 MHz，本机这些数值匹配；
+- 本机实际 `lcd_driver_name=rg34xx_v1`，不满足精确字符串条件。
+
+按该固定源码，`PanelRefresh::probe()` 会在面板名检查处返回 unsupported，之后 `supports_high_refresh()` 为 false，App 不会调用启动时的 `set_high_refresh()`。这说明本机不满足该 fork 当前 allowlist；不能据此推断只改面板名字就安全，也不能将其寄存器序列移植到本机。
 
 ## 3. 是否应用了 120 Hz 寄存器值：没有
 
-`0x03001040` 两次都是 `0x88001703`：
+`0x03001040` 两次都是 `0x88001703`，与该 fork 的 60-Hz 基线寄存器值一致。
 
-- N = `(0x1703 >> 8) & 0xFF` = 23，D2 = bit1 = 1 → `24 MHz × 24 / 2` = **288 MHz**
-- bit0 置位、高字节 `0x88` 与离线审计记录的 `bit31|bit27|bit0` 组合一致
-- 若真按 120 Hz 改频，该字应变成 576 MHz 对应的 `0x88001701`（N=23、D2=0）；实测未变
+固定 fork 源码的 `registers(true)` 明确给出的高刷组合是：
+
+- TCON divider：`0x06511044 = 0xf000000a`
+- PLL：`0x03001040 = 0x88002b03`
+
+其中高刷路径按先 divider、后 PLL 的顺序写入；60-Hz 路径按先 PLL `0x88001703`、后 divider `0xf000000b` 的顺序恢复。**`0x88001701` 不是该 fork 的高刷候选值**，不应作为本次设备应有的 readback 值。
+
+本次两状态均读回 PLL `0x88001703`，因此未观察到 fork 的 120-Hz PLL 候选被应用。TCON 地址本次读取失败，不能把 divider 说成已直接读回；其是否变化只能结合其它来源或另一次安全可读回证据判断。
 
 `0x06511044`（TCON dclk divider）两次都返回 `I/O error`，dump 接口对该地址不可读，因此**没有直接读到 divider**。旁证是显示栈自报 `fps:60.2` 与 IRQ 59.58–59.67 Hz 都和"288/11 = 26.18 MHz ÷ 439520"的 59.57 Hz 吻合，说明分频路径也没被改写。
 
@@ -60,19 +69,19 @@
 - `slot` 进程 PID 在两种状态下**都是 2301**，没有重启；进入游戏只是同一进程 `dlopen()` 了 `/mnt/sdcard/SYSTEM/armgba_libretro.so`。
 - 进程不重启 → 一次性 init 不会重跑，显示路径没有机会在下游重新配置。
 - `slot.state` 中 `high_refresh=1` 在两种状态下恒为 1，说明它是一个**常驻配置项**，并不是"进入游戏才置位"的开关；而显示栈侧没有任何对应变化。
-- 因此这份实测与离线逆向的结论一致：内核里没有 120 Hz 的 mode/timing 表，也没有运行时刷新切换路径；`high_refresh` 在当前 BaseOS 1.5.3 + 该内核上**没有落到显示驱动**。
+- 因此，这两轮实测与固定源码 gate 一致：当前 `rg34xx_v1` 不通过 `rg34xx → fog_fj035fhd05_v1` 的 allowlist，启动时高刷 setter 不会被调用；fork 的实现也没有 UI/GAME 场景切换逻辑，它是在支持的设备上于启动/唤醒阶段全局应用偏好。故本次 UI/GAME 都保持约 60 Hz。
 
 ## 6. 判断汇总
 
 | 判据 | 结果 |
 | --- | --- |
-| 面板条件匹配 | 否 — 单套 timing，26 MHz，`rg34xx_v1` |
-| 120 Hz 寄存器已应用 | 否 — `0x03001040` 仍为 288 MHz 编码 |
+| 面板 gate 匹配 | 否 — 精确驱动名不匹配（数值 timing tuple 匹配） |
+| 高刷 PLL 候选已应用 | 否 — PLL 仍为 60-Hz 基线 `0x88001703`，候选为 `0x88002b03` |
 | IRQ ≈ 120 Hz | 否 — 59.667 / 59.583 Hz |
-| `high_refresh` 生效 | 否 — 两态恒为 1，显示栈无响应 |
+| `high_refresh` 已应用 | 否 — 两态恒为 1，但 gate 不通过、setter 被跳过 |
 | 游戏内是否更接近 120 | 否 — 与 UI 差异在量化误差内（59.58 vs 59.67） |
 
-**最终判定：在当前设备/固件上，Slot 的 120 Hz 选项没有被实际应用，UI 与游戏都是 59.6 Hz 的 60 Hz 路径。**
+**最终判定：在当前设备/固件上，pvaibhav fork 的高刷选项没有被实际应用，UI 与游戏都是约 59.6 Hz 的 60-Hz 路径。此结论由 live gate mismatch、PLL readback 与 IRQ proxy 支持；TCON divider 在本次 ADB 审计中未能直接读回。**
 
 ## 7. 合规与未取到项
 
