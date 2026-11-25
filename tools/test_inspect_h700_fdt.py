@@ -247,18 +247,23 @@ class FdtInspectorTests(unittest.TestCase):
         panel = report["panels"][0]
         self.assertEqual(panel["driver"], "rg34xx_v1")
         self.assertEqual((panel["width"], panel["height"]), (720, 480))
-        self.assertEqual(panel["interface"], {
-            "lcd_if": 0, "lcd_hv_if": 0, "lcd_lvds_if": 0,
-        })
-        self.assertEqual(panel["timing"], {
-            "lcd_dclk_freq_mhz": 54,
-            "lcd_ht": 1679,
-            "lcd_hbp": 46,
-            "lcd_hspw": 2,
-            "lcd_vt": 536,
-            "lcd_vbp": 20,
-            "lcd_vspw": 5,
-        })
+        self.assertEqual(panel["interface"], "rgb666")
+        self.assertEqual(panel["interface_props"]["lcd_if"], 0)
+        self.assertEqual(panel["interface_props"]["lcd_hv_if"], 0)
+        self.assertEqual(panel["interface_props"]["lcd_lvds_if"], 0)
+        self.assertEqual(panel["timing"]["pixel_clock_hz"], 54000000)
+        self.assertEqual(panel["timing"]["pixel_clock_mhz"], 54)
+        self.assertEqual(panel["timing"]["h_active"], 720)
+        self.assertEqual(panel["timing"]["h_total"], 1679)
+        self.assertEqual(panel["timing"]["h_back_porch"], 46)
+        self.assertEqual(panel["timing"]["h_sync_pulse"], 2)
+        self.assertEqual(panel["timing"]["h_front_porch"], 911)
+        self.assertEqual(panel["timing"]["v_active"], 480)
+        self.assertEqual(panel["timing"]["v_total"], 536)
+        self.assertEqual(panel["timing"]["v_back_porch"], 20)
+        self.assertEqual(panel["timing"]["v_sync_pulse"], 5)
+        self.assertEqual(panel["timing"]["v_front_porch"], 31)
+        self.assertEqual(panel["timing"]["nominal_refresh_hz"], 60.004)
         self.assertEqual(report["pmic_nodes"][0]["compatible"], ["x-powers,axp2202"])
         cpu_power = report["cpu_power"]
         self.assertEqual(len(cpu_power["cpu_nodes"]), 1)
