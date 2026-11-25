@@ -174,7 +174,7 @@
   "clock_source_blocker": false,
   "reachable_rate_hz": 576000000,
   "dclk_at_576_hz": 52363636.36,
-  "refresh_at_576_hz": 119.15,
+  "refresh_at_576_hz": 119.1382334447,
   "missing": [
    "a second panel timing set (ht/vt/porches) for the target rate",
    "evidence that the panel or TCON accepts a 52.36-MHz DCLK",
