@@ -1,0 +1,106 @@
+{
+  "kernel": {
+    "elf_sha256": "2f7f36a5f5442fdb9a33dc76f14c53c4626f42ed91edbc4b337d5641c2a9ed44",
+    "gnu_build_id": "a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68",
+    "symbols": 89675,
+    "base_address": "0xffffff8008080000",
+    "sections": [
+      {
+        "name": ".kernel",
+        "start": "0xffffff8008080000",
+        "end": "0xffffff8008d88298"
+      },
+      {
+        "name": ".kernel2",
+        "start": "0xffffff8008fa1d90",
+        "end": "0xffffff8009127008"
+      }
+    ]
+  },
+  "functions": [
+    {
+      "name": "calc_rate_video0",
+      "address": "0xffffff800845f3cc",
+      "next_symbol": "0xffffff800845f3f4",
+      "bound_basis": "st_size is 0 for every kallsyms symbol; bound = next symbol address, confirmed by the trailing 'ret' in the bounded listing",
+      "role": "PLL_VIDEO0 rate from factors: rate = parent*(N+1)/(D2+1)"
+    },
+    {
+      "name": "calc_rate_video1",
+      "address": "0xffffff800845f3f4",
+      "next_symbol": "0xffffff800845f420",
+      "bound_basis": "st_size is 0 for every kallsyms symbol; bound = next symbol address, confirmed by the trailing 'ret' in the bounded listing",
+      "role": "PLL_VIDEO1 variant; divider multiplied by 4"
+    },
+    {
+      "name": "get_factors_pll_video0",
+      "address": "0xffffff800845f780",
+      "next_symbol": "0xffffff800845f7e4",
+      "bound_basis": "st_size is 0 for every kallsyms symbol; bound = next symbol address, confirmed by the trailing 'ret' in the bounded listing",
+      "role": "maps a target rate to a factor word via factor_pllvideo0x4_tbl"
+    },
+    {
+      "name": "sunxi_clk_factors_recalc_rate",
+      "address": "0xffffff800845b6f0",
+      "next_symbol": "0xffffff800845b918",
+      "bound_basis": "st_size is 0 for every kallsyms symbol; bound = next symbol address, confirmed by the trailing 'ret' in the bounded listing",
+      "role": "extracts n/m/p/d1/d2/frac from the factor descriptor, then calls the per-PLL calc callback"
+    },
+    {
+      "name": "disp_al_lcd_get_clk_info",
+      "address": "0xffffff8008434f94",
+      "next_symbol": "0xffffff80084350fc",
+      "bound_basis": "st_size is 0 for every kallsyms symbol; bound = next symbol address, confirmed by the trailing 'ret' in the bounded listing",
+      "role": "picks the dclk divider + interface constants from a per-lcd-type table"
+    },
+    {
+      "name": "disp_al_lcd_cfg",
+      "address": "0xffffff80084350fc",
+      "next_symbol": "0xffffff8008435230",
+      "bound_basis": "st_size is 0 for every kallsyms symbol; bound = next symbol address, confirmed by the trailing 'ret' in the bounded listing",
+      "role": "programs tcon0: dclk divider, tcon0_cfg, tcon0_cfg_ext, src select"
+    },
+    {
+      "name": "tcon0_set_dclk_div",
+      "address": "0xffffff8008437598",
+      "next_symbol": "0xffffff80084375b8",
+      "bound_basis": "st_size is 0 for every kallsyms symbol; bound = next symbol address, confirmed by the trailing 'ret' in the bounded listing",
+      "role": "writes the divider into TCON base+0x44 bits[6:0], no arithmetic"
+    },
+    {
+      "name": "tcon0_get_dclk_div",
+      "address": "0xffffff80084375b8",
+      "next_symbol": "0xffffff80084375d0",
+      "bound_basis": "st_size is 0 for every kallsyms symbol; bound = next symbol address, confirmed by the trailing 'ret' in the bounded listing",
+      "role": "reads TCON base+0x44 bits[6:0]"
+    },
+    {
+      "name": "factor_pllvideo0x4_tbl",
+      "address": "0xffffff800903d8d8",
+      "kind": "data",
+      "role": "array of {u32 register_word, u32 rate_hz}; consulted by get_factors_pll_video0",
+      "caveat": "pointer fields in .kernel2 are all zero in this ELF (no relocated data pointers), so data structures can only be read through scalar values or code immediates"
+    },
+    {
+      "name": "sunxi_clk_factor_pll_video0x4",
+      "address": "0xffffff800903deb0",
+      "kind": "data",
+      "role": "same {word, rate} pairs continued; the symbol name is the per-clock factor blob, not a clk_factors struct in this build",
+      "caveat": "pointer fields in .kernel2 are all zero in this ELF (no relocated data pointers), so data structures can only be read through scalar values or code immediates"
+    },
+    {
+      "name": "lcd_clk_const_table",
+      "address": "0xffffff80089f6070",
+      "kind": "data",
+      "role": "5 x u32 per entry, stride 0x14, indexed by cfg->lcd_type: {idx, dclk_div, a, b, c}",
+      "caveat": "pointer fields in .kernel2 are all zero in this ELF (no relocated data pointers), so data structures can only be read through scalar values or code immediates"
+    },
+    {
+      "name": "panel_name_table",
+      "address": "0xffffff8008ffc4c0",
+      "kind": "data",
+      "role": "fixed 0x60-byte name slots: FX070_DHM18BOEL2_1024X600, bp101wx1, rg34xx_v1",
+      "caveat": "pointer fields in .kernel2 are all zero in this ELF (no relocated data pointers), so data structures can only be read through scalar values or code immediates"
+    }
+  ]
+}

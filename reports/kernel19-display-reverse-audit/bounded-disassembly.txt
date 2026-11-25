@@ -1,0 +1,400 @@
+# kernel #19 display path — bounded disassembly
+
+ELF: build/rg34xx-kernel.elf  sha256 2f7f36a5f5442fdb9a33dc76f14c53c4626f42ed91edbc4b337d5641c2a9ed44
+GNU build-id: a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68
+Disassembler: capstone 6 (CS_ARCH_ARM64), addresses are link-time virtual addresses.
+Every symbol has st_size = 0 in kallsyms, so each listing is cut at the next symbol
+and the trailing `ret` is kept as boundary evidence. No hardware access, no MMIO.
+
+## calc_rate_video0  (PLL_VIDEO0 rate from factors: rate = parent*(N+1)/(D2+1))
+start 0xffffff800845f3cc  next symbol 0xffffff800845f3f4
+
+0xffffff800845f3cc  mov      w2, #0x3600
+0xffffff800845f3d0  cmp      w0, #0
+0xffffff800845f3d4  movk     w2, #0x16e, lsl #16
+0xffffff800845f3d8  csel     w0, w0, w2, ne
+0xffffff800845f3dc  ldrh     w2, [x1]
+0xffffff800845f3e0  ldrh     w1, [x1, #8]
+0xffffff800845f3e4  add      x1, x1, #1
+0xffffff800845f3e8  madd     x0, x2, x0, x0
+0xffffff800845f3ec  udiv     x0, x0, x1
+0xffffff800845f3f0  ret      
+
+## calc_rate_video1  (PLL_VIDEO1 variant; divider multiplied by 4)
+start 0xffffff800845f3f4  next symbol 0xffffff800845f420
+
+0xffffff800845f3f4  mov      w2, #0x3600
+0xffffff800845f3f8  cmp      w0, #0
+0xffffff800845f3fc  movk     w2, #0x16e, lsl #16
+0xffffff800845f400  csel     w0, w0, w2, ne
+0xffffff800845f404  ldrh     w2, [x1]
+0xffffff800845f408  ldrh     w1, [x1, #8]
+0xffffff800845f40c  add      w1, w1, #1
+0xffffff800845f410  madd     x0, x2, x0, x0
+0xffffff800845f414  ubfiz    x1, x1, #2, #0x11
+0xffffff800845f418  udiv     x0, x0, x1
+
+## get_factors_pll_video0  (maps a target rate to a factor word via factor_pllvideo0x4_tbl)
+start 0xffffff800845f780  next symbol 0xffffff800845f7e4
+
+0xffffff800845f780  cbz      x2, #0xffffff800845f7dc  ; 0xffffff800845f7dc?
+0xffffff800845f784  mov      x1, x2
+0xffffff800845f788  adrp     x2, #0xffffff800918d000  ; 0xffffff800918d000?
+0xffffff800845f78c  stp      x29, x30, [sp, #-0x10]!
+0xffffff800845f790  mov      x4, #0xbb
+0xffffff800845f794  mov      x29, sp
+0xffffff800845f798  ldr      w3, [x2, #0x320]
+0xffffff800845f79c  adrp     x2, #0xffffff800903c000  ; 0xffffff800903c000?
+0xffffff800845f7a0  add      x2, x2, #0x958
+0xffffff800845f7a4  cmp      w3, w0
+0xffffff800845f7a8  add      x2, x2, #0xf80
+0xffffff800845f7ac  csel     w3, w3, w0, ls
+0xffffff800845f7b0  mov      x0, #0x4240
+0xffffff800845f7b4  movk     x0, #0xf, lsl #16
+0xffffff800845f7b8  udiv     x3, x3, x0
+0xffffff800845f7bc  adrp     x0, #0xffffff800903d000  ; 0xffffff800903d000?
+0xffffff800845f7c0  add      x0, x0, #0xa58
+0xffffff800845f7c4  add      x0, x0, #0x458
+0xffffff800845f7c8  bl       #0xffffff800845cc24  ; sunxi_clk_com_ftr_sr
+0xffffff800845f7cc  cmp      w0, #0
+0xffffff800845f7d0  csetm    w0, ne
+0xffffff800845f7d4  ldp      x29, x30, [sp], #0x10
+0xffffff800845f7d8  ret      
+0xffffff800845f7dc  mov      w0, #-1  ; 0xffffffffffffffff?
+0xffffff800845f7e0  ret      
+0xffffff800845f7e4  cbz      x2, #0xffffff800845f838  ; 0xffffff800845f838?
+
+## sunxi_clk_factors_recalc_rate  (extracts n/m/p/d1/d2/frac from the factor descriptor, then calls the per-PLL calc callback)
+start 0xffffff800845b6f0  next symbol 0xffffff800845b918
+
+0xffffff800845b6f0  stp      x29, x30, [sp, #-0x60]!
+0xffffff800845b6f4  mov      x29, sp
+0xffffff800845b6f8  stp      x21, x22, [sp, #0x20]
+0xffffff800845b6fc  adrp     x21, #0xffffff8008fbd000  ; 0xffffff8008fbd000?
+0xffffff800845b700  stp      x23, x24, [sp, #0x30]
+0xffffff800845b704  mov      x23, x0
+0xffffff800845b708  stp      x19, x20, [sp, #0x10]
+0xffffff800845b70c  add      x0, x21, #0xe90
+0xffffff800845b710  mov      x22, x1
+0xffffff800845b714  ldr      x1, [x0]
+0xffffff800845b718  str      x1, [x29, #0x58]
+0xffffff800845b71c  mov      x1, #0
+0xffffff800845b720  ldr      x20, [x23, #0x50]
+0xffffff800845b724  ldr      x1, [x23, #0x60]
+0xffffff800845b728  mov      x0, #0
+0xffffff800845b72c  cbz      x1, #0xffffff800845b8ec  ; 0xffffff800845b8ec?
+0xffffff800845b730  ldr      x0, [x23, #0x68]
+0xffffff800845b734  mov      x24, #0
+0xffffff800845b738  cbz      x0, #0xffffff800845b744  ; 0xffffff800845b744?
+0xffffff800845b73c  bl       #0xffffff80089760e8  ; _raw_spin_lock_irqsave
+0xffffff800845b740  mov      x24, x0
+0xffffff800845b744  ldr      x1, [x23, #0x70]
+0xffffff800845b748  ldr      x0, [x23, #0x28]
+0xffffff800845b74c  cbz      x1, #0xffffff800845b760  ; 0xffffff800845b760?
+0xffffff800845b750  ldr      x1, [x1]
+0xffffff800845b754  blr      x1
+0xffffff800845b758  mov      w19, w0
+0xffffff800845b75c  b        #0xffffff800845b768  ; 0xffffff800845b768?
+0xffffff800845b760  ldr      w19, [x0]
+0xffffff800845b764  dsb      ld
+0xffffff800845b768  ldr      x0, [x23, #0x68]
+0xffffff800845b76c  cbz      x0, #0xffffff800845b778  ; 0xffffff800845b778?
+0xffffff800845b770  mov      x1, x24
+0xffffff800845b774  bl       #0xffffff80089764c4  ; _raw_spin_unlock_irqrestore
+0xffffff800845b778  ldrb     w1, [x20, #1]
+0xffffff800845b77c  mov      w0, #-1  ; 0xffffffffffffffff?
+0xffffff800845b780  cbz      w1, #0xffffff800845b7a4  ; 0xffffff800845b7a4?
+0xffffff800845b784  mov      w0, #0x20
+0xffffff800845b788  ldrb     w2, [x20]
+0xffffff800845b78c  sub      w1, w0, w1
+0xffffff800845b790  mov      w0, #-1  ; 0xffffffffffffffff?
+0xffffff800845b794  lsr      w0, w0, w1
+0xffffff800845b798  lsl      w0, w0, w2
+0xffffff800845b79c  and      w0, w0, w19
+0xffffff800845b7a0  lsr      x0, x0, x2
+0xffffff800845b7a4  ldrb     w1, [x20, #3]
+0xffffff800845b7a8  strh     w0, [x29, #0x48]
+0xffffff800845b7ac  mov      w0, #-1  ; 0xffffffffffffffff?
+0xffffff800845b7b0  cbz      w1, #0xffffff800845b7d4  ; 0xffffff800845b7d4?
+0xffffff800845b7b4  mov      w0, #0x20
+0xffffff800845b7b8  ldrb     w2, [x20, #2]
+0xffffff800845b7bc  sub      w1, w0, w1
+0xffffff800845b7c0  mov      w0, #-1  ; 0xffffffffffffffff?
+0xffffff800845b7c4  lsr      w0, w0, w1
+0xffffff800845b7c8  lsl      w0, w0, w2
+0xffffff800845b7cc  and      w0, w0, w19
+0xffffff800845b7d0  lsr      x0, x0, x2
+0xffffff800845b7d4  ldrb     w1, [x20, #5]
+0xffffff800845b7d8  strh     w0, [x29, #0x4a]
+0xffffff800845b7dc  mov      w0, #-1  ; 0xffffffffffffffff?
+0xffffff800845b7e0  cbz      w1, #0xffffff800845b804  ; 0xffffff800845b804?
+0xffffff800845b7e4  mov      w0, #0x20
+0xffffff800845b7e8  ldrb     w2, [x20, #4]
+0xffffff800845b7ec  sub      w1, w0, w1
+0xffffff800845b7f0  mov      w0, #-1  ; 0xffffffffffffffff?
+0xffffff800845b7f4  lsr      w0, w0, w1
+0xffffff800845b7f8  lsl      w0, w0, w2
+0xffffff800845b7fc  and      w0, w0, w19
+0xffffff800845b800  lsr      x0, x0, x2
+0xffffff800845b804  ldrb     w1, [x20, #7]
+0xffffff800845b808  strh     w0, [x29, #0x4c]
+0xffffff800845b80c  mov      w0, #-1  ; 0xffffffffffffffff?
+0xffffff800845b810  cbz      w1, #0xffffff800845b834  ; 0xffffff800845b834?
+0xffffff800845b814  mov      w0, #0x20
+0xffffff800845b818  ldrb     w2, [x20, #6]
+0xffffff800845b81c  sub      w1, w0, w1
+0xffffff800845b820  mov      w0, #-1  ; 0xffffffffffffffff?
+0xffffff800845b824  lsr      w0, w0, w1
+0xffffff800845b828  lsl      w0, w0, w2
+0xffffff800845b82c  and      w0, w0, w19
+0xffffff800845b830  lsr      x0, x0, x2
+0xffffff800845b834  ldrb     w1, [x20, #9]
+0xffffff800845b838  strh     w0, [x29, #0x4e]
+0xffffff800845b83c  mov      w0, #-1  ; 0xffffffffffffffff?
+0xffffff800845b840  cbz      w1, #0xffffff800845b864  ; 0xffffff800845b864?
+0xffffff800845b844  mov      w0, #0x20
+0xffffff800845b848  ldrb     w2, [x20, #8]
+0xffffff800845b84c  sub      w1, w0, w1
+0xffffff800845b850  mov      w0, #-1  ; 0xffffffffffffffff?
+0xffffff800845b854  lsr      w0, w0, w1
+0xffffff800845b858  lsl      w0, w0, w2
+0xffffff800845b85c  and      w0, w0, w19
+0xffffff800845b860  lsr      x0, x0, x2
+0xffffff800845b864  ldrb     w1, [x20, #0xb]
+0xffffff800845b868  strh     w0, [x29, #0x50]
+0xffffff800845b86c  mov      w0, #-1  ; 0xffffffffffffffff?
+0xffffff800845b870  cbz      w1, #0xffffff800845b894  ; 0xffffff800845b894?
+0xffffff800845b874  mov      w0, #0x20
+0xffffff800845b878  ldrb     w2, [x20, #0xa]
+0xffffff800845b87c  sub      w1, w0, w1
+0xffffff800845b880  mov      w0, #-1  ; 0xffffffffffffffff?
+0xffffff800845b884  lsr      w0, w0, w1
+0xffffff800845b888  lsl      w0, w0, w2
+0xffffff800845b88c  and      w0, w0, w19
+0xffffff800845b890  lsr      x0, x0, x2
+0xffffff800845b894  strh     w0, [x29, #0x52]
+0xffffff800845b898  ldrb     w0, [x20, #0xc]
+0xffffff800845b89c  cbz      w0, #0xffffff800845b8d0  ; 0xffffff800845b8d0?
+0xffffff800845b8a0  ldrb     w2, [x20, #0xe]
+0xffffff800845b8a4  mov      w1, #1
+0xffffff800845b8a8  lsl      w0, w1, w2
+0xffffff800845b8ac  and      w0, w0, w19
+0xffffff800845b8b0  lsr      x0, x0, x2
+0xffffff800845b8b4  strh     w0, [x29, #0x54]
+0xffffff800845b8b8  ldrb     w0, [x20, #0xd]
+0xffffff800845b8bc  lsl      w1, w1, w0
+0xffffff800845b8c0  and      w19, w1, w19
+0xffffff800845b8c4  lsr      x19, x19, x0
+0xffffff800845b8c8  strh     w19, [x29, #0x56]
+0xffffff800845b8cc  b        #0xffffff800845b8dc  ; 0xffffff800845b8dc?
+0xffffff800845b8d0  mov      w0, #-1  ; 0xffffffffffffffff?
+0xffffff800845b8d4  strh     w0, [x29, #0x54]
+0xffffff800845b8d8  strh     w0, [x29, #0x56]
+0xffffff800845b8dc  ldr      x2, [x23, #0x60]
+0xffffff800845b8e0  add      x1, x29, #0x48
+0xffffff800845b8e4  mov      w0, w22
+0xffffff800845b8e8  blr      x2
+0xffffff800845b8ec  add      x21, x21, #0xe90
+0xffffff800845b8f0  ldr      x2, [x29, #0x58]
+0xffffff800845b8f4  ldr      x1, [x21]
+0xffffff800845b8f8  eor      x1, x2, x1
+0xffffff800845b8fc  cbz      x1, #0xffffff800845b904  ; 0xffffff800845b904?
+0xffffff800845b900  bl       #0xffffff80080a0434  ; __stack_chk_fail
+0xffffff800845b904  ldp      x19, x20, [sp, #0x10]
+0xffffff800845b908  ldp      x21, x22, [sp, #0x20]
+0xffffff800845b90c  ldp      x23, x24, [sp, #0x30]
+0xffffff800845b910  ldp      x29, x30, [sp], #0x60
+0xffffff800845b914  ret      
+0xffffff800845b918  stp      x29, x30, [sp, #-0x50]!
+0xffffff800845b91c  mov      x29, sp
+0xffffff800845b920  stp      x19, x20, [sp, #0x10]
+0xffffff800845b924  mov      x20, x0
+0xffffff800845b928  str      x21, [sp, #0x20]
+0xffffff800845b92c  mov      x0, x1
+0xffffff800845b930  adrp     x1, #0xffffff8008fbd000  ; 0xffffff8008fbd000?
+
+## disp_al_lcd_get_clk_info  (picks the dclk divider + interface constants from a per-lcd-type table)
+start 0xffffff8008434f94  next symbol 0xffffff80084350fc
+
+0xffffff8008434f94  stp      x29, x30, [sp, #-0x20]!
+0xffffff8008434f98  mov      x29, sp
+0xffffff8008434f9c  stp      x19, x20, [sp, #0x10]
+0xffffff8008434fa0  mov      x20, x1
+0xffffff8008434fa4  adrp     x1, #0xffffff80089f6000  ; 0xffffff80089f6000?
+0xffffff8008434fa8  cbnz     x2, #0xffffff8008434fd4  ; 0xffffff8008434fd4?
+0xffffff8008434fac  adrp     x0, #0xffffff8008c08000  ; 0xffffff8008c08000?
+0xffffff8008434fb0  add      x1, x1, #0x50
+0xffffff8008434fb4  add      x0, x0, #0x515
+0xffffff8008434fb8  mov      w2, #0x5a
+0xffffff8008434fbc  bl       #0xffffff800815a2b0  ; printk
+0xffffff8008434fc0  adrp     x0, #0xffffff8008c0c000  ; 0xffffff8008c0c000?
+0xffffff8008434fc4  add      x0, x0, #0xef1
+0xffffff8008434fc8  bl       #0xffffff800815a2b0  ; printk
+0xffffff8008434fcc  mov      w0, #-1  ; 0xffffffffffffffff?
+0xffffff8008434fd0  b        #0xffffff80084350f0  ; 0xffffff80084350f0?
+0xffffff8008434fd4  stp      xzr, xzr, [x20]
+0xffffff8008434fd8  mov      x19, x2
+0xffffff8008434fdc  str      wzr, [x20, #0x10]
+0xffffff8008434fe0  ldr      w0, [x2]
+0xffffff8008434fe4  cbz      w0, #0xffffff8008435038  ; 0xffffff8008435038?
+0xffffff8008434fe8  cmp      w0, #1
+0xffffff8008434fec  b.eq     #0xffffff800843504c  ; 0xffffff800843504c?
+0xffffff8008434ff0  cmp      w0, #3
+0xffffff8008434ff4  b.eq     #0xffffff8008435040  ; 0xffffff8008435040?
+0xffffff8008434ff8  cmp      w0, #4
+0xffffff8008434ffc  b.eq     #0xffffff8008435048  ; 0xffffff8008435048?
+0xffffff8008435000  adrp     x0, #0xffffff8008c08000  ; 0xffffff8008c08000?
+0xffffff8008435004  add      x1, x1, #0x50
+0xffffff8008435008  add      x0, x0, #0x515
+0xffffff800843500c  mov      w2, #0x86
+0xffffff8008435010  bl       #0xffffff800815a2b0  ; printk
+0xffffff8008435014  ldr      w1, [x19]
+0xffffff8008435018  adrp     x0, #0xffffff8008c0c000  ; 0xffffff8008c0c000?
+0xffffff800843501c  add      x0, x0, #0xf02
+0xffffff8008435020  bl       #0xffffff800815a2b0  ; printk
+0xffffff8008435024  mov      w3, #0
+0xffffff8008435028  mov      w4, #1
+0xffffff800843502c  mov      w2, #4
+0xffffff8008435030  mov      w1, #6
+0xffffff8008435034  b        #0xffffff8008435068  ; 0xffffff8008435068?
+0xffffff8008435038  mov      w0, #0
+0xffffff800843503c  b        #0xffffff800843504c  ; 0xffffff800843504c?
+0xffffff8008435040  mov      w0, #2
+0xffffff8008435044  b        #0xffffff800843504c  ; 0xffffff800843504c?
+0xffffff8008435048  mov      w0, #3
+0xffffff800843504c  sxtw     x0, w0
+0xffffff8008435050  mov      x2, #0x14
+0xffffff8008435054  add      x1, x1, #0x50
+0xffffff8008435058  add      x1, x1, #0x20
+0xffffff800843505c  madd     x0, x0, x2, x1
+0xffffff8008435060  ldp      w1, w4, [x0, #4]
+0xffffff8008435064  ldp      w2, w3, [x0, #0xc]
+0xffffff8008435068  mov      x0, #0xc00000000
+0xffffff800843506c  ldr      x5, [x19]
+0xffffff8008435070  cmp      x5, x0
+0xffffff8008435074  ldr      w0, [x19]
+0xffffff8008435078  b.ne     #0xffffff800843508c  ; 0xffffff800843508c?
+0xffffff800843507c  ldr      w5, [x19, #0x118]
+0xffffff8008435080  cbz      w5, #0xffffff800843508c  ; 0xffffff800843508c?
+0xffffff8008435084  mov      w1, w5
+0xffffff8008435088  b        #0xffffff80084350b0  ; 0xffffff80084350b0?
+0xffffff800843508c  ldr      w5, [x19, #0x30]
+0xffffff8008435090  cmp      w5, #4
+0xffffff8008435094  b.ne     #0xffffff80084350b0  ; 0xffffff80084350b0?
+0xffffff8008435098  cmp      w0, #4
+0xffffff800843509c  b.ne     #0xffffff80084350b0  ; 0xffffff80084350b0?
+0xffffff80084350a0  mov      w0, #2
+0xffffff80084350a4  sdiv     w1, w1, w0
+0xffffff80084350a8  sdiv     w2, w2, w0
+0xffffff80084350ac  b        #0xffffff80084350b8  ; 0xffffff80084350b8?
+0xffffff80084350b0  cmp      w0, #4
+0xffffff80084350b4  b.ne     #0xffffff80084350d0  ; 0xffffff80084350d0?
+0xffffff80084350b8  ldr      w0, [x19, #0x48]
+0xffffff80084350bc  cmp      w0, #1
+0xffffff80084350c0  b.ne     #0xffffff80084350e4  ; 0xffffff80084350e4?
+0xffffff80084350c4  mov      w2, #6
+0xffffff80084350c8  mov      w1, w2
+0xffffff80084350cc  b        #0xffffff80084350e4  ; 0xffffff80084350e4?
+0xffffff80084350d0  cbnz     w0, #0xffffff80084350e4  ; 0xffffff80084350e4?
+0xffffff80084350d4  ldr      w0, [x19, #0x80]
+0xffffff80084350d8  cmp      w0, #0x1a
+0xffffff80084350dc  mov      w0, #0xb
+0xffffff80084350e0  csel     w1, w1, w0, ne
+0xffffff80084350e4  mov      w0, #0
+0xffffff80084350e8  stp      w1, w4, [x20, #4]
+0xffffff80084350ec  stp      w2, w3, [x20, #0xc]
+0xffffff80084350f0  ldp      x19, x20, [sp, #0x10]
+0xffffff80084350f4  ldp      x29, x30, [sp], #0x20
+0xffffff80084350f8  ret      
+
+## disp_al_lcd_cfg  (programs tcon0: dclk divider, tcon0_cfg, tcon0_cfg_ext, src select)
+start 0xffffff80084350fc  next symbol 0xffffff8008435230
+
+0xffffff80084350fc  stp      x29, x30, [sp, #-0x60]!
+0xffffff8008435100  mov      x29, sp
+0xffffff8008435104  stp      x19, x20, [sp, #0x10]
+0xffffff8008435108  mov      w20, w0
+0xffffff800843510c  stp      x21, x22, [sp, #0x20]
+0xffffff8008435110  adrp     x21, #0xffffff8008fbd000  ; 0xffffff8008fbd000?
+0xffffff8008435114  str      x23, [sp, #0x30]
+0xffffff8008435118  mov      x23, x1
+0xffffff800843511c  add      x1, x21, #0xe90
+0xffffff8008435120  mov      x22, x2
+0xffffff8008435124  ldr      x2, [x1]
+0xffffff8008435128  str      x2, [x29, #0x58]
+0xffffff800843512c  mov      x2, #0
+0xffffff8008435130  stp      xzr, xzr, [x29, #0x40]
+0xffffff8008435134  str      wzr, [x29, #0x50]
+0xffffff8008435138  adrp     x19, #0xffffff800918c000  ; 0xffffff800918c000?
+0xffffff800843513c  bl       #0xffffff8008436d18  ; tcon_init
+0xffffff8008435140  mov      x2, x23
+0xffffff8008435144  add      x1, x29, #0x40
+0xffffff8008435148  mov      w0, w20
+0xffffff800843514c  bl       #0xffffff8008434f94  ; disp_al_lcd_get_clk_info
+0xffffff8008435150  ldrb     w1, [x29, #0x44]
+0xffffff8008435154  mov      w0, w20
+0xffffff8008435158  bl       #0xffffff8008437598  ; tcon0_set_dclk_div
+0xffffff800843515c  mov      w1, w20
+0xffffff8008435160  add      x0, x19, #0x7e8
+0xffffff8008435164  add      x2, x1, #0xc
+0xffffff8008435168  add      x1, x1, #0x10
+0xffffff800843516c  str      wzr, [x0, x2, lsl #2]
+0xffffff8008435170  ldr      w2, [x0, x1, lsl #2]
+0xffffff8008435174  mov      x1, x23
+0xffffff8008435178  mov      w0, w20
+0xffffff800843517c  bl       #0xffffff80084384ec  ; tcon0_cfg
+0xffffff8008435180  cbz      w0, #0xffffff80084351ac  ; 0xffffff80084351ac?
+0xffffff8008435184  adrp     x1, #0xffffff80089f6000  ; 0xffffff80089f6000?
+0xffffff8008435188  adrp     x0, #0xffffff8008c08000  ; 0xffffff8008c08000?
+0xffffff800843518c  add      x1, x1, #0x50
+0xffffff8008435190  add      x0, x0, #0x515
+0xffffff8008435194  add      x1, x1, #0x70
+0xffffff8008435198  mov      w2, #0xb1
+0xffffff800843519c  bl       #0xffffff800815a2b0  ; printk
+0xffffff80084351a0  adrp     x0, #0xffffff8008c0c000  ; 0xffffff8008c0c000?
+0xffffff80084351a4  add      x0, x0, #0xf26
+0xffffff80084351a8  b        #0xffffff80084351d8  ; 0xffffff80084351d8?
+0xffffff80084351ac  bl       #0xffffff80084026a4  ; bsp_disp_get_print_level
+0xffffff80084351b0  cbz      w0, #0xffffff80084351dc  ; 0xffffff80084351dc?
+0xffffff80084351b4  adrp     x1, #0xffffff80089f6000  ; 0xffffff80089f6000?
+0xffffff80084351b8  adrp     x0, #0xffffff8008c08000  ; 0xffffff8008c08000?
+0xffffff80084351bc  add      x1, x1, #0x50
+0xffffff80084351c0  add      x0, x0, #0x515
+0xffffff80084351c4  add      x1, x1, #0x70
+0xffffff80084351c8  mov      w2, #0xb3
+0xffffff80084351cc  bl       #0xffffff800815a2b0  ; printk
+0xffffff80084351d0  adrp     x0, #0xffffff8008c0c000  ; 0xffffff8008c0c000?
+0xffffff80084351d4  add      x0, x0, #0xf37
+0xffffff80084351d8  bl       #0xffffff800815a2b0  ; printk
+0xffffff80084351dc  mov      x1, x22
+0xffffff80084351e0  mov      w0, w20
+0xffffff80084351e4  bl       #0xffffff8008438268  ; tcon0_cfg_ext
+0xffffff80084351e8  add      x0, x19, #0x7e8
+0xffffff80084351ec  mov      w1, #0
+0xffffff80084351f0  add      x0, x0, w20, uxtw #2
+0xffffff80084351f4  ldr      w2, [x0, #0x20]
+0xffffff80084351f8  mov      w0, w20
+0xffffff80084351fc  bl       #0xffffff8008436f80  ; tcon0_src_select
+
+## tcon0_set_dclk_div  (writes the divider into TCON base+0x44 bits[6:0], no arithmetic)
+start 0xffffff8008437598  next symbol 0xffffff80084375b8
+
+0xffffff8008437598  adrp     x2, #0xffffff800918c000  ; 0xffffff800918c000?
+0xffffff800843759c  add      x2, x2, #0x838
+0xffffff80084375a0  ldr      x0, [x2, w0, uxtw #3]
+0xffffff80084375a4  ldr      w2, [x0, #0x44]
+0xffffff80084375a8  bfxil    w2, w1, #0, #7
+0xffffff80084375ac  str      w2, [x0, #0x44]
+0xffffff80084375b0  mov      w0, #0
+0xffffff80084375b4  ret      
+
+## tcon0_get_dclk_div  (reads TCON base+0x44 bits[6:0])
+start 0xffffff80084375b8  next symbol 0xffffff80084375d0
+
+0xffffff80084375b8  adrp     x1, #0xffffff800918c000  ; 0xffffff800918c000?
+0xffffff80084375bc  add      x1, x1, #0x838
+0xffffff80084375c0  ldr      x0, [x1, w0, uxtw #3]
+0xffffff80084375c4  ldr      w0, [x0, #0x44]
+0xffffff80084375c8  and      w0, w0, #0x7f
+0xffffff80084375cc  ret      
+
