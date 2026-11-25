@@ -55,7 +55,7 @@ All three nodes are `status = "okay"` and `bus-width = <4>`. All expose `cap-sd-
 - Kernel enumerates `mmc0:1234 SA16G 14.5 GiB` as a **high-speed SDHC card**, then creates `mmcblk0`. Therefore this capture does **not** justify calling this medium eMMC: Linux marks it non-removable, but the reported card type is SDHC.
 - The command line confirms `root=/dev/mmcblk0p5`.
 
-The whole disk reports 30,375,936 sectors (14.48 GiB) with seven partitions. Sysfs sizes are p1 64 MiB, p2 32 MiB, p3 16 MiB, p4 64 MiB, p5 512 MiB, p6 128 MiB and p7 the remainder (~13.15 GiB). One naming discrepancy must be preserved: the cmdline `partitions=` string labels p6 as `appfs` and p7 as `UDISK`, while sysfs `PARTNAME` reports p6 as `UDISK` and p7 as `primary`. Do not silently treat those two naming sources as identical.
+The whole disk reports 30,375,936 sectors (14.48 GiB) with seven partitions. Sysfs sizes are p1 64 MiB, p2 32 MiB, p3 16 MiB, p4 64 MiB, p5 512 MiB, p6 128 MiB and p7 the remainder (~13.15 GiB). One naming discrepancy must be preserved: the cmdline `partitions=` string labels p6 as `appfs` and p7 as `UDISK`, while sysfs `PARTNAME` reports p6 as `UDISK` and p7 as `primary`. The captured mount table resolves the live data use: p6 is mounted as `/data` (ext4), while p7 is mounted as `/mnt/sdcard` (vfat), with nested mounts for `/mnt/sdcard/Roms`, `SYSTEM`, `.userdata`, `Bgm`, `Books`, `Bootlogos`, `Labels`, `Overlay`, and other user-data paths. Therefore, for the current firmware layout, **p7 is the actual ROM/user-data volume** despite its sysfs `PARTNAME=primary`; do not infer that partition's role from `PARTNAME` alone.
 
 ### sdc1 — SDIO device
 
