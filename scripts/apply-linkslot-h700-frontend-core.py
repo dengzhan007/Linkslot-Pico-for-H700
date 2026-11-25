@@ -614,9 +614,11 @@ fn set_h700_power_led_game_active(active: bool) -> i32 {
 
 """
     text = text.replace(update_anchor, method + update_anchor, 1)
-    text = text.replace(update_anchor + "        self.collect_cheevos();",
-                        update_anchor + "        self.sync_power_led();\n        self.collect_cheevos();",
-                        1)
+    text = text.replace(
+        update_anchor,
+        update_anchor + "        self.sync_power_led();\n",
+        1,
+    )
 
     path.write_text(text, encoding="utf-8")
 

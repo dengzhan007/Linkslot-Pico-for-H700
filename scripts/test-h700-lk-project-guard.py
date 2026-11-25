@@ -142,6 +142,14 @@ def main() -> None:
             raise RuntimeError("RG34XX PI12 power LED object has no source file")
         summary.append("PASS rg34xx-power-led-object: PI12 board LED service is linked")
 
+        mmu_object = "arch/h700_pio_mmu_mapping.o"
+        if f"$(LOCAL_DIR)/{mmu_object}" not in platform_rules:
+            raise RuntimeError("RG34XX PIO MMU mapping object is missing from H700 platform rules")
+        mmu_source = root / "platform/h700" / Path(mmu_object).with_suffix(".c")
+        if not mmu_source.is_file() or "0x03000000u" not in mmu_source.read_text(encoding="utf-8"):
+            raise RuntimeError("RG34XX early PIO mapping does not cover the H700 peripheral window")
+        summary.append("PASS rg34xx-pio-mmu-map: device mapping is installed by the early platform MMU hook")
+
         target_rules = (worktree / "target/rg34xx_h700/rules.mk").read_text(encoding="utf-8")
         target_init = root / "target/rg34xx_h700/init.c"
         if "$(LOCAL_DIR)/init.o" not in target_rules:

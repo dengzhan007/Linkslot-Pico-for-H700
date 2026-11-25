@@ -1,4 +1,4 @@
-#include "h700_rg34xx_power_led.h"
+#include "../../platform/h700/power/h700_rg34xx_power_led.h"
 
 /*
  * RG34XX H700 target lifecycle hooks.
@@ -7,15 +7,10 @@
  *   - target_early_init() before heap/timer initialization;
  *   - target_init() after platform_init() and before apps_init().
  *
- * The generic target/init.c is intentionally excluded by the H700 overlay
- * because it also provides MediaTek storage/fastboot defaults and includes
- * MTK-specific headers. Keep this replacement deliberately side-effect-free:
- * board services are not ready/approved yet, and this target does not enable
- * the MTK aboot/fastboot application.
- *
- * Future H700 board initialization belongs in target_init(), after platform
- * services are ready and before apps_init(), but only when each service has
- * its own reviewed hardware and memory contract.
+ * The generic MTK target/init.c is excluded. The H700 arch MMU hook maps
+ * the PIO peripheral window as device memory before target_early_init().
+ * target_early_init() then turns on PI12; target_init() retries if needed.
+ * No MTK fastboot/eMMC services are imported or enabled.
  */
 void target_early_init(void)
 {
