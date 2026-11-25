@@ -172,7 +172,7 @@ class OppCandidateTests(unittest.TestCase):
                 base_present=True, base=[900000]),
             opp(720, supported_present=True, supported_cells=[0x00000100],
                 base_present=True, base=[950000]),
-            opp(936, supported_present=True, supported_cells=[0x00000200],
+            opp(936, supported_present=True, supported_cells=[0x00000200, 0x00000001],
                 base_present=True, base=[1000000]),
         ])
         runtime = "[scaling_available_frequencies]\n480000 720000\n"
