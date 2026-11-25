@@ -239,30 +239,49 @@ The pinned BaseOS RG34XX U-Boot inventory selects DT panel struct `rg34xx_v1` (`
 
 A MustardOS community report describes another RG34XX-H where a related `sun50iw9` BSP's fixed RGB/HV TCON divider and minimum `pll_video0x4` frequency produced ~106.6 Hz despite DTB nominal ~59.97 Hz. Its later DTS fix changed that unit's DCLK/HT to 54 MHz/1679; another RG34XX-H user could not reproduce the original mismatch. This is not evidence of our non-SP board's actual clock divider, and the 54/1679 values must not be copied. It reinforces the requirement to derive and verify the exact kernel #19 DCLK/PLL/TCON path for our live 26/820×536 profile. See [the forum report](https://community.muos.dev/t/rg34xx-h-incorrect-display-refresh-rate/1825) and [the DTS correction commit](https://github.com/MustardOS/internal/commit/76e454dfa9758a99f85115f80a29121dabb13a01).
 
-## TCON DCLK divider: the next decisive read-only check
+## TCON DCLK divider and PLL: read-only readback completed (2026-11-25)
 
-The pinned Allwinner sun50iw9 BSP reference at [orangepi-xunlong/linux-orangepi@0cd0547ea405b84b5b60fbc92978ac1bc2b68055](https://github.com/orangepi-xunlong/linux-orangepi/commit/0cd0547ea405b84b5b60fbc92978ac1bc2b68055) gives a concrete way to distinguish the DTB request from the actual panel DCLK. This is a related vendor BSP reference, **not yet proven to be the exact source revision behind the running 4.9.170 #19 binary**.
+The new [RG34XX readback report](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/pvaibhav-slot-runtime/tcon-readback) records a same-boot, read-only request through `/sys/class/sunxi_dump/dump` on Linux 4.9.170 #19. The sibling `/sys/class/sunxi_dump/write` node was never opened or written.
 
-- The sun50iw9 build selects lowlevel_v33x display code (see the pinned [DE Makefile](https://github.com/orangepi-xunlong/linux-orangepi/blob/0cd0547ea405b84b5b60fbc92978ac1bc2b68055/drivers/video/fbdev/sunxi/disp2/disp/de/Makefile)).
-- Its [disp_al_tcon.c](https://github.com/orangepi-xunlong/linux-orangepi/blob/0cd0547ea405b84b5b60fbc92978ac1bc2b68055/drivers/video/fbdev/sunxi/disp2/disp/de/lowlevel_v33x/disp_al_tcon.c) default table maps LCD_IF_HV to tcon_div=6 and lcd_div=1; disp_al_lcd_cfg() passes this divider to tcon0_set_dclk_div().
-- The [TCON register definition](https://github.com/orangepi-xunlong/linux-orangepi/blob/0cd0547ea405b84b5b60fbc92978ac1bc2b68055/drivers/video/fbdev/sunxi/disp2/disp/de/lowlevel_v33x/tcon/de_lcd_type.h) places tcon0_dclk at offset 0x44 after tcon0_ctl at 0x40. Its tcon0_dclk_div field is bits [6:0], and tcon0_dclk_en is bits [31:28]. The [getter/setter](https://github.com/orangepi-xunlong/linux-orangepi/blob/0cd0547ea405b84b5b60fbc92978ac1bc2b68055/drivers/video/fbdev/sunxi/disp2/disp/de/lowlevel_v33x/tcon/de_lcd.c) reads/writes that field.
-- Its [disp_lcd.c](https://github.com/orangepi-xunlong/linux-orangepi/blob/0cd0547ea405b84b5b60fbc92978ac1bc2b68055/drivers/video/fbdev/sunxi/disp2/disp/de/disp_lcd.c) requests pll_rate = requested_DCLK × tcon_div × lcd_div, reads back the PLL and LCD child rates, and derives the actual DCLK as lcd_rate_set / tcon_div. Its frame-period calculation also uses the read-back clock, not just the DTB property.
-- The pvaibhav fork names the TCON DCLK register DIVIDER=0x06511044 and the video PLL register PLL=0x03001040. Its 60-Hz divider word is 0xf000000b (divider field 11); its 120-Hz word is 0xf000000a (divider field 10). We have **not** written either address on this device.
+| Address | Register role in the reviewed pvaibhav implementation | Raw readback |
+|---|---|---:|
+| `0x06511044` | TCON0 DCLK divider | `0xf000000b` |
+| `0x03001040` | video PLL | `0x88001703` |
 
-Our current clock summary reports tcon_lcd=288 MHz. If that is the clock immediately before the TCON divider:
+The TCON word has divider field 11 (bits [6:0]) and enabled nibble `0xf`. The same capture's clock summary reports `tcon_lcd=288 MHz` and `pll_video0x4=288 MHz`; the display driver reports `ref_fps=59`, `fps=60.2`. The PLL raw word is intentionally not decoded: its N/M field interpretation has not yet been matched against the exact running kernel #19 source.
 
-| Divider hypothesis | DCLK estimate | Calculated refresh at 820×536 |
-|---|---:|---:|
-| 11 | 26.1818 MHz | 59.569 Hz |
-| 6 | 48.0000 MHz | 109.210 Hz |
+### Cross-check against the pinned pvaibhav/slot source
 
-The IRQ-derived 59.61–59.65 Hz corresponds to an effective divider close to 11 if each IRQ is one frame, whereas the related source's generic RGB/HV table defaults to 6. These are **competing hypotheses**, not proof of the installed kernel's divider. The public MustardOS ~106.6-Hz RG34XX-H report illustrates the kind of mismatch that can occur, but it was a different unit/kernel profile; do not transplant its 54-MHz/1679 timing.
+At pinned commit [`5206e3fa39aa4a9b702cd9048a07dab3b5ab95da`](https://github.com/pvaibhav/slot/tree/5206e3fa39aa4a9b702cd9048a07dab3b5ab95da), `crates/slot-power/src/refresh.rs` defines:
 
-### Exact next read-only request
+| Source mode | Write order | Register values |
+|---|---|---|
+| 60-Hz baseline | PLL, then divider | PLL `0x88001703`; divider `0xf000000b` |
+| 120-Hz candidate | divider, then PLL | divider `0xf000000a`; PLL `0x88002b03` |
 
-The runtime report shows /sys/class/sunxi_dump/dump is present and accessible as root. The pvaibhav source itself reads a register by writing a query string to the **dump request node**, then reading the returned value. The next device capture should request:
+The live readback exactly matches both pvaibhav **60-Hz** values. This strengthens confidence that the named addresses and current baseline words correspond to the RG34XX's active 60-Hz state. It does not prove that the 120-Hz pair is safe for this panel.
 
-- 0x06511044 — TCON0 DCLK divider register (confirm current divider and enable nibble).
-- 0x03001040 — video PLL register used by the reviewed fork (cross-check against clk_summary).
+The pvaibhav fork's own target gate remains `rg34xx → fog_fj035fhd05_v1`; our live FDT is `rg34xx_v1` and bootargs contain `lcd_type=old`. Do not alias the panel name or bypass the gate. The high-mode pair remains source evidence for a different admitted profile, not an approved RG34XX writer.
 
-This request must use only /sys/class/sunxi_dump/dump; **never write to /sys/class/sunxi_dump/write**. Writing the query to the dump sysfs control file asks the kernel dump helper to read MMIO; it is not a write to the MMIO register. Capture the unmodified response and kernel clock summary together. Until the values are read back, neither the 6 nor 11 divider is accepted as the actual running configuration.
+### Derived current pixel clock
+
+Using the observed `tcon_lcd=288 MHz` as the clock immediately before the DCLK divider (a clock-tree assumption, not an independent measurement):
+
+- DCLK estimate = 288 MHz / 11 = **26.1818 MHz**.
+- Refresh estimate = 26.1818 MHz / (820 × 536) = **59.569 Hz**.
+- The measured display IRQ proxy was 59.61–59.65 Hz in UI and GAME. The estimate agrees within about 0.1%.
+
+This explains why the integer live-FDT property `lcd_dclk_freq=26` produces a lower nominal calculation (59.155 Hz) than the runtime IRQ slope. It does not turn the IRQ counter into a photodiode measurement or a frontend/game FPS measurement.
+
+### Independent 120-Hz reference and remaining gate
+
+The pinned [ROCKNIX panel firmware table](https://github.com/ROCKNIX/distribution/blob/c17558d2abadebec634100264523aaddc98b3b96/projects/ROCKNIX/packages/linux-firmware/kernel-firmware/extra-firmware/panels/anbernic,rg34xx-panel.panel) advertises 26/52 MHz modes for an `anbernic,rg34xx-panel` firmware profile, with 813×533 totals. This is independent evidence that a 120-Hz mode exists in an RG34XX-related firmware table, but the timing totals differ from our live 820×536 FDT and this does not prove equivalence to our `rg34xx_v1 + lcd_type=old` panel revision.
+
+The active C policy still carries the external 54-MHz / 840 / 536 and 54-MHz / 1679 / 536 timing candidates. These are not the observed live stock timing (26-MHz property / 820 / 536 plus the read-back divider), and must remain tagged as reference candidates rather than the final board profile. Do not use them to program hardware or infer that the current target supports either mode.
+
+### Next work
+
+1. Recover or identify the exact 4.9.170 #19 display implementation from the Build-ID-matched stock kernel and trace `rg34xx_v1 + lcd_type=old` panel init, PLL bitfields, clock parents and final DCLK path.
+2. Compare that result with the pvaibhav/slot source and the independent ROCKNIX RG34XX panel table without transplanting either timing or writer.
+3. Measure UI presents and armGBA committed frames separately. Display IRQ remains only a scanout/vblank proxy.
+4. Keep the 120-Hz writer disabled, GAME 120-Hz opt-in default-off, and `hardware_applied=0` until an RG34XX-specific HAL has exact panel qualification, synchronized transition sequencing, scanout/cache ownership, readback, timeout and rollback coverage.
