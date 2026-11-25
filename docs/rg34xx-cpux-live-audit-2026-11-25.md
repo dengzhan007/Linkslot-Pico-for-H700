@@ -125,6 +125,19 @@ The 1008 MHz / 950 mV, 1104 MHz / 1000 mV and 1416 MHz / 1160 mV Linux regulator
 
 v3 now identifies a unique no-mask + `b1` structural fingerprint against the actual nine-rate runtime table, and its table-level speed NVMEM reference is present in the parser output. What remains unresolved is the exact running cpufreq/OPP binary path that selects this suffix, whether the driver's no-mask behavior is actually the active path, and whether raw SID `0x6c00` is used to choose `b1`. Do not infer `0x6c00 → b1`.
 
+#### Public source cross-check after parser-v3
+
+The corrected v3 result was compared against additional public `sun50iw9` cpufreq-NVMEM implementations. None of the located sources reproduces the device's exact **no table mask + `b1`** result:
+
+| Public source candidate | NVMEM inputs and `0x6c00` path | Why it does not match v3 |
+|---|---|---|
+| [qiaoweibiao/T507_Kernel, Linux 4.9.170](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/cpufreq/sun50i-cpufreq-nvmem.c#L42-L110) | Reads only `speed`; no explicit `0x6c00` case, so its switch default sets `supported_hw=0x4`; it does not call `dev_pm_opp_set_prop_name()` | v3 shows no table-level supported-hw match and `b1` is required |
+| [lineage-on-allwinner/android_kernel_allwinner_4.9, Linux 4.9.170](https://github.com/lineage-on-allwinner/android_kernel_allwinner_4.9/blob/ce0c8395b269a6748a10f4917a0e1d06bd4978d0/drivers/cpufreq/sun50i-cpufreq-nvmem.c#L42-L120) | Reads only `speed`; explicitly maps `0x6c00` to `supported_hw=0x1`; no named-property setter in this source | v3's exact no-mask + `b1` model is different |
+| [CrealityTech/sonic_pad_os, Linux 4.9.191](https://github.com/CrealityTech/sonic_pad_os/blob/7f37a7fbf4ad59907034715e3d967b9177de1cd4/lichee/linux-4.9/drivers/cpufreq/sun50i-cpufreq-nvmem.c#L101-L143) | Requires both `speed` and `Icpu`; `0x6c00` sets mask 1. The `b1` name is generated only in other speed-code branches (`0x2c00/0x7c00`) with Icpu data | v3's OPP table exposes only the `speed` NVMEM cell, and its raw `0x6c00` does not fit this candidate's `b1` path |
+| [Radxa allwinner-bsp `sun50iw9` variant](https://github.com/radxa/allwinner-bsp/blob/2045a3ca2a01f088c0314dc924bda59d154e363e/drivers/cpufreq/sun50i-cpufreq-nvmem.c#L146-L205) | Its speed-only `sun50iw9` data path falls through to property `a0` plus a one-cell supported-hw mask for `0x6c00` | It sets a property name and a hardware mask; it does not produce no-mask + `b1` |
+
+The Creality device tree also declares both `speed` and `Icpu` at the OPP table ([DTS lines 139–143](https://github.com/CrealityTech/sonic_pad_os/blob/7f37a7fbf4ad59907034715e3d967b9177de1cd4/lichee/linux-4.9/arch/arm64/boot/dts/sunxi/sun50iw9p1.dtsi#L139-L143)), unlike the uploaded RG34XX live FDT's single `speed` cell. These are candidate-source comparisons only, not proof of the target kernel source. The current evidence therefore points to a **different/custom vendor driver path or build**; obtain a kernel build/source fingerprint before assigning that path. Do not infer the target implementation from the family-compatible DTS alone.
+
 ### 1.6 Thermal telemetry is not safe for automatic DVFS
 
 The kernel log explicitly reports:
