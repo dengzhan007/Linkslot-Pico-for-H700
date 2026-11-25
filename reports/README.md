@@ -2,6 +2,11 @@
 
 ## Index
 
+### 2026-11-23 — Rust static mGBA binding into slot-retro (round 13)
+
+- linkslot-rust-static-mgba-binding-2026-11-23-round13.md — workflow 45128096825 passed. Added a Rust module mapping all 21 namespaced mGBA exports into the real slot-retro::Api type; host C stubs verify mgba_static_api() and the LibretroCore::open_static() init/deinit lifecycle. Static mGBA binding test suite: 63 passed, 0 failed. The next step is slot-level built-in core selection; this report does not claim real game execution or hardware boot. [Workflow 45128096825](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45128096825); [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16).
+
+
 ### 2026-11-23 — Real mGBA static API symbol binding (round 12)
 
 - `linkslot-mgba-static-api-link-2026-11-23-round12.md` — main workflow 45126961555 passed on commit `13c8239`. Strict AArch32 API-shaped table references all 21 real namespaced mGBA functions, is combined with H700 newlib adapter, and is linked with the actual mGBA whole archive; newlib-only final ELF32/ARM has no undefined symbols. Artifact ID `14796725457`, 96,415,151 bytes. This is a link probe, not a Rust-runtime or device execution test. [Workflow 45126961555](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45126961555); [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16).
