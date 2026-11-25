@@ -12,6 +12,11 @@ lives on `main`; report archives are kept here because `build/` is gitignored th
 SHA-256 of `rg34xx-inventory-20261122-195053.zip`:
 `bbfa065e590ecd7f8394f9b251d15468d63ed6c93bbe192e4272a65a700ab5e2`
 
+## Standalone extracts
+
+- `debugfs-memory-reservations.txt`: verbatim copy of the same-named file inside the archive above
+  (2,664 bytes, SHA-256 `6d256713f030dd6093c6f04770cf20a9561b93db76f288c01f2da179f1603ced`).
+
 ## Capture conditions
 
 - Device: `<serial-redacted>`, block device `/dev/mmcblk0`
