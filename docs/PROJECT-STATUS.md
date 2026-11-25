@@ -292,3 +292,6 @@ Linkslot 1.0.45 UI 当前已追加 display-only CPU row：`SYSTEM_SETTINGS` 为 
 
 
 **TCON divider investigation added:** 0x06511044 corresponds to TCON0 DCLK at struct offset 0x44 in the related pinned sun50iw9 BSP; bits [6:0] are divider, bits [31:28] enable. That BSP's generic HV path picks divider 6, while pvaibhav's 60-Hz mode word encodes divider 11. With our observed 288-MHz tcon_lcd clock, /11 predicts ~59.57 Hz, /6 predicts ~109.21 Hz. This makes a read-only sunxi_dump/dump request for 0x06511044 and 0x03001040 the next decisive check; no write-node or MMIO writes are allowed. Exact 4.9.170 #19 implementation still needs provenance.
+
+
+**报告脱敏提醒（2026-11-25）：** 新上传的 `reports/pvaibhav-slot-runtime/fdt-reparse/` 当前包含设备唯一序列号字段：`device-sha256.txt` 中有 serial 行，`live-fdt.json` 的 bootargs 保留 androidboot.serialno，raw `live-fdt.dtb` 也包含该 bootargs。不要在后续提交/聊天中复制该编号。公开报告当前应以脱敏副本替换这些字段并删除公开的原始 DTB；但仅更新当前分支文件不能清除已公开 Git commit 历史，若需要彻底撤回，应先限制仓库访问或按仓库策略重写相关历史。首轮 UI/GAME 报告的 serial 已脱敏。
