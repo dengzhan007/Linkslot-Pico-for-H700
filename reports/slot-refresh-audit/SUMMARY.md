@@ -101,3 +101,20 @@ adb pull /tmp/slot-refresh-game.txt .
 ```
 
 Windows/MSYS 环境需设 `MSYS2_ARG_CONV_EXCL='*'`，否则 `/tmp/...` 会被改写成 `C:/Users/.../Temp/...`。
+
+
+## 10. 解释更正（2026-11-26）
+
+本节修正上文第 2、3 节中两处不准确表述；**不改变本次实机“UI 与 GAME 都处于约 60 Hz、没有应用 120 Hz”的结论**。
+
+1. “120 Hz 需要设备树里存在第二套 timing”表述过强。当前 FDT 只有一套基准 timing，并不能单独证明不能运行时改频。pvaibhav/slot 的 pinned writer 本身就是在启动/唤醒流程中直接重写 DIVIDER 与 PLL，不要求 FDT 再提供第二个 timing 节点。FDT 单套基准参数和面板身份仍是 probe 的输入，但不能把“没有第二个 FDT timing 节点”作为否决动态模式的独立依据。
+2. 上文称“120 Hz 需要 576 MHz 编码”不正确。核对 pinned 源码 `pvaibhav/slot@5206e3fa39aa4a9b702cd9048a07dab3b5ab95da` 的 `crates/slot-power/src/refresh.rs`，其 `registers(true)` 实际写入顺序和值为：
+   - TCON divider：`0x06511044 = 0xf000000a`（divider 10）
+   - PLL：`0x03001040 = 0x88002b03`（按已记录的 sun50iw9 参考公式为 528 MHz）
+   - 528 MHz / 10 = 52.8 MHz；在 820×536 totals 下约为 **120.131 Hz**。
+   
+   `0x88001701` 才是该参考公式下的 576 MHz 编码；它不是 pvaibhav fork 的实际 120-Hz candidate。576 MHz / 11 约为 119.138 Hz，576 MHz / 10 则约为 131.052 Hz。
+3. 本轮 UI/GAME 观测到的 PLL 始终是 `0x88001703`（288 MHz reference decode），IRQ 分别 59.667 / 59.583 Hz，显示驱动均报约 60.2 fps；因此本轮仍有充分证据判定当前没有应用 pvaibhav 的 120-Hz pair。当前这一轮对 TCON 地址 `0x06511044` 的 dump 读取返回 I/O error，故**本轮没有直接读回 divider**；旧的同设备独立只读记录曾读到 divider 11，但不可把它冒充为本轮的读回结果。
+4. 精确面板身份仍是 `rg34xx_v1`，与 pinned fork 对 target `rg34xx` 要求的 `fog_fj035fhd05_v1` 不同。不能通过改 allowlist 或仅凭 120-Hz 寄存器算术来开放 writer。
+
+证据来源：pinned [refresh.rs](https://github.com/pvaibhav/slot/blob/5206e3fa39aa4a9b702cd9048a07dab3b5ab95da/crates/slot-power/src/refresh.rs)；本次设备数据保留在本目录两份原始报告中。
