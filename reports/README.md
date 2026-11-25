@@ -2,6 +2,11 @@
 
 ## Index
 
+### 2026-11-23 — Real mGBA static API symbol binding (round 12)
+
+- `linkslot-mgba-static-api-link-2026-11-23-round12.md` — main workflow 45126961555 passed on commit `13c8239`. Strict AArch32 API-shaped table references all 21 real namespaced mGBA functions, is combined with H700 newlib adapter, and is linked with the actual mGBA whole archive; newlib-only final ELF32/ARM has no undefined symbols. Artifact ID `14796725457`, 96,415,151 bytes. This is a link probe, not a Rust-runtime or device execution test. [Workflow 45126961555](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45126961555); [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16).
+
+
 ### 2026-11-23 — Linkslot static core API entry (round 11)
 
 - `linkslot-static-core-api-2026-11-23-round11.md` — full workflow 45126045887 passed on commit `2ebe74b`. Dynamic mode: 61/61 tests; static-only mode: 62/62 tests. Adds `LibretroCore::open_static(Api, ...)`, makes `libloading` optional with dynamic still default, and confirms shared init/deinit lifecycle. Artifact ID `14795752171`, 96,408,534 bytes. Actual namespaced mGBA symbol binding is the next in-progress probe, not yet included as passed. [Workflow 45126045887](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45126045887); [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16).
