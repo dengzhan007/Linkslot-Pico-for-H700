@@ -2,6 +2,15 @@
 
 ## Index
 
+### 2026-11-25 — RG34XX stock kernel identity + CPUFreq NVMEM probe reverse engineering (offline)
+
+- `rg34xx-boot-p4-verified.json` confirms the uncompressed stock kernel SHA-256 `39cf8c3eb9a75ff0eda51b4074cd65860c5aa5386093bcaf69339819421d84b7` matches the public BaseOS survey prefix; GNU Build ID `a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68` matches the live kernel.
+- `rg34xx-cpufreq-driver-disasm.txt`, `rg34xx-cpufreq-full-cfg.txt/.json`, and `rg34xx-opp-core-disasm.txt` document the Build-ID-matched AArch64 ELF analysis: `sun50i_cpufreq_nvmem_probe` has 287 instructions / 69 strict basic blocks / 106 edges and ten explicit speed comparisons.
+- Speed `0x6c00/0x7c00` takes the `b0/b1` prop-name path, keeps supported-hw mask at zero, and skips `dev_pm_opp_set_supported_hw`; suffix is `(sunxi_get_soc_ver() & 7) ? 1 : 0`. The live `soc_ver&7` and actual NVMEM over-read high halfword remain unverified. The probe reads a 2-byte cell buffer with a 32-bit load; treat this as a logical bounds-risk, not as proof of a runtime fault.
+- Entire exercise is offline/static. No device-side vendor getter, `/dev/mem`, MMIO, PMIC/PLL writes, SD/boot writes or new hardware authorization.
+
+### 2026-11-25 — pvaibhav/slot RG34XX UI vs GAME runtime capture (read-only, 30 s each)
+
 ### 2026-11-25 — pvaibhav/slot RG34XX UI vs GAME runtime capture (read-only, 30 s each)
 
 - `pvaibhav-slot-runtime/` — two read-only runtime captures of the same RG34xx (`sun50iw9p1`, Linux `4.9.170`)
