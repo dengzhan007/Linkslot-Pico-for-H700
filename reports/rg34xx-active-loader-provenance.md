@@ -386,3 +386,62 @@ treated as proof that it ran on this unit.
   `experiments/h700-boot-speed/spl/verify-monitor.py`
 - Previous reports: `reports/rg34xx-boot-partition-deep-audit.md`,
   `reports/rg34xx-bootloader-handoff-followup.md`
+
+---
+
+## Addendum — 2026-11-24: p4+40 / p4+48 image-pair identity
+
+The local p4+40 MiB extraction is recorded in `reports/rg34xx-native-firmware/`.
+The 287,232-byte package at p4 offset `0x02800000` matches the audited
+SHA-256 `dc9dc3ae66b30244911e7054ca66136991626cabb0d59c796c4b253a126f28e9`
+and FNV-1a32 `0xaf0018cb`. Its four extents are contiguous and bounded:
+monitor, DTBO, DTB and the 32 KiB AArch32 loader.
+
+The p4+40 MiB firmware DTB and the p4+48 MiB active Android v2 image DTB are
+both 139,822 bytes and byte-identical (SHA-256
+`c28c87380ffab00148bf4dc457e70b8c6c576470dcfbc53df64addddf89603a1`).
+
+### Loader image identity checks
+
+The A32 loader disassembly in the extraction report finds both expected
+compile-time image constants in one validation function:
+
+- Image length `0x00829000`: `movw r1, #0x9000` at loader offset
+  `0x1880`, `movt r1, #0x82` at `0x1888`, compared at `0x1890`.
+- Image FNV-1a32 `0x04762a5f`: `movw r1, #0x2a5f` at `0x189c`,
+  `movt r1, #0x476` at `0x18a0`, compared at `0x18a4`.
+
+The report's byte-string literal search returned empty arrays because these
+A32 immediates are assembled by `movw` + `movt`; that is a scanner
+limitation, not evidence that the constants are absent. The instruction
+disassembly is the evidence for the two constants and comparisons.
+
+This also maps directly to the native record ABI in
+`experiments/h700-boot-speed/spl/native-handoff.h` at BaseOS-MultiFrontend
+commit `cbe253a4`: record base `0x4a300000`; `image_bytes` offset
+`0xbc`; `image_fnv` offset `0xc0`. With loader register `r7 =
+0x4a300028`, its loads `[r7, #0x94]` and `[r7, #0x98]` address exactly
+`0x4a3000bc` and `0x4a3000c0`. Those are the fields populated by
+`spl/native-boot.c` from `BASEOS_IMAGE_BYTES` and `BASEOS_IMAGE_FNV`.
+The source build derives the constants from the paired Android image;
+the SPL source also checks the image FNV after reading the p4+48 MiB extent.
+
+**Conclusion:** the deployed p4+40 MiB loader constants agree with the
+deployed p4+48 MiB active image's length and FNV, and their DTB components
+are byte-identical. This closes the *deployed loader ↔ active image
+identity* check at the available host-evidence level.
+
+### What this does not close
+
+It does not recreate or validate the exact 32-byte build generation, prove
+the image-validation function's runtime call path from disassembly alone,
+or independently inspect the deployed raw-capsule SPL's compiled constants.
+It is not a firmware rebuild or hardware boot test.
+
+Terminology matters here: BaseOS `native/build.py` reads
+`work/<target>/boot-gzip/boot-package.bin` as the **TOC1 source package**
+used to derive the policy and loader header. That input is not the
+287,232-byte p4+40 MiB native firmware output extracted in this round.
+The pinned TOC1 source package and build-time `inventory/prefix.bin` remain
+unavailable; the live TOC1 package hash differs from the pinned source hash.
+Those missing build inputs still block exact generation reproduction.
