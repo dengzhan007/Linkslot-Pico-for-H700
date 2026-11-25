@@ -2,6 +2,11 @@
 
 ## Index
 
+### 2026-11-23 — Linkslot static core API entry (round 11)
+
+- `linkslot-static-core-api-2026-11-23-round11.md` — full workflow 45126045887 passed on commit `2ebe74b`. Dynamic mode: 61/61 tests; static-only mode: 62/62 tests. Adds `LibretroCore::open_static(Api, ...)`, makes `libloading` optional with dynamic still default, and confirms shared init/deinit lifecycle. Artifact ID `14795752171`, 96,408,534 bytes. Actual namespaced mGBA symbol binding is the next in-progress probe, not yet included as passed. [Workflow 45126045887](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45126045887); [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16).
+
+
 ### 2026-11-23 — Linkslot VFS integration and complete mGBA/newlib feasibility chain (round 10)
 
 - `linkslot-lk-rust-feasibility-2026-11-23-round10-vfs-static-newlib.md` — successful workflow 45125097115 on feature head `2ea0b1f`. The real Linkslot 1.0.36 `slot-retro::environment()` callback now passes its VFS v3 host regression (60/60 slot-retro tests); the actual mGBA VDir adapter passes against a fake VFS; Generic and arm-none-eabi/newlib VFS v3 AArch32 archives build; H700 newlib adapter tests pass; whole-archive mGBA + adapter links with newlib-only and newlib-nosys; A32 LK BL33 layout probe passes. Artifact ID `14794884889` (91,104,214 bytes). No SD/FAT backend, static Linkslot core integration, full no_std frontend, hardware boot or device test. [Workflow 45125097115](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45125097115); [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16).
