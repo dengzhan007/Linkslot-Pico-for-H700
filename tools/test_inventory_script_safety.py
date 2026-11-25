@@ -146,6 +146,20 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertIn('done < "$CPU_CLK_SUMMARY"', self.source)
         self.assertIn('NOT_READABLE_OR_ABSENT: CPUX clk_summary focus', self.source)
 
+    def test_synchronized_cpufreq_clock_samples_are_read_only(self):
+        self.assertIn('== synchronized cpufreq / CPUX clock samples (read-only) ==', self.source)
+        self.assertIn('CPUFREQ_POLICY="/sys/devices/system/cpu/cpufreq/policy0"', self.source)
+        self.assertIn('CPUFREQ_CPU0="/sys/devices/system/cpu/cpu0/cpufreq"', self.source)
+        self.assertIn('while [ "$SAMPLE" -le 6 ]; do', self.source)
+        self.assertIn('for attr in scaling_cur_freq cpuinfo_cur_freq; do', self.source)
+        self.assertIn('cat /proc/uptime', self.source)
+        self.assertIn('done < "$CPU_CLK_SUMMARY"', self.source)
+        self.assertIn('sleep 0.2', self.source)
+        self.assertNotRegex(self.source, r'>\s*/sys/devices/system/cpu/')
+        self.assertNotIn('scaling_governor=', self.source)
+        self.assertNotIn('scaling_min_freq=', self.source)
+        self.assertNotIn('scaling_max_freq=', self.source)
+
     def test_tee_ion_runtime_capture_is_read_only(self):
         self.assertIn('> "$OUTDIR/tee-ion-runtime.txt"', self.source)
         self.assertIn('/proc/config.gz', self.source)
