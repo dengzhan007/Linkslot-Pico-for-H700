@@ -136,7 +136,7 @@ The live FDT has no reserved-memory node; CMA debugfs is absent on this Linux 4.
 | CPU0–CPU3 Linux cpufreq grouping | **Confirmed:** one shared policy, all four online in this Linux snapshot |
 | Current Linux CPU clock parent | **Confirmed at Linux snapshot:** pll_cpu → cpu; pll_periph0 is separate |
 | pll_periph0 Linux rate | **Observed:** 600 MHz, 4/4 prepare/enable users |
-| Physical CPU rate | **Unresolved:** cpufreq and clk_summary values diverge |
+| Synchronized instantaneous CPU rate | **Not yet captured:** cpufreq and clk_summary were read at different times; `cpuinfo_cur_freq` uses a clock-framework getter in the pinned cpufreq-dt candidate, while `scaling_cur_freq` is cached policy state |
 | SID speed raw value | **Captured:** 0x6c00; mainline candidate bin 5 only |
 | Vendor speed-bin interpretation / OPP mask | **Unresolved** |
 | DCDC1 runtime framework observation | **Captured:** enabled / 1160 mV / cpu0 consumer in this sample |
@@ -150,7 +150,7 @@ The live FDT has no reserved-memory node; CMA debugfs is absent on this Linux 4.
 ## 4. Next actions
 
 1. Reconcile the exact shipping Linux 4.9.170 cpufreq/OPP implementation with the live OPP table and raw 0x6c00; do not borrow the mainline bin label or the vendor's unsafe 2-byte-to-u32* consumer as authorization.
-2. Determine why scaling_cur_freq/cpuinfo_cur_freq diverge from clk_summary pll_cpu; collect a synchronized, repeated read sequence with timestamps and identify the implementation behind each sysfs field.
+2. Run the six-sample uptime-bracketed collector added after inventory v1; compare each `cpuinfo_cur_freq` clock-framework read with `scaling_cur_freq` cached policy state and the adjacent CPUX `clk_summary` tree.
 3. Keep the shared CPUX PLL write path disabled until BL31→BL33 CPU1–CPU3 state, single-core handoff, pll_periph0 fallback behavior and timer continuity are proven.
 4. Resolve why the thermal driver rejects AVCC calibration or establish a separately verified sensor path before implementing closed-loop thermal policy.
 5. Keep the runtime C service POLICY_ONLY, hardware_applied=0, and the Linkslot CPU Performance row display-only/unavailable.
