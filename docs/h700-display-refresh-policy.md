@@ -83,7 +83,7 @@ Files:
 The versioned C API provides:
 - `h700_display_refresh_policy_init_v1()`: initializes UI preference to 120 Hz and scene to UI.
 - `h700_display_refresh_policy_set_ui_preference_v1(60|120)`: future settings toggle.
-- `h700_display_refresh_policy_set_scene_v1(UI|GAME)`: game always resolves to 60 Hz; UI resolves to the stored UI preference.
+- `h700_display_refresh_policy_set_scene_v1(UI|GAME)`: GAME resolves to 120 Hz only when `game_120hz_enabled=1`, otherwise it remains at 60 Hz; UI resolves to the stored UI preference.
 - `h700_display_refresh_policy_get_state_v1()`: returns current preference, scene, requested profile, generation and `hardware_applied`.
 - `h700_display_refresh_get_rg34xx_timing_v1(60|120)`: returns the fixed RG34XX timing candidate above.
 
