@@ -9,6 +9,7 @@ on:
       - "scripts/test-h700-cpu-performance-policy.sh"
       - "scripts/test-h700-cpu-performance-service.sh"
       - "scripts/test-h700-rg34xx-power-led.sh"
+      - "scripts/test-h700-pio-mmu-mapping.sh"
       - "scripts/collect-rg34xx-readonly-inventory.sh"
       - "tools/test_inventory_script_safety.py"
       - "tools/inspect_h700_fdt.py"
@@ -38,6 +39,7 @@ on:
       - "scripts/build-h700-objects.sh"
       - "scripts/test-h700-cpu-performance-service.sh"
       - "scripts/test-h700-rg34xx-power-led.sh"
+      - "scripts/test-h700-pio-mmu-mapping.sh"
       - "scripts/collect-rg34xx-readonly-inventory.sh"
       - "tools/test_inventory_script_safety.py"
       - "tools/inspect_h700_fdt.py"
@@ -70,6 +72,7 @@ jobs:
           sh scripts/test-h700-gpt-readonly.sh
           sh scripts/test-h700-cpu-performance-service.sh
           sh scripts/test-h700-rg34xx-power-led.sh
+          sh scripts/test-h700-pio-mmu-mapping.sh
           python3 tools/test_inventory_script_safety.py
           python3 tools/test_inspect_h700_fdt.py
           sh scripts/test-h700-sunxi-mmc-clock.sh

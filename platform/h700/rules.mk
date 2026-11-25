@@ -4,6 +4,9 @@ ARCH := arm
 ARM_CPU := cortex-a53
 CPU := generic
 
+# Verified RG34XX physical DRAM base used by GammaOS AArch32 arm_mmu_init().
+DEFINES += DRAM_PHY_ADDR=0x40000000
+
 # LK build.mk links the ELF with this generated one-segment script.
 # The target's fail-closed memory gate must accept explicit reviewed values
 # before the linker script can be generated with device addresses.

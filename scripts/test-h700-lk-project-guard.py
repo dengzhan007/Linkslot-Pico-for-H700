@@ -146,9 +146,23 @@ def main() -> None:
         if f"$(LOCAL_DIR)/{mmu_object}" not in platform_rules:
             raise RuntimeError("RG34XX PIO MMU mapping object is missing from H700 platform rules")
         mmu_source = root / "platform/h700" / Path(mmu_object).with_suffix(".c")
-        if not mmu_source.is_file() or "0x03000000u" not in mmu_source.read_text(encoding="utf-8"):
-            raise RuntimeError("RG34XX early PIO mapping does not cover the H700 peripheral window")
-        summary.append("PASS rg34xx-pio-mmu-map: device mapping is installed by the early platform MMU hook")
+        if not mmu_source.is_file():
+            raise RuntimeError("RG34XX early PIO MMU mapping source is missing")
+        mmu_text = mmu_source.read_text(encoding="utf-8")
+        for required in (
+            "arm_mmu_init()",
+            "H700_DRAM_BASE 0x40000000u",
+            "H700_DRAM_SIZE 0x40000000u",
+            "MMU_MEMORY_TYPE_NORMAL_WRITE_BACK_ALLOCATE",
+            "H700_PIO_WINDOW_BASE 0x03000000u",
+            "MMU_MEMORY_TYPE_DEVICE_SHARED",
+            "arch_enable_mmu()",
+        ):
+            if required not in mmu_text:
+                raise RuntimeError("RG34XX early MMU mapping is missing: " + required)
+        if "DRAM_PHY_ADDR=0x40000000" not in platform_rules:
+            raise RuntimeError("H700 build does not set the verified RG34XX DRAM physical base")
+        summary.append("PASS rg34xx-pio-mmu-map: LK section table, DRAM attributes, PIO Device mapping and MMU enable are ordered")
 
         target_rules = (worktree / "target/rg34xx_h700/rules.mk").read_text(encoding="utf-8")
         target_init = root / "target/rg34xx_h700/init.c"
