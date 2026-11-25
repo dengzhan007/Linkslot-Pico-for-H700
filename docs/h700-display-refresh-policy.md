@@ -233,3 +233,8 @@ The pinned BaseOS [H700 variant survey](https://github.com/pvaibhav/BaseOS/tree/
 ### Vendor U-Boot selected panel versus init routine label
 
 The pinned BaseOS RG34XX U-Boot inventory selects DT panel struct `rg34xx_v1` (`selected_by_dt=true`), then calls a shared init function with a symbol string containing `lcd_panel_uboot_fj035fhd05_v1_init`. The function label is not the selected DT driver name. The same BaseOS survey maps RG34XX PE6 high → `lcd_type=old`, low → `boe`; the live bootargs show `old`. Therefore the pvaibhav fork's `rg34xx → fog_fj035fhd05_v1` gate mismatches the standard RG34XX firmware profile; it must not be made to pass by aliasing the name. U-Boot sequencing does not prove Linux DCLK divider or runtime mode-switch safety.
+
+
+### Clock-tree caution from a related RG34XX-H revision (not our live profile)
+
+A MustardOS community report describes another RG34XX-H where a related `sun50iw9` BSP's fixed RGB/HV TCON divider and minimum `pll_video0x4` frequency produced ~106.6 Hz despite DTB nominal ~59.97 Hz. Its later DTS fix changed that unit's DCLK/HT to 54 MHz/1679; another RG34XX-H user could not reproduce the original mismatch. This is not evidence of our non-SP board's actual clock divider, and the 54/1679 values must not be copied. It reinforces the requirement to derive and verify the exact kernel #19 DCLK/PLL/TCON path for our live 26/820×536 profile. See [the forum report](https://community.muos.dev/t/rg34xx-h-incorrect-display-refresh-rate/1825) and [the DTS correction commit](https://github.com/MustardOS/internal/commit/76e454dfa9758a99f85115f80a29121dabb13a01).
