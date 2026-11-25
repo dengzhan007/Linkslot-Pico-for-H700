@@ -1,0 +1,18 @@
+# device-side sha256 (read-only; no writes, no permission changes)
+captured_at 2026-11-25T19:12:18+08:00
+device RG34XX / sun50iw9p1, kernel 4.9.170
+serial [REDACTED]  # removed 2026-11-25 19:50: identical to androidboot.serialno in the FDT
+
+# /mnt/sdcard/System/slot
+sha256 8f0fd40da4ac161e5fbb9a56a99c254acf8b2f31806e2be6bdaa929b5ee28505
+size_bytes 18718728
+
+# /mnt/sdcard/SYSTEM/armgba_libretro.so
+sha256 4ebae098cc4848fb459fc18299c39acbdbbbeb732db5c3f66d1ff3f6e142e889
+size_bytes 2021992
+
+# identity of the running system when the hashes were taken
+uptime_s 414.98
+boot_id e0ca1c1b-6d0f-45db-a9be-2744d7fe1f0d
+kernel_release 4.9.170
+bootreason_prop unavailable: getprop is not present in this rootfs

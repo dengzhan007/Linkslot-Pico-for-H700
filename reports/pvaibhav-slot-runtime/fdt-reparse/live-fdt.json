@@ -1,0 +1,1361 @@
+{
+  "boot_framebuffers": [
+    {
+      "base": "0x7bf24800",
+      "bits_per_pixel": 32,
+      "end_exclusive": "0x7c076000",
+      "height": 480,
+      "matches_disp_reserve": true,
+      "node": "/soc@03000000/disp@01000000",
+      "raw": "7bf24800,2d0,1e0,20,b40,0,0,2d0,1e0",
+      "remaining_hex_fields": [
+        "0",
+        "0",
+        "2d0",
+        "1e0"
+      ],
+      "size_bytes": 1382400,
+      "stride_bytes": 2880,
+      "width": 720
+    }
+  ],
+  "chosen_bootargs": "earlyprintk=sunxi-uart,0x05000000 initcall_debug=0 console=ttyS0,115200 loglevel=4 root=/dev/mmcblk0p5 rootwait quiet splash init=/init partitions=special@mmcblk0p1:boot-resource@mmcblk0p2:env@mmcblk0p3:boot@mmcblk0p4:rootfs@mmcblk0p5:appfs@mmcblk0p6:UDISK@mmcblk0p7 cma=64M snum=<serial-redacted> mac_addr= wifi_mac= bt_mac= selinux=0 specialstr= gpt=1 androidboot.mode=normal androidboot.serialno=<serial-redacted> androidboot.hardware=sun50iw9p1 boot_type=1 androidboot.boot_type=1 androidboot.secure_os_exist=0 gpt=1 uboot_message=2018.05(05/26/2026-13:55:09) disp_reserve=1382400,0x7bf24800 bootreason=unknow lcd_type=old loglevel=1 rcupdate.rcu_expedited=1 rcupdate.rcu_normal_after_boot=1",
+  "compatible": [
+    "allwinner,h616",
+    "arm,sun50iw9p1"
+  ],
+  "cpu_power": {
+    "cpu_nodes": [
+      {
+        "clock_frequency_hz": null,
+        "compatible": [
+          "arm,cortex-a53",
+          "arm,armv8"
+        ],
+        "cpu_supply": [
+          {
+            "node": "/soc@03000000/twi@0x07081400/pmu/regulators@0/dcdc1",
+            "phandle": "0x4f",
+            "regulator": {
+              "always_on": true,
+              "boot_on": true,
+              "maximum_microvolt": 1540000,
+              "minimum_microvolt": 500000,
+              "name": "axp2202-dcdc1",
+              "node": "/soc@03000000/twi@0x07081400/pmu/regulators@0/dcdc1",
+              "status": "okay"
+            }
+          }
+        ],
+        "node": "/cpus/cpu@0",
+        "nvmem_cells": [],
+        "operating_points_v2": [
+          {
+            "node": "/opp_l_table",
+            "phandle": "0xde"
+          }
+        ],
+        "reg_cells": [
+          0,
+          0
+        ],
+        "status": "okay",
+        "thermal_sensors": []
+      },
+      {
+        "clock_frequency_hz": null,
+        "compatible": [
+          "arm,cortex-a53",
+          "arm,armv8"
+        ],
+        "cpu_supply": [],
+        "node": "/cpus/cpu@1",
+        "nvmem_cells": [],
+        "operating_points_v2": [
+          {
+            "node": "/opp_l_table",
+            "phandle": "0xde"
+          }
+        ],
+        "reg_cells": [
+          0,
+          1
+        ],
+        "status": "okay",
+        "thermal_sensors": []
+      },
+      {
+        "clock_frequency_hz": null,
+        "compatible": [
+          "arm,cortex-a53",
+          "arm,armv8"
+        ],
+        "cpu_supply": [],
+        "node": "/cpus/cpu@2",
+        "nvmem_cells": [],
+        "operating_points_v2": [
+          {
+            "node": "/opp_l_table",
+            "phandle": "0xde"
+          }
+        ],
+        "reg_cells": [
+          0,
+          2
+        ],
+        "status": "okay",
+        "thermal_sensors": []
+      },
+      {
+        "clock_frequency_hz": null,
+        "compatible": [
+          "arm,cortex-a53",
+          "arm,armv8"
+        ],
+        "cpu_supply": [],
+        "node": "/cpus/cpu@3",
+        "nvmem_cells": [],
+        "operating_points_v2": [
+          {
+            "node": "/opp_l_table",
+            "phandle": "0xde"
+          }
+        ],
+        "reg_cells": [
+          0,
+          3
+        ],
+        "status": "okay",
+        "thermal_sensors": []
+      }
+    ],
+    "cpu_opp_tables": [
+      {
+        "compatible": [
+          "allwinner,sun50i-operating-points"
+        ],
+        "entries": [
+          {
+            "frequency_hz": 480000000,
+            "node": "/opp_l_table/opp@480000000-0",
+            "status": "okay",
+            "supported_hw_cell_count": 1,
+            "supported_hw_cells": [
+              51
+            ],
+            "supported_hw_present": true,
+            "turbo": false,
+            "voltage_microvolt_cells": [
+              900000
+            ],
+            "voltage_microvolt_present": true,
+            "voltage_microvolt_variant_names": [],
+            "voltage_microvolt_variants": {}
+          },
+          {
+            "frequency_hz": 480000000,
+            "node": "/opp_l_table/opp@480000000-1",
+            "status": "okay",
+            "supported_hw_cell_count": 1,
+            "supported_hw_cells": [
+              12
+            ],
+            "supported_hw_present": true,
+            "turbo": false,
+            "voltage_microvolt_cells": [
+              900000
+            ],
+            "voltage_microvolt_present": true,
+            "voltage_microvolt_variant_names": [],
+            "voltage_microvolt_variants": {}
+          },
+          {
+            "frequency_hz": 480000000,
+            "node": "/opp_l_table/opp@480000000-ab",
+            "status": "okay",
+            "supported_hw_cell_count": 0,
+            "supported_hw_cells": [],
+            "supported_hw_present": false,
+            "turbo": false,
+            "voltage_microvolt_cells": [],
+            "voltage_microvolt_present": false,
+            "voltage_microvolt_variant_names": [
+              "a1",
+              "b0",
+              "b1",
+              "c0",
+              "c1",
+              "c2"
+            ],
+            "voltage_microvolt_variants": {
+              "a1": [
+                900000
+              ],
+              "b0": [
+                900000
+              ],
+              "b1": [
+                900000
+              ],
+              "c0": [
+                900000
+              ],
+              "c1": [
+                900000
+              ],
+              "c2": [
+                900000
+              ]
+            }
+          },
+          {
+            "frequency_hz": 600000000,
+            "node": "/opp_l_table/opp@600000000-0",
+            "status": "okay",
+            "supported_hw_cell_count": 1,
+            "supported_hw_cells": [
+              3
+            ],
+            "supported_hw_present": true,
+            "turbo": false,
+            "voltage_microvolt_cells": [
+              900000
+            ],
+            "voltage_microvolt_present": true,
+            "voltage_microvolt_variant_names": [],
+            "voltage_microvolt_variants": {}
+          },
+          {
+            "frequency_hz": 600000000,
+            "node": "/opp_l_table/opp@600000000-1",
+            "status": "okay",
+            "supported_hw_cell_count": 1,
+            "supported_hw_cells": [
+              12
+            ],
+            "supported_hw_present": true,
+            "turbo": false,
+            "voltage_microvolt_cells": [
+              900000
+            ],
+            "voltage_microvolt_present": true,
+            "voltage_microvolt_variant_names": [],
+            "voltage_microvolt_variants": {}
+          },
+          {
+            "frequency_hz": 600000000,
+            "node": "/opp_l_table/opp@600000000-ab",
+            "status": "okay",
+            "supported_hw_cell_count": 0,
+            "supported_hw_cells": [],
+            "supported_hw_present": false,
+            "turbo": false,
+            "voltage_microvolt_cells": [],
+            "voltage_microvolt_present": false,
+            "voltage_microvolt_variant_names": [
+              "b0",
+              "c0",
+              "c2"
+            ],
+            "voltage_microvolt_variants": {
+              "b0": [
+                900000
+              ],
+              "c0": [
+                900000
+              ],
+              "c2": [
+                900000
+              ]
+            }
+          },
+          {
+            "frequency_hz": 720000000,
+            "node": "/opp_l_table/opp@720000000",
+            "status": "okay",
+            "supported_hw_cell_count": 1,
+            "supported_hw_cells": [
+              48
+            ],
+            "supported_hw_present": true,
+            "turbo": false,
+            "voltage_microvolt_cells": [
+              900000
+            ],
+            "voltage_microvolt_present": true,
+            "voltage_microvolt_variant_names": [],
+            "voltage_microvolt_variants": {}
+          },
+          {
+            "frequency_hz": 720000000,
+            "node": "/opp_l_table/opp@720000000-ab",
+            "status": "okay",
+            "supported_hw_cell_count": 0,
+            "supported_hw_cells": [],
+            "supported_hw_present": false,
+            "turbo": false,
+            "voltage_microvolt_cells": [],
+            "voltage_microvolt_present": false,
+            "voltage_microvolt_variant_names": [
+              "a1",
+              "b1",
+              "c1"
+            ],
+            "voltage_microvolt_variants": {
+              "a1": [
+                900000
+              ],
+              "b1": [
+                900000
+              ],
+              "c1": [
+                950000
+              ]
+            }
+          },
+          {
+            "frequency_hz": 792000000,
+            "node": "/opp_l_table/opp@792000000-0",
+            "status": "okay",
+            "supported_hw_cell_count": 1,
+            "supported_hw_cells": [
+              3
+            ],
+            "supported_hw_present": true,
+            "turbo": false,
+            "voltage_microvolt_cells": [
+              900000
+            ],
+            "voltage_microvolt_present": true,
+            "voltage_microvolt_variant_names": [],
+            "voltage_microvolt_variants": {}
+          },
+          {
+            "frequency_hz": 792000000,
+            "node": "/opp_l_table/opp@792000000-1",
+            "status": "okay",
+            "supported_hw_cell_count": 1,
+            "supported_hw_cells": [
+              12
+            ],
+            "supported_hw_present": true,
+            "turbo": false,
+            "voltage_microvolt_cells": [
+              940000
+            ],
+            "voltage_microvolt_present": true,
+            "voltage_microvolt_variant_names": [],
+            "voltage_microvolt_variants": {}
+          },
+          {
+            "frequency_hz": 792000000,
+            "node": "/opp_l_table/opp@792000000-ab",
+            "status": "okay",
+            "supported_hw_cell_count": 0,
+            "supported_hw_cells": [],
+            "supported_hw_present": false,
+            "turbo": false,
+            "voltage_microvolt_cells": [],
+            "voltage_microvolt_present": false,
+            "voltage_microvolt_variant_names": [
+              "b0",
+              "c0",
+              "c2"
+            ],
+            "voltage_microvolt_variants": {
+              "b0": [
+                900000
+              ],
+              "c0": [
+                940000
+              ],
+              "c2": [
+                940000
+              ]
+            }
+          },
+          {
+            "frequency_hz": 936000000,
+            "node": "/opp_l_table/opp@936000000",
+            "status": "okay",
+            "supported_hw_cell_count": 1,
+            "supported_hw_cells": [
+              48
+            ],
+            "supported_hw_present": true,
+            "turbo": false,
+            "voltage_microvolt_cells": [
+              900000
+            ],
+            "voltage_microvolt_present": true,
+            "voltage_microvolt_variant_names": [],
+            "voltage_microvolt_variants": {}
+          },
+          {
+            "frequency_hz": 936000000,
+            "node": "/opp_l_table/opp@936000000-ab",
+            "status": "okay",
+            "supported_hw_cell_count": 0,
+            "supported_hw_cells": [],
+            "supported_hw_present": false,
+            "turbo": false,
+            "voltage_microvolt_cells": [],
+            "voltage_microvolt_present": false,
+            "voltage_microvolt_variant_names": [
+              "b1",
+              "c1"
+            ],
+            "voltage_microvolt_variants": {
+              "b1": [
+                900000
+              ],
+              "c1": [
+                950000
+              ]
+            }
+          },
+          {
+            "frequency_hz": 1008000000,
+            "node": "/opp_l_table/opp@1008000000-0",
+            "status": "okay",
+            "supported_hw_cell_count": 1,
+            "supported_hw_cells": [
+              1
+            ],
+            "supported_hw_present": true,
+            "turbo": false,
+            "voltage_microvolt_cells": [
+              920000
+            ],
+            "voltage_microvolt_present": true,
+            "voltage_microvolt_variant_names": [],
+            "voltage_microvolt_variants": {}
+          },
+          {
+            "frequency_hz": 1008000000,
+            "node": "/opp_l_table/opp@1008000000-1",
+            "status": "okay",
+            "supported_hw_cell_count": 1,
+            "supported_hw_cells": [
+              2
+            ],
+            "supported_hw_present": true,
+            "turbo": false,
+            "voltage_microvolt_cells": [
+              900000
+            ],
+            "voltage_microvolt_present": true,
+            "voltage_microvolt_variant_names": [],
+            "voltage_microvolt_variants": {}
+          },
+          {
+            "frequency_hz": 1008000000,
+            "node": "/opp_l_table/opp@1008000000-2",
+            "status": "okay",
+            "supported_hw_cell_count": 1,
+            "supported_hw_cells": [
+              12
+            ],
+            "supported_hw_present": true,
+            "turbo": false,
+            "voltage_microvolt_cells": [
+              1020000
+            ],
+            "voltage_microvolt_present": true,
+            "voltage_microvolt_variant_names": [],
+            "voltage_microvolt_variants": {}
+          },
+          {
+            "frequency_hz": 1008000000,
+            "node": "/opp_l_table/opp@1008000000-3",
+            "status": "okay",
+            "supported_hw_cell_count": 1,
+            "supported_hw_cells": [
+              48
+            ],
+            "supported_hw_present": true,
+            "turbo": false,
+            "voltage_microvolt_cells": [
+              950000
+            ],
+            "voltage_microvolt_present": true,
+            "voltage_microvolt_variant_names": [],
+            "voltage_microvolt_variants": {}
+          },
+          {
+            "frequency_hz": 1008000000,
+            "node": "/opp_l_table/opp@1008000000-ab",
+            "status": "okay",
+            "supported_hw_cell_count": 0,
+            "supported_hw_cells": [],
+            "supported_hw_present": false,
+            "turbo": false,
+            "voltage_microvolt_cells": [],
+            "voltage_microvolt_present": false,
+            "voltage_microvolt_variant_names": [
+              "b0",
+              "b1",
+              "c0",
+              "c1",
+              "c2"
+            ],
+            "voltage_microvolt_variants": {
+              "b0": [
+                920000
+              ],
+              "b1": [
+                950000
+              ],
+              "c0": [
+                1020000
+              ],
+              "c1": [
+                1000000
+              ],
+              "c2": [
+                1020000
+              ]
+            }
+          },
+          {
+            "frequency_hz": 1032000000,
+            "node": "/opp_l_table/opp@1032000000-ab",
+            "status": "okay",
+            "supported_hw_cell_count": 0,
+            "supported_hw_cells": [],
+            "supported_hw_present": false,
+            "turbo": false,
+            "voltage_microvolt_cells": [],
+            "voltage_microvolt_present": false,
+            "voltage_microvolt_variant_names": [
+              "a1"
+            ],
+            "voltage_microvolt_variants": {
+              "a1": [
+                900000
+              ]
+            }
+          },
+          {
+            "frequency_hz": 1104000000,
+            "node": "/opp_l_table/opp@1104000000",
+            "status": "okay",
+            "supported_hw_cell_count": 1,
+            "supported_hw_cells": [
+              48
+            ],
+            "supported_hw_present": true,
+            "turbo": false,
+            "voltage_microvolt_cells": [
+              1000000
+            ],
+            "voltage_microvolt_present": true,
+            "voltage_microvolt_variant_names": [],
+            "voltage_microvolt_variants": {}
+          },
+          {
+            "frequency_hz": 1104000000,
+            "node": "/opp_l_table/opp@1104000000-ab",
+            "status": "okay",
+            "supported_hw_cell_count": 0,
+            "supported_hw_cells": [],
+            "supported_hw_present": false,
+            "turbo": false,
+            "voltage_microvolt_cells": [],
+            "voltage_microvolt_present": false,
+            "voltage_microvolt_variant_names": [
+              "a1",
+              "b1",
+              "c1"
+            ],
+            "voltage_microvolt_variants": {
+              "a1": [
+                950000
+              ],
+              "b1": [
+                1000000
+              ],
+              "c1": [
+                1050000
+              ]
+            }
+          },
+          {
+            "frequency_hz": 1200000000,
+            "node": "/opp_l_table/opp@1200000000-0",
+            "status": "okay",
+            "supported_hw_cell_count": 1,
+            "supported_hw_cells": [
+              1
+            ],
+            "supported_hw_present": true,
+            "turbo": false,
+            "voltage_microvolt_cells": [
+              980000
+            ],
+            "voltage_microvolt_present": true,
+            "voltage_microvolt_variant_names": [],
+            "voltage_microvolt_variants": {}
+          },
+          {
+            "frequency_hz": 1200000000,
+            "node": "/opp_l_table/opp@1200000000-1",
+            "status": "okay",
+            "supported_hw_cell_count": 1,
+            "supported_hw_cells": [
+              2
+            ],
+            "supported_hw_present": true,
+            "turbo": false,
+            "voltage_microvolt_cells": [
+              960000
+            ],
+            "voltage_microvolt_present": true,
+            "voltage_microvolt_variant_names": [],
+            "voltage_microvolt_variants": {}
+          },
+          {
+            "frequency_hz": 1200000000,
+            "node": "/opp_l_table/opp@1200000000-2",
+            "status": "okay",
+            "supported_hw_cell_count": 1,
+            "supported_hw_cells": [
+              12
+            ],
+            "supported_hw_present": true,
+            "turbo": false,
+            "voltage_microvolt_cells": [
+              1100000
+            ],
+            "voltage_microvolt_present": true,
+            "voltage_microvolt_variant_names": [],
+            "voltage_microvolt_variants": {}
+          },
+          {
+            "frequency_hz": 1200000000,
+            "node": "/opp_l_table/opp@1200000000-3",
+            "status": "okay",
+            "supported_hw_cell_count": 1,
+            "supported_hw_cells": [
+              48
+            ],
+            "supported_hw_present": true,
+            "turbo": false,
+            "voltage_microvolt_cells": [
+              1050000
+            ],
+            "voltage_microvolt_present": true,
+            "voltage_microvolt_variant_names": [],
+            "voltage_microvolt_variants": {}
+          },
+          {
+            "frequency_hz": 1200000000,
+            "node": "/opp_l_table/opp@1200000000-ab",
+            "status": "okay",
+            "supported_hw_cell_count": 0,
+            "supported_hw_cells": [],
+            "supported_hw_present": false,
+            "turbo": false,
+            "voltage_microvolt_cells": [],
+            "voltage_microvolt_present": false,
+            "voltage_microvolt_variant_names": [
+              "a1",
+              "b0",
+              "b1",
+              "c0",
+              "c1",
+              "c2"
+            ],
+            "voltage_microvolt_variants": {
+              "a1": [
+                1000000
+              ],
+              "b0": [
+                980000
+              ],
+              "b1": [
+                1050000
+              ],
+              "c0": [
+                1100000
+              ],
+              "c1": [
+                1100000
+              ],
+              "c2": [
+                1100000
+              ]
+            }
+          },
+          {
+            "frequency_hz": 1296000000,
+            "node": "/opp_l_table/opp@1296000000-0",
+            "status": "okay",
+            "supported_hw_cell_count": 1,
+            "supported_hw_cells": [
+              2
+            ],
+            "supported_hw_present": true,
+            "turbo": false,
+            "voltage_microvolt_cells": [
+              1100000
+            ],
+            "voltage_microvolt_present": true,
+            "voltage_microvolt_variant_names": [],
+            "voltage_microvolt_variants": {}
+          },
+          {
+            "frequency_hz": 1296000000,
+            "node": "/opp_l_table/opp@1296000000-1",
+            "status": "okay",
+            "supported_hw_cell_count": 1,
+            "supported_hw_cells": [
+              8
+            ],
+            "supported_hw_present": true,
+            "turbo": false,
+            "voltage_microvolt_cells": [
+              1120000
+            ],
+            "voltage_microvolt_present": true,
+            "voltage_microvolt_variant_names": [],
+            "voltage_microvolt_variants": {}
+          },
+          {
+            "frequency_hz": 1296000000,
+            "node": "/opp_l_table/opp@1296000000-ab",
+            "status": "okay",
+            "supported_hw_cell_count": 0,
+            "supported_hw_cells": [],
+            "supported_hw_present": false,
+            "turbo": false,
+            "voltage_microvolt_cells": [],
+            "voltage_microvolt_present": false,
+            "voltage_microvolt_variant_names": [
+              "a1"
+            ],
+            "voltage_microvolt_variants": {
+              "a1": [
+                1050000
+              ]
+            }
+          },
+          {
+            "frequency_hz": 1320000000,
+            "node": "/opp_l_table/opp@1320000000",
+            "status": "okay",
+            "supported_hw_cell_count": 1,
+            "supported_hw_cells": [
+              48
+            ],
+            "supported_hw_present": true,
+            "turbo": false,
+            "voltage_microvolt_cells": [
+              1100000
+            ],
+            "voltage_microvolt_present": true,
+            "voltage_microvolt_variant_names": [],
+            "voltage_microvolt_variants": {}
+          },
+          {
+            "frequency_hz": 1320000000,
+            "node": "/opp_l_table/opp@1320000000-ab",
+            "status": "okay",
+            "supported_hw_cell_count": 0,
+            "supported_hw_cells": [],
+            "supported_hw_present": false,
+            "turbo": false,
+            "voltage_microvolt_cells": [],
+            "voltage_microvolt_present": false,
+            "voltage_microvolt_variant_names": [
+              "b1",
+              "c1"
+            ],
+            "voltage_microvolt_variants": {
+              "b1": [
+                1100000
+              ],
+              "c1": [
+                1160000
+              ]
+            }
+          },
+          {
+            "frequency_hz": 1344000000,
+            "node": "/opp_l_table/opp@1344000000",
+            "status": "okay",
+            "supported_hw_cell_count": 1,
+            "supported_hw_cells": [
+              4
+            ],
+            "supported_hw_present": true,
+            "turbo": false,
+            "voltage_microvolt_cells": [
+              1120000
+            ],
+            "voltage_microvolt_present": true,
+            "voltage_microvolt_variant_names": [],
+            "voltage_microvolt_variants": {}
+          },
+          {
+            "frequency_hz": 1344000000,
+            "node": "/opp_l_table/opp@1344000000-ab",
+            "status": "okay",
+            "supported_hw_cell_count": 0,
+            "supported_hw_cells": [],
+            "supported_hw_present": false,
+            "turbo": false,
+            "voltage_microvolt_cells": [],
+            "voltage_microvolt_present": false,
+            "voltage_microvolt_variant_names": [
+              "c0",
+              "c2"
+            ],
+            "voltage_microvolt_variants": {
+              "c0": [
+                1120000
+              ],
+              "c2": [
+                1120000
+              ]
+            }
+          },
+          {
+            "frequency_hz": 1416000000,
+            "node": "/opp_l_table/opp@1416000000-0",
+            "status": "okay",
+            "supported_hw_cell_count": 1,
+            "supported_hw_cells": [
+              16
+            ],
+            "supported_hw_present": true,
+            "turbo": false,
+            "voltage_microvolt_cells": [
+              1150000
+            ],
+            "voltage_microvolt_present": true,
+            "voltage_microvolt_variant_names": [],
+            "voltage_microvolt_variants": {}
+          },
+          {
+            "frequency_hz": 1416000000,
+            "node": "/opp_l_table/opp@1416000000-1",
+            "status": "okay",
+            "supported_hw_cell_count": 1,
+            "supported_hw_cells": [
+              32
+            ],
+            "supported_hw_present": true,
+            "turbo": false,
+            "voltage_microvolt_cells": [
+              1160000
+            ],
+            "voltage_microvolt_present": true,
+            "voltage_microvolt_variant_names": [],
+            "voltage_microvolt_variants": {}
+          },
+          {
+            "frequency_hz": 1416000000,
+            "node": "/opp_l_table/opp@1416000000-ab",
+            "status": "okay",
+            "supported_hw_cell_count": 0,
+            "supported_hw_cells": [],
+            "supported_hw_present": false,
+            "turbo": false,
+            "voltage_microvolt_cells": [],
+            "voltage_microvolt_present": false,
+            "voltage_microvolt_variant_names": [
+              "a1",
+              "b1"
+            ],
+            "voltage_microvolt_variants": {
+              "a1": [
+                1100000
+              ],
+              "b1": [
+                1150000
+              ]
+            }
+          },
+          {
+            "frequency_hz": 1512000000,
+            "node": "/opp_l_table/opp@1512000000",
+            "status": "okay",
+            "supported_hw_cell_count": 1,
+            "supported_hw_cells": [
+              1
+            ],
+            "supported_hw_present": true,
+            "turbo": false,
+            "voltage_microvolt_cells": [
+              1120000
+            ],
+            "voltage_microvolt_present": true,
+            "voltage_microvolt_variant_names": [],
+            "voltage_microvolt_variants": {}
+          },
+          {
+            "frequency_hz": 1512000000,
+            "node": "/opp_l_table/opp@1512000000-ab",
+            "status": "okay",
+            "supported_hw_cell_count": 0,
+            "supported_hw_cells": [],
+            "supported_hw_present": false,
+            "turbo": false,
+            "voltage_microvolt_cells": [],
+            "voltage_microvolt_present": false,
+            "voltage_microvolt_variant_names": [
+              "a1",
+              "b0",
+              "b1"
+            ],
+            "voltage_microvolt_variants": {
+              "a1": [
+                1160000
+              ],
+              "b0": [
+                1120000
+              ],
+              "b1": [
+                1160000
+              ]
+            }
+          }
+        ],
+        "node": "/opp_l_table",
+        "nvmem_cell_names": [
+          "speed"
+        ],
+        "nvmem_cells": [
+          {
+            "name": "speed",
+            "node": "/sunxi-sid-ng@03006000/speed@00",
+            "phandle": "0xe0"
+          }
+        ],
+        "shared": true
+      }
+    ],
+    "note": "These are static device-tree declarations only. They do not prove the active CPU voltage, current OPP, SID raw value, thermal calibration, regulator readback, or that an OPP is safe to apply.",
+    "phandle_node_count": 415,
+    "regulator_nodes": [
+      {
+        "always_on": false,
+        "boot_on": false,
+        "maximum_microvolt": 3500000,
+        "minimum_microvolt": 500000,
+        "name": "axp2202-aldo1",
+        "node": "/soc@03000000/twi@0x07081400/pmu/regulators@0/aldo1",
+        "status": "okay"
+      },
+      {
+        "always_on": false,
+        "boot_on": false,
+        "maximum_microvolt": 3500000,
+        "minimum_microvolt": 500000,
+        "name": "axp2202-aldo2",
+        "node": "/soc@03000000/twi@0x07081400/pmu/regulators@0/aldo2",
+        "status": "okay"
+      },
+      {
+        "always_on": true,
+        "boot_on": true,
+        "maximum_microvolt": 3500000,
+        "minimum_microvolt": 500000,
+        "name": "axp2202-aldo3",
+        "node": "/soc@03000000/twi@0x07081400/pmu/regulators@0/aldo3",
+        "status": "okay"
+      },
+      {
+        "always_on": true,
+        "boot_on": true,
+        "maximum_microvolt": 3500000,
+        "minimum_microvolt": 500000,
+        "name": "axp2202-aldo4",
+        "node": "/soc@03000000/twi@0x07081400/pmu/regulators@0/aldo4",
+        "status": "okay"
+      },
+      {
+        "always_on": false,
+        "boot_on": false,
+        "maximum_microvolt": 3500000,
+        "minimum_microvolt": 500000,
+        "name": "axp2202-bldo1",
+        "node": "/soc@03000000/twi@0x07081400/pmu/regulators@0/bldo1",
+        "status": "okay"
+      },
+      {
+        "always_on": true,
+        "boot_on": true,
+        "maximum_microvolt": 3500000,
+        "minimum_microvolt": 500000,
+        "name": "axp2202-bldo2",
+        "node": "/soc@03000000/twi@0x07081400/pmu/regulators@0/bldo2",
+        "status": "okay"
+      },
+      {
+        "always_on": false,
+        "boot_on": false,
+        "maximum_microvolt": 3500000,
+        "minimum_microvolt": 500000,
+        "name": "axp2202-bldo3",
+        "node": "/soc@03000000/twi@0x07081400/pmu/regulators@0/bldo3",
+        "status": "okay"
+      },
+      {
+        "always_on": false,
+        "boot_on": false,
+        "maximum_microvolt": 3500000,
+        "minimum_microvolt": 500000,
+        "name": "axp2202-bldo4",
+        "node": "/soc@03000000/twi@0x07081400/pmu/regulators@0/bldo4",
+        "status": "okay"
+      },
+      {
+        "always_on": false,
+        "boot_on": false,
+        "maximum_microvolt": 3500000,
+        "minimum_microvolt": 500000,
+        "name": "axp2202-cldo1",
+        "node": "/soc@03000000/twi@0x07081400/pmu/regulators@0/cldo1",
+        "status": "okay"
+      },
+      {
+        "always_on": false,
+        "boot_on": false,
+        "maximum_microvolt": 3500000,
+        "minimum_microvolt": 500000,
+        "name": "axp2202-cldo2",
+        "node": "/soc@03000000/twi@0x07081400/pmu/regulators@0/cldo2",
+        "status": "okay"
+      },
+      {
+        "always_on": true,
+        "boot_on": true,
+        "maximum_microvolt": 3500000,
+        "minimum_microvolt": 500000,
+        "name": "axp2202-cldo3",
+        "node": "/soc@03000000/twi@0x07081400/pmu/regulators@0/cldo3",
+        "status": "okay"
+      },
+      {
+        "always_on": false,
+        "boot_on": false,
+        "maximum_microvolt": 3500000,
+        "minimum_microvolt": 500000,
+        "name": "axp2202-cldo4",
+        "node": "/soc@03000000/twi@0x07081400/pmu/regulators@0/cldo4",
+        "status": "okay"
+      },
+      {
+        "always_on": true,
+        "boot_on": true,
+        "maximum_microvolt": 1400000,
+        "minimum_microvolt": 500000,
+        "name": "axp2202-cpusldo",
+        "node": "/soc@03000000/twi@0x07081400/pmu/regulators@0/cpusldo",
+        "status": "okay"
+      },
+      {
+        "always_on": true,
+        "boot_on": true,
+        "maximum_microvolt": 1540000,
+        "minimum_microvolt": 500000,
+        "name": "axp2202-dcdc1",
+        "node": "/soc@03000000/twi@0x07081400/pmu/regulators@0/dcdc1",
+        "status": "okay"
+      },
+      {
+        "always_on": true,
+        "boot_on": true,
+        "maximum_microvolt": 3400000,
+        "minimum_microvolt": 500000,
+        "name": "axp2202-dcdc2",
+        "node": "/soc@03000000/twi@0x07081400/pmu/regulators@0/dcdc2",
+        "status": "okay"
+      },
+      {
+        "always_on": true,
+        "boot_on": false,
+        "maximum_microvolt": 1840000,
+        "minimum_microvolt": 500000,
+        "name": "axp2202-dcdc3",
+        "node": "/soc@03000000/twi@0x07081400/pmu/regulators@0/dcdc3",
+        "status": "okay"
+      },
+      {
+        "always_on": false,
+        "boot_on": false,
+        "maximum_microvolt": 3700000,
+        "minimum_microvolt": 1000000,
+        "name": "axp2202-dcdc4",
+        "node": "/soc@03000000/twi@0x07081400/pmu/regulators@0/dcdc4",
+        "status": "okay"
+      },
+      {
+        "always_on": false,
+        "boot_on": false,
+        "maximum_microvolt": null,
+        "minimum_microvolt": null,
+        "name": "axp2202-drivevbus",
+        "node": "/soc@03000000/twi@0x07081400/pmu/regulators@0/drivevbus",
+        "status": "okay"
+      },
+      {
+        "always_on": true,
+        "boot_on": true,
+        "maximum_microvolt": 1800000,
+        "minimum_microvolt": 1800000,
+        "name": "axp2202-rtcldo",
+        "node": "/soc@03000000/twi@0x07081400/pmu/regulators@0/rtcldo",
+        "status": "okay"
+      },
+      {
+        "always_on": true,
+        "boot_on": false,
+        "maximum_microvolt": null,
+        "minimum_microvolt": null,
+        "name": "axp2202-vmid",
+        "node": "/soc@03000000/twi@0x07081400/pmu/regulators@0/vmid",
+        "status": "okay"
+      }
+    ]
+  },
+  "debug_modes": [
+    {
+      "node": "/soc@03000000/platform",
+      "value": 0
+    }
+  ],
+  "disp_reserve_bootarg": {
+    "base": "0x7bf24800",
+    "size_bytes": 1382400
+  },
+  "file": "reports\\pvaibhav-slot-runtime\\fdt-reparse\\live-fdt.dtb",
+  "file_bytes": 143936,
+  "firmware_nodes": [
+    {
+      "compatible": [
+        "android,firmware"
+      ],
+      "method": null,
+      "node": "/firmware/android",
+      "status": "okay"
+    },
+    {
+      "compatible": [
+        "android,vbmeta"
+      ],
+      "method": null,
+      "node": "/firmware/android/vbmeta",
+      "status": "okay"
+    },
+    {
+      "compatible": [
+        "linaro,optee-tz"
+      ],
+      "method": "smc",
+      "node": "/firmware/optee",
+      "status": "okay"
+    }
+  ],
+  "has_reserved_memory_node": false,
+  "initrd": {
+    "end_exclusive": "0x42000200",
+    "range_valid": true,
+    "size_bytes": 512,
+    "start": "0x42000000"
+  },
+  "ion_heaps": [
+    {
+      "base": "0x0",
+      "compatible": [
+        "allwinner,sys_user"
+      ],
+      "id": 0,
+      "name": "sys_user",
+      "node": "/ion/heap_sys_user@0",
+      "size_bytes": 0,
+      "status": "okay",
+      "type": "ion_system"
+    },
+    {
+      "base": "0x0",
+      "compatible": [
+        "allwinner,cma"
+      ],
+      "id": 4,
+      "name": "cma",
+      "node": "/ion/heap_cma@0",
+      "size_bytes": 0,
+      "status": "okay",
+      "type": "ion_cma"
+    },
+    {
+      "base": "0x0",
+      "compatible": [
+        "allwinner,secure"
+      ],
+      "id": 6,
+      "name": "secure",
+      "node": "/ion/heap_secure@0",
+      "size_bytes": 0,
+      "status": "okay",
+      "type": "ion_secure"
+    }
+  ],
+  "memory_regions": [
+    {
+      "end_exclusive": "0x80000000",
+      "node": "/memory@40000000",
+      "size": "0x40000000",
+      "start": "0x40000000"
+    }
+  ],
+  "model": [
+    "sun50iw9"
+  ],
+  "node_count": 573,
+  "panels": [
+    {
+      "driver": "rg34xx_v1",
+      "height": 480,
+      "interface": "rgb666",
+      "interface_props": {
+        "lcd_hv_clk_phase": 1,
+        "lcd_hv_if": 0,
+        "lcd_hv_sync_polarity": 3,
+        "lcd_if": 0,
+        "lcd_lvds_colordepth": 0,
+        "lcd_lvds_if": 0,
+        "lcd_lvds_mode": 0
+      },
+      "node": "/soc@03000000/lcd0@01c0c000",
+      "status": "okay",
+      "timing": {
+        "h_active": 720,
+        "h_back_porch": 46,
+        "h_front_porch": 52,
+        "h_sync_pulse": 2,
+        "h_total": 820,
+        "nominal_refresh_hz": 59.155,
+        "physical_mm": {
+          "height": 94,
+          "width": 150
+        },
+        "pixel_clock_hz": 26000000,
+        "pixel_clock_mhz": 26,
+        "pwm": {
+          "backlight": 50,
+          "channel": 0,
+          "freq_hz": 50000,
+          "max_limit": 255,
+          "polarity": 1,
+          "used": true
+        },
+        "v_active": 480,
+        "v_back_porch": 20,
+        "v_front_porch": 31,
+        "v_sync_pulse": 5,
+        "v_total": 536
+      },
+      "used": true,
+      "width": 720
+    }
+  ],
+  "pmic_nodes": [
+    {
+      "compatible": [
+        "x-powers,axp2202"
+      ],
+      "node": "/soc@03000000/twi@0x07081400/pmu",
+      "status": "okay"
+    },
+    {
+      "compatible": [
+        "x-powers,axp2202-usb-power-supply"
+      ],
+      "node": "/soc@03000000/twi@0x07081400/pmu/usb_power_supply",
+      "status": "okay"
+    },
+    {
+      "compatible": [
+        "x-powers,axp2202-bat-power-supply"
+      ],
+      "node": "/soc@03000000/twi@0x07081400/pmu/bat-power-supply",
+      "status": "okay"
+    }
+  ],
+  "redactions": {
+    "applied": true,
+    "fields": [
+      "chosen_bootargs"
+    ],
+    "note": "Device serial replaced by <serial-redacted>; no other byte of the bootargs was changed. The raw live-fdt.dtb stays local because bootargs carry the same serial.",
+    "removed": [
+      "snum",
+      "androidboot.serialno"
+    ]
+  },
+  "reserved_memory_nodes": [],
+  "sha256": "65801950f6d2d3c7139111d35c6cc0dd64cc249f8ba64ffb5b6f1c7fd9c39173",
+  "totalsize": 143936,
+  "usb_controllers": [
+    {
+      "compatible": [
+        "allwinner,sunxi-ehci0"
+      ],
+      "node": "/soc@03000000/ehci0-controller@0x05101000",
+      "status": "okay"
+    },
+    {
+      "compatible": [
+        "allwinner,sunxi-ehci1"
+      ],
+      "node": "/soc@03000000/ehci1-controller@0x05200000",
+      "status": "late"
+    },
+    {
+      "compatible": [
+        "allwinner,sunxi-ehci2"
+      ],
+      "node": "/soc@03000000/ehci2-controller@0x05310000",
+      "status": "okay"
+    },
+    {
+      "compatible": [
+        "allwinner,sunxi-ehci3"
+      ],
+      "node": "/soc@03000000/ehci3-controller@0x05311000",
+      "status": "late"
+    },
+    {
+      "compatible": [
+        "allwinner,sunxi-ohci0"
+      ],
+      "node": "/soc@03000000/ohci0-controller@0x05101400",
+      "status": "okay"
+    },
+    {
+      "compatible": [
+        "allwinner,sunxi-ohci1"
+      ],
+      "node": "/soc@03000000/ohci1-controller@0x05200400",
+      "status": "late"
+    },
+    {
+      "compatible": [
+        "allwinner,sunxi-ohci2"
+      ],
+      "node": "/soc@03000000/ohci2-controller@0x05310400",
+      "status": "late"
+    },
+    {
+      "compatible": [
+        "allwinner,sunxi-ohci3"
+      ],
+      "node": "/soc@03000000/ohci3-controller@0x05311400",
+      "status": "late"
+    }
+  ]
+}

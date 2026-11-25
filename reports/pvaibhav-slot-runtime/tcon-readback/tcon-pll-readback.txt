@@ -1,0 +1,54 @@
+# RG34XX TCON DCLK divider / video PLL read-only readback
+
+captured_at   2026-11-25 19:59:20 +08:00
+device        RG34XX / sun50iw9p1, serial [REDACTED]
+adb_shell_id  uid=0(root) gid=0(root)
+uptime_s      3236.47 12390.04
+boot_id       e0ca1c1b-6d0f-45db-a9be-2744d7fe1f0d
+kernel        Linux rg34xx 4.9.170 #19 SMP PREEMPT Tue May 26 13:58:08 CST 2026 aarch64 Linux
+
+method        echo of an address range into /sys/class/sunxi_dump/dump (the dump request node),
+              then cat of the same node. /sys/class/sunxi_dump/write was never opened,
+              written or used. No adb root, no reboot, no mode or refresh-rate change.
+scripts       the caller script was truncated after "$clocks = Read-Device"; the clock block
+              below is /sys/kernel/debug/clk/clk_summary, the only clock source used earlier.
+
+## Raw response: 0x06511044 (TCON0 DCLK divider register, as named by the pvaibhav fork)
+0xf000000b
+
+## Raw response: 0x03001040 (video PLL register used by the reviewed fork)
+0x88001703
+
+## Clock summary rows mentioning tcon / pll_video / display_top (verbatim, rewrapped)
+
+      pll_video2                            2            2   297000000          0 0
+         tcon_tv                            1            1   297000000          0 0
+         pll_video2x4                       0            0  1188000000          0 0
+      pll_video1                            0            0   432000000          0 0
+         tve_top                            0            0   432000000          0 0
+         tve                                0            0   432000000          0 0
+         tcon_tv1                           0            0   432000000          0 0
+         tcon_lcd1                          0            0   432000000          0 0
+         pll_video1x4                       0            0  1728000000          0 0
+      pll_video0x4                          1            1   288000000          0 0
+         tcon_lcd                           1            1   288000000          0 0
+         pll_video0                         0            0    72000000          0 0
+            display_top                     1            1   200000000          0 0
+
+## /sys/class/disp/disp/attr/sys (verbatim)
+
+  screen 0:
+  
+  de_rate 696000000 hz, ref_fps:59
+  
+  mgr0: 720x480 fmt[rgb] cs[0x204] range[full] eotf[0x4] bits[8bits] err[0] force_sync[0] unblank direct_show[false] iommu[1]
+  
+  dmabuf: cache[0] cache max[0] umap skip[0] umap skip max[0]
+  
+  	lcd output	backlight(  8)	fps:60.2	 720x 480
+  
+  	err:0	skip:0	irq:192803	vsync:0	vsync_skip:0
+  
+     BUF    enable ch[1] lyr[0] z[0] prem[N] a[globl 255] fmt[  0] fb[ 720, 960; 720, 960; 720, 960] crop[   0,   0, 720, 480] frame[   0,   0, 720, 480] addr[ff800000,       0,       0] flags[0x       0] trd[0,0]
+  
+  depth[ 0] transf[0]

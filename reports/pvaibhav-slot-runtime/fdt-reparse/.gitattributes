@@ -1,0 +1,5 @@
+# Keep byte-exact artifacts byte-exact: the README records SHA-256 values for these
+# files and a checkout must reproduce them on any platform (no CRLF rewriting).
+*.dtb -text
+*.json -text
+*.patch -text

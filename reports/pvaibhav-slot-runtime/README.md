@@ -78,6 +78,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\collect-pvaibhav-slo
   该设置在此环境下的实际生效方式**未被本次采集证明**。
 - 用 DTB 声明的 26 MHz 与 820×536 推算为 59.155 Hz；若实际 dclk 取自 `pll_video0x4`(288 MHz)/11 = 26.182 MHz，
   则为 59.569 Hz，与实测 59.63 Hz 更接近。这属于**推算**，仅作量级一致性说明，不作为已测得频率。
+- **后续已补上这个推算的前提**：19:59 用 `sunxi_dump` 的 dump 请求节点只读回读，
+  `0x06511044` = `0xf000000b`（divider 11，与 fork 标注的 60 Hz 分频字逐字节相同），
+  `tcon_lcd` = 288 MHz，见 `tcon-readback/`。即 288/11 → 26.18 MHz → 59.57 Hz，
+  与实测中断速率吻合；该结果仍是"分频字 + 上游时钟"推算，不是直接测得的 DCLK。
 - 驱动上报的 `fps` 在 60.2 / 59.8 之间跳变，两轮**都有**这两种取值，与阶段没有对应关系，属采样瞬间的驱动计数抖动。
 
 ## 3. 非显示侧对比（同环境、同设备）
@@ -133,6 +137,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\collect-pvaibhav-slo
 
 ## 7. Artifact and source-path follow-up
 
-The uploaded `live-fdt.json` files currently expose only panel driver and geometry; their `panels[0]` objects do not include the `interface` or `timing` keys emitted by the current project parser. The report's 26 MHz / HT 820 / VT 536 values were extracted from the local raw `live-fdt.dtb`, which was not uploaded. Re-run the parser against that retained DTB or pull it again and publish the populated JSON plus DTB SHA-256 before treating the machine-readable timing record as complete.
+The `live-fdt.json` files in the two 18:44/18:45 rounds expose only panel driver and geometry; their `panels[0]` objects do not include the `interface` or `timing` keys, because the parser version used at that time never emitted them. The report's 26 MHz / HT 820 / VT 536 values were extracted from the local raw `live-fdt.dtb`, which was not uploaded.
 
-Both process environments show `BASEOS_TARGET=rg34xx`, `BASEOS_PLATFORM=h700`, `BASEOS_PACKAGE_ID=slot-pvaibhav`, and `BASEOS_FRONTEND_ID=slot-pvaibhav--default`. The Slot process runs as UID 0 with full effective capabilities. In the reviewed pvaibhav source, `DevicePlatform::new()` reads `BASEOS_TARGET`, `PanelRefresh::probe()` requires `fog_fj035fhd05_v1` for `rg34xx`, and startup mode application is gated by `supports_high_refresh()`. Our observed `rg34xx_v1` panel therefore fails the exact identity gate; the 60-Hz observation is not explained by missing root permission. The installed binary hash/version was not captured, so its exact source revision remains unverified.
+**Resolved in `fdt-reparse/` (2026-11-25 19:09).** The parser was extended to emit `panels[].interface` and a full `panels[].timing` block and the live FDT was pulled again, so the timing record is now machine-readable and complete. Only the **redacted** `live-fdt.json` is published: the raw `live-fdt.dtb` (SHA-256 `65801950f6d2d3c7139111d35c6cc0dd64cc249f8ba64ffb5b6f1c7fd9c39173`) is kept local because its `bootargs` carry `snum=` and `androidboot.serialno=`. The published JSON has both of those keys replaced by `<serial-redacted>`. Two caveats recorded there: the 19:09 pull belongs to a **later boot** (`bootargs` now carries `bootreason=unknow` instead of `button`; uptime ≈ 350 s; only three `/chosen` properties differ, all boot-time records — every `lcd0@01c0c000` property is byte-identical), and the DTB-declared nominal refresh `59.155 Hz` is superseded by the divider readback below.
+
+Both process environments show `BASEOS_TARGET=rg34xx`, `BASEOS_PLATFORM=h700`, `BASEOS_PACKAGE_ID=slot-pvaibhav`, and `BASEOS_FRONTEND_ID=slot-pvaibhav--default`. The Slot process runs as UID 0 with full effective capabilities. In the reviewed pvaibhav source, `DevicePlatform::new()` reads `BASEOS_TARGET`, `PanelRefresh::probe()` requires `fog_fj035fhd05_v1` for `rg34xx`, and startup mode application is gated by `supports_high_refresh()`. Our observed `rg34xx_v1` panel therefore fails the exact identity gate; the 60-Hz observation is not explained by missing root permission. The installed binary hashes are now captured (`System/slot` = `8f0fd40da4ac161e5fbb9a56a99c254acf8b2f31806e2be6bdaa929b5ee28505`, 18,718,728 B; `SYSTEM/armgba_libretro.so` = `4ebae098cc4848fb459fc18299c39acbdbbbeb732db5c3f66d1ff3f6e142e889`, 2,021,992 B, both recorded in `fdt-reparse/device-sha256.txt`), but no upstream build was hashed for comparison, so the exact source revision is still unverified.

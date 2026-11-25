@@ -1,0 +1,24 @@
+# local file hashes
+captured_at 2026-11-25T19:49:10.6387271+08:00
+
+live-fdt.json (redacted, published) sha256 
+8d6e6e1477c187a692cd79c473823f39fdd19794aa745fc503012af0b5470c46
+  bytes 
+38866
+  (LF newlines)
+live-fdt.dtb (raw, LOCAL ONLY)       sha256 
+65801950f6d2d3c7139111d35c6cc0dd64cc249f8ba64ffb5b6f1c7fd9c39173
+  bytes 
+143936
+inspect_h700_fdt-panel-timing.patch sha256 
+d14e992959d6b468ec2698da08146301f3ef1654a292d8daed9a94f869e51ae6
+tools/inspect_h700_fdt.py            sha256 
+ecc939ddf76f49ebf7bf0a8abaf9f1a8961c5e702cd0caf6c33d27bff103e062
+  (at commit 04298e1)
+
+# notes
+live-fdt.json was produced by tools/inspect_h700_fdt.py at commit 04298e1 (LF output),
+then redacted: snum= and androidboot.serialno= replaced by <serial-redacted>.
+The raw DTB is not published because its bootargs carry the same serial; it stays at
+build/fdt-reparse-local/ (build/ is gitignored). Its hash above ties the local copy to
+the sha256 recorded inside live-fdt.json.
