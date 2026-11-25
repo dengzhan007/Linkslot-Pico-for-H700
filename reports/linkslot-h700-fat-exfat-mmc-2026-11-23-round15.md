@@ -2,7 +2,7 @@
 
 Date: 2026-11-23  
 Work branch: `porting/linkslot-1.0.36-feasibility`  
-Validated head: `53eb7c6e1cafc0d0fe71567be6d82e474a45b2e3`  
+Validated head: `e5b5cba676d35a0ef909dd93d234758c56c6462b`  
 PR: [#16 — draft](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16)
 
 ## Summary
@@ -34,13 +34,13 @@ GammaOS `LICENSES.md` identifies the `emu/` additions as MIT. Original source he
 
 ## CI evidence
 
-Full workflow [45135115298](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45135115298) completed successfully on validated head `53eb7c6`. The workflow also passed the existing Linkslot no_std/VFS/static-mGBA, AArch32/newlib, and A32 BL33 layout probes.
+Full workflow [45135795869](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45135795869) completed successfully on validated head `53eb7c6`. The workflow also passed the existing Linkslot no_std/VFS/static-mGBA, AArch32/newlib, and A32 BL33 layout probes.
 
 Artifact:
-- ID: `14800060917`
-- Size: `380,276,489` bytes
-- SHA-256: `6041a12137559f0fdf3f043a755f9d20e60b76e55a870e4a9296ff8a4a563f77`
-- [Download artifact](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45135115298)
+- ID: `14799857054`
+- Size: `380,276,591` bytes
+- SHA-256: `7e343b688e3a64bb5d285357e3ef9a3938d4dd93280081d93f5473a51b0d79fe`
+- [Download artifact](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45135795869)
 
 Filesystem-specific steps:
 - Step 18 — host compile: **PASS** for `fat_ro.c`, `fat_wr.c`, `fat_exfat.c`, all three test harnesses, and the AArch64 writer-mutex branch.
