@@ -2,6 +2,10 @@
 
 ## Index
 
+### 2026-11-26 — Slot 120 Hz runtime check (ADB, read-only)
+
+- [`slot-refresh-audit/`](slot-refresh-audit/) — two read-only ADB captures of the same RG34xx (BaseOS 1.5.3, Linux `4.9.170 #19`), UI then a running GBA core, 12 s IRQ windows in each. The panel block is byte-identical in both phases: `rg34xx_v1` 720x480, `lcd_ht` 820 / `lcd_vt` 536 / `lcd_dclk_freq` 26 MHz / `lcd_if` 0, so the tree carries only the 60 Hz timing set. IRQ 293 measures 59.667 Hz in UI and 59.583 Hz in game; `disp` reports `de_rate` 696 MHz, `ref_fps` 59 and `fps:60.2` in both. The PLL factor word at `0x03001040` reads `0x88001703` in both phases (N=23, D2=1, 288 MHz), i.e. no 120 Hz programming, and `0x06511044` answers `I/O error` from the dump node, so the TCON divider has no runtime readback. `slot` keeps PID 2301 across phases and only dlopens `armgba_libretro.so`, so no display re-init happens on game entry; `high_refresh=1` in `slot.state` in both phases with no effect on the display stack. Verdict: 120 Hz is not applied, and both phases sit at the 60 Hz path. Ships `SUMMARY.md` plus both raw reports and the collector script; no `sunxi_dump` write, no register write, no `adb root`, no process kill and no input injection.
+
 ### 2026-11-25 — RG34XX kernel #19 display-path static reverse audit (offline)
 
 - [`kernel19-display-reverse-audit/`](kernel19-display-reverse-audit/) — Build-ID matched stock ELF, GNU Build ID `a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68`; bounded PLL/TCON disassembly resolves the live 288-MHz / divider-11 / ~59.57-Hz baseline. No 120-Hz mode table or runtime refresh-switch path found. The first pass left the `tcon_lcd` code-side mux, the full panel callback lifecycle and the field at `+0x80` unresolved. No device access or hardware writes.
