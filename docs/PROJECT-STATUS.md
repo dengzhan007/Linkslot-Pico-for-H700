@@ -63,7 +63,7 @@
 
 **最近完成的 RG34XX 设备采集：** parser-v3 inventory 已上传至 `reports/rg34xx-inventory-20261125-cpux-v3/`，并完成 OPP exact-candidate analysis 与 cpufreq getter reconciliation。原始 binary 保留在采集机，未上传；报告可复查文本 JSON 与哈希清单。
 **boot 二进制身份核对：** 已通过 [p4 元数据](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-boot-p4-metadata.json) 与 [解压 hash / aligned notes](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-boot-p4-verified.json) 完成 live kernel ↔ stock p4 kernel 精确 Build ID 匹配；解压 SHA-256 与公开 BaseOS survey 前缀核对成功。`vmlinux-to-elf` 和首轮 probe/OPP setter 反汇编也已完成，报告见 [cpufreq disassembly](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-cpufreq-driver-disasm.txt)。
-**本轮 RG34XX cpufreq probe 完整 CFG + OPP core（2026-11-25，纯离线静态）：** 仅用本地已符号化 ELF，不接触设备、不读 `/sys`/`/dev/mem`、不调用 `sunxi_get_soc_ver`、不写寄存器、不重导出 p4。产物仅上传有界文本/JSON：[full CFG](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-cpufreq-full-cfg.txt) / [full CFG JSON](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-cpufreq-full-cfg.json) / [OPP core disasm](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-opp-core-disasm.txt)。ELF 与 boot 镜像保留本地。
+**本轮 RG34XX cpufreq probe 完整 CFG + OPP core（2026-11-25，纯离线静态）：** 仅用本地已符号化 ELF，不接触设备、不读 `/sys`/`/dev/mem`、不调用 `sunxi_get_soc_ver`、不写寄存器、不重导出 p4。产物仅上传有界文本/JSON：[驱动关键函数反汇编](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-cpufreq-driver-disasm.txt) / [full CFG](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-cpufreq-full-cfg.txt) / [full CFG JSON](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-cpufreq-full-cfg.json) / [OPP core disasm](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-opp-core-disasm.txt)。ELF 与 boot 镜像保留本地。
   - `sun50i_cpufreq_nvmem_probe` = `0x…72ccc`–`0x…73148`（不含），287 指令、69 严格基本块、106 edges；`st_size=0`，边界取"闭合 epilogue 的 ret，其后继为不同 FUNC（`find_deepest_state`）且非本函数分支目标"，全程连续块覆盖无缝隙。
   - 十个显式 speed 比较值及分支表：`0x2000`/`0x2800`→mask 0 + 前缀 `a` + 后缀恒 1；`0x5c00`→mask 0 + `c` + 条件后缀 0/1/2；`0x6c00`/`0x7c00`→mask 0 + `b` + 条件后缀 0/1；`0x2400`/`0x5000`/`0x5400`/`0x7400`→mask 1；`0x2c00`→mask 2；其余→mask 8。
   - **b0/b1 确认保持 mask=0 且跳过 `set_supported_hw`**：`0x…72f24` 块不写 mask 槽，唯一 `str` 在 `0x…72f44`，b 路径经 snprintf 后跳 `0x…72f48` 绕过之；`0x…72fd8 cbz w1,[x29,#0x74]` 因此在 b 路径必然跳过 setter。据此 no-mask + `b1` 模型由运货二进制证实（此前仅为 DT/runtime 指纹）。
@@ -82,7 +82,7 @@
 ## 1. 项目目标与固定约束
 
 - 目标设备是 **Anbernic RG34XX（非 SP）/ Allwinner H700 / Cortex-A53**，不是 RG353PS/RK3566，也不是 RG34XX SP。
-- 主线：**GammaOS LK → H700 AArch32 BL33 → H700 C HAL → Linkslot 1.0.45**。
+- 主线：**GammaOS LK → H700 AArch32 BL33 → H700 C HAL → Linkslot main 1.0.49**。当前已验证的 H700 前端 overlay/CI 仍基于历史 1.0.45，必须完成新基线重跑后才可把代码和验收状态标记为 1.0.49。
 - 长期语言分工：**C/ARM 汇编负责 LK、启动链和 H700 BSP/HAL；Rust `no_std` 负责 Linkslot 前端业务；C/C++ 静态模拟器核心通过窄 ABI 接入。**
 - 首期可玩目标只做 GB/GBC/GBA；首期只运行一个活动核心，采用单核协作式事件循环。
 - 不把 Linux Linkslot ELF、Linux `std`/线程/动态 `.so` loader、EGL/ALSA/evdev/sysfs 直接移进 LK。
@@ -98,13 +98,13 @@
 | `porting/linkslot-1.0.45-feasibility` | **当前唯一移植工作分支** | 新代码、测试、路线图和状态记录都提交到这里 |
 | `upstream/linkslot` | 上游源码归档 | 保持只读，不向此分支提交移植改动 |
 
-当前 Linkslot 正式基线为 **1.0.45**，归档 HEAD 为 `3b06d96adadd0375f071555ecb3cc20c3a5b53db`（该 SHA 是本项目归档提交，不是上游 GitCode commit）。根目录 main 与 `test/` 的 852 个源码文件逐 blob 一致；`DEV/` 为 1.0.42，与 1.0.45 有 26 个文件内容不同。详见 [1.0.45 移植基线更新](linkslot-1.0.45-portability-update.md)。
+当前目标稳定移植基线为 **main 1.0.49**；`test` 也是 1.0.49，851 个源码文件逐 blob 完全一致。未来差异审查分支为 `DEV 1.1.0`（相对 main 新增 21、删除 1、修改 46，重点增加 schema 2 平台包、Arcade/NeoGeo 与 FBNeo）。最新来源的原始 GitCode commit、归档 commit 与文件 SHA 见 [上游基线](upstream-baselines.md) 和 [三分支更新审查](linkslot-1.0.49-1.1.0-refresh.md)。**当前 H700 no_std crates、renderer/frontend patcher 与历史 CI 仍锁在 1.0.45**，1.0.49 迁移及重跑尚未完成；旧记录仅是历史基线。
 
 ## 3. 当前总体进展
 
 ### 已完成并有 CI/主机证据
 
-- 1.0.45 上游审查、三核心 GBA picker 状态机升级、Renderer overlay 基线更新。
+- 历史 1.0.45 上游审查、三核心 GBA picker 状态机升级、Renderer overlay 基线更新；1.0.49 的新源代码审查见 [更新报告](linkslot-1.0.49-1.1.0-refresh.md)，适配重跑待完成。
 - 多个纯业务 Rust crate 已拆为 `no_std + alloc` 形式；输入手势、核心选择、状态转换等有独立回归测试。
 - Linkslot Renderer 抽象和 H700 软件 framebuffer compositor 已可在隔离上游工作树编译；尚未接入已授权的真实 scanout buffer。
 - Linkslot `slot-retro` 静态核心接口、Libretro VFS v3 ABI、mGBA AArch32 静态 archive/newlib 构建和 host link probes 已完成；另已把真实 Linkslot Rust `Api` 表与真实 mGBA archive/newlib adapter 链接为无未解析符号的 AArch32 ELF（仅链接探针，不执行核心）。
@@ -121,7 +121,7 @@
 - 实际 H700 显示扫描输出、GPIO/ADC 输入 producer、硬件 timer、PCM DMA audio、RTC、关机和真实存储写入服务尚未形成完整运行时。
 - 无经 RG34XX 实机验证的 CPU OPP 表、PMIC 调压流程、CPU PLL 切换流程或温控闭环。
 
-### 最新 Linkslot 1.0.45 综合验收（2026-11-24 15:48 UTC）
+### 历史 Linkslot 1.0.45 综合验收（2026-11-24 15:48 UTC；不代表 1.0.49 已通过）
 
 - [H700 Linkslot runtime-slices #45428654903](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45428654903)：**成功，20/20 steps**。no_std business + Linkslot integration job 13/13，C input service ABI + queue job 7/7。
 - [Linkslot LK Rust feasibility #45428664653](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45428664653)：**成功，71/71 steps**，代码 HEAD `0e33da4a50b28583aac8c7e815dac7857b6ef43a`。artifact [14937338188](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45428664653/artifacts/14937338188) 已上传，约 387 MB，包含 maps、ELFs、日志和报告。
@@ -258,7 +258,7 @@ Linkslot 1.0.45 UI 当前已追加 display-only CPU row：`SYSTEM_SETTINGS` 为 
 - FDT OPP parser: [`tools/inspect_h700_fdt.py`](../tools/inspect_h700_fdt.py) + [`tools/test_inspect_h700_fdt.py`](../tools/test_inspect_h700_fdt.py); parser-v2 needs a new live inventory capture.
 - OPP/cpufreq source check details: [RG34XX CPUX live audit §1.5](rg34xx-cpux-live-audit-2026-11-25.md).
    - 总体路线： [roadmap](roadmap.md)
-   - Linkslot 1.0.45 源码差异： [1.0.45 portability update](linkslot-1.0.45-portability-update.md)
+   - 最新 Linkslot 源码差异： [1.0.49 / 1.1.0 refresh](linkslot-1.0.49-1.1.0-refresh.md)；历史 1.0.45 适配记录：[1.0.45 portability update](linkslot-1.0.45-portability-update.md)
    - LK/H700 runtime 架构： [Linkslot H700 runtime architecture](linkslot-h700-runtime-architecture.md)
    - BL33/内存交接： [RG34XX boot handoff audit](rg34xx-boot-handoff-audit.md)
 4. 只把 CI 明确通过的提交标为已验证；host compile 不等于实机启动，合成 OPP 不等于真实可用频点。
