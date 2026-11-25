@@ -372,3 +372,19 @@ This is a much closer structural match than the previously examined stock-style 
 **Important ambiguity in parser-v2:** an absent `opp-supported-hw` property and a present zero-cell `opp-supported-hw` property were both serialized as an empty `supported_hw_cells` array. The Linux OPP core treats them differently when no hardware mask is registered: absent means the OPP may be accepted; present (even with zero cells) means unsupported. The parser was therefore extended in commit `284f48e71ad93145c15bbf034d88d2f4c404789e` to emit `supported_hw_present`, `supported_hw_cell_count`, `voltage_microvolt_present`, and `voltage_microvolt_variant_names`. Synthetic regression covers absent and empty-present properties. H700 Linux/Windows validation passed in [#45529626035](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45529626035) and [#45529626080](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45529626080).
 
 A parser-v3 report is still required from the original device `live-fdt.dtb` to confirm the property-presence condition. Even if it matches, that would identify an OPP-selection mechanism—not decode SID raw `0x6c00` and not authorize any new OPP or frequency/voltage write. Keep the runtime `POLICY_ONLY`, `hardware_applied=0`, and all actual DVFS controls disabled.
+
+### 8.5 Read-only OPP candidate enumerator and current verification (2026-11-25)
+
+The repository now includes `tools/analyze_h700_opp_candidates.py` and `tools/test_analyze_h700_opp_candidates.py`. The tool consumes parser-v3 `live-fdt.json` and the paired `cpu-power-runtime.txt`, then evaluates:
+
+- no `supported_hw` array registered, where the presence of any `opp-supported-hw` property rejects the OPP, including a zero-cell property;
+- each non-zero one-cell `supported_hw` mask (0x01–0xff), requiring an `opp-supported-hw` property and bit intersection;
+- every voltage suffix in the OPP table, applying Linux 4.9 semantics: a selected named property is used when present; the base property is used only when the named property is absent.
+
+It reports exact frequency-list matches and nearest candidates. It does not read SID itself, claim the exact running driver, authorize an OPP or touch hardware. Synthetic tests explicitly reproduce the nine-rate `b1` fingerprint and verify the five dropped-rate fixture.
+
+The initial CI run exposed two implementation defects (an over-escaped frequency-block regex and a malformed test replacement); both were corrected. Current commit [`60d82ee21832f7f701c341eb4de72fae73e5a797`](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/60d82ee21832f7f701c341eb4de72fae73e5a797) passes:
+- [H700 AArch32/AArch64 compile + host regression #45531974987](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45531974987), including AArch64, AArch32 ARM-state, AArch32 Thumb-2, and storage/OPP/MMU/PIO host tests;
+- [H700 boot audit tools #45531974867](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45531974867), including Linux and Windows Python unit tests and PowerShell syntax validation.
+
+Next step is to run parser-v3 on the original device `live-fdt.dtb`, then run the analyzer against the same capture's runtime frequency file. Until then, `b1` remains a conditional structural fingerprint only; the SID decode and all OPP/DVFS writes remain unapproved.

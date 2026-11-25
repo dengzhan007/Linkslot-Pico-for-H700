@@ -2,7 +2,7 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-25（修正 LK AArch32 完整 MMU 初始化契约；扩展 CPUFreq getter/cooling 只读诊断；host 与三架构编译回归通过，实机 v3 采集待完成）  
+**最后核对时间：** 2026-11-25（parser-v3 OPP 属性存在性解析与候选分析工具已加入；Linux/Windows host tests 和 AArch32/AArch64/Thumb2 编译通过；设备 parser-v3 采集待完成）  
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **工作分支：** `porting/linkslot-1.0.45-feasibility`  
 **最近一次成功 CI 验证的代码基线：** `0e33da4a50b28583aac8c7e815dac7857b6ef43a`（完整综合 workflow #45428664653，71/71 steps；早于本轮只读 inventory 脚本增强）。**本轮 collector/CI 配置提交：** `96afe6d2fff811eab4edfa87b3f58606bdaf645c`，含 read-only clock-summary 摘录、静态安全测试和 workflow path/test 接入；随后又有 DVFS 专项文档、路线图和状态入口同步提交。对应 push workflow 尚未取得可核验结果。  
@@ -42,6 +42,12 @@
 **本轮 LK MMU static footprint：** pinned LK `arch/arm/mmu.c` 使用 `tt[4096]` 静态 section table，占 16 KiB、16 KiB 对齐的 BSS footprint。MMU hook 本身不动态申请 DRAM，但这块 BSS 和其余 LK BSS/stack/heap 的实际 placement 仍在内存 ownership 审批范围内。
 
 **下一次 RG34XX 设备采集：** 新只读 collector 已提交（cpufreq path identity、getter 前后 cached frequency、cooling-device state/bindings）。使用 Windows PowerShell：`.\scripts\run-rg34xx-inventory.ps1 -OutputDirectory ".\build\rg34xx-inventory-20261125-cpux-v3"`；完成后把目录上传到 reports 分支 `reports/rg34xx-inventory-20261125-cpux-v3/`。不需要调整 governor/min/max，也不需要触碰 PMIC/CCU/CPU PLL。
+
+**本轮 OPP 候选分析工具：** 新增 `tools/analyze_h700_opp_candidates.py` 与 `tools/test_analyze_h700_opp_candidates.py`，按 Linux 4.9 OPP core 规则枚举无 `supported_hw` 与所有一单元 mask，准确处理 `opp-supported-hw` 属性缺失/空属性、命名电压属性 fallback，并与实际 `scaling_available_frequencies` 对比。工具要求 parser-v3 presence 字段；输出仅是 source/table fingerprint，不解码 SID、不授权 OPP，也不写硬件。
+
+**本轮 OPP analyzer 自动化验证：** 初始 Actions 暴露 regex 多转义和测试块换行错误，已修复。当前提交 `60d82ee21832f7f701c341eb4de72fae73e5a797` 的 H700 host regression / AArch64 / AArch32 ARM / AArch32 Thumb-2 全部通过 [#45531974987](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45531974987)；Linux + Windows boot-audit tests、Windows inventory wrapper syntax 全部通过 [#45531974867](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45531974867)。
+
+**下一次 RG34XX 设备采集：** 在保留原始 `live-fdt.dtb` 的 Windows 采集机运行 `.\scripts\run-rg34xx-inventory.ps1 -OutputDirectory ".\build\rg34xx-inventory-20261125-cpux-v3"`，随后上传到 reports 分支 `reports/rg34xx-inventory-20261125-cpux-v3/`。v3 同时带回 OPP property presence、cpufreq getter 前后 cached frequency、cooling-device state/bindings；不需要改 governor、min/max、PMIC 或 CCU。
 
 ## 1. 项目目标与固定约束
 

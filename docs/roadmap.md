@@ -140,6 +140,10 @@
 - [x] 补齐 LK `platform_init_mmu_mappings()` 完整调用契约与 fake-MMU 回归；1 GiB DRAM + PIO Device descriptor + MMU enable 顺序已由 H700 AArch32/AArch64/Thumb2 编译和 host regression 验证。 Pinned LK 的 16 KiB static section table 位于 `.bss`，实际 BSS/stack/heap placement 继续受 memory approval gate 约束。 已在 pinned `arch/arm/mmu.h` 与 `arch/ops.h` 核对声明/宏；仍未执行完整 LK target link。
 - [ ] 重新运行 collector v3，验证 cpuinfo getter 前后的 cached frequency 是否被修正，并采集真实 thermal cooling-device state/bindings。 Linkslot/mGBA/LK feasibility #45526769421 已通过；仍不是完整 LK target link 或设备验证。
 
+- [x] 新增 `tools/analyze_h700_opp_candidates.py`：基于 parser-v3 JSON，按 Linux 4.9 OPP core 枚举 no-mask / 1-cell `supported_hw` masks 与电压 suffix，准确区分 `opp-supported-hw` absent/empty 和 named voltage fallback；与 runtime available frequency list 比对，输出 exact/closest diagnostics。synthetic tests 包含 b1 九档/五档 dropped fixture。
+- [x] OPP candidate analyzer 的 Linux/Windows host tests、H700 storage regressions 与 AArch64/AArch32 ARM/AArch32 Thumb-2 编译通过：#45531974867、#45531974987。初轮失败为 regex escape 和 test formatting，均已修复；最新 HEAD `60d82ee21832f7f701c341eb4de72fae73e5a797`。
+- [ ] 用 RG34XX parser-v3 真实 live FDT 报告运行 OPP candidate analyzer，确认所有 `-ab` 节点的 `supported_hw_present` 后再判断条件式 `b1` fingerprint。
+
 ### C1. CPU performance modes / H700 DVFS (architecture first)
 
 - [x] 建立 [H700 CPU Performance Service / DVFS 设计](h700-cpu-performance-service.md)：定义 Power Saver、Balanced、Performance、Auto、受限 Boost 模式；C HAL 负责 OPP/PLL/PMIC/热限制，Rust/Linkslot 只提交模式请求。

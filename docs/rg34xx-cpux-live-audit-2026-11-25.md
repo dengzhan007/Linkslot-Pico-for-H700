@@ -242,3 +242,10 @@ and boot audit tools workflow
 [#45526953774](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45526953774)
 passed. Both capture additions are read-only; they do not write cpufreq,
 thermal, regulator, clock or NVMEM sysfs controls.
+
+
+### 5.4 OPP candidate analyzer and CI status
+
+The read-only analyzer and regression tests were added to `tools/analyze_h700_opp_candidates.py` and `tools/test_analyze_h700_opp_candidates.py`. It models absent/empty `opp-supported-hw`, one-cell mask intersection and selected voltage suffix/base fallback, and compares candidate OPP frequency sets with the actual runtime list.
+
+The first CI attempts exposed a malformed regex, then a malformed test method block. Both were corrected. At commit [`60d82ee21832f7f701c341eb4de72fae73e5a797`](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/60d82ee21832f7f701c341eb4de72fae73e5a797), H700 compile/host regression [#45531974987](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45531974987) and Linux/Windows boot audit tools [#45531974867](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45531974867) are green. Device parser-v3 output is still required before running the analyzer against real OPP nodes.
