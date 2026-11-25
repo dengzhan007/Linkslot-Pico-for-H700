@@ -285,3 +285,17 @@ The active C policy still carries the external 54-MHz / 840 / 536 and 54-MHz / 1
 2. Compare that result with the pvaibhav/slot source and the independent ROCKNIX RG34XX panel table without transplanting either timing or writer.
 3. Measure UI presents and armGBA committed frames separately. Display IRQ remains only a scanout/vblank proxy.
 4. Keep the 120-Hz writer disabled, GAME 120-Hz opt-in default-off, and `hardware_applied=0` until an RG34XX-specific HAL has exact panel qualification, synchronized transition sequencing, scanout/cache ownership, readback, timeout and rollback coverage.
+
+
+## PLL register arithmetic cross-check (pinned public BSP reference only)
+
+A source-level decode is now possible without guessing the raw PLL field layout. In [`qiaoweibiao/T507_Kernel` commit `98fcc7d3f112e51b0edfb71536da89cb2115106f`, `clk-sun50iw9.c`](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/clk/sunxi/clk-sun50iw9.c), `SUNXI_CLK_FACTORS(pll_video0x4, ...)` defines N at shift 8 / width 8 and D1 at shift 1 / width 1; `calc_rate_video0()` calculates `24 MHz × (N + 1) / (D1 + 1)`. The matching [`sunxi,clk` DTS`](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/arch/arm64/boot/dts/sunxi/sun50iw9p1-clk.dtsi) assigns `tcon_lcd` to `pll_video0x4`; `pll_video0` is a `/4` fixed-factor child.
+
+| Raw PLL word | N field | D1 field | Reference `pll_video0x4` rate | With TCON divider | Estimated DCLK |
+|---|---:|---:|---:|---:|---:|
+| `0x88001703` (live) | 0x17 = 23 → N+1=24 | 1 → D1+1=2 | 24 MHz × 24 / 2 = **288 MHz** | 11 | **26.1818 MHz** |
+| `0x88002b03` (pvaibhav 120-Hz candidate) | 0x2b = 43 → N+1=44 | 1 → D1+1=2 | 24 MHz × 44 / 2 = **528 MHz** | 10 | **52.8 MHz** |
+
+At our live 820×536 totals, the candidate computes to 52.8 MHz / (820×536) = **120.13 Hz**. The baseline computes to 26.1818 MHz / (820×536) = **59.569 Hz**. This arithmetic is coherent with the observed 60-Hz clock summary and IRQ slope, and makes the upstream 120-Hz pair internally coherent. It still does **not** prove the current kernel uses this exact PLL layout, that the live `tcon_lcd` parent is the same at runtime, that the panel revision tolerates 52.8 MHz, or that pvaibhav's write sequence is safe on `rg34xx_v1 + lcd_type=old`. The report's raw PLL remains recorded as raw hardware evidence; this section is an external-source decode only.
+
+Do not copy the high-mode candidate into our HAL or enable a writer. First match the exact Linux 4.9.170 #19 source/build ID, verify `clk-sun50iw9` factor definitions and runtime parent/mux path, then qualify the panel timing and safe transition boundary. The linked T507 source is a related sun50iw9 reference, not proven identical to the shipping binary.
