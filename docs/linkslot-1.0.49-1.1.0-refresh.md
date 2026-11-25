@@ -58,6 +58,10 @@ DEV 的首条 changelog 为 1.1.0，核心增量是 schema 2 / `kind=platform` L
 
 ## 6. 对现有 H700 代码和 CI 的行动
 
+持久化集成代码已开始迁移：`integration/linkslot/h700-frontend-core/slot-model/src/core.rs` 已按 main 1.0.49 的 blob `cd877949a3b30c62cf178fd91add3e258a09c66d` 同步；本地 crate manifest 已升至 1.0.49，H700 contract test 增加 gpSP/armGBA/mGBA netpacket 断言。提交：`ac0e8e0` / `977519e` / `3e986dc`。
+
+两条 patcher 已更新为归档 HEAD `241e7c1974926fa22552b200852914ceaccbfd42` 与 workspace 1.0.49：`20a3ee9`、`e9faf2d`；runtime workflow 也改为 1.0.49 命名：`d557c54`。首轮 runtime workflow [#45623895416](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45623895416) 正在执行；截至本次记录，持久化 no_std workspace tests、renderer + business overlay 应用、上游 input/model regression 均成功，完整 Frontend 的 `cargo check` 正在运行，尚不能标记整条 workflow 通过。
+
 对当前持久化集成代码做了进一步只读检查，发现一个具体的功能性差异：`integration/linkslot/h700-frontend-core/slot-model/src/core.rs` 仍是 1.0.45 风格的 `CoreSpec`，只有 `frameskip` / `link`，没有 1.0.49 新基线的 `netpacket` 字段；其中 armGBA 注释仍写单人游玩。1.0.49 的上游核心表已经把 gpSP 和 armGBA 的 `netpacket` 声明为 true、mGBA 声明为 false。这与 1.0.46–1.0.47 的 armGBA netpacket 联机修复相对应。**因此 H700 no_std 核心模型目前不只是版本落后，还会丢失 armGBA 联机能力元数据**；迁移时要把字段、所有 CoreSpec 常量和测试一并同步，不能只复制上游一个文件而遗漏依赖字段/测试。
 
 持久化 `machine.rs` 目前仍只有 GBA/GB/GBC/FC/SFC/MD 六个机种。对第一期 GB/GBC/GBA 切片这是有意的范围限制，暂不引入 DEV 的 Arcade/NeoGeo；未来添加机种时必须遵守上游平台枚举与历史 `slot.state` 槽序只能追加的约束。
