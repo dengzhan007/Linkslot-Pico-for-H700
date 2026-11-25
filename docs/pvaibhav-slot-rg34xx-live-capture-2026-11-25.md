@@ -199,11 +199,11 @@ The next local verification is to download that ZIP, verify its archive hash, ex
 
 A November 2, 2026 MustardOS community report describes a different RG34XX-H running a related `sun50iw9` BSP where FDT DCLK 27 MHz / HT 840 / VT 536 nominally computes to 59.97 Hz, but the observed display was about 106.5 Hz. The author attributed the mismatch to a fixed TCON divider of 6 for RGB/HV combined with the BSP's `pll_video0x4` clock table starting at 288 MHz: 288/6=48 MHz, and 48 MHz/(840×536)=106.61 Hz. A later fix changed that RG34XX-H's DCLK to 54 MHz and HT to 1679; the pinned [MustardOS commit `76e454dfa9758a99f85115f80a29121dabb13a01`](https://github.com/MustardOS/internal/commit/76e454dfa9758a99f85115f80a29121dabb13a01) changed the DTS values and screen refresh declaration from 59.968 to 60.004. A second RG34XX-H user reported they could not reproduce the first unit's mismatch, illustrating revision/build differences.
 
-This is **not** a measurement of our RG34XX non-SP and does not prove that our kernel uses the same divider table. It is evidence that Allwinner's requested `lcd_dclk_freq`, parent PLL selection and final TCON DCLK can diverge, and that even the `rg34xx_v1` driver string is not enough to transfer timing values between hardware revisions. For our live 26 MHz / 820×536 profile, the IRQ rate (~59.63 Hz) is close to the DTB-derived 59.155 Hz but still differs by ~0.48 Hz. The next hardware-analysis step is to recover the **exact running 4.9.170 #19 display clock path** from the byte-matched stock kernel and identify/read back its final DCLK divider without writing anything. Do not import the MustardOS 54 MHz / 1679 timing.
+This is **not** a measurement of our RG34XX non-SP and does not prove that our kernel uses the same divider table. It is evidence that Allwinner's requested `lcd_dclk_freq`, parent PLL selection and final TCON DCLK can diverge, and that even the `rg34xx_v1` driver string is not enough to transfer timing values between hardware revisions. For our live 26 MHz / 820×536 profile, the IRQ rate (~59.63 Hz) is close to the DTB-derived 59.155 Hz but still differs by ~0.48 Hz. That divider has now been read back as 11. The remaining hardware-analysis step is to recover the **exact running 4.9.170 #19 display clock path** from the byte-matched stock kernel and validate PLL field layout, parent mux and `rg34xx_v1 + lcd_type=old` initialization against the already captured values. Do not repeat the same register readback unless a new boot/mode creates a distinct measurement need, and do not import the MustardOS 54 MHz / 1679 timing.
 
 References: [MustardOS RG34XX-H clock-mismatch discussion](https://community.muos.dev/t/rg34xx-h-incorrect-display-refresh-rate/1825) and [the DTS correction commit](https://github.com/MustardOS/internal/commit/76e454dfa9758a99f85115f80a29121dabb13a01).
 
-## TCON DCLK divider: the next decisive read-only check
+## External sun50iw9 TCON source reference (readback now complete)
 
 The pinned Allwinner sun50iw9 BSP reference at [orangepi-xunlong/linux-orangepi@0cd0547ea405b84b5b60fbc92978ac1bc2b68055](https://github.com/orangepi-xunlong/linux-orangepi/commit/0cd0547ea405b84b5b60fbc92978ac1bc2b68055) gives a concrete way to distinguish the DTB request from the actual panel DCLK. This is a related vendor BSP reference, **not yet proven to be the exact source revision behind the running 4.9.170 #19 binary**.
 
@@ -222,15 +222,7 @@ The pinned public [`clk-sun50iw9.c`](https://github.com/qiaoweibiao/T507_Kernel/
 No additional dump request is required for the current boot: both registers are already read. Do not write `/sys/class/sunxi_dump/write` or attempt the candidate high-mode pair.
 
 
-ADB single-command example (substitute the connected device serial locally; do not write to the sibling /write node):
-
-```powershell
-$serial = (adb devices | Select-String '\\sdevice$' | Select-Object -First 1).ToString().Split()[0]
-adb -s $serial shell "echo '0x06511044,0x06511044' > /sys/class/sunxi_dump/dump; cat /sys/class/sunxi_dump/dump"
-adb -s $serial shell "echo '0x03001040,0x03001040' > /sys/class/sunxi_dump/dump; cat /sys/class/sunxi_dump/dump"
-```
-
-The only write in these commands is a read request to the kernel's dump-control interface. The second path, /sys/class/sunxi_dump/write, must not be opened, written or used. Save the exact returned text alongside a contemporaneous display clock summary; do not decode PLL frequency until the register layout and running-kernel implementation are matched.
+No further register-read command is required for the current boot: both addresses have already been queried through `/sys/class/sunxi_dump/dump`. The query was read-only; `/sys/class/sunxi_dump/write` was never opened. The remaining work is source/build-ID validation, not repeating the MMIO capture.
 
 
 ## TCON / PLL readback follow-up (2026-11-25 19:59 +08:00)
@@ -238,7 +230,7 @@ The only write in these commands is a read request to the kernel's dump-control 
 The subsequent [read-only TCON/PLL capture](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/pvaibhav-slot-runtime/tcon-readback) closes the previous open item about the active divider:
 
 - TCON0 DCLK register `0x06511044`: `0xf000000b` (divider field 11).
-- Video PLL register `0x03001040`: `0x88001703` (raw only; not decoded).
+- Video PLL register `0x03001040`: `0x88001703` (preserved as raw hardware evidence; its fields are interpreted below using a pinned related BSP reference, not yet the exact kernel #19 source).
 - Concurrent `clk_summary`: `tcon_lcd=288 MHz` / `pll_video0x4=288 MHz`.
 - Capture method: read request through `/sys/class/sunxi_dump/dump`; `/sys/class/sunxi_dump/write` was never opened; no register, panel, or refresh-mode writes were performed.
 
