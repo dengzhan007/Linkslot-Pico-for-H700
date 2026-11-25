@@ -1,0 +1,496 @@
+================================================================================
+RG34XX / H700  目标 OPP core 静态分析（任务 B）
+纯离线：仅反汇编本地 ELF 的 .symtab/.kernel。无设备、无运行、无 DTB。
+st_size 全部为 0 → 所有函数边界由“ret + 后继不同 FUNC/填充”推断，非符号大小。
+================================================================================
+
+一、ELF .symtab 中枚举到的 OPP 相关函数（73 个，已剔除 stopped/dropped/floppy 误命中）
+--------------------------------------------------------------------------------
+  0xffffff80084bb960  _set_opp_voltage
+  0xffffff80084bba70  _kfree_opp_rcu
+  0xffffff80084bbaa0  _kfree_opp_dev_rcu
+  0xffffff80084bbab8  _remove_opp_dev
+  0xffffff80084bbb08  dev_pm_opp_get_voltage
+  0xffffff80084bbb54  dev_pm_opp_get_freq
+  0xffffff80084bbba8  dev_pm_opp_is_turbo
+  0xffffff80084bbbfc  _remove_opp_table
+  0xffffff80084bbca4  dev_pm_opp_put_regulator
+  0xffffff80084bbd24  _find_opp_table
+  0xffffff80084bbdb0  dev_pm_opp_get_max_clock_latency
+  0xffffff80084bbdf0  dev_pm_opp_get_max_volt_latency
+  0xffffff80084bbeb0  dev_pm_opp_get_max_transition_latency
+  0xffffff80084bbee0  dev_pm_opp_get_suspend_opp
+  0xffffff80084bbf18  dev_pm_opp_get_opp_count
+  0xffffff80084bbfb0  dev_pm_opp_find_freq_exact
+  0xffffff80084bc048  dev_pm_opp_find_freq_ceil
+  0xffffff80084bc0b4  dev_pm_opp_find_freq_floor
+  0xffffff80084bc160  dev_pm_opp_set_rate
+  0xffffff80084bc4d0  dev_pm_opp_put_supported_hw
+  0xffffff80084bc57c  dev_pm_opp_put_prop_name
+  0xffffff80084bc624  _opp_set_availability
+  0xffffff80084bc79c  dev_pm_opp_enable
+  0xffffff80084bc7b4  dev_pm_opp_disable
+  0xffffff80084bc7cc  dev_pm_opp_get_notifier
+  0xffffff80084bc7ec  _add_opp_dev
+  0xffffff80084bc87c  _add_opp_table
+  0xffffff80084bc990  dev_pm_opp_set_supported_hw
+  0xffffff80084bca70  dev_pm_opp_set_prop_name
+  0xffffff80084bcb3c  dev_pm_opp_set_regulator
+  0xffffff80084bcc34  _opp_remove
+  0xffffff80084bcca8  dev_pm_opp_remove
+  0xffffff80084bcd44  _allocate_opp
+  0xffffff80084bcdb0  _opp_add
+  0xffffff80084bcf18  _opp_add_v1
+  0xffffff80084bd038  dev_pm_opp_add
+  0xffffff80084bd050  _dev_pm_opp_remove_table
+  0xffffff80084bd17c  dev_pm_opp_remove_table
+  0xffffff80084bd194  dev_pm_opp_free_cpufreq_table
+  0xffffff80084bd1c4  dev_pm_opp_init_cpufreq_table
+  0xffffff80084bd31c  dev_pm_opp_set_sharing_cpus
+  0xffffff80084bd434  dev_pm_opp_get_sharing_cpus
+  0xffffff80084bd4e4  _dev_pm_opp_cpumask_remove_table
+  0xffffff80084bd59c  dev_pm_opp_cpumask_remove_table
+  0xffffff80084bd5b4  dev_pm_opp_of_remove_table
+  0xffffff80084bd5cc  _of_add_opp_table_v1
+  0xffffff80084bd6c4  dev_pm_opp_of_cpumask_remove_table
+  0xffffff80084bd6dc  dev_pm_opp_axi_bus_divide_ratio
+  0xffffff80084bd784  opp_parse_supplies.isra.0
+  0xffffff80084bd9a4  _of_add_opp_table_v2
+  0xffffff80084bde04  _of_init_opp_table
+  0xffffff80084bdeac  _of_get_opp_desc_node
+  0xffffff80084bded0  dev_pm_opp_of_add_table
+  0xffffff80084bdf0c  dev_pm_opp_of_cpumask_add_table
+  0xffffff80084bdfec  dev_pm_opp_of_get_sharing_cpus
+  0xffffff80084be154  of_get_opp_desc_node_by_soc_bin
+  0xffffff80084be1c8  dev_pm_opp_of_get_sharing_cpus_by_soc_bin
+  0xffffff80084be344  dev_pm_opp_of_add_table_by_soc_bin
+  0xffffff80084be380  dev_pm_opp_of_cpumask_add_table_by_soc_bin
+  0xffffff80084be470  opp_set_dev_name
+  0xffffff80084be4d8  opp_list_debug_create_link
+  0xffffff80084be57c  opp_debug_remove_one
+  0xffffff80084be594  opp_debug_create_one
+  0xffffff80084be73c  opp_debug_register
+  0xffffff80084be80c  opp_debug_unregister
+  0xffffff80086e2cb4  devfreq_register_opp_notifier
+  0xffffff80086e2d14  devm_devfreq_register_opp_notifier
+  0xffffff80086e2e6c  devfreq_unregister_opp_notifier
+  0xffffff80086e2ecc  devm_devfreq_opp_release
+  0xffffff80086e3a6c  devm_devfreq_unregister_opp_notifier
+  0xffffff80086e3acc  devfreq_recommended_opp
+  0xffffff8008d332a0  opp_debug_init
+  0xffffff8008d58e18  __initcall_opp_debug_init1
+
+说明：
+  · 该内核的 OPP core 是**供应商改造版**：除标准 dev_pm_opp_* 外，还存在
+    dev_pm_opp_of_add_table_by_soc_bin / of_get_opp_desc_node_by_soc_bin /
+    dev_pm_opp_axi_bus_divide_ratio / dev_pm_opp_of_get_sharing_cpus_by_soc_bin 等
+    Allwinner 专有符号 —— 这本身就是“非纯主线”的结构性证据。
+  · 不存在名为 _opp_is_supported 的独立符号；其逻辑被**内联**进 _of_add_opp_table_v2。
+
+二、关键结构体偏移（来自反汇编实证，不是猜头文件）
+--------------------------------------------------------------------------------
+  opp_table->supported_hw        = 0x160   （u32 位图数组指针）
+  opp_table->supported_hw_count  = 0x168   （数组长度）
+  opp_table->prop_name           = 0x170   （命名电压字符串，如 "b1"）
+  opp_table->np                  = 0x140
+  opp_table->clock               = 0x178
+  opp_table->rate_clk            = 0x180
+  opp->rate                      = 0x18    (u64 opp-hz)
+  opp->u_volt / min / max        = 0x20 / 0x28 / 0x30
+  opp->u_amp                     = 0x38
+  opp->available                 = 0x10
+  opp->turbo                     = 0x12
+  opp->dynamic                   = 0x11
+  opp->suspend                   = 0x13
+  opp->np                        = 0x60
+
+三、dev_pm_opp_set_supported_hw @ 0xffffff80084bc990（56 条，全量）
+--------------------------------------------------------------------------------
+0xffffff80084bc990: stp      x29, x30, [sp, #-0x40]!
+0xffffff80084bc994: mov      x29, sp
+0xffffff80084bc998: stp      x21, x22, [sp, #0x20]
+0xffffff80084bc99c: adrp     x21, #0xffffff800904f000
+0xffffff80084bc9a0: mov      x22, x0
+0xffffff80084bc9a4: add      x0, x21, #0xd70  ; =0xffffff800904fd70 ""
+0xffffff80084bc9a8: stp      x19, x20, [sp, #0x10]
+0xffffff80084bc9ac: mov      w20, w2
+0xffffff80084bc9b0: str      x23, [sp, #0x30]
+0xffffff80084bc9b4: mov      x23, x1
+0xffffff80084bc9b8: bl       #0xffffff80089741bc  ; -> mutex_lock
+0xffffff80084bc9bc: mov      x0, x22
+0xffffff80084bc9c0: bl       #0xffffff80084bc87c  ; -> _add_opp_table
+0xffffff80084bc9c4: cbz      x0, #0xffffff80084bca4c  ; -> 0xffffff80084bca4c
+0xffffff80084bc9c8: add      x1, x0, #0x130
+0xffffff80084bc9cc: mov      x19, x0
+0xffffff80084bc9d0: ldr      x0, [x0, #0x130]
+0xffffff80084bc9d4: cmp      x1, x0
+0xffffff80084bc9d8: b.eq     #0xffffff80084bc9e0  ; -> 0xffffff80084bc9e0
+0xffffff80084bc9dc: brk      #0x800
+0xffffff80084bc9e0: ldr      x0, [x19, #0x160]
+0xffffff80084bc9e4: cbz      x0, #0xffffff80084bca0c  ; -> 0xffffff80084bca0c
+0xffffff80084bc9e8: adrp     x2, #0xffffff8008a09000
+0xffffff80084bc9ec: adrp     x1, #0xffffff8008c1c000
+0xffffff80084bc9f0: add      x2, x2, #0x908  ; =0xffffff8008a09908 "_set_opp_voltage"
+0xffffff80084bc9f4: add      x1, x1, #0x3f1  ; =0xffffff8008c1c3f1 "%s: Already have supported hardware list
+0xffffff80084bc9f8: add      x2, x2, #0x1b0  ; =0xffffff8008a091b0 "kset_move_last"
+0xffffff80084bc9fc: mov      x0, x22
+0xffffff80084bca00: mov      w20, #-0x10
+0xffffff80084bca04: bl       #0xffffff80084a83ac  ; -> dev_err
+0xffffff80084bca08: b        #0xffffff80084bca40  ; -> 0xffffff80084bca40
+0xffffff80084bca0c: mov      w2, #0xc0
+0xffffff80084bca10: ubfiz    x1, x20, #2, #0x20
+0xffffff80084bca14: mov      x0, x23
+0xffffff80084bca18: movk     w2, #0x240, lsl #16
+0xffffff80084bca1c: bl       #0xffffff8008176d88  ; -> kmemdup
+0xffffff80084bca20: str      x0, [x19, #0x160]
+0xffffff80084bca24: cbz      x0, #0xffffff80084bca3c  ; -> 0xffffff80084bca3c
+0xffffff80084bca28: add      x0, x21, #0xd70  ; =0xffffff800904fd70 ""
+0xffffff80084bca2c: str      w20, [x19, #0x168]
+0xffffff80084bca30: bl       #0xffffff8008974380  ; -> mutex_unlock
+0xffffff80084bca34: mov      w0, #0
+0xffffff80084bca38: b        #0xffffff80084bca5c  ; -> 0xffffff80084bca5c
+0xffffff80084bca3c: mov      w20, #-0xc
+0xffffff80084bca40: mov      x0, x19
+0xffffff80084bca44: bl       #0xffffff80084bbbfc  ; -> _remove_opp_table
+0xffffff80084bca48: b        #0xffffff80084bca50  ; -> 0xffffff80084bca50
+0xffffff80084bca4c: mov      w20, #-0xc
+0xffffff80084bca50: add      x0, x21, #0xd70  ; =0xffffff800904fd70 ""
+0xffffff80084bca54: bl       #0xffffff8008974380  ; -> mutex_unlock
+0xffffff80084bca58: mov      w0, w20
+0xffffff80084bca5c: ldp      x19, x20, [sp, #0x10]
+0xffffff80084bca60: ldp      x21, x22, [sp, #0x20]
+0xffffff80084bca64: ldr      x23, [sp, #0x30]
+0xffffff80084bca68: ldp      x29, x30, [sp], #0x40
+0xffffff80084bca6c: ret      
+要点：
+  · _add_opp_table(dev) 取/建该 dev 的 opp_table（dev 为键，见 _find_opp_table/_add_opp_table）。
+  · 0x...c9e0  ldr x0,[x19,#0x160]；若已存在 supported_hw → dev_err("Already have supported
+    hardware list") 返回 -EBUSY(-0x10)。**每个 device 只能注册一次。**
+  · 0x...ca0c  ubfiz x1,w20,#2  → 长度 = count*4；kmemdup(versions, count*4, GFP_KERNEL)。
+  · 0x...ca20  str x0,[x19,#0x160]；0x...ca2c str w20,[x19,#0x168]。
+  · 即：mask 以 **u32 数组**形式存入 opp_table；探针传 (&mask,1)，故 supported_hw=[mask]、
+    count=1。纯内存写入，无硬件副作用。
+
+四、dev_pm_opp_set_prop_name @ 0xffffff80084bca70（51 条，全量）
+--------------------------------------------------------------------------------
+0xffffff80084bca70: stp      x29, x30, [sp, #-0x30]!
+0xffffff80084bca74: mov      x29, sp
+0xffffff80084bca78: stp      x21, x22, [sp, #0x20]
+0xffffff80084bca7c: adrp     x21, #0xffffff800904f000
+0xffffff80084bca80: stp      x19, x20, [sp, #0x10]
+0xffffff80084bca84: mov      x19, x0
+0xffffff80084bca88: add      x0, x21, #0xd70  ; =0xffffff800904fd70 ""
+0xffffff80084bca8c: mov      x22, x1
+0xffffff80084bca90: bl       #0xffffff80089741bc  ; -> mutex_lock
+0xffffff80084bca94: mov      x0, x19
+0xffffff80084bca98: bl       #0xffffff80084bc87c  ; -> _add_opp_table
+0xffffff80084bca9c: cbz      x0, #0xffffff80084bcb1c  ; -> 0xffffff80084bcb1c
+0xffffff80084bcaa0: add      x1, x0, #0x130
+0xffffff80084bcaa4: mov      x20, x0
+0xffffff80084bcaa8: ldr      x0, [x0, #0x130]
+0xffffff80084bcaac: cmp      x1, x0
+0xffffff80084bcab0: b.eq     #0xffffff80084bcab8  ; -> 0xffffff80084bcab8
+0xffffff80084bcab4: brk      #0x800
+0xffffff80084bcab8: ldr      x3, [x20, #0x170]
+0xffffff80084bcabc: cbz      x3, #0xffffff80084bcae4  ; -> 0xffffff80084bcae4
+0xffffff80084bcac0: adrp     x2, #0xffffff8008a09000
+0xffffff80084bcac4: adrp     x1, #0xffffff8008c1c000
+0xffffff80084bcac8: add      x2, x2, #0x908  ; =0xffffff8008a09908 "_set_opp_voltage"
+0xffffff80084bcacc: mov      x0, x19
+0xffffff80084bcad0: add      x2, x2, #0x1d0  ; =0xffffff8008a091d0 "driver_release"
+0xffffff80084bcad4: add      x1, x1, #0x41b  ; =0xffffff8008c1c41b "%s: Already have prop-name %s
+0xffffff80084bcad8: mov      w19, #-0x10
+0xffffff80084bcadc: bl       #0xffffff80084a83ac  ; -> dev_err
+0xffffff80084bcae0: b        #0xffffff80084bcb10  ; -> 0xffffff80084bcb10
+0xffffff80084bcae4: mov      w1, #0xc0
+0xffffff80084bcae8: mov      x0, x22
+0xffffff80084bcaec: movk     w1, #0x240, lsl #16
+0xffffff80084bcaf0: bl       #0xffffff8008176cdc  ; -> kstrdup
+0xffffff80084bcaf4: str      x0, [x20, #0x170]
+0xffffff80084bcaf8: cbz      x0, #0xffffff80084bcb0c  ; -> 0xffffff80084bcb0c
+0xffffff80084bcafc: add      x0, x21, #0xd70  ; =0xffffff800904fd70 ""
+0xffffff80084bcb00: bl       #0xffffff8008974380  ; -> mutex_unlock
+0xffffff80084bcb04: mov      w0, #0
+0xffffff80084bcb08: b        #0xffffff80084bcb2c  ; -> 0xffffff80084bcb2c
+0xffffff80084bcb0c: mov      w19, #-0xc
+0xffffff80084bcb10: mov      x0, x20
+0xffffff80084bcb14: bl       #0xffffff80084bbbfc  ; -> _remove_opp_table
+0xffffff80084bcb18: b        #0xffffff80084bcb20  ; -> 0xffffff80084bcb20
+0xffffff80084bcb1c: mov      w19, #-0xc
+0xffffff80084bcb20: add      x0, x21, #0xd70  ; =0xffffff800904fd70 ""
+0xffffff80084bcb24: bl       #0xffffff8008974380  ; -> mutex_unlock
+0xffffff80084bcb28: mov      w0, w19
+0xffffff80084bcb2c: ldp      x19, x20, [sp, #0x10]
+0xffffff80084bcb30: ldp      x21, x22, [sp, #0x20]
+0xffffff80084bcb34: ldp      x29, x30, [sp], #0x30
+0xffffff80084bcb38: ret      
+要点：
+  · 同样 _add_opp_table(dev)；若 opp_table->prop_name(0x170) 已存在 → dev_err
+    "Already have prop-name %s" 返回 -EBUSY。
+  · kstrdup(name, GFP_KERNEL) → str x0,[x20,#0x170]。
+  · 名字仅保存在 opp_table，供后续 _of_add_opp_table_v2 → opp_parse_supplies 使用。
+
+五、_opp_is_supported（内联于 _of_add_opp_table_v2 @ 0xffffff80084bd9a4）
+--------------------------------------------------------------------------------
+核心筛选区（0x84bdac4..0x84bdb78，逐条）：
+0xffffff80084bdac4: ldr      x6, [x29, #0x88]
+0xffffff80084bdac8: ldr      x0, [x6, #0x160]
+0xffffff80084bdacc: ldr      w5, [x6, #0x168]
+0xffffff80084bdad0: cbz      x0, #0xffffff80084bdae4  ; -> 0xffffff80084bdae4
+0xffffff80084bdad4: adrp     x7, #0xffffff8008c1c000
+0xffffff80084bdad8: sub      w5, w5, #1
+0xffffff80084bdadc: add      x7, x7, #0x74f  ; =0xffffff8008c1c74f "opp-supported-hw"
+0xffffff80084bdae0: b        #0xffffff80084bdb18  ; -> 0xffffff80084bdb18
+0xffffff80084bdae4: adrp     x1, #0xffffff8008c1c000
+0xffffff80084bdae8: mov      x0, x22
+0xffffff80084bdaec: add      x1, x1, #0x74f  ; =0xffffff8008c1c74f "opp-supported-hw"
+0xffffff80084bdaf0: mov      x2, #0
+0xffffff80084bdaf4: bl       #0xffffff80086d34a4  ; -> of_find_property
+0xffffff80084bdaf8: cbnz     x0, #0xffffff80084bdb6c  ; -> 0xffffff80084bdb6c
+0xffffff80084bdafc: b        #0xffffff80084bdb74  ; -> 0xffffff80084bdb74
+0xffffff80084bdb00: ldr      x0, [x6, #0x160]
+0xffffff80084bdb04: ldr      w1, [x0, w5, uxtw #2]
+0xffffff80084bdb08: sub      w5, w5, #1
+0xffffff80084bdb0c: ldr      w0, [x29, #0x84]
+0xffffff80084bdb10: tst      w1, w0
+0xffffff80084bdb14: b.eq     #0xffffff80084bdb6c  ; -> 0xffffff80084bdb6c
+0xffffff80084bdb18: cmn      w5, #1
+0xffffff80084bdb1c: b.eq     #0xffffff80084bdb74  ; -> 0xffffff80084bdb74
+0xffffff80084bdb20: mov      w2, w5
+0xffffff80084bdb24: mov      x1, x7
+0xffffff80084bdb28: add      x3, x29, #0x84
+0xffffff80084bdb2c: mov      x0, x22
+0xffffff80084bdb30: str      x6, [x29, #0x68]
+0xffffff80084bdb34: str      w5, [x29, #0x74]
+0xffffff80084bdb38: str      x7, [x29, #0x78]
+0xffffff80084bdb3c: bl       #0xffffff80086d3690  ; -> of_property_read_u32_index
+0xffffff80084bdb40: ldr      w5, [x29, #0x74]
+0xffffff80084bdb44: ldr      x6, [x29, #0x68]
+0xffffff80084bdb48: ldr      x7, [x29, #0x78]
+0xffffff80084bdb4c: cbz      w0, #0xffffff80084bdb00  ; -> 0xffffff80084bdb00
+0xffffff80084bdb50: adrp     x1, #0xffffff8008c1c000
+0xffffff80084bdb54: mov      w4, w0
+0xffffff80084bdb58: mov      w3, w5
+0xffffff80084bdb5c: add      x2, x26, #0x68  ; =0xffffff8008a09068 ""
+0xffffff80084bdb60: add      x1, x1, #0x760  ; =0xffffff8008c1c760 "%s: failed to read opp-supported-hw property at "
+0xffffff80084bdb64: mov      x0, x21
+0xffffff80084bdb68: bl       #0xffffff80084a84c0  ; -> dev_warn
+0xffffff80084bdb6c: nop      
+0xffffff80084bdb70: b        #0xffffff80084bdca8  ; -> 0xffffff80084bdca8
+0xffffff80084bdb74: ldr      x0, [x29, #0x90]
+0xffffff80084bdb78: adrp     x1, #0xffffff8008c1c000
+
+反汇编语义（伪代码）：
+    opp_table = [x29,#0x88];
+    M   = opp_table->supported_hw;        // 0x160
+    cnt = opp_table->supported_hw_count;  // 0x168
+    if (M == NULL) {
+        if (of_find_property(opp_np, "opp-supported-hw", NULL))
+            -> SKIP this OPP;             // 0x84bdaf8 cbnz -> 0x84bdb6c
+        else
+            -> ACCEPT;                    // 0x84bdafc b    -> 0x84bdb74
+    } else {
+        for (i = cnt-1; ; i--) {
+            if (i < 0) -> ACCEPT;                              // 0x84bdb18 cmn w5,#1; b.eq accept
+            if (of_property_read_u32_index(np,"opp-supported-hw",i,&val)) {
+                dev_warn(...); -> SKIP;                        // 0x84bdb50
+            }
+            if ((M[i] & val) == 0) -> SKIP;                    // 0x84bdb10 tst; b.eq skip
+        }
+    }
+
+关键结论：
+  · 匹配条件是 **(M[i] & node_bitmap[i]) != 0**，即“至少一位重叠”即可，不是全位包含。
+  · 当 mask 未注册时，**凡是带 opp-supported-hw 的节点一律被剔除**，只留下不带该属性的节点。
+  · 带 mask 注册时，**没有 opp-supported-hw 的节点仍然被接受**（不会因缺属性被过滤）。
+  · 缺 opp-supported-hw 的节点在“注册了 mask”时**不会**被过滤——过滤只发生在“未注册 mask
+    且节点带属性”这一种组合。
+
+六、命名电压属性选择 / 回退（opp_parse_supplies.isra.0 @ 0xffffff80084bd784）
+--------------------------------------------------------------------------------
+属性名选择与回退（0x84bd7c4..0x84bd818）：
+0xffffff80084bd7c4: cbnz     x3, #0xffffff80084bd7f0  ; -> 0xffffff80084bd7f0
+0xffffff80084bd7c8: adrp     x1, #0xffffff8008c1c000
+0xffffff80084bd7cc: add      x0, x29, #0x58
+0xffffff80084bd7d0: add      x1, x1, #0x68a  ; =0xffffff8008c1c68a "opp-microvolt"
+0xffffff80084bd7d4: bl       #0xffffff80083b1990  ; -> strcpy
+0xffffff80084bd7d8: ldr      x0, [x19, #0x60]
+0xffffff80084bd7dc: add      x1, x29, #0x58
+0xffffff80084bd7e0: mov      x2, #0
+0xffffff80084bd7e4: bl       #0xffffff80086d34a4  ; -> of_find_property
+0xffffff80084bd7e8: cbnz     x0, #0xffffff80084bd818  ; -> 0xffffff80084bd818
+0xffffff80084bd7ec: b        #0xffffff80084bd988  ; -> 0xffffff80084bd988
+0xffffff80084bd7f0: adrp     x2, #0xffffff8008c1c000
+0xffffff80084bd7f4: add      x0, x29, #0x58
+0xffffff80084bd7f8: add      x2, x2, #0x698  ; =0xffffff8008c1c698 "opp-microvolt-%s"
+0xffffff80084bd7fc: mov      x1, #0xff
+0xffffff80084bd800: bl       #0xffffff80083b550c  ; -> snprintf
+0xffffff80084bd804: ldr      x0, [x19, #0x60]
+0xffffff80084bd808: add      x1, x29, #0x58
+0xffffff80084bd80c: mov      x2, #0
+0xffffff80084bd810: bl       #0xffffff80086d34a4  ; -> of_find_property
+0xffffff80084bd814: cbz      x0, #0xffffff80084bd7c8  ; -> 0xffffff80084bd7c8
+0xffffff80084bd818: ldr      x0, [x19, #0x60]
+0xffffff80084bd81c: add      x1, x29, #0x58
+0xffffff80084bd820: mov      w2, #4
+0xffffff80084bd824: bl       #0xffffff80086d46ac  ; -> of_property_count_elems_of_size
+  语义：
+    name = opp_table->prop_name;                 // 由 set_prop_name 写入，可能为 NULL
+    if (name) snprintf(buf, 0xff, "opp-microvolt-%s", name);   // 0x84bd7f8
+    else      strcpy(buf, "opp-microvolt");                    // 0x84bd7cc
+    if (!of_find_property(np, buf, NULL) && name) {            // 0x84bd814 cbz -> 0x84bd7c8
+        strcpy(buf, "opp-microvolt");            // 回退到基础属性
+        of_find_property(np, buf, NULL);
+    }
+  → 命名属性 "opp-microvolt-<name>" 缺失时**回退**到 "opp-microvolt"；两者都缺失则该 OPP
+    的电压字段不设置（函数仍返回 0，OPP 不因缺电压被剔除）。
+
+电压值解析（0x84bd8e4..0x84bd910）：
+0xffffff80084bd784: stp      x29, x30, [sp, #-0x160]!
+0xffffff80084bd788: mov      x29, sp
+0xffffff80084bd78c: stp      x21, x22, [sp, #0x20]
+0xffffff80084bd790: adrp     x21, #0xffffff8008fbd000
+0xffffff80084bd794: stp      x19, x20, [sp, #0x10]
+0xffffff80084bd798: mov      x19, x0
+0xffffff80084bd79c: str      x23, [sp, #0x30]
+0xffffff80084bd7a0: add      x0, x21, #0xe90  ; =0xffffff8008fbde90 ""
+0xffffff80084bd7a4: mov      x22, x1
+0xffffff80084bd7a8: str      xzr, [x29, #0x48]
+0xffffff80084bd7ac: ldr      x3, [x2]
+0xffffff80084bd7b0: ldr      x1, [x0]
+0xffffff80084bd7b4: str      x1, [x29, #0x158]
+0xffffff80084bd7b8: mov      x1, #0
+0xffffff80084bd7bc: str      wzr, [x29, #0x50]
+0xffffff80084bd7c0: mov      x23, x2
+0xffffff80084bd7c4: cbnz     x3, #0xffffff80084bd7f0  ; -> 0xffffff80084bd7f0
+0xffffff80084bd7c8: adrp     x1, #0xffffff8008c1c000
+0xffffff80084bd7cc: add      x0, x29, #0x58
+0xffffff80084bd7d0: add      x1, x1, #0x68a  ; =0xffffff8008c1c68a "opp-microvolt"
+0xffffff80084bd7d4: bl       #0xffffff80083b1990  ; -> strcpy
+0xffffff80084bd7d8: ldr      x0, [x19, #0x60]
+0xffffff80084bd7dc: add      x1, x29, #0x58
+0xffffff80084bd7e0: mov      x2, #0
+0xffffff80084bd7e4: bl       #0xffffff80086d34a4  ; -> of_find_property
+0xffffff80084bd7e8: cbnz     x0, #0xffffff80084bd818  ; -> 0xffffff80084bd818
+0xffffff80084bd7ec: b        #0xffffff80084bd988  ; -> 0xffffff80084bd988
+0xffffff80084bd7f0: adrp     x2, #0xffffff8008c1c000
+0xffffff80084bd7f4: add      x0, x29, #0x58
+0xffffff80084bd7f8: add      x2, x2, #0x698  ; =0xffffff8008c1c698 "opp-microvolt-%s"
+0xffffff80084bd7fc: mov      x1, #0xff
+0xffffff80084bd800: bl       #0xffffff80083b550c  ; -> snprintf
+0xffffff80084bd804: ldr      x0, [x19, #0x60]
+0xffffff80084bd808: add      x1, x29, #0x58
+0xffffff80084bd80c: mov      x2, #0
+0xffffff80084bd810: bl       #0xffffff80086d34a4  ; -> of_find_property
+0xffffff80084bd814: cbz      x0, #0xffffff80084bd7c8  ; -> 0xffffff80084bd7c8
+0xffffff80084bd818: ldr      x0, [x19, #0x60]
+0xffffff80084bd81c: add      x1, x29, #0x58
+0xffffff80084bd820: mov      w2, #4
+0xffffff80084bd824: bl       #0xffffff80086d46ac  ; -> of_property_count_elems_of_size
+0xffffff80084bd828: mov      w20, w0
+0xffffff80084bd82c: tbz      w0, #0x1f, #0xffffff80084bd858  ; -> 0xffffff80084bd858
+0xffffff80084bd830: adrp     x2, #0xffffff8008a09000
+0xffffff80084bd834: adrp     x1, #0xffffff8008c1c000
+0xffffff80084bd838: add      x2, x2, #0xba8  ; =0xffffff8008a09ba8 "_of_add_opp_table_v1"
+0xffffff80084bd83c: mov      w4, w0
+0xffffff80084bd840: add      x3, x29, #0x58
+0xffffff80084bd844: add      x2, x2, #0x38  ; =0xffffff8008a09038 ""
+0xffffff80084bd848: add      x1, x1, #0x6a9  ; =0xffffff8008c1c6a9 "%s: Invalid %s property (%d)
+0xffffff80084bd84c: mov      x0, x22
+0xffffff80084bd850: bl       #0xffffff80084a83ac  ; -> dev_err
+0xffffff80084bd854: b        #0xffffff80084bd8c8  ; -> 0xffffff80084bd8c8
+0xffffff80084bd858: and      w0, w0, #0xfffffffd
+0xffffff80084bd85c: cmp      w0, #1
+0xffffff80084bd860: b.eq     #0xffffff80084bd884  ; -> 0xffffff80084bd884
+0xffffff80084bd864: adrp     x2, #0xffffff8008a09000
+0xffffff80084bd868: adrp     x1, #0xffffff8008c1c000
+0xffffff80084bd86c: add      x2, x2, #0xba8  ; =0xffffff8008a09ba8 "_of_add_opp_table_v1"
+0xffffff80084bd870: mov      w4, w20
+0xffffff80084bd874: add      x3, x29, #0x58
+0xffffff80084bd878: add      x2, x2, #0x38  ; =0xffffff8008a09038 ""
+0xffffff80084bd87c: add      x1, x1, #0x6c7  ; =0xffffff8008c1c6c7 "%s: Invalid number of elements in %s property (%"
+0xffffff80084bd880: b        #0xffffff80084bd8bc  ; -> 0xffffff80084bd8bc
+0xffffff80084bd884: ldr      x0, [x19, #0x60]
+0xffffff80084bd888: sxtw     x3, w20
+0xffffff80084bd88c: add      x2, x29, #0x48
+0xffffff80084bd890: add      x1, x29, #0x58
+0xffffff80084bd894: mov      x4, #0
+0xffffff80084bd898: bl       #0xffffff80086d382c  ; -> of_property_read_variable_u32_array
+0xffffff80084bd89c: tbz      w0, #0x1f, #0xffffff80084bd8e4  ; -> 0xffffff80084bd8e4
+0xffffff80084bd8a0: adrp     x2, #0xffffff8008a09000
+0xffffff80084bd8a4: adrp     x1, #0xffffff8008c1c000
+0xffffff80084bd8a8: add      x2, x2, #0xba8  ; =0xffffff8008a09ba8 "_of_add_opp_table_v1"
+0xffffff80084bd8ac: mov      w4, w0
+0xffffff80084bd8b0: add      x3, x29, #0x58
+0xffffff80084bd8b4: add      x2, x2, #0x38  ; =0xffffff8008a09038 ""
+0xffffff80084bd8b8: add      x1, x1, #0x718  ; =0xffffff8008c1c718 "%s: error parsing %s: %d
+0xffffff80084bd8bc: mov      x0, x22
+0xffffff80084bd8c0: mov      w20, #-0x16
+0xffffff80084bd8c4: bl       #0xffffff80084a83ac  ; -> dev_err
+0xffffff80084bd8c8: add      x21, x21, #0xe90  ; =0xffffff8008fbde90 ""
+0xffffff80084bd8cc: mov      w0, w20
+0xffffff80084bd8d0: ldr      x2, [x29, #0x158]
+0xffffff80084bd8d4: ldr      x1, [x21]
+0xffffff80084bd8d8: eor      x1, x2, x1
+0xffffff80084bd8dc: cbz      x1, #0xffffff80084bd990  ; -> 0xffffff80084bd990
+0xffffff80084bd8e0: bl       #0xffffff80080a0434  ; -> __stack_chk_fail
+0xffffff80084bd8e4: ldr      w0, [x29, #0x48]
+0xffffff80084bd8e8: cmp      w20, #1
+0xffffff80084bd8ec: str      x0, [x19, #0x20]
+0xffffff80084bd8f0: b.ne     #0xffffff80084bd8fc  ; -> 0xffffff80084bd8fc
+0xffffff80084bd8f4: str      x0, [x19, #0x28]
+0xffffff80084bd8f8: b        #0xffffff80084bd908  ; -> 0xffffff80084bd908
+0xffffff80084bd8fc: ldr      w0, [x29, #0x4c]
+0xffffff80084bd900: str      x0, [x19, #0x28]
+0xffffff80084bd904: ldr      w0, [x29, #0x50]
+0xffffff80084bd908: str      x0, [x19, #0x30]
+0xffffff80084bd90c: ldr      x3, [x23]
+0xffffff80084bd910: cbnz     x3, #0xffffff80084bd93c  ; -> 0xffffff80084bd93c
+  → 支持 1 或 3 个 u32：<uV> 或 <uVmin uV uVmax>；数量为其它值 → -EINVAL。
+  → 0x20=u_volt，0x28=u_volt_min，0x30=u_volt_max。
+  → microamp 同法：优先 "opp-microamp-<name>"，缺失回退 "opp-microamp"。
+
+七、五情形模拟（基于上面的实际反汇编谓词）
+--------------------------------------------------------------------------------
+设：节点 N 的 opp-supported-hw 位图为 B（u32 数组），注册掩码为 M。
+    接受谓词 =   (M==NULL 且 N 无 opp-supported-hw)
+             或 (M!=NULL 且 (N 无 opp-supported-hw 或 存在 i: (M[i]&B[i])!=0))
+    电压来源 =   prop_name ? "opp-microvolt-<prop_name>"(缺则回退 base) : base
+
+先声明：本探针**不可能**同时设置 mask 与 name——mask 组（0x2400/0x5000/0x5400/0x7400→1，
+0x2c00→2，默认→8）name 恒为空；a/b/c 组 mask 恒为 0。故“mask=1/2/8 + b1”只是假设情形，
+不是本探针可达状态。
+
+| 情形 | mask | prop_name | 接受集合（相对 38 节点）                               | 电压 |
+|------|------|-----------|--------------------------------------------------------|------|
+| ①    | 无(0)| b1        | 仅“无 opp-supported-hw”的节点                          | b1(回退 base) |
+| ②    | 1    | b1(假设)  | 无属性节点 ∪ B&1!=0 节点                              | b1(回退) |
+| ③    | 2    | b1(假设)  | 无属性节点 ∪ B&2!=0 节点                              | b1(回退) |
+| ④    | 8    | b1(假设)  | 无属性节点 ∪ B&8!=0 节点                              | b1(回退) |
+| ⑤    | 探针实得 | 探针实得 | 若走 a/b/c：(=①，mask=0，电压用该前缀名)；若走 mask 组：(=②/③/④ 但只回退 base) | 见左 |
+
+对九档频率集合 {480,720,936,1008,1104,1200,1320,1416,1512} MHz 的判定：
+  · 这 9 个值是“某一硬件 bin 的完整单调集合”（无 1608/1800 等更高档，说明不是全表）。
+  · **若**这 9 个目标节点是 DTB 中“不带 opp-supported-hw”的那一组（最自然的供应商写法：
+    每个 bin 用命名电压区分、用 supported-hw 区分不同硬件版本），
+    则**只有 mask 未注册的①（等价于 ⑤ 的 a/b/c 分支）恰好得到 9 个**；
+    任何 mask=1/2/8 分支都会把带对应位的节点也纳入，得到 >9 个（除非 DTB 人为把其余节点
+    标成别的位——但那样就应直接走①）。
+  · 若这 9 个节点恰好是“带 B&1”的节点，则也只有②能得 9 —— 但这与 probe 的 b1 命名机制
+    重叠冗余，且②在探针里不可达（mask 组 name 为空）。
+  · 因此最可能复现九档的是 **情形①（mask=0 + prop_name=b1）**，即 0x6c00/0x7c00 在
+    soc_ver&7!=0 时生成的 “b1”；电压取 opp-microvolt-b1，缺失则回退基础 opp-microvolt。
+    置信度：中（依赖“9 个目标节点不带 opp-supported-hw”这一 DTB 前提）。
+  · 由于 ELF 内无 DTB，“38 个节点”的各 B 值无法离线获取，故无法把①②③④从**频率个数**
+    上绝对证伪；上面给的是基于代码结构的最优推断。**要给出唯一结论必须有目标 DTB。**
+
+八、边界声明
+--------------------------------------------------------------------------------
+  · 所有 OPP 函数 st_size=0；本文列出的“函数范围”均由 ret + 后继不同 FUNC/填充推断。
+  · _of_add_opp_table_v2 共 280 条指令，本文只截取“筛选谓词”相关的 ≤80 条；其余为
+    节点遍历、opp-hz/turbo/clock-latency 解析、_opp_add、suspend、调试打印，未全量列出。
+  · opp_parse_supplies.isra.0 共 136 条，本文只截取“命名选择+回退”与“电压解析”两段。
+  · 未反汇编 dev_pm_opp_of_add_table_by_soc_bin 等 vendor 分支（与本探针注册路径无直接调用关系）。
+  · 结论中的频率集合来自任务书给定值，非从 ELF 反推（ELF 的 .kernel2 中虽存在这 9 个 u32
+    常量，但其周边布局不是可重建的 OPP 数组，不能作为节点表证据）。
+================================================================================

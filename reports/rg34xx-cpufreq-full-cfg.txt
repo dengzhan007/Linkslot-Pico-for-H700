@@ -1,0 +1,356 @@
+================================================================================
+RG34XX / H700  sun50i_cpufreq_nvmem_probe  完整静态还原（任务 A + C + D）
+纯离线：仅读取本地已符号化的 ELF，不接触设备、不执行内核代码、不访问寄存器/PMIC/CCU。
+ELF : rg34xx-kernel.elf  (AArch64 ET_EXEC, .kernel sh_addr=0xffffff8008080000 sh_offset=0x240)
+基址: 0xffffff8008080000      文件偏移 off = 0x240 + (addr - 0xffffff8008080000)
+工具: pyelftools 0.33 + capstone 5.0.7 (detail=True)
+================================================================================
+
+目标函数 : sun50i_cpufreq_nvmem_probe
+起始     : 0xffffff8008672ccc
+结束     : 0xffffff8008673144 (ret)  /  end_exclusive 0xffffff8008673148
+指令数   : 287（全部可解码，无空洞）
+基本块   : 69（严格定义：分支目标 + 分支后指令为 leader）
+边       : 106
+源码线索 : 0x2dd4 处 of_nvmem_cell_get 失败信息含 "drivers/cpufreq/cpufreq-dt.c"（本函数即 cpufreq-dt.c 内的供应商探针）
+
+--------------------------------------------------------------------------------
+① 函数边界判定与置信度
+--------------------------------------------------------------------------------
+1. .symtab 中该 FUNC 的 st_size = 0，因此**禁止**用“下一个符号地址”当函数终点。
+2. 起点 0x...2ccc 是唯一的 STT_FUNC 符号入口；向前一条 0x...2cc8 属于其它函数。
+3. 终点判定（三重交叉验证）：
+   a) 自 0x...2ccc 线性反汇编，最后一条可解码指令是 0x...3144 `ret`；
+      (0x3148-0x2ccc)/4 = 287，恰好等于全部指令数，说明 0x3148 处不是本函数的一部分。
+   b) 0x...3148 是另一个 DISTINCT STT_FUNC（find_deepest_state），且不在本函数任何
+      分支目标集合内 → 0x3144 的 ret 是真正的返回，不存在跨函数 fallthrough。
+   c) 整段内只有 1 个 `ret`（0x3144），有单一 epilogue（0x312c 起的 ldp/ret），
+      说明不存在中段 ret 截断或多函数合并。
+4. 结论：函数体 = [0xffffff8008672ccc, 0xffffff8008673148)，置信度 high。
+   残余风险：若链接器把 padding 去掉且相邻函数恰为分支目标（本例不成立），边界仍可能
+   被人为争议；但 d) 与 b) 已排除。
+
+   关于“16 个基本块”：先前工具（build_cfg.py / _probe_cfg.json）报告 16 块，是因为
+   capstone 对 cbz/cbnz 的立即数返回有符号值（例如 -0x7ff798cf14），代码按有符号比较
+   丢掉了跨 0x80000000 的真正分支目标，导致大量块被错误合并。修正为无符号 (imm & 2^64-1)
+   后，严格基本块 = 69。为便于阅读，下面额外给出 16 个“结构区域”视图（二者并存，不是矛盾）。
+
+--------------------------------------------------------------------------------
+② 基本块清单
+--------------------------------------------------------------------------------
+【16 个结构区域（人类可读视图，与 69 块一一对应、非替代）】
+R0  0x2ccc-0x2d2c  序言/stp x29,x30,[sp,#-0xe0]!、保存被调寄存器、读 canary、hweight64(cpu_possible_mask)、(hweight*8,GFP) kmalloc
+R1  0x2d30-0x2d88  错误码 -0x13、name 3 字节清零、[0x78]/[0x7c] 清零、sunxi_get_soc_ver()->w24、两次 sunxi_get_module_param_from_sid、get_cpu_device(0)
+R2  0x2d8c-0x2db0  of_parse_phandle(of_node,"operating-points-v2")、of_device_is_compatible("allwinner,sun50i-operating-points")，失败 -ENOENT 退出
+R3  0x2dc4-0x2df8  of_nvmem_cell_get(np,"speed")及 IS_ERR 分支（EPROBE_DEFER -517 静默 / 其他 printk）
+R4  0x2dfc-0x2e18  nvmem_cell_read(cell,&len@0x80)、nvmem_cell_put、检查返回指针
+R5  0x2e1c-0x2eb0  ldr w1,[x20] 与 10 个 speed 常量二分比较链
+R6  0x2eb4-0x2ef4  a 组 / c 组构造 name（snprintf(&0xd0,3,"%s%d",...))
+R7  0x2ef8-0x2f20  c 组后缀 1/2 判定（SID 阈值）
+R8  0x2f24-0x2f3c  b 组：w4=(soc_ver&7)?1:0，不写 mask
+R9  0x2f40-0x2f58  默认 mask=8 / mask 写入 [0x74]、kfree(nvmem buf)、w19=0
+R10 0x2f5c         错误闸门 cbnz w19
+R11 0x2f60-0x2ff8  遍历 cpu：get_cpu_device -> 可选 set_prop_name -> 可选 set_supported_hw(&mask,1)
+R12 0x3010-0x3068  构造 platform_device_info{"cpufreq-dt",id=-1} 并 platform_device_register_full
+R13 0x306c-0x30e8  清理遍历：put_prop_name / put_supported_hw、kfree(array)
+R14 0x30ec-0x3128  统一返回出口 + stack canary 校验（0x3108 __stack_chk_fail）
+R15 0x312c-0x3144  恢复寄存器 ldp/ret
+
+【69 个严格基本块（机器生成，B# = 块号；succ 为后继块号或外地址）】
+B0  0xffffff8008672ccc-0xffffff8008672d2c (25 insn)  cbz   x0, #0xffffff80086730ec                      -> [B66, B1]
+B1  0xffffff8008672d30-0xffffff8008672d8c (24 insn)  cbz   x0, #0xffffff80086730ec                      -> [B66, B2]
+B2  0xffffff8008672d90-0xffffff8008672da8 ( 7 insn)  cbnz  x0, #0xffffff8008672db4                      -> [B4, B3]
+B3  0xffffff8008672dac-0xffffff8008672db0 ( 2 insn)  b     #0xffffff80086730ec                          -> [B66]
+B4  0xffffff8008672db4-0xffffff8008672dc0 ( 4 insn)  cbz   w0, #0xffffff8008672dac                      -> [B3, B5]
+B5  0xffffff8008672dc4-0xffffff8008672ddc ( 7 insn)  b.ls  #0xffffff8008672dfc                          -> [B8, B6]
+B6  0xffffff8008672de0-0xffffff8008672de4 ( 2 insn)  b.eq  #0xffffff8008672f5c                          -> [B42, B7]
+B7  0xffffff8008672de8-0xffffff8008672df8 ( 5 insn)  b     #0xffffff8008672f5c                          -> [B42]
+B8  0xffffff8008672dfc-0xffffff8008672e18 ( 8 insn)  b.hi  #0xffffff8008672f5c                          -> [B42, B9]
+B9  0xffffff8008672e1c-0xffffff8008672e28 ( 4 insn)  b.eq  #0xffffff8008672ec8                          -> [B27, B10]
+B10 0xffffff8008672e2c-0xffffff8008672e2c ( 1 insn)  b.hi  #0xffffff8008672e6c                          -> [B18, B11]
+B11 0xffffff8008672e30-0xffffff8008672e38 ( 3 insn)  b.eq  #0xffffff8008672ec8                          -> [B27, B12]
+B12 0xffffff8008672e3c-0xffffff8008672e3c ( 1 insn)  b.hi  #0xffffff8008672e4c                          -> [B15, B13]
+B13 0xffffff8008672e40-0xffffff8008672e44 ( 2 insn)  b.eq  #0xffffff8008672eb4                          -> [B26, B14]
+B14 0xffffff8008672e48-0xffffff8008672e48 ( 1 insn)  b     #0xffffff8008672f40                          -> [B38]
+B15 0xffffff8008672e4c-0xffffff8008672e54 ( 3 insn)  b.eq  #0xffffff8008672eb4                          -> [B26, B16]
+B16 0xffffff8008672e58-0xffffff8008672e60 ( 3 insn)  b.ne  #0xffffff8008672f40                          -> [B38, B17]
+B17 0xffffff8008672e64-0xffffff8008672e68 ( 2 insn)  b     #0xffffff8008672f44                          -> [B39]
+B18 0xffffff8008672e6c-0xffffff8008672e74 ( 3 insn)  b.eq  #0xffffff8008672f24                          -> [B35, B19]
+B19 0xffffff8008672e78-0xffffff8008672e78 ( 1 insn)  b.hi  #0xffffff8008672e98                          -> [B23, B20]
+B20 0xffffff8008672e7c-0xffffff8008672e84 ( 3 insn)  b.eq  #0xffffff8008672ec8                          -> [B27, B21]
+B21 0xffffff8008672e88-0xffffff8008672e90 ( 3 insn)  b.eq  #0xffffff8008672ed0                          -> [B28, B22]
+B22 0xffffff8008672e94-0xffffff8008672e94 ( 1 insn)  b     #0xffffff8008672f40                          -> [B38]
+B23 0xffffff8008672e98-0xffffff8008672ea0 ( 3 insn)  b.eq  #0xffffff8008672ec8                          -> [B27, B24]
+B24 0xffffff8008672ea4-0xffffff8008672eac ( 3 insn)  b.eq  #0xffffff8008672f24                          -> [B35, B25]
+B25 0xffffff8008672eb0-0xffffff8008672eb0 ( 1 insn)  b     #0xffffff8008672f40                          -> [B38]
+B26 0xffffff8008672eb4-0xffffff8008672ec4 ( 5 insn)  b     #0xffffff8008672ee4                          -> [B31]
+B27 0xffffff8008672ec8-0xffffff8008672ecc ( 2 insn)  b     #0xffffff8008672f44                          -> [B39]
+B28 0xffffff8008672ed0-0xffffff8008672ed8 ( 3 insn)  cbnz  w0, #0xffffff8008672ef8                      -> [B32, B29]
+B29 0xffffff8008672edc-0xffffff8008672edc ( 1 insn)  mov   w4, #0                                       -> [B30]
+B30 0xffffff8008672ee0-0xffffff8008672ee0 ( 1 insn)  add   x3, x3, #0x9f3                               -> [B31]
+B31 0xffffff8008672ee4-0xffffff8008672ef4 ( 5 insn)  b     #0xffffff8008672f48                          -> [B40]
+B32 0xffffff8008672ef8-0xffffff8008672f04 ( 4 insn)  b.hi  #0xffffff8008672f1c                          -> [B34, B33]
+B33 0xffffff8008672f08-0xffffff8008672f18 ( 5 insn)  b.ls  #0xffffff8008672ee0                          -> [B30, B34]
+B34 0xffffff8008672f1c-0xffffff8008672f20 ( 2 insn)  b     #0xffffff8008672ee0                          -> [B30]
+B35 0xffffff8008672f24-0xffffff8008672f30 ( 4 insn)  cbz   w0, #0xffffff8008672f38                      -> [B37, B36]
+B36 0xffffff8008672f34-0xffffff8008672f34 ( 1 insn)  mov   w4, #1                                       -> [B37]
+B37 0xffffff8008672f38-0xffffff8008672f3c ( 2 insn)  b     #0xffffff8008672ee4                          -> [B31]
+B38 0xffffff8008672f40-0xffffff8008672f40 ( 1 insn)  mov   w0, #8                                       -> [B39]
+B39 0xffffff8008672f44-0xffffff8008672f44 ( 1 insn)  str   w0, [x29, #0x74]                             -> [B40]
+B40 0xffffff8008672f48-0xffffff8008672f48 ( 1 insn)  nop                                                -> [B41]
+B41 0xffffff8008672f4c-0xffffff8008672f58 ( 4 insn)  b     #0xffffff8008672f60                          -> [B43]
+B42 0xffffff8008672f5c-0xffffff8008672f5c ( 1 insn)  cbnz  w19, #0xffffff80086730ec                     -> [B66, B43]
+B43 0xffffff8008672f60-0xffffff8008672f70 ( 5 insn)  mov   w26, #-1                                     -> [B44]
+B44 0xffffff8008672f74-0xffffff8008672f98 (10 insn)  b.ls  #0xffffff8008673010                          -> [B52, B45]
+B45 0xffffff8008672f9c-0xffffff8008672fa4 ( 3 insn)  cbz   x0, #0xffffff800867306c                      -> [B56, B46]
+B46 0xffffff8008672fa8-0xffffff8008672fac ( 2 insn)  cbz   w1, #0xffffff8008672fd8                      -> [B49, B47]
+B47 0xffffff8008672fb0-0xffffff8008672fc4 ( 6 insn)  b.ls  #0xffffff8008672f74                          -> [B44, B48]
+B48 0xffffff8008672fc8-0xffffff8008672fd4 ( 4 insn)  b     #0xffffff8008673064                          -> [B55]
+B49 0xffffff8008672fd8-0xffffff8008672fe0 ( 3 insn)  cbz   w1, #0xffffff8008673070                      -> [B57, B50]
+B50 0xffffff8008672fe4-0xffffff8008672ff8 ( 6 insn)  cbz   w0, #0xffffff8008672f74                      -> [B44, B51]
+B51 0xffffff8008672ffc-0xffffff800867300c ( 5 insn)  b     #0xffffff8008673070                          -> [B57]
+B52 0xffffff8008673010-0xffffff800867304c (16 insn)  b.hi  #0xffffff8008673058                          -> [B54, B53]
+B53 0xffffff8008673050-0xffffff8008673054 ( 2 insn)  b     #0xffffff80086730ec                          -> [B66]
+B54 0xffffff8008673058-0xffffff8008673060 ( 3 insn)  add   x0, x0, #0xf37                               -> [B55]
+B55 0xffffff8008673064-0xffffff8008673068 ( 2 insn)  b     #0xffffff8008673070                          -> [B57]
+B56 0xffffff800867306c-0xffffff800867306c ( 1 insn)  mov   w20, #-0x13                                  -> [B57]
+B57 0xffffff8008673070-0xffffff8008673078 ( 3 insn)  mov   w25, #-1                                     -> [B58]
+B58 0xffffff800867307c-0xffffff80086730a0 (10 insn)  b.ls  #0xffffff80086730bc                          -> [B61, B59]
+B59 0xffffff80086730a4-0xffffff80086730b0 ( 4 insn)  cbz   x1, #0xffffff80086730bc                      -> [B61, B60]
+B60 0xffffff80086730b4-0xffffff80086730b8 ( 2 insn)  b.ls  #0xffffff80086730cc                          -> [B62, B61]
+B61 0xffffff80086730bc-0xffffff80086730c8 ( 4 insn)  b     #0xffffff80086730ec                          -> [B66]
+B62 0xffffff80086730cc-0xffffff80086730d0 ( 2 insn)  cbz   w1, #0xffffff80086730dc                      -> [B64, B63]
+B63 0xffffff80086730d4-0xffffff80086730d8 ( 2 insn)  b     #0xffffff800867307c                          -> [B58]
+B64 0xffffff80086730dc-0xffffff80086730e0 ( 2 insn)  cbz   w1, #0xffffff800867307c                      -> [B58, B65]
+B65 0xffffff80086730e4-0xffffff80086730e8 ( 2 insn)  b     #0xffffff800867307c                          -> [B58]
+B66 0xffffff80086730ec-0xffffff8008673104 ( 7 insn)  cbz   x1, #0xffffff800867312c                      -> [B68, B67]
+B67 0xffffff8008673108-0xffffff8008673128 ( 9 insn)  b     #0xffffff8008672f4c                          -> [B41]
+B68 0xffffff800867312c-0xffffff8008673144 ( 7 insn)  ret                                                -> [(none)]
+
+--------------------------------------------------------------------------------
+③ 9(实为 10) 个 speed 值的完整分支表
+--------------------------------------------------------------------------------
+重要更正：任务书列出的 9 个常量遗漏了 0x5000。反汇编在 0x2e24 有
+`cmp w1, #5, lsl #12`（=0x5000）。显式比较共 **10** 个值，外加 1 个默认块。
+
+分组语义（依据每条分支的目标地址逐值确定）：
+  · mask=1 组  (0x2ec8 → w0=1 → 0x2f44 str [x29,#0x74])：不生成 name
+  · mask=2 组  (0x2e64 → 0x2f44)
+  · mask=8 默认 (0x2f40 → 0x2f44)
+  · a 组 (0x2eb4)：x3="a"(0xffffff8008c6af52)，w4=1 固定 → name "a1"，不写 mask
+  · b 组 (0x2f24)：x3="b"(0xffffff8008c4c1e9)，w4=(soc_ver&7)?1:0 → "b0"/"b1"，不写 mask
+  · c 组 (0x2ed0)：x3="c"(0xffffff8008be59f3)，w4=0/1/2 → "c0"/"c1"/"c2"，不写 mask
+  · snprintf 目标 0x...d0，长度 3，格式串 0xffffff8008bd5274 = "%s%d"
+
+| speed 值 | 命中分支地址 | 跳转目标 | 有效 mask | 前缀 | 后缀 | set_prop_name | set_supported_hw | 跳过条件 | 可达 cpufreq-dt |
+|----------|--------------|----------|-----------|------|------|---------------|------------------|----------|-----------------|
+| 0x2000 | 0x...2e40 | 0x...2eb4 | 0  | a | 1 | 是 | 否 | mask==0 → 0x2fd8 cbz 跳过 setter | 是 |
+| 0x2400 | 0x...2e34 | 0x...2ec8 | 1  | - | - | 否 | 是 | name 空 → 0x2fa8 cbz 跳过 prop_name | 是 |
+| 0x2800 | 0x...2e50 | 0x...2eb4 | 0  | a | 1 | 是 | 否 | 同 0x2000 | 是 |
+| 0x2c00 | 0x...2e5c | 0x...2e64 | 2  | - | - | 否 | 是 | name 空 | 是 |
+| 0x5000 | 0x...2e24 | 0x...2ec8 | 1  | - | - | 否 | 是 | name 空 | 是 |
+| 0x5400 | 0x...2e80 | 0x...2ec8 | 1  | - | - | 否 | 是 | name 空 | 是 |
+| 0x5c00 | 0x...2e8c | 0x...2ed0 | 0  | c | 0/1/2* | 是 | 否 | mask==0 | 是 |
+| 0x6c00 | 0x...2e70 | 0x...2f24 | 0  | b | 0/1** | 是 | 否 | mask==0 | 是 |
+| 0x7400 | 0x...2e9c | 0x...2ec8 | 1  | - | - | 否 | 是 | name 空 | 是 |
+| 0x7c00 | 0x...2ea8 | 0x...2f24 | 0  | b | 0/1** | 是 | 否 | mask==0 | 是 |
+| 其它   | 默认        | 0x...2f40 | 8  | - | - | 否 | 是 | name 空 | 是 |
+
+*  c 组后缀：
+     w0 = sunxi_get_soc_ver() & 7
+     若 w0==0                     → suffix=0
+     否则若 (SID[0x28]&0x3ff) - 0x26 <= 7  且  ((SID[0x20]字节)<<5) - 0xa60 <= 0x940
+                                  → suffix=1（w4 初值 1）
+     否则                          → suffix=2
+     （两条阈值都用无符号比较：0x2ef8 `sub; cmp #7; b.hi`；0x2f08 `sub; cmp #0x940; b.ls`）
+** b 组后缀：w4 = (soc_ver&7 != 0) ? 1 : 0（0x2f30 cbz w0 决定是否跳过 0x2f34 mov w4,#1）
+
+关键解码证据（逐条）：
+  0x2e1c  ldr  w1,[x20]              ; 一次读取 32 位 speed
+  0x2e20  and  w0,w24,#7             ; soc_ver&7 暂存 w0（随后被比较链用作 scratch，仅 a/b/c 路径保留）
+  0x2e24  cmp  w1,#5,lsl#12          ; 0x5000
+  0x2e28  b.eq 0x2ec8
+  0x2e30/34/38  mov w0,#0x2400; cmp w1,w0; b.eq 0x2ec8
+  0x2e40/44     cmp w1,#2,lsl#12; b.eq 0x2eb4     ; 0x2000 -> a
+  0x2e4c/50/54  mov w0,#0x2800; cmp; b.eq 0x2eb4 ; 0x2800 -> a
+  0x2e58/5c/60/64 mov w0,#0x2c00; cmp; b.ne 0x2f40; mov w0,#2 ; 0x2c00 -> mask 2
+  0x2e6c/70/74  mov w2,#0x6c00; cmp; b.eq 0x2f24 ; 0x6c00 -> b
+  0x2e7c/80/84  mov w2,#0x5400; cmp; b.eq 0x2ec8
+  0x2e88/8c/90  mov w2,#0x5c00; cmp; b.eq 0x2ed0 ; 0x5c00 -> c
+  0x2e98/9c/a0  mov w2,#0x7400; cmp; b.eq 0x2ec8
+  0x2ea4/a8/ac  mov w2,#0x7c00; cmp; b.eq 0x2f24 ; 0x7c00 -> b
+  0x2eb0        b 0x2f40 (default)
+  0x2f40        mov w0,#8
+  0x2f44        str w0,[x29,#0x74]    ; 只有 mask 组会写 mask 槽！
+
+--------------------------------------------------------------------------------
+④ 关键栈变量生命周期（逐寄存器/槽位）
+--------------------------------------------------------------------------------
+w19（错误码累加器）
+  0x2cf8  mov w19,#-0xc      ; -ENOMEM（kmalloc 前）
+  0x2d3c  mov w19,#-0x13     ; -ENODEV（soc_ver 读取前）
+  0x2dac  mov w19,#-2        ; -ENOENT（phandle/compatible 失败）
+  0x2e0c  mov w19,w20        ; 暂时存放 nvmem 缓冲区指针低 32 位（仅供错误路径 cbnz 判定）
+  0x2f50  mov w19,#0         ; 成功路径清零
+  0x30c0  mov w19,w20        ; 清理路径把真正的错误码写回
+  0x30f0  mov w0,w19         ; 返回值 = w19
+
+w24（soc_ver）
+  0x2d44  bl sunxi_get_soc_ver ; 0x2d48 mov w24,w0
+  使用：0x2e20（&7）、0x2ed8（c 组 cbnz）、0x2f30（b 组 cbz）
+  0x2f60  adrp x24,... 覆盖 x24 —— 但此时所有使用已完成，无影响。
+
+[x29,#0x74]（mask 槽）
+  0x2cfc  str wzr  ; 初值 0
+  0x2f44  str w0   ; 仅 mask=1/2/8 组写入
+  读：0x2fd8（cbz → 跳过 set_supported_hw）、0x2fe4（传 &mask 给 setter）、
+      0x30dc（cbz → 跳过 put_supported_hw）、0x3114（pr_debug 打印）
+  a/b/c 组不写 → 保持 0。
+
+[x29,#0x78]
+  0x2d40  stp wzr,wzr,[x29,#0x78]（与 0x7c 一起清零）
+  0x2d4c  add x0,x29,#0x78；0x2d50 w2=4；0x2d54 w1=0x20；bl sunxi_get_module_param_from_sid
+  0x2d5c  ldrb w0,[x29,#0x78]；0x2d68 lsl #5；0x2d6c 回写 → 值 = (SID[0x20] 首字节) << 5
+  仅在 0x2f08 用于 c 组后缀判定。
+
+[x29,#0x7c]
+  0x2d70  add x0,x29,#0x7c；w1=0x28；w2=4；bl sunxi_get_module_param_from_sid
+  0x2d78  ldr w0；0x2d7c and #0x3ff；0x2d80 回写 → 值 = SID[0x28] & 0x3ff
+  仅在 0x2ef8 用于 c 组后缀判定。
+
+[x29,#0xd0]（名字缓冲区，3 字节）
+  0x2d34  strh wzr,[x29,#0xd0]   ; 清 2 字节
+  0x2d38  strb wzr,[x29,#0xd2]   ; 清第 3 字节
+  0x2ee4-0x2ef0  snprintf(&0xd0, 3, "%s%d", prefix, num)  ; 最长 2 字符+NUL
+  读：0x2fa8（ldrb 首字节，0 则跳过 set_prop_name）、0x30cc、0x3118
+  mask 分支从不写入 → 恒为空串。
+
+[x29,#0x80]（nvmem_cell_read 的 len 出参）
+  0x2dfc  add x1,x29,#0x80 → 传给 nvmem_cell_read 写入
+  **此后探针从不读取它**（无 ldr [x29,#0x80]）——无法得知 cell 实际字节数。
+  0x301c 起该 0x80..0xc8 区域被复用为 platform_device_info。
+
+x23（kmalloc 数组）
+  0x2d24  bl __kmalloc(hweight64(__cpu_possible_mask)*8, 0x024080c0)
+  0x2d30  mov x23,x0
+  仅在 0x2fbc / 0x30ac 被读取（ldr x0,[x23,cpu,uxtw#3]），全函数未见任何 str 写入它。
+  GFP 含 0x8000(__GFP_ZERO) → 内容为 0；因此 0x2fc0 / 0x30b0 的 IS_ERR 检查恒为“非错误”。
+
+x20（nvmem 缓冲区）
+  0x2e04  mov x20,x0（nvmem_cell_read 返回值）
+  0x2e1c  ldr w1,[x20]
+  0x2f4c-0x2f54  mov x0,x20; bl kfree
+
+--------------------------------------------------------------------------------
+⑤ b0/b1 特判结论（重点核对项）
+--------------------------------------------------------------------------------
+结论：b 组（speed ∈ {0x6c00, 0x7c00}，跳转 0xffffff8008672f24）**mask 保持 0，且必然跳过
+dev_pm_opp_set_supported_hw**。证据链：
+  1) 0x2f24 块仅含：adrp x2；adrp x3；mov w4,#0；cbz w0,0x2f38；mov w4,#1；
+     add x3,x3,#0x1e9("b")；b 0x2ee4。整块**没有** `str w0,[x29,#0x74]`。
+  2) 唯一写 mask 槽的指令是 0x2f44 `str w0,[x29,#0x74]`；b 组经 0x2ee4 → snprintf →
+     0x2f48(nop) → 0x2f4c(kfree)，直接绕开 0x2f44。
+  3) 因此到 0x2fd8 时 [x29,#0x74]==0，`ldr w1,[x29,#0x74]; cbz w1,0x3070` 必定跳转，
+     跳过 0x2fe4-0x2fec 的 `dev_pm_opp_set_supported_hw(dev,&mask,1)`。
+  4) 0x2fdc 的 `str x0,[x29,#0x60]` 保存的是当前 dev 指针（供后续 dev_err/清理使用），
+     与 mask 判定无关，不会被误读成 mask。
+  5) set_prop_name 之前**没有**对 mask 做零值检查；mask 检查只出现在 set_prop_name
+     **之后**的 0x2fd8。也就是说 b0/b1 只设置命名电压属性、不设置 supported-hw。
+  6) 后缀：b0（soc_ver&7==0）与 b1（soc_ver&7!=0）；两者行为完全相同，仅名字不同。
+
+此外，a 组（0x2000/0x2800，name "a1"）与 c 组（0x5c00，name c0/c1/c2）同样是 mask=0、
+仅 set_prop_name；mask=1/2/8 三组则相反：name 为空、只 set_supported_hw。
+
+--------------------------------------------------------------------------------
+⑥ 无法确定 / 需 DTB 才能闭合之处
+--------------------------------------------------------------------------------
+U1 st_size=0 导致的所有边界均为推断（本函数置信 high，但方法本身有残余风险）。
+U2 0x310c..0x3128 指向一处 pr_debug（"sun50i_cpufreq_nvmem: sun50iw9p1 vf vers..."）
+   并 `b 0x2f4c`，但它紧跟在 0x3108 `bl __stack_chk_fail`（noreturn）之后，CFG 上不可达；
+   究竟是被编译器布局成冷块、还是残留死代码，无法仅凭反汇编断言。
+U3 x23 数组“只读不写”与两处 IS_ERR 检查恒真——设计意图不明（可能是被优化掉的
+   per-cpu opp 句柄缓存）。
+U4 a 组后缀恒为 1，不是由 soc_ver/SID 决定；这一点与“后缀来自条件”的直觉不符，但
+   0x2eb8 `mov w4,#1` 是硬证据。
+U5 c 组两条阈值的“业务含义”（bin 分类）是推断，不是反汇编可证事实。
+U6 ELF 内**没有 DTB**。"38 个 OPP 节点"、各节点 opp-supported-hw / 命名电压属性的取值
+   不在本 ELF 中；因此“哪个 speed 值对应实机九档”只能给出条件化结论（见任务 B 模拟）。
+U7 未反汇编 sunxi_get_soc_ver / sunxi_get_module_param_from_sid 的内部（按要求不调用、
+   不触碰其寄存器副作用）；只按 AAPCS 记录其返回值/出参位置。
+
+--------------------------------------------------------------------------------
+任务 C：NVMEM 读取审计（nvmem_cell_read / __nvmem_cell_read.part.0）
+--------------------------------------------------------------------------------
+nvmem_cell_read @ 0xffffff80086f2578  (39 insns)
+  0x...258c  ldr  x22,[x0,#0x18]        ; cell->nvmem
+  0x...2590  cbz  x22 → -EINVAL
+  0x...2598  ldrsw x0,[x0,#0xc]         ; cell->bytes（有符号 32 位）
+  0x...25a0  w1 = 0x024080c0            ; GFP_KERNEL|__GFP_ZERO 等
+  0x...25a8  bl   __kmalloc(bytes, gfp)
+  0x...25b4  ldrsw x3,[x20,#0xc]        ; n = cell->bytes
+  0x...25b8  x2 = 缓冲
+  0x...25bc  ldr  w1,[x20,#8]           ; cell->offset
+  0x...25c0  x0 = cell->nvmem
+  0x...25c4  bl   nvmem_reg_read(nvmem, offset, buf, bytes)
+  0x...25c8  失败 → kfree, 返回错误
+  0x...25cc..25d8  bl __nvmem_cell_read.part.0(cell, buf, lenp)
+  0x...25e0  成功 → 返回 buf 指针（调用者拥有，需 kfree）
+  → **kmalloc 长度就是 cell->bytes；不是固定 4 字节。**
+
+__nvmem_cell_read.part.0 @ 0xffffff80086f24b4 (49 insns)
+  处理 cell->bit_offset / nbits 的位移，最后：
+  0x...2568  ldrsw x0,[x0,#0xc]     ; cell->bytes
+  0x...256c  str   x0,[x2]          ; *len = cell->bytes
+  → 即 nvmem_cell_read 返回的长度 = cell->bytes。
+
+探针侧：
+  0x2dfc  x1 = &[x29,#0x80]，调用 nvmem_cell_read；
+  0x2e1c  ldr w1,[x20]   ← 读 **4 字节**
+  但 [x29,#0x80] 这个 len 出参**从未被读取**。
+
+差异与定性：
+  · live FDT 里 "speed" cell 声明为 2 字节 → kmalloc(2) → nvmem_reg_read 只写 2 字节。
+  · 探针读 4 字节 → 高 2 字节属于**逻辑越界读**（读到了 cell 声明范围之外）。
+  · 但是否构成**实际内存越界**取决于 slab：kmalloc(2) 由 kmalloc-8/16 之类 size-class
+    提供，这 2 个额外字节仍落在**同一个已分配 slab 对象内部**，不会跨页、不会触发 fault。
+    因此**不能**仅凭“逻辑越界”就断言发生内存访问故障（缺页/异常）。
+  · 高 2 字节的内容：分配时 GFP 含 __GFP_ZERO(0x8000)。若 slab 的 __GFP_ZERO 清零覆盖
+    整个 object_size，则高 2 字节为 0，`ldr w1` 得到的 32 位值 == 低 16 位 speed 值（0..0xffff），
+    仍能命中 0x2000..0x7c00 等常量；若清零只覆盖请求的 2 字节（取决于该内核 slub 实现），
+    则高 2 字节可能是同类 slab 的历史残值，此时 32 位比较可能全部落空 → 走默认块 mask=8。
+  · 由于所有分支常量都 < 0x10000，只要高 2 字节为 0，2 字节 cell 与 4 字节读取**结果等价**。
+  · 结论：这是**逻辑越界（API 用法不匹配 len）**，在 slab 内**不必然**是硬件/内存故障；
+    实质风险是“高 2 字节若为非零残值会改变分支判定”，而非崩溃。
+
+--------------------------------------------------------------------------------
+任务 D：与公开源码家族（AvaotaSBC/linux sun50iw9_nvmem_xlate, commit 7c2a3395）比对
+--------------------------------------------------------------------------------
+（公开侧信息取自任务书给定的参考实现描述，未联网、未复制源码；仅作血缘指纹比对。）
+
+公开实现特征（据参考描述）：
+  · 速度常量集：0x2000 / 0x2100 / 0x2400 / 0x2c00 / 0x5000 / 0x5400 / 0x6000 / 0x5c00 / 0x5d00
+  · 命名：只生成 aN
+  · 掩码：mask = 1 << value（总是注册 supported-hw）
+  · 数据变换：疑似同样的 SID 读取（offset 0x20 << 5、0x28 & 0x3ff）
+
+目标实现（本 ELF 实证）：
+  · 速度常量集：0x2000 / 0x2400 / 0x2800 / 0x2c00 / 0x5000 / 0x5400 / 0x5c00 / 0x6c00 / 0x7400 / 0x7c00 + 默认
+  · 命名：a1 / b0 / b1 / c0 / c1 / c2（三前缀 + 条件后缀）
+  · 掩码：{0（a/b/c 不注册）, 1, 2, 8}，**不是** 1<<value
+  · 数据变换：SID[0x20] 字节 <<5、SID[0x28] & 0x3ff（两者均被用于 c 组后缀阈值）
+  · 控制流：有 of_nvmem_cell_get 错误分类（EPROBE_DEFER）、nvmem_cell_read、每 cpu setter 循环、
+    platform_device_register_full("cpufreq-dt")、以及 put_* 清理循环
+  · 速度集合相对公开版：新增 0x2800 / 0x6c00 / 0x7400 / 0x7c00，缺少 0x2100 / 0x6000 / 0x5d00
+
+判定：
+  · 二者共享同一“家族指纹”：都是“读 SID → 由 speed cell 选择 OPP 命名/掩码 → 影响
+    cpufreq-dt 的 OPP 筛选”的供应商补丁；SID 偏移 0x20/0x28 与 <<5/&0x3ff 的变换形式一致。
+  · 但常量集、命名方案、掩码语义、后缀条件、分支结构均有实质差异，
+    **不能**据此声称“源码匹配 / 同一份代码”。
+  · 结论只能是：**同一血缘/家族（blood-relation fingerprint），但不是同一实现（不匹配）**。
+    相同 offset 0x20/0x28 只说明沿用同一 SID 编码约定，不构成源码同一性的证据。
+
+================================================================================
+附：完整带注释反汇编见 build/_probe_disasm.txt（287 行，机器生成）
+    机器可读 CFG 见 build/rg34xx-cpufreq-full-cfg.json
+================================================================================

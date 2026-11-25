@@ -1,0 +1,919 @@
+{
+ "function": "sun50i_cpufreq_nvmem_probe",
+ "start": "0xffffff8008672ccc",
+ "end_exclusive": "0xffffff8008673148",
+ "last_insn": "0xffffff8008673144",
+ "insn_count": 287,
+ "block_count": 69,
+ "edge_count": 106,
+ "boundary_method": "st_size=0，故不用“下一个符号地址”。函数终点取“闭合末尾 epilogue 的 ret @0x...3144”，其后 0x...3148 起为另一 FUNC(find_deepest_state) 且非任何分支目标；同时校验总长 (0x3148-0x2ccc)/4=287 条全为可解码指令、末条为 ret、无跨函数 fallthrough。",
+ "boundary_confidence": "high",
+ "stack_frame": "stp x29,x30,[sp,#-0xe0]! ; 帧内使用 0x60..0xd8",
+ "abi": "AArch64 AAPCS64; x0=pdev(struct platform_device*)",
+ "blocks": [
+  {
+   "start": "0xffffff8008672ccc",
+   "end": "0xffffff8008672d2c",
+   "insns": 25,
+   "terminator": "cbz",
+   "term_ops": "x0, #0xffffff80086730ec",
+   "succ": [
+    "0xffffff80086730ec",
+    "0xffffff8008672d30"
+   ]
+  },
+  {
+   "start": "0xffffff8008672d30",
+   "end": "0xffffff8008672d8c",
+   "insns": 24,
+   "terminator": "cbz",
+   "term_ops": "x0, #0xffffff80086730ec",
+   "succ": [
+    "0xffffff80086730ec",
+    "0xffffff8008672d90"
+   ]
+  },
+  {
+   "start": "0xffffff8008672d90",
+   "end": "0xffffff8008672da8",
+   "insns": 7,
+   "terminator": "cbnz",
+   "term_ops": "x0, #0xffffff8008672db4",
+   "succ": [
+    "0xffffff8008672db4",
+    "0xffffff8008672dac"
+   ]
+  },
+  {
+   "start": "0xffffff8008672dac",
+   "end": "0xffffff8008672db0",
+   "insns": 2,
+   "terminator": "b",
+   "term_ops": "#0xffffff80086730ec",
+   "succ": [
+    "0xffffff80086730ec"
+   ]
+  },
+  {
+   "start": "0xffffff8008672db4",
+   "end": "0xffffff8008672dc0",
+   "insns": 4,
+   "terminator": "cbz",
+   "term_ops": "w0, #0xffffff8008672dac",
+   "succ": [
+    "0xffffff8008672dac",
+    "0xffffff8008672dc4"
+   ]
+  },
+  {
+   "start": "0xffffff8008672dc4",
+   "end": "0xffffff8008672ddc",
+   "insns": 7,
+   "terminator": "b.ls",
+   "term_ops": "#0xffffff8008672dfc",
+   "succ": [
+    "0xffffff8008672dfc",
+    "0xffffff8008672de0"
+   ]
+  },
+  {
+   "start": "0xffffff8008672de0",
+   "end": "0xffffff8008672de4",
+   "insns": 2,
+   "terminator": "b.eq",
+   "term_ops": "#0xffffff8008672f5c",
+   "succ": [
+    "0xffffff8008672f5c",
+    "0xffffff8008672de8"
+   ]
+  },
+  {
+   "start": "0xffffff8008672de8",
+   "end": "0xffffff8008672df8",
+   "insns": 5,
+   "terminator": "b",
+   "term_ops": "#0xffffff8008672f5c",
+   "succ": [
+    "0xffffff8008672f5c"
+   ]
+  },
+  {
+   "start": "0xffffff8008672dfc",
+   "end": "0xffffff8008672e18",
+   "insns": 8,
+   "terminator": "b.hi",
+   "term_ops": "#0xffffff8008672f5c",
+   "succ": [
+    "0xffffff8008672f5c",
+    "0xffffff8008672e1c"
+   ]
+  },
+  {
+   "start": "0xffffff8008672e1c",
+   "end": "0xffffff8008672e28",
+   "insns": 4,
+   "terminator": "b.eq",
+   "term_ops": "#0xffffff8008672ec8",
+   "succ": [
+    "0xffffff8008672ec8",
+    "0xffffff8008672e2c"
+   ]
+  },
+  {
+   "start": "0xffffff8008672e2c",
+   "end": "0xffffff8008672e2c",
+   "insns": 1,
+   "terminator": "b.hi",
+   "term_ops": "#0xffffff8008672e6c",
+   "succ": [
+    "0xffffff8008672e6c",
+    "0xffffff8008672e30"
+   ]
+  },
+  {
+   "start": "0xffffff8008672e30",
+   "end": "0xffffff8008672e38",
+   "insns": 3,
+   "terminator": "b.eq",
+   "term_ops": "#0xffffff8008672ec8",
+   "succ": [
+    "0xffffff8008672ec8",
+    "0xffffff8008672e3c"
+   ]
+  },
+  {
+   "start": "0xffffff8008672e3c",
+   "end": "0xffffff8008672e3c",
+   "insns": 1,
+   "terminator": "b.hi",
+   "term_ops": "#0xffffff8008672e4c",
+   "succ": [
+    "0xffffff8008672e4c",
+    "0xffffff8008672e40"
+   ]
+  },
+  {
+   "start": "0xffffff8008672e40",
+   "end": "0xffffff8008672e44",
+   "insns": 2,
+   "terminator": "b.eq",
+   "term_ops": "#0xffffff8008672eb4",
+   "succ": [
+    "0xffffff8008672eb4",
+    "0xffffff8008672e48"
+   ]
+  },
+  {
+   "start": "0xffffff8008672e48",
+   "end": "0xffffff8008672e48",
+   "insns": 1,
+   "terminator": "b",
+   "term_ops": "#0xffffff8008672f40",
+   "succ": [
+    "0xffffff8008672f40"
+   ]
+  },
+  {
+   "start": "0xffffff8008672e4c",
+   "end": "0xffffff8008672e54",
+   "insns": 3,
+   "terminator": "b.eq",
+   "term_ops": "#0xffffff8008672eb4",
+   "succ": [
+    "0xffffff8008672eb4",
+    "0xffffff8008672e58"
+   ]
+  },
+  {
+   "start": "0xffffff8008672e58",
+   "end": "0xffffff8008672e60",
+   "insns": 3,
+   "terminator": "b.ne",
+   "term_ops": "#0xffffff8008672f40",
+   "succ": [
+    "0xffffff8008672f40",
+    "0xffffff8008672e64"
+   ]
+  },
+  {
+   "start": "0xffffff8008672e64",
+   "end": "0xffffff8008672e68",
+   "insns": 2,
+   "terminator": "b",
+   "term_ops": "#0xffffff8008672f44",
+   "succ": [
+    "0xffffff8008672f44"
+   ]
+  },
+  {
+   "start": "0xffffff8008672e6c",
+   "end": "0xffffff8008672e74",
+   "insns": 3,
+   "terminator": "b.eq",
+   "term_ops": "#0xffffff8008672f24",
+   "succ": [
+    "0xffffff8008672f24",
+    "0xffffff8008672e78"
+   ]
+  },
+  {
+   "start": "0xffffff8008672e78",
+   "end": "0xffffff8008672e78",
+   "insns": 1,
+   "terminator": "b.hi",
+   "term_ops": "#0xffffff8008672e98",
+   "succ": [
+    "0xffffff8008672e98",
+    "0xffffff8008672e7c"
+   ]
+  },
+  {
+   "start": "0xffffff8008672e7c",
+   "end": "0xffffff8008672e84",
+   "insns": 3,
+   "terminator": "b.eq",
+   "term_ops": "#0xffffff8008672ec8",
+   "succ": [
+    "0xffffff8008672ec8",
+    "0xffffff8008672e88"
+   ]
+  },
+  {
+   "start": "0xffffff8008672e88",
+   "end": "0xffffff8008672e90",
+   "insns": 3,
+   "terminator": "b.eq",
+   "term_ops": "#0xffffff8008672ed0",
+   "succ": [
+    "0xffffff8008672ed0",
+    "0xffffff8008672e94"
+   ]
+  },
+  {
+   "start": "0xffffff8008672e94",
+   "end": "0xffffff8008672e94",
+   "insns": 1,
+   "terminator": "b",
+   "term_ops": "#0xffffff8008672f40",
+   "succ": [
+    "0xffffff8008672f40"
+   ]
+  },
+  {
+   "start": "0xffffff8008672e98",
+   "end": "0xffffff8008672ea0",
+   "insns": 3,
+   "terminator": "b.eq",
+   "term_ops": "#0xffffff8008672ec8",
+   "succ": [
+    "0xffffff8008672ec8",
+    "0xffffff8008672ea4"
+   ]
+  },
+  {
+   "start": "0xffffff8008672ea4",
+   "end": "0xffffff8008672eac",
+   "insns": 3,
+   "terminator": "b.eq",
+   "term_ops": "#0xffffff8008672f24",
+   "succ": [
+    "0xffffff8008672f24",
+    "0xffffff8008672eb0"
+   ]
+  },
+  {
+   "start": "0xffffff8008672eb0",
+   "end": "0xffffff8008672eb0",
+   "insns": 1,
+   "terminator": "b",
+   "term_ops": "#0xffffff8008672f40",
+   "succ": [
+    "0xffffff8008672f40"
+   ]
+  },
+  {
+   "start": "0xffffff8008672eb4",
+   "end": "0xffffff8008672ec4",
+   "insns": 5,
+   "terminator": "b",
+   "term_ops": "#0xffffff8008672ee4",
+   "succ": [
+    "0xffffff8008672ee4"
+   ]
+  },
+  {
+   "start": "0xffffff8008672ec8",
+   "end": "0xffffff8008672ecc",
+   "insns": 2,
+   "terminator": "b",
+   "term_ops": "#0xffffff8008672f44",
+   "succ": [
+    "0xffffff8008672f44"
+   ]
+  },
+  {
+   "start": "0xffffff8008672ed0",
+   "end": "0xffffff8008672ed8",
+   "insns": 3,
+   "terminator": "cbnz",
+   "term_ops": "w0, #0xffffff8008672ef8",
+   "succ": [
+    "0xffffff8008672ef8",
+    "0xffffff8008672edc"
+   ]
+  },
+  {
+   "start": "0xffffff8008672edc",
+   "end": "0xffffff8008672edc",
+   "insns": 1,
+   "terminator": "mov",
+   "term_ops": "w4, #0",
+   "succ": [
+    "0xffffff8008672ee0"
+   ]
+  },
+  {
+   "start": "0xffffff8008672ee0",
+   "end": "0xffffff8008672ee0",
+   "insns": 1,
+   "terminator": "add",
+   "term_ops": "x3, x3, #0x9f3",
+   "succ": [
+    "0xffffff8008672ee4"
+   ]
+  },
+  {
+   "start": "0xffffff8008672ee4",
+   "end": "0xffffff8008672ef4",
+   "insns": 5,
+   "terminator": "b",
+   "term_ops": "#0xffffff8008672f48",
+   "succ": [
+    "0xffffff8008672f48"
+   ]
+  },
+  {
+   "start": "0xffffff8008672ef8",
+   "end": "0xffffff8008672f04",
+   "insns": 4,
+   "terminator": "b.hi",
+   "term_ops": "#0xffffff8008672f1c",
+   "succ": [
+    "0xffffff8008672f1c",
+    "0xffffff8008672f08"
+   ]
+  },
+  {
+   "start": "0xffffff8008672f08",
+   "end": "0xffffff8008672f18",
+   "insns": 5,
+   "terminator": "b.ls",
+   "term_ops": "#0xffffff8008672ee0",
+   "succ": [
+    "0xffffff8008672ee0",
+    "0xffffff8008672f1c"
+   ]
+  },
+  {
+   "start": "0xffffff8008672f1c",
+   "end": "0xffffff8008672f20",
+   "insns": 2,
+   "terminator": "b",
+   "term_ops": "#0xffffff8008672ee0",
+   "succ": [
+    "0xffffff8008672ee0"
+   ]
+  },
+  {
+   "start": "0xffffff8008672f24",
+   "end": "0xffffff8008672f30",
+   "insns": 4,
+   "terminator": "cbz",
+   "term_ops": "w0, #0xffffff8008672f38",
+   "succ": [
+    "0xffffff8008672f38",
+    "0xffffff8008672f34"
+   ]
+  },
+  {
+   "start": "0xffffff8008672f34",
+   "end": "0xffffff8008672f34",
+   "insns": 1,
+   "terminator": "mov",
+   "term_ops": "w4, #1",
+   "succ": [
+    "0xffffff8008672f38"
+   ]
+  },
+  {
+   "start": "0xffffff8008672f38",
+   "end": "0xffffff8008672f3c",
+   "insns": 2,
+   "terminator": "b",
+   "term_ops": "#0xffffff8008672ee4",
+   "succ": [
+    "0xffffff8008672ee4"
+   ]
+  },
+  {
+   "start": "0xffffff8008672f40",
+   "end": "0xffffff8008672f40",
+   "insns": 1,
+   "terminator": "mov",
+   "term_ops": "w0, #8",
+   "succ": [
+    "0xffffff8008672f44"
+   ]
+  },
+  {
+   "start": "0xffffff8008672f44",
+   "end": "0xffffff8008672f44",
+   "insns": 1,
+   "terminator": "str",
+   "term_ops": "w0, [x29, #0x74]",
+   "succ": [
+    "0xffffff8008672f48"
+   ]
+  },
+  {
+   "start": "0xffffff8008672f48",
+   "end": "0xffffff8008672f48",
+   "insns": 1,
+   "terminator": "nop",
+   "term_ops": "",
+   "succ": [
+    "0xffffff8008672f4c"
+   ]
+  },
+  {
+   "start": "0xffffff8008672f4c",
+   "end": "0xffffff8008672f58",
+   "insns": 4,
+   "terminator": "b",
+   "term_ops": "#0xffffff8008672f60",
+   "succ": [
+    "0xffffff8008672f60"
+   ]
+  },
+  {
+   "start": "0xffffff8008672f5c",
+   "end": "0xffffff8008672f5c",
+   "insns": 1,
+   "terminator": "cbnz",
+   "term_ops": "w19, #0xffffff80086730ec",
+   "succ": [
+    "0xffffff80086730ec",
+    "0xffffff8008672f60"
+   ]
+  },
+  {
+   "start": "0xffffff8008672f60",
+   "end": "0xffffff8008672f70",
+   "insns": 5,
+   "terminator": "mov",
+   "term_ops": "w26, #-1",
+   "succ": [
+    "0xffffff8008672f74"
+   ]
+  },
+  {
+   "start": "0xffffff8008672f74",
+   "end": "0xffffff8008672f98",
+   "insns": 10,
+   "terminator": "b.ls",
+   "term_ops": "#0xffffff8008673010",
+   "succ": [
+    "0xffffff8008673010",
+    "0xffffff8008672f9c"
+   ]
+  },
+  {
+   "start": "0xffffff8008672f9c",
+   "end": "0xffffff8008672fa4",
+   "insns": 3,
+   "terminator": "cbz",
+   "term_ops": "x0, #0xffffff800867306c",
+   "succ": [
+    "0xffffff800867306c",
+    "0xffffff8008672fa8"
+   ]
+  },
+  {
+   "start": "0xffffff8008672fa8",
+   "end": "0xffffff8008672fac",
+   "insns": 2,
+   "terminator": "cbz",
+   "term_ops": "w1, #0xffffff8008672fd8",
+   "succ": [
+    "0xffffff8008672fd8",
+    "0xffffff8008672fb0"
+   ]
+  },
+  {
+   "start": "0xffffff8008672fb0",
+   "end": "0xffffff8008672fc4",
+   "insns": 6,
+   "terminator": "b.ls",
+   "term_ops": "#0xffffff8008672f74",
+   "succ": [
+    "0xffffff8008672f74",
+    "0xffffff8008672fc8"
+   ]
+  },
+  {
+   "start": "0xffffff8008672fc8",
+   "end": "0xffffff8008672fd4",
+   "insns": 4,
+   "terminator": "b",
+   "term_ops": "#0xffffff8008673064",
+   "succ": [
+    "0xffffff8008673064"
+   ]
+  },
+  {
+   "start": "0xffffff8008672fd8",
+   "end": "0xffffff8008672fe0",
+   "insns": 3,
+   "terminator": "cbz",
+   "term_ops": "w1, #0xffffff8008673070",
+   "succ": [
+    "0xffffff8008673070",
+    "0xffffff8008672fe4"
+   ]
+  },
+  {
+   "start": "0xffffff8008672fe4",
+   "end": "0xffffff8008672ff8",
+   "insns": 6,
+   "terminator": "cbz",
+   "term_ops": "w0, #0xffffff8008672f74",
+   "succ": [
+    "0xffffff8008672f74",
+    "0xffffff8008672ffc"
+   ]
+  },
+  {
+   "start": "0xffffff8008672ffc",
+   "end": "0xffffff800867300c",
+   "insns": 5,
+   "terminator": "b",
+   "term_ops": "#0xffffff8008673070",
+   "succ": [
+    "0xffffff8008673070"
+   ]
+  },
+  {
+   "start": "0xffffff8008673010",
+   "end": "0xffffff800867304c",
+   "insns": 16,
+   "terminator": "b.hi",
+   "term_ops": "#0xffffff8008673058",
+   "succ": [
+    "0xffffff8008673058",
+    "0xffffff8008673050"
+   ]
+  },
+  {
+   "start": "0xffffff8008673050",
+   "end": "0xffffff8008673054",
+   "insns": 2,
+   "terminator": "b",
+   "term_ops": "#0xffffff80086730ec",
+   "succ": [
+    "0xffffff80086730ec"
+   ]
+  },
+  {
+   "start": "0xffffff8008673058",
+   "end": "0xffffff8008673060",
+   "insns": 3,
+   "terminator": "add",
+   "term_ops": "x0, x0, #0xf37",
+   "succ": [
+    "0xffffff8008673064"
+   ]
+  },
+  {
+   "start": "0xffffff8008673064",
+   "end": "0xffffff8008673068",
+   "insns": 2,
+   "terminator": "b",
+   "term_ops": "#0xffffff8008673070",
+   "succ": [
+    "0xffffff8008673070"
+   ]
+  },
+  {
+   "start": "0xffffff800867306c",
+   "end": "0xffffff800867306c",
+   "insns": 1,
+   "terminator": "mov",
+   "term_ops": "w20, #-0x13",
+   "succ": [
+    "0xffffff8008673070"
+   ]
+  },
+  {
+   "start": "0xffffff8008673070",
+   "end": "0xffffff8008673078",
+   "insns": 3,
+   "terminator": "mov",
+   "term_ops": "w25, #-1",
+   "succ": [
+    "0xffffff800867307c"
+   ]
+  },
+  {
+   "start": "0xffffff800867307c",
+   "end": "0xffffff80086730a0",
+   "insns": 10,
+   "terminator": "b.ls",
+   "term_ops": "#0xffffff80086730bc",
+   "succ": [
+    "0xffffff80086730bc",
+    "0xffffff80086730a4"
+   ]
+  },
+  {
+   "start": "0xffffff80086730a4",
+   "end": "0xffffff80086730b0",
+   "insns": 4,
+   "terminator": "cbz",
+   "term_ops": "x1, #0xffffff80086730bc",
+   "succ": [
+    "0xffffff80086730bc",
+    "0xffffff80086730b4"
+   ]
+  },
+  {
+   "start": "0xffffff80086730b4",
+   "end": "0xffffff80086730b8",
+   "insns": 2,
+   "terminator": "b.ls",
+   "term_ops": "#0xffffff80086730cc",
+   "succ": [
+    "0xffffff80086730cc",
+    "0xffffff80086730bc"
+   ]
+  },
+  {
+   "start": "0xffffff80086730bc",
+   "end": "0xffffff80086730c8",
+   "insns": 4,
+   "terminator": "b",
+   "term_ops": "#0xffffff80086730ec",
+   "succ": [
+    "0xffffff80086730ec"
+   ]
+  },
+  {
+   "start": "0xffffff80086730cc",
+   "end": "0xffffff80086730d0",
+   "insns": 2,
+   "terminator": "cbz",
+   "term_ops": "w1, #0xffffff80086730dc",
+   "succ": [
+    "0xffffff80086730dc",
+    "0xffffff80086730d4"
+   ]
+  },
+  {
+   "start": "0xffffff80086730d4",
+   "end": "0xffffff80086730d8",
+   "insns": 2,
+   "terminator": "b",
+   "term_ops": "#0xffffff800867307c",
+   "succ": [
+    "0xffffff800867307c"
+   ]
+  },
+  {
+   "start": "0xffffff80086730dc",
+   "end": "0xffffff80086730e0",
+   "insns": 2,
+   "terminator": "cbz",
+   "term_ops": "w1, #0xffffff800867307c",
+   "succ": [
+    "0xffffff800867307c",
+    "0xffffff80086730e4"
+   ]
+  },
+  {
+   "start": "0xffffff80086730e4",
+   "end": "0xffffff80086730e8",
+   "insns": 2,
+   "terminator": "b",
+   "term_ops": "#0xffffff800867307c",
+   "succ": [
+    "0xffffff800867307c"
+   ]
+  },
+  {
+   "start": "0xffffff80086730ec",
+   "end": "0xffffff8008673104",
+   "insns": 7,
+   "terminator": "cbz",
+   "term_ops": "x1, #0xffffff800867312c",
+   "succ": [
+    "0xffffff800867312c",
+    "0xffffff8008673108"
+   ]
+  },
+  {
+   "start": "0xffffff8008673108",
+   "end": "0xffffff8008673128",
+   "insns": 9,
+   "terminator": "b",
+   "term_ops": "#0xffffff8008672f4c",
+   "succ": [
+    "0xffffff8008672f4c"
+   ]
+  },
+  {
+   "start": "0xffffff800867312c",
+   "end": "0xffffff8008673144",
+   "insns": 7,
+   "terminator": "ret",
+   "term_ops": "",
+   "succ": []
+  }
+ ],
+ "speed_map": [
+  {
+   "value": "0x2000",
+   "dispatch_target": "0xffffff8008672eb4",
+   "mask": 0,
+   "prefix": "a",
+   "suffix": 1,
+   "set_prop_name": true,
+   "set_supported_hw": false,
+   "skip_conditions": "mask 槽保持 0（a/b/c 组不执行 str w0,[x29,#0x74]）；0x2fd8 cbz w1 跳过 set_supported_hw；name=\"a1\" 非空故调用 set_prop_name",
+   "reaches_cpufreq_dt": true,
+   "note": "w4=1 固定"
+  },
+  {
+   "value": "0x2400",
+   "dispatch_target": "0xffffff8008672ec8",
+   "mask": 1,
+   "prefix": null,
+   "suffix": null,
+   "set_prop_name": false,
+   "set_supported_hw": true,
+   "skip_conditions": "name 缓冲仍全 0（未 snprintf）；0x2fa8 ldrb/cbz 跳过 set_prop_name；mask=1 非零故调用 set_supported_hw",
+   "reaches_cpufreq_dt": true,
+   "note": ""
+  },
+  {
+   "value": "0x2800",
+   "dispatch_target": "0xffffff8008672eb4",
+   "mask": 0,
+   "prefix": "a",
+   "suffix": 1,
+   "set_prop_name": true,
+   "set_supported_hw": false,
+   "skip_conditions": "同 0x2000：mask 保持 0，name=\"a1\"，仅 set_prop_name",
+   "reaches_cpufreq_dt": true,
+   "note": ""
+  },
+  {
+   "value": "0x2c00",
+   "dispatch_target": "0xffffff8008672e64",
+   "mask": 2,
+   "prefix": null,
+   "suffix": null,
+   "set_prop_name": false,
+   "set_supported_hw": true,
+   "skip_conditions": "name 空 → 跳过 set_prop_name；mask=2 → set_supported_hw",
+   "reaches_cpufreq_dt": true,
+   "note": ""
+  },
+  {
+   "value": "0x5000",
+   "dispatch_target": "0xffffff8008672ec8",
+   "mask": 1,
+   "prefix": null,
+   "suffix": null,
+   "set_prop_name": false,
+   "set_supported_hw": true,
+   "skip_conditions": "与 0x2400 同（首个比较 0x2e24 cmp #5<<12）",
+   "reaches_cpufreq_dt": true,
+   "note": ""
+  },
+  {
+   "value": "0x5400",
+   "dispatch_target": "0xffffff8008672ec8",
+   "mask": 1,
+   "prefix": null,
+   "suffix": null,
+   "set_prop_name": false,
+   "set_supported_hw": true,
+   "skip_conditions": "同 mask=1 组",
+   "reaches_cpufreq_dt": true,
+   "note": ""
+  },
+  {
+   "value": "0x5c00",
+   "dispatch_target": "0xffffff8008672ed0",
+   "mask": 0,
+   "prefix": "c",
+   "suffix": "0|1|2 (条件)",
+   "set_prop_name": true,
+   "set_supported_hw": false,
+   "skip_conditions": "mask 保持 0 → 跳过 set_supported_hw；name 非空 → set_prop_name；suffix 由 soc_ver&7 与 SID[0x28]/SID[0x20] 阈值决定",
+   "reaches_cpufreq_dt": true,
+   "note": ""
+  },
+  {
+   "value": "0x6c00",
+   "dispatch_target": "0xffffff8008672f24",
+   "mask": 0,
+   "prefix": "b",
+   "suffix": "0|1",
+   "set_prop_name": true,
+   "set_supported_hw": false,
+   "skip_conditions": "mask 保持 0 → 跳过 set_supported_hw；suffix=(soc_ver&7)?1:0",
+   "reaches_cpufreq_dt": true,
+   "note": ""
+  },
+  {
+   "value": "0x7400",
+   "dispatch_target": "0xffffff8008672ec8",
+   "mask": 1,
+   "prefix": null,
+   "suffix": null,
+   "set_prop_name": false,
+   "set_supported_hw": true,
+   "skip_conditions": "同 mask=1 组",
+   "reaches_cpufreq_dt": true,
+   "note": ""
+  },
+  {
+   "value": "0x7c00",
+   "dispatch_target": "0xffffff8008672f24",
+   "mask": 0,
+   "prefix": "b",
+   "suffix": "0|1",
+   "set_prop_name": true,
+   "set_supported_hw": false,
+   "skip_conditions": "同 0x6c00（b 组），mask 保持 0",
+   "reaches_cpufreq_dt": true,
+   "note": ""
+  },
+  {
+   "value": "其他任意值",
+   "dispatch_target": "0xffffff8008672f40",
+   "mask": 8,
+   "prefix": null,
+   "suffix": null,
+   "set_prop_name": false,
+   "set_supported_hw": true,
+   "skip_conditions": "落到默认块 w0=8 → str 到 mask 槽；name 空 → 跳过 set_prop_name；mask=8 → set_supported_hw",
+   "reaches_cpufreq_dt": true,
+   "note": ""
+  }
+ ],
+ "register_lifetime": {
+  "w19": "错误码累加器：0x2cf8=-ENOMEM(-0xc)；0x2d3c=-ENODEV(-0x13)；0x2dac=-ENOENT(-2)；成功路径 0x2f50=0；0x306c w20=-0x13 后 0x30bc 赋回 w19。函数返回 w19。",
+  "w24": "sun30_get_soc_ver() 返回值（0x2d44 bl，0x2d48 mov w24,w0）。仅在 0x2e20 (and #7)、0x2ed8 (c 组 cbnz)、0x2f30 (b 组 cbz) 使用；0x2f60 的 adrp x24 覆盖 x24，但此时已无后续使用。",
+  "[x29,#0x74]（mask 槽）": "0x2cfc str wzr 初值 0；仅 0x2f44 写（1/2/8）；a/b/c 组不写→保持 0。读：0x2fd8(cbz 跳过 set_supported_hw)、0x2fe4(传 &mask 给 setter)、0x30dc(cbz 跳过 put_supported_hw)、0x3114(pr_debug)。",
+  "[x29,#0x78]": "0x2d40 与 0x7c 一起被 stp wzr,wzr 清零；0x2d4c..0x2d58 sunxi_get_module_param_from_sid(&0x78,0x20,4)；0x2d5c ldrb→lsl#5→0x2d6c 回写。值=(SID[0x20] 字节)<<5。仅在 0x2f08 用于 c 组后缀条件。",
+  "[x29,#0x7c]": "同上清零；0x2d70..0x2d78 sunxi_get_module_param_from_sid(&0x7c,0x28,4)；0x2d7c and #0x3ff→0x2d80 回写。值=SID[0x28]&0x3ff。仅在 0x2ef8 用于 c 组后缀条件。",
+  "[x29,#0xd0]（名字缓冲）": "0x2d34 strh wzr + 0x2d38 strb wzr → 3 字节清零；snprintf(&0xd0,3,\"%s%d\",prefix,num)（x1=3 即最多 2 字符+NUL）。读：0x2fa8 ldrb(首字节=0 则跳过 set_prop_name)、0x30cc、0x3118。mask 分支从不写→保持 0。",
+  "[x29,#0x80]（len 出参）": "0x2dfc 作为 &len 传给 nvmem_cell_read 写入；探针此后从不读取（无 ldr [x29,#0x80]）。0x301c 起该区域被复用为 platform_device_info。",
+  "x23": "0x2d24 __kmalloc 返回的数组基址（长度=hweight64(cpu_possible_mask)*8，GFP 含 __GFP_ZERO）；仅 0x2fbc / 0x30ac 读取，未观察到写入。",
+  "x20": "0x2e04 nvmem_cell_read 返回的 cell 缓冲；0x2e1c ldr w1,[x20] 读取 4 字节；0x2f54 kfree。"
+ },
+ "b_group_special": {
+  "values": [
+   "0x6c00",
+   "0x7c00"
+  ],
+  "target": "0xffffff8008672f24",
+  "mask_slot_written": false,
+  "mask_effective": 0,
+  "suffix": "w4 = (w0 != 0) ? 1 : 0，其中 w0 = sunsi_get_soc_ver()&7（0x2e20 设置，b 组路径未经 w0 改写）",
+  "name": "b0 或 b1",
+  "skips_set_supported_hw": true,
+  "skips_set_prop_name": false,
+  "evidence": "0x2f24 组只做 adrp/mov w4/cbz/mov w4/add x3/b 0x2ee4，从不执行 0x2f44 的 str w0,[x29,#0x74]；因此 0x2fd8 ldr w1,[x29,#0x74]; cbz w1,0x3070 必然跳转，跳过 dev_pm_opp_set_supported_hw。"
+ },
+ "setter_flow": {
+  "loop": "0x2f60..0x2ff8：对 cpu_possible_mask 中每个 cpu，get_cpu_device(cpu)→若 name[0]!=0 调 dev_pm_opp_set_prop_name(dev,name)→再读 array[cpu]（恒 0）→若 mask!=0 调 dev_pm_opp_set_supported_hw(dev,&mask,1)。",
+  "failure_prop_name": "set_prop_name 返回非 0 → w20=ret, dev/printk 报 \"Failed to set prop name\" → 0x3070 清理循环 → kfree 数组 → 返回错误，不注册 cpufreq-dt。",
+  "failure_supported_hw": "set_supported_hw 返回非 0 → dev_err \"Failed to set supported hardware\" → 0x3070 清理 → 返回错误，不注册。",
+  "cleanup_loop": "0x3070..0x30e8：再次遍历 cpu，若 name[0]!=0 → dev_pm_opp_put_prop_name(dev)；否则若 mask!=0 → dev_pm_opp_put_supported_hw(dev)；随后 kfree(array)。",
+  "register": "0x3010..0x3054：在栈上构造 platform_device_info{ name=\"cpufreq-dt\", id=-1, ... }，调用 platform_device_register_full；成功则 str x23,[x25,#0xb0] 并返回 0，失败 printk \"Failed to register platform device\" 后清理。",
+  "can_reach_cpufreq_dt": "是：只要本轮所有 setter 返回 0，控制流必达 0x303c platform_device_register_full。"
+ },
+ "uncertainties": [
+  "st_size=0：所有函数边界均按 ret+后继符号/分支目标推断，非符号大小。",
+  "先前工具报告的“16 个基本块”是 capstone 把 cbz 立即数当有符号数（如 -0x7ff798cf14）导致分支目标丢失的产物；修正为无符号后真实基本块=69、边=106。",
+  "speed 常量实际有 10 个显式比较值（0x5000,0x2400,0x2000,0x2800,0x2c00,0x6c00,0x5400,0x5c00,0x7400,0x7c00）+ 默认块；任务描述列的“9 个”漏掉了 0x5000。",
+  "x23 数组在函数内只被读取、从未被写入（分配时 __GFP_ZERO 清零），故 0x2fc0/0x30b0 处的错误检查恒为“非错误”。其设计意图无法仅凭该函数确定。",
+  "0x310c..0x3128（pr_debug \"sun50iw9p1 vf vers...\" + b 0x2f4c）位于 0x3108 bl __stack_chk_fail（noreturn）之后，CFG 上不可达；疑为冷路径/编译器布局产物，无法确认是否曾被设计为可达。",
+  "a 组后缀固定为 1（0x2eb8 mov w4,#1），并非由 soc_ver/SID 条件决定；仅 b/c 组有动态后缀。",
+  "c 组后缀判定：soc_ver&7==0→0；否则若 (SID[0x28]&0x3ff)∈[0x26,0x2d] 且 ((SID[0x20]字节)<<5)∈[0xa60,0x13a0] →1，否则→2。语义标签（如“bin”）属推断。",
+  "未分析 sunxi_get_soc_ver / sunxi_get_module_param_from_sid 内部（按要求不调用、不触碰寄存器语义）；仅按调用约定记录返回值/出参位置。",
+  "ELF 中不含 DTB：无法离线读取 38 个 OPP 节点与各自 opp-supported-hw/命名电压属性，故 speed→频率集合的最终映射需 DTB 才能证实。"
+ ]
+}
