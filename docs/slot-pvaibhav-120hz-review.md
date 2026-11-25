@@ -74,7 +74,7 @@ The live FDT reparse and same-boot TCON/PLL readback are now published. The acti
 
 ### New profile evidence after FDT reparse
 
-The live machine-readable FDT now confirms `rg34xx_v1`, RGB666, 720×480, 26 MHz DCLK property, HT/VT 820×536 and `lcd_type=old` bootarg. The BaseOS H700 variant survey independently maps the standard `rg34xx` target to `rg34xx_v1`; `fog_fj035fhd05_v1` belongs to other target profiles. The reviewed fork's gate is therefore not a valid match for this standard non-SP RG34XX. Capability work must qualify the tuple including `lcd_type`, not only the driver string and geometry. Actual final DCLK/divider remains unmeasured; IRQ rate (~59.63 Hz) differs from DTB-derived nominal 59.155 Hz. No register writes are authorized.
+The live machine-readable FDT confirms `rg34xx_v1`, RGB666, 720×480, 26 MHz DCLK property, HT/VT 820×536 and `lcd_type=old` bootarg. The BaseOS H700 variant survey maps the standard `rg34xx` target to `rg34xx_v1`; `fog_fj035fhd05_v1` belongs to other target profiles. The reviewed fork's gate is not a match for this non-SP RG34XX. The active TCON divider is now read back as 11, and PLL raw is `0x88001703`; a pinned public sun50iw9 reference formula decodes that raw value to 288 MHz. At 288/11, estimated DCLK is 26.1818 MHz / 59.569 Hz. This PLL decode and parent relationship still require kernel #19 source confirmation; it replaces the previous claim that the divider is unmeasured. No register writes are authorized.
 
 
 The vendor U-Boot disassembly nuance is documented in [the live capture analysis](pvaibhav-slot-rg34xx-live-capture-2026-11-25.md): the selected DT panel struct is `rg34xx_v1`; its init function happens to carry a `fj035fhd05` symbol string. Do not confuse this function label with the FDT panel identity required by the fork's Linux-side gate.
@@ -94,3 +94,17 @@ The pinned armGBA source `MagnominusGit/armGBA@fad6c4b0c0176a76e10667f4aa071a8fe
 - `src/video/video.c` increments `video->frameCounter` at V-blank frame end; `retro_run()` waits for that counter to advance before publishing the next GBA image.
 
 This is source-level evidence for `gba->video.frameCounter` as the committed emulation-frame counter. It is **not yet safe to use against the deployed `armgba_libretro.so`**: its device SHA is recorded but not matched to this source build/release; symbol visibility, pointer mapping and `offsetof(struct GBA, video)` must be checked against the exact ELF before a `/proc/PID/mem` reader is trusted. Current `pvaibhav/slot/tools/refresh/probe.rs` supports gpSP and mGBA only, not armGBA. Keep Slot `presents/s`, armGBA committed frames/s and LCD IRQ/s as separate metrics.
+
+
+## PLL register arithmetic cross-check (pinned public BSP reference only)
+
+A source-level decode is now possible without guessing the raw PLL field layout. In [`qiaoweibiao/T507_Kernel` commit `98fcc7d3f112e51b0edfb71536da89cb2115106f`, `clk-sun50iw9.c`](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/clk/sunxi/clk-sun50iw9.c), `SUNXI_CLK_FACTORS(pll_video0x4, ...)` defines N at shift 8 / width 8 and D1 at shift 1 / width 1; `calc_rate_video0()` calculates `24 MHz × (N + 1) / (D1 + 1)`. The matching [`sunxi,clk` DTS`](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/arch/arm64/boot/dts/sunxi/sun50iw9p1-clk.dtsi) assigns `tcon_lcd` to `pll_video0x4`; `pll_video0` is a `/4` fixed-factor child.
+
+| Raw PLL word | N field | D1 field | Reference `pll_video0x4` rate | With TCON divider | Estimated DCLK |
+|---|---:|---:|---:|---:|---:|
+| `0x88001703` (live) | 0x17 = 23 → N+1=24 | 1 → D1+1=2 | 24 MHz × 24 / 2 = **288 MHz** | 11 | **26.1818 MHz** |
+| `0x88002b03` (pvaibhav 120-Hz candidate) | 0x2b = 43 → N+1=44 | 1 → D1+1=2 | 24 MHz × 44 / 2 = **528 MHz** | 10 | **52.8 MHz** |
+
+At our live 820×536 totals, the candidate computes to 52.8 MHz / (820×536) = **120.13 Hz**. The baseline computes to 26.1818 MHz / (820×536) = **59.569 Hz**. This arithmetic is coherent with the observed 60-Hz clock summary and IRQ slope, and makes the upstream 120-Hz pair internally coherent. It still does **not** prove the current kernel uses this exact PLL layout, that the live `tcon_lcd` parent is the same at runtime, that the panel revision tolerates 52.8 MHz, or that pvaibhav's write sequence is safe on `rg34xx_v1 + lcd_type=old`. The report's raw PLL remains recorded as raw hardware evidence; this section is an external-source decode only.
+
+Do not copy the high-mode candidate into our HAL or enable a writer. First match the exact Linux 4.9.170 #19 source/build ID, verify `clk-sun50iw9` factor definitions and runtime parent/mux path, then qualify the panel timing and safe transition boundary. The linked T507 source is a related sun50iw9 reference, not proven identical to the shipping binary.
