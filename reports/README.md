@@ -2,6 +2,10 @@
 
 ## Index
 
+### 2026-11-23 — FAT32/exFAT real-image regressions and RG34XX MMC reference (round 15)
+
+- linkslot-h700-fat-exfat-mmc-2026-11-23-round15.md — full feasibility workflow [45135115298](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45135115298) passed on head `53eb7c6`. Host compile and real-image FAT32/exFAT regressions passed, including FAT32 VFAT long-name file create/replace/delete, empty-file handling, path rejection, and exFAT 4 KiB/128 KiB cluster images checked clean by fsck. Records FAT32 LFN-directory limitation, no atomic rename/flush barrier, AArch64 writer-lock branch, and H700 MMC0/MMC2 register/board wiring references. Artifact `14800060917`, 380,276,489 bytes, SHA-256 `6041a12137559f0fdf3f043a755f9d20e60b76e55a870e4a9296ff8a4a563f77`. This is host-only; no SD/MMC driver or hardware test. [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16).
+
 ### 2026-11-23 — H700 card path containment and FAT/exFAT provider audit (round 14)
 
 - linkslot-h700-storage-path-2026-11-23-round14.md — full workflow 45130158723 passed on `4bb58d1`; standalone Rust path resolver passed 9/9 tests, enforcing exact mount boundaries, explicit relative bases and caller allowlists. Audited pinned GammaOS LK `emu/gba/fat_ro/fat_wr/fat_exfat` as a potential reusable MIT-licensed generic filesystem layer; its `sd_fat.c` glue is MTK-specific and must not be reused for H700. No SD driver or persistent filesystem is implemented. [Workflow](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45130158723); [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16).
