@@ -2,6 +2,11 @@
 
 ## Index
 
+
+### 2026-11-23 — Linkslot 1.0.36 no_std behavior tests and pinned LK heap ABI
+
+- `linkslot-lk-rust-feasibility-2026-11-23-round2.md` — second CI round. Original `slot-input` / `slot-model` host suite: 58 passed; 47 original gesture tests also pass against the isolated `no_std` `slot-input` candidate; 4 new pure-domain tests pass against the `no_std` `slot-model` candidate. Builds Rust `GlobalAlloc` against the pinned GammaOS LK `heap.h` function signatures and links the C test stub for AArch32. Documents the actual heap alignment contract and the important finding that current LK critical sections do not prove cross-core mutual exclusion. This is **header/ABI compatibility only**, not the real LK heap implementation or a hardware port. [Workflow run 45103281417](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45103281417); see also [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16).
+
 ### 2026-11-23 — Linkslot 1.0.36 Rust no_std / LK ABI feasibility
 
 - `linkslot-lk-rust-feasibility-2026-11-23.md` — GitHub Actions host-only cross-build. Verifies temporary `slot-input` and `slot-model` no_std+alloc candidates on AArch32 and AArch64, Rust staticlib ↔ freestanding C shim linking, final ELF architecture and undefined-symbol closure. Includes the AArch32 EHABI metadata-only marker caveat and explicitly excludes real LK heap/handoff/device execution. [Workflow run 45102606482](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45102606482); source/test branch is PR #16.
