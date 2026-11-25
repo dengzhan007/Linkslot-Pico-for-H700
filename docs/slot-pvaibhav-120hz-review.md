@@ -108,3 +108,56 @@ A source-level decode is now possible without guessing the raw PLL field layout.
 At our live 820×536 totals, the candidate computes to 52.8 MHz / (820×536) = **120.13 Hz**. The baseline computes to 26.1818 MHz / (820×536) = **59.569 Hz**. This arithmetic is coherent with the observed 60-Hz clock summary and IRQ slope, and makes the upstream 120-Hz pair internally coherent. It still does **not** prove the current kernel uses this exact PLL layout, that the live `tcon_lcd` parent is the same at runtime, that the panel revision tolerates 52.8 MHz, or that pvaibhav's write sequence is safe on `rg34xx_v1 + lcd_type=old`. The report's raw PLL remains recorded as raw hardware evidence; this section is an external-source decode only.
 
 Do not copy the high-mode candidate into our HAL or enable a writer. First match the exact Linux 4.9.170 #19 source/build ID, verify `clk-sun50iw9` factor definitions and runtime parent/mux path, then qualify the panel timing and safe transition boundary. The linked T507 source is a related sun50iw9 reference, not proven identical to the shipping binary.
+
+## Direct comparison with the original RG34XX boot-package mod
+
+Reviewed the original TheGammaSqueeze/rgxx_boot_package_mods branch rg34xx at HEAD 64300b3b6137f7676b63b2e969e58db2870db48b (2024-12-21), including its README, 60/120 directories, package manifest/build scripts and flash/backup/restore scripts.
+
+### Original implementation: boot-time timing profile, not a Slot runtime writer
+
+The branch ships two signed Allwinner boot packages. Its README documents these FEX timing profiles:
+
+| Profile | lcd_dclk_freq | lcd_ht | lcd_vt | README rate |
+|---|---:|---:|---:|---:|
+| 60 Hz | 54 MHz | 1679 | 536 | 60.006 Hz |
+| 120 Hz | 54 MHz | 840 | 536 | 119.947 Hz |
+| Stock | 26 MHz | 820 | 536 | — |
+
+The 60/120 DTBs are both 137,728 bytes with identical node/property structure; the direct FDT comparison recorded for this project found the sole property delta at /soc@03000000/lcd0@01c0c000:lcd_ht. Both modified profiles request 54 MHz; 120 Hz halves horizontal total from 1679 to 840. The two package directories also share the same U-Boot, monitor, DTBO, signing tool and stock package. The sunxi.fex DTB and resulting signed boot_package.fex differ.
+
+Build flow:
+- boot_package.cfg combines u-boot.fex, monitor.fex, p1.dtbo and sunxi.fex.
+- build.sh calls dragonsecboot -pack boot_package.cfg.
+- The supplied flashing scripts validate the sunxi-package marker, then write the selected 1,310,720-byte package directly to /dev/mmcblk0 at byte offset 0x1004000, followed by reboot. A companion script backs up 0x140000 bytes and the restore script writes that backup back.
+
+This is a static boot-package mode selection. The repository does not add a Linux service, Slot UI setting, scene detector, or per-game mode transition. To choose the other profile, the package is flashed and the device reboots. Its README explicitly says the packages were tested on stock firmware and disclaims compatibility with arbitrary CFW. Do not run these raw block-writing scripts or flash either package on our BaseOS image.
+
+### Difference from pvaibhav/slot
+
+| Dimension | Original boot-package repository | pvaibhav/slot at 5206e3f... |
+|---|---|---|
+| Control layer | Signed Allwinner boot package / DTB timing | Linux userspace Slot power service |
+| 120-Hz timing | 54 MHz, HT=840, VT=536 | Keeps live tuple HT=820, VT=536; changes PLL/TCON |
+| 120-Hz registers | No userspace register writer in this repo; boot flow/kernel consumes the selected timing profile | Divider 0xf000000a, PLL 0x88002b03 |
+| 60-Hz profile | 54 MHz, HT=1679, VT=536 | PLL 0x88001703, divider 0xf000000b |
+| Activation | Write boot package to raw media and reboot | App startup and resume, if exact panel gate passes |
+| Verification | README describes stock-firmware testing; branch does not provide the same per-device IRQ/readback trace | Reads back both registers, attempts 60-Hz rollback on error |
+| UI/GAME switching | None; selected boot profile is global | None; high_refresh is a global preference applied at startup/wake, not a GAME/UI scene switch |
+
+The two 120-Hz candidates are not the same mode recipe:
+- Original package nominal arithmetic: 54,000,000 / (840 × 536) = 119.9360 Hz.
+- pvaibhav candidate, using the related sun50iw9 PLL decode: 528 MHz / 10 / (820 × 536) = 120.1311 Hz.
+
+The original README reports 119.947/60.006 Hz, slightly above the arithmetic using its integer 54-MHz DT property (about 0.01%); the repository does not publish a raw IRQ/readback capture here that would let us independently establish the exact effective pixel clock. Treat its README rates as reported values and the calculations above as nominal timing arithmetic.
+
+### What this means for our RG34XX
+
+Our live BaseOS device is rg34xx_v1 + lcd_type=old, 720×480, 26-MHz property, 820×536. The latest ADB UI/GAME capture measured IRQ proxies of 59.667/59.583 Hz and read PLL 0x88001703 in both states. The TCON divider read failed in that ADB run; do not describe it as directly read back by those new reports (the earlier same-boot readback in the separate runtime report recorded 0xf000000b).
+
+Both external references have a panel-profile discrepancy against the live Linux identity:
+- The original boot-package FDT profile records fog_fj035fhd05_v1, while our live Linux FDT reports rg34xx_v1. These are not interchangeable strings. The original repo's stock-firmware test does not by itself prove its boot package works with our BaseOS 1.5.3 / kernel #19 handoff.
+- pvaibhav's BASEOS_TARGET=rg34xx runtime gate also requires the exact fog_fj035fhd05_v1 string. Our device fails that gate, so the startup setter is skipped; the ADB observations are consistent with the 60-Hz baseline.
+
+Do not resolve either mismatch by changing the panel string, copying the original boot package, or borrowing the pvaibhav register pair. Our matched kernel #19 audit indicates that the original 54-MHz request would follow a different stock divider/rate path than the current 26-MHz profile, but panel init, U-Boot-to-Linux FDT handoff, exact rg34xx_v1 + lcd_type=old electrical revision, and transition safety must be established before any HAL can select it.
+
+Project decision: reuse the original repository as timing evidence and pvaibhav as a writer/readback/rollback design reference. Neither is a drop-in hardware implementation for the current RG34XX. Keep hardware_applied=0, do not write the boot package or display registers, and keep UI/GAME policy separate from eventual HAL capability.
