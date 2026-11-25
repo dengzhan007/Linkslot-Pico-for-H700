@@ -436,7 +436,7 @@ Next gate: compare ZIP and device hashes, inspect the ZIP's armGBA `.meta`, insp
 - 设备 `System/slot` SHA-256 `8f0fd40d...`、`SYSTEM/armgba_libretro.so` SHA-256 `4ebae098...` 均与 ZIP 内文件完全相同；另外 gpsp/mGBA/Gambatte 三个核心和两个启动脚本也全部匹配。
 - armGBA ELF Build ID：`08309a288967a62cf4155e27d1b10ce13a5e33ef`；未 strip，完整 `.symtab` 4,960 项，`.dynsym` 240 项。
 - 官方包内 `armgba-*.meta` 记录的真实源码 commit 是 **`df6b2631291f249d54a00dd14f49bc893e438feb`**，设备与 ZIP 相同；编译参数 `-mcpu=cortex-a53`；link patch SHA-256 `6ffb6a9f83b6fdaf77350725e74f0bedbd530256bce3e5e4fb0cc4b9e5e794db`，与实际 patch 一致。
-- 重要修正：先前 layout probe 用的 `fad6c4b0c0176a76e10667f4aa071a8feb4425c0` 是另一个较新的上游 checkout，并非 v1.16.0-pvaibhav.2 所包含的源码。**之前得到的 11948-byte 偏移不可用于这份官方发布 core。** 已将 CI checkout 和探针 PINNED_COMMIT 改为上述官方 `.meta` commit；新的 run [#45724910634](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45724910634) 正在执行。只有它的 layout step 输出才是本机 core 对应的偏移。
+- 重要修正：先前 layout probe 用的 `fad6c4b0c0176a76e10667f4aa071a8feb4425c0` 是另一个较新的上游 checkout，并非 v1.16.0-pvaibhav.2 所包含的源码。此前从 fad6c4b0 得到的 11948-byte 数值在来源未匹配时不能直接使用。已把 CI checkout 与 PINNED_COMMIT 改为官方 `.meta` 所指定的 df6b263...；run [#45724910634](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45724910634) 的 exact-source layout step **成功**，artifact ID `15072724723` 的 JSON 确认同样是 `GBA.video=11944`、`Video.frameCounter=4`、合计 **11948 bytes**。本轮总体 workflow 后续因新文档提交被取消，这不影响已经成功完成的专用 layout step。
 
 ### `high_refresh=1` 不生效的原因已由源码与二进制共同解释
 
@@ -459,7 +459,7 @@ pinned Slot 源码 `pvaibhav/slot@5206e3fa39aa4a9b702cd9048a07dab3b5ab95da`：
 
 ### 后续次序
 
-1. 等待 [#45724910634](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45724910634) 中按真实 release commit 构建的 armGBA layout probe；读取 JSON，取代早期 11948 偏移。
+1. **已完成**：按官方 release commit `df6b2631291f249d54a00dd14f49bc893e438feb` 的 layout probe 通过，精确偏移为 11948 bytes，详情见 [armGBA layout 记录](armgba-frame-counter-layout-v1.16.0.md)。
 2. 只读采集当前 Slot PID 的 `/proc/PID/maps` 与 ELF `PT_LOAD` program headers，计算 `armgba_libretro.so` load bias；通过 `retro_run` 引用反汇编区分两个同名 `gba` 符号。此步骤不读取进程内存。
 3. UI presents：stderr 已落到可读日志文件，但 tracing 必须在 Slot 启动前启用；创建 marker 和重启前端属于设备配置动作，当前仍未执行。
 4. armGBA committed-frame counter：精确源码偏移、正确 `gba` 指针、load bias 三项完全闭合后，再单独决定是否进行有界只读进程内存采样。此前用户给 Agent 的采集约束禁止 `/proc/PID/mem`，本轮仍保持不读。
