@@ -1,0 +1,30 @@
+{
+  "partition": "/dev/mmcblk0p4",
+  "size": 67108864,
+  "sha256": "41cfaa8f9ade4a5e05a89188abb7db154243e38b8e19c53b730f0a45ff325516",
+  "android_boot_magic": true,
+  "build_ids": [
+    {
+      "location": "partition",
+      "id": "fe7e68cd7aa14945d71f36e4fbf8412d959f4cc1"
+    },
+    {
+      "location": "partition",
+      "id": "a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68"
+    },
+    {
+      "location": "kernel_gzip_unpacked",
+      "id": "fe7e68cd7aa14945d71f36e4fbf8412d959f4cc1"
+    },
+    {
+      "location": "kernel_gzip_unpacked",
+      "id": "a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68"
+    }
+  ],
+  "boot_header": {
+    "kernel_size": 7018071,
+    "page_size": 2048
+  },
+  "kernel_sha256": "cc4b5769cb8c9dcf8d013602e57c494a1153eb6714d9786cf847e39e3ecdd3af",
+  "matches_live_build_id": true
+}
