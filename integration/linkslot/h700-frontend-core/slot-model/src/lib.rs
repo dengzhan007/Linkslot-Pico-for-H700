@@ -77,7 +77,7 @@ mod h700_no_std_contract_tests {
     }
 
     #[test]
-    fn core_registry_contains_every_1_0_45_entry_and_armgba_metadata() {
+    fn core_registry_contains_every_1_0_49_entry_and_armgba_metadata() {
         for (index, item) in crate::CORES.iter().enumerate() {
             for other in &crate::CORES[index + 1..] {
                 assert_ne!(item.id.0, other.id.0, "duplicate core id: {}", item.id.0);
@@ -86,6 +86,9 @@ mod h700_no_std_contract_tests {
         let armgba = crate::core("armgba").expect("armGBA metadata must be registered");
         assert_eq!(armgba.dylib, "armgba");
         assert_eq!(armgba.display, "armGBA");
+        assert!(armgba.netpacket, "armGBA Link Mode Separate uses netpacket");
+        assert!(crate::core("gpsp").expect("gpSP registered").netpacket);
+        assert!(!crate::core("mgba").expect("mGBA registered").netpacket);
         let colour = armgba.colour.expect("armGBA colour setting must be preserved");
         assert_eq!(colour.key, "armgba_color_correction");
         assert_eq!(colour.on, "enabled");
