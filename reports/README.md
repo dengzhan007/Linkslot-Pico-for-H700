@@ -2,17 +2,27 @@
 
 ## Index
 
+### 2026-11-23 — RG34XX H700 live MMC mapping (round 16)
+
+- `linkslot-h700-live-mmc-map-2026-11-23-round16.md` — analyzed the r2 read-only capture and
+  decoded the live controller/host relationships. The ROM-card target is the removable-card
+  candidate `sdc2@0x04022000` (`sunxi-mmc-v4p6x`, Linux `mmc_host1`), with 4-bit bus,
+  GPIO card detect, and `vqmmc-supply` referencing AXP2202 ALDO1. `sdc1@0x04021000`
+  (`mmc_host2`) is the SDIO DDR50 device consistent with Wi-Fi. `sdc0@0x04020000`
+  (`mmc_host0`) owns `mmcblk0` and the running rootfs. Important corrections: `mmcblk0`
+  is identified by Linux as an SDHC card (not confirmed eMMC); raw `cd-gpios` cells contain
+  port 4 / pin 22 before vendor-specific config cells (the trailing `0x06` is not the pin);
+  and sysfs p6/p7 names differ from the cmdline partition aliases. This is topology/config
+  evidence only: sdc2 was empty, no block read/write or card initialization was tested.
+
 ### 2026-11-23 — RG34XX MMC map, second device capture (r2)
 
-- `h700-mmc-map-r2.tar.gz` — read-only MMC map capture repeated after fixing the collector's
-  platform-device sweep. r1 globbed `/sys/bus/platform/devices/*mmc*`, which matches nothing on
-  this SoC (sunxi registers `sdc0`/`sdc1`/`sdc2`), so the whole live-DT section came back empty.
-  r2 globs `sdc*` and returns all three controllers: eMMC on `sdc0@0x04020000`
-  (`sunxi-mmc-v4p1x`, non-removable, `mmcblk0` 30,375,936 sectors / 7 partitions), `sdc2@0x04022000`
-  (`sunxi-mmc-v4p6x`, has `cd-gpios` + `vqmmc-supply`), `sdc1@0x04021000` (`sunxi-mmc-v4p1x`).
-  Also confirms that DT alias numbering (`mmc0`, `mmc2`) disagrees with kernel host numbering
-  (`mmc0→sdc0`, `mmc1→sdc2`, `mmc2→sdc1`). Serial redacted, no CID/CSD identity fields,
-  no block-device reads.
+- `h700-mmc-map-r2.tar.gz` — read-only capture after fixing the collector's platform-device
+  sweep from `*mmc*` to `sdc*`. Includes the three live nodes, MMC host and block-device
+  symlinks, raw controller DT properties, regulator/debugfs summaries, and dmesg. SHA-256:
+  `c921136be2439c20d456904607542199f874d82181bd5467977ee12067350adf`. The detailed
+  interpretation and remaining unknowns are in round 16. Serial redacted; no CID/CSD identity
+  fields and no block-device reads or writes.
 
 ### 2026-11-23 — FAT32/exFAT real-image regressions and RG34XX MMC reference (round 15)
 
