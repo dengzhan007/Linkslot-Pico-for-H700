@@ -2,7 +2,7 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-25（RG34XX v4 kernel provenance 已上传；GNU Build ID 与 CPUFreq driver binding 已捕获；运行频率表与 `b1` 电压子集高度吻合，但目标源码和 SID→b1 规则仍未识别；温度校准、BL31 多核与 PMIC/CCU 实机门槛仍未关闭）  
+**最后核对时间：** 2026-11-25（RG34XX p4 boot 内核 Build ID 已与 live kernel 精确匹配；运行频率表强烈指向 `b1` OPP 子集，但驱动源码和 SID→b1 规则仍未识别；温度校准、BL31 多核与 PMIC/CCU 实机门槛仍未关闭）  
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **工作分支：** `porting/linkslot-1.0.45-feasibility`  
 **最新已验证代码 HEAD：** `e0ab50220939dfbbec95826ea61c15e7ec27c50c`。本轮只读 kernel/CPUFreq provenance collector + 静态安全回归通过 [H700 boot audit tools #45543371548](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45543371548)（Linux host tools、Windows Python tests 与 PowerShell wrapper syntax）；H700 storage/CPU/LED/MMU/PIO host regression 和 AArch64、AArch32 ARM-state、AArch32 Thumb-2 编译通过 [#45543371507](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45543371507)。完整 Linkslot/LK/mGBA 综合 host/cross-build 最新成功基线仍为 [#45532364153](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45532364153)；host/cross-build 不等于完整 LK target link 或实机启动。  
@@ -218,7 +218,7 @@
 
 Linkslot 1.0.45 UI 当前已追加 display-only CPU row：`SYSTEM_SETTINGS` 为 7 行，`QuickRow::ALL` 为 88 项，Language index=86、CPU Performance index=87；`QuickValue::ALL` 为 38 项，新 unavailable value index=37。两项 App unit tests 已在 runtime-slices/full feasibility CI 实际通过；Rust typed client 仍未接入 App。
 3. **已完成 RG34XX inventory v4**：[报告](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261125-cpux-v4) 已确认 GNU Build ID `a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68`、`sun50i-cpufreq-nvmem` / `cpufreq-dt` 实际绑定及运行列表与 `b1` 电压子集的对应关系；无需重复 inventory。
-4. **确认实机正在运行的 cpufreq-nvmem/OPP 精确源码和 build**：从 stock `boot` 分区 `mmcblk0p4` 或匹配的 `vmlinux` 获取二进制，离线比对 GNU Build ID 并审查 driver machine code，重点确认 `dev_pm_opp_set_prop_name` 与 raw `0x6c00` 的路径；不要从符号名或频率表直接推断源码和 mask。
+4. **离线恢复并反汇编已匹配的 stock kernel**：用 `build/rg34xx-boot-p4.img` 计算 gzip 解压后 kernel SHA（与公开 BaseOS survey 的 `39cf8c3eb9a75ff0` 前缀对照），然后用 `vmlinux-to-elf` 恢复 AArch64 ELF/kallsyms，提取 `sun50i_cpufreq_nvmem_probe`、speed decoder、`dev_pm_opp_set_prop_name` / `dev_pm_opp_set_supported_hw` 的反汇编；完整镜像/ELF 保留本地。
 5. 证明 BL31→BL33 CPU1–CPU3 状态、单核 invariant、备用父时钟切换和 timer continuity；同时解决 AVCC thermal calibration 或确认独立可信温度来源。前述门槛闭合后才设计 C HAL transition（升频先升压、降频先降频后降压、readback/timeout/rollback/hysteresis）。
 6. 最后才开放实际 Performance/Boost。不得把 ABI v1 的 `POLICY_ONLY` 当作 DVFS 已完成。
 
