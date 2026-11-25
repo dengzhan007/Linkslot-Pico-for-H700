@@ -178,3 +178,12 @@ Project decision: reuse the original repository as timing evidence and pvaibhav 
 ## Comparison with the original RG34XX boot-package mod (2026-11-26)
 
 The [separate artifact audit](rgxx-boot-package-120hz-review.md) has now inspected the original `TheGammaSqueeze/rgxx_boot_package_mods` branch. It is a fixed FDT timing package (54-MHz DCLK; HT 840 or 1679), flashed at raw offset `0x1004000` and followed by reboot. It does not use the runtime register writer in this fork. The original FDT uses `fog_fj035fhd05_v1`, while our live device is `rg34xx_v1`; its 54-MHz/840 timing also fails this fork's 26-MHz/820 runtime probe. Do not combine the two mechanisms or apply either third-party profile to the current device.
+
+
+## Runtime binary gate and exact device applicability (2026-11-26)
+
+The ADB binary-identity report now proves the device's `System/slot` and `armgba_libretro.so` are byte-identical to the official `v1.16.0-pvaibhav.2-h700.zip`; see [binary-identity/REPORT.md](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/slot-refresh-audit/binary-identity/REPORT.md). The release meta pins armGBA to `df6b2631291f249d54a00dd14f49bc893e438feb`. Note that the earlier source-layout probe used a different upstream commit (`fad6c4b0...`); its offset is not reusable for the release core. The work-branch probe and CI checkout have now been retargeted to `df6b263...`.
+
+The previously unknown high-refresh capability gate is now explained by source: `DevicePlatform.refresh` is `Option<PanelRefresh>`; target `rg34xx` only creates `Some` when the FDT `lcd_driver_name` is exactly `fog_fj035fhd05_v1` and all timing/path checks pass. Our test device reports `rg34xx_v1`, so `refresh=None`. Consequently `supports_high_refresh=false` and `set_high_refresh` never calls `PanelRefresh::set`. The stored preference `high_refresh=1` is not proof of hardware support or applied mode.
+
+The release core retains full `.symtab` but no dynamic `gba` export. There are two same-named LOCAL OBJECT symbols at `0x4c16a8` and `0x4259b8`, corresponding to the primary libretro machine pointer and a link-local pointer; map their code references before choosing one. Slot stderr/stdout are both captured in `/mnt/sdcard/Logs/slot.log`. Tracing is currently off. No memory read, marker creation, front-end restart or hardware write has occurred.
