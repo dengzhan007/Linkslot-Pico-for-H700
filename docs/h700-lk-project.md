@@ -13,9 +13,12 @@ This adds a real GammaOS LK project/target/platform selection path for the
   are supplied.
 - `target/rg34xx_h700/init.c` supplies the RG34XX target lifecycle hooks. The
   generic `target/init.c` is excluded because it imports MTK-only defaults.
-  H700 `platform_init_mmu_mappings()` maps the 1 MiB PIO/CCU register window
-  as Device memory; then `target_early_init()` turns on the PI12 work LED before
-  heap/thread startup. `target_init()` retries if early PIO access failed.
+  H700 `platform_init_mmu_mappings()` follows the pinned LK AArch32
+  section-table contract: `arm_mmu_init()`, 1 GiB RG34XX DRAM identity map
+  as normal write-back memory, 1 MiB PIO/CCU identity map as Device memory,
+  then `arch_enable_mmu()`. Only after that does `target_early_init()` turn
+  on PI12 before heap/thread startup. `target_init()` retries if early PIO
+  access failed.
   Neither hook creates fake fastboot/eMMC or memory-scratch capabilities.
 - `platform/h700/rules.mk` selects `ARCH=arm` / `ARM_CPU=cortex-a53` and assigns LK's generated `system-onesegment.ld` as the ELF linker script.
 - The H700 platform rules list the policy-only CPU selector/service/runtime owner,
@@ -28,7 +31,39 @@ This adds a real GammaOS LK project/target/platform selection path for the
   timer uses MTK GPT, and its mutex implementation is only a no-op placeholder;
   H700 must provide its own timer, logging and synchronization services.
 
-The project currently enables one minimal RG34XX board function: the PI12 work/power LED. It is not a general GPIO driver or input scanner. CPU performance objects remain policy-only; CPU DVFS, PMIC, MMC/SD hardware init and other H700 device drivers are not activated. This remains a scaffold, not a completed or bootable LK port.
+The project currently enables one minimal RG34XX board function: the PI12 work/power LED. It is not a general GPIO driver or input scanner. CPU performance objects remain policy-only; CPU DVFS, PMIC, MMC/SD hardware init and other H700 device drivers are not activated. The early MMU hook sets address-translation attributes only; the 1 GiB DRAM mapping does not allocate memory or approve any LK image, heap, stack, BSS, page-table, framebuffer, DMA or payload placement. This remains a scaffold, not a completed or bootable LK port.
+
+## AArch32 early MMU mapping contract
+
+The H700 target uses the pinned GammaOS LK AArch32 section-table implementation
+(non-`MTK_LM_MODE`, non-`MTK_3LEVEL_PAGETABLE`). The upstream LK sequence in
+`arch/arm/arch.c::arch_early_init()` calls
+`platform_init_mmu_mappings()` before `target_early_init()`; the reference
+MTK platform hook initializes the table and TTBR, maps DRAM, then enables the
+MMU. The RG34XX implementation now follows that order:
+
+1. `arm_mmu_init()` initializes the 4096-entry identity section table and TTBR.
+2. The observed RG34XX DRAM range `[0x40000000, 0x80000000)` is remapped as
+   normal write-back, read/write memory (1024 one-MiB sections).
+3. `[0x03000000, 0x03100000)` is remapped as shared Device, read/write,
+   execute-never memory for H700 CCU/PIO registers.
+4. `arch_enable_mmu()` enables translation only after all descriptors are set.
+5. LK then proceeds to cache setup and `target_early_init()`, where PI12 is
+   configured and turned on.
+
+`DRAM_PHY_ADDR=0x40000000` is supplied to LK's architecture code because
+`arm_mmu_init()` uses that constant when building its initial section map.
+This is not the same as `H700_MEMBASE/H700_MEMSIZE`: it does not select or
+approve the replacement LK load address or grant memory ownership. All
+secure/monitor, framebuffer, CMA, unknown-reserved and current-loader
+lifetimes remain separate memory-safety gates.
+
+A fake-MMU host regression verifies the call order and descriptor attributes:
+one table initialization, 1024 DRAM sections, one PIO Device section, then
+one MMU enable. H700 AArch64, AArch32 ARM and AArch32 Thumb-2 object builds
+also compile this hook. Neither proves a full LK target link or a hardware boot.
+See `platform/h700/arch/h700_pio_mmu_mapping.c` and
+`scripts/test-h700-pio-mmu-mapping.sh`.
 
 ## RG34XX PI12 power LED startup
 
@@ -162,9 +197,10 @@ overlay in a disposable worktree and proves that:
 6. `target/rg34xx_h700/rules.mk` links its target lifecycle object and the
    source defines exactly one `target_early_init()` and `target_init()`.
 
-The source/build-graph assertions do not execute the full LK target link or
-prove the object set fits an approved RG34XX memory map. The fake-PIO host test
-checks register ordering and bit preservation, not physical LED polarity or
+The source/build-graph assertions and MMU/PIO fake-register tests do not
+execute the full LK target link or prove the object set fits an approved
+RG34XX memory map. They verify software call order and descriptor values,
+not the BL33 handoff state, physical LED polarity, APB1/PIO gate state or
 boot-time behavior on the handheld.
 
 The sentinel values are parser fixtures only; they are never written to the

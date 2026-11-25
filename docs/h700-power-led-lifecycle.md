@@ -40,10 +40,13 @@ H700 PIO 字段：
 
 ## 启动时序
 
-1. LK 的 `platform_init_mmu_mappings()` 把 `0x03000000–0x03100000` 1 MiB 外设窗口以 VA=PA 映射为 Device memory，覆盖 PIO@0x0300b000。
-2. `target_early_init()` 调用 `h700_rg34xx_power_led_early_init()`，早于 LK heap/thread 启动。
-3. 先把 PI12 输出数据锁存置高，再把 PI12 mux 切为 GPIO output，最后读回验证，避免 pinmux 切换期间误拉低。
-4. 若早期访问失败，`target_init()` 在 `platform_init()` 后重试；Linkslot C ABI 首次请求时也会在必要时尝试初始化。
+1. GammaOS LK 的 `arch_early_init()` 在 `target_early_init()` 之前调用 `platform_init_mmu_mappings()`。
+2. H700 hook 调用 `arm_mmu_init()` 初始化 LK 4096-entry AArch32 section table / TTBR。
+3. 将现场确认的 DRAM `[0x40000000, 0x80000000)` 以 normal write-back / read-write 属性建立 1024 个 1 MiB identity sections。
+4. 将 `[0x03000000, 0x03100000)` 以 shared Device / read-write / XN 属性映射，覆盖 CCU 与 PIO@0x0300b000。
+5. 调用 `arch_enable_mmu()`；之后 LK 完成 cache setup，才进入 `target_early_init()`。
+6. `target_early_init()` 调用 `h700_rg34xx_power_led_early_init()`。GPIO data latch 先置高，再切 PI12 mux 为 GPIO output，最后读回验证。
+7. 若早期访问失败，`target_init()` 在 `platform_init()` 后重试；Linkslot C ABI 首次请求时也会在必要时尝试初始化。
 
 PIO MMU 映射只更新已有 ARM section translation table 的一个外设条目，不分配 DRAM，不改变 LK heap/stack/BSS/BL31 保留区，也不写 CCU/APB1、PMIC 或 CPU PLL。v2 Linux 运行态报告中 PIO/APB1 时钟为 100 MHz；LED driver 不改变这个时钟树。
 
@@ -65,7 +68,7 @@ PIO MMU 映射只更新已有 ARM section translation table 的一个外设条�
 - 游戏开始/结束切换和重复请求幂等；
 - 无效 ABI、未初始化、pinmux 丢失和读回失败。
 
-Rust no_std state tests 覆盖初始前端态、开始/退出游戏各一次请求，以及 600 次重复状态采样不会重复发出硬件请求。H700 AArch32/AArch64 compile check [#45524236936](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45524236936) 已通过，包括 AArch64、AArch32 ARM 和 Thumb-2 对象编译及 C fake-PIO host test；Linkslot runtime slices [#45524236833](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45524236833) 已通过 no_std tests 与完整 Frontend overlay 编译。
+Rust no_std state tests 覆盖初始前端态、开始/退出游戏各一次请求，以及 600 次重复状态采样不会重复发出硬件请求。H700 AArch32/AArch64 compile check [#45526769732](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45526769732) 已通过，包括 AArch64、AArch32 ARM、Thumb-2 对象编译和 MMU/PIO fake-register tests；Linkslot runtime slices [#45524236833](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45524236833) 已通过 no_std tests 与完整 Frontend overlay 编译。
 
 仍需完成：
 - 后续完整 LK target link / 固件构建（当前仍受独立内存批准 gate 限制）；

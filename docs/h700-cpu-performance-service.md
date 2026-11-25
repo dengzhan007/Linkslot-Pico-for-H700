@@ -301,3 +301,56 @@ The second read-only report is archived at [reports/rg34xx-inventory-20261125-cp
 - CPU0–CPU3 remain in one shared cpufreq policy; CPU supply is AXP2202 DCDC1. Thermal AVCC remains uncalibrated. Raw SID `0x6c00` still does not authorize a speed-bin mask or voltage suffix.
 
 The report is read-only and does not authorize OPP expansion or any PLL/CCU/PMIC write. Keep the service `POLICY_ONLY`, `hardware_applied=0`; continue to block Auto/Boost and CPU voltage/frequency writes.
+
+### 8.3 cpufreq cached-frequency reconciliation and thermal cooling diagnostics (2026-11-25)
+
+The v2 collector's ordered pair `scaling_cur_freq` then `cpuinfo_cur_freq` is
+not sufficient to conclude that the clock driver rejected a request. The pinned
+candidate `qiaoweibiao/T507_Kernel@98fcc7d3f112e51b0edfb71536da89cb2115106f`
+shows why:
+
+- `cpufreq-dt` has `.target_index = set_target` and `.get = cpufreq_generic_get`.
+  The target callback calls `dev_pm_opp_set_rate()`; the getter reads
+  `clk_get_rate(policy->clk)`.
+- In the 4.9 cpufreq core, a target-based driver without `setpolicy` exposes
+  `scaling_cur_freq` from cached `policy->cur`.
+- `cpuinfo_cur_freq` calls `__cpufreq_get()`. If that driver getter returns a
+  non-zero rate different from cached `policy->cur`, the core calls
+  `cpufreq_out_of_sync()`, emits a synthetic transition update, assigns the
+  returned rate to `policy->cur`, and schedules policy work.
+
+Therefore a read sequence that first sees `scaling_cur_freq=480/1008 MHz` and
+then reads `cpuinfo_cur_freq=1008/1104 MHz` can itself reconcile the cached
+policy value. The v2 output does not capture `scaling_cur_freq` again after the
+getter, so the claimed 1.1-second cached-value mismatch is **not evidence of a
+persistent hardware clock failure**. The driver candidate is a pinned public
+source reference, not a proven match to the shipping 4.9.170 binary.
+
+The same capture reports CPU thermal zone0 at 46.637°C, with passive trips at
+60°C and 70°C and critical at 115°C, policy `power_allocator`. In the pinned
+candidate power_allocator implementation, the governor clears passive mode and
+allows maximum power when temperature is below its switch-on passive trip. That
+makes active CPU-zone power_allocator throttling less likely at this particular
+sample, but the report did not include thermal cooling-device states/bindings,
+and exact source correspondence is unproven. Other cooling devices, policy
+limits or non-thermal drivers are not ruled out.
+
+The collector has therefore been extended again (commit
+`b421b077e5f27c95bf61679762b70a86d66131cb`) to capture, read-only:
+
+- resolved path identities of `policy0` and `cpu0/cpufreq`, plus transition
+  counters where exported;
+- thermal `cooling_deviceN` `type/cur_state/max_state` and each thermal
+  zone's `cdevN` binding;
+- eight 150 ms samples that read cached scaling frequency, invoke the
+  `cpuinfo_cur_freq` getter, read cached scaling frequency again, repeat the
+  getter sequence, then capture CPUX clock tree, DCDC1 voltage and uptime.
+
+The new host shell/Python regression and Windows PowerShell workflow are
+wired in. H700 compile/regression run
+[#45526953772](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45526953772)
+and boot audit tools
+[#45526953774](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45526953774)
+passed. A new on-device capture is still needed to resolve cached-frequency
+reconciliation and the active cooling state. Keep the service POLICY_ONLY,
+`hardware_applied=0`; no governor/limit/PMIC/PLL/OPP writes are approved.

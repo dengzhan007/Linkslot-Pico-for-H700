@@ -2,7 +2,7 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-25（已分析 CPUX inventory v2；新增 RG34XX PI12 电源灯早期驱动与 Linkslot 游戏生命周期联动，CI/实机验证待完成）  
+**最后核对时间：** 2026-11-25（修正 LK AArch32 完整 MMU 初始化契约；扩展 CPUFreq getter/cooling 只读诊断；host 与三架构编译回归通过，实机 v3 采集待完成）  
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **工作分支：** `porting/linkslot-1.0.45-feasibility`  
 **最近一次成功 CI 验证的代码基线：** `0e33da4a50b28583aac8c7e815dac7857b6ef43a`（完整综合 workflow #45428664653，71/71 steps；早于本轮只读 inventory 脚本增强）。**本轮 collector/CI 配置提交：** `96afe6d2fff811eab4edfa87b3f58606bdaf645c`，含 read-only clock-summary 摘录、静态安全测试和 workflow path/test 接入；随后又有 DVFS 专项文档、路线图和状态入口同步提交。对应 push workflow 尚未取得可核验结果。  
@@ -31,6 +31,12 @@
 **本轮 CPUX inventory v2：** 报告已上传至 [reports/rg34xx-inventory-20261125-cpux-v2](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261125-cpux-v2)，采集时间 2026-11-25 00:41:21 UTC。parser-v2 已解析 `/opp_l_table` 的 table-level SID `speed` 引用及 `opp-microvolt-a1/b0/b1/c0/c1/c2` 命名电压；启动时 600/792/1032/1296/1344 MHz 五档因电压属性未命中被内核丢弃。八组 150 ms 样本中 `scaling_cur_freq` 连续至少 1.1 s 显示 480 MHz，而 `cpuinfo_cur_freq` / `pll_cpu` 为 1008/1104 MHz，DCDC1 为 950/1000 mV；仍需区分 policy/IPA 限制与 clock-driver 拒绝。SID raw `0x6c00` 未获 OPP mask 授权，AVCC 热校准仍未通过。
 
 **本轮 RG34XX 电源灯实现：** 原厂 RG34XX（非 SP）设备树与 MustardOS RG34XX-H 配置均映射 `work_led=PI12`、`low_pwr_led=PI11`；仅控制 PI12。新增 `platform/h700/power/h700_rg34xx_power_led.c`，上电默认点亮；`target_early_init()` 早期点亮，`target_init()` 失败重试。新增 PIO 1 MiB Device MMU window mapping。Linkslot 1.0.45 `Session` 在 Playing/Polaroids 状态熄灭、退出后点亮；no_std 状态机仅在状态变化时调用 C ABI。暂不增加前端开关。提交：driver `af1922d0cecec278fc7bf2d81d63e4e621ab8685`、Session state `3cbc92669aac23b3e702c9518573d37adcd2fa54`、PIO mapping `c3a233e6f20defaf2ab0192f0de54f5c70921464`。Host tests 与 cross-compile 已通过：H700 AArch32/AArch64 compile check [#45524236936](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45524236936)（含 AArch64、AArch32 ARM、AArch32 Thumb-2 三组对象编译与 LED C host regression）；Linkslot runtime slices [#45524236833](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45524236833)（含 no_std 状态机测试和 Linkslot 1.0.45 Frontend overlay 编译）成功。实机极性、启动时机仍待验证；完整 LK target link/镜像仍受独立内存批准 gate 约束。
+
+**本轮 LK MMU 顺序修正（`ca1d1ce33b588bff85dc4ab9c949971ee2736ff4`）：** 对照 pinned GammaOS LK `arch/arm/arch.c` / `platform/mt6580/platform.c` 发现 `platform_init_mmu_mappings()` 在 `target_early_init()` 前必须建立 section table/TTBR、映射 DRAM 和设备窗口、最后启用 MMU；此前仅添加 PIO descriptor 的实现不完整。现在按 RG34XX live DRAM `[0x40000000,0x80000000)` 建 1024 个 1 MiB normal write-back RW identity sections，再将 `[0x03000000,0x03100000)` 设为 Device RW/XN，最后 `arch_enable_mmu()`。`DRAM_PHY_ADDR=0x40000000` 只供 LK 初始 section map 使用，不是 `H700_MEMBASE/H700_MEMSIZE` 或任何分配授权。fake-MMU 回归通过。
+
+**本轮 CPUFreq 诊断修正（`b421b077e5f27c95bf61679762b70a86d66131cb`）：** pinned Linux 4.9 候选 `cpufreq.c` 显示 `scaling_cur_freq` 对 `cpufreq-dt` target driver 返回缓存 `policy->cur`；读取 `cpuinfo_cur_freq` 会调用 driver getter，若读数不同，`__cpufreq_get()` 会通过 `cpufreq_out_of_sync()` 更新缓存并排队 policy update。旧 v2 先读 scaling 后读 cpuinfo，因此 480 vs 1008/1104MHz 不能证明持续硬件故障。v2 CPU zone0 46.637°C 且 first passive trip 60°C；固定 power_allocator 候选在低于开关温度时允许最大功率，但其他 cdev/策略及 exact shipping binary 仍未知。新只读 collector 增加 cpufreq path identity、getter 前后 scaling reread、thermal cooling_device cur/max state 与 zone binding、DCDC1/CPUX eight-sample capture。
+
+**自动化验证：** MMU/PIO 修正后的 H700 AArch64、AArch32 ARM、AArch32 Thumb-2 compile + host regressions [#45526769732](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45526769732) 成功；最新 collector 诊断测试 H700 compile/regression [#45526953772](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45526953772) 和 Linux/Windows boot-audit tools [#45526953774](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45526953774) 成功。完整 Linkslot/mGBA/LK feasibility [#45526769421](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45526769421) 截至本次检查仍在构建 mGBA/newlib/BL33 验证，不可标记为整体通过。
 
 ## 1. 项目目标与固定约束
 

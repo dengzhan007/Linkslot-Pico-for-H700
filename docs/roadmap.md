@@ -120,7 +120,7 @@
 
 - [x] 依据 RG34XX（非 SP）原厂启动设备树和 MustardOS 配置确认 `work_led=PI12`、`low_pwr_led=PI11`；当前只操作 PI12，不改变低电量灯。
 - [x] 新增 PI12 GPIO C service：先置高输出锁存，再切换 GPIO output；带 pinmux/readback 检查，更新时 read-modify-write 保留 PI11 和同端口其他位。
-- [x] 在 LK `platform_init_mmu_mappings()` 阶段把 `0x03000000–0x03100000` PIO/CCU 窗口映射为 Device memory，再由 `target_early_init()` 点亮 PI12；`target_init()` 在早期未就绪时重试。映射不分配 DRAM。
+- [x] 按 pinned GammaOS LK AArch32 真实顺序实现早期 MMU：`arm_mmu_init()`，映射 RG34XX 1 GiB DRAM 为 normal write-back，映射 `0x03000000–0x03100000` PIO/CCU 为 Device，再 `arch_enable_mmu()`；之后才进入 `target_early_init()` 点亮 PI12。该映射只设页表属性，不分配或批准 DRAM 使用。
 - [x] 将 Linkslot 1.0.45 `Session` 游戏状态接入 PI12：`Playing/Polaroids` 熄灯，其余阶段亮灯；状态机抑制逐帧重复 GPIO 访问。默认启用，暂不增加设置项。
 - [x] 加入 fake PIO host tests、Rust no_std 状态机 tests、AArch32/AArch64 对象编译和 LK source guard 接入；H700 AArch32/AArch64 compile check [#45524236936](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45524236936)、Linkslot runtime slices [#45524236833](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45524236833) 均通过。
 - [ ] RG34XX 实机验证冷启动时灯亮时间是否足以作为松开电源键指示；验证进入游戏熄灭、退出游戏点亮，并确认 PI11 低电量灯不受影响。
@@ -133,6 +133,11 @@
 - [ ] 通过真实 CMD17 只读采集卡片 GPT、FAT/exFAT 卷及 ROM/BIOS 文件；验证块设备和分区 extent 与现场 inventory 一致。
 - [ ] 实现有界写入、flush、原子替换和断电一致性后，才接入 save/state/battery 写路径。
 - [ ] 逐项增加显示/framebuffer/backlight、GPIO input、timer、PCM audio、PMIC、电源关机、Wi-Fi/USB 调试服务；每项均有独立诊断和实机验收。
+
+- [x] 审查 Linux 4.9 cpufreq core `show_scaling_cur_freq()` / `show_cpuinfo_cur_freq()` / `__cpufreq_get()`：target-based `cpufreq-dt` 的 `scaling_cur_freq` 为缓存 `policy->cur`，而 `cpuinfo_cur_freq` 调用硬件/clock getter；若不同，getter 路径会触发 `cpufreq_out_of_sync()` 并更新缓存。因此 v2 的“480 MHz cached value → 1008/1104 MHz cpuinfo”不能证明 PLL/driver 持续故障。新 collector 在 getter 前后复读缓存并收集 cooling-device 状态。
+- [x] 复核 v2 CPU thermal zone0 46.637°C / first passive trip 60°C：固定 `power_allocator` 候选源码在低于 switch-on trip 时返回 maximum power；本次样本不支持 CPU-zone PA 已主动降频的判断，但 exact binary、其它 thermal cdev 和 policy constraints 仍待实测。
+- [x] 补齐 LK `platform_init_mmu_mappings()` 完整调用契约与 fake-MMU 回归；1 GiB DRAM + PIO Device descriptor + MMU enable 顺序已由 H700 AArch32/AArch64/Thumb2 编译和 host regression 验证。
+- [ ] 重新运行 collector v3，验证 cpuinfo getter 前后的 cached frequency 是否被修正，并采集真实 thermal cooling-device state/bindings。
 
 ### C1. CPU performance modes / H700 DVFS (architecture first)
 

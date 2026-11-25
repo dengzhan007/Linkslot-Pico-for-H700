@@ -141,6 +141,43 @@ The follow-up capture at **2026-11-25 00:41:21 UTC** is archived in [reports/rg3
 The capture remains read-only and does not authorize any DVFS, PMIC or clock register write. The original raw FDT binary stays on the acquisition PC; only parser-v2 JSON was uploaded.
 
 
+### 1.8 The old 480 MHz cached-frequency observation requires reinterpretation
+
+A follow-up source review of the pinned public candidate
+[qiaoweibiao/T507_Kernel@98fcc7d3f112e51b0edfb71536da89cb2115106f](https://github.com/qiaoweibiao/T507_Kernel/tree/98fcc7d3f112e51b0edfb71536da89cb2115106f)
+shows that Linux 4.9's `cpuinfo_cur_freq` read can alter the software cache
+that `scaling_cur_freq` reports:
+
+- The candidate `cpufreq-dt` driver uses `.target_index=set_target` and
+  `.get=cpufreq_generic_get`; set_target calls `dev_pm_opp_set_rate()`, while
+  the getter returns `clk_get_rate(policy->clk)`.
+- For this target-based driver, cpufreq core's `show_scaling_cur_freq()`
+  returns cached `policy->cur`; it does not call the getter.
+- `show_cpuinfo_cur_freq()` calls `__cpufreq_get()`. When the hardware/clock
+  getter returns a non-zero value different from `policy->cur`, that core
+  path calls `cpufreq_out_of_sync()`, updates `policy->cur` from the getter
+  result and schedules a policy update.
+
+Thus the v2 ordered read `scaling_cur_freq` → `cpuinfo_cur_freq` may read a
+stale cached value first and then repair that cache with the getter. Since the
+v2 collector did not re-read `scaling_cur_freq` after the getter, the
+reported 480 MHz cached reading does **not** establish a persistent PLL or
+clock-provider fault. This is source-level behavior in a candidate 4.9.170
+tree; the exact shipping kernel binary has not yet been matched to it.
+
+The same v2 capture gives CPU thermal zone0 temperature 46.637°C and a first
+passive trip at 60°C. The pinned candidate `power_allocator_throttle()`
+returns to non-passive / maximum-power mode below its switch-on trip. This
+reduces the likelihood that CPU-zone power_allocator was throttling at that
+sample, but no cooling-device state or zone binding was captured, and the
+candidate source is not proven to be the target binary. No conclusion is made
+about other cooling devices or limits.
+
+The latest read-only collector update captures cpufreq path identity, the
+`cpuinfo_cur_freq` getter's before/after effect on cached `scaling_cur_freq`,
+thermal cooling-device `cur_state/max_state` and zone-to-device bindings,
+plus DCDC1/CPUX clock samples. A fresh device capture is required.
+
 ## 2. Memory ownership observations relevant to the broader port
 
 The capture reports one 1 GiB memory range [0x40000000, 0x80000000), 46 reserved ranges, and the following noteworthy regions:
@@ -174,7 +211,7 @@ The live FDT has no reserved-memory node; CMA debugfs is absent on this Linux 4.
 ## 4. Next actions
 
 1. Identify the exact running Linux 4.9.170 cpufreq source/build and reconcile its SID mask / voltage-property suffix with the now-complete parser-v2 live FDT and runtime frequency list. Do not borrow any candidate mapping as authorization.
-2. Explain the v2 persistent `scaling_cur_freq=480 MHz` versus `cpuinfo_cur_freq` / `pll_cpu=1008/1104 MHz` interval. Distinguish policy/governor/IPA constraints from a clock-driver refusal without writing hardware registers.
+2. Re-run the updated read-only collector. Check whether reading `cpuinfo_cur_freq` reconciles cached `scaling_cur_freq`, resolve `policy0`/per-CPU cpufreq path identities, and inspect active thermal cooling-device state/bindings before considering any policy explanation.
 3. Keep the shared CPUX PLL write path disabled until BL31→BL33 CPU1–CPU3 state, single-core handoff, pll_periph0 fallback behavior and timer continuity are proven.
 4. Resolve why the thermal driver rejects AVCC calibration or establish a separately verified sensor path before implementing closed-loop thermal policy.
 5. Keep the runtime C service POLICY_ONLY, hardware_applied=0, and the Linkslot CPU Performance row display-only/unavailable.
@@ -194,3 +231,14 @@ The live FDT has no reserved-memory node; CMA debugfs is absent on this Linux 4.
 - [Parser-v2 live FDT](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261125-cpux-v2/live-fdt.json)
 - [Synchronized CPU/regulator/clock sampler](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261125-cpux-v2/cpu-power-runtime.txt)
 - [SID decode](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261125-cpux-v2/sid-cell-report.json)
+
+### 5.2 cpufreq getter and cooling-device follow-up
+
+The updated collector and safety tests are in commit
+[`b421b077e5f27c95bf61679762b70a86d66131cb`](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/b421b077e5f27c95bf61679762b70a86d66131cb).
+The H700 AArch32/AArch64 compile/regression workflow
+[#45526953772](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45526953772)
+and boot audit tools workflow
+[#45526953774](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45526953774)
+passed. Both capture additions are read-only; they do not write cpufreq,
+thermal, regulator, clock or NVMEM sysfs controls.
