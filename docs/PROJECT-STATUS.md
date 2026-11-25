@@ -2,10 +2,10 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-25（parser-v3 OPP 属性存在性解析与候选分析工具已加入；Linux/Windows host tests 和 AArch32/AArch64/Thumb2 编译通过；设备 parser-v3 采集待完成）  
+**最后核对时间：** 2026-11-25（OPP analyzer 已覆盖 u32 全位候选、多版本 OPP 属性及电压 triplet 结构检查；Linux/Windows host tests、H700 host regression 与 AArch64/AArch32 ARM/Thumb-2 编译通过；设备 parser-v3 采集待完成）  
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **工作分支：** `porting/linkslot-1.0.45-feasibility`  
-**最近一次成功 CI 验证的代码基线：** `0e33da4a50b28583aac8c7e815dac7857b6ef43a`（完整综合 workflow #45428664653，71/71 steps；早于本轮只读 inventory 脚本增强）。**本轮 collector/CI 配置提交：** `96afe6d2fff811eab4edfa87b3f58606bdaf645c`，含 read-only clock-summary 摘录、静态安全测试和 workflow path/test 接入；随后又有 DVFS 专项文档、路线图和状态入口同步提交。对应 push workflow 尚未取得可核验结果。  
+**最新代码 HEAD：** `da41806e47dbd2e0d57e23e9ff6ff405a5514e29`。H700 AArch32/AArch64 compile + host regression [#45537478198](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45537478198) 与 H700 boot audit tools [#45537478202](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45537478202) 均成功，覆盖 OPP analyzer、storage/CPU/LED/MMU/PIO regressions、AArch64、AArch32 ARM-state、AArch32 Thumb-2、Linux/Windows audit tests 与 PowerShell wrapper syntax。最近一次完整 Linkslot/LK/mGBA 综合 host/cross-build 仍为 [#45532364153](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45532364153)；host/cross-build 不等于完整 LK target link 或实机启动。  
 **本轮 CPU runtime owner 最新代码提交：** `072793f8b4bfce00683aa3d303eee62613fe41ab`（7 个连续提交）  
 **本轮 Rust runtime bridge 最新代码提交：** `0d381d7ba66592b5ab64ba67e0b228039bb9eec0`  
 **本轮 H700 build graph / guard 最新代码提交：** `6e847c0121431c681062053c52f28824715e78a6`（platform OBJS）与 `ef07a0e06c1d55e2d2f49175d4e976e8337e1ee4`（project guard）。  
@@ -45,7 +45,7 @@
 
 **本轮 OPP 候选分析工具：** 新增 `tools/analyze_h700_opp_candidates.py` 与 `tools/test_analyze_h700_opp_candidates.py`，按 Linux 4.9 OPP core 规则枚举无 `supported_hw` 与所有一单元 mask，准确处理 `opp-supported-hw` 属性缺失/空属性、命名电压属性 fallback，并与实际 `scaling_available_frequencies` 对比。工具要求 parser-v3 presence 字段；输出仅是 source/table fingerprint，不解码 SID、不授权 OPP，也不写硬件。
 
-**本轮 OPP analyzer 自动化验证：** 初始 Actions 暴露 regex 多转义和测试块换行错误，已修复。当前提交 `60d82ee21832f7f701c341eb4de72fae73e5a797` 的 H700 host regression / AArch64 / AArch32 ARM / AArch32 Thumb-2 全部通过 [#45531974987](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45531974987)；Linux + Windows boot-audit tests、Windows inventory wrapper syntax 全部通过 [#45531974867](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45531974867)。
+**本轮 OPP analyzer 自动化验证：** `da41806e47dbd2e0d57e23e9ff6ff405a5514e29` 通过 [H700 AArch32/AArch64 compile + host regression #45537478198](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45537478198) 和 [H700 boot audit tools #45537478202](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45537478202)。新测试覆盖完整 u32 位域、多版本 OPP cell、exact witness 约束和电压 min/target/max 顺序。前一中间提交 `300ae422` 的一项 test fixture 未禁止低位候选，已修正并在 `da41806` 两平台重跑通过。
 
 **下一次 RG34XX 设备采集：** 在保留原始 `live-fdt.dtb` 的 Windows 采集机运行 `.\scripts\run-rg34xx-inventory.ps1 -OutputDirectory ".\build\rg34xx-inventory-20261125-cpux-v3"`，随后上传到 reports 分支 `reports/rg34xx-inventory-20261125-cpux-v3/`。v3 同时带回 OPP property presence、cpufreq getter 前后 cached frequency、cooling-device state/bindings；不需要改 governor、min/max、PMIC 或 CCU。
 

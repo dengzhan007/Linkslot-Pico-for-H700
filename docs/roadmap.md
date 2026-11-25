@@ -141,7 +141,7 @@
 - [ ] 重新运行 collector v3，验证 cpuinfo getter 前后的 cached frequency 是否被修正，并采集真实 thermal cooling-device state/bindings。 Linkslot/mGBA/LK feasibility #45526769421 已通过；仍不是完整 LK target link 或设备验证。
 
 - [x] 新增 `tools/analyze_h700_opp_candidates.py`：基于 parser-v3 JSON，按 Linux 4.9 OPP core 模拟 no-mask / one-cell table-level `supported_hw`，区分 absent/empty 属性、多版本 OPP 属性、命名电压 suffix 与 base fallback，并与 runtime available frequency list 比对。工具不模拟 regulator selector table，不解码 SID，也不授权真实 OPP。
-- [x] OPP candidate analyzer 初版 Linux/Windows host tests、H700 storage regressions 与 AArch64/AArch32 ARM/Thumb-2 编译通过：#45531974867、#45531974987。后续已扩展完整 u32 mask 假设、多版本属性与 voltage-triplet 回归；当前 HEAD 的新验证以本轮 Actions 结果为准。
+- [x] OPP candidate analyzer 的完整 u32 mask 假设、多版本 OPP cells、set-cover exact witness 与 voltage-triplet 回归通过 H700 Linux/Windows、storage-host regression 和 AArch64/AArch32 ARM/Thumb-2 编译：#45537478202、#45537478198；验证 HEAD `da41806e47dbd2e0d57e23e9ff6ff405a5514e29`。
 - [ ] 用 RG34XX parser-v3 真实 live FDT 报告运行 OPP candidate analyzer，确认所有 `-ab` 节点的 `supported_hw_present`，并核对同一采集的 `scaling_available_frequencies` 与同步 cpufreq getter 样本后，再判断条件式 `b1` fingerprint。
 
 ### C1. CPU performance modes / H700 DVFS (architecture first)
