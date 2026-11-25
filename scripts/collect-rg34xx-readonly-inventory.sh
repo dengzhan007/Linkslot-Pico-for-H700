@@ -223,7 +223,7 @@ fi
         while IFS= read -r line; do
             case "$line" in
                 *pll_video*|*pll-video*|*tcon*|*de_clk*|*de@*|*disp*|*lcd*)
-                    printf '%s\\n' "$line"
+                    printf '%s\n' "$line"
                     ;;
             esac
         done < "$DISPLAY_CLK_SUMMARY"

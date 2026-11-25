@@ -91,7 +91,7 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertIn('== display-related clock summary (read-only; indentation preserved) ==', self.source)
         self.assertIn('DISPLAY_CLK_SUMMARY="/sys/kernel/debug/clk/clk_summary"', self.source)
         self.assertIn('done < "$DISPLAY_CLK_SUMMARY"', self.source)
-        self.assertNotRegex(self.source, r'>\\s*/sys/(?:class/disp|class/graphics|kernel/debug/clk)/')
+        self.assertNotRegex(self.source, r'>\s*/sys/(?:class/disp|class/graphics|kernel/debug/clk)/')
         self.assertNotIn('of="/sys/class/disp/', self.source)
         self.assertNotIn('of="/sys/class/graphics/', self.source)
 
