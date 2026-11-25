@@ -58,6 +58,23 @@ DEV 的首条 changelog 为 1.1.0，核心增量是 schema 2 / `kind=platform` L
 
 ## 6. 对现有 H700 代码和 CI 的行动
 
+对当前持久化集成代码做了进一步只读检查，发现一个具体的功能性差异：`integration/linkslot/h700-frontend-core/slot-model/src/core.rs` 仍是 1.0.45 风格的 `CoreSpec`，只有 `frameskip` / `link`，没有 1.0.49 新基线的 `netpacket` 字段；其中 armGBA 注释仍写单人游玩。1.0.49 的上游核心表已经把 gpSP 和 armGBA 的 `netpacket` 声明为 true、mGBA 声明为 false。这与 1.0.46–1.0.47 的 armGBA netpacket 联机修复相对应。**因此 H700 no_std 核心模型目前不只是版本落后，还会丢失 armGBA 联机能力元数据**；迁移时要把字段、所有 CoreSpec 常量和测试一并同步，不能只复制上游一个文件而遗漏依赖字段/测试。
+
+持久化 `machine.rs` 目前仍只有 GBA/GB/GBC/FC/SFC/MD 六个机种。对第一期 GB/GBC/GBA 切片这是有意的范围限制，暂不引入 DEV 的 Arcade/NeoGeo；未来添加机种时必须遵守上游平台枚举与历史 `slot.state` 槽序只能追加的约束。
+
+当前 H700 patcher `scripts/apply-linkslot-h700-frontend-core.py` 与 `scripts/apply-linkslot-render-core.py` 仍硬编码 1.0.45 archive pin `3b06d96adadd0375f071555ecb3cc20c3a5b53db` 和 1.0.45 workspace version。workflow `.github/workflows/h700-linkslot-runtime.yml` 会 checkout `upstream/linkslot` 的最新分支头；现在该头已是包含 main 1.0.49 根目录快照的归档 commit `241e7c1974926fa22552b200852914ceaccbfd42`。因此若现在直接运行该 workflow，旧 patcher 会在严格 SHA/version gate 拒绝新快照。这是根据现有脚本与 ref 的确定性不匹配判断，**不是已观察到的一次失败 Actions 运行**。必须先有计划地升级 pin，再验证 patch anchors。
+
+下一步不能只把 pin 换成归档 HEAD；应：
+
+1. 建立 main 1.0.49 的临时隔离源码树，核对 Cargo features、crate manifests 和编译参数。
+2. 对 frontend/core、renderer 和三核心选择器 patcher 分别跑 dry-run，检查每个锚点的唯一性和上下文语义。
+3. 更新 H700 持久化 `slot-model` 数据子集，保留 no_std/alloc；同步 `CoreSpec::netpacket` 字段、gpSP/armGBA/mGBA 的元数据及其回归测试；机种表先保持六平台。
+4. 在新快照上重新运行 slot-retro VFS v3、21 个 mGBA 静态 API binding、newlib whole-archive 和 AArch32 ELF `--no-undefined`。
+5. 保持 AArch32 ARM、Thumb-2 与 AArch64 的已有编译矩阵；运行完整 Linkslot/LK feasibility workflow。旧 1.0.45 通过记录不能移作 1.0.49 通过证明。
+6. DEV 1.1.0 只补充独立审查/兼容测试，不更改首期 ROM 机种范围。
+
+
+
 当前 H700 patcher `scripts/apply-linkslot-h700-frontend-core.py` 与 `scripts/apply-linkslot-render-core.py` 仍硬编码 1.0.45 archive pin `3b06d96adadd0375f071555ecb3cc20c3a5b53db` 和 1.0.45 workspace version。当前 H700 Linkslot runtime slices 最近通过记录也仍然是以 1.0.45 为输入。
 
 下一步不能只把 pin 换成归档 HEAD；应：
