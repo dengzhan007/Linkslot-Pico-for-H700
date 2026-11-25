@@ -25,12 +25,21 @@
 | LCD | 3.4 英寸 IPS，720×480 | 横向面板；设备 profile 不旋转 |
 | Kernel panel driver name | `rg34xx_v1` | 不是 `rg34xxsp_v1` |
 | LCD type selection | BaseOS 固件分析记录 PE6 strap 高电平为 `old`，低电平为 `boe` | 需在本机只读确认 strap/实际面板，不把猜测写入驱动 |
+| LCD refresh timing reference | 60.006 Hz / 119.947 Hz candidate; 54 MHz DCLK, `lcd_vt=536`, `lcd_ht=1679/840` | Based on [RG34XX boot-package mods](https://github.com/TheGammaSqueeze/rgxx_boot_package_mods/tree/rg34xx); external FDT names panel `fog_fj035fhd05_v1`, while this project's live FDT uses `rg34xx_v1`; not yet approved as the same panel revision or applied in bare metal |
 | Storage | TF/microSD 启动；无 eMMC | 项目不设计 eMMC 安装或自动回退 |
 | Wi-Fi / Bluetooth | 2.4/5 GHz Wi-Fi，Bluetooth 4.2 | BaseOS 使用 RTL8821CS SDIO WLAN 模块和 RTL 蓝牙低功耗支持；固件/供电顺序需按本机验证 |
 | USB | H700 USB 2.0 OTG/Host 能力 | SoC 能力不等于本机连接器的具体角色/PHY 路由，需实机探测 |
 | PMIC / Power | BaseOS 提供 AXP2202 关机路径及电源状态集成 | 本 profile 暂不把 PMIC 寄存器访问当作已验证的裸机实现；需读取 RG34XX live DT/sysfs/内核日志确认实际绑定器件 |
 | Work/power LED | KNULLI RG34XX（非 SP）启动 DTS 将 `work_led` 映射到 PI12、`low_pwr_led` 映射到 PI11；当前实现假定高电平点亮 | PI12/PI11 的 PIO bank/pin 映射有精确机型 DTS 证据；高电平极性由 RG35XX-2024 同族 DTS 旁证，仍待 RG34XX 实机冷启动确认。PI11 不修改，见 [电源灯生命周期](h700-power-led-lifecycle.md) |
 | Audio | BaseOS 有 RG34XX 专属 speaker amp kernel profile | 可用作 codec/功放行为参考；Linux 内核模块不能直接作为裸机驱动 |
+
+
+## 2.1 LCD refresh reference and validation boundary
+
+The RG34XX-specific [`rgxx_boot_package_mods` branch](https://github.com/TheGammaSqueeze/rgxx_boot_package_mods/tree/rg34xx) publishes 60.006 Hz and 119.947 Hz boot-package variants. A direct structural comparison of its two 137,728-byte `sunxi.fex` DTBs found the same node/property layout and one differing property at `/soc@03000000/lcd0@01c0c000`: `lcd_ht=1679` for 60 Hz versus `lcd_ht=840` for 120 Hz. Both declare DCLK 54 MHz, `lcd_vt=536`, 720×480 active area, and the same H/V blanking values.
+
+The external DTB says `lcd_driver_name="fog_fj035fhd05_v1"`; the project's existing live-FDT evidence reports `rg34xx_v1`. Until the physical panel/revision mapping is confirmed, these timings are a candidate reference only. The project does not flash or modify the external boot-package image and has no real TCON timing writer yet. See [H700 display refresh policy](h700-display-refresh-policy.md) for the policy API, exact values and pending hardware gates.
+
 
 ## 3.1 BaseOS 已验证固件输入指纹
 
