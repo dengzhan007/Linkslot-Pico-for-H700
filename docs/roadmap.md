@@ -350,3 +350,6 @@ The vendor U-Boot survey now resolves an additional identity nuance: RG34XX sele
 
 
 The [related RG34XX-H divider-mismatch report](https://community.muos.dev/t/rg34xx-h-incorrect-display-refresh-rate/1825) is retained as a caution, not a transferable profile: a different unit reported ~106.6 Hz from nominal ~60 Hz with a related fixed /6 TCON path, and a later DTS revision changed DCLK/HT to 54 MHz/1679. Another unit could not reproduce the symptom. The user's RG34XX non-SP is measured near 59.63 Hz with 26 MHz/820×536; resolve its exact final DCLK divider from its byte-matched kernel #19 before testing any 120-Hz candidate. Never apply the MustardOS timing to this device by analogy.
+
+
+The next display milestone is now a **read-only TCON DCLK / PLL readback**, before any attempt to enable 120 Hz. The related pinned sun50iw9 BSP has a generic HV divider=6, while pvaibhav's 60-Hz register word encodes divider=11; at the observed 288-MHz tcon_lcd clock these predict ~109.21 vs ~59.57 Hz. The first live action is to query 0x06511044 and 0x03001040 through /sys/class/sunxi_dump/dump only. Never write /sys/class/sunxi_dump/write; do not assume that the public BSP source is identical to the running kernel #19. See [the detailed live capture report](pvaibhav-slot-rg34xx-live-capture-2026-11-25.md).
