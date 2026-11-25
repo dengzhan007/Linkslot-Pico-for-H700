@@ -41,6 +41,18 @@
   (missing pinned `boot-package.bin` and build-time GPT prefix), resolves the `p6/p7` label
   drift against `rcS`/`fstab`, and documents a 12,288-byte freestanding AArch64 probe that was
   built and verified on the host only. No binaries, serial numbers or local paths.
+- `rg34xx-a64-probe-qualification.md` — fourth round: completes the SRAM usage audit against the
+  H616 map (A1 `0x20000`–`0x28000`, SRAM C `0x28000`–`0x58000`), showing the deployed 128 KiB
+  capsule does **not** fit in A1 (its content reaches `0x3C753`), that the BROM itself writes
+  SRAM C, that the first code to *choose* SRAM C is the dispatcher, and that BROM-time ownership
+  of SRAM C stays UNKNOWN even though it is demonstrably usable. Rebuilds the baseline probe with
+  a real assembler (`zig cc` 0.17.1 / clang 22.1.8 / lld) and compares all 144 instructions
+  against the hand-encoded original: 118 byte-identical, 26 differences classified, one of them a
+  value correction. Adds a framebuffer probe gated on eight independent facts from the live tree
+  that paints 23,877 pixels inside `0x7BF24800`–`0x7C076000` with zero out-of-range writes, plus
+  nine mutation tests proving every refusal writes nothing. States explicitly that painting is
+  not the same claim as *being visible*, so a dark panel on hardware must be reported as
+  inconclusive. No binaries, serial numbers or local paths.
 
 This branch is dedicated to field reports captured from the RG34XX handheld. Source code
 lives on `main`; report archives are kept here because `build/` is gitignored there.
