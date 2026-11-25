@@ -7,6 +7,9 @@
 - `rg34xx-inventory-20261122-204742/` — sanitized ION/TEE runtime subset (`main` @ `9b68302`).
 - `rg34xx-inventory-20261122-210352/` — sanitized Allwinner DRM-info SMC follow-up
   (`audit/rg34xx-ion-drm-followup-20261122` @ `00fe17d`); see `DRM-SMC-finding.md`.
+- `rg34xx-inventory-20261122-212049/` — sanitized ION config-symbol + kallsyms capture
+  (`audit/rg34xx-ion-drm-followup-20261122` @ `b84fff0`); see `ION-symbol-finding.md`.
+  Confirms `CONFIG_ION_SUNXI=y`, `CONFIG_ION_OF=y` and all three key functions in kallsyms.
 
 
 This branch is dedicated to field reports captured from the RG34XX handheld. Source code
