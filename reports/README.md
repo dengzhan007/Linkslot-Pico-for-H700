@@ -2,6 +2,20 @@
 
 ## Index
 
+### 2026-11-25 — RG34XX/H700 CPU clock, CPU rail, SID and memory reservations
+
+- `rg34xx-inventory-20261125-cpux/` — read-only inventory (`porting/linkslot-1.0.45-feasibility` @ `aad78d4`,
+  collector `ce88451c…`, device `sun50iw9p1` / kernel `4.9.170`). CPU clock parent is `pll_cpu` (div 1,
+  `cpu` rate always equals `pll_cpu`; `cpuapb` = 1/4); `pll_periph0` stays 600 MHz / 4 users and is not a
+  CPU parent. CPU rail is `axp2202-dcdc1` (DTS `cpu-supply` phandle `0x4f`, `cpu0 @1160mV`, measured
+  950/1000/1160 mV tracking OPP; `axp2202-cpusldo` 900 mV unused). Five OPPs (600/792/1032/1296/1344 MHz)
+  are dropped at boot as `not supported by regulators`. SID `speed@0x00` = `0x6c00` (matches no pinned
+  vendor literal) and `calib@0x14` = `181113ab191b16bb` → four 12-bit codes 2835/2841/2838/2842, yet
+  `sunxi-thermal: avcc is not calibrated` means calibration is **not** applied. `clk_summary` PLL rates and
+  cpufreq readings diverge across samples (480 MHz requested vs `pll_cpu` 1008/1104 MHz), so only the
+  parent relation is asserted. live FDT is 143,936 B / 573 nodes vs packaged DTB 139,822 B / 573 nodes —
+  property-level patching, not a DTBO overlay. Serial numbers redacted; binaries stay local.
+
 ### 2026-11-24 — RG34XX active BOL4 payload identity resolved
 
 - `rg34xx-boot-partition-deep-audit.md` addendum — decodes the active p4 +48 MiB BOL4 component using the verified extraction report and matches the 17,461,256-byte output SHA-256 to the primary Android image's gzip-decompressed kernel. Resolves the former BOL4-format / secondary-kernel identity unknown; does not change the firmware-pairing blocker or hardware NO-GO.

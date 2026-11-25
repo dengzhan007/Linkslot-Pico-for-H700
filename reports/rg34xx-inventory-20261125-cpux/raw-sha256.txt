@@ -1,0 +1,9 @@
+== SHA-256 of raw boot-chain captures ==
+bf886995745a0eb9b5030296f9f6163035e164b3a82183716e67ff876319289f  /tmp/rg34xx-inventory-20261125-074500/boot0-primary.bin
+5f143679e0d2c5293d22fee47a47ea6c17120c7a19e6007247c8b13710aa5ef9  /tmp/rg34xx-inventory-20261125-074500/boot0-secondary.bin
+e6c20e3a54c51b9336c798e3a4fa1ca6c45b28c6f70456e2db9c252aa4ba4604  /tmp/rg34xx-inventory-20261125-074500/toc1-package.bin
+8dd964ef0d525071626040d7cdce6c16925aaa6108d35558a0a5f032592b78a2  /tmp/rg34xx-inventory-20261125-074500/env-partition.bin
+cbb0bf254f366a864a34c562602674813c6432832626f5005bab998494c1f7cc  /tmp/rg34xx-inventory-20261125-074500/live-fdt.dtb
+
+== Boot0 copy comparison ==
+different (may include documented training/header mutations)
