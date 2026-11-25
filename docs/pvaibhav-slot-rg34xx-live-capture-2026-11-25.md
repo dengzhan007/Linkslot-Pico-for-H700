@@ -162,3 +162,24 @@ The [BaseOS H700 variant survey](https://github.com/pvaibhav/BaseOS/tree/63137af
 - The same survey says the per-target panel driver consumes `lcd_type=` to choose an initialization sequence. This device's live bootargs show `lcd_type=old`.
 
 This cross-check strengthens the conclusion that the reviewed pvaibhav `rg34xx → fog_fj035fhd05_v1` gate does not describe the standard RG34XX non-SP panel profile. It does not authorize substituting `rg34xx_v1` into that gate: the 120-Hz clock sequence must first be validated against the exact `rg34xx_v1 + lcd_type=old` initialization and actual panel revision.
+
+
+## Vendor RG34XX U-Boot panel-selection evidence
+
+The pinned BaseOS firmware audit gives a more precise explanation for the live `lcd_type=old` token and the fork's panel-name mismatch:
+
+- Its compatibility contract maps target `rg34xx` to FDT driver `rg34xx_v1` / 720×480 and records the vendor PE6 result as high → `old`, low → `boe`.
+- Its panel survey independently lists `rg34xx` → `rg34xx_v1` and the kernel panel driver `rg34xx_v1`; `fog_fj035fhd05_v1` is assigned to other target profiles.
+- The RG34XX U-Boot disassembly inventory selects the `rg34xx_v1` panel struct at `0xa38d0` (`selected_by_dt=true`). That struct's open flow calls init function `0x262e4`, whose embedded symbol/string is `lcd_panel_uboot_fj035fhd05_v1_init`. The function name is a shared U-Boot init routine label; it does **not** change the selected DT driver name from `rg34xx_v1` to `fog_fj035fhd05_v1`.
+- The disassembly shows a PE-data bit-6 read and branch inside that U-Boot init path. The survey maps PE6 high to `lcd_type=old` and low to `boe`. Our live FDT bootargs contain `lcd_type=old`, so this is consistent with the vendor boot chain taking the PE6-high / `old` branch. It remains an indirect boot-argument observation, not a fresh electrical read of PE6 at Linux runtime.
+
+This makes the pvaibhav fork's `BASEOS_TARGET=rg34xx → fog_fj035fhd05_v1` gate a clear mismatch with the surveyed standard RG34XX firmware contract. A reasonable hypothesis is that the fork's RG34XX allowlist is incomplete or intended for another hardware revision. Do **not** "fix" the mismatch by changing the driver string or borrowing the FJ035 PLL/divider values: the U-Boot init routine name is not proof that the Linux driver identity or 120-Hz register sequence is interchangeable.
+
+This U-Boot evidence covers panel selection/reset/init sequencing only. It does not reveal the Linux final pixel-clock divider, the runtime TCON/DE clock route, or a safe 60↔120-Hz transition boundary.
+
+Source references:
+
+- [BaseOS compatibility contract](https://github.com/pvaibhav/BaseOS/blob/63137afeda1c0bc4ff771be6f03012b7f8147aca/experiments/h700-boot-speed/evidence/compatibility.json)
+- [BaseOS target/panel survey](https://github.com/pvaibhav/BaseOS/blob/63137afeda1c0bc4ff771be6f03012b7f8147aca/experiments/h700-boot-speed/variant-survey/panel-survey.txt)
+- [RG34XX U-Boot panel-init disassembly](https://github.com/pvaibhav/BaseOS/blob/63137afeda1c0bc4ff771be6f03012b7f8147aca/experiments/h700-boot-speed/uboot-trace-notes/delays/inventory-rg34xx.json)
+- [PE6/lcd_type branch summary](https://github.com/pvaibhav/BaseOS/blob/63137afeda1c0bc4ff771be6f03012b7f8147aca/experiments/h700-boot-speed/uboot-trace-notes/delays/summary.md)
