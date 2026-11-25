@@ -19,13 +19,13 @@
 
 ## 当前工作：GammaOS LK → H700 BL33 → H700 HAL → Linkslot main 1.0.49
 
-### 当前源码基线升级：从历史 1.0.45 迁移至 main 1.0.49（进行中）
+### 当前源码基线升级：从历史 1.0.45 迁移至 main 1.0.49（host/cross-build feasibility 已通过，实机 HAL 仍在开发）
 
 - [x] 归档并比较 Linkslot 最新三分支：main 1.0.49 与 test 1.0.49 的 851 个源码文件逐 blob 一致；DEV 1.1.0 相对 main 新增 21、删除 1、修改 46。当前唯一稳定移植基线为 main 1.0.49；原始来源 commit、归档 commit 和差异见 [上游源码基线](upstream-baselines.md) / [1.0.49 与 1.1.0 更新审查](linkslot-1.0.49-1.1.0-refresh.md)。
 - [x] H700 no_std `slot-model/core.rs` 已同步 1.0.49 CoreSpec，包括 `netpacket` 字段；gpSP/armGBA netpacket=true、mGBA=false，contract test 已补齐。
 - [x] Frontend 与 renderer patcher source pin 已更新到归档 HEAD `241e7c1974926fa22552b200852914ceaccbfd42` 和 workspace 1.0.49。
 - [x] 1.0.49 runtime-slices workflow [#45624285300](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45624285300) 成功：no_std host tests/A32/A64、renderer/business overlay、input/model regression、完整 Frontend + SoftwareCompositor cargo check、CPU QuickRow fail-closed tests 与 C input ABI/queue 全部通过。首轮 #45623895416 因缺少 armGBA `armgba_link_carried` / `armgba_port` 接口失败，已修复后复验通过。
-- [ ] 继续解决首轮 CI 出现的 App/UI/Renderer patcher 锚点/API 差异；只有新版本所有 job 通过后才能锁定 1.0.49 综合验证结果。
+- [x] Linkslot main 1.0.49 完整 feasibility workflow [#45646868006](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45646868006) 已在 HEAD `018e0b30d14965b56003e23e06da5593a94808d6` **71/71 steps 成功**；静态 mGBA selector 的 `Option<LinkSetup>` 类型错误已由 `d333eb30dc8a21b4e9b9509bc08a3760223c091a` 修复，`#45631521531` 和最新 run 均通过。此结果只覆盖 host/cross-build、overlay、storage/VFS 和 ELF/link probes，不是完整 LK 固件或实机验证。artifact `15038716689`。
 ### A2（历史验证）：Linkslot 1.0.36 裸机可移植性与静态核心接入（host-only 阶段）
 
 - [x] 固定 Linkslot 1.0.36 只读 ZIP 快照及 SHA256 清单，不伪造原始上游 commit。
