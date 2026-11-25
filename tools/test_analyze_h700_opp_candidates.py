@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+"""Regression tests for the read-only H700 OPP candidate enumerator."""
+import importlib.util
+import unittest
+from pathlib import Path
+
+MODULE_PATH = Path(__file__).with_name("analyze_h700_opp_candidates.py")
+SPEC = importlib.util.spec_from_file_location("analyze_h700_opp_candidates", MODULE_PATH)
+assert SPEC and SPEC.loader
+MODULE = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(MODULE)
+
+
+def opp(
+    mhz,
+    *,
+    supported_present=False,
+    supported_cells=None,
+    base_present=False,
+    base=None,
+    variants=None,
+    variant_names=None,
+    status="okay",
+):
+    variants = variants or {}
+    variant_names = variant_names if variant_names is not None else list(variants)
+    return {
+        "node": f"/opp-table/opp@{mhz}000000",
+        "frequency_hz": mhz * 1000000,
+        "supported_hw_present": supported_present,
+        "supported_hw_cell_count": len(supported_cells or []),
+        "supported_hw_cells": supported_cells or [],
+        "voltage_microvolt_present": base_present,
+        "voltage_microvolt_cells": base or [],
+        "voltage_microvolt_variant_names": variant_names,
+        "voltage_microvolt_variants": variants,
+        "status": status,
+    }
+
+
+def report(entries):
+    return {
+        "cpu_power": {
+            "cpu_opp_tables": [{
+                "node": "/opp_l_table",
+                "nvmem_cell_names": ["speed"],
+                "entries": entries,
+            }]
+        }
+    }
+
+
+class OppCandidateTests(unittest.TestCase):
+    def test_no_mask_b1_model_uses_unmasked_nodes_and_drops_empty_present_hw(self):
+        fdt = report([
+            opp(480, variants={"b1": [900000]}),
+            opp(720, variants={"b1": [900000]}),
+            opp(936, variants={"b0": [900000]}),
+            opp(1008, supported_present=True, supported_cells=[1],
+                base_present=True, base=[950000]),
+            opp(1104, supported_present=True, supported_cells=[],
+                base_present=True, base=[1000000]),
+        ])
+        runtime = "[scaling_available_frequencies]\n480000 720000\n"
+        result = MODULE.analyze_opp_candidates(fdt, runtime)
+        matches = result["exact_matches"]
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]["supported_hw_mode"], "not_registered")
+        self.assertIsNone(matches[0]["supported_hw_mask"])
+        self.assertEqual(matches[0]["voltage_property_suffix"], "b1")
+        self.assertEqual(matches[0]["accepted_frequencies_hz"], [480000000, 720000000])
+        self.assertNotIn(1104000000, matches[0]["accepted_frequencies_hz"])
+
+    def test_one_cell_mask_requires_supported_hw_property_and_intersection(self):
+        fdt = report([
+            opp(480, supported_present=True, supported_cells=[0x33],
+                base_present=True, base=[900000]),
+            opp(720, supported_present=True, supported_cells=[0x30],
+                base_present=True, base=[900000]),
+            opp(936, supported_present=False, variants={"b1": [900000]}),
+            opp(1008, supported_present=True, supported_cells=[],
+                base_present=True, base=[950000]),
+        ])
+        runtime = "[scaling_available_frequencies]\n480000 720000\n"
+        result = MODULE.analyze_opp_candidates(fdt, runtime)
+        candidate = next(
+            item for item in result["closest_candidates"]
+            if item["supported_hw_mask"] == 0x10
+            and item["voltage_property_suffix"] is None
+        )
+        self.assertEqual(candidate["accepted_frequencies_hz"], [480000000, 720000000])
+        self.assertFalse(candidate["matches_runtime"] is False is True)
+
+    def test_named_property_present_but_empty_does_not_fall_back_to_base(self):
+        entry = opp(
+            480,
+            base_present=True,
+            base=[900000],
+            variants={"b1": []},
+            variant_names=["b1"],
+        )
+        fdt = report([entry])
+        runtime = "[scaling_available_frequencies]\n480000\n"
+        result = MODULE.analyze_opp_candidates(fdt, runtime)
+        no_mask_b1 = next(
+            item for item in result["closest_candidates"]
+            if item["supported_hw_mask"] is None
+            and item["voltage_property_suffix"] == "b1"
+        )
+        self.assertEqual(no_mask_b1["accepted_frequencies_hz"], [])
+
+    def test_named_property_absent_falls_back_to_base(self):
+        entry = opp(480, base_present=True, base=[900000])
+        fdt = report([entry])
+        runtime = "[scaling_available_frequencies]\n480000\n"
+        result = MODULE.analyze_opp_candidates(fdt, runtime)
+        no_mask_b1 = next(
+            item for item in result["closest_candidates"]
+            if item["supported_hw_mask"] is None
+            and item["voltage_property_suffix"] == "b1"
+        )
+        self.assertEqual(no_mask_b1["accepted_frequencies_hz"], [480000000])
+
+    def test_requires_parser_v3_property_presence_fields(self):
+        entry = opp(480, variants={"b1": [900000]})
+        del entry["supported_hw_present"]
+        with self.assertRaisesRegex(MODULE.AnalysisError, "parser-v3 fields missing"):
+            MODULE.analyze_opp_candidates(
+                report([entry]),
+                "[scaling_available_frequencies]\n480000\n",
+            )
+
+    def test_runtime_policy_blocks_must_agree(self):
+        fdt = report([opp(480, base_present=True, base=[900000])])
+        runtime = (
+            "[scaling_available_frequencies]\n480000\n"
+            "[scaling_available_frequencies]\n480000 720000\n"
+        )
+        with self.assertRaisesRegex(MODULE.AnalysisError, "blocks disagree"):
+            MODULE.analyze_opp_candidates(fdt, runtime)
+
+
+if __name__ == "__main__":
+    unittest.main()
