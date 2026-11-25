@@ -140,19 +140,6 @@ The corrected v3 static-table model was compared against additional public `sun5
 
 The Creality device tree also declares both `speed` and `Icpu` at the OPP table ([DTS lines 139–143](https://github.com/CrealityTech/sonic_pad_os/blob/7f37a7fbf4ad59907034715e3d967b9177de1cd4/lichee/linux-4.9/arch/arm64/boot/dts/sunxi/sun50iw9p1.dtsi#L139-L143)), unlike the uploaded RG34XX live FDT's single `speed` cell. The SID offsets `0x20/0x28` in the Avaota/JasonYANG family code are separate direct SID-module reads, not extra `Icpu` NVMEM cells. The target binary's two direct SID calls therefore fit this family more closely than the previous public-source candidates. Yet the target's observed branch constants/output strings and NVMEM read width still differ, so the source repository remains unidentified. Do not infer the final mask or active OPP set from a family-compatible DTS alone.
 
-### 1.13 New closest public driver-family candidate (2026-11-25)
-
-GitHub code search surfaced [AvaotaSBC/linux at `7c2a33957cb82e522885992ec26331d1c1c6db28`](https://github.com/AvaotaSBC/linux/blob/7c2a33957cb82e522885992ec26331d1c1c6db28/bsp/drivers/cpufreq/sun50i-cpufreq-nvmem.c), plus the closely related [JasonYANG170/Mini-LinuxPC-Pro Linux 5.4 version](https://github.com/JasonYANG170/Mini-LinuxPC-Pro/blob/cabc0f177920738c41973655cfd73b1c205c5545/kernel/linux-5.4/drivers/cpufreq/sun50i-cpufreq-nvmem.c). Their `sun50iw9_nvmem_xlate()` contains the same unusual combination now visible in the matched shipping binary:
-
-- `sunxi_get_soc_ver() & 7` supplies the SoC revision bits.
-- `sunxi_get_module_param_from_sid()` reads offset `0x20` into `pvalue`, then masks to 8 bits and multiplies by 32; a second read at offset `0x28` is masked with `0x3ff` into `icpu`.
-- The decoded values and NVMEM `speed` cell jointly select the OPP table property name and hardware mask.
-- The probe installs both `dev_pm_opp_set_prop_name()` and `dev_pm_opp_set_supported_hw()` and aborts/unwinds on setter failure before creating `cpufreq-dt`.
-
-This is a much stronger **code-family/lineage fingerprint** than the previously checked speed-only public sources. It does not identify the exact source commit: the public Avaota `sun50iw9` branch emits only `aN` names and masks `1 << value`, with a different speed constant set (`0x2000`, `0x2100`, `0x2400`, `0x2c00`, `0x5000`, `0x5400`, `0x6000`, `0x5c00`, `0x5d00`). The recovered target compares a different nine-value set including `0x2800` and `0x6c00`, emits `a/b/c` prefixes and masks from `{1,2,8}`. The public helper also validates the NVMEM cell length and assembles up to four bytes little-endian; the target binary's current excerpt performs a direct 32-bit load from a FDT cell declared as two bytes. The exact target is therefore likely a different revision/fork of this Allwinner driver family, not this public file verbatim.
-
-**Next source-identification method:** compare the target's full probe CFG against these source-family variants at the basic-block level, then search for the distinctive target switch set and generated-name branches. Do not call the candidate a source match until control flow, constants, cleanup and OPP helper behavior agree.
-
 ### 1.6 Thermal telemetry is not safe for automatic DVFS
 
 The kernel log explicitly reports:
@@ -271,6 +258,19 @@ The uploaded verified p4 kernel report and bounded driver disassembly now allow 
 - This directly contradicts treating the analyzer's exact no-mask + b1 match as proof of the running driver's effective state. The analyzer remains a useful static DT/runtime candidate enumerator, but must be extended or qualified after the exact probe CFG and target _opp_is_supported() / named-voltage parser are decoded.
 
 The 2-byte-cell/32-bit-load defect is now evidenced in the matched shipping binary, not just public source candidates. It does not by itself establish a crash, a particular value read from the adjacent allocation bytes, or the SID mapping. Keep the exact mapping and final OPP table open.
+### 1.13 New closest public driver-family candidate (2026-11-25)
+
+GitHub code search surfaced [AvaotaSBC/linux at `7c2a33957cb82e522885992ec26331d1c1c6db28`](https://github.com/AvaotaSBC/linux/blob/7c2a33957cb82e522885992ec26331d1c1c6db28/bsp/drivers/cpufreq/sun50i-cpufreq-nvmem.c), plus the closely related [JasonYANG170/Mini-LinuxPC-Pro Linux 5.4 version](https://github.com/JasonYANG170/Mini-LinuxPC-Pro/blob/cabc0f177920738c41973655cfd73b1c205c5545/kernel/linux-5.4/drivers/cpufreq/sun50i-cpufreq-nvmem.c). Their `sun50iw9_nvmem_xlate()` contains the same unusual combination now visible in the matched shipping binary:
+
+- `sunxi_get_soc_ver() & 7` supplies the SoC revision bits.
+- `sunxi_get_module_param_from_sid()` reads offset `0x20` into `pvalue`, then masks to 8 bits and multiplies by 32; a second read at offset `0x28` is masked with `0x3ff` into `icpu`.
+- The decoded values and NVMEM `speed` cell jointly select the OPP table property name and hardware mask.
+- The probe installs both `dev_pm_opp_set_prop_name()` and `dev_pm_opp_set_supported_hw()` and aborts/unwinds on setter failure before creating `cpufreq-dt`.
+
+This is a much stronger **code-family/lineage fingerprint** than the previously checked speed-only public sources. It does not identify the exact source commit: the public Avaota `sun50iw9` branch emits only `aN` names and masks `1 << value`, with a different speed constant set (`0x2000`, `0x2100`, `0x2400`, `0x2c00`, `0x5000`, `0x5400`, `0x6000`, `0x5c00`, `0x5d00`). The recovered target compares a different nine-value set including `0x2800` and `0x6c00`, emits `a/b/c` prefixes and masks from `{1,2,8}`. The public helper also validates the NVMEM cell length and assembles up to four bytes little-endian; the target binary's current excerpt performs a direct 32-bit load from a FDT cell declared as two bytes. The exact target is therefore likely a different revision/fork of this Allwinner driver family, not this public file verbatim.
+
+**Next source-identification method:** compare the target's full probe CFG against these source-family variants at the basic-block level, then search for the distinctive target switch set and generated-name branches. Do not call the candidate a source match until control flow, constants, cleanup and OPP helper behavior agree.
+
 ## 2. Memory ownership observations relevant to the broader port
 
 The capture reports one 1 GiB memory range [0x40000000, 0x80000000), 46 reserved ranges, and the following noteworthy regions:
