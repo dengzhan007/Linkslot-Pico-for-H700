@@ -3,7 +3,7 @@
 #include <stddef.h>
 
 #define H700_DISPLAY_UI_DEFAULT_HZ H700_DISPLAY_REFRESH_120HZ
-#define H700_DISPLAY_GAME_FIXED_HZ H700_DISPLAY_REFRESH_60HZ
+#define H700_DISPLAY_GAME_DEFAULT_HZ H700_DISPLAY_REFRESH_60HZ
 
 /*
  * RG34XX timing values are based on TheGammaSqueeze/rgxx_boot_package_mods
@@ -63,12 +63,16 @@ static int mode_is_valid(enum h700_display_refresh_mode mode)
 
 static uint32_t resolve_mode(
     uint32_t ui_preference_hz,
+    uint32_t game_120hz_enabled,
     uint32_t scene
 )
 {
-    return scene == H700_DISPLAY_SCENE_GAME
-        ? H700_DISPLAY_GAME_FIXED_HZ
-        : ui_preference_hz;
+    if (scene == H700_DISPLAY_SCENE_GAME) {
+        return game_120hz_enabled != 0u
+            ? H700_DISPLAY_REFRESH_120HZ
+            : H700_DISPLAY_GAME_DEFAULT_HZ;
+    }
+    return ui_preference_hz;
 }
 
 static void increment_generation(h700_display_refresh_policy_v1_t *policy)
@@ -100,9 +104,9 @@ int h700_display_refresh_policy_init_v1(
     policy->requested_mode_hz = H700_DISPLAY_UI_DEFAULT_HZ;
     policy->generation = 1u;
     policy->hardware_applied = 0u;
+    policy->game_120hz_enabled = 0u;
     policy->reserved[0] = 0u;
     policy->reserved[1] = 0u;
-    policy->reserved[2] = 0u;
 
     return H700_DISPLAY_REFRESH_POLICY_ONLY;
 }
@@ -123,12 +127,38 @@ int h700_display_refresh_policy_set_ui_preference_v1(
         policy->ui_preference_hz = (uint32_t)mode;
         policy->requested_mode_hz = resolve_mode(
             policy->ui_preference_hz,
+            policy->game_120hz_enabled,
             policy->scene
         );
         increment_generation(policy);
     }
 
     /* This state change only selects a target profile; it never applies it. */
+    return H700_DISPLAY_REFRESH_POLICY_ONLY;
+}
+
+int h700_display_refresh_policy_set_game_120hz_enabled_v1(
+    h700_display_refresh_policy_v1_t *policy,
+    uint32_t enabled
+)
+{
+    if (!policy_is_ready(policy)) {
+        return H700_DISPLAY_REFRESH_ERR_NOT_INITIALIZED;
+    }
+    if (enabled > 1u) {
+        return H700_DISPLAY_REFRESH_ERR_INVALID_ARGUMENT;
+    }
+
+    if (policy->game_120hz_enabled != enabled) {
+        policy->game_120hz_enabled = enabled;
+        policy->requested_mode_hz = resolve_mode(
+            policy->ui_preference_hz,
+            policy->game_120hz_enabled,
+            policy->scene
+        );
+        increment_generation(policy);
+    }
+
     return H700_DISPLAY_REFRESH_POLICY_ONLY;
 }
 
@@ -149,6 +179,7 @@ int h700_display_refresh_policy_set_scene_v1(
         policy->scene = (uint32_t)scene;
         policy->requested_mode_hz = resolve_mode(
             policy->ui_preference_hz,
+            policy->game_120hz_enabled,
             policy->scene
         );
         increment_generation(policy);
@@ -180,7 +211,7 @@ int h700_display_refresh_policy_get_state_v1(
     state->scene = policy->scene;
     state->requested_mode_hz = policy->requested_mode_hz;
     state->hardware_applied = policy->hardware_applied;
-    state->reserved = 0u;
+    state->game_120hz_enabled = policy->game_120hz_enabled;
     return H700_DISPLAY_REFRESH_STATUS_OK;
 }
 

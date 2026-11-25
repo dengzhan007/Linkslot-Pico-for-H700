@@ -64,7 +64,9 @@ typedef struct h700_display_refresh_policy_v1 {
     uint32_t requested_mode_hz;
     uint32_t generation;
     uint32_t hardware_applied;
-    uint32_t reserved[3];
+    /* Consumes one v1 reserved word; struct size and later offsets stay stable. */
+    uint32_t game_120hz_enabled;
+    uint32_t reserved[2];
 } h700_display_refresh_policy_v1_t;
 
 typedef struct h700_display_refresh_state_v1 {
@@ -75,10 +77,14 @@ typedef struct h700_display_refresh_state_v1 {
     uint32_t scene;
     uint32_t requested_mode_hz;
     uint32_t hardware_applied;
-    uint32_t reserved;
+    uint32_t game_120hz_enabled;
 } h700_display_refresh_state_v1_t;
 
-/* Default policy: UI 120 Hz, game 60 Hz. No hardware mode is applied. */
+/*
+ * Default policy: UI 120 Hz, GAME 60 Hz (game_120hz_enabled=0).
+ * The opt-in GAME 120 Hz flag is independent of the UI preference.
+ * No hardware mode is applied by this policy module.
+ */
 int h700_display_refresh_policy_init_v1(
     h700_display_refresh_policy_v1_t *policy,
     uint32_t policy_size
@@ -94,7 +100,18 @@ int h700_display_refresh_policy_set_ui_preference_v1(
     enum h700_display_refresh_mode mode
 );
 
-/* Switch the logical scene. GAME always resolves to 60 Hz. */
+/*
+ * Enable or disable the optional GAME 120 Hz request.
+ * enabled must be 0 or 1. Default is 0 (GAME requests 60 Hz).
+ * Changing this while in GAME updates requested_mode_hz immediately.
+ * This remains policy-only; it does not apply a physical display mode.
+ */
+int h700_display_refresh_policy_set_game_120hz_enabled_v1(
+    h700_display_refresh_policy_v1_t *policy,
+    uint32_t enabled
+);
+
+/* Switch the logical scene. GAME resolves to 120 Hz only when opted in. */
 int h700_display_refresh_policy_set_scene_v1(
     h700_display_refresh_policy_v1_t *policy,
     enum h700_display_scene scene

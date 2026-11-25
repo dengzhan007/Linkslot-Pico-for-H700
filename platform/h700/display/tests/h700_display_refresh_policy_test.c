@@ -26,14 +26,18 @@ int main(void)
     CHECK(rc == H700_DISPLAY_REFRESH_POLICY_ONLY,
           "initialization establishes policy without touching hardware");
 
+    CHECK(sizeof(policy) == 48u && sizeof(state) == 32u,
+          "GAME toggle consumes reserved ABI words without changing v1 sizes");
+
     rc = h700_display_refresh_policy_get_state_v1(
         &policy, &state, sizeof(state));
     CHECK(rc == H700_DISPLAY_REFRESH_STATUS_OK &&
           state.ui_preference_hz == H700_DISPLAY_REFRESH_120HZ &&
           state.scene == H700_DISPLAY_SCENE_UI &&
           state.requested_mode_hz == H700_DISPLAY_REFRESH_120HZ &&
+          state.game_120hz_enabled == 0u &&
           state.hardware_applied == 0u,
-          "default UI policy requests 120 Hz and does not claim application");
+          "default UI policy requests 120 Hz, GAME toggle is off, and no hardware application is claimed");
 
     timing = h700_display_refresh_get_rg34xx_timing_v1(
         H700_DISPLAY_REFRESH_120HZ);
@@ -83,8 +87,32 @@ int main(void)
     rc = h700_display_refresh_policy_get_state_v1(
         &policy, &state, sizeof(state));
     CHECK(rc == H700_DISPLAY_REFRESH_STATUS_OK &&
-          state.requested_mode_hz == H700_DISPLAY_REFRESH_60HZ,
-          "game scene always requests 60 Hz");
+          state.requested_mode_hz == H700_DISPLAY_REFRESH_60HZ &&
+          state.game_120hz_enabled == 0u,
+          "GAME defaults to 60 Hz while its optional 120 Hz toggle is off");
+
+    rc = h700_display_refresh_policy_set_game_120hz_enabled_v1(
+        &policy, 1u);
+    CHECK(rc == H700_DISPLAY_REFRESH_POLICY_ONLY,
+          "GAME 120 Hz can be opted in without touching hardware");
+    rc = h700_display_refresh_policy_get_state_v1(
+        &policy, &state, sizeof(state));
+    CHECK(rc == H700_DISPLAY_REFRESH_STATUS_OK &&
+          state.game_120hz_enabled == 1u &&
+          state.requested_mode_hz == H700_DISPLAY_REFRESH_120HZ,
+          "enabling GAME 120 Hz while in GAME requests 120 Hz");
+
+    {
+        uint32_t generation = state.generation;
+        rc = h700_display_refresh_policy_set_game_120hz_enabled_v1(
+            &policy, 1u);
+        CHECK(rc == H700_DISPLAY_REFRESH_POLICY_ONLY,
+              "setting the same GAME toggle value is accepted");
+        rc = h700_display_refresh_policy_get_state_v1(
+            &policy, &state, sizeof(state));
+        CHECK(state.generation == generation,
+              "setting an unchanged GAME toggle does not advance generation");
+    }
 
     rc = h700_display_refresh_policy_set_ui_preference_v1(
         &policy, H700_DISPLAY_REFRESH_60HZ);
@@ -94,8 +122,9 @@ int main(void)
         &policy, &state, sizeof(state));
     CHECK(rc == H700_DISPLAY_REFRESH_STATUS_OK &&
           state.ui_preference_hz == H700_DISPLAY_REFRESH_60HZ &&
-          state.requested_mode_hz == H700_DISPLAY_REFRESH_60HZ,
-          "changing UI preference during a game keeps the game at 60 Hz");
+          state.game_120hz_enabled == 1u &&
+          state.requested_mode_hz == H700_DISPLAY_REFRESH_120HZ,
+          "changing UI preference during a game does not override GAME 120 Hz");
 
     rc = h700_display_refresh_policy_set_scene_v1(
         &policy, H700_DISPLAY_SCENE_UI);
@@ -104,8 +133,9 @@ int main(void)
     rc = h700_display_refresh_policy_get_state_v1(
         &policy, &state, sizeof(state));
     CHECK(rc == H700_DISPLAY_REFRESH_STATUS_OK &&
-          state.requested_mode_hz == H700_DISPLAY_REFRESH_60HZ,
-          "UI 60 Hz preference is restored after gameplay");
+          state.requested_mode_hz == H700_DISPLAY_REFRESH_60HZ &&
+          state.game_120hz_enabled == 1u,
+          "UI 60 Hz preference is restored while the GAME 120 Hz toggle remains independent");
 
     rc = h700_display_refresh_policy_set_ui_preference_v1(
         &policy, H700_DISPLAY_REFRESH_120HZ);
@@ -115,6 +145,36 @@ int main(void)
         &policy, &state, sizeof(state));
     CHECK(state.requested_mode_hz == H700_DISPLAY_REFRESH_120HZ,
           "UI 120 Hz preference takes effect in UI scene");
+
+    rc = h700_display_refresh_policy_set_scene_v1(
+        &policy, H700_DISPLAY_SCENE_GAME);
+    CHECK(rc == H700_DISPLAY_REFRESH_POLICY_ONLY,
+          "re-entering GAME restores the independent GAME preference");
+    rc = h700_display_refresh_policy_get_state_v1(
+        &policy, &state, sizeof(state));
+    CHECK(state.requested_mode_hz == H700_DISPLAY_REFRESH_120HZ &&
+          state.game_120hz_enabled == 1u,
+          "GAME 120 Hz remains selected across UI/GAME scene transitions");
+
+    rc = h700_display_refresh_policy_set_game_120hz_enabled_v1(
+        &policy, 0u);
+    CHECK(rc == H700_DISPLAY_REFRESH_POLICY_ONLY,
+          "GAME 120 Hz can be switched off again");
+    rc = h700_display_refresh_policy_get_state_v1(
+        &policy, &state, sizeof(state));
+    CHECK(state.requested_mode_hz == H700_DISPLAY_REFRESH_60HZ &&
+          state.game_120hz_enabled == 0u,
+          "disabling GAME 120 Hz returns the active game request to 60 Hz");
+
+    rc = h700_display_refresh_policy_set_game_120hz_enabled_v1(
+        &policy, 2u);
+    CHECK(rc == H700_DISPLAY_REFRESH_ERR_INVALID_ARGUMENT,
+          "GAME 120 Hz toggle rejects values other than 0 or 1");
+
+    rc = h700_display_refresh_policy_set_scene_v1(
+        &policy, H700_DISPLAY_SCENE_UI);
+    CHECK(rc == H700_DISPLAY_REFRESH_POLICY_ONLY,
+          "test returns to UI after exercising the GAME toggle");
 
     rc = h700_display_refresh_policy_set_ui_preference_v1(
         &policy, (enum h700_display_refresh_mode)90);
@@ -135,6 +195,6 @@ int main(void)
               H700_DISPLAY_REFRESH_ERR_ABI,
           "undersized policy storage is rejected");
 
-    puts("PASS: RG34XX display refresh policy keeps UI preference independent of fixed 60 Hz gameplay");
+    puts("PASS: RG34XX display policy has independent UI preference and opt-in GAME 120 Hz toggle (default off)");
     return EXIT_SUCCESS;
 }

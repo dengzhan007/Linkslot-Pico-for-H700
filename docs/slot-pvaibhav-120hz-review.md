@@ -8,7 +8,7 @@ This fork is materially ahead of our current H700 display code at the **hardware
 
 It is **not a drop-in implementation for our RG34XX non-SP**. The fork's code allows `BASEOS_TARGET=rg34xx` only when the DT panel name is `fog_fj035fhd05_v1`, while our latest live RG34XX FDT identifies the panel as `rg34xx_v1`. The fork also requires 26 MHz / 820×536 timing cells. Its own hardware note says the non-SP RG34XX entry has no connected-device live test. Do not weaken these checks or copy its register constants to make the probe pass.
 
-Its product policy also differs from ours: it applies 120 Hz globally on supported devices at startup and wake, and explicitly does not change physical refresh during emulation. It does not implement our UI=120 Hz / GAME=60 Hz scene transition or the UI preference toggle.
+Its product policy also differs from ours: it applies 120 Hz globally on supported devices at startup and wake, and explicitly does not change physical refresh during emulation. It does not implement our per-scene policy or an independent GAME 120-Hz test switch. Our policy now keeps UI preference (60/120 Hz) independent from `game_120hz_enabled` (default off, GAME 60 Hz; opt-in requests 120 Hz). This is a policy request only and awaits HAL/settings integration and controlled measurements.
 
 ## What the fork actually implements
 
@@ -59,7 +59,7 @@ The same fork gate further requires 26 MHz / 820×536. The current uploaded live
 
 **Reuse the architecture; do not port the register values.**
 
-1. Keep our versioned C policy: UI preference 60/120 Hz, GAME fixed at 60 Hz, and return to the UI preference when leaving a game.
+1. Keep our versioned C policy: UI preference 60/120 Hz plus independent `game_120hz_enabled`. The GAME toggle defaults off (60 Hz); enabling it requests 120 Hz for measurement. Returning to UI restores the separate UI preference.
 2. Add a separate C H700 display HAL beneath that policy. It must identify the live board/panel/timing tuple, expose capability only for a fully qualified profile, apply the complete timing/clock route, read back the relevant state, and report `hardware_applied=1` only after successful verification.
 3. Treat write ordering, readback, explicit failure status and rollback as mandatory design requirements. Do not assume the two-register writer covers our `rg34xx_v1` panel.
 4. Before any hardware writer exists, rerun the read-only inventory with the enhanced FDT parser and verify the live `lcd_*` timing cells. Then trace the exact `rg34xx_v1` initialization path, PE6/`lcd_type` handling, TCON/DE/CCU clock tree and register ownership.

@@ -5,7 +5,7 @@
 The RG34XX policy is:
 
 - UI scene default: **120 Hz class** (source package reports 119.947 Hz).
-- Game scene: **fixed 60 Hz class** (source package reports 60.006 Hz).
+- Game scene: **60 Hz by default** (source package reports 60.006 Hz); an independent opt-in GAME 120 Hz switch can request the 120-Hz candidate for controlled testing. The switch defaults off and does not assert that 120 Hz is stable in gameplay.
 - UI preference: user-selectable **60 Hz / 120 Hz**. Changing this preference while a game is active does not change the game target; leaving the game restores the selected UI preference.
 - The policy is independent of CPU performance policy. No Linkslot Rust/Frontend/App interface is added in this phase.
 
@@ -195,6 +195,6 @@ Consequences for our target:
 
 The [`pvaibhav/slot` fork at `5206e3fa39aa4a9b702cd9048a07dab3b5ab95da`](https://github.com/pvaibhav/slot/tree/5206e3fa39aa4a9b702cd9048a07dab3b5ab95da) provides a substantially more complete Linux-side H700 refresh implementation than our current policy-only code: exact DT/model gating, a two-register divider/PLL sequence, register readback, a best-effort 60-Hz rollback, startup/wake reapplication and LCD IRQ measurement. See the [detailed compatibility review](slot-pvaibhav-120hz-review.md).
 
-Do **not** copy its register addresses/values into this project. Its `rg34xx` allowlist expects `fog_fj035fhd05_v1`, 26 MHz and 820×536, while our live RG34XX report identifies `rg34xx_v1`; the fork's non-SP RG34XX support is not backed by a connected-device test. Its global 120-Hz startup/wake policy also does not implement our UI=120/GAME=60 scene policy.
+Do **not** copy its register addresses/values into this project. Its `rg34xx` allowlist expects `fog_fj035fhd05_v1`, 26 MHz and 820×536, while our live RG34XX report identifies `rg34xx_v1`; the fork's non-SP RG34XX support is not backed by a connected-device test. Its global 120-Hz startup/wake policy also does not implement our independent UI preference plus opt-in GAME 120-Hz switch (default off).
 
 Reuse only the engineering pattern: identify the exact live panel tuple, refuse unsupported combinations, separate policy from hardware ownership, verify every applied state, expose failure clearly and attempt a known-safe rollback. Our own C HAL must be based on fresh live `rg34xx_v1` timing readback and target-specific source/register evidence. No writer is approved.
