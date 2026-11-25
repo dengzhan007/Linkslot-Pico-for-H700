@@ -6,6 +6,10 @@
 
 - `rg34xx-boot-partition-deep-audit.md` addendum — decodes the active p4 +48 MiB BOL4 component using the verified extraction report and matches the 17,461,256-byte output SHA-256 to the primary Android image's gzip-decompressed kernel. Resolves the former BOL4-format / secondary-kernel identity unknown; does not change the firmware-pairing blocker or hardware NO-GO.
 
+### 2026-11-24 — RG34XX native build inputs recovered from CI artifact
+
+- `rg34xx-native-build-inputs-from-0539a7-artifact.md` — extracted read-only from BaseOS-MultiFrontend CI upgrade artifact `14588761000` (build commit `05c39a7`). Recovers the exact pinned `boot-gzip/boot-package.bin` (SHA-256 `56371d98…af3d`), source `boot.img`, Boot0 from the native capsule and the 128 KiB env input. Distinguishes that source TOC1 package from the separate recovery TOC1 (`e6c20e3a…`). Generated firmware/image/generation hashes match prior reports. The prepared 222,298,112-byte `boot-prefix.img` remains unavailable; the composed A/B image prefix is a different byte sequence and is explicitly not substituted.
+
 ### 2026-11-24 — RG34XX p4+40 MiB firmware package split
 
 - `rg34xx-native-firmware/` — `firmware-manifest.json` for the 287,232-byte firmware package at
