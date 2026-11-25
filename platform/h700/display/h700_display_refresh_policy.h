@@ -92,8 +92,8 @@ int h700_display_refresh_policy_init_v1(
 
 /*
  * Change the UI refresh preference (the future user-visible 60/120 Hz toggle).
- * In GAME scene the requested mode remains 60 Hz; the preference is restored
- * automatically when the scene returns to UI.
+ * In GAME scene, the requested mode follows the independent GAME 120 Hz flag;
+ * the UI preference is restored automatically when the scene returns to UI.
  */
 int h700_display_refresh_policy_set_ui_preference_v1(
     h700_display_refresh_policy_v1_t *policy,
