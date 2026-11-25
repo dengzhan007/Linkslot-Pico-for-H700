@@ -15,7 +15,7 @@
   `+48 MiB` active image DTB. The manifest's literal scan reports no length/FNV candidates because
   A32 builds those constants with `movw`+`movt`; an instruction-level scan finds `0x00829000` at
   `0x4A001880/0x4A001888` (tested at `0x4A001890`) and `0x04762a5f` at `0x4A00189C/0x4A0018A0`
-  (tested at `0x4A0018A4`), both branching to the same reject path. Binaries stay local.
+  (tested at `0x4A0018A4`), both branching to the same reject path. Cross-check against BaseOS `native-handoff.h` maps loader loads `[r7,#0x94]`/`[r7,#0x98]` (`r7=0x4a300028`) to record fields `image_bytes`/`image_fnv` at `0x4a3000bc`/`0x4a3000c0`. This closes deployed loader ↔ active image identity, not raw-capsule SPL/generation reproduction. Binaries stay local.
 
 ### 2026-11-24 — RG34XX active boot inputs extracted and checksummed
 
