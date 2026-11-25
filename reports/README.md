@@ -2,6 +2,11 @@
 
 ## Index
 
+### 2026-11-23 — Linkslot VFS integration and complete mGBA/newlib feasibility chain (round 10)
+
+- `linkslot-lk-rust-feasibility-2026-11-23-round10-vfs-static-newlib.md` — successful workflow 45125097115 on feature head `2ea0b1f`. The real Linkslot 1.0.36 `slot-retro::environment()` callback now passes its VFS v3 host regression (60/60 slot-retro tests); the actual mGBA VDir adapter passes against a fake VFS; Generic and arm-none-eabi/newlib VFS v3 AArch32 archives build; H700 newlib adapter tests pass; whole-archive mGBA + adapter links with newlib-only and newlib-nosys; A32 LK BL33 layout probe passes. Artifact ID `14794884889` (91,104,214 bytes). No SD/FAT backend, static Linkslot core integration, full no_std frontend, hardware boot or device test. [Workflow 45125097115](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45125097115); [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16).
+
+
 ### 2026-11-23 — newlib whole-archive link and mGBA VDir regression (round 9)
 
 - linkslot-lk-rust-feasibility-2026-11-23-round9-newlib-link-and-vdir.md — successful workflow 45115290950. The actual mGBA VDir adapter passes host fake-VFS tests for enumeration, type, EOF, rewind (close/reopen), nested directories, file open, delete/mkdir and path traversal rejection. A whole-archive newlib/libm/libgcc link leaves only 11 syscall hooks (_close/_exit/_fstat/_getpid/_gettimeofday/_isatty/_kill/_lseek/_read/_sbrk/_write); adding libnosys closes an ELF32/ARM link but only with dummy system calls and a WFI entry stub. No LK service adapter or device runtime. [Workflow run 45115290950](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45115290950); [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16).
