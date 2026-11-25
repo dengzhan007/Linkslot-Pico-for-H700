@@ -1,0 +1,193 @@
+{
+  "boot_framebuffers": [],
+  "chosen_bootargs": "earlyprintk=sunxi-uart,0x05000000 loglevel=8 initcall_debug=1 console=ttyS0 init=/init",
+  "compatible": [
+    "allwinner,h616",
+    "arm,sun50iw9p1"
+  ],
+  "debug_modes": [
+    {
+      "node": "/soc@03000000/platform",
+      "value": 0
+    }
+  ],
+  "disp_reserve_bootarg": null,
+  "file": "D:\\WorkBuddy\\2026-11-22-15-52-19\\Linkslot-Pico-for-H700\\build\\rg34xx-inventory-20261122-214708\\toc1-extracted\\items\\dtb.bin",
+  "file_bytes": 144384,
+  "firmware_nodes": [
+    {
+      "compatible": [
+        "android,firmware"
+      ],
+      "method": null,
+      "node": "/firmware/android",
+      "status": "okay"
+    },
+    {
+      "compatible": [
+        "android,vbmeta"
+      ],
+      "method": null,
+      "node": "/firmware/android/vbmeta",
+      "status": "okay"
+    },
+    {
+      "compatible": [
+        "linaro,optee-tz"
+      ],
+      "method": "smc",
+      "node": "/firmware/optee",
+      "status": "okay"
+    }
+  ],
+  "has_reserved_memory_node": false,
+  "initrd": {
+    "end_exclusive": "0x0",
+    "range_valid": true,
+    "size_bytes": 0,
+    "start": "0x0"
+  },
+  "ion_heaps": [
+    {
+      "base": "0x0",
+      "compatible": [
+        "allwinner,sys_user"
+      ],
+      "id": 0,
+      "name": "sys_user",
+      "node": "/ion/heap_sys_user@0",
+      "size_bytes": 0,
+      "status": "okay",
+      "type": "ion_system"
+    },
+    {
+      "base": "0x0",
+      "compatible": [
+        "allwinner,cma"
+      ],
+      "id": 4,
+      "name": "cma",
+      "node": "/ion/heap_cma@0",
+      "size_bytes": 0,
+      "status": "okay",
+      "type": "ion_cma"
+    },
+    {
+      "base": "0x0",
+      "compatible": [
+        "allwinner,secure"
+      ],
+      "id": 6,
+      "name": "secure",
+      "node": "/ion/heap_secure@0",
+      "size_bytes": 0,
+      "status": "okay",
+      "type": "ion_secure"
+    }
+  ],
+  "memory_regions": [
+    {
+      "end_exclusive": "0x60000000",
+      "node": "/memory@40000000",
+      "size": "0x20000000",
+      "start": "0x40000000"
+    }
+  ],
+  "model": [
+    "sun50iw9"
+  ],
+  "node_count": 573,
+  "panels": [
+    {
+      "driver": "rg34xx_v1",
+      "height": 480,
+      "node": "/soc@03000000/lcd0@01c0c000",
+      "status": "okay",
+      "width": 720
+    }
+  ],
+  "pmic_nodes": [
+    {
+      "compatible": [
+        "x-powers,axp2202"
+      ],
+      "node": "/soc@03000000/twi@0x07081400/pmu",
+      "status": "okay"
+    },
+    {
+      "compatible": [
+        "x-powers,axp2202-usb-power-supply"
+      ],
+      "node": "/soc@03000000/twi@0x07081400/pmu/usb_power_supply",
+      "status": "okay"
+    },
+    {
+      "compatible": [
+        "x-powers,axp2202-bat-power-supply"
+      ],
+      "node": "/soc@03000000/twi@0x07081400/pmu/bat-power-supply",
+      "status": "okay"
+    }
+  ],
+  "reserved_memory_nodes": [],
+  "sha256": "c28c87380ffab00148bf4dc457e70b8c6c576470dcfbc53df64addddf89603a1",
+  "totalsize": 139822,
+  "usb_controllers": [
+    {
+      "compatible": [
+        "allwinner,sunxi-ehci0"
+      ],
+      "node": "/soc@03000000/ehci0-controller@0x05101000",
+      "status": "okay"
+    },
+    {
+      "compatible": [
+        "allwinner,sunxi-ehci1"
+      ],
+      "node": "/soc@03000000/ehci1-controller@0x05200000",
+      "status": "late"
+    },
+    {
+      "compatible": [
+        "allwinner,sunxi-ehci2"
+      ],
+      "node": "/soc@03000000/ehci2-controller@0x05310000",
+      "status": "okay"
+    },
+    {
+      "compatible": [
+        "allwinner,sunxi-ehci3"
+      ],
+      "node": "/soc@03000000/ehci3-controller@0x05311000",
+      "status": "late"
+    },
+    {
+      "compatible": [
+        "allwinner,sunxi-ohci0"
+      ],
+      "node": "/soc@03000000/ohci0-controller@0x05101400",
+      "status": "okay"
+    },
+    {
+      "compatible": [
+        "allwinner,sunxi-ohci1"
+      ],
+      "node": "/soc@03000000/ohci1-controller@0x05200400",
+      "status": "late"
+    },
+    {
+      "compatible": [
+        "allwinner,sunxi-ohci2"
+      ],
+      "node": "/soc@03000000/ohci2-controller@0x05310400",
+      "status": "late"
+    },
+    {
+      "compatible": [
+        "allwinner,sunxi-ohci3"
+      ],
+      "node": "/soc@03000000/ohci3-controller@0x05311400",
+      "status": "late"
+    }
+  ]
+}

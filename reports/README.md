@@ -10,7 +10,10 @@
 - `rg34xx-inventory-20261122-212049/` — sanitized ION config-symbol + kallsyms capture
   (`audit/rg34xx-ion-drm-followup-20261122` @ `b84fff0`); see `ION-symbol-finding.md`.
   Confirms `CONFIG_ION_SUNXI=y`, `CONFIG_ION_OF=y` and all three key functions in kallsyms.
-
+- `rg34xx-inventory-20261122-214708/` — sanitized text/JSON subset of the boot-partition
+  capture (`audit/rg34xx-ion-drm-followup-20261122` @ `c6da96d`); see
+  `boot-partition-local-only.md`. The 64 MiB `boot-partition.bin` and all other binaries
+  are kept local only, NOT uploaded.
 
 This branch is dedicated to field reports captured from the RG34XX handheld. Source code
 lives on `main`; report archives are kept here because `build/` is gitignored there.

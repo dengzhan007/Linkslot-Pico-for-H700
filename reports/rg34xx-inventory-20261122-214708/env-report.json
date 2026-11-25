@@ -1,0 +1,132 @@
+{
+  "crc_matches": [
+    {
+      "crc32": "0xe3b6e401",
+      "data_bytes": 131068,
+      "data_offset": 4,
+      "env_image_bytes": 131072
+    }
+  ],
+  "crc_note": "CRC32 matched a sector-aligned environment size and header offset.",
+  "crc_valid": true,
+  "file_bytes": 16777216,
+  "file_sha256": "8dd964ef0d525071626040d7cdce6c16925aaa6108d35558a0a5f032592b78a2",
+  "first_data_byte": {
+    "hex": "0x00",
+    "is_nul": true
+  },
+  "format": "Allwinner/U-Boot environment (structural candidate)",
+  "header_format_candidate": "CRC32 + NUL-separated variables (CRC matched)",
+  "limitations": [
+    "A valid CRC proves only that this byte range is internally consistent; it does not prove U-Boot selected this copy at boot.",
+    "A valid environment dump does not prove the runtime bootcmd was not modified by board-specific startup code.",
+    "Environment parsing is read-only and never writes or repairs the source image."
+  ],
+  "parse_warnings": [],
+  "source": "D:\\WorkBuddy\\2026-11-22-15-52-19\\Linkslot-Pico-for-H700\\build\\rg34xx-inventory-20261122-214708\\env-partition.bin",
+  "stored_crc32_le": "0xe3b6e401",
+  "variable_count": 25,
+  "variables": [
+    {
+      "name": "earlyprintk",
+      "value": "sunxi-uart,0x05000000"
+    },
+    {
+      "name": "initcall_debug",
+      "value": "0"
+    },
+    {
+      "name": "console",
+      "value": "ttyS0,115200"
+    },
+    {
+      "name": "nand_root",
+      "value": "/dev/nand0p4"
+    },
+    {
+      "name": "mmc_root",
+      "value": "/dev/mmcblk0p5"
+    },
+    {
+      "name": "init",
+      "value": "/init"
+    },
+    {
+      "name": "loglevel",
+      "value": "4"
+    },
+    {
+      "name": "selinux",
+      "value": "0"
+    },
+    {
+      "name": "cma",
+      "value": "64M"
+    },
+    {
+      "name": "mac",
+      "value": ""
+    },
+    {
+      "name": "wifi_mac",
+      "value": ""
+    },
+    {
+      "name": "bt_mac",
+      "value": ""
+    },
+    {
+      "name": "specialstr",
+      "value": ""
+    },
+    {
+      "name": "keybox_list",
+      "value": "hdcpkey,widevine"
+    },
+    {
+      "name": "setargs_nand",
+      "value": "setenv bootargs earlyprintk=${earlyprintk} initcall_debug=${initcall_debug} console=${console} loglevel=${loglevel} root=${nand_root} init=${init} partitions=${partitions} cma=${cma} snum=${snum} mac_addr=${mac} wifi_mac=${wifi_mac} bt_mac=${bt_mac} selinux=${selinux} specialstr=${specialstr} gpt=1"
+    },
+    {
+      "name": "setargs_mmc",
+      "value": "setenv  bootargs earlyprintk=${earlyprintk} initcall_debug=${initcall_debug} console=${console} loglevel=${loglevel} root=${mmc_root} rootwait quiet splash init=${init} partitions=${partitions} cma=${cma} snum=${snum} mac_addr=${mac} wifi_mac=${wifi_mac} bt_mac=${bt_mac} selinux=${selinux} specialstr=${specialstr} gpt=1"
+    },
+    {
+      "name": "boot_normal",
+      "value": "sunxi_flash read 45000000 boot;bootm 45000000"
+    },
+    {
+      "name": "boot_recovery",
+      "value": "sunxi_flash read 45000000 recovery;bootm 45000000"
+    },
+    {
+      "name": "boot_fastboot",
+      "value": "fastboot"
+    },
+    {
+      "name": "recovery_key_value_max",
+      "value": "0x13"
+    },
+    {
+      "name": "recovery_key_value_min",
+      "value": "0x10"
+    },
+    {
+      "name": "fastboot_key_value_max",
+      "value": "0x8"
+    },
+    {
+      "name": "fastboot_key_value_min",
+      "value": "0x2"
+    },
+    {
+      "name": "bootdelay",
+      "value": "0"
+    },
+    {
+      "name": "bootcmd",
+      "value": "run setargs_nand boot_normal"
+    }
+  ],
+  "variables_data_offset": 4
+}
