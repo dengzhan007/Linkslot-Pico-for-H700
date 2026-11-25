@@ -263,7 +263,7 @@ def main():
         (persistent / "Cargo.toml").write_text(
             "[package]\n"
             'name = "slot-i18n"\n'
-            'version = "1.0.45"\n'
+            'version = "1.0.49"\n'
             'edition = "2021"\n'
             'rust-version = "1.96"\n'
             'license = "GPL-3.0-or-later"\n\n'
