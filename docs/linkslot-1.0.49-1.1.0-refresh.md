@@ -58,6 +58,8 @@ DEV 的首条 changelog 为 1.1.0，核心增量是 schema 2 / `kind=platform` L
 
 ## 6. 对现有 H700 代码和 CI 的行动
 
+**Linkslot 1.0.49 runtime-slices 迁移验证（2026-11-25）：** [#45624285300](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45624285300) **成功**。完整 job 通过：H700 no_std workspace host tests、AArch32/AArch64 freestanding checks、renderer + business overlay 应用、上游 input/model regression、Linkslot 1.0.49 完整 Frontend + SoftwareCompositor 的 `cargo check`、CPU Performance QuickRow unavailable/不写存储的 2 项回归，以及 H700 C input ABI/queue job。首次 1.0.49 run [#45623895416](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45623895416) 曾因 H700 `slot-link-kind` 未提供上游新增的 `armgba_link_carried` / `armgba_port` 失败；已补齐 no_std 实现、测试和 re-export，第二轮通过。此结果仍是 host/cross-build，不是 LK 完整镜像或实机运行。
+
 持久化集成代码已开始迁移：`integration/linkslot/h700-frontend-core/slot-model/src/core.rs` 已按 main 1.0.49 的 blob `cd877949a3b30c62cf178fd91add3e258a09c66d` 同步；本地 crate manifest 已升至 1.0.49，H700 contract test 增加 gpSP/armGBA/mGBA netpacket 断言。提交：`ac0e8e0` / `977519e` / `3e986dc`。
 
 两条 patcher 已更新为归档 HEAD `241e7c1974926fa22552b200852914ceaccbfd42` 与 workspace 1.0.49：`20a3ee9`、`e9faf2d`；runtime workflow 也改为 1.0.49 命名：`d557c54`。首轮 runtime workflow [#45623895416](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45623895416) 正在执行；截至本次记录，持久化 no_std workspace tests、renderer + business overlay 应用、上游 input/model regression 均成功，完整 Frontend 的 `cargo check` 正在运行，尚不能标记整条 workflow 通过。
