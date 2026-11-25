@@ -158,3 +158,22 @@ The read-only inventory script now writes `display-runtime.txt` with:
 The capture has no sysfs/debugfs output redirection, mode set, MMIO, ioctl, or boot-package write. Missing paths are reported as unavailable. Run the normal Windows inventory wrapper or the read-only collector and inspect the generated `display-runtime.txt`.
 
 Interpret this evidence in layers: display-engine `ref_fps`/`fps` is the kernel driver's reported scanout timing, framebuffer `mode` may only report geometry/nominal rate, and clock-summary is the provider's current clock readback. None is a photodiode/high-speed-camera measurement of the physical panel. It is nevertheless the missing on-device observation needed before claiming that the panel currently scans at 120 Hz; frontend render FPS remains a separate quantity.
+## 8. Allwinner sun50iw9 vendor display-driver reference
+
+To separate a reporting sysfs node from a real mode-setting interface, the
+Allwinner Linux 4.9 `sun50iw9` display framework was inspected in the pinned
+[orangepi-xunlong/linux-orangepi commit `0cd0547ea405b84b5b60fbc92978ac1bc2b68055`](https://github.com/orangepi-xunlong/linux-orangepi/commit/0cd0547ea405b84b5b60fbc92978ac1bc2b68055).
+This is a public vendor-BSP reference for the same SoC family, not a claim
+that this exact source revision is the binary kernel currently installed on
+the test handheld.
+
+- [`dev_disp.c`](https://github.com/orangepi-xunlong/linux-orangepi/blob/0cd0547ea405b84b5b60fbc92978ac1bc2b68055/drivers/video/fbdev/sunxi/disp2/disp/dev_disp.c#L86-L224): `disp_sys_show()` prints display-engine clock rate, driver-reported `ref_fps`, LCD `fps`, resolution and vsync counters. `disp_sys_store()` simply returns `count` and performs no operation. The neighboring `disp` attribute writes the `g_disp` screen-selection variable; it is not a refresh-rate control.
+- [`disp_lcd.c`](https://github.com/orangepi-xunlong/linux-orangepi/blob/0cd0547ea405b84b5b60fbc92978ac1bc2b68055/drivers/video/fbdev/sunxi/disp2/disp/de/disp_lcd.c): derives frame rate from `lcd_dclk_freq × 1,000,000 × (interlace + 1) / (lcd_ht × lcd_vt)`. Its LCD clock configuration calculates PLL/LCD/DSI rates from panel parameters and calls the clock framework to set parents and rates.
+- [`de_lcd.c`](https://github.com/orangepi-xunlong/linux-orangepi/blob/0cd0547ea405b84b5b60fbc92978ac1bc2b68055/drivers/video/fbdev/sunxi/disp2/disp/de/lowlevel_v33x/tcon/de_lcd.c) programs the TCON horizontal/vertical panel timing fields. The companion [`disp_al_tcon.c`](https://github.com/orangepi-xunlong/linux-orangepi/blob/0cd0547ea405b84b5b60fbc92978ac1bc2b68055/drivers/video/fbdev/sunxi/disp2/disp/de/lowlevel_v33x/disp_al_tcon.c) calculates the clock dividers used by the LCD output path.
+
+Consequences for our target:
+
+1. Do not try to switch refresh rate by writing `ref_fps`, `fps`, or `disp` under `attr`; `sys` is read-only in effect and `disp` only selects a screen index.
+2. The actual operation spans panel timing, TCON, DE/display routing and clock parents/dividers. A dynamic UI/game mode switch must either use a proven driver API with explicit synchronization or own the whole LK display path; changing the emulator's frame cap alone only changes content update cadence.
+3. Treat the vendor Linux sources as a sequencing/reference map only. Before implementing LK MMIO/clock writes, confirm the exact H700 register map, the live `rg34xx_v1` panel initialization sequence, current scanout ownership, and a safe VBlank transition. Do not copy Linux `clk_set_rate()` calls or guessed register addresses into LK.
+

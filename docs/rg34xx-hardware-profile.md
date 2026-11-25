@@ -205,3 +205,14 @@ GammaOS Pico 当前参考树面向 MT6785/32-bit ARM。其 MTK 驱动和 A32 cor
 ### Read-only device timing capture
 
 `scripts/collect-rg34xx-readonly-inventory.sh` now writes `display-runtime.txt` with H700 display engine sysfs (`/sys/class/disp/disp/attr/sys`), framebuffer mode/geometry (`/sys/class/graphics/fb0` and `/proc/fb`), and filtered display clocks from `clk_summary`. It is read-only and gracefully reports missing nodes. This is the next evidence source for actual driver-reported panel timing; no new on-device capture has been uploaded yet, and these software readbacks are not a physical optical measurement. See [H700 display refresh policy](h700-display-refresh-policy.md#7-on-device-timing-readback-collection).
+### Vendor display driver mode-setting path
+
+The public Allwinner `sun50iw9` Linux 4.9 reference source at commit
+`0cd0547ea405b84b5b60fbc92978ac1bc2b68055` clarifies that
+`/sys/class/disp/disp/attr/sys` is a status dump (`de_rate`, `ref_fps`,
+`fps`, vsync health), with a no-op store callback. Its neighboring `disp`
+attribute only changes the selected screen index. Neither is a refresh-rate
+setter. The vendor LCD path derives FPS from DCLK/(HT×VT), configures PLL/LCD
+clock parents/rates and TCON timing fields. This is a reference only; the
+exact installed RG34XX kernel revision has not been identified from source.
+See [H700 display refresh policy §8](h700-display-refresh-policy.md#8-allwinner-sun50iw9-vendor-display-driver-reference).
