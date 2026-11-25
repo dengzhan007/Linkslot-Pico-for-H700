@@ -248,9 +248,23 @@ The 2026-11-25 04:05:51 UTC v4 report records:
 
 This is strong evidence that the currently bound cpufreq/OPP path is operating with an effective `b1`-shaped OPP set. It does **not** identify the exact source commit or prove the driver uses `dev_pm_opp_set_prop_name("b1")` as opposed to another vendor-specific equivalent; it also does not prove how raw `0x6c00` enters that decision. The Build ID is not a substitute for the matching kernel image or source.
 
-**Next binary-identification step:** prioritize the official [RG34XX V1.0.6-EN16GB-260526 firmware](https://win.anbernic.com/download/514.html), whose date matches the running kernel build date, or read the stock `mmcblk0p4` boot partition from the device. The date match is a lead only; compare the actual GNU Build ID `a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68` before treating it as the same kernel. Inspect the driver code offline, keep the full binary local, and upload only extracted metadata or bounded relevant excerpts. This step does not authorize MMIO, PMIC, PLL or CPUFreq writes.
+**Next binary-analysis step:** the stock `/dev/mmcblk0p4` partition has now been exported read-only; its decompressed kernel contains GNU Build ID `a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68`, exactly matching the live kernel. Metadata only is archived at [reports/rg34xx-boot-p4-metadata.json](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-boot-p4-metadata.json); the 64 MiB boot image and extracted kernel remain local. Use [`vmlinux-to-elf`](https://github.com/marin-m/vmlinux-to-elf) to recover the embedded kallsyms and reconstruct an AArch64 ELF from the Android `ANDROID!` boot image, then disassemble `sun50i_cpufreq_nvmem_probe`, the speed NVMEM decode path and OPP property setter. Keep the ELF local and upload only the Build ID, decompressed-kernel hash, and bounded relevant disassembly excerpts. This step does not authorize MMIO, PMIC, PLL or CPUFreq writes.
 
 Thermal status remains unchanged: CPU zone0 is 51.74 °C in the v4 snapshot, but the kernel still logs `avcc is not calibrated`. Until a calibrated temperature source, BL31→BL33 secondary-core quiescence, timer continuity and raw PMIC/CCU readback are established, keep `POLICY_ONLY`, `hardware_applied=0`, and all actual DVFS controls disabled.
+
+
+### 8.10 Exact stock boot-image match and symbolized disassembly gate
+
+The read-only boot-partition export is a **binary identity match**, not merely a build-date correlation:
+
+- `mmcblk0p4` is a 64 MiB Android boot partition with `ANDROID!` magic, `page_size=2048`, and compressed kernel payload size `7,018,071` bytes.
+- Its decompressed kernel contains the same GNU Build ID as the live kernel: `a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68`. The metadata report also records partition SHA-256 `41cfaa8f9ade4a5e05a89188abb7db154243e38b8e19c53b730f0a45ff325516` and compressed payload SHA-256 `cc4b5769cb8c9dcf8d013602e57c494a1153eb6714d9786cf847e39e3ecdd3af`.
+- The report scanner found a second GNU-note-like ID `fe7e68cd7aa14945d71f36e4fbf8412d959f4cc1`; it has not been attributed. Do not treat it as a second kernel build or component without offset/context validation.
+- The public [BaseOS RG34XX survey](https://github.com/pvaibhav/BaseOS/blob/63137afeda1c0bc4ff771be6f03012b7f8147aca/experiments/h700-boot-speed/evidence/all-targets-survey.jsonl) records a matching `4.9.170 #19` / build host / compiler and decompressed kernel length `17,461,256` bytes with short SHA-256 `39cf8c3eb9a75ff0`. Its survey hashes the decompressed bytes; the local p4 report currently hashes the compressed payload. Compute the local decompressed SHA before claiming that independent hash match.
+
+The [`vmlinux-to-elf`](https://github.com/marin-m/vmlinux-to-elf) README documents ARM64, embedded kallsyms and Android `ANDROID!` boot-image support. The target config has `CONFIG_KALLSYMS=y` and `CONFIG_KALLSYMS_ALL=y`, so it is the next offline reconstruction candidate. Verify the reconstructed ELF's Build ID before inspecting the driver. The code-level questions are: (1) does probe call `dev_pm_opp_set_prop_name`, and with what string; (2) where does it read the two-byte `speed` cell and what exact transformation is applied; (3) does it also call `dev_pm_opp_set_supported_hw`; and (4) how does the OPP core fall back between named and base voltage properties.
+
+Do not infer the raw `0x6c00 → b1` relationship from the Build ID, the function names, or the runtime frequency subset. The exact source decoder must be established by the matching binary's disassembly or a source tree proven to produce that exact image. `opp_authorization` remains `not_approved`.
 
 ## 9. Current project status
 
