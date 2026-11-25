@@ -58,7 +58,7 @@ def run(command: list[str], log: Path, *, cwd: Path | None = None,
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--source", type=Path, required=True,
-                    help="temporary Linkslot 1.0.45 checkout after static API patch")
+                    help="temporary Linkslot 1.0.49 checkout after static API patch")
     ap.add_argument("--module", type=Path, required=True,
                     help="repository platform/h700/runtime/mgba_static.rs")
     ap.add_argument("--archive", type=Path, required=True,
@@ -80,8 +80,8 @@ def main() -> None:
     for required in (ffi_source, workspace, module, archive, adapter):
         if not required.is_file():
             raise RuntimeError("required static mGBA link input is missing: " + str(required))
-    if 'version = "1.0.45"' not in workspace.read_text(encoding="utf-8"):
-        raise RuntimeError("expected immutable Linkslot 1.0.45 source snapshot")
+    if 'version = "1.0.49"' not in workspace.read_text(encoding="utf-8"):
+        raise RuntimeError("expected immutable Linkslot 1.0.49 source snapshot")
 
     ffi = ffi_source.read_text(encoding="utf-8")
     if "#[derive(Clone, Copy)]\npub struct Api" not in ffi:
@@ -258,7 +258,7 @@ __attribute__((noreturn)) void _start(void) {
 
     report = (
         "# Rust Linkslot static mGBA / H700 newlib AArch32 link probe\n\n"
-        "- Uses the exact patched Linkslot 1.0.45 slot-retro FFI API type definitions.\n"
+        "- Uses the exact patched Linkslot 1.0.49 slot-retro FFI API type definitions.\n"
         "- Compiles the repository platform/h700/runtime/mgba_static.rs as a no_std AArch32 static library.\n"
         "- Verifies all 21 namespaced mGBA function references are present in the Rust static library.\n"
         "- Links the actual mGBA VFS v3 archive, Rust API table, H700 newlib adapter and newlib/libm/libgcc.\n"
