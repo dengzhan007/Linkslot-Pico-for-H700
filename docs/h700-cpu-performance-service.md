@@ -189,20 +189,32 @@ The upstream 1.0.45 UI extension point was reviewed in the immutable snapshot. T
 
 ## 8. Required hardware and safety gates
 
-- [ ] Export the complete `cpu-supply` / AXP2202 regulator subtree from the exact RG34XX live FDT and confirm the DCDC1 mapping on this unit/board revision. Knulli and MustardOS RG34XX DTSs already cross-check DCDC1 as cpu0 supply, but live-FDT readback is still outstanding.
+- [x] Export and parse the RG34XX live-FDT CPU `cpu-supply` relationship: CPU0 phandle `0x4f` resolves to `axp2202-dcdc1` (500000–1540000 µV, always_on/boot_on). Linux regulator debugfs independently reports consumer `cpu0 @1160mV` in the 2026-11-25 capture. This confirms the rail mapping for this captured FDT/runtime pairing; it is not raw PMIC register readback at BL33 entry.
 - [x] Confirm the current Linux runtime PMIC observation: AXP2202 on I²C-5, address `0x34`. Match generic AXP2202 reference DCDC1 selector/control fields (`0x83` / `0x80`) without enabling writes.
 - [ ] Read-only PMIC voltage and enable-state readback at BL33 entry; verify that the stock firmware left the expected rail at the expected voltage before any transition is designed.
-- [ ] Read the actual H700 SID speed cell at `0x03006000 + 0x00` (two bytes), establish the required SoC revision semantics, and fail closed for unknown raw values.
-- [ ] Identify H700 CPUX PLL/CCU sequence and verify safe clock-parent switching, lock polling, divider constraints, exact CCU base and timer continuity from matching H616/H700 sources.
+- [x] Read the exact bounded SID speed cell (two bytes): raw `0x6c00`; thermal calibration cell (eight bytes): `181113ab191b16bb`. Mainline diagnostic decode says candidate bin 5, but the pinned vendor literal decoder has no case for `0x6c00`, generic SoC identity is unavailable, and `opp_authorization` remains `not_approved`. The raw read is complete; silicon-revision semantics and the active OPP mask remain unresolved.
+- [x] Audit a pinned `sun50iw9` vendor CPUX source candidate: `PLL_CPU=0x0000`, `CPU_CFG=0x0500`, temporary `pll_periph0` parent before PLL rate change, restore `pll_cpu` afterward, new lock-mode polling; bit31 must not be toggled dynamically and lock-status bit is build-config dependent. This is source-level only; actual BL33 CCU base/access, lock configuration, timer continuity and transition safety remain pending.
 - [ ] Resolve CPU1–CPU3 state at BL31→BL33. Until then, CPU PLL writes remain disabled.
 - [ ] Implement/read the H700 thermal sensor path and validate AVCC calibration; the current RG34XX kernel capture reports “avcc is not calibrated”, so automatic thermal DVFS is blocked.
-- [ ] Establish cold-boot voltage/clock readback and a conservative board-approved OPP table before adding any write path.
+- [ ] Establish cold-boot BL33-entry voltage/clock readback and a conservative board-approved OPP table before adding any write path.
 - [x] Implement a pure C OPP policy selector with no MMIO/PMIC access, strict speed-bin masks, board-voltage and thermal caps, and fail-closed evidence gates; add host regression tests and AArch64/AArch32 compile coverage.
 - [x] GitHub Actions [H700 CPU OPP / AArch32-AArch64 regression #45381349400](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45381349400) passed: policy host regressions plus AArch64, AArch32 ARM-state and AArch32 Thumb-2 freestanding object compilation.
 - [x] GitHub Actions [H700 Linkslot 1.0.45 runtime slices #45387192778](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45387192778) passed: the `slot-cpu-performance` Rust workspace tests, `no_std` AArch32/AArch64 checks and full Linkslot renderer/business overlay compile passed.
 - [x] GitHub Actions [H700 AArch32/AArch64 compile check #45387293421](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45387293421) passed after adding C `_Static_assert` checks for the ABI v1 state size/field offsets.
 - [ ] Add transition-ordering tests for voltage-before-frequency on upshift and frequency-before-voltage on downshift, plus PLL timeout and PMIC failure handling when a hardware transition layer is eventually introduced.
 - [ ] Add on-device sustained-load, cold/warm boot, battery/charger, audio-underrun, frame-pacing and thermal-soak tests before enabling Performance/Boost in release builds.
+
+### 8.2 Linux 4.9.170 cpufreq/OPP candidate-source audit (2026-11-25)
+
+The pinned vendor tree `qiaoweibiao/T507_Kernel@98fcc7d3f112e51b0edfb71536da89cb2115106f` reports the same Linux version, 4.9.170, as the device. The running kernel's build ID/image hash has not been matched to this exact source tree, so this is a **same-version candidate**, not proof of the binary's source.
+
+The candidate `sun50i-cpufreq-nvmem.c` reads the two-byte SID speed cell into a `u32 *`, ignores the returned `len`, then switches on `*efuse_value`; `0x6c00` has no explicit case and would take the default branch assigning `supported_hw=0x4`. This is a potential out-of-bounds 32-bit read and must not be copied or trusted.
+
+In the same tree, OPP filtering uses bitwise intersection: an OPP node is accepted when `opp-supported-hw & supported_hw` is nonzero. Applying candidate mask `0x4` to the voltage-bearing live-DT OPP entries predicts 480/600/792/1008/1200/1344 MHz. The device's reported `scaling_available_frequencies` is 480/720/936/1008/1104/1200/1320/1416/1512 MHz. The mismatch demonstrates that the pinned same-version source cannot yet be used to infer the actual running supported-hardware mask or approved OPP list.
+
+The same candidate source says `cpufreq-dt` uses `cpufreq_generic_get() = clk_get_rate(policy->clk)/1000`. Thus `cpuinfo_cur_freq` is a clock-framework sample, while `scaling_cur_freq` normally reports cached `policy->cur` for this target-based driver. Inventory v1 read these values and the later `clk_summary` at different times. The collector now takes six uptime-bracketed samples, 200 ms apart, reading both cpufreq values and CPUX clock-summary rows in each sample. The new static safety assertions have been added to the inventory test; complete Python/Actions verification is still pending.
+
+Do not infer an OPP mask from either mainline candidate bin 5 or the pinned vendor default mask 0x4. Keep all real DVFS paths disabled.
 
 ## 9. Current project status
 
@@ -212,7 +224,7 @@ Hardware status remains:
 - AXP2202 on I²C-5 / `0x34` is confirmed by the live Linux log.
 - CPU0's live-FDT `cpu-supply` phandle `0x4f` is confirmed to resolve to AXP2202 DCDC1. Linux regulator debugfs identifies the `cpu0` consumer and reports 1160 mV in the 2026-11-25 sample; this is framework state, not raw PMIC register readback.
 - The SID speed cell is read from the exact bounded NVMEM range: raw `0x6c00`. Mainline reference decode suggests candidate bin 5, but vendor literal matching fails, generic SoC revision is unavailable and `opp_authorization` remains `not_approved`.
-- The pinned `sun50iw9` vendor-source audit provides CPUX register offsets and a candidate parent-switch/lock sequence. The live Linux clock summary confirms `pll_cpu → cpu` and observes `pll_periph0=600 MHz`, but cpufreq and clock-summary rate values diverge. Exact BL33 CCU readback/clock state remains unavailable.
+- The pinned `sun50iw9` vendor-source audit provides CPUX offsets and a candidate parent-switch/lock sequence. Linux `clk_summary` observes `pll_cpu → cpu` and `pll_periph0=600 MHz`. The first inventory read cpufreq and `clk_summary` at different times; pinned cpufreq-dt source shows `cpuinfo_cur_freq` reads `clk_get_rate()` while `scaling_cur_freq` is cached `policy->cur`, so a schedutil transition may explain the apparent discrepancy. A six-sample uptime-bracketed collector has been added; synchronized runtime capture and exact BL33 CCU readback are still pending.
 - The H700 thermal sensor is present; raw calibration fields exist, but the kernel says `AVCC is not calibrated`. Current temperature values are diagnostic, not calibrated control input.
 - Linux has CPUs 0–3 online in one shared cpufreq policy. CPU1–CPU3 state at BL31→BL33 remains unknown.
 
