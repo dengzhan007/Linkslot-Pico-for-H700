@@ -290,3 +290,17 @@ pinned `device.rs` 明确将 `refresh` 定义为 `Option<PanelRefresh>`，`suppo
 ### 下一步边界
 
 下一次只读采集应补 `/proc/2301/maps`、`readlink /proc/2301/exe` 以及 core 的 ELF `PT_LOAD` headers，求出 load bias 并关联两个同名 `gba` 符号。此阶段仍不读 `/proc/2301/mem`、不创建 tracing marker、不重启 Slot。待 exact-build layout 与主 GBA 指针均闭合，再独立决定是否进行有界进程内存读取。UI presents、armGBA committed frames、LCD IRQ 继续分开统计。
+
+
+## 12. Exact official-release committed-frame offset (2026-11-26)
+
+The official release metadata pins the device core to armGBA commit `df6b2631291f249d54a00dd14f49bc893e438feb`. The work-branch probe and CI checkout were retargeted to that exact commit. Dedicated step in [run #45724910634](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45724910634) succeeded and artifact ID `15072724723` contains the exact-source JSON:
+
+- `sizeof(GBA)=788712`
+- `offsetof(GBA, video)=11944`
+- `offsetof(Video, frameCounter)=4`
+- combined `gba->video.frameCounter` offset = **11948 bytes**
+
+AArch32 ARM, AArch32 Thumb-2 and AArch64 static assertions all passed, and the host probe returned the same values. The full workflow was cancelled after this step by a superseding documentation push; only the dedicated layout step is marked pass. The earlier 11948 result from a different commit was not used as evidence; this new result is tied to the official release source. Full note: [armgba-frame-counter-layout-v1.16.0.md](armgba-frame-counter-layout-v1.16.0.md).
+
+This still does not provide a runtime pointer. The ELF .symtab lists two LOCAL OBJECT symbols both named `gba` at `0x4c16a8` and `0x4259b8`; the source has the main machine pointer in `libretro/libretro.c` and a file-local link pointer in `libretro/link.c`. Next inspection must disassemble the core's `retro_run` / active GBA path and prove which symbol it dereferences, while separately obtaining the process maps and PT_LOAD-derived load bias. Do not read `/proc/PID/mem` yet.
