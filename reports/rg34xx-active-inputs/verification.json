@@ -1,0 +1,69 @@
+{
+  "format": "RG34XX active input extraction - independent verification",
+  "host_only": true,
+  "device_io_performed": false,
+  "tool": {
+    "path": "tools/h700_boot_image.py",
+    "branch": "porting/linkslot-1.0.36-feasibility",
+    "commit": "b6c3667",
+    "sha256": "5c75dc3805ef50117fa19ca0de1896ee82965f4100a68fed0619a0e1ced76c3a",
+    "unit_tests": {
+      "ran": 14,
+      "passed": 14,
+      "skipped": 1,
+      "skipped_reason": "host C compiler not installed (C decoder fixture)"
+    }
+  },
+  "invocation": {
+    "partition": "build/rg34xx-inventory-20261122-214708/boot-partition.bin",
+    "offset": "0x03000000",
+    "size": "0x829000",
+    "output_dir": "build/rg34xx-active-inputs",
+    "interpreter": "python 3.13.14 (py launcher not installed on this host)"
+  },
+  "derived": {
+    "android_image_id": "3e5a011f78a3797b5379c622c05d05fea6b90ba6000000000000000000000000",
+    "android_parts_bytes": [
+      8406862,
+      512,
+      0,
+      0,
+      144384
+    ],
+    "kernel_text_offset": "0x80000",
+    "kernel_image_size": "0x1138000",
+    "kernel_flags": "0xa",
+    "dtb_totalsize": 139822,
+    "dtb_extent_bytes": 144384,
+    "initrd_bytes": 512,
+    "initrd_entries": 1,
+    "kernel_sha256": "39cf8c3eb9a75ff0eda51b4074cd65860c5aa5386093bcaf69339819421d84b7",
+    "bol4_packed_sha256": "0d68a382464e7a7bcfbaf999e4c7326a3096b258208df191783e1e6d7d46ba94"
+  },
+  "checks": {
+    "source_partition_bytes_is_64_mib": true,
+    "source_extent_in_bounds": true,
+    "active_image_matches_source_extent": true,
+    "active_image_bytes_is_0x829000": true,
+    "active_image_fnv1a32_is_0x04762a5f": true,
+    "bol4_bytes_is_0x80474e": true,
+    "bol4_packed_len_matches_extent": true,
+    "bol4_packed_len_is_0x80473e": true,
+    "bol4_output_len_is_0x10a7008": true,
+    "bol4_header_fnv_matches_payload": true,
+    "bol4_header_fnv_is_0xb4c47d39": true,
+    "bol4_decodes_to_kernel_image": true,
+    "kernel_bytes_is_0x10a7008": true,
+    "kernel_magic_is_arm64_image": true,
+    "android_header_matches_image_prefix": true,
+    "android_page_size_is_2048": true,
+    "android_header_version_is_2": true,
+    "android_header_size_is_1660": true,
+    "initrd_is_empty_newc_cpio": true,
+    "dtb_magic_is_fdt": true,
+    "dtb_totalsize_within_extent": true
+  },
+  "all_checks_passed": true,
+  "not_installable": true,
+  "not_hardware_validated": true
+}
