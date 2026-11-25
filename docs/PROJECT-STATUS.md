@@ -2,7 +2,7 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-25（OPP analyzer 已覆盖 u32 全位候选、多版本 OPP 属性及电压 triplet 结构检查；Linux/Windows host tests、H700 host regression 与 AArch64/AArch32 ARM/Thumb-2 编译通过；设备 parser-v3 采集待完成）  
+**最后核对时间：** 2026-11-25（RG34XX parser-v3 实机报告已上传并完成 OPP 候选分析；唯一精确结构指纹为 no-mask + b1；cpufreq getter 缓存瞬态已澄清；SID→b1、温度校准、BL31 多核与 PMIC/CCU 实机门槛仍未关闭）  
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **工作分支：** `porting/linkslot-1.0.45-feasibility`  
 **最新代码 HEAD：** `da41806e47dbd2e0d57e23e9ff6ff405a5514e29`。H700 AArch32/AArch64 compile + host regression [#45537478198](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45537478198) 与 H700 boot audit tools [#45537478202](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45537478202) 均成功，覆盖 OPP analyzer、storage/CPU/LED/MMU/PIO regressions、AArch64、AArch32 ARM-state、AArch32 Thumb-2、Linux/Windows audit tests 与 PowerShell wrapper syntax。最近一次完整 Linkslot/LK/mGBA 综合 host/cross-build 仍为 [#45532364153](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45532364153)；host/cross-build 不等于完整 LK target link 或实机启动。  
@@ -28,7 +28,8 @@
 **同步采样代码提交：** collector `2726db1f2b4e356e632b958027cb11f9bf42bf49`（blob `94cce9b7a0a90a28a7e427cfb84d2a9f6be540b8`）；新增静态只读测试 `51ed3bae2fc24e88fc803b2e3e143fe5df8ba495`（blob `c320daec1fc6a970b19301aa61b0003b797409ae`）。采样 shell 片段与 Python 测试方法的语法检查通过；GitHub commit combined status 目前未返回 checks，完整测试/Actions 仍待确认。
 
 
-**本轮 CPUX inventory v2：** 报告已上传至 [reports/rg34xx-inventory-20261125-cpux-v2](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261125-cpux-v2)，采集时间 2026-11-25 00:41:21 UTC。parser-v2 已解析 `/opp_l_table` 的 table-level SID `speed` 引用及 `opp-microvolt-a1/b0/b1/c0/c1/c2` 命名电压；启动时 600/792/1032/1296/1344 MHz 五档因电压属性未命中被内核丢弃。八组 150 ms 样本中 `scaling_cur_freq` 连续至少 1.1 s 显示 480 MHz，而 `cpuinfo_cur_freq` / `pll_cpu` 为 1008/1104 MHz，DCDC1 为 950/1000 mV；仍需区分 policy/IPA 限制与 clock-driver 拒绝。SID raw `0x6c00` 未获 OPP mask 授权，AVCC 热校准仍未通过。
+**本轮 CPUX inventory v2：** 报告已上传至 [reports/rg34xx-inventory-20261125-cpux-v2](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261125-cpux-v2)，采集时间 2026-11-25 00:41:21 UTC。parser-v2 已解析 `/opp_l_table` 的 table-level SID `speed` 引用及 `opp-microvolt-a1/b0/b1/c0/c1/c2` 命名电压；启动时 600/792/1032/1296/1344 MHz 五档因电压属性未命中被内核丢弃。v2 的 480 MHz cached observation 已由 v3 复读证据重新解释，不再视为真实 clamp；SID raw `0x6c00` 未获 OPP mask 授权，AVCC 热校准仍未通过。
+**本轮 CPUX inventory v3（2026-11-25 03:19:48 UTC）：** 报告已上传至 [reports/rg34xx-inventory-20261125-cpux-v3](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261125-cpux-v3)。原始 live FDT 与五个启动链二进制捕获的哈希与 v1/v2 一致；v3 新增 parser-v3 OPP property presence 和八组 cpufreq getter/clock/DCDC1 对账。五份 `scaling_available_frequencies` 均为 480/720/936/1008/1104/1200/1320/1416/1512 MHz；38 个 OPP 节点的唯一精确结构候选为 no table-level `supported_hw` + `b1` named voltage，全部 one-cell mask 模型没有 exact witness。九档 `b1` 电压为 900/900/900/950/1000/1050/1100/1150/1160 mV。八组 getter 证明 v2 的 480 MHz cached window 是 cpufreq sysfs 非原子/滞后读取，不是已证实的频率钳制；CPU thermal cdev 状态为 0/8、0/5，均绑定 CPU zone0。此结果仍不证明实际驱动源码、SID `0x6c00 → b1`、原始 PMIC/CCU 状态或 OPP 安全授权；AVCC 未校准、CPU1–CPU3 BL33 状态未知，所有 DVFS 写操作继续禁用。
 
 **本轮 RG34XX 电源灯实现：** 原厂 RG34XX（非 SP）设备树与 MustardOS RG34XX-H 配置均映射 `work_led=PI12`、`low_pwr_led=PI11`；仅控制 PI12。新增 `platform/h700/power/h700_rg34xx_power_led.c`，上电默认点亮；`target_early_init()` 早期点亮，`target_init()` 失败重试。新增 PIO 1 MiB Device MMU window mapping。Linkslot 1.0.45 `Session` 在 Playing/Polaroids 状态熄灭、退出后点亮；no_std 状态机仅在状态变化时调用 C ABI。暂不增加前端开关。提交：driver `af1922d0cecec278fc7bf2d81d63e4e621ab8685`、Session state `3cbc92669aac23b3e702c9518573d37adcd2fa54`、PIO mapping `c3a233e6f20defaf2ab0192f0de54f5c70921464`。Host tests 与 cross-compile 已通过：H700 AArch32/AArch64 compile check [#45524236936](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45524236936)（含 AArch64、AArch32 ARM、AArch32 Thumb-2 三组对象编译与 LED C host regression）；Linkslot runtime slices [#45524236833](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45524236833)（含 no_std 状态机测试和 Linkslot 1.0.45 Frontend overlay 编译）成功。实机极性、启动时机仍待验证；完整 LK target link/镜像仍受独立内存批准 gate 约束。
 
@@ -41,13 +42,13 @@
 **本轮 PIO clock-boundary 审计：** H616-family 参考 PIO DTS 以 `CLK_APB1` 为主总线时钟且无独立 PIO reset property；参考 CCU `apb1_clk` 为 `SUNXI_CCU_MP_WITH_MUX`（offset `0x520`），无 PIO 专属 gate。RG34XX v2 Linux clk_summary 报告 APB1=100 MHz、PIO consumer=1。该证据支持不添加未经验证的 PIO gate/reset 写入，但 BL33-entry APB1 parent/rate 仍未实测；LED 代码不改 CCU。
 **本轮 LK MMU static footprint：** pinned LK `arch/arm/mmu.c` 使用 `tt[4096]` 静态 section table，占 16 KiB、16 KiB 对齐的 BSS footprint。MMU hook 本身不动态申请 DRAM，但这块 BSS 和其余 LK BSS/stack/heap 的实际 placement 仍在内存 ownership 审批范围内。
 
-**下一次 RG34XX 设备采集：** 新只读 collector 已提交（cpufreq path identity、getter 前后 cached frequency、cooling-device state/bindings）。使用 Windows PowerShell：`.\scripts\run-rg34xx-inventory.ps1 -OutputDirectory ".\build\rg34xx-inventory-20261125-cpux-v3"`；完成后把目录上传到 reports 分支 `reports/rg34xx-inventory-20261125-cpux-v3/`。不需要调整 governor/min/max，也不需要触碰 PMIC/CCU/CPU PLL。
+**下一步 CPU/DVFS 工作：** 不需要再次重复 v3 inventory。先匹配目标 Linux 4.9.170 的实际 cpufreq/OPP binary/source，解释 `b1` suffix 选择和 SID `0x6c00` 的真实语义；随后在安全 BL33-entry 只读路径批准后获取 PMIC/CPUX register readback，并证明 CPU1–CPU3 handoff 与 timer continuity。AVCC 校准未解决前不开放 Auto/Boost；所有 DVFS 写操作保持禁用。
 
 **本轮 OPP 候选分析工具：** 新增 `tools/analyze_h700_opp_candidates.py` 与 `tools/test_analyze_h700_opp_candidates.py`，按 Linux 4.9 OPP core 规则枚举无 `supported_hw` 与所有一单元 mask，准确处理 `opp-supported-hw` 属性缺失/空属性、命名电压属性 fallback，并与实际 `scaling_available_frequencies` 对比。工具要求 parser-v3 presence 字段；输出仅是 source/table fingerprint，不解码 SID、不授权 OPP，也不写硬件。
 
 **本轮 OPP analyzer 自动化验证：** `da41806e47dbd2e0d57e23e9ff6ff405a5514e29` 通过 [H700 AArch32/AArch64 compile + host regression #45537478198](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45537478198) 和 [H700 boot audit tools #45537478202](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45537478202)。新测试覆盖完整 u32 位域、多版本 OPP cell、exact witness 约束和电压 min/target/max 顺序。前一中间提交 `300ae422` 的一项 test fixture 未禁止低位候选，已修正并在 `da41806` 两平台重跑通过。
 
-**下一次 RG34XX 设备采集：** 在保留原始 `live-fdt.dtb` 的 Windows 采集机运行 `.\scripts\run-rg34xx-inventory.ps1 -OutputDirectory ".\build\rg34xx-inventory-20261125-cpux-v3"`，随后上传到 reports 分支 `reports/rg34xx-inventory-20261125-cpux-v3/`。v3 同时带回 OPP property presence、cpufreq getter 前后 cached frequency、cooling-device state/bindings；不需要改 governor、min/max、PMIC 或 CCU。
+**最近完成的 RG34XX 设备采集：** parser-v3 inventory 已上传至 `reports/rg34xx-inventory-20261125-cpux-v3/`，并完成 OPP exact-candidate analysis 与 cpufreq getter reconciliation。原始 binary 保留在采集机，未上传；报告可复查文本 JSON 与哈希清单。
 
 ## 1. 项目目标与固定约束
 

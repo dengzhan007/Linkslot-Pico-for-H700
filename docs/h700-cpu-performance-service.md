@@ -297,7 +297,7 @@ The read-only inventory collector now also emits a focused, indentation-preservi
 The second read-only report is archived at [reports/rg34xx-inventory-20261125-cpux-v2](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261125-cpux-v2). It regenerates the live FDT JSON with parser-v2 and adds six uptime-bracketed CPUFreq/clock-tree samples plus eight 150 ms samples including DCDC1 voltage.
 
 - The live `/opp_l_table` now exposes its table-level NVMEM `speed` reference and named `opp-microvolt-a1/b0/b1/c0/c1/c2` variants. The kernel drops 600/792/1032/1296/1344 MHz because selected voltage-property lookup yields `minuV=maxuV=0`. The final Linux table remains 480/720/936/1008/1104/1200/1320/1416/1512 MHz.
-- In eight repeated 150 ms samples, `scaling_cur_freq` reports 480 MHz for at least 1.1 seconds while `cpuinfo_cur_freq` reports 1008/1104 MHz and `pll_cpu` remains at 1008/1104 MHz; DCDC1 reads 950/1000 mV. This is a persistent policy-vs-clock reporting discrepancy, not evidence that the CPU physically ran at 480 MHz. The capture cannot distinguish a governor/thermal-policy constraint from a clock-driver request rejection.
+- Historical v2 observation: `scaling_cur_freq` appeared to remain at 480 MHz while `cpuinfo_cur_freq` reported 1008/1104 MHz. The v3 eight-sample getter reconciliation supersedes this as a stale/non-atomic cache observation: repeated reads show the cached scaling value moving from 1008 to 1104 MHz after getter reads. Do not classify the old v2 window as a governor clamp or clock-driver rejection.
 - CPU0–CPU3 remain in one shared cpufreq policy; CPU supply is AXP2202 DCDC1. Thermal AVCC remains uncalibrated. Raw SID `0x6c00` still does not authorize a speed-bin mask or voltage suffix.
 
 The report is read-only and does not authorize OPP expansion or any PLL/CCU/PMIC write. Keep the service `POLICY_ONLY`, `hardware_applied=0`; continue to block Auto/Boost and CPU voltage/frequency writes.
@@ -387,4 +387,22 @@ The initial CI run exposed two implementation defects (an over-escaped frequency
 - [H700 AArch32/AArch64 compile + host regression #45537478198](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45537478198), including AArch64, AArch32 ARM-state, AArch32 Thumb-2, and storage/CPU/OPP/MMU/PIO host tests;
 - [H700 boot audit tools #45537478202](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45537478202), including Linux and Windows Python unit tests and PowerShell syntax validation.
 
-Next step is to run parser-v3 on the original device `live-fdt.dtb`, then run the analyzer against the same capture's runtime frequency file. Until then, `b1` remains a conditional structural fingerprint only; the SID decode and all OPP/DVFS writes remain unapproved.
+Parser-v3 is now uploaded and analyzed. The 38-entry live OPP table and five identical runtime frequency lists yield one exact candidate: no table-level `supported_hw` array plus the `b1` named-voltage property. Every `-ab` node has `supported_hw_present=false`; all nine runtime rates have a `b1` variant, while the five boot-rejected rates do not. No one-cell table mask produces an exact witness. Runtime samples at 1416/1150 mV, 1104/1000 mV and 1200/1050 mV also match `b1` voltage declarations. This narrows the property-selection model but does not prove the shipping binary selects `b1` or that SID `0x6c00` maps to it. Keep `opp_authorization=not_approved`, `POLICY_ONLY`, `hardware_applied=0`, and every DVFS write disabled.
+
+### 8.6 Parser-v3: unique no-mask + b1 structural fingerprint and getter reconciliation
+
+The v3 field capture is archived at [reports/rg34xx-inventory-20261125-cpux-v3](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261125-cpux-v3), captured 2026-11-25 03:19:48 UTC. The original live FDT is hash-identical to v1/v2; parser-v3 preserves `supported_hw_present`, `supported_hw_cell_count`, named voltage variants and the table's `speed` NVMEM reference. The runtime file includes matching CPU0–CPU3 and policy0 lists plus eight uptime-bracketed getter/clock/DCDC1 samples.
+
+- The live `/opp_l_table` has 38 entries; all 14 `-ab` nodes explicitly have no `opp-supported-hw` property.
+- Five `scaling_available_frequencies` blocks agree exactly on 480/720/936/1008/1104/1200/1320/1416/1512 MHz.
+- The corrected analyzer returns one exact candidate only: no table-level `supported_hw` array + voltage suffix `b1`. Base voltage and other named suffixes fail exact comparison; no one-cell mask model produces an exact set-cover witness.
+- The nine `b1` voltages are 900/900/900/950/1000/1050/1100/1150/1160 mV; the five dropped frequencies do not have a matching `b1` voltage on their untagged `-ab` entries.
+- Runtime clock / regulator-framework pairs at 1416/1150, 1104/1000 and 1200/1050 MHz/mV numerically match `b1`; these are not raw CCU/PMIC readbacks and the attributes are not atomic.
+
+This is now a unique structural fingerprint, not merely the earlier conditional hypothesis. The exact Linux 4.9.170 binary/source path that selects the property name remains unproven. Do not claim that SID raw `0x6c00` maps to `b1`. The analyzer does not model PMIC selector tables or `regulator_is_supported_voltage()`, and no real OPP is approved.
+
+**cpufreq getter result:** Sample 2 shows cached scaling 1008 → `cpuinfo_cur_freq` 1104 → cached scaling 1104; `pll_cpu` is 1104 MHz and DCDC1 framework voltage is 1000 mV. Sample 4's getter reads 1104 while the later clock tree reads 1200 and DCDC1 1050 mV, proving the reads are non-atomic. Samples 5/6 update the cache only later in the second getter/read sequence; samples 7/8 repeat 1008 → 1104. The v2 480 MHz window is therefore a stale/non-atomic sysfs observation, not evidence of a persistent clamp or failed clock transition.
+
+CPU zone0 is 47.69 °C with passive trips at 60/70 °C and critical at 115 °C. `thermal-cpufreq-0` is 0/8 and `thermal-devfreq-0` is 0/5, both bound to CPU zone0; no active cooling-state throttling is visible in this snapshot. AVCC calibration remains rejected. The 1 GiB RAM window, 46 memblock reservations and 64 MiB CMA are unchanged; `[0x7ec00000,0x7fc00000)` remains un-attributed and excluded.
+
+Next gates: identify the shipping cpufreq/OPP binary path and its `b1` selection; prove BL31→BL33 CPU1–CPU3 state and timer continuity; obtain safe read-only raw PMIC/CCU evidence; certify an independent temperature path. Keep the CPU service unavailable and write-free.

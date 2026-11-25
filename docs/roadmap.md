@@ -138,11 +138,13 @@
 - [x] 审查 Linux 4.9 cpufreq core `show_scaling_cur_freq()` / `show_cpuinfo_cur_freq()` / `__cpufreq_get()`：target-based `cpufreq-dt` 的 `scaling_cur_freq` 为缓存 `policy->cur`，而 `cpuinfo_cur_freq` 调用硬件/clock getter；若不同，getter 路径会触发 `cpufreq_out_of_sync()` 并更新缓存。因此 v2 的“480 MHz cached value → 1008/1104 MHz cpuinfo”不能证明 PLL/driver 持续故障。新 collector 在 getter 前后复读缓存并收集 cooling-device 状态。
 - [x] 复核 v2 CPU thermal zone0 46.637°C / first passive trip 60°C：固定 `power_allocator` 候选源码在低于 switch-on trip 时返回 maximum power；本次样本不支持 CPU-zone PA 已主动降频的判断，但 exact binary、其它 thermal cdev 和 policy constraints 仍待实测。
 - [x] 补齐 LK `platform_init_mmu_mappings()` 完整调用契约与 fake-MMU 回归；1 GiB DRAM + PIO Device descriptor + MMU enable 顺序已由 H700 AArch32/AArch64/Thumb2 编译和 host regression 验证。 Pinned LK 的 16 KiB static section table 位于 `.bss`，实际 BSS/stack/heap placement 继续受 memory approval gate 约束。 已在 pinned `arch/arm/mmu.h` 与 `arch/ops.h` 核对声明/宏；仍未执行完整 LK target link。
-- [ ] 重新运行 collector v3，验证 cpuinfo getter 前后的 cached frequency 是否被修正，并采集真实 thermal cooling-device state/bindings。 Linkslot/mGBA/LK feasibility #45526769421 已通过；仍不是完整 LK target link 或设备验证。
+- [x] 已在 RG34XX 实机运行并上传 collector v3：八组 uptime-bracketed getter 对账显示 `scaling_cur_freq` 可由 1008 MHz 在 getter 后更新至 1104 MHz；CPU thermal cooling devices 当前为 0/8 与 0/5，绑定 CPU zone0。v2 的 480 MHz 持续缓存异常被 v3 证据推翻为非原子/滞后读取，不是已证实的 governor clamp 或 clock-driver rejection。报告见 `reports/rg34xx-inventory-20261125-cpux-v3/`。仍不是完整 LK target link 或设备 DVFS 验证。
 
 - [x] 新增 `tools/analyze_h700_opp_candidates.py`：基于 parser-v3 JSON，按 Linux 4.9 OPP core 模拟 no-mask / one-cell table-level `supported_hw`，区分 absent/empty 属性、多版本 OPP 属性、命名电压 suffix 与 base fallback，并与 runtime available frequency list 比对。工具不模拟 regulator selector table，不解码 SID，也不授权真实 OPP。
 - [x] OPP candidate analyzer 的完整 u32 mask 假设、多版本 OPP cells、set-cover exact witness 与 voltage-triplet 回归通过 H700 Linux/Windows、storage-host regression 和 AArch64/AArch32 ARM/Thumb-2 编译：#45537478202、#45537478198；验证 HEAD `da41806e47dbd2e0d57e23e9ff6ff405a5514e29`。
-- [ ] 用 RG34XX parser-v3 真实 live FDT 报告运行 OPP candidate analyzer，确认所有 `-ab` 节点的 `supported_hw_present`，并核对同一采集的 `scaling_available_frequencies` 与同步 cpufreq getter 样本后，再判断条件式 `b1` fingerprint。
+- [x] 已用真实 parser-v3 `live-fdt.json` + 同次 `cpu-power-runtime.txt` 运行修正后的 OPP candidate analyzer：38 个 OPP entry 中 14 个 `-ab` 节点均 `supported_hw_present=false`；五组 runtime list 一致为九档。唯一精确模型为 no table-level `supported_hw` + named voltage suffix `b1`，全部 one-cell mask 模型均无 exact witness。此为运行表结构指纹，不是 SID 解码或 OPP 授权。
+- [ ] 识别实际运行 Linux 4.9.170 cpufreq/OPP binary/source 路径，解释为何实际行为唯一匹配 no-mask + `b1`；不得直接推断 SID raw `0x6c00 → b1`。
+- [ ] 在具备安全 BL33-entry 只读访问依据后读取/验证 AXP2202 DCDC1 与 CPUX PLL/CCU 实际状态；先证明 CPU1–CPU3 handoff、单核所有权和 timer continuity，完成前不允许任何共享 CPU PLL 写入。
 
 ### C1. CPU performance modes / H700 DVFS (architecture first)
 
@@ -156,7 +158,7 @@
 - [x] 确认该固定 vendor `clk-sun50iw9_tbl.c` 明确注释频率因子表不正确；因此不从该表生成 RG34XX MHz 档位或 OPP，也不把表格数值与 AXP2202 电压推断拼接。
 - [x] 扩展 RG34XX 只读 inventory：从 Linux `clk_summary` 单独摘录 `pll_cpu`、`pll_periph0`、`cpux` 和 `cpu` 条目并保留父子树缩进；不执行 devmem、不触碰 CCU MMIO、不修改 clock policy。对应静态只读安全测试已加入 H700 AArch32/AArch64 workflow。
 - [x] 扩展 `tools/inspect_h700_fdt.py`：OPP entries 现输出 `voltage_microvolt_variants`（解析 `opp-microvolt-<suffix>`），OPP table 现输出 `nvmem_cells` / `nvmem_cell_names`。`tools/test_inspect_h700_fdt.py` 增加 a1/b0 电压后缀与 speed-bin phandle 回归；workflow 已添加对应 push/PR path 和执行命令。提交 parser `fc84576d0d597abb6317ac64fefd62cf25dd63dc`、test `0ee82a5709418b8f81120cd337a75b8d237052ee`、workflow `9cbceb738ac2a8802784d0eac6ae6f4f2c5e1a5c`、fixture string 修正 `c5bd42ca547db2c49ec2018946275cd457ff24ee`。新 CI 结果待确认。
-- [x] 已在设备重新运行并上传 parser-v2 inventory：`reports/rg34xx-inventory-20261125-cpux-v2/`，包含命名电压属性和 OPP table SID-cell reference。当前 parser-v3 又增加 OPP property-presence 字段，仍需使用本机原始 `live-fdt.dtb` 重新生成 v3 报告。
+- [x] 已上传 parser-v2 与 parser-v3 inventory：`reports/rg34xx-inventory-20261125-cpux-v2/`、`reports/rg34xx-inventory-20261125-cpux-v3/`。v3 包含原始 live FDT 派生的 OPP property-presence、named voltage、table speed NVMEM reference 及同步 cpufreq getter/cooling-state 证据。
 - [x] 扩展只读 inventory 为六轮、间隔 200 ms 的 uptime-bracketed 同步采样：每轮读取 policy0/cpu0 的 `scaling_cur_freq`、`cpuinfo_cur_freq` 和 CPUX 相关 `clk_summary` 行，用于区分缓存 policy 频率与 clock-framework 即时读数；仅读取 `/proc/uptime`、cpufreq sysfs 和 clk_summary，不改 governor、频率、电压或寄存器。静态 safety regression 已新增断言并由现有 H700 workflow 执行，结果待确认。
 - [x] collector/synchronized-sample 变更的 H700 host regression 与 Linux/Windows boot-audit 已通过 #45526953772、#45526953774；这些只验证采集脚本和静态只读边界，不替代新一轮设备采集。
 - [x] parser-v2 OPP/FDT regression 已通过 H700 AArch32/AArch64 与 Linux/Windows workflows #45529626035、#45529626080。parser-v3 与候选分析器的增量验证见本轮 OPP 专项记录。
