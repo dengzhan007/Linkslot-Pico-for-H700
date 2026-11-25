@@ -18,7 +18,7 @@ The r2 capture resolves the live controller-to-host mapping and supplies the mis
 | `sdc1` | `0x04021000` | `allwinner,sunxi-mmc-v4p1x` | `mmc_host2` | SDIO device; kernel log identifies an SDIO DDR50 card (consistent with Wi-Fi) |
 | `sdc2` | `0x04022000` | `allwinner,sunxi-mmc-v4p6x` | `mmc_host1` | Removable-card candidate; has a card-detect GPIO; no card was inserted |
 
-**The Linkslot external-card target is `sdc2` / MMIO `0x04022000`, not “Linux mmc2”.** Do not derive the host index or controller role from the DT alias number.
+**The first Linkslot storage target is `sdc0` / MMIO `0x04020000`, because it owns the running system card and mounted ROM volume.** `sdc2` / MMIO `0x04022000` is only the optional second-card-slot candidate. Neither controller should be selected by the Linux `mmcN` name or DT alias number.
 
 ## Live host and alias mapping
 
@@ -62,6 +62,20 @@ The whole disk reports 30,375,936 sectors (14.48 GiB) with seven partitions. Sys
 - `reg`: `0x04021000`, size `0x1000`; compatible v4p1x; `bus-width = <4>`.
 - No card-detect or supply properties; pinctrl default/sleep is present.
 - Kernel log eventually reports `mmc2: new ultra high speed DDR50 SDIO card at address 0001`, at 50 MHz / 4-bit. This is consistent with the board's Wi-Fi SDIO device; it is not the removable game-card slot.
+
+## Live pinctrl and CCU clock state
+
+The collector also captured debugfs pinctrl and clock summaries. These are live Linux observations, not a prescription to reproduce every state transition blindly in LK.
+
+| Controller | Live pinctrl state | Active/default pin groups observed | CCU module clock | Bus gate / reset gate |
+| --- | --- | --- | ---: | --- |
+| \`sdc0\` | \`default\` | PF0–PF5 muxed to \`sdc0\` | \`sdmmc0_mod\`: 100 MHz, enabled | \`sdmmc0_bus\` and \`sdmmc0_rst\` enabled |
+| \`sdc1\` | \`default\` | PG0–PG5 muxed to \`sdc1\` | \`sdmmc1_mod\`: 200 MHz, enabled | \`sdmmc1_bus\` and \`sdmmc1_rst\` enabled |
+| \`sdc2\` | \`sleep\` at capture time | Default map contains PC1, PC5, PC6, PC8–PC11, PC13–PC16 and PC0; sleep map disables those pins | \`sdmmc2_mod\`: 800 kHz nominal entry, not enabled/prepared | \`sdmmc2_bus\` and \`sdmmc2_rst\` disabled |
+
+The \`sdc0\` and \`sdc1\` active pin groups have pinconf entries \`0x00002809\` / \`0x00000005\`. The \`sdc2\` default map mostly has \`0x00001e09\` / \`0x00000005\`, with PC0 carrying \`0x00000003\`; however, its current state is \`sleep\`, so those default settings were not active at capture time. These encoded pinconf values must be decoded against the exact vendor PIO implementation before LK writes equivalent values. Do not treat them as already-decoded pull/drive settings.
+
+The CCU clock-summary rates are module-clock framework rates, not the card's SDCLK. The kernel log independently shows sdc0's card bus reaching 50 MHz in 4-bit SDR25 mode. In particular, do not mistake the 100 MHz sdc0 module clock for a 100 MHz SD bus clock. sdc2's disabled clock/gates are consistent with the empty slot and later host clock shutdown.
 
 ## Cross-checks against kernel log
 
