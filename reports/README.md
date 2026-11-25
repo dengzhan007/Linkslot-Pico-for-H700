@@ -392,3 +392,6 @@ with `[REDACTED]`; every other byte is exactly what the device produced. The uns
 is kept local only (SHA-256 `8856e75b2942763cd4799ae647feb6364ec85680d25d5b42f0a324eafff56503`),
 so the two archives differ only by those two replacements. No CID/CSD identity fields and no
 partition contents are included. No SD/MMC driver work and no hardware test are implied.
+
+
+**Correction (2026-11-26):** The pvaibhav pinned source does not require a second FDT timing node for its runtime register switch. Its actual 120-Hz pair is TCON divider `0xf000000a` + PLL `0x88002b03` (528 MHz / 10 ≈ 120.131 Hz); `0x88001701` is a different 576-MHz encoding. This corrects the interpretation in the runtime audit summary without changing the measured result: the device's PLL remained `0x88001703` and IRQ stayed near 59.6 Hz in both captures. See the erratum at the end of [slot-refresh-audit/SUMMARY.md](slot-refresh-audit/SUMMARY.md).
