@@ -43,7 +43,7 @@
 
 **状态入口：** [项目当前状态与续接记录](docs/PROJECT-STATUS.md)。此文件记录当前工作分支、HEAD、最近 CI、已完成工作、硬件门槛和下一步任务；每轮移植后同步更新。
 
-- 当前移植分支：`porting/linkslot-1.0.45-feasibility`；当前正式源码基线为 Linkslot 1.0.45。旧 1.0.36 分支仅保留历史验证。
+- 当前移植工作分支：`porting/linkslot-1.0.45-feasibility`（分支名保留历史）；当前目标源码基线为 Linkslot main 1.0.49。现有 1.0.45 代码/CI 需迁移复验。旧 1.0.36 分支仅保留历史验证。
 - 已完成多个 Linkslot 纯业务 `no_std + alloc` crate 的抽取、三核心 picker 状态机、H700 software renderer、C Input ABI/queue、Libretro VFS v3、真实 mGBA AArch32 静态 archive 构建和 host/cross-build 集成验证。
 - H700 只读存储 host 路径已覆盖 sdc0/CMD17 → GPT → FAT → Libretro VFS；尚未完成目标机真实 sdc0 MMIO、实体卡读扇区和文件写入/断电一致性验证。
 - GammaOS LK AArch32 BL33 的部分 overlay、CRT0/vector、Cortex-A53 编译参数和 VBAR host/cross-build 检查通过；**尚未完成完整 LK target link、可刷写镜像或 RG34XX 实机启动**。
@@ -68,11 +68,11 @@ H700_ARCH=aarch32 H700_A32_STATE=thumb bash scripts/build-h700-objects.sh
 
 项目不要求直接使用原版 Linkslot Linux 发布包。目标是尽量保持上游业务逻辑和数据语义，将 H700/LK 适配放在独立目录，减少每次更新时需要重新移植的范围。
 
-**当前源码基线：** Linkslot 1.0.45，归档于 `upstream/linkslot`。归档来源 commit、根目录 main / DEV / test 快照差异和文件 hash 比对见 [1.0.45 移植基线更新](docs/linkslot-1.0.45-portability-update.md)。归档目录不是原始上游 Git 历史的完整 mirror。
+**当前源码基线：** Linkslot main 1.0.49，归档于 `upstream/linkslot` 根目录；同版本 `test` 与 main 逐文件一致。`DEV/` 为 1.1.0，作为第二阶段差异审查对象。原始来源 commit、归档 commit、851/872 文件清单和差异说明见 [三分支上游基线](docs/upstream-baselines.md) 与 [1.0.49/1.1.0 更新审查](docs/linkslot-1.0.49-1.1.0-refresh.md)。此前 1.0.45 的适配和 CI 仅是历史验证，不能视为 1.0.49 已通过。归档目录不是原始上游 Git 历史的完整 mirror。
 
 特别注意：Linkslot 当前 `device` feature 仍是 AArch64 Linux/`std` 后端，不是 LK/bare-metal。后续以窄 `no_std` Rust 业务运行时承载前端逻辑，通过 H700 C HAL 和静态 Libretro C ABI 接入设备服务；不得把 Linux `device_app` 当作裸机入口。GammaOS LK 参考分支和当前 BL33 候选为 AArch32，Rust 与模拟器静态核心必须按该 ABI 构建。
 
-具体规则见 [Linkslot 上游同步与移植边界](docs/linkslot-upstream-sync.md)、[1.0.45 移植基线更新](docs/linkslot-1.0.45-portability-update.md) 和 [总体路线图](docs/roadmap.md)。
+具体规则见 [Linkslot 上游同步与移植边界](docs/linkslot-upstream-sync.md)、[三分支源码基线](docs/upstream-baselines.md)、[1.0.49/1.1.0 更新审查](docs/linkslot-1.0.49-1.1.0-refresh.md) 和 [总体路线图](docs/roadmap.md)。
 
 ## 重要设计文档
 
