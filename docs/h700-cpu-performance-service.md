@@ -192,7 +192,7 @@ The upstream 1.0.45 UI extension point was reviewed in the immutable snapshot. T
 - [x] Export and parse the RG34XX live-FDT CPU `cpu-supply` relationship: CPU0 phandle `0x4f` resolves to `axp2202-dcdc1` (500000–1540000 µV, always_on/boot_on). Linux regulator debugfs independently reports consumer `cpu0 @1160mV` in the 2026-11-25 capture. This confirms the rail mapping for this captured FDT/runtime pairing; it is not raw PMIC register readback at BL33 entry.
 - [x] Confirm the current Linux runtime PMIC observation: AXP2202 on I²C-5, address `0x34`. Match generic AXP2202 reference DCDC1 selector/control fields (`0x83` / `0x80`) without enabling writes.
 - [ ] Read-only PMIC voltage and enable-state readback at BL33 entry; verify that the stock firmware left the expected rail at the expected voltage before any transition is designed.
-- [x] Read the exact bounded SID speed cell (two bytes): raw `0x6c00`; thermal calibration cell (eight bytes): `181113ab191b16bb`. Mainline diagnostic decode says candidate bin 5, but two 4.9.170 vendor source candidates disagree (mask 4 versus mask 1), generic SoC identity is unavailable, and `opp_authorization` remains `not_approved`. The raw read is complete; exact running-source identity and active OPP mask remain unresolved.
+- [x] Read the exact bounded SID speed cell (two bytes): raw `0x6c00`; thermal calibration cell (eight bytes): `181113ab191b16bb`. v4 now provides kernel Build ID and confirms the `sun50i-cpufreq-nvmem` / `cpufreq-dt` platform devices are bound; the runtime nine-rate OPP set strongly matches the `b1` named-voltage subset. The exact source/decoder and raw `0x6c00 → b1` rule remain unresolved; `opp_authorization` stays `not_approved`.
 - [x] Audit a pinned `sun50iw9` vendor CPUX source candidate: `PLL_CPU=0x0000`, `CPU_CFG=0x0500`, temporary `pll_periph0` parent before PLL rate change, restore `pll_cpu` afterward, new lock-mode polling; bit31 must not be toggled dynamically and lock-status bit is build-config dependent. This is source-level only; actual BL33 CCU base/access, lock configuration, timer continuity and transition safety remain pending.
 - [ ] Resolve CPU1–CPU3 state at BL31→BL33. Until then, CPU PLL writes remain disabled.
 - [ ] Implement/read the H700 thermal sensor path and validate AVCC calibration; the current RG34XX kernel capture reports “avcc is not calibrated”, so automatic thermal DVFS is blocked.
@@ -204,9 +204,9 @@ The upstream 1.0.45 UI extension point was reviewed in the immutable snapshot. T
 - [ ] Add transition-ordering tests for voltage-before-frequency on upshift and frequency-before-voltage on downshift, plus PLL timeout and PMIC failure handling when a hardware transition layer is eventually introduced.
 - [ ] Add on-device sustained-load, cold/warm boot, battery/charger, audio-underrun, frame-pacing and thermal-soak tests before enabling Performance/Boost in release builds.
 
-### 8.2 Linux 4.9.170 cpufreq/OPP source variants and parser-v1 limits (2026-11-25)
+### 8.2 Linux 4.9.170 cpufreq/OPP source variants and v4 kernel provenance (2026-11-25)
 
-The device reports Linux `4.9.170`, but no running-kernel build ID or image hash ties it to an exact public source commit. The reviewed branches disagree on raw SID `0x6c00`:
+The device reports Linux `4.9.170`. v4 now captures GNU Build ID `a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68`, compiler/build host, relevant configuration and successful `sun50i-cpufreq-nvmem` / `cpufreq-dt` platform bindings. The Build ID is not yet mapped to a public source commit. The reviewed branches disagree on raw SID `0x6c00`:
 
 | Candidate | Version / driver blob | `0x6c00` handling | Read safety |
 |---|---|---|---|
@@ -235,6 +235,22 @@ Earlier comparisons of candidate masks against parser-v1's base `opp-microvolt` 
 The same-version cpufreq-dt source candidate says `cpuinfo_cur_freq` reads `clk_get_rate(policy->clk)`, while `scaling_cur_freq` uses cached `policy->cur`. Inventory v1 read these fields and the later `clk_summary` sequentially. The collector now performs six uptime-bracketed samples, 200 ms apart, but a new device report is still required. Full Python/Actions verification of the parser/sampler changes is pending.
 
 Do not infer an OPP mask from either vendor candidate or the mainline diagnostic decode. Keep all real DVFS paths disabled.
+
+### 8.9 v4 kernel provenance and effective OPP fingerprint
+
+The 2026-11-25 04:05:51 UTC v4 report records:
+
+- Linux `4.9.170 #19 SMP PREEMPT`, built by Linaro GCC 5.3.1 on 2026-05-26 13:58:08 CST; build host `flower@flower-B85M-D2V`.
+- GNU Build ID from `/sys/kernel/notes`: `a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68`; the complete notes SHA-256 is `6065c1a7ae894047f0e902551811b39d0c5a11b5afd894083eae46497d56e12d`.
+- The config enables `CONFIG_CPUFREQ_DT`, `CONFIG_CPUFREQ_DT_PLATDEV`, `CONFIG_PM_OPP`, `CONFIG_NVMEM` and `CONFIG_NVMEM_SUN50I_SID`. Kallsyms includes `sun50i_cpufreq_nvmem_probe`, `sun50i_cpufreq_init`, `sun50i_cpufreq_match_list`, `dev_pm_opp_set_prop_name` and `dev_pm_opp_set_supported_hw`. Both `sun50i-cpufreq-nvmem` and `cpufreq-dt` have actual platform-device driver symlinks and `DRIVER=` uevents; no matching `/proc/modules` entries is consistent with built-in drivers.
+- The live OPP table references only `speed`; SID raw remains `0x6c00`. All five runtime frequency lists expose the same nine rates (480/720/936/1008/1104/1200/1320/1416/1512 MHz), which correspond exactly to the nine `b1` named-voltage entries (900/900/900/950/1000/1050/1100/1150/1160 mV). The five dropped frequencies lack a corresponding `b1` property. The v4 clock/regulator framework samples include 1320 MHz / 1100 mV and 1104 MHz / 1000 mV, also numerically consistent with `b1`.
+- The public Creality 4.9.191 `sun50iw9` path is not the target match: it requires both `speed` and `Icpu` (the live table has only `speed`) and maps `0x6c00` to supported-hardware mask 1, not a `b1` property. The two examined public 4.9.170 variants likewise do not match the live no-mask / named-voltage behavior.
+
+This is strong evidence that the currently bound cpufreq/OPP path is operating with an effective `b1`-shaped OPP set. It does **not** identify the exact source commit or prove the driver uses `dev_pm_opp_set_prop_name("b1")` as opposed to another vendor-specific equivalent; it also does not prove how raw `0x6c00` enters that decision. The Build ID is not a substitute for the matching kernel image or source.
+
+**Next binary-identification step:** acquire the stock boot partition (`mmcblk0p4`) or the matching `vmlinux` / unstripped kernel image read-only, then compare the embedded GNU Build ID and inspect the driver code offline. Keep the full binary local; upload only extracted metadata or bounded relevant excerpts. This step does not authorize MMIO, PMIC, PLL or CPUFreq writes.
+
+Thermal status remains unchanged: CPU zone0 is 51.74 °C in the v4 snapshot, but the kernel still logs `avcc is not calibrated`. Until a calibrated temperature source, BL31→BL33 secondary-core quiescence, timer continuity and raw PMIC/CCU readback are established, keep `POLICY_ONLY`, `hardware_applied=0`, and all actual DVFS controls disabled.
 
 ## 9. Current project status
 
@@ -421,4 +437,4 @@ The collector now emits `kernel-driver-provenance.txt` using read-only sources: 
 
 Validation: [H700 boot audit tools #45543371548](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45543371548) passed on Linux and Windows, including the inventory write-path safety checks and PowerShell wrapper syntax. [H700 AArch32/AArch64 compile + host regression #45543371507](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45543371507) passed storage/CPU/LED/MMU/PIO host regressions plus AArch64, AArch32 ARM-state and AArch32 Thumb-2 object compilation.
 
-Next collection: run `scripts/run-rg34xx-inventory.ps1` with output directory `build/rg34xx-inventory-20261125-cpux-v4`, then upload the text report folder to `reports/rg34xx-inventory-20261125-cpux-v4/`. No additional device-side test or control write is requested. The resulting provenance may still be incomplete if the running kernel does not export `/sys/kernel/notes`, config or kallsyms; absence must be recorded as unavailable, not inferred.
+The v4 collection is complete at [reports/rg34xx-inventory-20261125-cpux-v4](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261125-cpux-v4). It successfully exports the GNU Build ID, config, binding links and filtered symbols; these are runtime identity evidence, not a source tree match.
