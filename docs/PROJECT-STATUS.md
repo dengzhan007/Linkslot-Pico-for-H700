@@ -258,3 +258,17 @@ Linkslot 1.0.45 UI 当前已追加 display-only CPU row：`SYSTEM_SETTINGS` 为 
 
 
 **第三方 H700 120 Hz 实现审查（2026-11-25）：** 已审查 [`pvaibhav/slot` `5206e3fa39aa4a9b702cd9048a07dab3b5ab95da`](https://github.com/pvaibhav/slot/tree/5206e3fa39aa4a9b702cd9048a07dab3b5ab95da)。该 fork 的 Linux 侧实现确实比我们当前 policy-only 完整：`PanelRefresh::probe()` 对 model/panel/DT timing 严格 allowlist，使用 `sunxi_dump` 写 `DIVIDER 0x06511044` / `PLL 0x03001040`，120 Hz 先 divider 后 PLL，60 Hz 先 PLL 后 divider，读回两寄存器并在失败时 best-effort 回滚 60 Hz；启动时应用，唤醒时在开背光前重应用。其测量工具读取 LCD IRQ，而非依赖 stale `ref_fps`。但 **不能直接移植到本机**：fork 对 target `rg34xx` 的 gate 要求 `fog_fj035fhd05_v1 + 720×480 + lcd_dclk_freq=26 + HT/VT=820×536`，而本机最新 live FDT 是 `rg34xx_v1`；fork 自己也注明非 SP RG34XX 没有连接实机做 live test。BaseOS fleet panel survey 同样将 RG34XX 标为 `rg34xx_v1`。此外该 fork 设定为全局默认 120 Hz，启动/唤醒恢复，不提供独立 UI 偏好与 GAME 120 Hz 开关；与我们的 per-scene policy 不同。详细分析见 [`slot-pvaibhav-120hz-review.md`](slot-pvaibhav-120hz-review.md)。结论：借鉴 strict gate、C HAL owner、write ordering、readback、rollback 和 IRQ 验证；不复制其地址/数值或修改 panel allowlist。先用增强 FDT parser 重新只读采集本机 live `lcd_*` timing，再追查 `rg34xx_v1` 专用初始化和 TCON/DE/CCU/PLL 路径。硬件 writer 继续关闭，`hardware_applied=0`。
+
+
+## 8. pvaibhav/slot RG34XX non-SP 实机运行采集（2026-11-25 18:44–18:45 +08:00）
+
+报告已上传至 [reports/pvaibhav-slot-runtime](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/pvaibhav-slot-runtime)，同一台 RG34XX、同一系统分别采集 UI 29.624 s（27 samples）和 GAME 29.749 s（23 samples）。[专项分析](docs/pvaibhav-slot-rg34xx-live-capture-2026-11-25.md)。
+
+- 两个显示 IRQ 均稳定约 59.6 Hz：UI IRQ292/293 = 59.648/59.614 Hz；GAME = 59.632/59.632 Hz。驱动 `fps` 只在 59.8/60.2 间变化，`ref_fps=59`。DE rate 696 MHz；两轮 framebuffer、display status 和 clock summary 相同。没有观测到 UI/GAME 刷新模式切换，当前实机显示扫描仍约 60 Hz。
+- Live FDT 身份为 `rg34xx_v1`、720×480。报告 README 记录 DCLK=26 MHz、HT/VT=820×536、HBP=46、HSPW=2、VBP=20、VSPW=5；但已上传的 `live-fdt.json` 实际缺少 parser 的 `interface`/`timing` 子对象，raw DTB 未上传，因此此组 timing 需再用当前 parser 从保留 DTB 或重新拉取确认，不能把 README 提取记录当作完整机器可复现 parser 输出。
+- Slot PID 2842 两轮相同，cmdline/executable 映射路径是 `/mnt/sdcard/System/slot`（comm 被 loader 截断为 `ld-linux-aarch6`）。GAME 的 `maps` 确认加载 `armgba_libretro.so`。多前端路径不是进程名 `slot-pvaibhav`；后续 collector 必须按真实 `/System/slot` executable path 匹配。
+- `slot.state` 的 `high_refresh=1`，但配置值本身不是硬件模式证明；IRQ/clock/readback 没有显示 120 Hz。UI present FPS 和 armGBA committed game FPS 均未测得，不能从 IRQ 推断游戏 FPS。
+- pvaibhav fork 的目标 `rg34xx` gate 要求 `fog_fj035fhd05_v1`；本机实际是 `rg34xx_v1`，虽然 report README 所列的几何和时序数值匹配，但面板 byte identity 不匹配。其 `PanelRefresh::probe()` 会拒绝该设备、不会开放 writer；不可放宽 allowlist 或复制寄存器值。
+- `sunxi_dump` write/dump 节点存在且 root 可写，但本次没有写入。保持硬件 writer 关闭、`hardware_applied=0`。
+
+下一步：补齐 FDT parser JSON artifact；修复并版本化 PowerShell collector 的 adb shell quoting/CRLF、IRQ regex/`$Matches`、嵌套数组、真实多前端进程路径和 `fps`/`ref_fps` 区分；然后追踪 `rg34xx_v1` 初始化与 TCON/DE/CCU/clock route。再分别增加 UI present 和 armGBA committed-frame 测量。GAME 120 Hz 维持默认关闭。
