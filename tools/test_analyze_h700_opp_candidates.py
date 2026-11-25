@@ -137,18 +137,7 @@ class OppCandidateTests(unittest.TestCase):
         )
         self.assertEqual(no_mask_b1["accepted_frequencies_hz"], [])
 
-    def test_named_property_absent_falls_back_to_base(self):
-        entry = opp(480, base_present=True, base=[900000])
-        fdt = report([entry])
-        runtime = "[scaling_available_frequencies]\n480000\n"
-        result = MODULE.analyze_opp_candidates(fdt, runtime)
-        no_mask_b1 = next(
-            item for item in result["closest_candidates"]
-            if item["supported_hw_mask"] is None
-            and item["voltage_property_suffix"] == "b1"
-        )
-        self.assertEqual(no_mask_b1["accepted_frequencies_hz"], [480000000])
-
+    def test_named_property_absent_falls_back_to_base(self):,        entry = opp(480, base_present=True, base=[900000]),        # Ensure b1 is enumerated without making this active OPP depend on it.,        disabled = opp(600, variants={"b1": [950000]}, status="disabled"),        fdt = report([entry, disabled]),        runtime = "[scaling_available_frequencies]\n480000\n",        result = MODULE.analyze_opp_candidates(fdt, runtime),        matches = [,            item for item in result["exact_matches"],            if item["supported_hw_mask"] is None,            and item["voltage_property_suffix"] == "b1",        ],        self.assertEqual(len(matches), 1),        self.assertEqual(matches[0]["accepted_frequencies_hz"], [480000000])
     def test_requires_parser_v3_property_presence_fields(self):
         entry = opp(480, variants={"b1": [900000]})
         del entry["supported_hw_present"]
