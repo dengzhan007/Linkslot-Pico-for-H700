@@ -396,3 +396,6 @@ partition contents are included. No SD/MMC driver work and no hardware test are 
 
 
 **Correction (2026-11-26):** The pvaibhav pinned source does not require a second FDT timing node for its runtime register switch. Its actual 120-Hz pair is TCON divider `0xf000000a` + PLL `0x88002b03` (528 MHz / 10 ≈ 120.131 Hz); `0x88001701` is a different 576-MHz encoding. This corrects the interpretation in the runtime audit summary without changing the measured result: the device's PLL remained `0x88001703` and IRQ stayed near 59.6 Hz in both captures. See the erratum at the end of [slot-refresh-audit/SUMMARY.md](slot-refresh-audit/SUMMARY.md).
+
+
+**Binary identity follow-up (2026-11-26):** [ADDENDUM-2026-11-26.md](slot-refresh-audit/binary-identity/ADDENDUM-2026-11-26.md) closes the source-level high-refresh gate: this unit's live panel name `rg34xx_v1` fails the official Slot `rg34xx` requirement `fog_fj035fhd05_v1`, so `DevicePlatform.refresh=None` and the stored `high_refresh=1` setting never reaches the writer. The addendum also records the exact official-release armGBA layout probe (commit `df6b263...`, combined frame-counter offset 11,948 bytes; dedicated CI step passed), while preserving the no-`/proc/PID/mem` boundary.
