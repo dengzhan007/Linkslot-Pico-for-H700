@@ -34,12 +34,16 @@ The captured /sys/kernel/debug/clk/clk_summary contains:
 
 The CPU branch is pll_cpu → cpu; cpu equals the PLL rate in this snapshot, and CPUAPB is one quarter of it. pll_periph0 appears as a separate tree at 600 MHz with four prepare/enable users; it is not the current CPU parent in the captured tree.
 
-The report's additional observations show cpufreq readings and pll_cpu values diverging across samples (e.g. cpufreq 480 MHz with pll_cpu still reported at 1008 MHz). Therefore:
+A pinned same-version Linux source candidate explains why sample timing matters:
 
-- Treat the parent relationship as the supported finding.
-- Do not select one of the inconsistent sysfs/debugfs frequency values as the authoritative physical CPU rate.
-- enable_cnt=0 / prepare_cnt=0 for pll_cpu/cpu is not proof that the CPU clock is gated off; the vendor driver has special always-on CPU PLL behavior and these counters are not reliable as an enable-state test.
-- The 600 MHz pll_periph0 observation is useful when reviewing the vendor driver's temporary alternate-parent sequence, but it does not prove BL33-entry parent/rate, timer continuity, or that switching to it is safe under LK.
+- `cpufreq-dt` registers `.get = cpufreq_generic_get`.
+- In that source, `cpufreq_generic_get()` returns `clk_get_rate(policy->clk) / 1000`; `cpuinfo_cur_freq` calls this driver getter, so it reads the clock framework at the time of that sysfs read (not an independent hardware counter).
+- For a target-based driver such as `cpufreq-dt`, `scaling_cur_freq` normally returns `policy->cur`, the last frequency recorded by cpufreq transition notifications. It is cached state and can lag the instantaneous clock.
+- `clk_summary` also reports clock-framework rates, but inventory v1 reads it later than the cpufreq attributes. Under `schedutil`, the governor can change the shared CPU clock between those reads.
+
+Therefore the present report supports the **clock parent relationship** and confirms a shared policy, but it does not supply a synchronized instantaneous-frequency sample. It is too early to conclude that cpufreq and the clock provider disagree persistently. The collector has now been extended to take six read-only, uptime-bracketed samples of `scaling_cur_freq`, `cpuinfo_cur_freq` and the CPUX clock-summary rows at 200 ms intervals; those new samples still need to be collected from the device.
+
+The `enable_cnt=0 / prepare_cnt=0` values for `pll_cpu`/`cpu` are not proof that the CPU clock is gated off; clock-framework counters are not a reliable CPU PLL enable-state test here. The 600 MHz `pll_periph0` observation is useful when reviewing the vendor driver's alternate-parent sequence, but it does not prove BL33-entry parent/rate, timer continuity, or that switching to it is safe under LK.
 
 The exact pinned vendor source sequence remains documented in [H700 CPUX clock-source audit](h700-cpux-clock-source-audit.md).
 
@@ -82,7 +86,28 @@ The pinned mainline reference classifier calls 0x6c00 candidate bin 5, without r
 
 The 1416 MHz / 1160 mV runtime observation is numerically consistent with the DT 1416 MHz 0x20 / 1160 mV variant, but the cpufreq-vs-clk_summary divergence and unresolved vendor speed-bin semantics make this a correlation only—not proof that bit 5 was selected or that the pair is safe.
 
-### 1.5 Thermal telemetry is not safe for automatic DVFS
+### 1.5 Exact-version cpufreq/OPP source check — candidate only
+
+The device reports Linux `4.9.170`. The pinned vendor tree [qiaoweibiao/T507_Kernel@98fcc7d3f112e51b0edfb71536da89cb2115106f](https://github.com/qiaoweibiao/T507_Kernel/tree/98fcc7d3f112e51b0edfb71536da89cb2115106f) has the same top-level kernel version in its Makefile (`4.9.170`), but no build ID or image hash ties the running kernel to that exact source revision. Treat it as a same-version source candidate, not proof of the binary's source.
+
+Pinned file evidence:
+
+| Source | Blob SHA | Finding |
+|---|---|---|
+| `Makefile` | `532275df0dc8dc01ed7ee1c6ddd95bd36f5ba1a7` | Linux 4.9.170 |
+| `drivers/cpufreq/sun50i-cpufreq-nvmem.c` | `e121a4ddf28adb55e0b6bf78b450bd783b8b27bc` | Reads the two-byte NVMEM speed cell into a `u32 *`, does not validate `len`, then switches on `*efuse_value`; unknown values fall through to supported-hardware mask `0x4` |
+| `drivers/base/power/opp/of.c` | `d92e7d3a4c02f722dc4d62cd460e316b403ebced` | `_opp_is_supported()` checks that `opp-supported-hw & supported_hw` is nonzero |
+| `drivers/base/power/opp/core.c` | `e494a938a9f1fcbeabb9c5469f87e82b4aa430ec` | `dev_pm_opp_set_supported_hw()` stores the driver-provided version mask |
+| `drivers/cpufreq/cpufreq-dt.c` | `fbb278b7eed6bb291ab087ab4ee365acaa6036f3` | `cpufreq-dt` uses OPP-derived frequency table, `dev_pm_opp_set_rate()`, and `.get = cpufreq_generic_get` |
+| `drivers/cpufreq/cpufreq.c` | `8cb2f419a070a9bdc1a80328191df1c19583e8e4` | `cpufreq_generic_get()` reads `clk_get_rate()`; `scaling_cur_freq` uses cached `policy->cur` for this target-based driver |
+
+For raw SID `0x6c00`, the pinned vendor switch has no matching literal and would take its default branch, assigning `supported_hw = 0x4`—**assuming the unsafe 32-bit read happens to return the two-byte value as expected**. The read is not safe to assume: the NVMEM API returns a two-byte allocation for this DTS cell, while the cpufreq consumer dereferences a `u32 *` without checking `len`.
+
+Applying the pinned OPP bitwise filter to the voltage-bearing entries in this live DT, mask `0x4` would select candidate entries at **480, 600, 792, 1008, 1200 and 1344 MHz**. The actual Linux `scaling_available_frequencies` capture is **480, 720, 936, 1008, 1104, 1200, 1320, 1416 and 1512 MHz**. These sets do not match. This is material evidence that the pinned same-version source cannot be treated as the exact running cpufreq/OPP implementation (or that another firmware/runtime mechanism changes the table); it is not a basis for inferring the live mask.
+
+Do not use either the mainline diagnostic candidate bin 5 or the pinned vendor fallback mask 0x4 as the RG34XX OPP authorization. The active runtime mask remains unknown pending exact kernel-source/build identification and a reconciliation of the live OPP table with runtime frequencies.
+
+### 1.6 Thermal telemetry is not safe for automatic DVFS
 
 The kernel log explicitly reports:
 
