@@ -424,3 +424,44 @@ Previously recorded installed core identity remains:
 - H700 release ZIP `slot-v1.16.0-pvaibhav.2-h700.zip`: SHA-256 `1f9bdaa1110eb4f6006cc9da6a8bb34bca694ea53555c3138dcf656f0dfd1fca`.
 
 Next gate: compare ZIP and device hashes, inspect the ZIP's armGBA `.meta`, inspect full ELF `.symtab` versus `.dynsym`, and read the current Slot process stderr FD/log route. No marker file, front-end restart, or `/proc/PID/mem` access until those read-only checks establish the exact build and pointer source.
+
+
+## 12. 官方二进制溯源闭环与 high_refresh 门控解释（2026-11-26）
+
+### 二进制身份已闭环
+
+最新 ADB 报告已上传至 [reports/slot-refresh-audit/binary-identity](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/slot-refresh-audit/binary-identity)，reports HEAD `9662b6b218fe1e7af0edb21e53f8098520d2cdd3`。
+
+- 官方 H700 ZIP SHA-256 与预期完全一致：`1f9bdaa1110eb4f6006cc9da6a8bb34bca694ea53555c3138dcf656f0dfd1fca`。
+- 设备 `System/slot` SHA-256 `8f0fd40d...`、`SYSTEM/armgba_libretro.so` SHA-256 `4ebae098...` 均与 ZIP 内文件完全相同；另外 gpsp/mGBA/Gambatte 三个核心和两个启动脚本也全部匹配。
+- armGBA ELF Build ID：`08309a288967a62cf4155e27d1b10ce13a5e33ef`；未 strip，完整 `.symtab` 4,960 项，`.dynsym` 240 项。
+- 官方包内 `armgba-*.meta` 记录的真实源码 commit 是 **`df6b2631291f249d54a00dd14f49bc893e438feb`**，设备与 ZIP 相同；编译参数 `-mcpu=cortex-a53`；link patch SHA-256 `6ffb6a9f83b6fdaf77350725e74f0bedbd530256bce3e5e4fb0cc4b9e5e794db`，与实际 patch 一致。
+- 重要修正：先前 layout probe 用的 `fad6c4b0c0176a76e10667f4aa071a8feb4425c0` 是另一个较新的上游 checkout，并非 v1.16.0-pvaibhav.2 所包含的源码。**之前得到的 11948-byte 偏移不可用于这份官方发布 core。** 已将 CI checkout 和探针 PINNED_COMMIT 改为上述官方 `.meta` commit；新的 run [#45724910634](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45724910634) 正在执行。只有它的 layout step 输出才是本机 core 对应的偏移。
+
+### `high_refresh=1` 不生效的原因已由源码与二进制共同解释
+
+pinned Slot 源码 `pvaibhav/slot@5206e3fa39aa4a9b702cd9048a07dab3b5ab95da`：
+
+- `DevicePlatform::new` 从环境变量 `BASEOS_TARGET` 取目标，缺失时才回退读取 `/etc/baseos-release` 的 `BASEOS_TARGET=`。
+- `DevicePlatform::probe` 设置 `refresh = target.and_then(|target| PanelRefresh::probe(sysfs, target))`。
+- 普通 target `rg34xx` 在 `PanelRefresh::probe` 中要求 FDT `lcd_driver_name=fog_fj035fhd05_v1\0`；同时要求 720×480、HT820、VT536、DCLK26MHz 和 sunxi_dump dump/write 节点可写。
+- 现场 FDT 的分辨率与时序数值符合，但驱动名是 **`rg34xx_v1\0`**，与硬编码要求不同。因此 probe 会返回 `None`，即 `DevicePlatform.refresh=None`。
+- `supports_high_refresh()` 返回 `self.refresh.is_some()`；`set_high_refresh()` 通过 `self.refresh.as_mut().is_some_and(...)` 调用 writer。故能力 gate 为 false 时，设置文件中的 `high_refresh=1` 不会写 PLL/TCON，也不会使能高刷。离线二进制反汇编的 `self+0xb8` sentinel 路径与此 Option 门控相符。
+
+这已经足以解释设备仍保持约60Hz，不需要 dump Rust 运行时结构，也不需要读 `/proc/PID/mem`。不得通过伪造面板名或放宽 allowlist 绕过该门控。
+
+### armGBA 符号与 UI 日志通道
+
+- `gba` 在 `.dynsym` 中为 0 个，在完整 `.symtab` 中可见；它不可以通过 `dlsym` 获取。
+- `.symtab` 有两个同名 `gba` LOCAL OBJECT：`0x4c16a8` 与 `0x4259b8`。源码中同时存在 `libretro/libretro.c` 的主 GBA 指针和 `libretro/link.c` 的文件局部 link 指针。必须先通过 ELF 符号与调用点反汇编把两个地址准确对应，再选取主 GBA 指针；禁止仅按同名符号任选一个。
+- Slot PID 2301 的 fd/1 与 fd/2 均指向同一个 `/mnt/sdcard/Logs/slot.log`，stderr 路径已明确。当前 `SLOT_TRACE_LATENCY` 未设置，`/mnt/sdcard/System/trace-latency.on` 不存在，因此尚无 UI present-rate trace。
+- 当前报告保持完全只读：无 marker、无 Slot 重启、无 `/proc/PID/mem` 访问、无硬件写入。
+
+### 后续次序
+
+1. 等待 [#45724910634](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45724910634) 中按真实 release commit 构建的 armGBA layout probe；读取 JSON，取代早期 11948 偏移。
+2. 只读采集当前 Slot PID 的 `/proc/PID/maps` 与 ELF `PT_LOAD` program headers，计算 `armgba_libretro.so` load bias；通过 `retro_run` 引用反汇编区分两个同名 `gba` 符号。此步骤不读取进程内存。
+3. UI presents：stderr 已落到可读日志文件，但 tracing 必须在 Slot 启动前启用；创建 marker 和重启前端属于设备配置动作，当前仍未执行。
+4. armGBA committed-frame counter：精确源码偏移、正确 `gba` 指针、load bias 三项完全闭合后，再单独决定是否进行有界只读进程内存采样。此前用户给 Agent 的采集约束禁止 `/proc/PID/mem`，本轮仍保持不读。
+
+UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率指标。所有硬件 writer 保持关闭，`hardware_applied=0`。
