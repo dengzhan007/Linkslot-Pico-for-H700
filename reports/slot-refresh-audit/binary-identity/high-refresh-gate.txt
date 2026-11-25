@@ -1,0 +1,57 @@
+# high_refresh gate in the official slot binary
+# source: /mnt/sdcard/System/slot (sha256 8f0fd40d...), offline disassembly
+
+=== Platform::high_refresh_enabled @ 0x95648 (28 bytes) ===
+  0x095648  ldr      x9, [x0, #0xb8]
+  0x09564c  mov      x8, #-0x8000000000000000
+  0x095650  cmp      x9, x8
+  0x095654  ldrb     w8, [x0, #0xe8]
+  0x095658  cset     w9, ne
+  0x09565c  and      w0, w9, w8
+  0x095660  ret      
+
+=== Platform::supports_high_refresh @ 0x95664 (20 bytes) ===
+  0x095664  ldr      x8, [x0, #0xb8]
+  0x095668  mov      x9, #-0x8000000000000000
+  0x09566c  cmp      x8, x9
+  0x095670  cset     w0, ne
+  0x095674  ret      
+
+=== Platform::set_high_refresh @ 0x4f37d0 (28 bytes) ===
+  0x4f37d0  ldr      x8, [x0, #0xb8]!
+  0x4f37d4  mov      x9, #-0x8000000000000000
+  0x4f37d8  cmp      x8, x9
+  0x4f37dc  b.ne     #0x4f37e8
+  0x4f37e0  mov      w0, wzr
+  0x4f37e4  ret      
+  0x4f37e8  b        #0x4f2cf8
+
+=== strings around the trace / setting keys ===
+--- SLOT_TRACE_LATENCY|System/trace-latency.on @ 0x82abb5 ---
+  eleases/downloadBASEOS_VERSIONSystem.new.manifest/proc/net/rtl8821cs/wlan0/rx_signalslot-box-artSLOT_TRACE_LATENCYSystem/trace-latency.on
+  slot: latency: read>pad
+  p
+  pad>emu
+  p
+  emu>pub
+  p
+  pub>take
+  p
+  take>swapped
+  p
+  (
+
+--- high_refresh= (settings block) @ 0x6c4ed5 ---
+  shader_gb=
+  rewind=
+  high_refresh=
+  gb_palettes=
+  gb_palette=
+  appearance=
+  wallpaper=
+  colour_correction_gbc=
+  shader_gbc=
+  dim=
+  saturation=
+  contrast
+

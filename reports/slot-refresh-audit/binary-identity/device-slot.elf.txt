@@ -1,0 +1,127 @@
+### file: build/binary-identity/device/slot
+
+ELF Header (-h):
+  Class:      ELF64
+  Data:       2's complement, little endian
+  Version:    1 (current)
+  OS/ABI:     UNIX - System V
+  Type:       DYN (Shared object file)
+  Machine:    AArch64
+  Entry:      0x7036c
+  Flags:      0x0
+  PH off/sz:  64 / 56 x 10
+  SH off/sz:  18716680 / 64 x 32
+  SH strndx:  31
+
+Notes (-n):
+  PT_NOTE: NT_GNU_BUILD_ID  165bb449d732ad848dc0e9b41ec961268abc37c8
+  .note.gnu.build-id: NT_GNU_BUILD_ID  165bb449d732ad848dc0e9b41ec961268abc37c8
+
+Section Headers (-S):
+   Nr Name                     Type                        Address        Off       Size   ES  Flg  Lk Inf  Al
+    0                          NULL             0x0000000000000000          0          0    0        0   0   0
+    1 .interp                  PROGBITS         0x0000000000000270        624         27    0    A   0   0   1
+    2 .note.gnu.build-id       NOTE             0x000000000000028c        652         36    0    A   0   0   4
+    3 .note.ABI-tag            NOTE             0x00000000000002b0        688         32    0    A   0   0   4
+    4 .gnu.hash                GNU_HASH         0x00000000000002d0        720         28    0    A   5   0   8
+    5 .dynsym                  DYNSYM           0x00000000000002f0        752       4776   24    A   6   3   8
+    6 .dynstr                  STRTAB           0x0000000000001598       5528       2329    0    A   0   0   1
+    7 .gnu.version             VERSYM           0x0000000000001eb2       7858        398    2    A   5   0   2
+    8 .gnu.version_r           VERNEED          0x0000000000002040       8256        320    0    A   6   5   8
+    9 .rela.dyn                RELA             0x0000000000002180       8576     267744   24    A   5   0   8
+   10 .rela.plt                RELA             0x0000000000043760     276320       4536   24   AI   5  25   8
+   11 .init                    PROGBITS         0x0000000000044918     280856         20    0   AX   0   0   4
+   12 .plt                     PROGBITS         0x0000000000044930     280880       3056    0   AX   0   0  16
+   13 .text                    PROGBITS         0x0000000000045540     283968    6731296    0   AX   0   0  64
+   14 .fini                    PROGBITS         0x00000000006b0b60    7015264         16    0   AX   0   0   4
+   15 .rodata                  PROGBITS         0x00000000006b1000    7016448    8874784    0    A   0   0 4096
+   16 .eh_frame_hdr            PROGBITS         0x0000000000f27b20   15891232      65212    0    A   0   0   4
+   17 .eh_frame                PROGBITS         0x0000000000f379e0   15956448     539216    0    A   0   0   8
+   18 .gcc_except_table        PROGBITS         0x0000000000fbb430   16495664     226044    0    A   0   0   4
+   19 .tdata                   PROGBITS         0x00000000010030a0   16724128         33    0  WAT   0   0   8
+   20 .tbss                    NOBITS           0x00000000010030c8   16724161        120    0  WAT   0   0   8
+   21 .init_array              INIT_ARRAY       0x00000000010030c8   16724168         32    8  WAo   0   0   8
+   22 .fini_array              FINI_ARRAY       0x00000000010030e8   16724200          8    8   WA   0   0   8
+   23 .data.rel.ro             PROGBITS         0x00000000010030f0   16724208     210512    0   WA   0   0   8
+   24 .dynamic                 DYNAMIC          0x0000000001036740   16934720        560   16   WA   6   0   8
+   25 .got                     PROGBITS         0x0000000001036970   16935280       1680    8   WA   0   0   8
+   26 .data                    PROGBITS         0x0000000001037000   16936960      19200    0   WA   0   0   8
+   27 .bss                     NOBITS           0x000000000103bb00   16956160        536    0   WA   0   0   8
+   28 .comment                 PROGBITS         0x0000000000000000   16956160        108    1   MS   0   0   1
+   29 .symtab                  SYMTAB           0x0000000000000000   16956272     892824   24       30 36883   8
+   30 .strtab                  STRTAB           0x0000000000000000   17849096     867284    0        0   0   1
+   31 .shstrtab                STRTAB           0x0000000000000000   18716380        294    0        0   0   1
+
+Symbol tables:
+  .dynsym: 199 symbols (2 defined, 197 undefined)
+  .symtab: 37201 symbols (37005 defined, 196 undefined)
+
+  .symtab present: YES
+
+Symbols whose name contains 'gba' (case-insensitive):
+  [.dynsym] 0 hit(s)
+  [.symtab] 24 hit(s)
+    0x00000000000f0fb4    4440 FUNC            LOCAL      DEFAULT      ndx=13 _ZN10image_webp3vp85Frame9fill_rgba17hb27d2f26173c9e5cE
+    0x000000000011d4f0      96 FUNC            LOCAL      DEFAULT      ndx=13 _ZN3png7decoder9transform7palette27create_expansion_into_rgba817ha70ea6a2690ed93cE
+    0x000000000011ded4     804 FUNC            LOCAL      DEFAULT      ndx=13 _ZN3png7decoder9transform7palette19create_rgba_palette17h314fe112df64d607E
+    0x000000000011dd10     452 FUNC            LOCAL      DEFAULT      ndx=13 _ZN3png7decoder9transform7palette27create_expansion_into_rgba828_$u7b$$u7b$closure$u7d$$u7d$17h5adc0709c853044dE
+    0x00000000001266a0     804 FUNC            LOCAL      DEFAULT      ndx=13 _ZN3png7decoder9transform7palette19create_rgba_palette17h01733b62d08e99caE
+    0x0000000000125cbc      96 FUNC            LOCAL      DEFAULT      ndx=13 _ZN3png7decoder9transform7palette27create_expansion_into_rgba817heb67f26d6c756665E
+    0x00000000001264dc     452 FUNC            LOCAL      DEFAULT      ndx=13 _ZN3png7decoder9transform7palette27create_expansion_into_rgba828_$u7b$$u7b$closure$u7d$$u7d$17h95ce3d4f4dfeea5cE
+    0x00000000005d33d0     204 FUNC            LOCAL      DEFAULT      ndx=13 _ZN9tiny_skia7painter5Paint15set_color_rgba817h0131842d2c897fcaE
+    0x000000000021bb60     736 FUNC            LOCAL      DEFAULT      ndx=13 _ZN4slot4root15armgba_boot_crc17hc625d38b87907a19E
+    0x000000000053a6f4    1620 FUNC            LOCAL      DEFAULT      ndx=13 _ZN7slot_ui3art10cover_rgba17h74905f2ca182b6e5E
+    0x00000000002a72fc    4328 FUNC            LOCAL      DEFAULT      ndx=13 _ZN4slot7overlay11decode_rgba17h339016490e36cfe9E
+    0x0000000000515198     596 FUNC            LOCAL      DEFAULT      ndx=13 _ZN10slot_store3gba5field17h9df6cfccbaf2d090E
+    0x00000000004d7db8     292 FUNC            LOCAL      DEFAULT      ndx=13 _ZN9zune_jpeg13color_convert6neon6418ycbcr_to_rgba_neon17h6b5603a21d343b88E.1939
+    0x00000000004d7edc     488 FUNC            LOCAL      DEFAULT      ndx=13 _ZN9zune_jpeg13color_convert6scalar29ycbcr_to_rgba_inner_16_scalar17h805f1c340da4c0d4E
+    0x00000000004d82a8     488 FUNC            LOCAL      DEFAULT      ndx=13 _ZN9zune_jpeg13color_convert6scalar29ycbcr_to_rgba_inner_16_scalar17he1678f50da913018E
+    0x0000000000515654     200 FUNC            LOCAL      DEFAULT      ndx=13 _ZN10slot_store3gba15text_from_bytes17h6219821e5e330d89E
+    0x00000000005c1888    1636 FUNC            LOCAL      DEFAULT      ndx=13 _ZN9tiny_skia8pipeline5highp21source_over_rgba_tail17h0ff23d9d0bfa51e7E
+    0x00000000005c0eb4     912 FUNC            LOCAL      DEFAULT      ndx=13 _ZN9tiny_skia8pipeline5highp16source_over_rgba17h07d2e66f7c08df17E
+    0x00000000005c05ec    1276 FUNC            LOCAL      DEFAULT      ndx=13 _ZN9tiny_skia8pipeline4lowp21source_over_rgba_tail17h8af72c93701df7d1E
+    0x00000000005bf854    1260 FUNC            LOCAL      DEFAULT      ndx=13 _ZN9tiny_skia8pipeline4lowp16source_over_rgba17h76051f99ea3f5738E
+    0x000000000103b3e8      32 OBJECT          LOCAL      DEFAULT      ndx=26 _ZN7slot_ui7bitmaps11shell_asset3GBA17hfbefd3bd55c8ff0fE
+    0x000000000103b448      32 OBJECT          LOCAL      DEFAULT      ndx=26 _ZN7slot_ui7bitmaps11shell_asset9GBA_CLEAR17h54a984f461c9502aE
+    0x000000000103b488      32 OBJECT          LOCAL      DEFAULT      ndx=26 _ZN7slot_ui7bitmaps12gba_interior1P17hc9e71ab43cbf10aaE
+    0x000000000103b6a8      32 OBJECT          LOCAL      DEFAULT      ndx=26 _ZN7slot_ui7bitmaps8gba_cart1P17h972e9dd730049acbE
+
+libretro entry points (export/import status per table):
+  retro_init                     .dynsym=absent  .symtab=absent
+  retro_deinit                   .dynsym=absent  .symtab=absent
+  retro_api_version              .dynsym=absent  .symtab=absent
+  retro_get_system_info          .dynsym=absent  .symtab=absent
+  retro_get_system_av_info       .dynsym=absent  .symtab=absent
+  retro_set_environment          .dynsym=absent  .symtab=absent
+  retro_set_video_refresh        .dynsym=absent  .symtab=absent
+  retro_set_audio_sample         .dynsym=absent  .symtab=absent
+  retro_set_audio_sample_batch   .dynsym=absent  .symtab=absent
+  retro_set_input_poll           .dynsym=absent  .symtab=absent
+  retro_set_input_state          .dynsym=absent  .symtab=absent
+  retro_reset                    .dynsym=absent  .symtab=absent
+  retro_run                      .dynsym=absent  .symtab=absent
+  retro_serialize_size           .dynsym=absent  .symtab=absent
+  retro_serialize                .dynsym=absent  .symtab=absent
+  retro_unserialize              .dynsym=absent  .symtab=absent
+  retro_cheat_reset              .dynsym=absent  .symtab=absent
+  retro_cheat_set                .dynsym=absent  .symtab=absent
+  retro_load_game                .dynsym=absent  .symtab=absent
+  retro_load_game_special        .dynsym=absent  .symtab=absent
+  retro_unload_game              .dynsym=absent  .symtab=absent
+  retro_get_region               .dynsym=absent  .symtab=absent
+  retro_get_memory_data          .dynsym=absent  .symtab=absent
+  retro_get_memory_size          .dynsym=absent  .symtab=absent
+
+Program headers (context):
+  PT_PHDR      off=       64 vaddr=0x0000000000000040 filesz=      560 memsz=      560 flags=4
+  PT_INTERP    off=      624 vaddr=0x0000000000000270 filesz=       27 memsz=       27 flags=4
+  PT_LOAD      off=        0 vaddr=0x0000000000000000 filesz= 16721708 memsz= 16721708 flags=5
+  PT_LOAD      off= 16724128 vaddr=0x00000000010030a0 filesz=   232032 memsz=   232568 flags=6
+  PT_DYNAMIC   off= 16934720 vaddr=0x0000000001036740 filesz=      560 memsz=      560 flags=6
+  PT_NOTE      off=      652 vaddr=0x000000000000028c filesz=       68 memsz=       68 flags=4
+  PT_TLS       off= 16724128 vaddr=0x00000000010030a0 filesz=       33 memsz=      160 flags=4
+  PT_GNU_EH_FRAME off= 15891232 vaddr=0x0000000000f27b20 filesz=    65212 memsz=    65212 flags=4
+  PT_GNU_STACK off=        0 vaddr=0x0000000000000000 filesz=        0 memsz=        0 flags=6
+  PT_GNU_RELRO off= 16724128 vaddr=0x00000000010030a0 filesz=   212832 memsz=   212832 flags=4
+
+tool: pyelftools 0.33 (no readelf on host or device)

@@ -1,0 +1,5 @@
+commit=df6b2631291f249d54a00dd14f49bc893e438feb
+source=https://github.com/MagnominusGit/armGBA/archive/df6b2631291f249d54a00dd14f49bc893e438feb.tar.gz
+recipe=cmake -DCMAKE_BUILD_TYPE=Release, target armgba_libretro
+device_cflags=-mcpu=cortex-a53
+patch=link-stop-queued-once.patch sha256:6ffb6a9f83b6fdaf77350725e74f0bedbd530256bce3e5e4fb0cc4b9e5e794db

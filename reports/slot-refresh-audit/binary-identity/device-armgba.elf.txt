@@ -1,0 +1,147 @@
+### file: build/binary-identity/device/armgba_libretro.so
+
+ELF Header (-h):
+  Class:      ELF64
+  Data:       2's complement, little endian
+  Version:    1 (current)
+  OS/ABI:     UNIX - System V
+  Type:       DYN (Shared object file)
+  Machine:    AArch64
+  Entry:      0x11880
+  Flags:      0x0
+  PH off/sz:  64 / 56 x 8
+  SH off/sz:  2020008 / 64 x 31
+  SH strndx:  30
+
+Notes (-n):
+  PT_NOTE: NT_GNU_BUILD_ID  08309a288967a62cf4155e27d1b10ce13a5e33ef
+  .note.gnu.build-id: NT_GNU_BUILD_ID  08309a288967a62cf4155e27d1b10ce13a5e33ef
+
+Section Headers (-S):
+   Nr Name                     Type                        Address        Off       Size   ES  Flg  Lk Inf  Al
+    0                          NULL             0x0000000000000000          0          0    0        0   0   0
+    1 .note.gnu.build-id       NOTE             0x0000000000000200        512         36    0    A   0   0   4
+    2 .gnu.hash                GNU_HASH         0x0000000000000228        552        384    0    A   3   0   8
+    3 .dynsym                  DYNSYM           0x00000000000003a8        936       5760   24    A   4   3   8
+    4 .dynstr                  STRTAB           0x0000000000001a28       6696       5018    0    A   0   0   1
+    5 .gnu.version             VERSYM           0x0000000000002dc2      11714        480    2    A   3   0   2
+    6 .gnu.version_r           VERNEED          0x0000000000002fa8      12200        320    0    A   4   6   8
+    7 .rela.dyn                RELA             0x00000000000030e8      12520      51552   24    A   3   0   8
+    8 .rela.plt                RELA             0x000000000000fa48      64072       4608   24   AI   3  24   8
+    9 .init                    PROGBITS         0x0000000000010c48      68680         20    0   AX   0   0   4
+   10 .plt                     PROGBITS         0x0000000000010c60      68704       3104    0   AX   0   0  16
+   11 .text                    PROGBITS         0x0000000000011880      71808    1044484    0   AX   0   0  16
+   12 .fini                    PROGBITS         0x0000000000110884    1116292         16    0   AX   0   0   4
+   13 .rodata                  PROGBITS         0x00000000001108a0    1116320     265064    0    A   0   0  16
+   14 .eh_frame_hdr            PROGBITS         0x0000000000151408    1381384      21788    0    A   0   0   4
+   15 .eh_frame                PROGBITS         0x0000000000156928    1403176     126080    0    A   0   0   8
+   16 .gcc_except_table        PROGBITS         0x00000000001755a8    1529256        286    0    A   0   0   1
+   17 .tdata                   PROGBITS         0x00000000001857a0    1529760          4    0  WAT   0   0   8
+   18 .tbss                    NOBITS           0x00000000001857a8    1529764          9    0  WAT   0   0   8
+   19 .init_array              INIT_ARRAY       0x00000000001857a8    1529768        112    8   WA   0   0   8
+   20 .fini_array              FINI_ARRAY       0x0000000000185818    1529880          8    8   WA   0   0   8
+   21 .data.rel.ro             PROGBITS         0x0000000000185820    1529888       8192    0   WA   0   0  16
+   22 .dynamic                 DYNAMIC          0x0000000000187820    1538080        576   16   WA   4   0   8
+   23 .got                     PROGBITS         0x0000000000187a60    1538656       1416    8   WA   0   0   8
+   24 .got.plt                 PROGBITS         0x0000000000187fe8    1540072       1576    8   WA   0   0   8
+   25 .data                    PROGBITS         0x0000000000188610    1541648     203840    0   WA   0   0   8
+   26 .bss                     NOBITS           0x00000000001ba250    1745488    4832608    0   WA   0   0  16
+   27 .comment                 PROGBITS         0x0000000000000000    1745488         39    1   MS   0   0   1
+   28 .symtab                  SYMTAB           0x0000000000000000    1745528     119040   24       29 4723   8
+   29 .strtab                  STRTAB           0x0000000000000000    1864568     155156    0        0   0   1
+   30 .shstrtab                STRTAB           0x0000000000000000    2019724        281    0        0   0   1
+
+Symbol tables:
+  .dynsym: 240 symbols (49 defined, 191 undefined)
+  .symtab: 4960 symbols (4769 defined, 191 undefined)
+
+  .symtab present: YES
+
+Symbols whose name contains 'gba' (case-insensitive):
+  [.dynsym] 0 hit(s)
+  [.symtab] 47 hit(s)
+    0x0000000000128860      20 OBJECT          LOCAL      DEFAULT      ndx=13 _ZZN12_GLOBAL__N_18mgbaFileEPKhyE4ends
+    0x00000000001289e0    2304 OBJECT          LOCAL      DEFAULT      ndx=13 _ZL15armgba_cgb_boot
+    0x00000000001292e0    2304 OBJECT          LOCAL      DEFAULT      ndx=13 _ZL15armgba_agb_boot
+    0x00000000003ed5a0  153600 OBJECT          LOCAL      DEFAULT      ndx=26 gbAdvanceFrame
+    0x0000000000346bf0  307200 OBJECT          LOCAL      DEFAULT      ndx=26 gbaShown
+    0x00000000002b0bf0  307200 OBJECT          LOCAL      DEFAULT      ndx=26 gbaCorrected
+    0x00000000002fbbf0  307200 OBJECT          LOCAL      DEFAULT      ndx=26 gbaTogetherFrame
+    0x00000000001bc498      16 OBJECT          LOCAL      DEFAULT      ndx=26 gbaAhead
+    0x00000000001bc4a9       1 OBJECT          LOCAL      DEFAULT      ndx=26 gbAdapter
+    0x00000000004c16a8       8 OBJECT          LOCAL      DEFAULT      ndx=26 gba
+    0x0000000000000000       0 FILE            LOCAL      DEFAULT      ndx=SHN_ABS gbacheats.c
+    0x0000000000039e20     196 FUNC            LOCAL      DEFAULT      ndx=11 armgbaSavePath
+    0x0000000000057e00    2832 FUNC            LOCAL      DEFAULT      ndx=11 gbaLoadState.part.0
+    0x000000000004aed0     328 FUNC            LOCAL      DEFAULT      ndx=11 gbaSetKeys
+    0x0000000000056ac0      12 FUNC            LOCAL      DEFAULT      ndx=11 gbaStateSize
+    0x000000000004b180   12932 FUNC            LOCAL      DEFAULT      ndx=11 gbaCreate
+    0x000000000004a1c0    1044 FUNC            LOCAL      DEFAULT      ndx=11 gbaMapRom
+    0x00000000000335e0     188 FUNC            LOCAL      DEFAULT      ndx=11 linkGbaFrame
+    0x0000000000049f20     664 FUNC            LOCAL      DEFAULT      ndx=11 gbaLoadRom
+    0x00000000000382d0     136 FUNC            LOCAL      DEFAULT      ndx=11 arGbaCipherWorks
+    0x000000000004e590    3620 FUNC            LOCAL      DEFAULT      ndx=11 gbaReset
+    0x0000000000040890      36 FUNC            LOCAL      DEFAULT      ndx=11 libretroGbActionReplayControls
+    0x0000000000058910      84 FUNC            LOCAL      DEFAULT      ndx=11 gbaLoadState
+    0x00000000000408c0      68 FUNC            LOCAL      DEFAULT      ndx=11 libretroGbActionReplayFlash
+    0x00000000004259b8       8 OBJECT          LOCAL      DEFAULT      ndx=26 gba
+    0x0000000000393578      32 OBJECT          LOCAL      DEFAULT      ndx=26 gbas
+    0x000000000004fc10     544 FUNC            LOCAL      DEFAULT      ndx=11 gbaWriteIf
+    0x00000000000573e0    1116 FUNC            LOCAL      DEFAULT      ndx=11 gbaSaveState
+    0x000000000004fe30     304 FUNC            LOCAL      DEFAULT      ndx=11 gbaSetOverclock
+    0x0000000000036b60     112 FUNC            LOCAL      DEFAULT      ndx=11 gbaGameId
+    0x0000000000051fe0    7236 FUNC            LOCAL      DEFAULT      ndx=11 gbaRunPart
+    0x000000000004f3c0     364 FUNC            LOCAL      DEFAULT      ndx=11 gbaIrqSync
+    0x000000000004fa50     440 FUNC            LOCAL      DEFAULT      ndx=11 gbaWriteIe
+    0x0000000000049ed0      68 FUNC            LOCAL      DEFAULT      ndx=11 gbaLoadBios
+    0x0000000000030cc0    1272 FUNC            LOCAL      DEFAULT      ndx=11 dolphinGbaFrame
+    0x000000000004e410     384 FUNC            LOCAL      DEFAULT      ndx=11 gbaDestroy
+    0x000000000012ca38   16384 OBJECT          LOCAL      DEFAULT      ndx=13 armgbaBios
+    0x0000000000393570       1 OBJECT          LOCAL      DEFAULT      ndx=26 gbaTogether
+    0x0000000000033160     172 FUNC            LOCAL      DEFAULT      ndx=11 linkSetGba
+    0x0000000000037f70     856 FUNC            LOCAL      DEFAULT      ndx=11 arGbaClear
+    0x0000000000033aa0     228 FUNC            LOCAL      DEFAULT      ndx=11 linkGbAllowance
+    0x0000000000033bb0      64 FUNC            LOCAL      DEFAULT      ndx=11 linkGbArrived
+    0x00000000000376c0    2212 FUNC            LOCAL      DEFAULT      ndx=11 arGbaImport
+    0x00000000000336a0      12 FUNC            LOCAL      DEFAULT      ndx=11 linkGbaHeld
+    0x000000000004f780     720 FUNC            LOCAL      DEFAULT      ndx=11 gbaIrqQuietChanged
+    0x000000000004b020     344 FUNC            LOCAL      DEFAULT      ndx=11 gbaTestKeypadIrq
+    0x0000000000040910      28 FUNC            LOCAL      DEFAULT      ndx=11 libretroGbActionReplayFlashChanged
+
+libretro entry points (export/import status per table):
+  retro_init                     .dynsym=DEF@0x1c7b0/FUNC  .symtab=DEF@0x1c7b0/FUNC
+  retro_deinit                   .dynsym=DEF@0x1c7f0/FUNC  .symtab=DEF@0x1c7f0/FUNC
+  retro_api_version              .dynsym=DEF@0x1c6e0/FUNC  .symtab=DEF@0x1c6e0/FUNC
+  retro_get_system_info          .dynsym=DEF@0x1c6f0/FUNC  .symtab=DEF@0x1c6f0/FUNC
+  retro_get_system_av_info       .dynsym=DEF@0x1c720/FUNC  .symtab=DEF@0x1c720/FUNC
+  retro_set_environment          .dynsym=DEF@0x1c550/FUNC  .symtab=DEF@0x1c550/FUNC
+  retro_set_video_refresh        .dynsym=DEF@0x1c690/FUNC  .symtab=DEF@0x1c690/FUNC
+  retro_set_audio_sample         .dynsym=DEF@0x1c6a0/FUNC  .symtab=DEF@0x1c6a0/FUNC
+  retro_set_audio_sample_batch   .dynsym=DEF@0x1c6b0/FUNC  .symtab=DEF@0x1c6b0/FUNC
+  retro_set_input_poll           .dynsym=DEF@0x1c6c0/FUNC  .symtab=DEF@0x1c6c0/FUNC
+  retro_set_input_state          .dynsym=DEF@0x1c6d0/FUNC  .symtab=DEF@0x1c6d0/FUNC
+  retro_reset                    .dynsym=DEF@0x1d940/FUNC  .symtab=DEF@0x1d940/FUNC
+  retro_run                      .dynsym=DEF@0x1f560/FUNC  .symtab=DEF@0x1f560/FUNC
+  retro_serialize_size           .dynsym=DEF@0x21d80/FUNC  .symtab=DEF@0x21d80/FUNC
+  retro_serialize                .dynsym=DEF@0x21dd0/FUNC  .symtab=DEF@0x21dd0/FUNC
+  retro_unserialize              .dynsym=DEF@0x221f0/FUNC  .symtab=DEF@0x221f0/FUNC
+  retro_cheat_reset              .dynsym=DEF@0x22a50/FUNC  .symtab=DEF@0x22a50/FUNC
+  retro_cheat_set                .dynsym=DEF@0x22ac0/FUNC  .symtab=DEF@0x22ac0/FUNC
+  retro_load_game                .dynsym=DEF@0x1cf60/FUNC  .symtab=DEF@0x1cf60/FUNC
+  retro_load_game_special        .dynsym=DEF@0x1d160/FUNC  .symtab=DEF@0x1d160/FUNC
+  retro_unload_game              .dynsym=DEF@0x1d470/FUNC  .symtab=DEF@0x1d470/FUNC
+  retro_get_region               .dynsym=DEF@0x22bb0/FUNC  .symtab=DEF@0x22bb0/FUNC
+  retro_get_memory_data          .dynsym=DEF@0x22bc0/FUNC  .symtab=DEF@0x22bc0/FUNC
+  retro_get_memory_size          .dynsym=DEF@0x22be0/FUNC  .symtab=DEF@0x22be0/FUNC
+
+Program headers (context):
+  PT_LOAD      off=        0 vaddr=0x0000000000000000 filesz=  1529542 memsz=  1529542 flags=5
+  PT_LOAD      off=  1529760 vaddr=0x00000000001857a0 filesz=   215728 memsz=  5048336 flags=6
+  PT_DYNAMIC   off=  1538080 vaddr=0x0000000000187820 filesz=      576 memsz=      576 flags=6
+  PT_NOTE      off=      512 vaddr=0x0000000000000200 filesz=       36 memsz=       36 flags=4
+  PT_TLS       off=  1529760 vaddr=0x00000000001857a0 filesz=        4 memsz=       17 flags=4
+  PT_GNU_EH_FRAME off=  1381384 vaddr=0x0000000000151408 filesz=    21788 memsz=    21788 flags=4
+  PT_GNU_STACK off=        0 vaddr=0x0000000000000000 filesz=        0 memsz=        0 flags=6
+  PT_GNU_RELRO off=  1529760 vaddr=0x00000000001857a0 filesz=    10336 memsz=    10336 flags=4
+
+tool: pyelftools 0.33 (no readelf on host or device)

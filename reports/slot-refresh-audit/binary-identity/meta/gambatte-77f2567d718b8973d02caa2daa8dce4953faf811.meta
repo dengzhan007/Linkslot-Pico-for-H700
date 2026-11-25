@@ -1,0 +1,5 @@
+commit=77f2567d718b8973d02caa2daa8dce4953faf811
+source=https://github.com/libretro/gambatte-libretro/archive/77f2567d718b8973d02caa2daa8dce4953faf811.tar.gz
+recipe=make platform=unix
+device_cflags=-mcpu=cortex-a53
+patch=gb-audio-centred-channels.patch sha256:79639d05e2934785b1f81f2ee7f5d73094f5d2bd78c066d0a28bec26033f9b58
