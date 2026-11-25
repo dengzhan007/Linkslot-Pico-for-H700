@@ -69,7 +69,7 @@ Until those conditions are met: retain `hardware_applied=0`, do not write `sunxi
 
 ## Immediate next step
 
-A read-only UI/GAME capture and a complete live-FDT reparse are now published; see [the live capture analysis](pvaibhav-slot-rg34xx-live-capture-2026-11-25.md) and [the reparse artifacts](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/pvaibhav-slot-runtime/fdt-reparse). The live panel is `rg34xx_v1`, RGB666, 720×480, DCLK 26 MHz, HT/VT 820×536, and bootargs include `lcd_type=old`. The numeric timing cells match the pvaibhav gate, but exact panel identity does not: the fork requires `fog_fj035fhd05_v1`. IRQ remains near 59.6 Hz; DTB-derived nominal refresh is 59.155 Hz, and final DCLK/divider remains unmeasured. The `rg34xx_v1` panel and `lcd_type`-dependent init sequence need their own source evidence; do not alias this panel to `fog_fj035fhd05_v1`, weaken the gate or try its register writes.
+The live FDT reparse and same-boot TCON/PLL readback are now published. The active 60-Hz register pair is `0xf000000b` / `0x88001703`; with `tcon_lcd=288 MHz` this gives a derived 26.1818-MHz DCLK and 59.569 Hz for the live 820×536 totals. This aligns with the IRQ proxy but remains a clock-tree estimate. The pvaibhav 120-Hz candidate pair is `0xf000000a` / `0x88002b03`; it must not be applied because the fork's strict gate requires `fog_fj035fhd05_v1`, while the device is `rg34xx_v1 + lcd_type=old`. Next: recover the exact kernel #19 panel/PLL path, validate any high-mode clock/timing against that profile, then establish a safe VBlank/TE transition boundary. Keep all hardware writes disabled.
 
 
 ### New profile evidence after FDT reparse
@@ -78,3 +78,19 @@ The live machine-readable FDT now confirms `rg34xx_v1`, RGB666, 720×480, 26 MHz
 
 
 The vendor U-Boot disassembly nuance is documented in [the live capture analysis](pvaibhav-slot-rg34xx-live-capture-2026-11-25.md): the selected DT panel struct is `rg34xx_v1`; its init function happens to carry a `fj035fhd05` symbol string. Do not confuse this function label with the FDT panel identity required by the fork's Linux-side gate.
+
+
+## Frame-rate instrumentation findings (source review)
+
+The pinned pvaibhav/slot source provides a low-overhead UI-present counter, gated by its latency trace switch:
+
+- `crates/slot/src/latency.rs`: tracing is enabled by nonzero `SLOT_TRACE_LATENCY` or by `SLOT_ROOT/System/trace-latency.on` (with `SLOT_ROOT` defaulting to `/mnt/sdcard`). The setting is cached at first use, so the flag must exist before Slot starts.
+- `crates/slot/src/device_app.rs`: while tracing is enabled, every 600 primary `surface.swap()` calls it logs `presents/s`, nominal frontend frame period and missed game periods. On the one-panel RG34XX FBDEV path this gives an application present rate, not physical panel scanout.
+
+The pinned armGBA source `MagnominusGit/armGBA@fad6c4b0c0176a76e10667f4aa071a8feb4425c0` establishes a direct game-frame counter:
+
+- `libretro/libretro.c` defines a non-static global `struct GBA* gba`.
+- `src/gba.h` defines `struct Video { int vcount; uint32_t frameCounter; ... }`, embedded as `struct GBA::video`.
+- `src/video/video.c` increments `video->frameCounter` at V-blank frame end; `retro_run()` waits for that counter to advance before publishing the next GBA image.
+
+This is source-level evidence for `gba->video.frameCounter` as the committed emulation-frame counter. It is **not yet safe to use against the deployed `armgba_libretro.so`**: its device SHA is recorded but not matched to this source build/release; symbol visibility, pointer mapping and `offsetof(struct GBA, video)` must be checked against the exact ELF before a `/proc/PID/mem` reader is trusted. Current `pvaibhav/slot/tools/refresh/probe.rs` supports gpSP and mGBA only, not armGBA. Keep Slot `presents/s`, armGBA committed frames/s and LCD IRQ/s as separate metrics.
