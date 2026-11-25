@@ -351,8 +351,12 @@ wired in. H700 compile/regression run
 [#45526953772](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45526953772)
 and boot audit tools
 [#45526953774](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45526953774)
-passed. A new on-device capture is still needed to resolve cached-frequency
-reconciliation and the active cooling state. Keep the service POLICY_ONLY,
+passed. The v3 on-device capture is now archived under
+[`reports/rg34xx-inventory-20261125-cpux-v3`](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261125-cpux-v3)
+and analyzed in §8.6. The getter sequence shows that cached `scaling_cur_freq`
+can reconcile after `cpuinfo_cur_freq`; cooling devices are at 0/8 and 0/5
+in this snapshot. This supersedes the v2 uncertainty, but does not prove the
+shipping driver binary or certify AVCC. Keep the service POLICY_ONLY,
 `hardware_applied=0`; no governor/limit/PMIC/PLL/OPP writes are approved.
 
 
@@ -371,7 +375,7 @@ This is a much closer structural match than the previously examined stock-style 
 
 **Important ambiguity in parser-v2:** an absent `opp-supported-hw` property and a present zero-cell `opp-supported-hw` property were both serialized as an empty `supported_hw_cells` array. The Linux OPP core treats them differently when no hardware mask is registered: absent means the OPP may be accepted; present (even with zero cells) means unsupported. The parser was therefore extended in commit `284f48e71ad93145c15bbf034d88d2f4c404789e` to emit `supported_hw_present`, `supported_hw_cell_count`, `voltage_microvolt_present`, and `voltage_microvolt_variant_names`. Synthetic regression covers absent and empty-present properties. H700 Linux/Windows validation passed in [#45529626035](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45529626035) and [#45529626080](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45529626080).
 
-A parser-v3 report is still required from the original device `live-fdt.dtb` to confirm the property-presence condition. Even if it matches, that would identify an OPP-selection mechanism—not decode SID raw `0x6c00` and not authorize any new OPP or frequency/voltage write. Keep the runtime `POLICY_ONLY`, `hardware_applied=0`, and all actual DVFS controls disabled.
+The parser-v3 report is now available and confirms the property-presence condition. The corrected analyzer finds one exact structural fingerprint—no table-level `supported_hw` array plus the `b1` voltage suffix—against the nine runtime frequencies. This identifies a matching OPP-selection model, not the exact shipping kernel code path; it does not decode SID raw `0x6c00`, approve any OPP or authorize frequency/voltage writes. Keep the runtime `POLICY_ONLY`, `hardware_applied=0`, and all actual DVFS controls disabled.
 
 ### 8.5 Read-only OPP candidate enumerator and current verification (2026-11-25)
 
