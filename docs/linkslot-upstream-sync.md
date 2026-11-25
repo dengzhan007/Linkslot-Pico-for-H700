@@ -1,12 +1,14 @@
 # Linkslot 上游同步与移植边界
 
-## 当前状态：Linkslot 1.0.36 源码快照已取得，正在进行可移植性审计
+## 当前状态：Linkslot 三分支最新源码已归档，正在重定移植基线
 
-用户提供的 linkSlot 1.0.36 源码已归档到本仓库 `upstream/linkslot` 分支，快照 commit 为 `8590d6ff1b2caa26118051069c975106fbb14bd3`。它是无 `.git` 的 ZIP 快照，因此该 commit 只是本仓库的归档提交，不是原始上游 Git commit；真实上游 commit/tag 不可得，详见 [上游基线](upstream-baselines.md) 与 [1.0.36 可移植性审计](linkslot-1.0.36-portability-audit.md)。
+2026-11-25 20:40（UTC+8）同步的私有来源 `luguiyi691/linkslot` 三分支已归档到本仓库 `upstream/linkslot`：根目录 `main 1.0.49`、`DEV/ 1.1.0`、`test/ 1.0.49`。原始来源 commit 分别为 `b84f37f1a6259a625e9095279dd132f5ef2116af`、`a800adb2e3a51d05ffe80abeae2e1ec52247b951`、`8c7a37055eb68f71170320d4a17cdb9251785186`；本仓库归档分支 HEAD 为 `241e7c1974926fa22552b200852914ceaccbfd42`。精确来源、文件数和 SHA256 清单见 [上游基线](upstream-baselines.md) 与 [UPSTREAM-SNAPSHOT.md](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/upstream/linkslot/UPSTREAM-SNAPSHOT.md)。
 
-当前不直接把整个 workspace 导入 `third_party/linkslot`，也不开始大规模修改上游代码。先完成逐 crate 复用审计与 LK Rust ABI/工具链可行性验证。特别注意：Linkslot 的 `device` feature 仍通过 `rust:1.96-bullseye` / `linux/arm64` 构建，是 AArch64 Linux/glibc 程序，不是 LK/bare-metal。
+main 与 test 的 851 个源码文件逐文件一致，正式稳定适配基线选择 main 1.0.49；DEV 1.1.0 相对 main 有 21 个新增、1 个删除、46 个修改，增加 schema 2 平台包、Arcade/NeoGeo 与 FBNeo。DEV 作为后续能力审查对象，不并入首期 GB/GBC/GBA 垂直切片。
 
-等待审计期间继续推进不依赖 Linkslot UI 的 H700 启动链、硬件边界与 freestanding 工具链工作；探针实机准入仍遵循 reports 分支的 NO-GO 结论。
+旧 H700 patcher 目前仍 pin 在 Linkslot 1.0.45 archive commit `3b06d96adadd0375f071555ecb3cc20c3a5b53db`，并在运行时检查 1.0.45。不得直接改写 pin 后假设兼容；先在 1.0.49 上重新验证 no_std crate、renderer patch、静态 Core API、VFS/newlib 链接和 patcher anchors，再固定新 pin。完整 workspace 仍是 AArch64 Linux/glibc 程序，不是 LK/bare-metal；本项目只复用经验证的纯逻辑并由 H700/LK adapter 替换系统后端。
+
+等待适配审计期间，继续推进不依赖前端版本的 H700 启动链、硬件边界与 freestanding 工具链工作；探针实机准入仍遵循 reports 分支的 NO-GO 结论。
 
 ## 目标
 
@@ -75,9 +77,9 @@ H700 侧提供稳定的适配接口，不让 Linkslot 业务模块直接访问 S
 1. 若取得上游原始 Git 历史，先核验 release tag 与 commit，再使用固定 SHA 进行 subtree 导入/更新。
 2. 若只取得新的 ZIP 源码快照，先将原始归档按日期和 SHA-256 归档；记录快照 commit 与上游真实 commit 的区别。
 3. 对快照版本可使用 `git diff` / 文件级 SHA 比较变化，但不能声称获得原始上游 Git 历史，也不能用快照伪造 release tag。
-4. 在 1.0.36 crate 审计和 LK ABI 试编译完成前，不创建 `third_party/linkslot` subtree，不把完整 workspace 作为 H700 根 workspace 成员。
+4. 在 1.0.49 稳定基线复核和 DEV 1.1.0 差异审计完成前，不创建 `third_party/linkslot` subtree，不把完整 workspace 作为 H700 根 workspace 成员。
 
-原始上游仓库公开版本落后于用户提供快照时，不得从公开 `main` 强行 subtree pull 覆盖 1.0.36。应继续以 `upstream/linkslot` 分支作为只读输入，等待可核验的上游 Git 基线或后续源码快照。
+原始上游仓库公开版本落后于用户提供快照时，不得从公开 `luguiyi/linkslot/main`（当前公开仓库仍是旧版 1.0.0）强行 subtree pull 覆盖私有来源快照。继续以 `upstream/linkslot` 分支作为只读输入，并按 `UPSTREAM-SNAPSHOT.md` 的原始来源 commit 锁定版本。
 
 每次同步必须经过：
 
@@ -86,7 +88,7 @@ H700 侧提供稳定的适配接口，不让 Linkslot 业务模块直接访问 S
 3. 编译探针：上游复用部分在主机测试目标与 H700 目标上分别编译；
 4. 行为回归：游戏库、配置、存档、即时状态、云同步冲突处理、Web API、Lua MOD；
 5. 核心与实机回归：GB/GBC/GBA 启动、音视频、按键、存档；
-6. 更新 `docs/upstream-baselines.md`，附上新 SHA、差异摘要、未移植功能和测试结果。
+6. 更新 `docs/upstream-baselines.md`，附上原始来源 SHA、归档 SHA、差异摘要、未移植功能和测试结果。
 
 上游更新不能自动升级用户 SD 卡上的数据；任何数据格式迁移必须独立、可验证并保留备份。
 
