@@ -1,0 +1,1 @@
+2842	ld-linux-aarch6	/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1	/lib/ld-linux-aarch64.so.1 /mnt/sdcard/System/slot 

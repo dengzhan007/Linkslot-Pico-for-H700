@@ -1,0 +1,11 @@
+    pll_video2                            2            2   297000000          0 0  
+       tcon_tv                            1            1   297000000          0 0  
+       pll_video2x4                       0            0  1188000000          0 0  
+    pll_video1                            0            0   432000000          0 0  
+       tcon_tv1                           0            0   432000000          0 0  
+       tcon_lcd1                          0            0   432000000          0 0  
+       pll_video1x4                       0            0  1728000000          0 0  
+    pll_video0x4                          1            1   288000000          0 0  
+       tcon_lcd                           1            1   288000000          0 0  
+       pll_video0                         0            0    72000000          0 0  
+          display_top                     1            1   200000000          0 0  

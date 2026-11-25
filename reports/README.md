@@ -2,6 +2,21 @@
 
 ## Index
 
+### 2026-11-25 — pvaibhav/slot RG34XX UI vs GAME runtime capture (read-only, 30 s each)
+
+- `pvaibhav-slot-runtime/` — two read-only runtime captures of the same RG34xx (`sun50iw9p1`, Linux `4.9.170`)
+  taken back to back: `20261125-184406-ui` (27 samples / 29.6 s) and `20261125-184508-game` (23 samples /
+  29.7 s). Display scanout IRQ rates are indistinguishable between phases — IRQ 292 `wakeupgen 88 dispaly`
+  59.648 Hz (UI) vs 59.632 Hz (GAME); IRQ 293 59.614 vs 59.632 Hz. Driver-reported `fps` toggles between
+  `60.2` and `59.8` in *both* phases, so it does not track the phase. `mgr0` mode line, `de_rate` 696 MHz and
+  the live FDT blob (`6d1301e6…`) are identical in both rounds; panel is `rg34xx_v1` 720x480,
+  `lcd_dclk_freq` 26 MHz, `ht` 820 / `vt` 536, `hbp` 46 / `hspw` 2 / `vbp` 20 / `vspw` 5. `high_refresh=1`
+  in `slot.state` in both phases, with **no** observed mode change. GAME round additionally maps
+  `armgba_libretro.so` + `libz.so.1` (PID 2842 unchanged; 895 vs 863 `maps` lines). No game FPS was measured —
+  IRQ deltas are a scanout proxy only. Includes per-round `samples.json`, `interrupt-samples/`,
+  `proc-2842/*` and a packaged zip; `live-fdt.dtb` and the serial stay local/redacted, and no `adb root`,
+  mode-set, MMIO, `sunxi_dump` write or input injection was performed.
+
 ### 2026-11-25 — RG34XX/H700 read-only inventory (v5, display timing snapshot)
 
 - `rg34xx-inventory-20261125-163152/` — fifth read-only inventory (`porting/linkslot-1.0.45-feasibility` @ `d7edaad`,

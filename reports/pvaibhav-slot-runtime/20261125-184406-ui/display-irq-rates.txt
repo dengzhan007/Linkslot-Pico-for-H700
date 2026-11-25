@@ -1,0 +1,8 @@
+﻿
+irq label                           delta seconds     hz
+--- -----                           ----- -------     --
+292 wakeupgen  88 Level     dispaly  1767  29.624 59.648
+293 wakeupgen  64 Level     dispaly  1766  29.624 59.614
+
+
+

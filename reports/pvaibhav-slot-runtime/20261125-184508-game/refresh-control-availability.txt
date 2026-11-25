@@ -1,0 +1,2 @@
+-rw-r--r--    1 root     root          4096 Nov 25 10:39 [0;0m/sys/class/sunxi_dump/write[m
+-rw-r--r--    1 root     root          4096 Nov 25 10:39 [0;0m/sys/class/sunxi_dump/dump[m

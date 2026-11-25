@@ -1,0 +1,46 @@
+Name:	ld-linux-aarch6
+Umask:	0022
+State:	S (sleeping)
+Tgid:	2842
+Ngid:	0
+Pid:	2842
+PPid:	1335
+TracerPid:	0
+Uid:	0	0	0	0
+Gid:	0	0	0	0
+FDSize:	64
+Groups:	 
+VmPeak:	 2026904 kB
+VmSize:	 2026904 kB
+VmLck:	       0 kB
+VmPin:	       0 kB
+VmHWM:	  274296 kB
+VmRSS:	  274296 kB
+RssAnon:	  177480 kB
+RssFile:	   96816 kB
+RssShmem:	       0 kB
+VmData:	  426940 kB
+VmStk:	     132 kB
+VmExe:	     172 kB
+VmLib:	   41420 kB
+VmPTE:	     824 kB
+VmPMD:	      20 kB
+VmSwap:	       0 kB
+Threads:	29
+SigQ:	0/3626
+SigPnd:	0000000000000000
+ShdPnd:	0000000000000000
+SigBlk:	0000000000000000
+SigIgn:	0000000000001000
+SigCgt:	00000001000044e8
+CapInh:	0000000000000000
+CapPrm:	0000003fffffffff
+CapEff:	0000003fffffffff
+CapBnd:	0000003fffffffff
+CapAmb:	0000000000000000
+Seccomp:	0
+Speculation_Store_Bypass:	unknown
+Cpus_allowed:	f
+Cpus_allowed_list:	0-3
+voluntary_ctxt_switches:	182578
+nonvoluntary_ctxt_switches:	10293

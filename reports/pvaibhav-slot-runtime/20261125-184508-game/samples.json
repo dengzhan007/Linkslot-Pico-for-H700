@@ -1,0 +1,761 @@
+﻿[
+    {
+        "sample":  0,
+        "timestamp":  "2026-11-25T18:45:12.2418614+08:00",
+        "elapsed_s":  0.578,
+        "display_fps_reported":  60.2,
+        "ref_fps_reported":  59,
+        "cpu0_scaling_khz":  1200000,
+        "thermal_zone0_millic":  50768,
+        "display_irqs":  [
+                             {
+                                 "irq":  292,
+                                 "label":  "wakeupgen  88 Level     dispaly",
+                                 "total":  151768,
+                                 "cpu_counts":  [
+                                                    151768,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             },
+                             {
+                                 "irq":  293,
+                                 "label":  "wakeupgen  64 Level     dispaly",
+                                 "total":  152783,
+                                 "cpu_counts":  [
+                                                    152783,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             }
+                         ]
+    },
+    {
+        "sample":  1,
+        "timestamp":  "2026-11-25T18:45:13.6334230+08:00",
+        "elapsed_s":  1.932,
+        "display_fps_reported":  60.2,
+        "ref_fps_reported":  59,
+        "cpu0_scaling_khz":  1200000,
+        "thermal_zone0_millic":  49715,
+        "display_irqs":  [
+                             {
+                                 "irq":  292,
+                                 "label":  "wakeupgen  88 Level     dispaly",
+                                 "total":  151850,
+                                 "cpu_counts":  [
+                                                    151850,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             },
+                             {
+                                 "irq":  293,
+                                 "label":  "wakeupgen  64 Level     dispaly",
+                                 "total":  152866,
+                                 "cpu_counts":  [
+                                                    152866,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             }
+                         ]
+    },
+    {
+        "sample":  2,
+        "timestamp":  "2026-11-25T18:45:14.9815499+08:00",
+        "elapsed_s":  3.309,
+        "display_fps_reported":  60.2,
+        "ref_fps_reported":  59,
+        "cpu0_scaling_khz":  1104000,
+        "thermal_zone0_millic":  50201,
+        "display_irqs":  [
+                             {
+                                 "irq":  292,
+                                 "label":  "wakeupgen  88 Level     dispaly",
+                                 "total":  151930,
+                                 "cpu_counts":  [
+                                                    151930,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             },
+                             {
+                                 "irq":  293,
+                                 "label":  "wakeupgen  64 Level     dispaly",
+                                 "total":  152946,
+                                 "cpu_counts":  [
+                                                    152946,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             }
+                         ]
+    },
+    {
+        "sample":  3,
+        "timestamp":  "2026-11-25T18:45:16.3641918+08:00",
+        "elapsed_s":  4.665,
+        "display_fps_reported":  60.2,
+        "ref_fps_reported":  59,
+        "cpu0_scaling_khz":  1104000,
+        "thermal_zone0_millic":  48986,
+        "display_irqs":  [
+                             {
+                                 "irq":  292,
+                                 "label":  "wakeupgen  88 Level     dispaly",
+                                 "total":  152013,
+                                 "cpu_counts":  [
+                                                    152013,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             },
+                             {
+                                 "irq":  293,
+                                 "label":  "wakeupgen  64 Level     dispaly",
+                                 "total":  153028,
+                                 "cpu_counts":  [
+                                                    153028,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             }
+                         ]
+    },
+    {
+        "sample":  4,
+        "timestamp":  "2026-11-25T18:45:17.7151457+08:00",
+        "elapsed_s":  6.018,
+        "display_fps_reported":  60.2,
+        "ref_fps_reported":  59,
+        "cpu0_scaling_khz":  1200000,
+        "thermal_zone0_millic":  49472,
+        "display_irqs":  [
+                             {
+                                 "irq":  292,
+                                 "label":  "wakeupgen  88 Level     dispaly",
+                                 "total":  152094,
+                                 "cpu_counts":  [
+                                                    152094,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             },
+                             {
+                                 "irq":  293,
+                                 "label":  "wakeupgen  64 Level     dispaly",
+                                 "total":  153109,
+                                 "cpu_counts":  [
+                                                    153109,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             }
+                         ]
+    },
+    {
+        "sample":  5,
+        "timestamp":  "2026-11-25T18:45:19.0683415+08:00",
+        "elapsed_s":  7.371,
+        "display_fps_reported":  59.8,
+        "ref_fps_reported":  59,
+        "cpu0_scaling_khz":  1512000,
+        "thermal_zone0_millic":  49310,
+        "display_irqs":  [
+                             {
+                                 "irq":  292,
+                                 "label":  "wakeupgen  88 Level     dispaly",
+                                 "total":  152174,
+                                 "cpu_counts":  [
+                                                    152174,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             },
+                             {
+                                 "irq":  293,
+                                 "label":  "wakeupgen  64 Level     dispaly",
+                                 "total":  153189,
+                                 "cpu_counts":  [
+                                                    153189,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             }
+                         ]
+    },
+    {
+        "sample":  6,
+        "timestamp":  "2026-11-25T18:45:20.4158795+08:00",
+        "elapsed_s":  8.714,
+        "display_fps_reported":  60.2,
+        "ref_fps_reported":  59,
+        "cpu0_scaling_khz":  1320000,
+        "thermal_zone0_millic":  49553,
+        "display_irqs":  [
+                             {
+                                 "irq":  292,
+                                 "label":  "wakeupgen  88 Level     dispaly",
+                                 "total":  152254,
+                                 "cpu_counts":  [
+                                                    152254,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             },
+                             {
+                                 "irq":  293,
+                                 "label":  "wakeupgen  64 Level     dispaly",
+                                 "total":  153269,
+                                 "cpu_counts":  [
+                                                    153269,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             }
+                         ]
+    },
+    {
+        "sample":  7,
+        "timestamp":  "2026-11-25T18:45:21.7672444+08:00",
+        "elapsed_s":  10.074,
+        "display_fps_reported":  60.2,
+        "ref_fps_reported":  59,
+        "cpu0_scaling_khz":  1512000,
+        "thermal_zone0_millic":  49310,
+        "display_irqs":  [
+                             {
+                                 "irq":  292,
+                                 "label":  "wakeupgen  88 Level     dispaly",
+                                 "total":  152335,
+                                 "cpu_counts":  [
+                                                    152335,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             },
+                             {
+                                 "irq":  293,
+                                 "label":  "wakeupgen  64 Level     dispaly",
+                                 "total":  153350,
+                                 "cpu_counts":  [
+                                                    153350,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             }
+                         ]
+    },
+    {
+        "sample":  8,
+        "timestamp":  "2026-11-25T18:45:23.1207429+08:00",
+        "elapsed_s":  11.451,
+        "display_fps_reported":  60.2,
+        "ref_fps_reported":  59,
+        "cpu0_scaling_khz":  1104000,
+        "thermal_zone0_millic":  49472,
+        "display_irqs":  [
+                             {
+                                 "irq":  292,
+                                 "label":  "wakeupgen  88 Level     dispaly",
+                                 "total":  152418,
+                                 "cpu_counts":  [
+                                                    152418,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             },
+                             {
+                                 "irq":  293,
+                                 "label":  "wakeupgen  64 Level     dispaly",
+                                 "total":  153433,
+                                 "cpu_counts":  [
+                                                    153433,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             }
+                         ]
+    },
+    {
+        "sample":  9,
+        "timestamp":  "2026-11-25T18:45:24.4952691+08:00",
+        "elapsed_s":  12.804,
+        "display_fps_reported":  59.8,
+        "ref_fps_reported":  59,
+        "cpu0_scaling_khz":  1320000,
+        "thermal_zone0_millic":  48905,
+        "display_irqs":  [
+                             {
+                                 "irq":  292,
+                                 "label":  "wakeupgen  88 Level     dispaly",
+                                 "total":  152498,
+                                 "cpu_counts":  [
+                                                    152498,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             },
+                             {
+                                 "irq":  293,
+                                 "label":  "wakeupgen  64 Level     dispaly",
+                                 "total":  153513,
+                                 "cpu_counts":  [
+                                                    153513,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             }
+                         ]
+    },
+    {
+        "sample":  10,
+        "timestamp":  "2026-11-25T18:45:25.8515402+08:00",
+        "elapsed_s":  14.151,
+        "display_fps_reported":  60.2,
+        "ref_fps_reported":  59,
+        "cpu0_scaling_khz":  1104000,
+        "thermal_zone0_millic":  50039,
+        "display_irqs":  [
+                             {
+                                 "irq":  292,
+                                 "label":  "wakeupgen  88 Level     dispaly",
+                                 "total":  152578,
+                                 "cpu_counts":  [
+                                                    152578,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             },
+                             {
+                                 "irq":  293,
+                                 "label":  "wakeupgen  64 Level     dispaly",
+                                 "total":  153593,
+                                 "cpu_counts":  [
+                                                    153593,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             }
+                         ]
+    },
+    {
+        "sample":  11,
+        "timestamp":  "2026-11-25T18:45:27.2023937+08:00",
+        "elapsed_s":  15.49,
+        "display_fps_reported":  60.2,
+        "ref_fps_reported":  59,
+        "cpu0_scaling_khz":  1104000,
+        "thermal_zone0_millic":  49715,
+        "display_irqs":  [
+                             {
+                                 "irq":  292,
+                                 "label":  "wakeupgen  88 Level     dispaly",
+                                 "total":  152658,
+                                 "cpu_counts":  [
+                                                    152658,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             },
+                             {
+                                 "irq":  293,
+                                 "label":  "wakeupgen  64 Level     dispaly",
+                                 "total":  153674,
+                                 "cpu_counts":  [
+                                                    153674,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             }
+                         ]
+    },
+    {
+        "sample":  12,
+        "timestamp":  "2026-11-25T18:45:28.5431621+08:00",
+        "elapsed_s":  16.843,
+        "display_fps_reported":  60.2,
+        "ref_fps_reported":  59,
+        "cpu0_scaling_khz":  1200000,
+        "thermal_zone0_millic":  48986,
+        "display_irqs":  [
+                             {
+                                 "irq":  292,
+                                 "label":  "wakeupgen  88 Level     dispaly",
+                                 "total":  152738,
+                                 "cpu_counts":  [
+                                                    152738,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             },
+                             {
+                                 "irq":  293,
+                                 "label":  "wakeupgen  64 Level     dispaly",
+                                 "total":  153753,
+                                 "cpu_counts":  [
+                                                    153753,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             }
+                         ]
+    },
+    {
+        "sample":  13,
+        "timestamp":  "2026-11-25T18:45:29.8857945+08:00",
+        "elapsed_s":  18.181,
+        "display_fps_reported":  60.2,
+        "ref_fps_reported":  59,
+        "cpu0_scaling_khz":  1104000,
+        "thermal_zone0_millic":  49553,
+        "display_irqs":  [
+                             {
+                                 "irq":  292,
+                                 "label":  "wakeupgen  88 Level     dispaly",
+                                 "total":  152818,
+                                 "cpu_counts":  [
+                                                    152818,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             },
+                             {
+                                 "irq":  293,
+                                 "label":  "wakeupgen  64 Level     dispaly",
+                                 "total":  153833,
+                                 "cpu_counts":  [
+                                                    153833,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             }
+                         ]
+    },
+    {
+        "sample":  14,
+        "timestamp":  "2026-11-25T18:45:31.2360864+08:00",
+        "elapsed_s":  19.537,
+        "display_fps_reported":  59.8,
+        "ref_fps_reported":  59,
+        "cpu0_scaling_khz":  1200000,
+        "thermal_zone0_millic":  49958,
+        "display_irqs":  [
+                             {
+                                 "irq":  292,
+                                 "label":  "wakeupgen  88 Level     dispaly",
+                                 "total":  152899,
+                                 "cpu_counts":  [
+                                                    152899,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             },
+                             {
+                                 "irq":  293,
+                                 "label":  "wakeupgen  64 Level     dispaly",
+                                 "total":  153914,
+                                 "cpu_counts":  [
+                                                    153914,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             }
+                         ]
+    },
+    {
+        "sample":  15,
+        "timestamp":  "2026-11-25T18:45:32.5851740+08:00",
+        "elapsed_s":  20.878,
+        "display_fps_reported":  60.2,
+        "ref_fps_reported":  59,
+        "cpu0_scaling_khz":  1104000,
+        "thermal_zone0_millic":  49958,
+        "display_irqs":  [
+                             {
+                                 "irq":  292,
+                                 "label":  "wakeupgen  88 Level     dispaly",
+                                 "total":  152979,
+                                 "cpu_counts":  [
+                                                    152979,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             },
+                             {
+                                 "irq":  293,
+                                 "label":  "wakeupgen  64 Level     dispaly",
+                                 "total":  153994,
+                                 "cpu_counts":  [
+                                                    153994,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             }
+                         ]
+    },
+    {
+        "sample":  16,
+        "timestamp":  "2026-11-25T18:45:33.9330519+08:00",
+        "elapsed_s":  22.222,
+        "display_fps_reported":  60.2,
+        "ref_fps_reported":  59,
+        "cpu0_scaling_khz":  1104000,
+        "thermal_zone0_millic":  49472,
+        "display_irqs":  [
+                             {
+                                 "irq":  292,
+                                 "label":  "wakeupgen  88 Level     dispaly",
+                                 "total":  153059,
+                                 "cpu_counts":  [
+                                                    153059,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             },
+                             {
+                                 "irq":  293,
+                                 "label":  "wakeupgen  64 Level     dispaly",
+                                 "total":  154074,
+                                 "cpu_counts":  [
+                                                    154074,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             }
+                         ]
+    },
+    {
+        "sample":  17,
+        "timestamp":  "2026-11-25T18:45:35.2848668+08:00",
+        "elapsed_s":  23.577,
+        "display_fps_reported":  60.2,
+        "ref_fps_reported":  59,
+        "cpu0_scaling_khz":  1200000,
+        "thermal_zone0_millic":  48986,
+        "display_irqs":  [
+                             {
+                                 "irq":  292,
+                                 "label":  "wakeupgen  88 Level     dispaly",
+                                 "total":  153140,
+                                 "cpu_counts":  [
+                                                    153140,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             },
+                             {
+                                 "irq":  293,
+                                 "label":  "wakeupgen  64 Level     dispaly",
+                                 "total":  154155,
+                                 "cpu_counts":  [
+                                                    154155,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             }
+                         ]
+    },
+    {
+        "sample":  18,
+        "timestamp":  "2026-11-25T18:45:36.6178453+08:00",
+        "elapsed_s":  24.917,
+        "display_fps_reported":  60.2,
+        "ref_fps_reported":  59,
+        "cpu0_scaling_khz":  1104000,
+        "thermal_zone0_millic":  49310,
+        "display_irqs":  [
+                             {
+                                 "irq":  292,
+                                 "label":  "wakeupgen  88 Level     dispaly",
+                                 "total":  153220,
+                                 "cpu_counts":  [
+                                                    153220,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             },
+                             {
+                                 "irq":  293,
+                                 "label":  "wakeupgen  64 Level     dispaly",
+                                 "total":  154235,
+                                 "cpu_counts":  [
+                                                    154235,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             }
+                         ]
+    },
+    {
+        "sample":  19,
+        "timestamp":  "2026-11-25T18:45:37.9670155+08:00",
+        "elapsed_s":  26.274,
+        "display_fps_reported":  60.2,
+        "ref_fps_reported":  59,
+        "cpu0_scaling_khz":  1512000,
+        "thermal_zone0_millic":  50120,
+        "display_irqs":  [
+                             {
+                                 "irq":  292,
+                                 "label":  "wakeupgen  88 Level     dispaly",
+                                 "total":  153300,
+                                 "cpu_counts":  [
+                                                    153300,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             },
+                             {
+                                 "irq":  293,
+                                 "label":  "wakeupgen  64 Level     dispaly",
+                                 "total":  154315,
+                                 "cpu_counts":  [
+                                                    154315,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             }
+                         ]
+    },
+    {
+        "sample":  20,
+        "timestamp":  "2026-11-25T18:45:39.3204395+08:00",
+        "elapsed_s":  27.618,
+        "display_fps_reported":  60.2,
+        "ref_fps_reported":  59,
+        "cpu0_scaling_khz":  1200000,
+        "thermal_zone0_millic":  49553,
+        "display_irqs":  [
+                             {
+                                 "irq":  292,
+                                 "label":  "wakeupgen  88 Level     dispaly",
+                                 "total":  153380,
+                                 "cpu_counts":  [
+                                                    153380,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             },
+                             {
+                                 "irq":  293,
+                                 "label":  "wakeupgen  64 Level     dispaly",
+                                 "total":  154395,
+                                 "cpu_counts":  [
+                                                    154395,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             }
+                         ]
+    },
+    {
+        "sample":  21,
+        "timestamp":  "2026-11-25T18:45:40.6686947+08:00",
+        "elapsed_s":  28.971,
+        "display_fps_reported":  60.2,
+        "ref_fps_reported":  59,
+        "cpu0_scaling_khz":  1512000,
+        "thermal_zone0_millic":  49796,
+        "display_irqs":  [
+                             {
+                                 "irq":  292,
+                                 "label":  "wakeupgen  88 Level     dispaly",
+                                 "total":  153461,
+                                 "cpu_counts":  [
+                                                    153461,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             },
+                             {
+                                 "irq":  293,
+                                 "label":  "wakeupgen  64 Level     dispaly",
+                                 "total":  154476,
+                                 "cpu_counts":  [
+                                                    154476,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             }
+                         ]
+    },
+    {
+        "sample":  22,
+        "timestamp":  "2026-11-25T18:45:42.0312500+08:00",
+        "elapsed_s":  30.327,
+        "display_fps_reported":  60.2,
+        "ref_fps_reported":  59,
+        "cpu0_scaling_khz":  1200000,
+        "thermal_zone0_millic":  49472,
+        "display_irqs":  [
+                             {
+                                 "irq":  292,
+                                 "label":  "wakeupgen  88 Level     dispaly",
+                                 "total":  153542,
+                                 "cpu_counts":  [
+                                                    153542,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             },
+                             {
+                                 "irq":  293,
+                                 "label":  "wakeupgen  64 Level     dispaly",
+                                 "total":  154557,
+                                 "cpu_counts":  [
+                                                    154557,
+                                                    0,
+                                                    0,
+                                                    0
+                                                ]
+                             }
+                         ]
+    }
+]

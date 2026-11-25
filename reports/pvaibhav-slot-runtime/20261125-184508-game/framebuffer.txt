@@ -1,0 +1,15 @@
+[name]
+
+[mode]
+[modes]
+U:720x480p-59
+[virtual_size]
+720,960
+[stride]
+2880
+[pan]
+0,480
+[bits_per_pixel]
+32
+[/proc/fb]
+0 

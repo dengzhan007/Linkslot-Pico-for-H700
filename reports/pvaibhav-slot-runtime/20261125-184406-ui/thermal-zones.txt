@@ -1,0 +1,25 @@
+-- /sys/class/thermal/thermal_zone0 --
+[type]
+cpu_thermal_zone
+[temp]
+47285
+-- /sys/class/thermal/thermal_zone1 --
+[type]
+gpu_thermal_zone
+[temp]
+47852
+-- /sys/class/thermal/thermal_zone2 --
+[type]
+ve_thermal_zone
+[temp]
+47042
+-- /sys/class/thermal/thermal_zone3 --
+[type]
+ddr_thermal_zone
+[temp]
+47447
+-- /sys/class/thermal/thermal_zone4 --
+[type]
+axp2202-battery
+[temp]
+30000
