@@ -9,6 +9,10 @@ on:
       - "scripts/test-linkslot-static-core-api.py"
       - "scripts/test-linkslot-mgba-static-rust-binding.py"
       - "scripts/test-linkslot-static-mgba-selection.py"
+      - "scripts/test-armgba-frame-layout.py"
+      - "tools/armgba-frame-layout-probe.c"
+      - "scripts/test-armgba-frame-layout.py"
+      - "tools/armgba-frame-layout-probe.c"
       - "scripts/apply-linkslot-render-core.py"
       - "scripts/apply-linkslot-h700-frontend-core.py"
       - "integration/linkslot/h700-frontend-core/**"
@@ -145,6 +149,14 @@ jobs:
           path: .ci/mgba-source
           persist-credentials: false
 
+      - name: Checkout pinned armGBA source
+        uses: actions/checkout@v4
+        with:
+          repository: MagnominusGit/armGBA
+          ref: fad6c4b0c0176a76e10667f4aa071a8feb4425c0
+          path: .ci/armgba-source
+          persist-credentials: false
+
       - name: Checkout pinned GammaOS LK reference
         uses: actions/checkout@v4
         with:
@@ -179,6 +191,13 @@ jobs:
           for tool in clang ld.lld llvm-nm llvm-objcopy arm-none-eabi-gcc arm-linux-gnueabi-gcc mkfs.fat mcopy mkfs.exfat; do
             command -v "$tool" >/dev/null || { echo "Missing required tool: $tool"; exit 1; }
           done
+
+      - name: Verify armGBA committed-frame layout across H700 ABIs
+        run: |
+          python3 scripts/test-armgba-frame-layout.py \
+            --source .ci/armgba-source \
+            --out build/audit-work/linkslot-1.0.49/armgba-frame-layout \
+            --cc cc --arm-cc arm-none-eabi-gcc --clang clang
 
       - name: Compile/link actual GammaOS LK H700 BL33 overlay CRT0 and exception vectors
         run: |
