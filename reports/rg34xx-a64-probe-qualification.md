@@ -467,7 +467,7 @@ If visibility turns out to be absent, the two candidate read-out channels are:
 | `smc` / `hvc` / `eret` | 0 / 0 / 0 |
 | relocations | 0 |
 | every `adrp`/`adr` target inside the image | pass |
-| every `sp`-relative access inside the 8 KiB stack | pass (offsets 8…0x1F8, all non-negative, all < 0x2000) |
+| every `sp`-relative access inside the 8 KiB stack | pass (displacements `-0x10` … `+0x190`; the single negative one is the pre-index `str x30, [sp, #-0x10]!` at `0x4008110C`, all others non-negative and below 8 KiB) |
 | **hard-coded physical addresses** in the instruction stream | **none** — no MMIO, no DRAM, no fixed framebuffer address; the address comes from the FDT at run time |
 | `fb_store` (the only store into the framebuffer) | exactly 1 store instruction, at `0x40081158` |
 | `fb_pixel` (its only caller) | 6 guard instructions (x<0, y<0, x≥w, y≥h) and 1 call to `fb_store`, spanning `0x400810DC`–`0x40081158` |
