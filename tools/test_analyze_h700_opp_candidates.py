@@ -89,7 +89,35 @@ class OppCandidateTests(unittest.TestCase):
             and item["voltage_property_suffix"] is None
         )
         self.assertEqual(candidate["accepted_frequencies_hz"], [480000000, 720000000])
-        self.assertFalse(candidate["matches_runtime"] is False is True)
+        self.assertTrue(candidate["matches_runtime"])
+
+    def test_runtime_frequency_fingerprint_matches_nine_b1_opps(self):
+        frequencies = [480, 720, 936, 1008, 1104, 1200, 1320, 1416, 1512]
+        dropped = [600, 792, 1032, 1296, 1344]
+        entries = [
+            opp(mhz, variants={"b1": [900000 + index * 10000]})
+            for index, mhz in enumerate(frequencies)
+        ]
+        entries.extend(
+            opp(mhz, variants={"a1": [950000]})
+            for mhz in dropped
+        )
+        runtime = (
+            "[scaling_available_frequencies]\n"
+            + " ".join(str(value * 1000) for value in frequencies)
+            + "\n"
+        )
+        result = MODULE.analyze_opp_candidates(report(entries), runtime)
+        matches = [
+            item for item in result["exact_matches"]
+            if item["supported_hw_mode"] == "not_registered"
+            and item["voltage_property_suffix"] == "b1"
+        ]
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(
+            matches[0]["accepted_frequencies_hz"],
+            [value * 1000000 for value in frequencies],
+        )
 
     def test_named_property_present_but_empty_does_not_fall_back_to_base(self):
         entry = opp(

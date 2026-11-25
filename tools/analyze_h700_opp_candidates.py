@@ -21,7 +21,7 @@ class AnalysisError(ValueError):
 def parse_runtime_frequencies(cpu_runtime_text: str) -> List[int]:
     """Read kHz values from all scaling_available_frequencies blocks."""
     pattern = re.compile(
-        r"^\\[scaling_available_frequencies\\]\\s*\\r?\\n([0-9 \\t]+)$",
+        r"^\[scaling_available_frequencies\]\s*\r?\n([0-9 \t]+)$",
         re.MULTILINE,
     )
     found: List[List[int]] = []
@@ -213,7 +213,7 @@ def main() -> int:
     except (OSError, json.JSONDecodeError, AnalysisError) as error:
         parser.error(str(error))
 
-    encoded = json.dumps(report, indent=2, sort_keys=True) + "\\n"
+    encoded = json.dumps(report, indent=2, sort_keys=True) + "\n"
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(encoded, encoding="utf-8")
