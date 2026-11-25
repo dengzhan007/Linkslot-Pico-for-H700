@@ -391,6 +391,54 @@ fi
         echo "NOT_READABLE_OR_ABSENT: CPUX clk_summary focus"
     fi
 
+    # Read cpufreq sysfs and clock-summary values close together so users can
+    # distinguish governor transitions from a persistent clock-provider mismatch.
+    # This block is read-only and intentionally avoids changing governor/limits.
+    echo
+    echo "== synchronized cpufreq / CPUX clock samples (read-only) =="
+    CPUFREQ_POLICY="/sys/devices/system/cpu/cpufreq/policy0"
+    CPUFREQ_CPU0="/sys/devices/system/cpu/cpu0/cpufreq"
+    SAMPLE=1
+    while [ "$SAMPLE" -le 6 ]; do
+        echo "-- sample $SAMPLE --"
+        if [ -r /proc/uptime ]; then
+            echo "[uptime_before]"
+            cat /proc/uptime
+        else
+            echo "NOT_READABLE: /proc/uptime"
+        fi
+        for node in "$CPUFREQ_POLICY" "$CPUFREQ_CPU0"; do
+            [ -d "$node" ] || continue
+            echo "-- $node --"
+            for attr in scaling_cur_freq cpuinfo_cur_freq; do
+                if [ -r "$node/$attr" ]; then
+                    echo "[$attr]"
+                    cat "$node/$attr"
+                else
+                    echo "NOT_READABLE_OR_ABSENT: $node/$attr"
+                fi
+            done
+        done
+        if [ -r "$CPU_CLK_SUMMARY" ]; then
+            echo "[clock_summary_cpu_tree]"
+            while IFS= read -r line; do
+                case "$line" in
+                    *pll_cpu*|*pll_periph0*|*cpux*|*cpu*|*axi*)
+                        printf '%s\n' "$line"
+                        ;;
+                esac
+            done < "$CPU_CLK_SUMMARY"
+        else
+            echo "NOT_READABLE_OR_ABSENT: $CPU_CLK_SUMMARY"
+        fi
+        if [ -r /proc/uptime ]; then
+            echo "[uptime_after]"
+            cat /proc/uptime
+        fi
+        SAMPLE=$((SAMPLE + 1))
+        [ "$SAMPLE" -le 6 ] && sleep 0.2
+    done
+
     echo
     echo "== NVMEM metadata and narrowly scoped SID cell readback =="
     echo "Only the two device-tree-declared SID cells are read; the complete NVMEM range is never dumped."
