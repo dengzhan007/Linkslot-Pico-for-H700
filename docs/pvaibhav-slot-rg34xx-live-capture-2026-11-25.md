@@ -213,23 +213,13 @@ The pinned Allwinner sun50iw9 BSP reference at [orangepi-xunlong/linux-orangepi@
 - Its [disp_lcd.c](https://github.com/orangepi-xunlong/linux-orangepi/blob/0cd0547ea405b84b5b60fbc92978ac1bc2b68055/drivers/video/fbdev/sunxi/disp2/disp/de/disp_lcd.c) requests pll_rate = requested_DCLK × tcon_div × lcd_div, reads back the PLL and LCD child rates, and derives the actual DCLK as lcd_rate_set / tcon_div. Its frame-period calculation also uses the read-back clock, not just the DTB property.
 - The pvaibhav fork names the TCON DCLK register DIVIDER=0x06511044 and the video PLL register PLL=0x03001040. Its 60-Hz divider word is 0xf000000b (divider field 11); its 120-Hz word is 0xf000000a (divider field 10). We have **not** written either address on this device.
 
-Our current clock summary reports tcon_lcd=288 MHz. If that is the clock immediately before the TCON divider:
+The current same-boot readback has settled the divider question: `0x06511044=0xf000000b` (divider 11), not the related generic BSP's divider 6. The PLL raw word at `0x03001040` is `0x88001703`. Under the public sun50iw9 clock formula below, that raw word decodes to 288 MHz; if that parent directly feeds the divider, the DCLK estimate is 26.1818 MHz and the scanout estimate is 59.569 Hz at 820×536.
 
-| Divider hypothesis | DCLK estimate | Calculated refresh at 820×536 |
-|---|---:|---:|
-| 11 | 26.1818 MHz | 59.569 Hz |
-| 6 | 48.0000 MHz | 109.210 Hz |
+### External PLL formula cross-check (not exact-kernel proof)
 
-The IRQ-derived 59.61–59.65 Hz corresponds to an effective divider close to 11 if each IRQ is one frame, whereas the related source's generic RGB/HV table defaults to 6. These are **competing hypotheses**, not proof of the installed kernel's divider. The public MustardOS ~106.6-Hz RG34XX-H report illustrates the kind of mismatch that can occur, but it was a different unit/kernel profile; do not transplant its 54-MHz/1679 timing.
+The pinned public [`clk-sun50iw9.c`](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/clk/sunxi/clk-sun50iw9.c) defines N at bits [15:8], D1 at bit 1, and `pll_video0x4 = 24 MHz × (N+1)/(D1+1)`. Its pinned [sun50iw9p1 clock DTS](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/arch/arm64/boot/dts/sunxi/sun50iw9p1-clk.dtsi) assigns `tcon_lcd` to that parent. Therefore the reference formula maps live `0x88001703` to 288 MHz and candidate `0x88002b03` to 528 MHz. Pairing with dividers 11 and 10 yields estimated DCLKs 26.1818 and 52.8 MHz; the latter computes to 120.13 Hz at 820×536. This is only an external source cross-check. It does not establish that exact kernel #19 uses identical fields or parent mux, nor prove the `rg34xx_v1 + lcd_type=old` panel supports the candidate.
 
-### Exact next read-only request
-
-The runtime report shows /sys/class/sunxi_dump/dump is present and accessible as root. The pvaibhav source itself reads a register by writing a query string to the **dump request node**, then reading the returned value. The next device capture should request:
-
-- 0x06511044 — TCON0 DCLK divider register (confirm current divider and enable nibble).
-- 0x03001040 — video PLL register used by the reviewed fork (cross-check against clk_summary).
-
-This request must use only /sys/class/sunxi_dump/dump; **never write to /sys/class/sunxi_dump/write**. Writing the query to the dump sysfs control file asks the kernel dump helper to read MMIO; it is not a write to the MMIO register. Capture the unmodified response and kernel clock summary together. Until the values are read back, neither the 6 nor 11 divider is accepted as the actual running configuration.
+No additional dump request is required for the current boot: both registers are already read. Do not write `/sys/class/sunxi_dump/write` or attempt the candidate high-mode pair.
 
 
 ADB single-command example (substitute the connected device serial locally; do not write to the sibling /write node):
@@ -255,3 +245,8 @@ The subsequent [read-only TCON/PLL capture](https://github.com/dengzhan007/Links
 The raw pair matches the pvaibhav/slot pinned implementation's 60-Hz register pair exactly. With the 820×536 live FDT totals, 288 MHz / 11 estimates a 26.1818-MHz DCLK and 59.569 Hz scanout, which agrees with the 59.61–59.65-Hz IRQ proxy to roughly 0.1%. This explains the previous 59.155-Hz DTB-vs-IRQ difference as consistent with a rounded 26-MHz FDT property and the observed divider/clock summary; the derived DCLK is still not an independent physical measurement.
 
 The pvaibhav high-mode pair is divider `0xf000000a` then PLL `0x88002b03`. Its `rg34xx` panel gate requires `fog_fj035fhd05_v1`, whereas this unit reports `rg34xx_v1` and `lcd_type=old`. The 120-Hz sequence is therefore still **not approved** for this board. The exact 4.9.170 #19 panel/PLL source, complete clock-parent chain, UI present FPS, and armGBA committed-frame FPS remain outstanding. Keep hardware writes disabled.
+
+
+## External sun50iw9 PLL formula cross-check (reference only)
+
+The pinned public `qiaoweibiao/T507_Kernel` sun50iw9 clock driver defines PLL-video0x4 N at bits [15:8], D1 at bit 1, and computes `24 MHz × (N+1)/(D1+1)`. Its pinned DTS assigns `tcon_lcd` to `pll_video0x4`. Under that related BSP's layout, the live raw PLL word `0x88001703` decodes to 288 MHz, while pvaibhav's candidate `0x88002b03` decodes to 528 MHz. Paired with DCLK dividers 11 and 10 respectively, those yield 26.1818-MHz and 52.8-MHz pixel-clock estimates; the latter is about 120.13 Hz at 820×536. This makes the candidate internally consistent but **does not identify the exact running kernel #19 PLL layout or prove panel support**. Exact source/build-ID correspondence and runtime parent mux still need verification. No register write is authorized.
