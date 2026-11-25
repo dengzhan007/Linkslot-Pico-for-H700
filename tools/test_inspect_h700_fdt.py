@@ -169,7 +169,7 @@ def make_fdt():
     prop("compatible", b"operating-points-v2\0")
     prop("opp-shared", b"")
     prop("nvmem-cells", be32(0x40))
-    prop("nvmem-cell-names", b"speed-bin\\0")
+    prop("nvmem-cell-names", b"speed-bin\0")
     begin("opp-1000000000")
     prop("opp-hz", cells(0, 1000000000))
     prop("opp-microvolt", cells(900000))
