@@ -93,9 +93,13 @@ The pinned fork implementation reviewed for this project (`5206e3fa39aa4a9b702cd
 - It also requires 720x480, HT 820, VT 536 and DCLK 26 MHz.
 - The live device reports `rg34xx_v1`, not `fog_fj035fhd05_v1`.
 
-Thus the numerical timing tuple recorded by the report matches the fork's expected timing values, but the panel identity does not. The probe returns unsupported before the writer is exposed. In the fork's app startup path, the refresh setter is called only when `supports_high_refresh()` is true. The configured `high_refresh=1` therefore cannot force the unsupported panel through the gate.
+Thus the numerical timing tuple now confirmed by the live parser matches the fork's numeric gate, but the panel identity does not. The probe returns unsupported before the writer is exposed. In the fork's app startup path, the refresh setter is called only when `supports_high_refresh()` is true. The configured `high_refresh=1` therefore cannot force the unsupported panel through the gate.
 
-This is a useful confirmation of the fork's fail-closed behavior, not evidence that its 120-Hz register sequence is compatible with this panel. Do not change the panel allowlist, copy its register values, or write `sunxi_dump` to make this device pass.
+This is also an inconsistency between the fork's target mapping and the pinned BaseOS panel survey: that survey maps target `rg34xx` to `rg34xx_v1` (720×480), while `fog_fj035fhd05_v1` is assigned to other board targets and panel geometries. The live bootargs additionally record `lcd_type=old`; the survey explains that the Linux panel driver uses this token to choose its init sequence. The token is a selected boot argument, not a direct live PE6 electrical read or a panel-vendor identification.
+
+The safest interpretation is that the reviewed fork's non-SP `rg34xx` allowlist does not cover the standard live RG34XX profile tested here. It may be an upstream coverage gap, but this does **not** establish that simply replacing its string with `rg34xx_v1` would make its 120-Hz register sequence safe. The precise panel init variant, `lcd_type` handling and physical panel characteristics must be traced independently.
+
+Do not change the panel allowlist, copy its register values, or write `sunxi_dump` to make this device pass.
 
 ## FPS measurement boundary
 
@@ -147,3 +151,14 @@ The 19:12 read-only capture recorded:
 - `/mnt/sdcard/SYSTEM/armgba_libretro.so`: 2,021,992 bytes, SHA-256 `4ebae098cc4848fb459fc18299c39acbdbbbeb732db5c3f66d1ff3f6e142e889`.
 
 These hashes are new to the project reports. They do not by themselves identify a version or prove equality with the reviewed source. Compare them with the extracted executable/core in the official [`v1.16.0-pvaibhav.2` H700 release](https://github.com/pvaibhav/slot/releases/tag/v1.16.0-pvaibhav.2); the tag points to the reviewed source line, but the installed file's version/build ID has not yet been attested.
+
+
+## Panel-identity cross-check from the pinned BaseOS survey
+
+The [BaseOS H700 variant survey](https://github.com/pvaibhav/BaseOS/tree/63137afeda1c0bc4ff771be6f03012b7f8147aca/experiments/h700-boot-speed/variant-survey) records the target-to-panel mapping:
+
+- `rg34xx` → `rg34xx_v1`, 720×480, with kernel panel driver `rg34xx_v1`.
+- `fog_fj035fhd05_v1` is assigned to other targets (including RG28XX, RG35XXH/Plus/Pro/SP and RG40XX variants); the survey's geometry list is 640×480 for most of those targets and 720×720 for RG CubeXX.
+- The same survey says the per-target panel driver consumes `lcd_type=` to choose an initialization sequence. This device's live bootargs show `lcd_type=old`.
+
+This cross-check strengthens the conclusion that the reviewed pvaibhav `rg34xx → fog_fj035fhd05_v1` gate does not describe the standard RG34XX non-SP panel profile. It does not authorize substituting `rg34xx_v1` into that gate: the 120-Hz clock sequence must first be validated against the exact `rg34xx_v1 + lcd_type=old` initialization and actual panel revision.
