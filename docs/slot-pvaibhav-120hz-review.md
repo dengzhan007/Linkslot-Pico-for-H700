@@ -161,3 +161,8 @@ Both external references have a panel-profile discrepancy against the live Linux
 Do not resolve either mismatch by changing the panel string, copying the original boot package, or borrowing the pvaibhav register pair. Our matched kernel #19 audit indicates that the original 54-MHz request would follow a different stock divider/rate path than the current 26-MHz profile, but panel init, U-Boot-to-Linux FDT handoff, exact rg34xx_v1 + lcd_type=old electrical revision, and transition safety must be established before any HAL can select it.
 
 Project decision: reuse the original repository as timing evidence and pvaibhav as a writer/readback/rollback design reference. Neither is a drop-in hardware implementation for the current RG34XX. Keep hardware_applied=0, do not write the boot package or display registers, and keep UI/GAME policy separate from eventual HAL capability.
+
+
+## Comparison with the original RG34XX boot-package mod (2026-11-26)
+
+The [separate artifact audit](rgxx-boot-package-120hz-review.md) has now inspected the original `TheGammaSqueeze/rgxx_boot_package_mods` branch. It is a fixed FDT timing package (54-MHz DCLK; HT 840 or 1679), flashed at raw offset `0x1004000` and followed by reboot. It does not use the runtime register writer in this fork. The original FDT uses `fog_fj035fhd05_v1`, while our live device is `rg34xx_v1`; its 54-MHz/840 timing also fails this fork's 26-MHz/820 runtime probe. Do not combine the two mechanisms or apply either third-party profile to the current device.
