@@ -1,3 +1,5 @@
+#include "h700_rg34xx_power_led.h"
+
 /*
  * RG34XX H700 target lifecycle hooks.
  *
@@ -17,10 +19,13 @@
  */
 void target_early_init(void)
 {
-    /* No H700 target-specific work is safe at this early stage yet. */
+    /* Turn the RG34XX work LED on before LK heap/thread startup. */
+    (void)h700_rg34xx_power_led_early_init();
 }
 
 void target_init(void)
 {
-    /* Intentionally empty until a validated H700 target init sequence exists. */
+    /* Retry if PIO was not accessible during the early hook. */
+    if (!h700_rg34xx_power_led_is_ready())
+        (void)h700_rg34xx_power_led_early_init();
 }

@@ -99,6 +99,10 @@ COMMON_FLAGS=(
     -I"$ROOT/platform/h700/power" \
     -c "$ROOT/platform/h700/power/h700_cpu_performance_runtime.c" \
     -o "$OUT_DIR/h700_cpu_performance_runtime.o"
+"$CC" "${COMMON_FLAGS[@]}" -std=c11 \
+    -I"$ROOT/platform/h700/power" \
+    -c "$ROOT/platform/h700/power/h700_rg34xx_power_led.c" \
+    -o "$OUT_DIR/h700_rg34xx_power_led.o"
 
 "$CC" "${COMMON_FLAGS[@]}" -std=c11 \
     -c "$ROOT/target/rg34xx_h700/init.c" \
@@ -195,7 +199,7 @@ COMMON_FLAGS=(
     -c "$CPP_PROBE" \
     -o "$OUT_DIR/compile_probe_cpp.o"
 
-for object in "$OUT_DIR/compile_probe.o" "$OUT_DIR/compile_probe_asm.o" "$OUT_DIR/compile_probe_cpp.o" "$OUT_DIR/h700_mmc_board_profile.o" "$OUT_DIR/h700_cpu_performance_policy.o" "$OUT_DIR/h700_cpu_performance_service.o" "$OUT_DIR/h700_cpu_performance_runtime.o" "$OUT_DIR/rg34xx_h700_target_init.o" "$OUT_DIR/sunxi_mmc_clock.o" "$OUT_DIR/sunxi_mmc_module_clock.o" "$OUT_DIR/sunxi_mmc_pio_read.o" "$OUT_DIR/sunxi_sd_csd.o" "$OUT_DIR/sunxi_sd_card_init.o" "$OUT_DIR/sunxi_h616_sdc0_platform.o" "$OUT_DIR/sunxi_h616_sdc0_pins.o" "$OUT_DIR/h700_sunxi_mmc_block_device.o" "$OUT_DIR/h700_sunxi_sdc0_readonly_scan.o" "$OUT_DIR/h700_gpt_readonly.o" "$OUT_DIR/h700_sunxi_mmc_fat.o" "$OUT_DIR/h700_fat_vfs_backend.o" "$OUT_DIR/fat_ro.o" "$OUT_DIR/fat_exfat.o"; do
+for object in "$OUT_DIR/compile_probe.o" "$OUT_DIR/compile_probe_asm.o" "$OUT_DIR/compile_probe_cpp.o" "$OUT_DIR/h700_mmc_board_profile.o" "$OUT_DIR/h700_cpu_performance_policy.o" "$OUT_DIR/h700_cpu_performance_service.o" "$OUT_DIR/h700_cpu_performance_runtime.o" "$OUT_DIR/h700_rg34xx_power_led.o" "$OUT_DIR/rg34xx_h700_target_init.o" "$OUT_DIR/sunxi_mmc_clock.o" "$OUT_DIR/sunxi_mmc_module_clock.o" "$OUT_DIR/sunxi_mmc_pio_read.o" "$OUT_DIR/sunxi_sd_csd.o" "$OUT_DIR/sunxi_sd_card_init.o" "$OUT_DIR/sunxi_h616_sdc0_platform.o" "$OUT_DIR/sunxi_h616_sdc0_pins.o" "$OUT_DIR/h700_sunxi_mmc_block_device.o" "$OUT_DIR/h700_sunxi_sdc0_readonly_scan.o" "$OUT_DIR/h700_gpt_readonly.o" "$OUT_DIR/h700_sunxi_mmc_fat.o" "$OUT_DIR/h700_fat_vfs_backend.o" "$OUT_DIR/fat_ro.o" "$OUT_DIR/fat_exfat.o"; do
     format="$("$OBJDUMP" -f "$object")"
     if ! grep -q "architecture: $EXPECTED_ARCH" <<<"$format"; then
         echo "error: $object does not match the requested H700 architecture ($H700_ARCH)" >&2

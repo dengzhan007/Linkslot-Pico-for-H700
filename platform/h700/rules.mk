@@ -16,7 +16,9 @@ LINKER_SCRIPT += $(BUILDDIR)/system-onesegment.ld
 OBJS += \
 	$(LOCAL_DIR)/power/h700_cpu_performance_policy.o \
 	$(LOCAL_DIR)/power/h700_cpu_performance_service.o \
-	$(LOCAL_DIR)/power/h700_cpu_performance_runtime.o
+	$(LOCAL_DIR)/power/h700_cpu_performance_runtime.o \\
+	$(LOCAL_DIR)/power/h700_rg34xx_power_led.o
 
-# No H700 MMIO drivers are enabled here yet. Add modules only after their
-# register, clock, pinmux and ownership assumptions have separate evidence.
+# RG34XX PI12 power LED is the first board MMIO service. It only changes the
+# GPIO mux/data fields; it does not reprogram CCU/APB1 or touch the PMIC.
+# Other H700 MMIO drivers remain disabled pending their own evidence.
