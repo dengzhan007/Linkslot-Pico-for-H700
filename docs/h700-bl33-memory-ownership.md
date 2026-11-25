@@ -45,6 +45,17 @@ All intervals below are half-open: the start is included and the end is excluded
 | [0x7ec00000, 0x7fc00000) | 16 MiB | Unassigned live memblock reservation; DRM/TEE association remains unproven. | Unknown means reserved. Exclude. |
 | [0x7fd65000, 0x7ff49000) and top fragments | Multiple ranges | Unnamed top-of-RAM reservations in the live memblock snapshot. | Exclude; do not merge fragments into a free span. |
 
+### 2026-11-25 16:30 +08:00 ION/TEE read-only follow-up
+
+The latest capture at [`reports/rg34xx-inventory-20261125-163152/tee-ion-runtime.txt`](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261125-163152/tee-ion-runtime.txt) records:
+
+- `CONFIG_CMA=y`, `CONFIG_DMA_CMA=y`, `CONFIG_OF_RESERVED_MEM=y`, `CONFIG_ION=y`, `CONFIG_TEE=y`, and `CONFIG_OPTEE=y`.
+- `/dev/ion` exists; `/dev/tee0` and `/dev/teepriv0` are absent. The kernel log reports `optee: api uid mismatch`; this describes the standard OP-TEE probe and does not establish whether a separate vendor DRM SMC service exists.
+- ION debugfs exposes `sys_user`, `cma`, and `secure` heaps. The sampled `secure` heap has zero current allocations; `sys_user` reports 7,397,376 bytes of current allocations (including a 7,372,800-byte `ion_disp2` client). These are runtime allocation snapshots, not address ownership maps.
+- The CMA heap reports `[0x77c00000,0x7bc00000)`, total 64 MiB and approximately 62 MiB free. The FDT ION secure heap base/size fields remain zero.
+
+This narrows the runtime evidence but does **not** identify the separate `[0x7ec00000,0x7fc00000)` 16 MiB memblock reservation. Do not infer that it is or is not a secure/DRM carveout from the OP-TEE UID mismatch, empty ION secure heap, or zero FDT heap base/size. No vendor SMC, ioctl, secure monitor call, or memory read was issued. The range remains unknown and excluded from every LK allocation candidate; `H700_MEMORY_LAYOUT_APPROVED` remains unset.
+
 The 0x42e00000 package buffer is populated before the monitor reset. The 0x45000000 image buffer is still live when BL33 is entered. The 0x40080000 kernel destination, initrd and final FDT are populated by the current A32 loader on the way to Linux; they are not written by the SPL's BOL4 staging operation itself.
 
 ## 3. Internal BL33 layout: what is established

@@ -455,6 +455,20 @@ def inspect_fdt(path: Path) -> dict[str, Any]:
                 "driver": (_strings(props.get("lcd_driver_name")) or [""])[0],
                 "width": _number(props.get("lcd_x")),
                 "height": _number(props.get("lcd_y")),
+                "interface": {
+                    "lcd_if": _number(props.get("lcd_if")),
+                    "lcd_hv_if": _number(props.get("lcd_hv_if")),
+                    "lcd_lvds_if": _number(props.get("lcd_lvds_if")),
+                },
+                "timing": {
+                    "lcd_dclk_freq_mhz": _number(props.get("lcd_dclk_freq")),
+                    "lcd_ht": _number(props.get("lcd_ht")),
+                    "lcd_hbp": _number(props.get("lcd_hbp")),
+                    "lcd_hspw": _number(props.get("lcd_hspw")),
+                    "lcd_vt": _number(props.get("lcd_vt")),
+                    "lcd_vbp": _number(props.get("lcd_vbp")),
+                    "lcd_vspw": _number(props.get("lcd_vspw")),
+                },
                 "status": (_strings(props.get("status")) or ["okay"])[0],
             })
         comp = _strings(props.get("compatible"))

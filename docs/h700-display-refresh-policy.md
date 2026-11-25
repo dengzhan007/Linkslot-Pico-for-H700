@@ -157,7 +157,19 @@ The read-only inventory script now writes `display-runtime.txt` with:
 
 The capture has no sysfs/debugfs output redirection, mode set, MMIO, ioctl, or boot-package write. Missing paths are reported as unavailable. Run the normal Windows inventory wrapper or the read-only collector and inspect the generated `display-runtime.txt`.
 
-Interpret this evidence in layers: display-engine `ref_fps`/`fps` is the kernel driver's reported scanout timing, framebuffer `mode` may only report geometry/nominal rate, and clock-summary is the provider's current clock readback. None is a photodiode/high-speed-camera measurement of the physical panel. It is nevertheless the missing on-device observation needed before claiming that the panel currently scans at 120 Hz; frontend render FPS remains a separate quantity.
+Interpret this evidence in layers: display-engine `ref_fps`/`fps` is the kernel driver's reported scanout timing, framebuffer `mode` may only report geometry/nominal rate, and clock-summary is the provider's current clock readback. None is a photodiode/high-speed-camera measurement of the physical panel. Frontend render FPS remains a separate quantity.
+
+### 7.1 RG34XX live readback (2026-11-25 16:30 +08:00)
+
+The latest read-only capture is [`reports/rg34xx-inventory-20261125-163152`](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261125-163152). It identifies the panel node as `rg34xx_v1` (720×480) and records:
+
+- Vendor display-engine status: `de_rate=696000000 Hz`, `ref_fps=59`, current `fps=60.2`, active 720×480 layer.
+- Framebuffer: `U:720x480p-59`, virtual size 720×960, stride 2880 bytes, 32 bpp.
+- Display clocks: `pll_video2/tcon_tv=297 MHz`, `pll_video0x4/tcon_lcd=288 MHz`, `display_top=200 MHz`.
+
+This is a software readback of the current approximately-60-Hz scanout path. The 288 MHz `tcon_lcd` clock-summary value is **not** the panel pixel clock and must not be substituted for `lcd_dclk_freq`; the divider and clock-parent path matter. The capture does not show a 120-Hz scanout and does not validate the external `lcd_ht=840` candidate. The 120-Hz timing remains policy-only and unapproved for the live `rg34xx_v1` identity.
+
+The captured `live-fdt.json` predates the panel-timing parser enhancement and therefore reports panel identity/geometry but not the `lcd_*` timing cells. The FDT inspector now emits the available `lcd_dclk_freq`, `lcd_ht`, `lcd_hbp`, `lcd_hspw`, `lcd_vt`, `lcd_vbp`, `lcd_vspw`, and interface properties as structured fields. A subsequent read-only inventory capture is required to establish what the live FDT actually supplies; the MustardOS DTS values remain an independent reference, not a substitute for that readback.
 ## 8. Allwinner sun50iw9 vendor display-driver reference
 
 To separate a reporting sysfs node from a real mode-setting interface, the

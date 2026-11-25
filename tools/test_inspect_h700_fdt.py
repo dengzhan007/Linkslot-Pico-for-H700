@@ -25,7 +25,9 @@ def cells(*values):
 def make_fdt():
     property_names = (
         "#address-cells", "#size-cells", "model", "compatible", "bootargs",
-        "device_type", "reg", "lcd_driver_name", "lcd_x", "lcd_y", "status", "boot_fb0",
+        "device_type", "reg", "lcd_driver_name", "lcd_x", "lcd_y", "lcd_if", "lcd_hv_if",
+        "lcd_lvds_if", "lcd_dclk_freq", "lcd_ht", "lcd_hbp", "lcd_hspw", "lcd_vt",
+        "lcd_vbp", "lcd_vspw", "status", "boot_fb0",
         "no-map", "debug_mode", "ranges", "linux,initrd-start", "linux,initrd-end",
         "method", "heap-name", "heap-id", "heap-base", "heap-size", "heap-type",
         "phandle", "cpu-supply", "regulator-name", "regulator-min-microvolt",
@@ -127,6 +129,16 @@ def make_fdt():
     prop("lcd_driver_name", b"rg34xx_v1\0")
     prop("lcd_x", be32(720))
     prop("lcd_y", be32(480))
+    prop("lcd_if", be32(0))
+    prop("lcd_hv_if", be32(0))
+    prop("lcd_lvds_if", be32(0))
+    prop("lcd_dclk_freq", be32(54))
+    prop("lcd_ht", be32(1679))
+    prop("lcd_hbp", be32(46))
+    prop("lcd_hspw", be32(2))
+    prop("lcd_vt", be32(536))
+    prop("lcd_vbp", be32(20))
+    prop("lcd_vspw", be32(5))
     prop("status", b"okay\0")
     end()
 
@@ -232,8 +244,21 @@ class FdtInspectorTests(unittest.TestCase):
         self.assertTrue(report["has_reserved_memory_node"])
         self.assertEqual(report["reserved_memory_nodes"][0]["ranges"][0]["start"], "0x7bf24800")
         self.assertTrue(report["reserved_memory_nodes"][0]["no_map"])
-        self.assertEqual(report["panels"][0]["driver"], "rg34xx_v1")
-        self.assertEqual((report["panels"][0]["width"], report["panels"][0]["height"]), (720, 480))
+        panel = report["panels"][0]
+        self.assertEqual(panel["driver"], "rg34xx_v1")
+        self.assertEqual((panel["width"], panel["height"]), (720, 480))
+        self.assertEqual(panel["interface"], {
+            "lcd_if": 0, "lcd_hv_if": 0, "lcd_lvds_if": 0,
+        })
+        self.assertEqual(panel["timing"], {
+            "lcd_dclk_freq_mhz": 54,
+            "lcd_ht": 1679,
+            "lcd_hbp": 46,
+            "lcd_hspw": 2,
+            "lcd_vt": 536,
+            "lcd_vbp": 20,
+            "lcd_vspw": 5,
+        })
         self.assertEqual(report["pmic_nodes"][0]["compatible"], ["x-powers,axp2202"])
         cpu_power = report["cpu_power"]
         self.assertEqual(len(cpu_power["cpu_nodes"]), 1)
