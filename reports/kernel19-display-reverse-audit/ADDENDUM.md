@@ -473,6 +473,8 @@ clk_get_rate(priv[0x1978])
 
 （顺带更正首轮 §5 第 4 条："factor table 的 288..336 MHz 范围"实际是 288–2520 MHz；这不改变结论，但原表述是错的。）
 
+**第三轮路径更正（见 §13.2–§13.3）：** 上文“52 MHz × 11 = 572 MHz”只作为“外部强制保持 divider=11”的算术候选，不是 stock LCD 初始化在 `lcd_dclk_freq=52` 时的结果。stock helper 的条件是 `lcd_dclk_freq == 26` 才把 divider 覆盖成 11；52 MHz 时 `lcd_if=0` 仍取表值 divider 6，PLL 请求为 312 MHz，DCLK 52 MHz，820×536 下约 118.3109 Hz。另一个 divider 10 / 528-MHz 候选约 120.1311 Hz，同样需要外部强制分频，不能当作已支持模式。
+
 ---
 
 ## 10. 仍未解决的问题
