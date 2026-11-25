@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Patch a clean Linkslot 1.0.45 checkout with the H700 VFS seam and host-test it."""
+"""Patch a clean Linkslot 1.0.49 checkout with the H700 VFS seam and host-test it."""
 from __future__ import annotations
 import argparse
 import os
@@ -16,8 +16,8 @@ def patch_checkout(source: Path, module: Path) -> None:
     vfs_rs = source / "crates/slot-retro/src/vfs.rs"
     if not all(p.is_file() for p in (package, lib_rs, libretro_rs, module)):
         raise RuntimeError("Linkslot workspace or VFS bridge module is missing")
-    if 'version = "1.0.45"' not in package.read_text(encoding="utf-8"):
-        raise RuntimeError("expected the supplied Linkslot 1.0.45 source snapshot")
+    if 'version = "1.0.49"' not in package.read_text(encoding="utf-8"):
+        raise RuntimeError("expected the supplied Linkslot 1.0.49 source snapshot")
 
     lib_text = lib_rs.read_text(encoding="utf-8")
     retro_text = libretro_rs.read_text(encoding="utf-8")
@@ -53,7 +53,7 @@ def patch_checkout(source: Path, module: Path) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--source", type=Path, required=True, help="clean Linkslot 1.0.45 checkout")
+    ap.add_argument("--source", type=Path, required=True, help="clean Linkslot 1.0.49 checkout")
     ap.add_argument("--module", type=Path, required=True, help="H700 VFS bridge Rust module")
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
