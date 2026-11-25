@@ -1,5 +1,7 @@
 #include "h700_display_refresh_policy.h"
 
+#include <stddef.h>
+
 #define H700_DISPLAY_UI_DEFAULT_HZ H700_DISPLAY_REFRESH_120HZ
 #define H700_DISPLAY_GAME_FIXED_HZ H700_DISPLAY_REFRESH_60HZ
 
