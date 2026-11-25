@@ -34,14 +34,41 @@ The command environment required a local execution copy with fixes. The report l
 
 Display clock readback was identical in both phases: `tcon_lcd=288 MHz`, `pll_video0x4=288 MHz`, `pll_video0=72 MHz`, `display_top=200 MHz`, and `tcon_tv/pll_video2=297 MHz`. These clock-summary entries are not themselves the panel pixel clock.
 
-The live FDT identifies:
+The first runtime captures identify:
 - SoC/model: `sun50iw9`; compatible includes `allwinner,h616` and `arm,sun50iw9p1`.
-- Panel node: `/soc@03000000/lcd0@01c0c000`.
-- Panel driver: `rg34xx_v1`.
-- Active geometry: 720x480.
-- The capture README records the live FDT timing cells as DCLK 26 MHz, HT 820, VT 536, HBP 46, HSPW 2, VBP 20, VSPW 5, interface `lcd_if=0`.
+- Panel node: `/soc@03000000/lcd0@01c0c000`; driver identity `rg34xx_v1`; 720×480 active geometry.
+- Both first-pass runtime captures have `high_refresh=1`, but remained near 59.6 Hz by IRQ counters.
 
-**Artifact caveat:** the published `live-fdt.json` files do not contain the `interface` or `timing` subobjects. They include panel driver and geometry only. The raw `live-fdt.dtb` was retained locally and not uploaded. Therefore the 26 MHz / 820x536 values are recorded in the report README as extracted values, but cannot be independently re-parsed from the published binary in this commit. Re-pull the live FDT once or provide the retained DTB, run the current `tools/inspect_h700_fdt.py`, and publish a JSON whose `panels[0].timing` values are populated. Do not silently treat the report README as a substitute for the parser artifact.
+### Re-parsed live FDT (19:09 +08:00, new boot cycle)
+
+The follow-up [FDT reparse artifacts](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/pvaibhav-slot-runtime/fdt-reparse) now include the raw DTB and complete machine-readable JSON. The JSON's internal `sha256` exactly matches the raw DTB:
+
+| Artifact | Size | SHA-256 |
+|---|---:|---|
+| `live-fdt.dtb` | 143,936 B | `65801950f6d2d3c7139111d35c6cc0dd64cc249f8ba64ffb5b6f1c7fd9c39173` |
+| `live-fdt.json` | 38,537 B (LF) | `1ddbb3073fddc83e3633b372bf42168a0652182e46726abcb6cf60b1121e560b` |
+
+The re-parsed `panels[0]` fields are:
+
+| Property | Live FDT value |
+|---|---:|
+| `lcd_driver_name` | `rg34xx_v1` |
+| Interface | `rgb666` (`lcd_if=0`, `lcd_hv_if=0`) |
+| Active size | 720×480 |
+| Pixel clock property | 26,000,000 Hz (26 MHz) |
+| H total / back porch / sync / front porch | 820 / 46 / 2 / 52 |
+| V total / back porch / sync / front porch | 536 / 20 / 5 / 31 |
+| Derived nominal refresh | 59.155 Hz |
+| Physical dimensions | 150×94 mm |
+| PWM | channel 0, 50 kHz, polarity 1, max 255 |
+
+The active kernel bootargs also contain `lcd_type=old`. This is a boot-time strap-derived argument, not a direct measurement of panel vendor or optical characteristics. The panel driver can select its initialization sequence using this token, so it must remain part of the hardware profile evidence.
+
+The computed 59.155 Hz is derived from the DTB values: `26,000,000 / (820 × 536)`. It is **not** a measurement of the final pixel clock. The runtime IRQ counters measured 59.61–59.65 Hz, and the vendor driver's instantaneous `fps` alternated between 59.8 and 60.2. The approximately 0.5-Hz difference between the IRQ slope and DTB-derived nominal value remains unexplained. The exported clock summary exposes `tcon_lcd=288 MHz` and `pll_video0x4=288 MHz`, but not a verified final LCD DCLK/divider; do not infer a register value from the parent clock alone.
+
+The live timing is independently consistent with the [Knulli RG34XX boot-package DTS](https://github.com/knulli-cfw/knulli-linux/blob/57afa662009641d181f57241bcc480119b131530/package/boot/uboot-h700/rg34xx/boot_package/rg34xx.dts), which also declares `rg34xx_v1`, 26 MHz and 820×536. A different MustardOS RG34XX-H DTS uses the same driver identity with 54 MHz and 1679×536; that is an alternate source configuration, not the live device's current values.
+
+The README's structural comparison says the 19:09 DTB differs from the 18:44 FDT only in three `/chosen` boot metadata properties; the 573-node tree including the complete LCD node is otherwise identical. The new capture is a later boot cycle, not a panel replacement.
 
 The two IRQ counters are scanout/vblank proxies. Their approximately-59.6-Hz slopes agree across the full UI and GAME intervals, and the display status, clock tree and FDT are unchanged. This establishes that no refresh change was observed during these captures; it does not measure panel optical response or UI present rate.
 
@@ -87,10 +114,10 @@ A follow-up game probe must be armGBA-specific; the fork's existing sample probe
 
 ## Next steps
 
-1. Re-parse the retained live DTB or re-pull it and publish the missing `panels[0].timing` fields; keep the raw DTB local if the report policy requires it, but retain its SHA-256.
-2. Add and regression-check a corrected PowerShell collector. It must normalize multiline payloads, quote the `adb shell sh -c` payload as one remote command, avoid PowerShell `$Matches` clobbering, return a flat IRQ row array, distinguish `fps` from `ref_fps`, and discover `/mnt/sdcard/System/slot`.
-3. Trace the exact `rg34xx_v1` panel initialization, TCON/DE/CCU clock path, actual pixel-clock divider, scanout ownership and safe VBlank/blanking boundary from matching sources. Keep hardware writes disabled.
-4. Develop separate UI-present and armGBA committed-frame measurements; then use 60-Hz baseline and only source-approved refresh candidates for controlled comparison.
+1. Compare the installed `System/slot` and `SYSTEM/armgba_libretro.so` hashes against the exact extracted files from the published `v1.16.0-pvaibhav.2` H700 release ZIP; the device hashes are recorded below, but ZIP-to-installed-file identity is not yet established.
+2. Trace the exact `rg34xx_v1` panel initialization and `lcd_type=old` strap path, then identify the final LCD DCLK divider and clock parent. Resolve why IRQ counters report about 59.63 Hz while the static DTB calculation gives 59.155 Hz.
+3. Continue tracing TCON/DE/CCU clock path, scanout ownership and safe VBlank/blanking boundary from matching sources. Keep hardware writes disabled.
+4. Develop separate UI-present and armGBA committed-frame measurements; do not use LCD IRQ as either FPS metric.
 5. Preserve the C policy contract: UI preference and GAME 120-Hz opt-in are separate; GAME 120 Hz remains default-off. `hardware_applied=0` until an RG34XX-specific HAL proves the applied mode by readback.
 
 **Current conclusion:** the device is observed at approximately 60 Hz in both UI and gameplay. No 120-Hz support or UI/GAME FPS result is claimed.
@@ -109,4 +136,14 @@ The running process status is `Uid: 0 0 0 0` with effective capabilities `000000
 
 The reviewed pvaibhav source confirms the exact decision chain: `DevicePlatform::new()` reads `BASEOS_TARGET`; `DevicePlatform::probe()` calls `PanelRefresh::probe()`; `supports_high_refresh()` is `self.refresh.is_some()`; and `app.rs::set_power()` calls `set_high_refresh()` only when that capability is true. The fork's `rg34xx` panel gate requires the exact bytes `fog_fj035fhd05_v1\\0`, while this live panel reports `rg34xx_v1`. Therefore the reviewed source path rejects this board before any hardware write and skips the startup setter even though the stored preference is 1.
 
-The report did not capture a SHA-256 or version string for the installed Slot executable/core, so the deployed binary cannot be proven byte-for-byte identical to reviewed commit `5206e3fa39aa4a9b702cd9048a07dab3b5ab95da`. The environment and runtime observations match the expected target, but the source-level explanation is pinned to that reviewed source revision rather than an independently verified installed binary.
+The report now captures hashes and sizes for the installed Slot executable and armGBA core, but not the build ID/version or an extracted-release comparison. The source-level gate explanation remains pinned to reviewed commit `5206e3fa39aa4a9b702cd9048a07dab3b5ab95da`; byte identity of the deployed binary is still unverified.
+
+
+## Installed runtime binary identities
+
+The 19:12 read-only capture recorded:
+
+- `/mnt/sdcard/System/slot`: 18,718,728 bytes, SHA-256 `8f0fd40da4ac161e5fbb9a56a99c254acf8b2f31806e2be6bdaa929b5ee28505`.
+- `/mnt/sdcard/SYSTEM/armgba_libretro.so`: 2,021,992 bytes, SHA-256 `4ebae098cc4848fb459fc18299c39acbdbbbeb732db5c3f66d1ff3f6e142e889`.
+
+These hashes are new to the project reports. They do not by themselves identify a version or prove equality with the reviewed source. Compare them with the extracted executable/core in the official [`v1.16.0-pvaibhav.2` H700 release](https://github.com/pvaibhav/slot/releases/tag/v1.16.0-pvaibhav.2); the tag points to the reviewed source line, but the installed file's version/build ID has not yet been attested.
