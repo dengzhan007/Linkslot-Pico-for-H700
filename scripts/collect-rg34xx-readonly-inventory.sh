@@ -184,6 +184,55 @@ if command -v dmesg >/dev/null 2>&1; then
         > "$OUTDIR/dmesg-hardware-lines.txt" || true
 fi
 
+{
+    echo "== H700 display engine state (read-only) =="
+    DISPLAY_SYS="/sys/class/disp/disp/attr/sys"
+    if [ -r "$DISPLAY_SYS" ]; then
+        echo "-- $DISPLAY_SYS --"
+        cat "$DISPLAY_SYS"
+    else
+        echo "NOT_READABLE_OR_ABSENT: $DISPLAY_SYS"
+    fi
+
+    echo
+    echo "== framebuffer geometry and mode attributes (read-only) =="
+    FB="/sys/class/graphics/fb0"
+    if [ -d "$FB" ]; then
+        for attr in name mode modes virtual_size stride pan bits_per_pixel; do
+            if [ -r "$FB/$attr" ]; then
+                echo "[$FB/$attr]"
+                cat "$FB/$attr"
+            else
+                echo "NOT_READABLE_OR_ABSENT: $FB/$attr"
+            fi
+        done
+    else
+        echo "NOT_PRESENT: $FB"
+    fi
+    if [ -r /proc/fb ]; then
+        echo "[/proc/fb]"
+        cat /proc/fb
+    else
+        echo "NOT_READABLE_OR_ABSENT: /proc/fb"
+    fi
+
+    echo
+    echo "== display-related clock summary (read-only; indentation preserved) =="
+    DISPLAY_CLK_SUMMARY="/sys/kernel/debug/clk/clk_summary"
+    if [ -r "$DISPLAY_CLK_SUMMARY" ]; then
+        while IFS= read -r line; do
+            case "$line" in
+                *pll_video*|*pll-video*|*tcon*|*de_clk*|*de@*|*disp*|*lcd*)
+                    printf '%s\\n' "$line"
+                    ;;
+            esac
+        done < "$DISPLAY_CLK_SUMMARY"
+    else
+        echo "NOT_READABLE_OR_ABSENT: $DISPLAY_CLK_SUMMARY"
+    fi
+} > "$OUTDIR/display-runtime.txt"
+
+
 # Capture read-only runtime evidence for the vendor ION/TEE path. In
 # particular, some Allwinner kernels populate the secure ION heap through a
 # vendor SMC even when the standard OP-TEE API probe fails. Never invoke an

@@ -82,6 +82,19 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertNotIn("env-partition-first64k.bin", self.source)
         self.assertNotIn("/dev/mmcblk0p3", self.source)
 
+    def test_h700_display_runtime_probe_is_read_only(self):
+        self.assertIn('> "$OUTDIR/display-runtime.txt"', self.source)
+        self.assertIn('DISPLAY_SYS="/sys/class/disp/disp/attr/sys"', self.source)
+        self.assertIn('cat "$DISPLAY_SYS"', self.source)
+        self.assertIn('FB="/sys/class/graphics/fb0"', self.source)
+        self.assertIn('for attr in name mode modes virtual_size stride pan bits_per_pixel', self.source)
+        self.assertIn('== display-related clock summary (read-only; indentation preserved) ==', self.source)
+        self.assertIn('DISPLAY_CLK_SUMMARY="/sys/kernel/debug/clk/clk_summary"', self.source)
+        self.assertIn('done < "$DISPLAY_CLK_SUMMARY"', self.source)
+        self.assertNotRegex(self.source, r'>\\s*/sys/(?:class/disp|class/graphics|kernel/debug/clk)/')
+        self.assertNotIn('of="/sys/class/disp/', self.source)
+        self.assertNotIn('of="/sys/class/graphics/', self.source)
+
     def test_cma_and_memblock_debugfs_capture_is_read_only(self):
         self.assertIn('/sys/kernel/debug/cma', self.source)
         self.assertIn('for name in memory reserved', self.source)
