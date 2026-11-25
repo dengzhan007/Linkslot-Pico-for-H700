@@ -19,6 +19,13 @@
   extracted IKCONFIG, empty ramdisk, DTB cross-comparison (512 MiB on-disk vs
   1 GiB live), DRM `GET_DRM_INFO` source match to `qiaoweibiao/T507_Kernel`,
   memory-region attribution and LK hand-off recommendations. No binaries included.
+- `rg34xx-bootloader-handoff-followup.md` — deep read-only follow-up: AArch32 U-Boot boot flow
+  and image selection, full DTBO fragment decode (PMIC only — not the cause of 512 MiB → 1 GiB),
+  U-Boot `fdt_fixup_memory_banks`/`update_fdt_dram_para` fixup path, the NAND-env vs MMC-root
+  contradiction explained by `boot_type`, vendor monitor identified as AArch64 BL31 with the
+  A32→A64 SMC contract (`0x8000ff04` / SPSR `0x3c5`), recovered kernel kallsyms addresses for
+  the DRM path, **BOL4 decoded as LZ4 holding a byte-identical kernel**, and an A/B/C comparison
+  of LK take-over architectures. No binaries, serial numbers or local paths included.
 
 This branch is dedicated to field reports captured from the RG34XX handheld. Source code
 lives on `main`; report archives are kept here because `build/` is gitignored there.
