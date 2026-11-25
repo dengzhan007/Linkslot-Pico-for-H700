@@ -131,7 +131,6 @@ class OppCandidateTests(unittest.TestCase):
 
     def test_named_property_absent_falls_back_to_base(self):
         entry = opp(480, base_present=True, base=[900000])
-        # Include a disabled OPP only to make "b1" an enumerated suffix.
         disabled = opp(600, variants={"b1": [950000]}, status="disabled")
         fdt = report([entry, disabled])
         runtime = "[scaling_available_frequencies]\n480000\n"
@@ -143,6 +142,56 @@ class OppCandidateTests(unittest.TestCase):
         ]
         self.assertEqual(len(matches), 1)
         self.assertEqual(matches[0]["accepted_frequencies_hz"], [480000000])
+
+    def test_multi_version_opp_property_accepts_any_intersecting_version(self):
+        fdt = report([
+            opp(480, supported_present=True,
+                supported_cells=[0x01, 0x80000000],
+                base_present=True, base=[900000]),
+            opp(600, supported_present=True, supported_cells=[0x02],
+                base_present=True, base=[950000]),
+        ])
+        runtime = "[scaling_available_frequencies]\n480000\n"
+        result = MODULE.analyze_opp_candidates(fdt, runtime)
+        exact_masks = {
+            item["supported_hw_mask"] for item in result["exact_matches"]
+            if item["supported_hw_mode"] == "one_cell_mask"
+            and item["voltage_property_suffix"] is None
+        }
+        self.assertIn(0x80000000, exact_masks)
+        self.assertIn(0x01, exact_masks)
+        self.assertTrue(any(
+            item["mask_is_derived_exact_witness"]
+            for item in result["exact_matches"]
+            if item["supported_hw_mode"] == "one_cell_mask"
+        ))
+
+    def test_derived_witness_finds_combined_bits_above_low_byte(self):
+        fdt = report([
+            opp(480, supported_present=True, supported_cells=[0x80000001],
+                base_present=True, base=[900000]),
+            opp(720, supported_present=True, supported_cells=[0x00000100],
+                base_present=True, base=[950000]),
+            opp(936, supported_present=True, supported_cells=[0x00000200],
+                base_present=True, base=[1000000]),
+        ])
+        runtime = "[scaling_available_frequencies]\n480000 720000\n"
+        result = MODULE.analyze_opp_candidates(fdt, runtime)
+        matches = [
+            item for item in result["exact_matches"]
+            if item["supported_hw_mode"] == "one_cell_mask"
+            and item["voltage_property_suffix"] is None
+        ]
+        self.assertTrue(matches)
+        self.assertTrue(any(
+            item["supported_hw_mask"] & 0x80000000
+            for item in matches
+        ))
+
+    def test_voltage_triplet_order_is_validated(self):
+        self.assertTrue(MODULE._valid_voltage_cells([800000, 900000, 1000000]))
+        self.assertFalse(MODULE._valid_voltage_cells([900000, 800000, 1000000]))
+        self.assertFalse(MODULE._valid_voltage_cells([900000, 1000000, 800000]))
 
     def test_requires_parser_v3_property_presence_fields(self):
         entry = opp(480, variants={"b1": [900000]})
