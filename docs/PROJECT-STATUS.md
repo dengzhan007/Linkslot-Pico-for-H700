@@ -404,3 +404,23 @@ KNULLI's [RG34XX developer documentation](https://knulli.org/devices/anbernic/rg
 - 更关键的是，两个第三方方案的 FDT/allowlist panel string 都是 `fog_fj035fhd05_v1`；当前测试设备真实 live panel 为 `rg34xx_v1` + `lcd_type=old`。不得通过改面板名或降低 gate 来套用第三方实现。
 
 两种方式都没有实现本项目想要的 UI 120 Hz / GAME 默认 60 Hz 场景策略：boot package 是跨 UI/GAME 固定模式、刷包重启切换；pvaibhav Slot 是启动/唤醒应用同一个全局偏好，游戏进入不切换。保持本项目硬件 writer 关闭、`hardware_applied=0`。
+
+
+## 11. armGBA committed-frame probe preparation (2026-11-26)
+
+Pinned source reviewed: `MagnominusGit/armGBA@fad6c4b0c0176a76e10667f4aa071a8feb4425c0`. `src/video/video.c` increments `gba->video.frameCounter` at VBlank frame end; `libretro.c` owns global `struct GBA* gba`. `libretro/link.T` exports only `retro_*` and localizes all remaining symbols, so `gba` cannot be assumed visible via `dlsym` / `nm -D`.
+
+New compile-time probe:
+- `tools/armgba-frame-layout-probe.c` prints the host layout and cross-target static-asserts the combined `offsetof(GBA,video)+offsetof(Video,frameCounter)`.
+- `scripts/test-armgba-frame-layout.py` checks the exact source commit, verifies upstream `sizeof(struct GBA)==788712`, then compiles the same offsets for host, AArch32 ARM, AArch32 Thumb-2 and AArch64.
+- Workflow run [#45722327333](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45722327333) on HEAD `23473143b08af1a087775c6e40499de5980cab44`: the dedicated **Verify armGBA committed-frame layout across H700 ABIs** step is **success** (all static offset assertions compiled); the full workflow remained in progress at the time of this status update. The numeric layout JSON artifact is not yet available; do not use an offset until the completed workflow artifact is read and the installed ELF is source-matched.
+- H700 boot audit tools [#45722302580](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45722302580): **success**.
+
+Additional release-source finding: pinned pvaibhav Slot's [`cores/armgba/build.sh`](https://github.com/pvaibhav/slot/blob/5206e3fa39aa4a9b702cd9048a07dab3b5ab95da/cores/armgba/build.sh) accepts a source commit at build time, downloads the matching `MagnominusGit/armGBA` archive, applies `link-stop-queued-once.patch`, builds `armgba_libretro` with `-mcpu=cortex-a53`, and emits a `.meta` file containing the source commit and patch hash. The exact source commit/patch metadata of the published H700 ZIP and the installed device core are not yet matched.
+
+Previously recorded installed core identity remains:
+- device `/mnt/sdcard/SYSTEM/armgba_libretro.so`: SHA-256 `4ebae098cc4848fb459fc18299c39acbdbbbeb732db5c3f66d1ff3f6e142e889`;
+- device `/mnt/sdcard/System/slot`: SHA-256 `8f0fd40da4ac161e5fbb9a56a99c254acf8b2f31806e2be6bdaa929b5ee28505`;
+- H700 release ZIP `slot-v1.16.0-pvaibhav.2-h700.zip`: SHA-256 `1f9bdaa1110eb4f6006cc9da6a8bb34bca694ea53555c3138dcf656f0dfd1fca`.
+
+Next gate: compare ZIP and device hashes, inspect the ZIP's armGBA `.meta`, inspect full ELF `.symtab` versus `.dynsym`, and read the current Slot process stderr FD/log route. No marker file, front-end restart, or `/proc/PID/mem` access until those read-only checks establish the exact build and pointer source.
