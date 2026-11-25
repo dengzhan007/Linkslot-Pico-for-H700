@@ -8,6 +8,7 @@ on:
       - "scripts/build-h700-objects.sh"
       - "scripts/test-h700-cpu-performance-policy.sh"
       - "scripts/test-h700-cpu-performance-service.sh"
+      - "scripts/test-h700-display-refresh-policy.sh"
       - "scripts/test-h700-rg34xx-power-led.sh"
       - "scripts/test-h700-pio-mmu-mapping.sh"
       - "scripts/collect-rg34xx-readonly-inventory.sh"
@@ -40,6 +41,7 @@ on:
       - "target/rg34xx_h700/**"
       - "scripts/build-h700-objects.sh"
       - "scripts/test-h700-cpu-performance-service.sh"
+      - "scripts/test-h700-display-refresh-policy.sh"
       - "scripts/test-h700-rg34xx-power-led.sh"
       - "scripts/test-h700-pio-mmu-mapping.sh"
       - "scripts/collect-rg34xx-readonly-inventory.sh"
@@ -75,6 +77,7 @@ jobs:
         run: |
           sh scripts/test-h700-gpt-readonly.sh
           sh scripts/test-h700-cpu-performance-service.sh
+          sh scripts/test-h700-display-refresh-policy.sh
           sh scripts/test-h700-rg34xx-power-led.sh
           sh scripts/test-h700-pio-mmu-mapping.sh
           python3 tools/test_inventory_script_safety.py
