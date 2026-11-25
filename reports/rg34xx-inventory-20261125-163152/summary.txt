@@ -1,0 +1,13 @@
+collector=rg34xx-readonly-inventory-v1
+disk=/dev/mmcblk0
+root_argument_from_cmdline=/dev/mmcblk0p5
+root_device_from_cmdline=/dev/mmcblk0p5
+captured_at=Wed Nov 25 08:30:25 UTC 2026
+block_device_bytes:
+15552479232
+logical_sector_size:
+512
+read_only_flag:
+0
+live_fdt=present
+env_partition_capture=complete source=sysfs PARTNAME=env device=mmcblk0p3 bytes=16777216 sectors=32768

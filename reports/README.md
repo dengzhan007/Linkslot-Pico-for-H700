@@ -2,6 +2,19 @@
 
 ## Index
 
+### 2026-11-25 — RG34XX/H700 read-only inventory (v5, display timing snapshot)
+
+- `rg34xx-inventory-20261125-163152/` — fifth read-only inventory (`porting/linkslot-1.0.45-feasibility` @ `d7edaad`,
+  collector `8b6852d0…`, same device `sun50iw9p1` / Linux `4.9.170 #19`). Adds `display-runtime.txt`:
+  read-only vendor display snapshot (`de_rate 696000000`, `720x480 rgb`, `fps:60.2`, fb `stride 2880`,
+  `bpp 32`) plus the display clock subtree (`pll_video2`/`tcon_tv` 297 MHz, `pll_video0x4`/`tcon_lcd`
+  288 MHz, `display_top` 200 MHz). All five partition-level captures remain byte-identical to v1-v4;
+  `kernel-driver-provenance.txt`, `memory-map-report.json` and `dmesg-hardware-lines.txt` are also
+  byte-identical. `cpu-power-runtime.txt` differs only in sampled CPU rates (idle `1512000`), and
+  `sid-cell-report.json` only in its `source_sha256`. This is a runtime snapshot: it does not prove
+  `0x6c00 → b1`, authorize any OPP/clock/PMIC/display write, or close the temperature path. Serial
+  redacted; binaries stay local.
+
 ### 2026-11-25 — RG34XX/H700 kernel + CPUFreq driver provenance (v4, build-id / OPP source)
 
 - `rg34xx-inventory-20261125-cpux-v4/` — fourth read-only inventory (`porting/linkslot-1.0.45-feasibility`

@@ -1,0 +1,47 @@
+{
+  "declared_item_count": 4,
+  "format": "Allwinner H700 TOC1 item directory",
+  "items": [
+    {
+      "file": "items/u-boot.bin",
+      "index": 0,
+      "name": "u-boot",
+      "offset": 2048,
+      "sha256": "4d60a22ff13eac00dba89e0ee7df52a49852c0d9d856bec545ce40126191d127",
+      "size": 1048576
+    },
+    {
+      "file": "items/monitor.bin",
+      "index": 1,
+      "name": "monitor",
+      "offset": 1050624,
+      "sha256": "676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31",
+      "size": 107216
+    },
+    {
+      "file": "items/dtbo.bin",
+      "index": 2,
+      "name": "dtbo",
+      "offset": 1158144,
+      "sha256": "4bee281701610f96dcbdd1d38cb8df28386224d8c68b668b9a7a7a9df8e73ec2",
+      "size": 2336
+    },
+    {
+      "file": "items/dtb.bin",
+      "index": 3,
+      "name": "dtb",
+      "offset": 1161216,
+      "sha256": "c28c87380ffab00148bf4dc457e70b8c6c576470dcfbc53df64addddf89603a1",
+      "size": 144384
+    }
+  ],
+  "limitations": [
+    "This validates the known RG34XX H700 TOC1 container layout and checksum.",
+    "It does not authenticate a vendor signature, parse Boot0 DRAM training, or prove a live handoff ABI.",
+    "The package hash is a byte-level fingerprint, not a per-boot hardware attestation."
+  ],
+  "package_bytes": 1310720,
+  "package_sha256": "e6c20e3a54c51b9336c798e3a4fa1ca6c45b28c6f70456e2db9c252aa4ba4604",
+  "source_file": "toc1-package.bin",
+  "stored_checksum": "0x5923eb81"
+}

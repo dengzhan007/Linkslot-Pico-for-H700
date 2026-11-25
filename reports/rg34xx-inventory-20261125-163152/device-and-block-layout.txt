@@ -1,0 +1,152 @@
+== kernel ==
+Linux rg34xx 4.9.170 #19 SMP PREEMPT Tue May 26 13:58:08 CST 2026 aarch64 Linux
+
+== device-tree model / compatible ==
+model: sun50iw9
+compatible: allwinner,h616
+arm,sun50iw9p1
+
+== block sysfs ==
+-- /sys/class/block/mmcblk0 --
+[dev]
+179:0
+[size]
+30375936
+[ro]
+0
+[removable]
+0
+[uevent]
+MAJOR=179
+MINOR=0
+DEVNAME=mmcblk0
+DEVTYPE=disk
+-- /sys/class/block/mmcblk0p1 --
+[dev]
+179:1
+[size]
+131072
+[start]
+73728
+[partition]
+1
+[ro]
+0
+[uevent]
+MAJOR=179
+MINOR=1
+DEVNAME=mmcblk0p1
+DEVTYPE=partition
+PARTN=1
+PARTNAME=special
+-- /sys/class/block/mmcblk0p2 --
+[dev]
+179:2
+[size]
+65536
+[start]
+204800
+[partition]
+2
+[ro]
+0
+[uevent]
+MAJOR=179
+MINOR=2
+DEVNAME=mmcblk0p2
+DEVTYPE=partition
+PARTN=2
+PARTNAME=boot-resource
+-- /sys/class/block/mmcblk0p3 --
+[dev]
+179:3
+[size]
+32768
+[start]
+270336
+[partition]
+3
+[ro]
+0
+[uevent]
+MAJOR=179
+MINOR=3
+DEVNAME=mmcblk0p3
+DEVTYPE=partition
+PARTN=3
+PARTNAME=env
+-- /sys/class/block/mmcblk0p4 --
+[dev]
+179:4
+[size]
+131072
+[start]
+303104
+[partition]
+4
+[ro]
+0
+[uevent]
+MAJOR=179
+MINOR=4
+DEVNAME=mmcblk0p4
+DEVTYPE=partition
+PARTN=4
+PARTNAME=boot
+-- /sys/class/block/mmcblk0p5 --
+[dev]
+179:5
+[size]
+1048576
+[start]
+1482752
+[partition]
+5
+[ro]
+0
+[uevent]
+MAJOR=179
+MINOR=5
+DEVNAME=mmcblk0p5
+DEVTYPE=partition
+PARTN=5
+PARTNAME=rootfs
+-- /sys/class/block/mmcblk0p6 --
+[dev]
+179:6
+[size]
+262144
+[start]
+2531328
+[partition]
+6
+[ro]
+0
+[uevent]
+MAJOR=179
+MINOR=6
+DEVNAME=mmcblk0p6
+DEVTYPE=partition
+PARTN=6
+PARTNAME=UDISK
+-- /sys/class/block/mmcblk0p7 --
+[dev]
+179:7
+[size]
+27582461
+[start]
+2793472
+[partition]
+7
+[ro]
+0
+[uevent]
+MAJOR=179
+MINOR=7
+DEVNAME=mmcblk0p7
+DEVTYPE=partition
+PARTN=7
+PARTNAME=primary
+
+== partition labels ==
+NOT_PRESENT
