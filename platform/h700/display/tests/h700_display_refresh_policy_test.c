@@ -16,6 +16,7 @@ int main(void)
     h700_display_refresh_policy_v1_t policy;
     h700_display_refresh_state_v1_t state;
     const h700_display_refresh_timing_v1_t *timing;
+    uint64_t period_ns;
     int rc;
 
     memset(&policy, 0, sizeof(policy));
