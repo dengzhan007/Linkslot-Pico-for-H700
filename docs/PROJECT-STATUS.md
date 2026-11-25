@@ -2,7 +2,7 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-25（RG34XX p4 boot 内核 Build ID 已与 live kernel 精确匹配；运行频率表强烈指向 `b1` OPP 子集，但驱动源码和 SID→b1 规则仍未识别；温度校准、BL31 多核与 PMIC/CCU 实机门槛仍未关闭）  
+**最后核对时间：** 2026-11-25（stock p4 kernel 与 live kernel 的 GNU Build ID 精确匹配；已从同一二进制恢复 cpufreq probe/OPP setter 符号并完成首轮反汇编，确认 2-byte SID cell 被 32-bit load 读取且 probe 含 named-property 与 supported-hw setter；完整 CFG、mask/name 映射与最终 OPP 仍待核验；温度、BL31 多核与 PMIC/CCU 门槛未关闭）  
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **工作分支：** `porting/linkslot-1.0.45-feasibility`  
 **最新已验证代码 HEAD：** `e0ab50220939dfbbec95826ea61c15e7ec27c50c`。本轮只读 kernel/CPUFreq provenance collector + 静态安全回归通过 [H700 boot audit tools #45543371548](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45543371548)（Linux host tools、Windows Python tests 与 PowerShell wrapper syntax）；H700 storage/CPU/LED/MMU/PIO host regression 和 AArch64、AArch32 ARM-state、AArch32 Thumb-2 编译通过 [#45543371507](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45543371507)。完整 Linkslot/LK/mGBA 综合 host/cross-build 最新成功基线仍为 [#45532364153](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45532364153)；host/cross-build 不等于完整 LK target link 或实机启动。  
@@ -46,15 +46,20 @@
 **本轮 PIO clock-boundary 审计：** H616-family 参考 PIO DTS 以 `CLK_APB1` 为主总线时钟且无独立 PIO reset property；参考 CCU `apb1_clk` 为 `SUNXI_CCU_MP_WITH_MUX`（offset `0x520`），无 PIO 专属 gate。RG34XX v2 Linux clk_summary 报告 APB1=100 MHz、PIO consumer=1。该证据支持不添加未经验证的 PIO gate/reset 写入，但 BL33-entry APB1 parent/rate 仍未实测；LED 代码不改 CCU。
 **本轮 LK MMU static footprint：** pinned LK `arch/arm/mmu.c` 使用 `tt[4096]` 静态 section table，占 16 KiB、16 KiB 对齐的 BSS footprint。MMU hook 本身不动态申请 DRAM，但这块 BSS 和其余 LK BSS/stack/heap 的实际 placement 仍在内存 ownership 审批范围内。
 
-**下一步 CPU/DVFS 工作：** 不重复 v1–v4 inventory 或再次导出分区。用本地 `build/rg34xx-boot-p4.img` 计算 gzip 解压后内核 SHA-256，并对照公开 `pvaibhav/BaseOS` RG34XX boot survey 的未压缩 kernel SHA 前缀 `39cf8c3eb9a75ff0`；随后用 `vmlinux-to-elf` 将该 Android boot/kernel image 重建为带 kallsyms 的 AArch64 ELF，离线反汇编 `sun50i_cpufreq_nvmem_probe`、NVMEM speed decode 及 OPP property setter，确认 `b1` 是如何选择的。完整 boot/ELF 文件留在本地，不上传仓库；只上传 Build ID、解压 SHA、少量反汇编文本与分析结论。之后才考虑安全 BL33-entry 只读 PMIC/CPUX readback，并证明 CPU1–CPU3 handoff 与 timer continuity。AVCC 校准未解决前不开放 Auto/Boost；所有 DVFS 写操作保持禁用。
+**下一步 CPU/DVFS 工作：** p4 解压 SHA、公示 survey 前缀比对、live↔p4 GNU Build ID 精确匹配及 `vmlinux-to-elf` 恢复 AArch64 ELF 已完成，不重复采集。先完成匹配 binary 的全量 probe CFG、raw SID→mask/name 分支、两项 OPP setter 的返回处理和 cpufreq-dt 注册条件；随后恢复目标 OPP core 的 supported-hw / named-voltage filtering 逻辑，解释它与九档 runtime list 的冲突。保持完整 boot/ELF 本地，仅上传有限反汇编片段/JSON。再推进安全 BL33-entry 只读 PMIC/CPUX readback、CPU1–CPU3 handoff 与 timer continuity。AVCC 校准未解决前不开放 Auto/Boost；所有 DVFS 写操作保持禁用。
 
 **本轮 OPP 候选分析工具：** 新增 `tools/analyze_h700_opp_candidates.py` 与 `tools/test_analyze_h700_opp_candidates.py`，按 Linux 4.9 OPP core 规则枚举无 `supported_hw` 与所有一单元 mask，准确处理 `opp-supported-hw` 属性缺失/空属性、命名电压属性 fallback，并与实际 `scaling_available_frequencies` 对比。工具要求 parser-v3 presence 字段；输出仅是 source/table fingerprint，不解码 SID、不授权 OPP，也不写硬件。
 
 **本轮 OPP analyzer 自动化验证：** `da41806e47dbd2e0d57e23e9ff6ff405a5514e29` 通过 [H700 AArch32/AArch64 compile + host regression #45537478198](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45537478198) 和 [H700 boot audit tools #45537478202](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45537478202)。新测试覆盖完整 u32 位域、多版本 OPP cell、exact witness 约束和电压 min/target/max 顺序。前一中间提交 `300ae422` 的一项 test fixture 未禁止低位候选，已修正并在 `da41806` 两平台重跑通过。
 
 **最近完成的 RG34XX 设备采集：** parser-v3 inventory 已上传至 `reports/rg34xx-inventory-20261125-cpux-v3/`，并完成 OPP exact-candidate analysis 与 cpufreq getter reconciliation。原始 binary 保留在采集机，未上传；报告可复查文本 JSON 与哈希清单。
-**boot 二进制身份核对：** [p4 元数据报告](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-boot-p4-metadata.json) 已确认压缩内核中包含与 live kernel 相同的 GNU Build ID。无需再次采集；下一步离线重建 ELF/kallsyms 并反汇编驱动函数。
+**boot 二进制身份核对：** 已通过 [p4 元数据](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-boot-p4-metadata.json) 与 [解压 hash / aligned notes](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-boot-p4-verified.json) 完成 live kernel ↔ stock p4 kernel 精确 Build ID 匹配；解压 SHA-256 与公开 BaseOS survey 前缀核对成功。`vmlinux-to-elf` 和首轮 probe/OPP setter 反汇编也已完成，报告见 [cpufreq disassembly](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-cpufreq-driver-disasm.txt)。
 
+**最新增量：stock kernel ELF 与 cpufreq driver 初步反汇编（2026-11-25）：**
+- reports 分支已上传 `rg34xx-boot-p4-verified.json`：解压内核 17,461,256 bytes，SHA-256 `39cf8c3eb9a75ff0eda51b4074cd65860c5aa5386093bcaf69339819421d84b7`，前 16 位与公开 BaseOS V1.0.6 RG34XX survey 的 SHA 前缀一致；aligned GNU notes 位于 `0x9082b8` 和 `0xc8fc50`，后者为运行内核 Build ID。
+- `vmlinux-to-elf` 已将本地 p4 镜像恢复为 AArch64 ET_EXEC，找回 89,675 symbols；报告 `rg34xx-cpufreq-driver-disasm.txt` 记录 `sun50i_cpufreq_nvmem_probe`、NVMEM、OPP setter 和 call-site 摘录。
+- 目标 probe 的 speed cell 在 FDT 中声明为 2 bytes，但二进制执行 32-bit `ldr`，当前摘录未发现长度检查；这是匹配 shipping binary 中的逻辑越界读取风险。probe 同时出现 `dev_pm_opp_set_prop_name()` 与 `dev_pm_opp_set_supported_hw(..., 1)` 调用，不能再把静态 analyzer 的 no-mask + b1 fingerprint 描述为有效运行配置。
+- 下一步是完整 CFG/分支映射、setter 返回处理、cpufreq-dt 注册路径，以及目标 OPP core 的 `_opp_is_supported()` / named-voltage parser。不得从有限摘录推断 `0x6c00 → mask/name`；所有 OPP 授权和 DVFS 写操作保持关闭。详见 [RG34XX CPUX live audit §1.11–1.12](rg34xx-cpux-live-audit-2026-11-25.md)。
 ## 1. 项目目标与固定约束
 
 - 目标设备是 **Anbernic RG34XX（非 SP）/ Allwinner H700 / Cortex-A53**，不是 RG353PS/RK3566，也不是 RG34XX SP。
