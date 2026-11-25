@@ -1,0 +1,398 @@
+# rg34xx cpufreq 驱动关键函数反汇编与符号解读
+
+> 分析对象：`build/rg34xx-kernel.elf`
+> （AArch64 `ET_EXEC`，由 kallsyms 恢复 89,675 个符号，链接基址 `0xffffff8008080000`）
+> 工具：pyelftools 0.33 读取 `.symtab`；capstone 5.0.7（`CS_ARCH_ARM64` + `CS_MODE_LITTLE_ENDIAN`）反汇编。
+> 范围：每个函数从 `st_value` 起**最多 60 条指令**，有限长度摘录，不代表完整函数体。
+
+## 0. 地址换算与有效性验证
+
+- 该 ELF 由 `vmlinux_to_elf` 转换，**没有 `.text` 节**。代码位于 `.kernel`（section 1：
+  `sh_addr=0xffffff8008080000`，`sh_offset=0x240`，`sh_size=0xd08298`）。
+- 目标四个符号的 `st_shndx` 均为 1，故按要求以所属代码节换算：
+  `offset = sh_offset + (st_value - sh_addr) = 0x240 + (st_value - 0xffffff8008080000)`：
+  `sun50i_cpufreq_nvmem_probe`→`0x5f2f0c`，`dev_pm_opp_set_prop_name`→`0x43ccb0`，
+  `dev_pm_opp_set_supported_hw`→`0x43cbd0`，`nvmem_cell_read`→`0x6727b8`。
+- 有效性核对：四处首 4 字节均能解码为合法 AArch64 指令（例：probe 首字 `a9b27bfd` =
+  `stp x29, x30, [sp,#-0xe0]!`），`bl` 目标均落在 `.kernel` 内且多数命中已知符号，
+  栈帧/返回序列完整。**未出现整片无效指令或不合理跳转目标，故不记录“重定位基址可能需重估”。**
+
+## 1. 符号检索摘要
+
+按五个关键字各扫描至多 80 个符号，关键命中如下：
+
+| 关键字 | 关键命中（节选） |
+| --- | --- |
+| `sun50i_cpufreq` | `sun50i_cpufreq_nvmem_remove` `0xffffff8008672c4c`、`sun50i_cpufreq_nvmem_probe` `0xffffff8008672ccc`、
+  `sun50i_cpufreq_match_list` `0xffffff8008a33750`(STT_OBJECT)、`sun50i_cpufreq_init`、`sun50i_cpufreq_exit`、
+  `sun50i_cpufreq_driver`、`sun50i_cpufreq_pdev`、`__initcall_sun50i_cpufreq_init6`（共 8 个，全部列出） |
+| `nvmem_cell` | `of_nvmem_cell_get` `0xffffff80086f1f04`、`nvmem_cell_get`、`nvmem_cell_put`、`nvmem_cell_read` 
+  `0xffffff80086f2578`、`nvmem_cell_write`、`__nvmem_cell_read.part.0` `0xffffff80086f24b4`、
+  `devm_nvmem_cell_get/put` 等；其余为 `__ksymtab_*`/`__kcrctab_*`/`__kstrtab_*` 元数据符号 |
+| `dev_pm_opp_set_prop_name` | 本体 `0xffffff80084bca70` + `__ksymtab_*`/`__kcrctab_*`/`__kstrtab_*`（共 4 个） |
+| `dev_pm_opp_set_supported_hw` | 本体 `0xffffff80084bc990` + `__ksymtab_*`/`__kcrctab_*`/`__kstrtab_*`（共 4 个） |
+| `speed` | 扫描前 80 个：多为 `cpufreq_interactive_*`、`*_show/store_speed`、`usb/mmc speed` 等，
+  **未发现 `sun50i_cpufreq_get_speed_bin` 或任何 `*speed_bin*` 符号** |
+
+**关于“speed NVMEM 解码函数”的结论：** 符号表中不存在独立的 speed 解码函数。
+底层 cell 读取使用通用内核 API `nvmem_cell_read`（`0xffffff80086f2578`）；
+把读出的原始值解码为属性名（如 `b1`）的逻辑**内联在 `sun50i_cpufreq_nvmem_probe` 内**
+（见第 3 节：`of_nvmem_cell_get("speed")` → `nvmem_cell_read` → 常量比较 → `snprintf`）。
+`__nvmem_cell_read.part.0` 只是 `nvmem_cell_read` 的内部读取辅助，不参与 speed 解码。
+
+## 2. 反汇编列表（每函数 ≤60 条）
+
+注释约定：`; -> name` 为 `bl` 目标的符号解析；`; STR="..."` 为 `ADRP`+`ADD` 解析出的只读字符串。
+所有 `st_size` 均为 0，函数边界按 `ret` 与下一函数起始推断。
+
+### 2.1 `sun50i_cpufreq_nvmem_probe` @ `0xffffff8008672ccc`
+
+```text
+0xffffff8008672ccc  stp        x29, x30, [sp, #-0xe0]!                 
+0xffffff8008672cd0  mov        x29, sp                                 
+0xffffff8008672cd4  stp        x21, x22, [sp, #0x20]                   
+0xffffff8008672cd8  adrp       x21, #0xffffff8008fbd000                
+0xffffff8008672cdc  stp        x19, x20, [sp, #0x10]                   
+0xffffff8008672ce0  adrp       x22, #0xffffff8008fbd000                
+0xffffff8008672ce4  stp        x25, x26, [sp, #0x40]                   
+0xffffff8008672ce8  mov        x25, x0                                 
+0xffffff8008672cec  stp        x23, x24, [sp, #0x30]                   
+0xffffff8008672cf0  add        x0, x22, #0xe90                         
+0xffffff8008672cf4  stp        x27, x28, [sp, #0x50]                   
+0xffffff8008672cf8  mov        w19, #-0xc                              
+0xffffff8008672cfc  str        wzr, [x29, #0x74]                       
+0xffffff8008672d00  ldr        x1, [x0]                                
+0xffffff8008672d04  str        x1, [x29, #0xd8]                        
+0xffffff8008672d08  mov        x1, #0                                  
+0xffffff8008672d0c  ldr        x0, [x21, #0xed8]                       
+0xffffff8008672d10  and        x0, x0, #0xf                            
+0xffffff8008672d14  bl         #0xffffff80083c2f28                      ; -> __sw_hweight64
+0xffffff8008672d18  ubfiz      x0, x0, #3, #0x20                       
+0xffffff8008672d1c  mov        w1, #0x80c0                             
+0xffffff8008672d20  movk       w1, #0x240, lsl #16                     
+0xffffff8008672d24  bl         #0xffffff80081a136c                      ; -> __kmalloc
+0xffffff8008672d28  str        x22, [x29, #0x68]                       
+0xffffff8008672d2c  cbz        x0, #0xffffff80086730ec                 
+0xffffff8008672d30  mov        x23, x0                                 
+0xffffff8008672d34  strh       wzr, [x29, #0xd0]                       
+0xffffff8008672d38  strb       wzr, [x29, #0xd2]                       
+0xffffff8008672d3c  mov        w19, #-0x13                             
+0xffffff8008672d40  stp        wzr, wzr, [x29, #0x78]                  
+0xffffff8008672d44  bl         #0xffffff8008464cbc                      ; -> sunxi_get_soc_ver
+0xffffff8008672d48  mov        w24, w0                                 
+0xffffff8008672d4c  add        x0, x29, #0x78                          
+0xffffff8008672d50  mov        w2, #4                                  
+0xffffff8008672d54  mov        w1, #0x20                               
+0xffffff8008672d58  bl         #0xffffff8008464950                      ; -> sunxi_get_module_param_from_sid
+0xffffff8008672d5c  ldrb       w0, [x29, #0x78]                        
+0xffffff8008672d60  mov        w2, #4                                  
+0xffffff8008672d64  mov        w1, #0x28                               
+0xffffff8008672d68  lsl        w0, w0, #5                              
+0xffffff8008672d6c  str        w0, [x29, #0x78]                        
+0xffffff8008672d70  add        x0, x29, #0x7c                          
+0xffffff8008672d74  bl         #0xffffff8008464950                      ; -> sunxi_get_module_param_from_sid
+0xffffff8008672d78  ldr        w0, [x29, #0x7c]                        
+0xffffff8008672d7c  and        w0, w0, #0x3ff                          
+0xffffff8008672d80  str        w0, [x29, #0x7c]                        
+0xffffff8008672d84  mov        w0, #0                                  
+0xffffff8008672d88  bl         #0xffffff80084aec68                      ; -> get_cpu_device
+0xffffff8008672d8c  cbz        x0, #0xffffff80086730ec                 
+0xffffff8008672d90  adrp       x1, #0xffffff8008c1c000                 
+0xffffff8008672d94  ldr        x0, [x0, #0x248]                        
+0xffffff8008672d98  add        x1, x1, #0x89e                           ; STR="operating-points-v2"
+0xffffff8008672d9c  mov        w2, #0                                  
+0xffffff8008672da0  bl         #0xffffff80086d5474                      ; -> of_parse_phandle
+0xffffff8008672da4  mov        x19, x0                                 
+0xffffff8008672da8  cbnz       x0, #0xffffff8008672db4                 
+0xffffff8008672dac  mov        w19, #-2                                
+0xffffff8008672db0  b          #0xffffff80086730ec                     
+0xffffff8008672db4  adrp       x1, #0xffffff8008c5d000                 
+0xffffff8008672db8  add        x1, x1, #0xe8b                           ; STR="allwinner,sun50i-operating-points"
+```
+
+### 2.2 `dev_pm_opp_set_prop_name` @ `0xffffff80084bca70`
+
+```text
+0xffffff80084bca70  stp        x29, x30, [sp, #-0x30]!                 
+0xffffff80084bca74  mov        x29, sp                                 
+0xffffff80084bca78  stp        x21, x22, [sp, #0x20]                   
+0xffffff80084bca7c  adrp       x21, #0xffffff800904f000                
+0xffffff80084bca80  stp        x19, x20, [sp, #0x10]                   
+0xffffff80084bca84  mov        x19, x0                                 
+0xffffff80084bca88  add        x0, x21, #0xd70                         
+0xffffff80084bca8c  mov        x22, x1                                 
+0xffffff80084bca90  bl         #0xffffff80089741bc                      ; -> mutex_lock
+0xffffff80084bca94  mov        x0, x19                                 
+0xffffff80084bca98  bl         #0xffffff80084bc87c                      ; -> _add_opp_table
+0xffffff80084bca9c  cbz        x0, #0xffffff80084bcb1c                 
+0xffffff80084bcaa0  add        x1, x0, #0x130                          
+0xffffff80084bcaa4  mov        x20, x0                                 
+0xffffff80084bcaa8  ldr        x0, [x0, #0x130]                        
+0xffffff80084bcaac  cmp        x1, x0                                  
+0xffffff80084bcab0  b.eq       #0xffffff80084bcab8                     
+0xffffff80084bcab4  brk        #0x800                                  
+0xffffff80084bcab8  ldr        x3, [x20, #0x170]                       
+0xffffff80084bcabc  cbz        x3, #0xffffff80084bcae4                 
+0xffffff80084bcac0  adrp       x2, #0xffffff8008a09000                 
+0xffffff80084bcac4  adrp       x1, #0xffffff8008c1c000                 
+0xffffff80084bcac8  add        x2, x2, #0x908                           ; STR="_set_opp_voltage"
+0xffffff80084bcacc  mov        x0, x19                                 
+0xffffff80084bcad0  add        x2, x2, #0x1d0                           ; STR="dev_pm_opp_set_prop_name"
+0xffffff80084bcad4  add        x1, x1, #0x41b                           ; STR="%s: Already have prop-name %s"
+0xffffff80084bcad8  mov        w19, #-0x10                             
+0xffffff80084bcadc  bl         #0xffffff80084a83ac                      ; -> dev_err
+0xffffff80084bcae0  b          #0xffffff80084bcb10                     
+0xffffff80084bcae4  mov        w1, #0xc0                               
+0xffffff80084bcae8  mov        x0, x22                                 
+0xffffff80084bcaec  movk       w1, #0x240, lsl #16                     
+0xffffff80084bcaf0  bl         #0xffffff8008176cdc                      ; -> kstrdup
+0xffffff80084bcaf4  str        x0, [x20, #0x170]                       
+0xffffff80084bcaf8  cbz        x0, #0xffffff80084bcb0c                 
+0xffffff80084bcafc  add        x0, x21, #0xd70                         
+0xffffff80084bcb00  bl         #0xffffff8008974380                      ; -> mutex_unlock
+0xffffff80084bcb04  mov        w0, #0                                  
+0xffffff80084bcb08  b          #0xffffff80084bcb2c                     
+0xffffff80084bcb0c  mov        w19, #-0xc                              
+0xffffff80084bcb10  mov        x0, x20                                 
+0xffffff80084bcb14  bl         #0xffffff80084bbbfc                      ; -> _remove_opp_table
+0xffffff80084bcb18  b          #0xffffff80084bcb20                     
+0xffffff80084bcb1c  mov        w19, #-0xc                              
+0xffffff80084bcb20  add        x0, x21, #0xd70                         
+0xffffff80084bcb24  bl         #0xffffff8008974380                      ; -> mutex_unlock
+0xffffff80084bcb28  mov        w0, w19                                 
+0xffffff80084bcb2c  ldp        x19, x20, [sp, #0x10]                   
+0xffffff80084bcb30  ldp        x21, x22, [sp, #0x20]                   
+0xffffff80084bcb34  ldp        x29, x30, [sp], #0x30                   
+0xffffff80084bcb38  ret                                                
+; ---- 以下为本函数 ret 之后的相邻代码（仅供定位，不属于本函数） ----
+0xffffff80084bcb3c  stp        x29, x30, [sp, #-0x40]!                 
+0xffffff80084bcb40  mov        x29, sp                                 
+0xffffff80084bcb44  stp        x21, x22, [sp, #0x20]                   
+0xffffff80084bcb48  adrp       x22, #0xffffff800904f000                
+0xffffff80084bcb4c  stp        x19, x20, [sp, #0x10]                   
+0xffffff80084bcb50  add        x20, x22, #0xd70                        
+0xffffff80084bcb54  str        x23, [sp, #0x30]                        
+0xffffff80084bcb58  mov        x23, x0                                 
+0xffffff80084bcb5c  mov        x0, x20                                 
+```
+
+### 2.3 `dev_pm_opp_set_supported_hw` @ `0xffffff80084bc990`
+
+```text
+0xffffff80084bc990  stp        x29, x30, [sp, #-0x40]!                 
+0xffffff80084bc994  mov        x29, sp                                 
+0xffffff80084bc998  stp        x21, x22, [sp, #0x20]                   
+0xffffff80084bc99c  adrp       x21, #0xffffff800904f000                
+0xffffff80084bc9a0  mov        x22, x0                                 
+0xffffff80084bc9a4  add        x0, x21, #0xd70                         
+0xffffff80084bc9a8  stp        x19, x20, [sp, #0x10]                   
+0xffffff80084bc9ac  mov        w20, w2                                 
+0xffffff80084bc9b0  str        x23, [sp, #0x30]                        
+0xffffff80084bc9b4  mov        x23, x1                                 
+0xffffff80084bc9b8  bl         #0xffffff80089741bc                      ; -> mutex_lock
+0xffffff80084bc9bc  mov        x0, x22                                 
+0xffffff80084bc9c0  bl         #0xffffff80084bc87c                      ; -> _add_opp_table
+0xffffff80084bc9c4  cbz        x0, #0xffffff80084bca4c                 
+0xffffff80084bc9c8  add        x1, x0, #0x130                          
+0xffffff80084bc9cc  mov        x19, x0                                 
+0xffffff80084bc9d0  ldr        x0, [x0, #0x130]                        
+0xffffff80084bc9d4  cmp        x1, x0                                  
+0xffffff80084bc9d8  b.eq       #0xffffff80084bc9e0                     
+0xffffff80084bc9dc  brk        #0x800                                  
+0xffffff80084bc9e0  ldr        x0, [x19, #0x160]                       
+0xffffff80084bc9e4  cbz        x0, #0xffffff80084bca0c                 
+0xffffff80084bc9e8  adrp       x2, #0xffffff8008a09000                 
+0xffffff80084bc9ec  adrp       x1, #0xffffff8008c1c000                 
+0xffffff80084bc9f0  add        x2, x2, #0x908                           ; STR="_set_opp_voltage"
+0xffffff80084bc9f4  add        x1, x1, #0x3f1                           ; STR="%s: Already have supported hardware list"
+0xffffff80084bc9f8  add        x2, x2, #0x1b0                           ; STR="dev_pm_opp_set_supported_hw"
+0xffffff80084bc9fc  mov        x0, x22                                 
+0xffffff80084bca00  mov        w20, #-0x10                             
+0xffffff80084bca04  bl         #0xffffff80084a83ac                      ; -> dev_err
+0xffffff80084bca08  b          #0xffffff80084bca40                     
+0xffffff80084bca0c  mov        w2, #0xc0                               
+0xffffff80084bca10  ubfiz      x1, x20, #2, #0x20                      
+0xffffff80084bca14  mov        x0, x23                                 
+0xffffff80084bca18  movk       w2, #0x240, lsl #16                     
+0xffffff80084bca1c  bl         #0xffffff8008176d88                      ; -> kmemdup
+0xffffff80084bca20  str        x0, [x19, #0x160]                       
+0xffffff80084bca24  cbz        x0, #0xffffff80084bca3c                 
+0xffffff80084bca28  add        x0, x21, #0xd70                         
+0xffffff80084bca2c  str        w20, [x19, #0x168]                      
+0xffffff80084bca30  bl         #0xffffff8008974380                      ; -> mutex_unlock
+0xffffff80084bca34  mov        w0, #0                                  
+0xffffff80084bca38  b          #0xffffff80084bca5c                     
+0xffffff80084bca3c  mov        w20, #-0xc                              
+0xffffff80084bca40  mov        x0, x19                                 
+0xffffff80084bca44  bl         #0xffffff80084bbbfc                      ; -> _remove_opp_table
+0xffffff80084bca48  b          #0xffffff80084bca50                     
+0xffffff80084bca4c  mov        w20, #-0xc                              
+0xffffff80084bca50  add        x0, x21, #0xd70                         
+0xffffff80084bca54  bl         #0xffffff8008974380                      ; -> mutex_unlock
+0xffffff80084bca58  mov        w0, w20                                 
+0xffffff80084bca5c  ldp        x19, x20, [sp, #0x10]                   
+0xffffff80084bca60  ldp        x21, x22, [sp, #0x20]                   
+0xffffff80084bca64  ldr        x23, [sp, #0x30]                        
+0xffffff80084bca68  ldp        x29, x30, [sp], #0x40                   
+0xffffff80084bca6c  ret                                                
+; ---- 以下为本函数 ret 之后的相邻代码（仅供定位，不属于本函数） ----
+0xffffff80084bca70  stp        x29, x30, [sp, #-0x30]!                 
+0xffffff80084bca74  mov        x29, sp                                 
+0xffffff80084bca78  stp        x21, x22, [sp, #0x20]                   
+0xffffff80084bca7c  adrp       x21, #0xffffff800904f000                
+```
+
+### 2.4 `nvmem_cell_read` @ `0xffffff80086f2578`
+
+```text
+0xffffff80086f2578  stp        x29, x30, [sp, #-0x30]!                 
+0xffffff80086f257c  mov        x29, sp                                 
+0xffffff80086f2580  stp        x19, x20, [sp, #0x10]                   
+0xffffff80086f2584  mov        x19, #-0x16                             
+0xffffff80086f2588  stp        x21, x22, [sp, #0x20]                   
+0xffffff80086f258c  ldr        x22, [x0, #0x18]                        
+0xffffff80086f2590  cbz        x22, #0xffffff80086f2600                
+0xffffff80086f2594  mov        x20, x0                                 
+0xffffff80086f2598  ldrsw      x0, [x0, #0xc]                          
+0xffffff80086f259c  mov        x21, x1                                 
+0xffffff80086f25a0  mov        w1, #0x80c0                             
+0xffffff80086f25a4  movk       w1, #0x240, lsl #16                     
+0xffffff80086f25a8  bl         #0xffffff80081a136c                      ; -> __kmalloc
+0xffffff80086f25ac  mov        x19, x0                                 
+0xffffff80086f25b0  cbz        x0, #0xffffff80086f25fc                 
+0xffffff80086f25b4  ldrsw      x3, [x20, #0xc]                         
+0xffffff80086f25b8  mov        x2, x0                                  
+0xffffff80086f25bc  ldr        w1, [x20, #8]                           
+0xffffff80086f25c0  mov        x0, x22                                 
+0xffffff80086f25c4  bl         #0xffffff80086f1888                      ; -> nvmem_reg_read
+0xffffff80086f25c8  cbnz       w0, #0xffffff80086f25e8                 
+0xffffff80086f25cc  mov        x0, x20                                 
+0xffffff80086f25d0  mov        x2, x21                                 
+0xffffff80086f25d4  mov        x1, x19                                 
+0xffffff80086f25d8  bl         #0xffffff80086f24b4                      ; -> __nvmem_cell_read.part.0
+0xffffff80086f25dc  mov        w20, w0                                 
+0xffffff80086f25e0  cbz        w0, #0xffffff80086f2600                 
+0xffffff80086f25e4  b          #0xffffff80086f25ec                     
+0xffffff80086f25e8  mov        w20, w0                                 
+0xffffff80086f25ec  mov        x0, x19                                 
+0xffffff80086f25f0  sxtw       x19, w20                                
+0xffffff80086f25f4  bl         #0xffffff80081a01c4                      ; -> kfree
+0xffffff80086f25f8  b          #0xffffff80086f2600                     
+0xffffff80086f25fc  mov        x19, #-0xc                              
+0xffffff80086f2600  mov        x0, x19                                 
+0xffffff80086f2604  ldp        x19, x20, [sp, #0x10]                   
+0xffffff80086f2608  ldp        x21, x22, [sp, #0x20]                   
+0xffffff80086f260c  ldp        x29, x30, [sp], #0x30                   
+0xffffff80086f2610  ret                                                
+; ---- 以下为本函数 ret 之后的相邻代码（仅供定位，不属于本函数） ----
+0xffffff80086f2614  stp        x29, x30, [sp, #-0x10]!                 
+0xffffff80086f2618  mov        x3, x1                                  
+0xffffff80086f261c  adrp       x2, #0xffffff80086f1000                 
+0xffffff80086f2620  adrp       x1, #0xffffff80086f1000                 
+0xffffff80086f2624  mov        x29, sp                                 
+0xffffff80086f2628  add        x2, x2, #0xd74                          
+0xffffff80086f262c  add        x1, x1, #0xe1c                          
+0xffffff80086f2630  bl         #0xffffff80084b0098                      ; -> devres_release
+0xffffff80086f2634  cbz        w0, #0xffffff80086f263c                 
+0xffffff80086f2638  brk        #0x800                                  
+0xffffff80086f263c  ldp        x29, x30, [sp], #0x10                   
+0xffffff80086f2640  ret                                                
+; ---- 以下为本函数 ret 之后的相邻代码（仅供定位，不属于本函数） ----
+0xffffff80086f2644  stp        x29, x30, [sp, #-0x10]!                 
+0xffffff80086f2648  mov        x3, x1                                  
+0xffffff80086f264c  adrp       x2, #0xffffff80086f1000                 
+0xffffff80086f2650  adrp       x1, #0xffffff80086f1000                 
+0xffffff80086f2654  mov        x29, sp                                 
+0xffffff80086f2658  add        x2, x2, #0xd98                          
+0xffffff80086f265c  add        x1, x1, #0xe60                          
+0xffffff80086f2660  bl         #0xffffff80084b0098                      ; -> devres_release
+0xffffff80086f2664  cbz        w0, #0xffffff80086f266c                 
+```
+
+## 3. 关键调用点解读
+
+### 3.1 `sun50i_cpufreq_nvmem_probe`
+
+**60 条窗口内可见的调用**（地址 → 符号 / 可见常量）：
+
+- `0xffffff8008672d14` → `__sw_hweight64`；`0xffffff8008672d24` → `__kmalloc`
+  （size 来自 `ubfiz x0, x0, #3, #0x20`，即 `8 * popcount`）。
+- `0xffffff8008672d44` → `sunxi_get_soc_ver`，返回值保存在 `w24`。
+- `0xffffff8008672d58` / `0xffffff8008672d74` → `sunxi_get_module_param_from_sid`
+  （两次，键 `0x20`、`0x28`，后者结果 `& 0x3ff` 存入 `[x29,#0x7c]`）——
+  这是 SID 侧参数读取，显示为内联，无独立函数名。
+- `0xffffff8008672d88` → `get_cpu_device(0)`；`0xffffff8008672da0` →
+  `of_parse_phandle(..., "operating-points-v2")`。窗口最后一条 `0xffffff8008672db8` 引用字符串
+  `"allwinner,sun50i-operating-points"`；紧随其后的 `of_device_is_compatible` 位于 60 条窗口之外
+  （`0xffffff8008672dbc`，见下表）。
+
+**关键调用点位于 60 条窗口之外**，为避免超出指令配额，以下为扩展扫描（不计入上方列表）得到的调用序列，
+逐条给出地址与目标，参数解读仅基于可见寄存器/常量：
+
+| 地址 | 调用 / 引用 | 从反汇编可见的要点 |
+| --- | --- | --- |
+| `0xffffff8008672dbc` | `of_device_is_compatible` | 参数 `"allwinner,sun50i-operating-points"`（该字符串引用位于窗口内 `0xffffff8008672db8`） |
+| `0xffffff8008672dcc` | `STR="speed"` | `of_nvmem_cell_get(np, "speed")` 于 `0xffffff8008672dd0` |
+| `0xffffff8008672e00` | `nvmem_cell_read` | `x1 = &[x29,#0x80]`（长度出参）；返回指针 `x20` |
+| `0xffffff8008672e10` | `nvmem_cell_put` | 读后立即释放 cell |
+| `0xffffff8008672e1c` | `ldr w1, [x20]` | 取 nvmem 读出的 **32-bit 原始值** |
+| `0xffffff8008672e24`–`0xffffff8008672eac` | 常量比较 | 原始值与 `0x2000`、`0x2400`、`0x2800`、`0x2c00`、
+  `0x5400`、`0x5c00`、`0x6c00`、`0x7400`、`0x7c00` 逐一比较；分支写 `w0` = `1`/`2`/`8` 到 `[x29,#0x74]`，
+  并选择字符串前缀 `'a'`/`'c'`/`'b'` 与后缀 `0`/`1`/`2` |
+| `0xffffff8008672ef0` | `snprintf` | `snprintf([x29,#0xd0], 3, "%s%d", prefix, suffix)`；
+  `"%s%d"` @ `0xffffff8008bd5274`，`'a'` @ `0xffffff8008c6af52`，`'b'` @ `0xffffff8008c4c1e9`，
+  `'c'` @ `0xffffff8008be59f3`（均为独立 NUL 结尾字符串，已核对原始字节） |
+| `0xffffff8008672f84` | `find_next_bit` | 遍历 CPU mask（`x28`），逐 CPU 设置 OPP |
+| `0xffffff8008672fb4` | `dev_pm_opp_set_prop_name` | `x1 = &[x29,#0xd0]`，即上面 `snprintf` 生成的名字 |
+| `0xffffff8008672fec` | `dev_pm_opp_set_supported_hw` | `x1 = &[x29,#0x74]`，`w2 = 1`（mask 数组长度 1） |
+| `0xffffff8008673008` | `dev_err` | `"Failed to set supported hardware"` @ `0xffffff8008c5df15` |
+| `0xffffff800867303c` | `platform_device_register_full` | 名字 `"cpufreq-dt"` @ `0xffffff8008c5de58` |
+| `0xffffff8008673124` | `__dynamic_pr_debug` | `"sun50i_cpufreq_nvmem: sun50iw9p1 vf versions:0x%x, name:%s"` |
+
+**是否看到对 `b1` 字符串的引用：**
+
+- ELF 中**没有**独立的 `"b1\0"` 静态数据引用（全文搜索 `b1\0` 的命中落在无关二进制/其他字符串中）。
+- 可见的是：`'b'` 前缀字符串（`0xffffff8008c4c1e9`）、`"%s%d"`（`0xffffff8008bd5274`）与 `snprintf` 调用
+  （`0xffffff8008672ef0`）。当 speed 原始值命中 `0x6c00` 或 `0x7c00` 分支时走 `'b'` 前缀，
+  后缀由 `w0 = sunxi_get_soc_ver() & 7` 是否为 0 决定（`0xffffff8008672f30`/`0xffffff8008672f34`）：
+  非 0 → `w4=1`，组合结果为 `"b1"`；为 0 → `w4=0`，结果为 `"b0"`。
+- 因此“`b1`”是**运行时由 `snprintf` 拼接**产生的属性名，不是直接写死在反汇编里的字符串常量。
+
+**是否注册 supported_hw mask：** 是，可见 `0xffffff8008672fec` 调用
+`dev_pm_opp_set_supported_hw(dev, &[x29,#0x74], 1)`；mask 值来自 speed 解码分支写入 `[x29,#0x74]` 的
+`w0`（`1`/`2`/`8`），长度参数 `w2=1`。被调函数 `dev_pm_opp_set_supported_hw` 本身
+（`dev_pm_opp_set_supported_hw+0x80` 附近）以 `ubfiz x1, x20, #2, #0x20` 计算 `4*count` 字节并 `kmemdup`，
+存入 opp table 偏移 `0x160`、count 存 `0x168`。具体 bit 语义不从本反汇编断言。
+
+**speed 原始值如何被使用：** `nvmem_cell_read` 返回的缓冲区被 `ldr w1, [x20]` 读成 32-bit 值，
+仅用于上述与 9 个常量的比较/分支：分支同时决定 (a) 写入 `[x29,#0x74]` 的 mask 值 `1`/`2`/`8`、
+(b) `snprintf` 的名字前缀与后缀，(c) 随后 `dev_pm_opp_set_prop_name` 使用的名字；
+读取缓冲区在 `0xffffff8008672f54` 被 `kfree`。未见该原始值参与算术缩放或作为频率直接使用。
+
+### 3.2 `dev_pm_opp_set_prop_name`
+
+- 通用 OPP 辅助函数：`mutex_lock` → `_add_opp_table` → `kstrdup(x22, GFP_KERNEL)`
+  将调用者传入的字符串（`x22`）复制到 opp table 偏移 `0x170` → `mutex_unlock` → `ret`。
+- 该函数**不含 `"b1"` 字面量**：属性名由调用者（probe 的 `snprintf` 结果）通过 `x1` 传入。
+
+### 3.3 `dev_pm_opp_set_supported_hw`
+
+- 通用 OPP 辅助函数：`mutex_lock` → `_add_opp_table` → `kmemdup(x23, 4*w2, GFP_KERNEL)`
+  复制 `count` 个 u32 mask → 存 opp table 偏移 `0x160`/count `0x168` → `mutex_unlock` → `ret`。
+- 同样**不含 speed 常量**：mask 数组由调用者通过 `x1`/`w2` 传入。
+
+### 3.4 `nvmem_cell_read`
+
+- `ldrsw x0, [x0,#0xc]` 取 cell 长度 → `__kmalloc(len, GFP_KERNEL)` → `nvmem_reg_read` →
+  `__nvmem_cell_read.part.0` → `kfree`，返回缓冲区指针；长度为出参 `x1`。
+- **纯通用读 cell 实现，不含 speed 解码或任何 `0x6c00`/`b1` 常量。**
+
+## 4. 结论边界
+
+- **不**据此声称 SID `0x6c00 → b1` 授权。反汇编仅显示：nvmem `"speed"` cell 读出的 32-bit 值
+  与 `0x6c00`/`0x7c00` 等常量比较，命中分支以 `'b'` 前缀经 `snprintf("%s%d", ...)` 生成属性名；
+  是否构成授权关系、上游语义为何，无法从本反汇编确认。
+- **不**声称完整还原源码。所有符号 `st_size=0`，函数边界、变量名、类型与参数含义均为基于调用约定
+  和常量引用的推断；第 3 节中 60 条窗口外的调用点来自扩展扫描，仅作调用图说明。
+- 本文只陈述从反汇编**可见的调用与常量/字符串引用**；所有字符串常量均已核对 ELF 中的原始字节。
+

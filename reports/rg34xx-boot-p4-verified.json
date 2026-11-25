@@ -1,0 +1,16 @@
+{
+  "uncompressed_kernel_bytes": 17461256,
+  "uncompressed_kernel_sha256": "39cf8c3eb9a75ff0eda51b4074cd65860c5aa5386093bcaf69339819421d84b7",
+  "expected_public_survey_sha_prefix": "39cf8c3eb9a75ff0",
+  "public_survey_sha_matches": true,
+  "aligned_gnu_build_id_notes": [
+    {
+      "offset": "0x9082b8",
+      "build_id": "fe7e68cd7aa14945d71f36e4fbf8412d959f4cc1"
+    },
+    {
+      "offset": "0xc8fc50",
+      "build_id": "a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68"
+    }
+  ]
+}
