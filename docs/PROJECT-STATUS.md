@@ -215,7 +215,7 @@
 2. CPU Performance QuickRow 已完成 display-only/unavailable 接入和 App 回归测试。后续只有在 board-approved RG34XX profile、C owner 初始化和真实只读 telemetry 路径齐备后，才把 `CpuPerformanceRuntime` typed client 接入 App；在此之前继续保持不可选、不可 persist、无计划 MHz 展示。
 
 Linkslot 1.0.45 UI 当前已追加 display-only CPU row：`SYSTEM_SETTINGS` 为 7 行，`QuickRow::ALL` 为 88 项，Language index=86、CPU Performance index=87；`QuickValue::ALL` 为 38 项，新 unavailable value index=37。两项 App unit tests 已在 runtime-slices/full feasibility CI 实际通过；Rust typed client 仍未接入 App。
-3. **在 RG34XX 上重新运行 parser-v2 inventory**：取得包含 `opp-microvolt-*` named variants、OPP table-level SID phandle/name 的新 `live-fdt.json`；随后再核对 raw `0x6c00` 对应的实际 OPP voltage suffix 与 `scaling_available_frequencies`。
+3. **运行 RG34XX inventory v4**：使用更新后的 `scripts/run-rg34xx-inventory.ps1`，输出目录为 `build/rg34xx-inventory-20261125-cpux-v4`；确认报告包含 `kernel-driver-provenance.txt`（kernel notes/build-id、cpufreq platform binding、过滤后的 OPP/NVMEM symbol names），再上传到 reports 分支 `reports/rg34xx-inventory-20261125-cpux-v4/`。不改 governor、min/max、PMIC、PLL 或 CCU。
 4. **确认实机正在运行的 cpufreq-nvmem/OPP 精确源码和 build**：目前公开 4.9.170 source candidates 的 raw `0x6c00` mapping 不一致；需找到目标镜像对应 source commit/patch 或可识别的只读驱动证据，不能推定 mask。
 5. 证明 BL31→BL33 CPU1–CPU3 状态、单核 invariant、备用父时钟切换和 timer continuity；同时解决 AVCC thermal calibration 或确认独立可信温度来源。前述门槛闭合后才设计 C HAL transition（升频先升压、降频先降频后降压、readback/timeout/rollback/hysteresis）。
 6. 最后才开放实际 Performance/Boost。不得把 ABI v1 的 `POLICY_ONLY` 当作 DVFS 已完成。
