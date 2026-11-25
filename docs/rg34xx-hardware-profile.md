@@ -202,3 +202,6 @@ GammaOS Pico 当前参考树面向 MT6785/32-bit ARM。其 MTK 驱动和 A32 cor
 - OTG/USB PHY 端口的精确连线。
 
 这些作为 M1/M2 的探测任务；未经验证不得写入默认驱动配置。
+### Read-only device timing capture
+
+`scripts/collect-rg34xx-readonly-inventory.sh` now writes `display-runtime.txt` with H700 display engine sysfs (`/sys/class/disp/disp/attr/sys`), framebuffer mode/geometry (`/sys/class/graphics/fb0` and `/proc/fb`), and filtered display clocks from `clk_summary`. It is read-only and gracefully reports missing nodes. This is the next evidence source for actual driver-reported panel timing; no new on-device capture has been uploaded yet, and these software readbacks are not a physical optical measurement. See [H700 display refresh policy](h700-display-refresh-policy.md#7-on-device-timing-readback-collection).

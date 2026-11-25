@@ -147,3 +147,14 @@ No such hardware transition function exists yet. Do not add register writes, PLL
 The display policy test script is `scripts/test-h700-display-refresh-policy.sh`. The H700 AArch32/AArch64 build script compiles the policy for AArch64, AArch32 ARM-state and AArch32 Thumb-2; `platform/h700/rules.mk` links the policy object into the target graph. GitHub Actions invokes the host policy test from `.github/workflows/h700-arch-check.yml`.
 
 Host tests verify the state rules, timing constants, period calculations (8,337,777 ns for the 119.947 Hz candidate and 16,665,629 ns for the 60.006 Hz candidate), and invalid arguments. The helper was added in code commit [`237ee131d5926ee79b049a1d3915b4da7f5c8d0b`](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/237ee131d5926ee79b049a1d3915b4da7f5c8d0b); its host test initially missed a local variable declaration, corrected in [`d20550ab2cd6c4e7dbaa758f09e1b5993988878b`](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/d20550ab2cd6c4e7dbaa758f09e1b5993988878b). [H700 AArch32/AArch64 compile check #45572079415](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45572079415) passed the host-regression job and the freestanding AArch64, AArch32 ARM-state and AArch32 Thumb-2 compile job. This is not a full LK target link, hardware timing application, or physical 120/60 Hz display test.
+## 7. On-device timing readback collection
+
+The read-only inventory script now writes `display-runtime.txt` with:
+
+- `/sys/class/disp/disp/attr/sys` when exported by the vendor H700 display driver (often contains `ref_fps`, current `fps`, and display-engine state);
+- `/sys/class/graphics/fb0/{name,mode,modes,virtual_size,stride,pan,bits_per_pixel}` and `/proc/fb` when available;
+- display-related lines from `/sys/kernel/debug/clk/clk_summary`, preserving clock-tree indentation.
+
+The capture has no sysfs/debugfs output redirection, mode set, MMIO, ioctl, or boot-package write. Missing paths are reported as unavailable. Run the normal Windows inventory wrapper or the read-only collector and inspect the generated `display-runtime.txt`.
+
+Interpret this evidence in layers: display-engine `ref_fps`/`fps` is the kernel driver's reported scanout timing, framebuffer `mode` may only report geometry/nominal rate, and clock-summary is the provider's current clock readback. None is a photodiode/high-speed-camera measurement of the physical panel. It is nevertheless the missing on-device observation needed before claiming that the panel currently scans at 120 Hz; frontend render FPS remains a separate quantity.
