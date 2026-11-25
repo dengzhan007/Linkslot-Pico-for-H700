@@ -310,3 +310,18 @@ commit hash or localversion ties them. Do not claim exact source identity.
   `manifest/kernel-gzip.json`; `qiaoweibiao/T507_Kernel`
   `drivers/tee/optee/core.c`, `drivers/staging/android/ion/sunxi/sunxi_ion.c`,
   `drivers/staging/android/ion/ion_secure_heap.c`, `Makefile`.
+
+---
+
+## Addendum — 2026-11-24: active BOL4 payload identity resolved
+
+The original audit above left the secondary Android image's `BOL4` payload unresolved because the decoder was not yet available. The follow-up extraction is recorded in `reports/rg34xx-active-inputs/` (manifest, 21-check verification and checksums; the raw binaries remain local-only).
+
+The extracted active image confirms:
+
+- BOL4 component: 8,406,862 bytes (`0x80474e`); packed raw-LZ4 payload: 8,406,846 bytes (`0x80473e`).
+- Declared and decoded output: 17,461,256 bytes (`0x010a7008`); payload FNV-1a32: `0xb4c47d39`.
+- The new extractor verifies that BOL4 decoding produces `kernel.Image` byte-for-byte. Its SHA-256 is `39cf8c3eb9a75ff0eda51b4074cd65860c5aa5386093bcaf69339819421d84b7`.
+- This length and SHA-256 match the primary Android image's gzip-decompressed kernel recorded in section 2. The active secondary image therefore carries the same AArch64 Linux kernel payload as the primary image; the difference is the packaging/container path, not a different kernel binary.
+
+This resolves the former open question 3 in section 7 about the BOL4 decoder and secondary-kernel identity. It does **not** prove which on-disk image a different firmware build will select, does not rebuild the paired p4+40 MiB native firmware/SPL, and does not change the existing `not_installable` / `not_hardware_validated` verdict. No device I/O or binary upload was performed for this addendum.
