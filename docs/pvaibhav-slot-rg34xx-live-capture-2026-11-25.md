@@ -183,3 +183,13 @@ Source references:
 - [BaseOS target/panel survey](https://github.com/pvaibhav/BaseOS/blob/63137afeda1c0bc4ff771be6f03012b7f8147aca/experiments/h700-boot-speed/variant-survey/panel-survey.txt)
 - [RG34XX U-Boot panel-init disassembly](https://github.com/pvaibhav/BaseOS/blob/63137afeda1c0bc4ff771be6f03012b7f8147aca/experiments/h700-boot-speed/uboot-trace-notes/delays/inventory-rg34xx.json)
 - [PE6/lcd_type branch summary](https://github.com/pvaibhav/BaseOS/blob/63137afeda1c0bc4ff771be6f03012b7f8147aca/experiments/h700-boot-speed/uboot-trace-notes/delays/summary.md)
+
+
+## Official release identity for the next binary comparison
+
+GitHub release metadata confirms the reviewed source commit is exactly the commit targeted by tag `v1.16.0-pvaibhav.2`:
+
+- Tag `v1.16.0-pvaibhav.2` resolves to `5206e3fa39aa4a9b702cd9048a07dab3b5ab95da` (annotated tag message: checked against that commit).
+- Official H700 bundle: [`slot-v1.16.0-pvaibhav.2-h700.zip`](https://github.com/pvaibhav/slot/releases/download/v1.16.0-pvaibhav.2/slot-v1.16.0-pvaibhav.2-h700.zip), 17,556,056 bytes, release asset SHA-256 `1f9bdaa1110eb4f6006cc9da6a8bb34bca694ea53555c3138dcf656f0dfd1fca`.
+
+The next local verification is to download that ZIP, verify its archive hash, extract the `slot` and `armgba_libretro.so` files, and compare their SHA-256 with the device captures in [`device-sha256.txt`](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/pvaibhav-slot-runtime/fdt-reparse/device-sha256.txt). The archive was not downloaded in this environment, so no equality result is claimed yet.
