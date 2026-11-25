@@ -2,6 +2,10 @@
 
 ## Index
 
+### 2026-11-24 — RG34XX active BOL4 payload identity resolved
+
+- `rg34xx-boot-partition-deep-audit.md` addendum — decodes the active p4 +48 MiB BOL4 component using the verified extraction report and matches the 17,461,256-byte output SHA-256 to the primary Android image's gzip-decompressed kernel. Resolves the former BOL4-format / secondary-kernel identity unknown; does not change the firmware-pairing blocker or hardware NO-GO.
+
 ### 2026-11-24 — RG34XX active boot inputs extracted and checksummed
 
 - `rg34xx-active-inputs/` — host-only extraction of the active Android v2 / BOL4 image at
