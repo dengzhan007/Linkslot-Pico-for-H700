@@ -1,8 +1,8 @@
 # RG34XX / H700 stock boot partition — deep read-only audit
 
 Scope: `build/rg34xx-inventory-20261122-214708/boot-partition.bin` (67,108,864 B,
-partition `mmcblk0p4`), captured read-only on device `<serial-redacted>`
-(ADB serial redacted here). Target: confirm the stock Linux boot image layout,
+partition `mmcblk0p4`), captured read-only on a single authorized ADB device
+(ADB serial redacted). Target: confirm the stock Linux boot image layout,
 kernel version/build, DTB provenance and the AArch64 hand-off facts needed for a
 GammaOS Pico / LK bare-metal port. All analysis was performed on the **local
 copy** of the image; no writes to the device, boot chain or SD card were made.
