@@ -271,6 +271,41 @@ This is a much stronger **code-family/lineage fingerprint** than the previously 
 
 **Next source-identification method:** compare the target's full probe CFG against these source-family variants at the basic-block level, then search for the distinctive target switch set and generated-name branches. Do not call the candidate a source match until control flow, constants, cleanup and OPP helper behavior agree.
 
+### 1.14 Full probe CFG, OPP-core and NVMEM audit (2026-11-25, offline static)
+
+This section closes the open items left by 1.12/1.13 using the same local symbolized ELF only (no device, no `/sys`, no `/dev/mem`, no `sunxi_get_soc_ver` invocation, no re-export of p4). Bounded text/JSON is uploaded to `reports/rg34xx-cpufreq-full-cfg.txt`, `reports/rg34xx-cpufreq-full-cfg.json` and `reports/rg34xx-opp-core-disasm.txt`; the ELF and boot image stay local.
+
+**Function boundary.** `sun50i_cpufreq_nvmem_probe` = `0xffffff8008672ccc` .. `0xffffff8008673148` (exclusive), **287 instructions**. Because `st_size=0`, the end is the `ret` that closes the epilogue at `0xffffff8008673144`, whose successor is a distinct FUNC (`find_deepest_state`) that is not any intra-function branch target. The whole `[start,end)` range is covered by contiguous basic blocks with no gaps (48 blocks / 62 edges in the linear-sweep view; a finer view that splits `cbz` fall-through yields ~69 blocks). This supersedes the earlier 60-instruction excerpt.
+
+**Nine-value switch → mask / name / setter (complete).** The loaded 32-bit `speed` word is compared against exactly nine constants; every branch converges to a masked 0/1/2/8 slot and optionally a generated `"%s%d"` name:
+
+| speed | dispatch | mask | prefix | suffix | set_prop_name | set_supported_hw |
+| --- | --- | ---: | --- | --- | --- | --- |
+| `0x2000` | `0x…72eb4` | 0 | `a` | 1 (fixed) | yes | no |
+| `0x2400` | `0x…72ec8` | 1 | — | — | no | yes |
+| `0x2800` | `0x…72eb4` | 0 | `a` | 1 (fixed) | yes | no |
+| `0x2c00` | `0x…72e64` | 2 | — | — | no | yes |
+| `0x5000` | `0x…72ec8` | 1 | — | — | no | yes |
+| `0x5400` | `0x…72ec8` | 1 | — | — | no | yes |
+| `0x5c00` | `0x…72ed0` | 0 | `c` | 0/1/2 (cond.) | yes | no |
+| `0x6c00` | `0x…72f24` | 0 | `b` | 0/1 (cond.) | yes | no |
+| `0x7400` | `0x…72ec8` | 1 | — | — | no | yes |
+| `0x7c00` | `0x…72f24` | 0 | `b` | 0/1 (cond.) | yes | no |
+| any other | `0x…72f40` | 8 | — | — | no | yes |
+
+- **b0/b1 confirmed mask=0 and skips `set_supported_hw`.** The b-group block at `0x…72f24` contains no `str w0,[x29,#0x74]`; only `0x…72f44` writes the mask slot. The b path reaches `snprintf` and branches to `0x…72f48`, bypassing `0x…72f44`. The guard `0x…72fd8 ldr w1,[x29,#0x74]; cbz w1,0x…73070` therefore always skips `dev_pm_opp_set_supported_hw` on the b-prefix path. So the shipping binary *does* keep mask 0 for b0/b1, which resolves the 1.12 open question in favour of the analyzer's **no-mask + b1** model.
+- **a-group suffix is fixed 1** (`0x…72eb8 mov w4,#1`), not conditional. Only the c-group (`0x5c00`) and b-group (`0x6c00`/`0x7c00`) suffix are conditional: b suffix = `(sunxi_get_soc_ver() & 7) ? 1 : 0`; c suffix = 0 when `soc_ver&7==0`, else 1 if `SID[0x28] ∈ [0x26,0x2d]` and `(SID[0x20]<<5) ∈ [0xa60,0x13a0]`, else 2.
+- **Zero-guards.** `0x…72fa8 ldrb w1,[x29,#0xd0]; cbz w1,0x…72fd8` skips `set_prop_name` when the name buffer is empty (mask-group paths never `snprintf`). `0x…72fd8 … cbz w1,0x…73070` skips `set_supported_hw` when mask==0 (a/b/c paths). Thus a/b/c paths set only the name, mask-group paths set only the mask — the two setters are never both reached in one pass.
+- **Setter failure and registration.** `0x…72ff8 cbz w0,0x…72f74` continues the per-CPU loop on success; on failure it prints `"Failed to set supported hardware"` and jumps to `0x…73070` (unwind, no `cpufreq-dt`). `platform_device_register_full("cpufreq-dt")` at `0x…7303c` is reached only after the CPU loop completes, and on error prints and unwinds via `0x…730ec`.
+
+**OPP-core behaviour (task B).** `opp_table->supported_hw` is a u32 array at offset `0x160`, count at `0x168`, prop-name string at `0x170`; `dev_pm_opp_set_supported_hw` uses `kmemdup(4*count)` and `dev_pm_opp_set_prop_name` uses `kstrdup`. The `supported-hw` predicate is inlined in `_of_add_opp_table_v2` (`0x…84bdac4`–`0x…84bdb78`): when `supported_hw==NULL`, every node carrying an `opp-supported-hw` property is dropped (only property-less nodes survive); when a mask is registered, property-less nodes are still accepted and a node is kept only if some `(mask[i] & bit[i]) != 0`. Named voltage falls back from `opp-microvolt-<name>` to `opp-microvolt`. Therefore, of the five simulated cases, only **mask-not-registered + b1** yields a clean nine-rate set from property-less nodes; mask 1/2/8 would additionally admit matching `opp-supported-hw` nodes and overshoot nine. Confidence is moderate: the ELF carries no DTB, so the literal 38-node bitmaps cannot be read offline; the final proof needs the target DTB.
+
+**NVMEM audit (task C).** `nvmem_cell_read` allocates `cell->bytes` bytes (from `[cell+0xc]`) with `GFP_KERNEL|__GFP_ZERO`; for a 2-byte `speed` cell only 2 bytes are allocated and read by the helper. The probe's `ldr w1,[x20]` then reads 4 bytes: this is a **logical over-read beyond the declared cell length** (the `&len` output is ignored). The extra two bytes stay inside the same slab object, so this is not by itself a fault or a read outside the allocator's rounded object; the risk is that a non-zero high half would miss the constant matches and fall to the default mask=8. Not asserted as a crash. Do not copy this read pattern into the new HAL.
+
+**Source-family comparison (task D).** Against AvaotaSBC/linux `sun50iw9_nvmem_xlate` the target shares the family fingerprint (`sunxi_get_soc_ver() & 7`, SID `0x20` → `<<5`, SID `0x28` → `& 0x3ff`, both setters before `cpufreq-dt`), but differs concretely: constant set (target adds `0x2800`/`0x6c00`/`0x7400`/`0x7c00`, drops `0x2100`/`0x6000`/`0x5d00`), naming (`a/b/c` with conditional suffix vs `aN` only), mask values (`{0,1,2,8}` vs `1<<value`), and control flow (EPROBE_DEFER classification, per-CPU setter loop, `put_*` cleanup). Conclusion: **same lineage, not the same implementation**; identical SID offsets alone do not prove a source match.
+
+**What this closes / leaves open.** Closes: full probe CFG with exact nine-value mask/name mapping; confirmation that b0/b1 keeps mask 0 and skips `set_supported_hw`; the OPP-core mask predicate and named-voltage fallback; the NVMEM over-read scope. Still open: the literal 38-node DTB bitmaps (needs target DTB), the live `sunxi_get_soc_ver()&7` value, and any DVFS authorization. No OPP/DVFS write is authorized; the CPU service stays `POLICY_ONLY`, `hardware_applied=0`.
+
 ## 2. Memory ownership observations relevant to the broader port
 
 The capture reports one 1 GiB memory range [0x40000000, 0x80000000), 46 reserved ranges, and the following noteworthy regions:
@@ -292,7 +327,7 @@ The live FDT has no reserved-memory node; CMA debugfs is absent on this Linux 4.
 | pll_periph0 Linux rate | **Observed:** 600 MHz, 4/4 prepare/enable users |
 | cpufreq getter/cache reconciliation | **Captured in v3/v4:** getter-triggered cache refresh is repeated; reads remain non-atomic |
 | SID speed raw value | **Captured:** 0x6c00; candidate classifications differ by vendor source tree |
-| OPP table/runtime-list structural fingerprint | **Static-only match:** nine rates fit no-mask + `b1`, but matched probe binary calls both named-property and one-cell supported-hardware setters; active mask/result not yet reconciled |
+| OPP table/runtime-list structural fingerprint | **Static match, reconciled (see 1.14):** the shipping probe keeps mask 0 and skips `set_supported_hw` on the `b0/b1` path (`0x…72f24`→`0x…72f48` bypasses the mask store; `0x…72fd8 cbz w1` guards the setter), so nine property-less rates fit no-mask + `b1`. OPP-core predicate: `supported_hw==NULL` drops every `opp-supported-hw` node and keeps property-less ones; a registered mask would admit extra matching nodes and overshoot nine. Literal 38-node DTB bitmap still unread (no DTB offline) |
 | DCDC1 runtime framework observation | **Captured:** v3/v4 frequency-voltage pairs (including 1320/1100 and 1104/1000 MHz/mV) align with `b1`; framework-only, not raw PMIC readback |
 | Raw PMIC voltage register at BL33 entry | **Not captured** |
 | Thermal cooling / calibration | **Cooling states observed at 0/8 and 0/5;** no active state in this snapshot. AVCC calibration remains rejected, so temperatures are not certified for closed-loop control |
@@ -303,7 +338,7 @@ The live FDT has no reserved-memory node; CMA debugfs is absent on this Linux 4.
 
 ## 4. Next actions
 
-1. The stock p4 image ↔ live kernel identity and symbolized ELF recovery are complete. Obtain a full disassembly/control-flow report for `sun50i_cpufreq_nvmem_probe` (all basic blocks and branch targets), including the exact raw-value→mask/name mapping, both setter return-value paths and the `platform_device_register_full()` gate. Also disassemble the target OPP-core `_opp_is_supported()` and named-voltage parser to reconcile the one-cell mask call with the nine-rate runtime list. Keep the binary/ELF local; upload bounded text/JSON only.
+1. **Done (see 1.14):** full probe CFG (287 insns, 48 blocks, exact nine-value mask/name mapping), both setter return paths, the `platform_device_register_full()` gate, the target OPP-core `supported-hw` predicate and named-voltage fallback are decoded offline; b0/b1 is confirmed mask 0 + skip `set_supported_hw`. **Next:** to convert the static model into a rate-level proof, read the target 38-node DTB bitmaps (from a separate read-only DTB dump, not the boot image re-export) and the live `sunxi_get_soc_ver()&7`. Keep binary/ELF local; upload bounded text/JSON only.
 2. Obtain a safe, read-only BL33-entry CPUX / PMIC state record only after the entry ABI and MMIO access prerequisites are proven. Distinguish Linux framework regulator readings from raw AXP2202 registers and Linux clk_summary from direct CCU readback. Do not issue test writes.
 3. Prove BL31→BL33 CPU1–CPU3 state, single-core execution ownership, shared CPUX PLL coordination, pll_periph0 fallback behavior and timer continuity before any shared-PLL transition design.
 4. Resolve AVCC/thermal calibration rejection or establish an independently validated temperature sensor path.

@@ -2,7 +2,7 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-25（stock p4 kernel 与 live kernel 的 GNU Build ID 精确匹配；已从同一二进制恢复 cpufreq probe/OPP setter 符号并完成首轮反汇编，确认 2-byte SID cell 被 32-bit load 读取且 probe 含 named-property 与 supported-hw setter；完整 CFG、mask/name 映射与最终 OPP 仍待核验；温度、BL31 多核与 PMIC/CCU 门槛未关闭）  
+**最后核对时间：** 2026-11-25（stock p4 kernel 与 live kernel 的 GNU Build ID 精确匹配；已完成 cpufreq probe 的**完整 CFG**（287 指令/48 块，无缝隙），九个 speed 值→mask/前缀/后缀映射全部解出；确认 b0/b1 分支**保持 mask=0 并跳过 `set_supported_hw`**，支撑 no-mask + b1 模型；目标 OPP core 的 supported-hw 谓词与 named-voltage 回退已反汇编，NVMEM 2-byte/32-bit 逻辑越界定性；与 Avaota 家族同血缘但非同一实现。仍待：38 节点 DTB 位图、live `soc_ver&7`、温度、BL31 多核与 PMIC/CCU 门槛）  
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **工作分支：** `porting/linkslot-1.0.45-feasibility`  
 **最新已验证代码 HEAD：** `e0ab50220939dfbbec95826ea61c15e7ec27c50c`。本轮只读 kernel/CPUFreq provenance collector + 静态安全回归通过 [H700 boot audit tools #45543371548](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45543371548)（Linux host tools、Windows Python tests 与 PowerShell wrapper syntax）；H700 storage/CPU/LED/MMU/PIO host regression 和 AArch64、AArch32 ARM-state、AArch32 Thumb-2 编译通过 [#45543371507](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45543371507)。完整 Linkslot/LK/mGBA 综合 host/cross-build 最新成功基线仍为 [#45532364153](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45532364153)；host/cross-build 不等于完整 LK target link 或实机启动。  
@@ -54,6 +54,15 @@
 
 **最近完成的 RG34XX 设备采集：** parser-v3 inventory 已上传至 `reports/rg34xx-inventory-20261125-cpux-v3/`，并完成 OPP exact-candidate analysis 与 cpufreq getter reconciliation。原始 binary 保留在采集机，未上传；报告可复查文本 JSON 与哈希清单。
 **boot 二进制身份核对：** 已通过 [p4 元数据](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-boot-p4-metadata.json) 与 [解压 hash / aligned notes](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-boot-p4-verified.json) 完成 live kernel ↔ stock p4 kernel 精确 Build ID 匹配；解压 SHA-256 与公开 BaseOS survey 前缀核对成功。`vmlinux-to-elf` 和首轮 probe/OPP setter 反汇编也已完成，报告见 [cpufreq disassembly](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-cpufreq-driver-disasm.txt)。
+**本轮 RG34XX cpufreq probe 完整 CFG + OPP core（2026-11-25，纯离线静态）：** 仅用本地已符号化 ELF，不接触设备、不读 `/sys`/`/dev/mem`、不调用 `sunxi_get_soc_ver`、不写寄存器、不重导出 p4。产物仅上传有界文本/JSON：[full CFG](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-cpufreq-full-cfg.txt) / [full CFG JSON](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-cpufreq-full-cfg.json) / [OPP core disasm](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-opp-core-disasm.txt)。ELF 与 boot 镜像保留本地。
+  - `sun50i_cpufreq_nvmem_probe` = `0x…72ccc`–`0x…73148`（不含），287 指令；`st_size=0`，边界取"闭合 epilogue 的 ret，其后继为不同 FUNC（`find_deepest_state`）且非本函数分支目标"，全程连续块覆盖无缝隙。
+  - 九值分支表：`0x2000`/`0x2800`→mask 0 + 前缀 `a` + 后缀恒 1；`0x5c00`→mask 0 + `c` + 条件后缀 0/1/2；`0x6c00`/`0x7c00`→mask 0 + `b` + 条件后缀 0/1；`0x2400`/`0x5000`/`0x5400`/`0x7400`→mask 1；`0x2c00`→mask 2；默认→mask 8。
+  - **b0/b1 确认保持 mask=0 且跳过 `set_supported_hw`**：`0x…72f24` 块不写 mask 槽，唯一 `str` 在 `0x…72f44`，b 路径经 snprintf 后跳 `0x…72f48` 绕过之；`0x…72fd8 cbz w1,[x29,#0x74]` 因此在 b 路径必然跳过 setter。据此 no-mask + `b1` 模型由运货二进制证实（此前仅为 DT/runtime 指纹）。
+  - 零值保证：`0x…72fa8 cbz` 在名字空时跳过 `set_prop_name`；`0x…72fd8 cbz` 在 mask=0 时跳过 `set_supported_hw`。故 a/b/c 只设名字、mask 组只设 mask，两 setter 不会同时触发。`set_supported_hw` 失败打印 `"Failed to set supported hardware"` 并 unwind 至 `0x…73070`，不注册 cpufreq-dt；`platform_device_register_full("cpufreq-dt")` 在 `0x…7303c`，仅 CPU 循环结束后到达。
+  - OPP core：`_of_add_opp_table_v2`（`0x…84bdac4`–`0x…84bdb78`）中 `supported_hw==NULL` 时凡带 `opp-supported-hw` 节点一律剔除、仅留无属性节点；注册 mask 时无属性节点仍接受且要求某 `(mask[i]&bit[i])!=0`；命名电压回退 `opp-microvolt-<name>`→`opp-microvolt`。五种模拟组合中仅 **mask 未注册 + b1** 能由无属性节点得到干净九档；mask 1/2/8 会多纳入匹配节点而超过九档。38 节点 DTB 位图无法离线取得，最终证明需目标 DTB。
+  - NVMEM：`nvmem_cell_read` 按 `cell->bytes`（speed 为 2）分配（含 `__GFP_ZERO`）并读 2 字节；probe `ldr w1,[x20]` 读 4 字节 = 超越声明长度的**逻辑越界读**（忽略 `&len`），多出 2 字节仍在同一 slab 对象内，不必然是故障/缺页；风险是高 2 字节非零会落空比较而走默认 mask=8。不要把该读法抄进新 HAL。
+  - 源码家族：与 AvaotaSBC/linux `sun50iw9_nvmem_xlate` 同血缘（SID `0x20`→`<<5`、`0x28`→`&0x3ff`、两 setter），但常量集、`a/b/c` 条件后缀命名、`{0,1,2,8}` 掩码、DEFER 分类与逐 CPU setter 循环均不同，**不是同一实现**；offset 相同不构成源码匹配。
+  - 仍开放：38 节点字面 DTB 位图、live `sunxi_get_soc_ver()&7`、任何速率级证明。CPU 服务保持 `POLICY_ONLY`、`hardware_applied=0`，所有 DVFS 写禁用。
 
 **最新增量：stock kernel ELF 与 cpufreq driver 初步反汇编（2026-11-25）：**
 - reports 分支已上传 `rg34xx-boot-p4-verified.json`：解压内核 17,461,256 bytes，SHA-256 `39cf8c3eb9a75ff0eda51b4074cd65860c5aa5386093bcaf69339819421d84b7`，前 16 位与公开 BaseOS V1.0.6 RG34XX survey 的 SHA 前缀一致；aligned GNU notes 位于 `0x9082b8` 和 `0xc8fc50`，后者为运行内核 Build ID。
