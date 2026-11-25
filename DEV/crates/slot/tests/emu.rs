@@ -284,6 +284,117 @@ fn spawn_probe(cost: Duration) -> (EmuHandle, Arc<Mutex<Vec<bool>>>) {
     (emu, log)
 }
 
+/// A core that records the mask the emu thread actually hands it, so the
+/// platform → `frame_input` → core path can be asserted end to end.
+struct InputProbe {
+    inner: MockCore,
+    seen: Arc<Mutex<Vec<u16>>>,
+}
+
+impl RetroCore for InputProbe {
+    fn load(&mut self, rom: &Path) -> Result<(), CoreError> {
+        self.inner.load(rom)
+    }
+    fn run_frame(&mut self, input: ButtonMask) {
+        self.seen.lock().expect("the input log").push(input.0);
+        self.inner.run_frame(input);
+    }
+    fn video_xrgb8888(&self) -> &[u8] {
+        self.inner.video_xrgb8888()
+    }
+    fn take_audio(&mut self) -> Vec<i16> {
+        self.inner.take_audio()
+    }
+    fn serialize(&mut self) -> Result<Vec<u8>, CoreError> {
+        self.inner.serialize()
+    }
+    fn unserialize(&mut self, data: &[u8]) -> Result<(), CoreError> {
+        self.inner.unserialize(data)
+    }
+    fn save_ram(&self) -> Option<Vec<u8>> {
+        self.inner.save_ram()
+    }
+    fn load_save_ram(&mut self, data: &[u8]) -> Result<(), CoreError> {
+        self.inner.load_save_ram(data)
+    }
+    fn av_info(&self) -> AvInfo {
+        self.inner.av_info()
+    }
+}
+
+fn spawn_input_probe() -> (EmuHandle, Arc<Mutex<Vec<u16>>>) {
+    let mut sink = StubSink::new();
+    sink.open(32_768).expect("the stub refused to open");
+    drain(sink.clone());
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let core = Box::new(InputProbe {
+        inner: MockCore::new(),
+        seen: seen.clone(),
+    });
+    let emu = EmuHandle::spawn(core, PathBuf::from("mock"), sink.ring(), None, None);
+    assert!(
+        wait_for(|| emu.state() == CoreState::Ready),
+        "the core never finished loading"
+    );
+    (emu, seen)
+}
+
+/// Run a few frames with `mask` held and return the masks the core saw.
+fn masks_the_core_saw(emu: &EmuHandle, seen: &Arc<Mutex<Vec<u16>>>, mask: u16) -> Vec<u16> {
+    emu.set_input(ButtonMask(mask));
+    emu.set_speed(Speed::Normal);
+    std::thread::sleep(Duration::from_millis(60));
+    seen.lock().expect("the input log").clear();
+    std::thread::sleep(Duration::from_millis(150));
+    let held = seen.lock().expect("the input log").clone();
+    assert!(!held.is_empty(), "the core never ran a frame");
+    held
+}
+
+#[test]
+fn a_direct_xy_platform_hands_x_and_y_to_the_core() {
+    // The Super Famicom's session opens the core this way: X/Y are its own
+    // buttons, not the turbo keys.
+    let (emu, seen) = spawn_input_probe();
+    emu.set_direct_xy(true);
+    let held = masks_the_core_saw(&emu, &seen, ButtonMask::X | ButtonMask::Y);
+    let xy = ButtonMask::X | ButtonMask::Y;
+    for mask in held {
+        assert_eq!(mask & xy, xy, "a frame dropped the SFC X/Y");
+        assert_eq!(
+            mask & (ButtonMask::A | ButtonMask::B),
+            0,
+            "the turbo remap turned X/Y into A/B"
+        );
+    }
+}
+
+#[test]
+fn a_turbo_platform_still_turns_x_and_y_into_a_and_b() {
+    // The Famicom and the Game Boys keep X/Y as the auto-fire keys.
+    let (emu, seen) = spawn_input_probe();
+    emu.set_direct_xy(false);
+    emu.set_turbo(true);
+    let held = masks_the_core_saw(&emu, &seen, ButtonMask::X | ButtonMask::Y);
+    let xy = ButtonMask::X | ButtonMask::Y;
+    assert!(
+        held.iter().all(|mask| mask & xy == 0),
+        "X/Y leaked through to the turbo core"
+    );
+    assert!(
+        held.iter().any(|mask| mask & ButtonMask::A != 0),
+        "no A pulse from X"
+    );
+    assert!(
+        held.iter().any(|mask| mask & ButtonMask::B != 0),
+        "no B pulse from Y"
+    );
+    assert!(
+        held.iter().any(|mask| mask & (ButtonMask::A | ButtonMask::B) == 0),
+        "the auto-fire never released"
+    );
+}
+
 #[test]
 fn every_speed_publishes_the_frame_the_core_last_ran() {
     let emu = spawn();

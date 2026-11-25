@@ -39,6 +39,9 @@ impl Cart {
             // Game Boy reader would only invent mojibake. The shelf falls
             // back to the file name.
             Platform::Fc | Platform::Sfc | Platform::Md => {}
+            // 街机 / NeoGeo 的"ROM"是 ZIP 压缩包，不是卡带：里面没有可打印的
+            // 标题头，解压去猜游戏名只会写出乱码。名字一律取文件名。
+            Platform::Arcade | Platform::Neogeo => {}
         }
     }
 }
@@ -73,15 +76,19 @@ pub fn scan(root: &Path) -> Result<Vec<Cart>, StoreError> {
         carts.len(),
         root.join("Games").display()
     );
-    // The report promises what the scan looks for. Deriving both lines from
-    // `Platform::ALL` keeps that promise true when a machine is added, where a
-    // hand-written list silently goes stale.
-    let expected: Vec<String> = Platform::ALL
+    // The report promises what the scan looks for. Deriving both lines from the
+    // same platform list the collector walks keeps that promise true when a
+    // machine is added, where a hand-written list silently goes stale.
+    //
+    // 街机 / NeoGeo 只有装了平台包才在这里出现：日志必须如实反映"没扫描"，
+    // 否则用户会以为游戏丢在 Games/Arcade 里而扫描器视而不见。
+    let scanned = crate::platform_packs::available_platforms(root);
+    let expected: Vec<String> = scanned
         .iter()
         .map(|platform| format!("Games/{}", platform.dir_name()))
         .collect();
     let mut extensions: Vec<&str> = Vec::new();
-    for platform in Platform::ALL {
+    for platform in &scanned {
         for extension in platform.extensions() {
             if !extensions.contains(extension) {
                 extensions.push(extension);
@@ -141,11 +148,37 @@ fn collect(root: &Path) -> Result<Vec<Cart>, StoreError> {
     let cached = crate::cart_meta::read_all(root);
     let mut carts = Vec::new();
     let mut nested_listings: HashMap<PathBuf, HashMap<String, String>> = HashMap::new();
-    for platform in Platform::ALL {
+    // 平台包的激活门就在这里：`available_platforms` 只在内置六台之外多出
+    // 已激活的 Arcade/Neogeo，所以"没装包"连目录都不会被 `read_dir`。
+    for platform in crate::platform_packs::available_platforms(root) {
         let dir = root.join("Games").join(platform.dir_name());
         let entries = rom_entries(&dir);
         let labels_dir = root.join("Labels").join(platform.dir_name());
         let labels = listing(&labels_dir);
+        // 街机 / NeoGeo 用 DAT 决定"哪一条是游戏"、标题与机板。其它机种根本不
+        // 读 DAT（hosted == false），下面的每个分支都会走"没有 entry"的老路径。
+        let hosted = crate::platform_packs::is_hosted(platform);
+        let catalog = if hosted {
+            crate::arcade_dat::Catalog::load(root, platform)
+        } else {
+            crate::arcade_dat::Catalog::empty(platform)
+        };
+        // 判断"这个 clone 的母版在不在卡上"必须先知道目录里有哪些 set：
+        // 只装了一个 clone 的用户仍然要能玩到它，不能静默吞掉。
+        let sets: std::collections::BTreeSet<String> = if catalog.is_empty() {
+            std::collections::BTreeSet::new()
+        } else {
+            entries
+                .iter()
+                .filter(|rom| !is_hidden(rom) && platform.accepts(rom) && rom.is_file())
+                .filter_map(|rom| {
+                    rom.file_stem()
+                        .and_then(|stem| stem.to_str())
+                        .map(|stem| stem.to_ascii_lowercase())
+                })
+                .collect()
+        };
+        let mut warned_orphan = false;
         for rom in entries {
             if is_hidden(&rom) || !platform.accepts(&rom) || !rom.is_file() {
                 continue;
@@ -153,20 +186,87 @@ fn collect(root: &Path) -> Result<Vec<Cart>, StoreError> {
             let Some(stem) = rom.file_stem().and_then(|s| s.to_str()) else {
                 continue;
             };
-            let nested_labels = rom.parent().and_then(|parent| parent.strip_prefix(&dir).ok())
+            // 卡上的 zip 名大小写不由我们决定（exFAT/Windows 大小写不敏感），
+            // 先按 DAT 的原样查，再退回小写。
+            let entry = if catalog.is_empty() {
+                None
+            } else {
+                catalog
+                    .get(stem)
+                    .or_else(|| catalog.get(&stem.to_ascii_lowercase()))
+            };
+            if let Some(entry) = entry {
+                // BIOS 集合不是游戏，不占书架。
+                if entry.is_bios {
+                    continue;
+                }
+                if !entry.parent.is_empty() {
+                    if sets.contains(&entry.parent.to_ascii_lowercase()) {
+                        // 母版在卡上：clone 收进"版本"子菜单，由母版代表。
+                        continue;
+                    }
+                    if !warned_orphan {
+                        // 每台机种只提醒一次：一个只拷了 clone 的库可能上千条，
+                        // 逐条 eprintln 会把日志刷满。
+                        warned_orphan = true;
+                        eprintln!(
+                            "slot: scan: {}/{} 是 {} 的 clone，但母版不在 Games/{}，按独立条目显示",
+                            platform.dir_name(),
+                            stem,
+                            entry.parent,
+                            platform.dir_name()
+                        );
+                    }
+                }
+            }
+            // 街机的标题来自 DAT；缺 DAT 或缺这一条时退化成文件名，和内置机种
+            // "没有标题就显示文件名"的既有行为一致。
+            let title = match entry {
+                Some(entry) if !entry.title.trim().is_empty() => entry.title.clone(),
+                _ if hosted => stem.to_string(),
+                _ => String::new(),
+            };
+            // 贴纸（cart 封面）查找顺序，stem 与 title 走**同一套**规则：
+            //   1. `Labels/<dir>/<相对目录>/<stem>.png`
+            //   2. `Labels/<dir>/<相对目录>/<title>.png`
+            //   3. `Labels/<dir>/<stem>.png`
+            //   4. `Labels/<dir>/<title>.png`
+            // 同一层级里 stem 优先：两套命名并存时以文件名为准，更可预测。
+            let folder = rom.parent().and_then(|parent| parent.strip_prefix(&dir).ok())
                 .filter(|rel| !rel.as_os_str().is_empty()).map(|rel| labels_dir.join(rel));
-            let label_name = format!("{stem}.png").to_lowercase();
-            let label = nested_labels
-                .and_then(|folder| {
+            let mut nested = |name: &str| -> Option<PathBuf> {
+                folder.as_ref().and_then(|folder| {
                     // Thousands of ROMs often share one deep Games/ subfolder.
                     // Listing the matching Labels/ subfolder once per folder,
                     // instead of once per ROM, is the difference between a
                     // large exFAT card scanning in seconds and in tens of
                     // seconds.
-                    let entries = nested_listings.entry(folder.clone()).or_insert_with(|| listing(&folder));
-                    entries.get(&label_name).map(|name| folder.join(name))
+                    let entries = nested_listings.entry(folder.clone()).or_insert_with(|| listing(folder));
+                    entries.get(name).map(|hit| folder.join(hit))
                 })
-                .or_else(|| labels.get(&label_name).map(|name| labels_dir.join(name)));
+            };
+            let top = |name: &str| -> Option<PathBuf> {
+                labels.get(name).map(|hit| labels_dir.join(hit))
+            };
+            let stem_name = format!("{stem}.png").to_lowercase();
+            // 街机额外允许按标题命名的贴纸（`<title>.png`）；标题不能当文件名时
+            // （含 `/` `\` `:`、过长）根本不查。
+            let title_name = (hosted && title != stem && label_title_usable(&title))
+                .then(|| format!("{}.png", title.to_lowercase()));
+            let mut label = nested(&stem_name);
+            if label.is_none() {
+                if let Some(name) = &title_name {
+                    label = nested(name);
+                }
+            }
+            if label.is_none() {
+                label = top(&stem_name);
+            }
+            if label.is_none() {
+                if let Some(name) = &title_name {
+                    label = top(name);
+                }
+            }
             let shell = shells.get(&crate::cart_shell::key(stem)).copied();
             let shell = colours
                 .get(&crate::cart_color::key(platform, stem))
@@ -184,7 +284,7 @@ fn collect(root: &Path) -> Result<Vec<Cart>, StoreError> {
             let mut cart = Cart {
                 platform,
                 stem: stem.to_string(),
-                title: String::new(),
+                title,
                 code: String::new(),
                 shell,
                 label,
@@ -214,6 +314,19 @@ fn collect(root: &Path) -> Result<Vec<Cart>, StoreError> {
         (a.platform as u8, sort_key(&a.stem)).cmp(&(b.platform as u8, sort_key(&b.stem)))
     });
     Ok(carts)
+}
+
+/// 标题能不能直接当文件名用。
+///
+/// FBNeo 的标题里有 `Street Fighter II: The World Warrior`、`Cadillacs and
+/// Dinosaurs` 这种带冒号/斜杠的写法；冒号在 FAT/exFAT 上是非法字符，斜杠会被
+/// 当成目录分隔符。这类标题干脆不做贴纸查找，回退到 stem 命名的贴纸。
+fn label_title_usable(title: &str) -> bool {
+    !title.trim().is_empty()
+        && title.len() <= 120
+        && !title.contains('/')
+        && !title.contains('\\')
+        && !title.contains(':')
 }
 
 pub fn listing(dir: &Path) -> HashMap<String, String> {

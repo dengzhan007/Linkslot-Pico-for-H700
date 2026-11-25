@@ -5,8 +5,10 @@
 - 许可证：GPL-2.0（含 Gambatte；另有 MPL-2.0/LGPL/MIT/Expat 片段，见
   `licenses/armgba-*`）
 - 交付方式：LSP 扩展包，不随基础卡包分发；id 为 `armgba`，芯片丝印 `armGBA`。
-- 联机：不支持。它的联机是 RetroArch netplay 自己的一套，linkSlot 的
-  电缆/netpacket 会话不接；要联机请用 mGBA / gpSP。
+- 联机：上游 libretro 核心通过 `SET_NETPACKET_INTERFACE` 提供 netpacket（协议
+  `armGBA link 3`），`Link Mode = Separate` 时支持 Link Cable / Wireless Adapter；
+  linkSlot 的 2 人联机会话走这条接口（Together 不接，两端需同一构建）。联机游戏
+  沿用 gpSP 的 carried 白名单；未验证游戏（如马车）会被直接拒绝，请改用 mGBA。
 
 ## 构建（bullseye arm64 容器）
 

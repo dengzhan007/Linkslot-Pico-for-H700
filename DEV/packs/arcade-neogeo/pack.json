@@ -1,0 +1,50 @@
+{
+  "schema": 2,
+  "kind": "platform",
+  "id": "arcade-neogeo",
+  "name": "街机 & NeoGeo · FBNeo",
+  "version": "1.0.0",
+  "min_app": "1.1.0",
+  "extension_api": 1,
+  "license": "Non-commercial",
+  "source": "https://github.com/libretro/FBNeo/tree/3f0de7fefbb7cc4b46e832647215cbe41eaf37b0",
+  "platforms": [
+    {
+      "id": "arcade",
+      "name": "街机 / ARCADE",
+      "folder": "Games/Arcade",
+      "rom_extensions": ["zip"],
+      "scanner": "arcade_zip_v1",
+      "ui": "arcade_cabinet_v1",
+      "ui_profile": "arcade",
+      "input": "arcade_6button_v1",
+      "core_ids": ["fbneo"],
+      "default_core": "fbneo",
+      "bios": []
+    },
+    {
+      "id": "neogeo",
+      "name": "NeoGeo / NEOGEO",
+      "folder": "Games/NeoGeo",
+      "rom_extensions": ["zip"],
+      "scanner": "arcade_zip_v1",
+      "ui": "arcade_cabinet_v1",
+      "ui_profile": "neogeo",
+      "input": "arcade_6button_v1",
+      "core_ids": ["fbneo"],
+      "default_core": "fbneo",
+      "bios": ["neogeo.zip"]
+    }
+  ],
+  "cores": [
+    {
+      "id": "fbneo",
+      "dylib": "fbneo_libretro.so",
+      "display": "FBNeo",
+      "license": "Non-commercial",
+      "source": "https://github.com/libretro/FBNeo/tree/3f0de7fefbb7cc4b46e832647215cbe41eaf37b0",
+      "system_dir": "BIOS/fbneo"
+    }
+  ],
+  "files": []
+}

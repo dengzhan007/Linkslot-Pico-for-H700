@@ -9567,28 +9567,64 @@
   }
 
   function bindLogLevel() {
+    var select = $('logLevel');
     var button = $('saveLogLevel');
-    if (!button) return;
-    button.addEventListener('click', function () {
+    var status = $('logLevelStatus');
+    if (!select && !button) return;
+
+    function levelLabel(level) {
+      if (!select) return level;
+      for (var index = 0; index < select.options.length; index += 1) {
+        if (select.options[index].value === level) {
+          return select.options[index].textContent;
+        }
+      }
+      return level;
+    }
+
+    function apply(level) {
+      state.logLevel = level;
+      if (select) select.value = level;
+    }
+
+    function setStatus(text) {
+      if (status) status.textContent = text;
+    }
+
+    // A change saves at once: the old separate button was easy to miss, and
+    // an unsaved select looked like it had taken effect.
+    function save() {
+      if (!select) return;
+      var level = select.value;
       if (!isWritable()) {
+        setStatus(t('web.sync.readonly_level'));
+        apply(state.logLevel);
         toast(t('web.sync.readonly_level'), 'warn');
         return;
       }
-      var level = $('logLevel').value;
-      button.disabled = true;
+      setStatus(t('web.sync.levelSaving'));
+      if (button) button.disabled = true;
+      select.disabled = true;
       apiWrite('/api/log/level', { level: level })
         .then(function (result) {
-          state.logLevel = (result && result.level) || level;
-          toast(t('web.sync.level_saved', { level: state.logLevel }), 'ok');
-          loadSync();
+          var saved = (result && result.level) || level;
+          apply(saved);
+          setStatus(t('web.sync.level_saved', { level: levelLabel(saved) }));
+          toast(t('web.sync.level_saved', { level: levelLabel(saved) }), 'ok');
         })
         .catch(function (error) {
+          setStatus(t('web.sync.level_failed') + ': ' + error.message);
+          apply(state.logLevel);
           showError(error, t('web.sync.level_failed'));
         })
         .then(function () {
-          button.disabled = !isWritable();
+          select.disabled = false;
+          if (button) button.disabled = !isWritable();
         });
-    });
+    }
+
+    if (select) select.addEventListener('change', save);
+    if (button) button.addEventListener('click', save);
   }
 
   function bindSaveUpload() {
@@ -10098,6 +10134,37 @@
 
   function bindLogExport() {
     if ($('exportLogs')) $('exportLogs').addEventListener('click', exportLogs);
+    if ($('clearLogs')) $('clearLogs').addEventListener('click', clearLogs);
+  }
+
+  // Truncate every stored log in one go.  The files stay so the running
+  // processes keep appending; the server reports how many were cleared.
+  function clearLogs() {
+    var status = $('clearLogsStatus');
+    if (!window.confirm(t('web.about.logClearConfirm'))) return;
+    if (status) status.textContent = t('web.about.logClearBusy');
+    apiWrite('/api/logs/clear')
+      .then(function (body) {
+        var files = body && typeof body.cleared === 'number' ? body.cleared : 0;
+        var freed = body && typeof body.freed === 'number' ? body.freed : 0;
+        var failed = body && typeof body.failed === 'number' ? body.failed : 0;
+        if (status) {
+          status.textContent = failed
+            ? t('web.about.logClearPartial', {
+                files: files,
+                failed: failed,
+                freed: fmtBytes(freed)
+              })
+            : t('web.about.logClearDone', { files: files, freed: fmtBytes(freed) });
+        }
+        renderSyncLog([]);
+        loadRecentLog();
+      })
+      .catch(function (error) {
+        if (status) {
+          status.textContent = t('web.about.logClearFailed', { message: error.message });
+        }
+      });
   }
 
   function start() {

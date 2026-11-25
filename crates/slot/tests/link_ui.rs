@@ -1561,6 +1561,25 @@ fn a_cart_gpsp_cannot_link_is_refused_on_gpsp_and_carried_by_mgbas_cable() {
     };
     assert_eq!(refused(Core::Gpsp, false), Some(Toast::NoLink));
     assert_eq!(refused(Core::Mgba, true), None);
+    assert_eq!(
+        refused(Core::Armgba, false),
+        Some(Toast::NoLink),
+        "armGBA must use gpSP's carried whitelist"
+    );
+}
+
+#[test]
+fn armgba_refuses_mario_kart_until_it_is_in_the_carried_list() {
+    let d = common::tmp_root_with_carts(&["Mario Kart", "Zzz"]);
+    common::write_retail_header(&d, "Mario Kart", "MARIO KART", "AMKE");
+    let mut app = seated_on(&d, Core::Armgba);
+    app.apply(Action::GameMenu);
+    assert!(
+        !app.game_menu_open(),
+        "armGBA offered a link for Mario Kart"
+    );
+    assert_eq!(app.toast(), Some(Toast::NoLink));
+    assert!(!app.game_can_link());
 }
 
 #[test]
@@ -1581,25 +1600,71 @@ fn a_wireless_adapter_cart_on_mgba_still_says_to_switch_to_gpsp() {
 }
 
 #[test]
-fn armgba_is_told_its_core_has_no_linkslot_link() {
+fn armgba_reloads_into_its_netpacket_link_before_pairing() {
+    let _link = common::link_port_lock();
+    let (mut app, _d) = playing_on(Core::Armgba);
+    app.apply(Action::GameMenu);
+    assert_eq!(app.game_menu(), Some(GameMenu::Pick(LinkRow::Host)));
+    app.apply(Action::GbaDown(Btn::A));
+    assert_eq!(
+        app.take_link_reload(),
+        Some(("Emerald".to_string(), "cable")),
+        "armGBA started the link without reloading with its Link Mode/port options"
+    );
+    assert_eq!(
+        app.armgba_link(),
+        Some(LinkKind::Cable),
+        "the reload did not carry the armGBA link port"
+    );
+    assert!(
+        matches!(app.game_menu(), Some(GameMenu::Working { .. })),
+        "the reload did not leave the link screen working: {:?}",
+        app.game_menu()
+    );
+}
+
+#[test]
+fn armgba_offers_its_netpacket_link() {
     let d = common::tmp_root_with_carts(&["Emerald", "Zzz"]);
     common::write_retail_header(&d, "Emerald", "POKEMON EMER", "BPEE");
     let mut app = seated_on(&d, Core::Armgba);
     app.apply(Action::GameMenu);
     assert!(
-        !app.game_menu_open(),
-        "armGBA opened a link screen its transport cannot drive"
+        app.game_menu_open(),
+        "armGBA refused a link its netpacket interface can carry"
     );
     assert_eq!(
         app.toast(),
-        Some(Toast::CoreNoLink),
-        "armGBA was not told its core has no linkslot link"
+        None,
+        "armGBA opened the link screen but also raised a refusal"
     );
     assert!(
         matches!(app.phase(), Phase::Playing { .. }),
-        "the refusal took the game away: {:?}",
+        "opening the link screen took the game away: {:?}",
         app.phase()
     );
+    assert!(
+        app.game_can_link(),
+        "the armGBA game is not announced as linkable"
+    );
+}
+
+#[test]
+fn armgba_does_not_reload_when_the_port_is_already_loaded() {
+    let _link = common::link_port_lock();
+    let (mut app, _d) = playing_on(Core::Armgba);
+    app.set_link_loaded("cable");
+    app.apply(Action::GameMenu);
+    assert_eq!(app.game_menu(), Some(GameMenu::Pick(LinkRow::Host)));
+    app.apply(Action::GbaDown(Btn::A));
+    assert_eq!(
+        app.take_link_reload(),
+        None,
+        "armGBA reloaded a core already open on the same netpacket port"
+    );
+    assert!(reaches_waiting(&mut app), "the link did not start");
+    app.apply(Action::GbaDown(Btn::B));
+    settle(&mut app);
 }
 
 /// mGBA's link mode carries the cable only. Offering the SELECT switch here

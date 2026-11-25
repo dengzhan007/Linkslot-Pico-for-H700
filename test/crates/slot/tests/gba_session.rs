@@ -83,13 +83,19 @@ fn only_a_cart_whose_core_can_link_is_announced() {
     plain.set_core(slot_store::Core::Armgba);
     assert!(
         !plain.game_can_link(),
-        "armGBA has no linkslot cable/netpacket transport"
+        "a plain cart must not link on armGBA: it starts from gpSP's carried whitelist"
     );
 
-    // A Pokémon card is a wireless cart: gpSP can carry it.
+    // A Pokémon card is a wireless cart: gpSP can carry it.  armGBA starts
+    // from the same carried list, so this one is allowed on both.
     let mut wireless = common::app_playing_in(d.path(), "POKEMON Emerald");
     wireless.set_core(slot_store::Core::Gpsp);
     assert!(wireless.game_can_link(), "Pokémon cannot link on gpSP");
+    wireless.set_core(slot_store::Core::Armgba);
+    assert!(
+        wireless.game_can_link(),
+        "a carried Pokémon cart must link on armGBA"
+    );
 }
 
 #[test]
@@ -115,6 +121,36 @@ fn following_a_cart_adopts_the_hosts_core() {
         chosen.get("Emerald"),
         Some(&slot_store::Core::Gpsp),
         "the joiner kept its own core instead of the host's"
+    );
+}
+
+#[test]
+fn following_a_cart_adopts_armgba_when_the_host_uses_it() {
+    let d = common::tmp_root_with_carts(&["Fusion", "Emerald"]);
+    let mut a = common::app_playing_in(d.path(), "Fusion");
+    a.set_core(slot_store::Core::Armgba);
+    a.begin_link(0);
+
+    a.ask_follow(
+        "Emerald",
+        "Emerald",
+        slot_store::Core::Armgba.index() as u8,
+    );
+    a.apply(Action::GbaDown(Btn::A));
+    assert_eq!(a.take_follow_answer(), Some(FollowAnswer::Accept));
+    for _ in 0..600 {
+        a.update(1.0 / 60.0);
+        if a.seated_cart().map(|cart| cart.stem.as_str()) == Some("Emerald")
+            && matches!(a.phase(), Phase::Inserting { .. })
+        {
+            break;
+        }
+    }
+    let chosen = slot_store::read_selected_cores(d.path());
+    assert_eq!(
+        chosen.get("Emerald"),
+        Some(&slot_store::Core::Armgba),
+        "the joiner did not adopt the host's armGBA core"
     );
 }
 

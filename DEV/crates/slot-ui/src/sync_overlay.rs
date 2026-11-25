@@ -7,6 +7,54 @@ use crate::plate::UndoFace;
 use crate::text;
 use crate::CartFace;
 
+/// The cloud-sync workbench: a translucent sheet, a cartridge dock, a cream
+/// sticker card for the remote side, a short transfer lane and a five-stage
+/// rail.  Everything here is rastered once at boot; the app only moves the
+/// finished faces around.
+pub const SHEET_W: u32 = 656;
+pub const SHEET_H: u32 = 440;
+pub const CLOUD_CARD_W: u32 = 172;
+pub const CLOUD_CARD_H: u32 = 110;
+pub const DOCK_W: u32 = 232;
+pub const DOCK_H: u32 = 16;
+pub const LANE_W: u32 = 142;
+pub const LANE_H: u32 = 10;
+pub const PACKET_W: u32 = 9;
+pub const PACKET_H: u32 = 13;
+pub const STAMP_PX: u32 = 52;
+pub const DOT_DONE_PX: u32 = 10;
+pub const DOT_ACTIVE_PX: u32 = 19;
+pub const DOT_PENDING_PX: u32 = 9;
+pub const DIRECTION_PX: u32 = 26;
+pub const CHIP_W: u32 = 64;
+pub const CHIP_H: u32 = 26;
+
+pub const SHEET_FILL: [u8; 4] = [0x1c, 0x1c, 0x22, 0x8f];
+/// Opaque panel colour for the active dot's cut-out ring.
+pub const SHEET_MASK: [u8; 4] = [0x1c, 0x1c, 0x22, 0xff];
+pub const SHEET_BORDER: [u8; 4] = [0x4d, 0x4d, 0x58, 0xff];
+pub const PAPER: [u8; 4] = [0xe8, 0xe2, 0xcd, 0xff];
+pub const PAPER_BORDER: [u8; 4] = [0xc9, 0xc3, 0xb4, 0xff];
+pub const STICKER_INK: [u8; 3] = [0x2e, 0x29, 0x22];
+pub const STICKER_DIM: [u8; 3] = [0x8c, 0x84, 0x72];
+pub const LANE_FILL: [u8; 4] = [0x14, 0x14, 0x18, 0xff];
+pub const LANE_EDGE: [u8; 4] = [0x3a, 0x3a, 0x44, 0xff];
+
+/// Which direction the transfer lane reads.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum Travel {
+    Left,
+    Right,
+}
+
+/// Which stage-rail dot to draw.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum StageDot {
+    Done,
+    Active,
+    Pending,
+}
+
 /// Where a transfer arrow points: up to the cloud (upload) or down to the
 /// cartridge (download).
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -20,7 +68,7 @@ const CLOUD_ASPECT: f32 = 1.5;
 /// Supersampling grid per pixel, so the round outlines stay smooth.
 const SAMPLES: u32 = 4;
 /// Status lines never shrink below this, however little room they are given.
-const MIN_PX: f32 = 12.0;
+const MIN_PX: f32 = 10.0;
 
 /// The cloud the cartridge syncs with. `px` is the cloud's height; the face
 /// comes out [`CLOUD_ASPECT`] times as wide.
@@ -43,9 +91,15 @@ pub fn arrow_face(dir: Arrow, px: f32) -> CartFace {
     }
 }
 
-/// One line of overlay text, shrunk to fit `max_w` (never below 12 px) and
+/// One line of overlay text, shrunk to fit `max_w` (never below 10 px) and
 /// trimmed to the ink so the caller can centre it by the face's own size.
 pub fn line_face(text: &str, max_w: f32, px: f32) -> UndoFace {
+    line_face_coloured(text, max_w, px, HUD_INK)
+}
+
+/// [`line_face`] with an explicit ink colour: the cloud sticker needs the
+/// dark paper ink, while the rail and header stay on the light HUD ink.
+pub fn line_face_coloured(text: &str, max_w: f32, px: f32, ink: [u8; 3]) -> UndoFace {
     let Some(font) = text::label_font() else {
         return empty();
     };
@@ -59,7 +113,7 @@ pub fn line_face(text: &str, max_w: f32, px: f32) -> UndoFace {
         .map_or((layout.px * 1.4).ceil(), |m| m.new_line_size.ceil())
         .max(1.0) as u32;
     let mut rgba = vec![0u8; (box_w * box_h * 4) as usize];
-    text::draw_centred(&mut rgba, box_w, box_h, &layout, HUD_INK);
+    text::draw_centred(&mut rgba, box_w, box_h, &layout, ink);
     trim(rgba, box_w, box_h)
 }
 

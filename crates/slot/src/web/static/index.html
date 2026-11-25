@@ -599,6 +599,14 @@
       <p id="exportLogsStatus" class="hint" role="status" data-i18n="web.about.logExportEmpty">尚未导出。</p>
     </section>
     <section class="card">
+      <h2 data-i18n="web.about.logClear">日志清理</h2>
+      <p class="hint" data-i18n="web.about.logClearHint">一键清空 Logs/ 下的全部日志（含 crash/）。清理后无法恢复；当前会话的新日志会继续写入。</p>
+      <div class="actions">
+        <button id="clearLogs" class="btn danger" type="button" data-i18n="web.about.logClearButton">一键清理日志</button>
+      </div>
+      <p id="clearLogsStatus" class="hint" role="status" data-i18n="web.about.logClearEmpty">尚未清理。</p>
+    </section>
+    <section class="card">
       <h2 data-i18n="web.sync.serviceLog">服务日志（最后 200 行）</h2>
       <div class="row-actions">
         <label for="logLevel" class="muted small" data-i18n="web.sync.logLevel">日志级别</label>
@@ -608,8 +616,9 @@
           <option value="info" data-i18n="web.sync.levelInfo">信息</option>
           <option value="debug" data-i18n="web.sync.levelDebug">调试（WiFi 详细）</option>
         </select>
-        <button class="btn ghost small" type="button" id="saveLogLevel" data-i18n="web.sync.saveLevel">保存级别</button>
+        <button class="btn small" type="button" id="saveLogLevel" data-i18n="web.sync.saveLevel">保存级别</button>
       </div>
+      <p id="logLevelStatus" class="hint" role="status" data-i18n="web.sync.logLevelAuto">切换后立即保存。</p>
       <p class="hint" data-i18n="web.sync.debugHint">调试级别会记录 WiFi 扫描、关联、DHCP 等细节，日志增长较快；排查完建议切回「信息」。</p>
       <pre class="log tall" id="syncLog" data-i18n="web.common.noLog">暂无日志</pre>
     </section>

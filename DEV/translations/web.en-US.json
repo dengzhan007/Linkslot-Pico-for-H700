@@ -5,6 +5,15 @@
     "web.about.embedded": "This page and its assets are embedded in the slot binary; no external fonts, scripts or CDN resources are loaded.",
     "web.about.license": "Licence",
     "web.about.licenseTail": ".",
+    "web.about.logClear": "Log cleanup",
+    "web.about.logClearBusy": "Clearing…",
+    "web.about.logClearButton": "Clear the logs",
+    "web.about.logClearConfirm": "Clear every log under Logs/? This cannot be undone.",
+    "web.about.logClearDone": "Cleared {files} log file(s), freed {freed}.",
+    "web.about.logClearEmpty": "Nothing cleared yet.",
+    "web.about.logClearFailed": "Clear failed: {message}",
+    "web.about.logClearHint": "Clear every log under Logs/ (including crash/). This cannot be undone; new lines from this session keep arriving.",
+    "web.about.logClearPartial": "Cleared {files} file(s), {failed} failed; freed {freed}.",
     "web.about.logExport": "Log export",
     "web.about.logExportButton": "Export the log",
     "web.about.logExportEmpty": "Nothing exported yet.",
@@ -239,6 +248,7 @@
     "web.sync.levelInfo": "Info",
     "web.sync.levelWarn": "Warning",
     "web.sync.logLevel": "Log level",
+    "web.sync.logLevelAuto": "Changes are saved immediately.",
     "web.sync.password": "Password",
     "web.sync.passwordTitle": "Leave empty to keep the current password",
     "web.sync.remoteRoot": "Remote root",
@@ -495,6 +505,7 @@
     "web.sync.saved": "WebDAV settings saved",
     "web.sync.save_failed": "Could not save the WebDAV settings",
     "web.sync.readonly_level": "The device is in a game or a sync, so the log level cannot be changed right now.",
+    "web.sync.levelSaving": "Saving the log level…",
     "web.sync.level_saved": "Log level saved: {level}",
     "web.sync.level_failed": "Could not save the log level",
     "web.mod.version_empty": "The mod version cannot be empty",
@@ -951,6 +962,8 @@
     "web.rom.sha256Copied": "SHA256 copied",
     "web.rom.sha256Hint": "SHA256 of the ROM content; useful for verifying a version or matching achievements.",
     "web.common.search": "Search",
-    "web.common.clearSearch": "Clear search"
+    "web.common.clearSearch": "Clear search",
+    "web.about.packsKindPlatform": "Platform",
+    "web.about.packsFilterPlatform": "Platforms"
   }
 }

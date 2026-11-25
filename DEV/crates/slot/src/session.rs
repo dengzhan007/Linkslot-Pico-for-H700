@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use slot_input::{Action, Btn, Gestures, Millis, RawEvent};
 use slot_retro::{LinkChannel, Rumble, NETPACKET_RELIABLE};
-use slot_store::{Controls, Platform, Shortcut, ShortcutKeys};
+use slot_store::{Controls, Core, Platform, Shortcut, ShortcutKeys};
 use slot_ui::FfState;
 
 pub const RUMBLE_MIN_MS: Millis = 100;
@@ -13,10 +13,11 @@ use crate::app::{App, FollowAnswer, Phase};
 use crate::audio::{opened_sink, AudioSink, Ring, Sfx};
 use crate::cable::{Hello, Pairing, HELLO_VERSION};
 use crate::rom_id::Digest;
-use crate::core::open_core;
+use crate::core::{open_core_with_system_dir, LinkSetup};
+use crate::link_kind::LinkKind;
 use crate::emu::{CoreState, EmuHandle, Speed};
 use crate::frames::FrameRef;
-use crate::input::Pad;
+use crate::input::{Pad, PadLayout};
 use crate::persist;
 use crate::prefetch::Prefetch;
 
@@ -254,6 +255,12 @@ impl Session {
         self.emu.as_ref().map_or(0, EmuHandle::frames_taken)
     }
 
+    /// Whether the hold-to-rewind key is down.  The emu thread is told this
+    /// every frame; exposed for tests and diagnostics.
+    pub fn rewinding(&self) -> bool {
+        self.rewinding
+    }
+
     pub fn game_visible(&self) -> bool {
         self.app.game_visible()
     }
@@ -280,13 +287,18 @@ impl Session {
                     RawEvent::Down(btn @ (Btn::L2 | Btn::R2)) => {
                         self.app.set_select_held(true);
                         self.app.apply(Action::GbaDown(btn));
-                        self.pad.apply(Action::GbaUp(btn));
+                        self.pad.apply_for(Action::GbaUp(btn), self.pad_layout());
                         continue;
                     }
                     RawEvent::Up(btn @ (Btn::L2 | Btn::R2)) => {
+                        // Do not swallow the release.  A shoulder that was
+                        // already held (rewind / fast-forward) before SELECT
+                        // armed the chord never came through this branch on
+                        // its press, so the gesture layer still needs the
+                        // release to stop it.  Falling through (no `continue`)
+                        // lets the generic release path stop the gesture.
                         self.app.apply(Action::GbaUp(btn));
-                        self.pad.apply(Action::GbaUp(btn));
-                        continue;
+                        self.pad.apply_for(Action::GbaUp(btn), self.pad_layout());
                     }
                     _ => {}
                 }
@@ -366,6 +378,15 @@ impl Session {
             self.controls = slot_store::read_controls(&self.root);
         }
         self.sync_pad();
+    }
+
+    /// 当前核心用哪张按键表：只有 FBNeo（街机 / NeoGeo）走六键布局，
+    /// 其余核心仍是卡带的同名映射。
+    fn pad_layout(&self) -> PadLayout {
+        match self.app.core() {
+            slot_store::Core::Fbneo => PadLayout::Arcade,
+            _ => PadLayout::Default,
+        }
     }
 
     fn sync_pad(&mut self) {
@@ -465,10 +486,10 @@ impl Session {
             self.pad.clear();
         } else if self.app.takes_from_the_game(action) {
             if let Action::GbaDown(btn) | Action::GbaUp(btn) = action {
-                self.pad.apply(Action::GbaUp(btn));
+                self.pad.apply_for(Action::GbaUp(btn), self.pad_layout());
             }
         } else {
-            self.pad.apply(action);
+            self.pad.apply_for(action, self.pad_layout());
         }
         self.sync_rumble();
     }
@@ -905,27 +926,53 @@ fn run_marker_text(cart: Option<&str>, linked: bool) -> Option<String> {
         self.app.set_platform(platform);
         self.app
             .set_video_mode(crate::video_mode::video_mode_for(&self.root, stem));
-        self.app.set_link_loaded(serial);
         let resume = (!self.app.starting_clean())
             .then(|| persist::read_resume(&self.root, platform, core, stem))
             .flatten();
         launch("resume state read");
         let player = self.app.link_player();
+        // mGBA's cable needs the player before load; armGBA's netpacket link
+        // needs Link Mode Separate and the port before load. gpSP needs
+        // neither (its serial option is applied by `apply_core_options`).
+        let link = match core {
+            Core::Mgba => player.map(|player| LinkSetup::Mgba { player }),
+            Core::Armgba => self.app.armgba_link().map(|kind| LinkSetup::Armgba {
+                wireless: kind == LinkKind::Wireless,
+            }),
+            _ => None,
+        };
+        // What the app compares a later pick against: the cart's serial for
+        // gpSP, the netpacket port for armGBA, and the plain serial otherwise.
+        let loaded = match link {
+            Some(LinkSetup::Armgba { wireless }) => {
+                if wireless {
+                    "wireless"
+                } else {
+                    "cable"
+                }
+            }
+            _ => serial,
+        };
+        self.app.set_link_loaded(loaded);
         crate::link_log::debug(format!(
-            "link: opening {stem:?} core={} platform={platform:?} serial={serial} player={player:?} clean={}",
+            "link: opening {stem:?} core={} platform={platform:?} serial={serial} loaded={loaded} player={player:?} link={link:?} clean={}",
             core.as_str(),
             self.app.starting_clean()
         ));
         let palette = crate::core::palette_for(self.app.gb_palette(), platform, &rom, player);
         self.app.set_palette_live(palette.is_some());
-        let opened = open_core(
+        // 街机的 BIOS 在 `BIOS/fbneo/`：用 `launch_plan` 算出的 system 目录覆盖
+        // 默认的 `BIOS/`；其余机种拿到 `None`，行为与以前一致。
+        let system_dir = crate::arcade::launch_plan(&self.root, platform, stem, "").system_dir;
+        let opened = open_core_with_system_dir(
             &self.root,
             core,
             platform,
             serial,
             self.app.colour_correction(),
             palette,
-            player,
+            link,
+            system_dir.as_deref(),
         );
         self.app.set_named_core(opened.named);
         launch("core opened");
@@ -937,7 +984,14 @@ fn run_marker_text(cart: Option<&str>, linked: bool) -> Option<String> {
             None => EmuHandle::spawn_with_cheevos(opened.core, rom, ring, sav, resume, rules),
         };
         emu.set_volume(self.app.output_volume());
-        emu.set_direct_xy(platform == Platform::Md);
+        // The Super Famicom has real X/Y buttons, so they go to the core like
+        // the Mega Drive's six-button X/Z instead of becoming turbo A/B.  Only
+        // the Famicom (and the Game Boys) still use X/Y as the turbo keys.
+        let direct_xy = matches!(platform, Platform::Md | Platform::Sfc);
+        emu.set_direct_xy(direct_xy);
+        if direct_xy {
+            eprintln!("slot: input: X/Y reach the core as real buttons");
+        }
         emu.set_driven(self.driven);
         self.app.set_snapshot(Box::new(emu.snapshot()));
         self.emu = Some(emu);
@@ -1579,7 +1633,10 @@ fn run_marker_text(cart: Option<&str>, linked: bool) -> Option<String> {
     }
 
     fn reload_for_link(&mut self, stem: &str, serial: &'static str) {
-        eprintln!("slot: link: loading {stem} again with gpsp_serial={serial}");
+        eprintln!(
+            "slot: link: loading {stem} again with serial={serial} armgba={:?}",
+            self.app.armgba_link()
+        );
         if self.emu.is_some() {
             self.app.flush_resume();
         }

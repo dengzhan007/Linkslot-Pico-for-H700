@@ -150,6 +150,24 @@ pub struct AssetMeta {
     pub size: u64,
 }
 
+/// One asset's real progress for the transfer docket.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AssetProgress {
+    pub kind: u8,
+    pub size: u64,
+    /// The item's own byte progress, 0..1000.
+    pub progress: u16,
+}
+
+fn permille(done: u64, total: u64) -> u16 {
+    if total == 0 {
+        return 1000;
+    }
+    ((done as f64 / total as f64) * 1000.0)
+        .round()
+        .clamp(0.0, 1000.0) as u16
+}
+
 #[derive(Clone, Debug)]
 struct SourceAsset {
     meta: AssetMeta,
@@ -320,6 +338,87 @@ impl Transfer {
         kinds.into_iter().map(asset_label).collect()
     }
 
+    /// The items the docket lists, each with its own real byte progress.  A
+    /// sender tracks `sending_index/sending_at`; a receiver tracks
+    /// `received/size`; once the receiver finishes, `receiving` is cleared and
+    /// the offer's asset list is used with everything complete.
+    pub fn view_assets(&self) -> Vec<AssetProgress> {
+        let done = self.stage == Stage::Done;
+        if self.received {
+            if !self.receiving.is_empty() {
+                return self
+                    .receiving
+                    .iter()
+                    .map(|asset| AssetProgress {
+                        kind: asset.meta.kind,
+                        size: asset.meta.size,
+                        progress: if done {
+                            1000
+                        } else {
+                            permille(asset.received, asset.meta.size)
+                        },
+                    })
+                    .collect();
+            }
+            if let Some(offer) = &self.incoming {
+                return offer
+                    .assets
+                    .iter()
+                    .map(|asset| AssetProgress {
+                        kind: asset.kind,
+                        size: asset.size,
+                        progress: 1000,
+                    })
+                    .collect();
+            }
+        }
+        if let Some(selected) = &self.selected {
+            return selected
+                .assets
+                .iter()
+                .enumerate()
+                .map(|(index, asset)| AssetProgress {
+                    kind: asset.meta.kind,
+                    size: asset.meta.size,
+                    progress: if done || index < self.sending_index {
+                        1000
+                    } else if index == self.sending_index {
+                        permille(self.sending_at, asset.meta.size)
+                    } else {
+                        0
+                    },
+                })
+                .collect();
+        }
+        Vec::new()
+    }
+
+    /// Real transferred bytes and total bytes for the docket footer.
+    pub fn view_bytes(&self) -> (u64, u64) {
+        let explicit_total = if self.received {
+            self.receiving_total
+        } else {
+            self.selected
+                .as_ref()
+                .map(|selected| selected.offer.size)
+                .unwrap_or(0)
+        };
+        let total = if explicit_total > 0 {
+            explicit_total
+        } else {
+            let assets = self.view_assets();
+            assets.iter().map(|asset| asset.size).sum()
+        };
+        if self.stage == Stage::Done {
+            return (total, total);
+        }
+        if total == 0 {
+            return (0, 0);
+        }
+        let done = (self.progress.clamp(0.0, 1.0) as f64 * total as f64).round() as u64;
+        (done.min(total), total)
+    }
+
     pub fn select(&mut self, root: &Path, cart: &Cart, hash: Digest) -> Result<(), String> {
         if self.stage != Stage::Shelf || self.wire.is_none() {
             return Err("对方还没有就绪".into());
@@ -473,7 +572,7 @@ impl Transfer {
     }
 
     pub fn accept_parts(&mut self, root: &Path) -> Result<(), String> {
-        let offer = self
+        let mut offer = self
             .incoming
             .take()
             .ok_or_else(|| "没有待接收的内容".to_string())?;
@@ -534,6 +633,10 @@ impl Transfer {
         self.received = true;
         self.parts_only = true;
         self.target_stem = Some(stem);
+        // Keep the offer in sync with the parts actually requested, so the
+        // docket's Done state lists the same items the transfer carried.
+        offer.assets = assets;
+        offer.size = total;
         self.incoming = Some(offer);
         self.stage = Stage::Receiving;
         self.progress = 0.0;
@@ -1875,4 +1978,104 @@ mod tests {
             .expect_err("an empty save-only transfer was accepted");
         assert!(error.contains("存档"), "{error}");
     }
+
+    fn selected(items: &[(u8, u64)], mode: TransferMode) -> Selected {
+        let assets: Vec<SourceAsset> = items
+            .iter()
+            .map(|(kind, size)| SourceAsset {
+                meta: AssetMeta {
+                    kind: *kind,
+                    size: *size,
+                },
+                path: PathBuf::new(),
+            })
+            .collect();
+        let total = assets.iter().map(|asset| asset.meta.size).sum();
+        let offer = Offer {
+            platform: Platform::Gba,
+            extension: "gba".into(),
+            name: "Test".into(),
+            size: total,
+            hash: [0u8; 32],
+            assets: assets.iter().map(|asset| asset.meta).collect(),
+            shell: None,
+            mode,
+            core: Core::EVERY[0],
+        };
+        Selected { offer, assets }
+    }
+
+    #[test]
+    fn the_docket_reports_each_assets_own_progress() {
+        let mut transfer = Transfer::stub(true, Stage::Sending);
+        transfer.selected = Some(selected(
+            &[(ASSET_ROM, 1_000_000), (ASSET_LABEL, 100_000), (ASSET_INTRO, 1_000)],
+            TransferMode::All,
+        ));
+        transfer.sending_index = 1;
+        transfer.sending_at = 50_000;
+        transfer.progress = 1_050_000.0 / 1_101_000.0;
+        let assets = transfer.view_assets();
+        assert_eq!(assets.len(), 3);
+        assert_eq!(assets[0].progress, 1000);
+        assert_eq!(assets[1].progress, 500);
+        assert_eq!(assets[2].progress, 0);
+        assert_eq!(transfer.view_bytes(), (1_050_000, 1_101_000));
+    }
+
+    #[test]
+    fn waiting_reports_zero_and_done_reports_everything() {
+        let mut transfer = Transfer::stub(true, Stage::OfferSent);
+        transfer.selected = Some(selected(
+            &[(ASSET_ROM, 10), (ASSET_LABEL, 20)],
+            TransferMode::All,
+        ));
+        assert!(transfer.view_assets().iter().all(|asset| asset.progress == 0));
+        assert_eq!(transfer.view_bytes(), (0, 30));
+
+        transfer.stage = Stage::Done;
+        assert!(transfer
+            .view_assets()
+            .iter()
+            .all(|asset| asset.progress == 1000));
+        assert_eq!(transfer.view_bytes(), (30, 30));
+    }
+
+    #[test]
+    fn a_finished_receiver_keeps_the_parts_it_actually_requested() {
+        let mut transfer = Transfer::stub(false, Stage::Done);
+        transfer.received = true;
+        transfer.receiving_total = 672_000;
+        transfer.received_total = 672_000;
+        transfer.progress = 1.0;
+        transfer.incoming = Some(Offer {
+            platform: Platform::Gba,
+            extension: "gba".into(),
+            name: "Test".into(),
+            size: 672_000,
+            hash: [0u8; 32],
+            assets: vec![
+                AssetMeta {
+                    kind: ASSET_LABEL,
+                    size: 128_000,
+                },
+                AssetMeta {
+                    kind: ASSET_SAV,
+                    size: 32_000,
+                },
+                AssetMeta {
+                    kind: ASSET_STATE,
+                    size: 512_000,
+                },
+            ],
+            shell: None,
+            mode: TransferMode::All,
+            core: Core::EVERY[0],
+        });
+        let assets = transfer.view_assets();
+        assert_eq!(assets.len(), 3);
+        assert!(assets.iter().all(|asset| asset.progress == 1000));
+        assert_eq!(transfer.view_bytes(), (672_000, 672_000));
+    }
+
 }

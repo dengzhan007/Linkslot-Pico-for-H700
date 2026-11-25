@@ -48,12 +48,33 @@ fn game_btn(button: GameButton) -> Btn {
 
 /// Translate a physical key through the user's Controls file. Defaults are
 /// identity, so an absent/old config keeps the old button behaviour.
+///
+/// `CONFIGURED` includes the Super Famicom / Mega Drive X/Y, so a hand-edited
+/// swap (`x=y`, `y=x`) reaches the input layer.  A binding the user actually
+/// changed wins over a default one, which keeps the older configs working:
+/// e.g. `TurboA=Y` used to shadow the stock `Y=Y` row and still does.
 fn controls_map(controls: &Controls, physical: Btn) -> Option<Btn> {
-    GameButton::ALL.into_iter().find_map(|button| {
+    let default = Controls::default();
+    let matches = |button: GameButton, custom_only: bool| {
         let binding = controls.game(button)?;
-        (binding.modifier.is_none() && device_btn(binding.button) == physical)
-            .then(|| game_btn(button))
-    })
+        if binding.modifier.is_some() || device_btn(binding.button) != physical {
+            return None;
+        }
+        if custom_only && Some(binding) == default.game(button) {
+            return None;
+        }
+        Some(game_btn(button))
+    };
+    GameButton::CONFIGURED
+        .iter()
+        .copied()
+        .find_map(|button| matches(button, true))
+        .or_else(|| {
+            GameButton::CONFIGURED
+                .iter()
+                .copied()
+                .find_map(|button| matches(button, false))
+        })
 }
 
 impl Remap {
@@ -125,6 +146,48 @@ mod tests {
         assert_eq!(
             remap.feed_with(RawEvent::Up(Btn::B), ButtonLayout::Off, &controls),
             Some(RawEvent::Up(Btn::A))
+        );
+    }
+
+    #[test]
+    fn a_swapped_x_and_y_reaches_the_super_famicom_buttons() {
+        // The Super Famicom / Mega Drive can swap their extra face buttons
+        // through controls.txt; the defaults leave them alone.
+        let mut controls = Controls::default();
+        controls.set_game(GameButton::X, Binding::plain(Device::Y));
+        controls.set_game(GameButton::Y, Binding::plain(Device::X));
+        let mut remap = Remap::default();
+        assert_eq!(
+            remap.feed_with(RawEvent::Down(Btn::Y), ButtonLayout::Off, &controls),
+            Some(RawEvent::Down(Btn::X)),
+            "physical Y did not become the console's X"
+        );
+        assert_eq!(
+            remap.feed_with(RawEvent::Down(Btn::X), ButtonLayout::Off, &controls),
+            Some(RawEvent::Down(Btn::Y)),
+            "physical X did not become the console's Y"
+        );
+        assert_eq!(
+            remap.feed_with(RawEvent::Up(Btn::Y), ButtonLayout::Off, &controls),
+            Some(RawEvent::Up(Btn::X))
+        );
+        assert_eq!(
+            remap.feed_with(RawEvent::Up(Btn::X), ButtonLayout::Off, &controls),
+            Some(RawEvent::Up(Btn::Y))
+        );
+    }
+
+    #[test]
+    fn a_customised_turbo_alias_still_wins_over_the_stock_x_and_y() {
+        // Older cards could bind 连发 A to the Y key.  The SFC's real X/Y rows
+        // now default to Y, but an explicit turbo binding must keep working.
+        let mut controls = Controls::default();
+        controls.set_game(GameButton::TurboA, Binding::plain(Device::Y));
+        let mut remap = Remap::default();
+        assert_eq!(
+            remap.feed_with(RawEvent::Down(Btn::Y), ButtonLayout::Off, &controls),
+            Some(RawEvent::Down(Btn::X)),
+            "the customised turbo A alias lost to the stock Y row"
         );
     }
 

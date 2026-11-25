@@ -3,7 +3,10 @@ use slot_store::Platform;
 #[test]
 fn every_platform_has_a_directory() {
     let names: Vec<&str> = Platform::ALL.iter().map(|p| p.dir_name()).collect();
-    assert_eq!(names, vec!["GBA", "GB", "GBC", "FC", "SFC", "MD"]);
+    assert_eq!(
+        names,
+        vec!["GBA", "GB", "GBC", "FC", "SFC", "MD", "Arcade", "NeoGeo"]
+    );
 }
 
 #[test]
@@ -16,7 +19,9 @@ fn every_platform_is_a_shelf_of_its_own() {
             Platform::Gbc,
             Platform::Fc,
             Platform::Sfc,
-            Platform::Md
+            Platform::Md,
+            Platform::Arcade,
+            Platform::Neogeo
         ]
     );
     for (i, p) in Platform::ALL.iter().enumerate() {
@@ -25,6 +30,25 @@ fn every_platform_is_a_shelf_of_its_own() {
             "{p:?} is named twice in the ring, so two shelves would hold one platform"
         );
     }
+}
+
+/// 内置六台永远在货架上；Arcade / NeoGeo 要装平台包才出现，所以不在其中。
+#[test]
+fn the_builtin_ring_is_the_first_six_platforms() {
+    assert_eq!(
+        Platform::BUILTIN,
+        [
+            Platform::Gba,
+            Platform::Gb,
+            Platform::Gbc,
+            Platform::Fc,
+            Platform::Sfc,
+            Platform::Md
+        ]
+    );
+    assert_eq!(&Platform::ALL[..6], &Platform::BUILTIN[..]);
+    assert!(!Platform::BUILTIN.contains(&Platform::Arcade));
+    assert!(!Platform::BUILTIN.contains(&Platform::Neogeo));
 }
 
 #[test]

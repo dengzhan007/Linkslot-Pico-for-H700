@@ -1,3 +1,4 @@
+pub mod arcade_dat;
 mod atomic;
 pub mod bindings;
 pub mod cart_color;
@@ -14,6 +15,7 @@ mod gba;
 pub mod ini;
 pub mod language;
 pub mod pinyin;
+pub mod platform_packs;
 mod ring;
 mod scan;
 mod slot_state;
@@ -40,8 +42,10 @@ pub use gba::{header_clean, header_code, header_title, header_title_code};
 pub use language::{
     language_mtime, language_path, read_language, read_language_code, write_language, LANGUAGE_FILE,
 };
+pub use arcade_dat::{Catalog, Entry, Orientation};
+pub use platform_packs::{active_platforms, available_platforms, PackRecord, RECORD_REL};
 pub use slot_model::{Machine, MachineId, Platform};
-pub use ring::{StateEntry, StateRing, RING_MAX};
+pub use ring::{state_dir, StateEntry, StateRing, RING_MAX};
 pub use scan::{initial, is_hidden, listing, scan, scan_quiet, sort_key, Cart, StoreError};
 pub use slot_state::{
     read_slot_state, write_slot_state, ButtonLayout, Recent, ResumeKind, Shader, SlotState,

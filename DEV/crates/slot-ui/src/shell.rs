@@ -104,6 +104,9 @@ pub fn shell_for(cart: &Cart) -> Shell {
         Platform::Fc => FC_SHELL,
         Platform::Sfc => SFC_SHELL,
         Platform::Md => MD_SHELL,
+        // TODO(phase 4): 街机没有可换的塑料壳，NeoGeo 是 MVS 卡座的黑壳；
+        // 现在沿用 MD 的黑塑料，避免出现全黑的未定义颜色。
+        Platform::Arcade | Platform::Neogeo => MD_SHELL,
     }
 }
 

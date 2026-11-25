@@ -2440,6 +2440,76 @@ fn sfc_shoulders_reach_the_game_and_select_keeps_the_state_keys() {
     s.feed([RawEvent::Up(Btn::Select)], 440);
 }
 
+/// The Super Famicom's X/Y are real buttons: the session opens the core with
+/// `direct_xy`, so the turbo remap leaves them alone.  A GBA cart keeps the
+/// turbo path, where X/Y are the auto-fire keys rather than pad buttons.
+#[test]
+fn sfc_x_and_y_go_to_the_core_instead_of_the_turbo_remap() {
+    let d = common::tmp_root_with_sfc_carts(&["Mario", "Zzz"]);
+    let mut s = session_playing(d.path());
+    assert!(
+        s.emu().expect("no core in the slot").direct_xy(),
+        "the SFC still routes X/Y through the turbo remap"
+    );
+
+    s.feed([RawEvent::Down(Btn::X)], 100);
+    s.feed([RawEvent::Down(Btn::Y)], 116);
+    assert_ne!(pad(&s) & ButtonMask::X, 0, "SFC X never reached the pad");
+    assert_ne!(pad(&s) & ButtonMask::Y, 0, "SFC Y never reached the pad");
+    s.feed([RawEvent::Up(Btn::X)], 132);
+    s.feed([RawEvent::Up(Btn::Y)], 148);
+
+    let g = common::tmp_root_with_carts(&["Emerald", "Zzz"]);
+    let gba = session_playing(g.path());
+    assert!(
+        !gba.emu().expect("no core in the slot").direct_xy(),
+        "the GBA lost its X/Y turbo keys"
+    );
+}
+
+/// Pressing SELECT while a shoulder is already held arms the picture chord.
+/// The shoulder's release must still reach the gesture layer, or the game
+/// keeps fast-forwarding after the key came up.
+#[test]
+fn sfc_fast_forward_released_under_the_picture_chord_stops() {
+    let d = common::tmp_root_with_sfc_carts(&["Mario", "Zzz"]);
+    let mut s = session_playing(d.path());
+    let mut now = run(&mut s, 0, 2);
+
+    s.feed([RawEvent::Down(Btn::R2)], now + 16);
+    now = run(&mut s, now + 16, 2);
+    assert_eq!(
+        s.app().ff_badge(),
+        Some(Icon::FastForward),
+        "hold-to-fast-forward never started"
+    );
+
+    s.feed([RawEvent::Down(Btn::Select)], now + 16);
+    s.feed([RawEvent::Up(Btn::R2)], now + 32);
+    now = run(&mut s, now + 32, 3);
+    assert_eq!(
+        s.app().ff_badge(),
+        None,
+        "the released R2 is still fast-forwarding"
+    );
+    s.feed([RawEvent::Up(Btn::Select)], now + 16);
+}
+
+/// The same release rule for hold-to-rewind.
+#[test]
+fn sfc_rewind_released_under_the_picture_chord_stops() {
+    let d = common::tmp_root_with_sfc_carts(&["Mario", "Zzz"]);
+    let mut s = session_playing(d.path());
+    let now = run(&mut s, 0, 2);
+
+    s.feed([RawEvent::Down(Btn::L2)], now + 16);
+    assert!(s.rewinding(), "hold-to-rewind never started");
+    s.feed([RawEvent::Down(Btn::Select)], now + 32);
+    s.feed([RawEvent::Up(Btn::L2)], now + 48);
+    assert!(!s.rewinding(), "the released L2 is still rewinding");
+    s.feed([RawEvent::Up(Btn::Select)], now + 64);
+}
+
 #[test]
 fn l_and_r_change_the_mode_on_a_game_boy_cart_and_not_on_a_gba_one() {
     let d = common::tmp_root_with_gb_carts(&["Tetris", "Zzz"]);

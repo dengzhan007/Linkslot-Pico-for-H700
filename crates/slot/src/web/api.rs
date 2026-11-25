@@ -68,6 +68,7 @@ pub const ROUTES: &[Route] = &[
     route!(Get, "/api/files", super::files::list),
     route!(Get, "/api/files/download", super::files::download),
     route!(Get, "/api/logs/export", w_logs_export),
+    route!(Post, "/api/logs/clear", w_logs_clear),
     route!(Get, "/api/files/view", super::files::view),
     route!(Get, "/api/files/text", super::files::text),
     route!(Post, "/api/files/upload", super::files::upload),
@@ -193,6 +194,15 @@ fn w_gbastation_cancel(shared: &Shared, _r: &Request) -> Response {
 fn w_logs_export(shared: &Shared, _r: &Request) -> Response {
     super::logs::export(shared)
 }
+
+fn w_logs_clear(shared: &Shared, request: &Request) -> Response {
+    let handled = (|| -> Result<Response, Response> {
+        guard_write(shared, request)?;
+        Ok(super::logs::clear(shared))
+    })();
+    handled.unwrap_or_else(|response| response)
+}
+
 fn w_collection_status(shared: &Shared, _r: &Request) -> Response {
     super::collection::status(shared)
 }

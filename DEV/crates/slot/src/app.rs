@@ -32,7 +32,7 @@ use crate::audio::Sfx;
 static PREFETCH_SCAN: OnceLock<Mutex<Option<(PathBuf, std::thread::JoinHandle<Vec<Cart>>)>>> =
     OnceLock::new();
 use crate::boot_mods::{BootJob, BootSchedule};
-use crate::cart_transfer::{Stage as TransferStage, Transfer};
+use crate::cart_transfer::{Stage as TransferStage, Transfer, TransferMode};
 use crate::core_picker::{Chip, CorePicker, Outcome, Press, ThreeLayout, CLOSE_MS, OPEN_MS};
 use crate::link_kind::{link_carried, link_kind, serial_option, LinkKind};
 use crate::link_radio::{radio_jobs, LinkRole, RadioJob, RadioJobs};
@@ -217,6 +217,8 @@ pub(crate) fn intro_back_label_box(platform: Platform) -> (f32, f32, f32, f32) {
         Platform::Fc => (105.0, 172.0, 150.0, 76.0),
         Platform::Sfc => (100.0, 120.0, 160.0, 72.0),
         Platform::Md => (100.0, 120.0, 160.0, 72.0),
+        // 街机 / NeoGeo 的卡面借 MD 的几何，背面标签框跟着走。
+        Platform::Arcade | Platform::Neogeo => (100.0, 120.0, 160.0, 72.0),
     }
 }
 
@@ -310,6 +312,9 @@ const HOLD_PROMPT_MS: Millis = 300;
 /// Utility panel kinds for the shortcut mapping popups: capturing a key, and
 /// the "this will set the shortcut to 无" question.
 const SHORTCUT_CAPTURE: u8 = 8;
+/// The cartridge-transfer content chooser ("传输内容").  Kinds 8 and 9 are
+/// the shortcut keys and 11..14 the help pages, so this one takes 15.
+const TRANSFER_CONTENT: u8 = 15;
 const SHORTCUT_CLEAR: u8 = 9;
 
 /// The game-only shortcut page opened from the in-game menu.  The shelf copy
@@ -329,6 +334,38 @@ const SYNC_HOLD_BAR_W: f32 = 120.0;
 const SYNC_HOLD_BAR_H: f32 = 6.0;
 const SYNC_CYAN: [f32; 4] = [0.34, 0.89, 0.95, 1.0];
 const SYNC_PLACEHOLDER: [f32; 4] = [0.12, 0.12, 0.16, 1.0];
+
+/// The dimmed shelf behind the sync sheet.  The screen is deliberately still
+/// semi-transparent: the player can see the cartridge shelf they came from.
+const SYNC_PAGE_BG: [f32; 4] = [8.0 / 255.0, 8.0 / 255.0, 11.0 / 255.0, 0.66];
+/// The sheet's top-left corner; its face is baked at this size.
+const SYNC_SHEET_AT: (f32, f32) = (32.0, 20.0);
+/// The fixed footprint of the source cartridge on the stage.  Cards keep their
+/// own aspect inside this box and their foot stays on the dock's lip.
+const SYNC_STAGE_BOX: (f32, f32, f32, f32) = (102.0, 180.0, 196.0, 110.0);
+const SYNC_DOCK_AT: (f32, f32) = (84.0, 286.0);
+const SYNC_CLOUD_CARD_AT: (f32, f32) = (444.0, 180.0);
+const SYNC_LANE_AT: (f32, f32) = (302.0, 230.0);
+const SYNC_LANE_W: f32 = 142.0;
+const SYNC_LANE_Y: f32 = 235.0;
+const SYNC_DIRECTION_CENTRE: (f32, f32) = (373.0, 235.0);
+const SYNC_NODE_X: [f32; 5] = [100.0, 230.0, 360.0, 490.0, 620.0];
+const SYNC_RAIL_Y: f32 = 342.0;
+const SYNC_RAIL_LABEL_Y: f32 = 352.0;
+const SYNC_PAPER_RECT: (f32, f32, f32, f32) = (456.0, 209.0, 148.0, 52.0);
+const SYNC_CLOUD_LABEL_AT: (f32, f32) = (510.0, 219.0);
+const SYNC_TARGET_LABEL_Y: f32 = 260.0;
+const SYNC_SIDE_LABEL_Y: f32 = 156.0;
+const SYNC_TITLE_AT: (f32, f32) = (76.0, 34.0);
+const SYNC_SUBTITLE_AT: (f32, f32) = (78.0, 74.0);
+const SYNC_BANNER_Y: f32 = 106.0;
+const SYNC_PERCENT_CHIP_AT: (f32, f32) = (592.0, 40.0);
+const SYNC_FOOTER_Y: f32 = 418.0;
+const SYNC_STAMP_CENTRE: (f32, f32) = (598.0, 260.0);
+/// The cartridge drops this far while the screen opens, like the picker's
+/// insert beat.
+const SYNC_CART_DROP: f32 = 14.0;
+const SYNC_CARD_SLIDE: f32 = 10.0;
 
 const SHUTDOWN_SHOW_MS: Millis = 250;
 
@@ -421,25 +458,20 @@ pub struct SyncFace {
 /// has nothing to say on that line.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SyncFaces {
-    pub banner: Option<SyncFace>,
-    pub cloud_line: Option<SyncFace>,
-    pub local_line: Option<SyncFace>,
-    pub upload_label: Option<SyncFace>,
-    pub download_label: Option<SyncFace>,
-    /// Static art for the sync animation.
     pub title: Option<SyncFace>,
-    pub data_label: Option<SyncFace>,
-    pub net_label: Option<SyncFace>,
-    pub card_label: Option<SyncFace>,
-    pub state_label: Option<SyncFace>,
-    pub sav_label: Option<SyncFace>,
+    pub subtitle: Option<SyncFace>,
+    pub banner: Option<SyncFace>,
+    /// The larger face used by the result banner after the sheet closes.
+    pub result: Option<SyncFace>,
+    pub side_local: Option<SyncFace>,
+    pub side_remote: Option<SyncFace>,
+    pub cloud_label: Option<SyncFace>,
+    pub target_label: Option<SyncFace>,
     pub rail_labels: [Option<SyncFace>; 5],
-    pub net_slot_title: Option<SyncFace>,
-    pub net_slot_hint: Option<SyncFace>,
     pub progress_left: Option<SyncFace>,
     pub progress_right: Option<SyncFace>,
+    pub completion_hint: Option<SyncFace>,
     pub cancel_hint: Option<SyncFace>,
-    pub check: Option<SyncFace>,
 }
 
 /// The strings behind [`SyncFaces`]; the frontend re-rasterises only when this
@@ -448,21 +480,39 @@ pub struct SyncFaces {
 pub struct SyncTexts {
     /// Heading above the animation; empty while no animation owns the screen.
     pub title: String,
+    /// `《游戏名》` or `《游戏名》 · 手动同步`.
+    pub subtitle: String,
+    /// The current stage or result line.
     pub banner: String,
-    pub cloud_line: String,
-    pub local_line: String,
-    pub upload_label: String,
-    pub download_label: String,
+    pub side_local: String,
+    pub side_remote: String,
+    pub cloud_label: String,
+    pub target_label: String,
+    /// Stage-rail captions (network / cloud or link / transfer / verify / done).
+    pub rail: [String; 5],
     pub progress_left: String,
     pub progress_right: String,
+    pub completion_hint: String,
 }
 
-/// The cloud and arrow textures the frontend uploads once at boot.
+/// The static artwork the frontend uploads once at boot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SyncArt {
-    pub cloud: SyncFace,
-    pub up: SyncFace,
-    pub down: SyncFace,
+    pub sheet: SyncFace,
+    pub dock: SyncFace,
+    pub cloud_card: SyncFace,
+    pub target_card: SyncFace,
+    pub shadow: SyncFace,
+    pub lane: SyncFace,
+    pub packet: SyncFace,
+    pub stamp: SyncFace,
+    pub dot_done: SyncFace,
+    pub dot_active: SyncFace,
+    pub dot_pending: SyncFace,
+    pub dir_left: SyncFace,
+    pub dir_right: SyncFace,
+    pub dir_wait: SyncFace,
+    pub chip: SyncFace,
 }
 
 /// A screen rectangle: left, top, width, height.
@@ -839,6 +889,10 @@ pub enum ShelfSync {
         direction: Option<Direction>,
         noop: bool,
         only: Option<UnitKind>,
+        /// The manual mod's declarative animation, so a mod's settled frame
+        /// keeps its title and target card instead of turning into a cloud.
+        ui: Option<slot_mods::ActionUi>,
+        manual: bool,
     },
     /// The network cartridge leaves the slot after the sync screen closes.
     Ejecting {
@@ -1114,16 +1168,70 @@ pub struct GameIntroFaces {
     pub achievements: Option<(TexId, u32, u32)>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct TransferFaces {
-    pub percent: (TexId, u32, u32),
-    pub assets: Vec<(TexId, u32, u32)>,
+    pub docket: Option<SyncFace>,
+    pub percent: Option<SyncFace>,
+    pub bytes: Option<SyncFace>,
+}
+
+/// The static transfer-docket artwork uploaded once at boot.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TransferArt {
+    pub stamp: SyncFace,
+    pub check: SyncFace,
+    pub shadow: SyncFace,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TransferFlow {
+    Waiting,
+    Sending,
+    Receiving,
+    Done,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TransferAssetGroup {
+    Cart,
+    Save,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TransferAssetView {
+    pub label: String,
+    pub group: TransferAssetGroup,
+    pub size: u64,
+    /// 0..1000, the item's own byte progress.
+    pub progress: u16,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TransferView {
     pub percent: u32,
-    pub assets: Vec<String>,
+    pub flow: TransferFlow,
+    /// True when bytes move from the peer to this device (receiving / received).
+    pub reverse: bool,
+    pub host: bool,
+    pub partial: bool,
+    pub game: String,
+    pub platform: Platform,
+    pub bytes_done: u64,
+    pub bytes_total: u64,
+    pub assets: Vec<TransferAssetView>,
+    pub title: String,
+    pub status: String,
+    pub content: String,
+    pub platform_line: String,
+    pub role_local: String,
+    pub role_peer: String,
+    pub group_cart: String,
+    pub group_save: String,
+    pub not_included: String,
+    pub partial_note: String,
+    pub waiting_line: String,
+    pub waiting_after: String,
+    pub footer_hint: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1262,6 +1370,15 @@ pub enum Phase {
         from_menu: bool,
     },
     Shelf,
+    /// 街机 / NeoGeo 的主界面：柜内预览 + PCB 架。状态全在 `ArcadeScreen` 里，
+    /// 这一层只负责画与转发按键。
+    Arcade {
+        screen: crate::arcade::ArcadeScreen,
+    },
+    /// 服务门（只读页 + FREE PLAY + 本机记录）。
+    Service {
+        state: crate::service::ServiceState,
+    },
     QuickMenu {
         row: QuickRow,
     },
@@ -1885,6 +2002,12 @@ pub struct App {
     transfer_leaving_at: Option<Millis>,
     transfer_progress_started: Option<Millis>,
     transfer_done_pending: bool,
+    /// When the seated card's insert finished; the docket slides in then.
+    transfer_docket_at: Option<Millis>,
+    /// When the transfer first reached Done; the stamp pops in then.
+    transfer_done_at: Option<Millis>,
+    /// Stamp/check/shadow faces uploaded once at boot.
+    transfer_art: Option<TransferArt>,
     transfer_faces: Option<TransferFaces>,
     /// A blank receiver card generated by the frontend before the real face
     /// arrives; without this the preview draws only the slot's placeholder.
@@ -2010,6 +2133,34 @@ pub struct App {
     wifi_off_job: Option<WifiJob>,
     wifi_off_retry_at: Millis,
     shelf_legend: (Vec<(TexId, u32)>, Vec<(TexId, u32)>),
+    /// 已激活的平台包机种（Arcade / NeoGeo）；空 = 没装包，书架只有 8 架。
+    hosted: Vec<Platform>,
+    /// 扫描到的**全部** cart（含 Arcade / NeoGeo）。
+    ///
+    /// `carts()` 只遍历六个卡带架，街机卡带不落在任何一排里，所以柜子的数据
+    /// 必须另存一份；否则主界面永远看到空列表。
+    library: Vec<Cart>,
+    /// 主界面的 DAT（set → 标题/机板）。进入 Arcade 时加载一次，库刷新时重载。
+    arcade_catalog: Option<slot_store::arcade_dat::Catalog>,
+    /// 主界面筛选条（机板名，按频次降序），与 `arcade_catalog` 一起重算。
+    arcade_systems: Vec<String>,
+    /// 当前筛选下的板子（缓存：按键与绘制都用它，避免每帧重扫整库）。
+    arcade_boards: Vec<Cart>,
+    /// 从主界面 START 进入游戏时记住来源平台：退出要回主界面而不是书架，
+    /// 且不能污染卡带续玩指针（见 `record_cart`）。
+    arcade_return: Option<Platform>,
+    /// 主界面底栏提示。
+    arcade_legend: (Vec<(TexId, u32)>, Vec<(TexId, u32)>),
+    /// attract 阶段的底栏：B 返回 / SELECT 投币 / START 开始。
+    arcade_attract_legend: (Vec<(TexId, u32)>, Vec<(TexId, u32)>),
+    /// 柜子上（书架里停住时）的底栏提示：A 进入 / ←→ 选柜。
+    cabinet_legend: (Vec<(TexId, u32)>, Vec<(TexId, u32)>),
+    /// 主界面的文字纹理，由 `frontend` 在视图变化时刷新。
+    arcade_faces: ArcadeFaces,
+    /// 服务门的文字纹理（视图变化时重建）。
+    service_faces: ServiceFaces,
+    /// 服务门底栏：B 关闭 / A 选择 / ←→ 切页。
+    service_legend: (Vec<(TexId, u32)>, Vec<(TexId, u32)>),
     /// Bottom hints while a transfer room is open: A sends the selected cart,
     /// M leaves the room.  The shelf's Y/X/B legend is meaningless there.
     transfer_legend: (Vec<(TexId, u32)>, Vec<(TexId, u32)>),
@@ -2090,6 +2241,9 @@ pub struct TransferHeader {
     /// `None` when `show_rom_title` is off.
     pub game: Option<String>,
     pub language: Language,
+    /// What the room sends when the player presses A, shown as a chip so the
+    /// choice stays visible after the content panel closes.
+    pub content: TransferMode,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -2156,35 +2310,56 @@ pub struct FaceWant {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-enum Rack {
+pub(crate) enum Rack {
     Recents,
     Favorites,
     Of(Platform),
+    /// 街机 / NeoGeo 的柜子：不是卡带架，架子恒空，靠 `is_cabinet()` 参与导航。
+    Cabinet(Platform),
 }
 
 impl Rack {
     fn platform(self) -> Option<Platform> {
         match self {
             Rack::Of(p) => Some(p),
-            Rack::Recents | Rack::Favorites => None,
+            // 柜子不是卡带架：`platform()` 只用来回答"这条 cart 该进哪一排"，
+            // 柜子若返回 Some 会把街机卡带塞进一个恒空的架子里。
+            Rack::Recents | Rack::Favorites | Rack::Cabinet(_) => None,
         }
+    }
+
+    /// 柜子（街机 / NeoGeo 的入口）。
+    fn cabinet(self) -> Option<Platform> {
+        match self {
+            Rack::Cabinet(p) => Some(p),
+            _ => None,
+        }
+    }
+
+    fn is_cabinet(self) -> bool {
+        matches!(self, Rack::Cabinet(_))
     }
 
     fn name(self, lang: Language) -> &'static str {
         match self {
             Rack::Recents => slot_i18n::t(lang, "device.app.shelf.recents"),
             Rack::Favorites => slot_i18n::t(lang, "device.app.shelf.favorites"),
-            Rack::Of(platform) => {
-                let key = match platform {
-                    Platform::Gba => "device.app.platform.gba",
-                    Platform::Gb => "device.app.platform.gb",
-                    Platform::Gbc => "device.app.platform.gbc",
-                    Platform::Fc => "device.app.platform.fc",
-                    Platform::Sfc => "device.app.platform.sfc",
-                    Platform::Md => "device.app.platform.md",
-                };
-                slot_i18n::t(lang, key)
-            }
+            Rack::Cabinet(platform) => match platform {
+                Platform::Neogeo => slot_i18n::t(lang, "device.app.arcade.neogeo"),
+                _ => slot_i18n::t(lang, "device.app.arcade.title"),
+            },
+            Rack::Of(platform) => match platform {
+                Platform::Gba => slot_i18n::t(lang, "device.app.platform.gba"),
+                Platform::Gb => slot_i18n::t(lang, "device.app.platform.gb"),
+                Platform::Gbc => slot_i18n::t(lang, "device.app.platform.gbc"),
+                Platform::Fc => slot_i18n::t(lang, "device.app.platform.fc"),
+                Platform::Sfc => slot_i18n::t(lang, "device.app.platform.sfc"),
+                Platform::Md => slot_i18n::t(lang, "device.app.platform.md"),
+                // 街机 / NeoGeo 的入口是柜子（`Rack::Cabinet`），这两个变体只剩
+                // 兜底用途。
+                Platform::Arcade => slot_i18n::t(lang, "device.app.arcade.title"),
+                Platform::Neogeo => slot_i18n::t(lang, "device.app.arcade.neogeo"),
+            },
         }
     }
 
@@ -2192,6 +2367,9 @@ impl Rack {
         match self {
             Rack::Recents => "recents".into(),
             Rack::Favorites => "favorites".into(),
+            // 与卡带架 `"arcade"` 区分：柜子是"物件"，不能和平台架共用一个 key，
+            // 否则 reload 时会把光标从柜子挪到同名的空架子上。
+            Rack::Cabinet(p) => format!("cabinet-{}", p.dir_name().to_ascii_lowercase()),
             Rack::Of(p) => p.dir_name().to_ascii_lowercase(),
         }
     }
@@ -2200,6 +2378,10 @@ impl Rack {
         match self {
             Rack::Recents => slot_ui::CollectionKind::Recents,
             Rack::Favorites => slot_ui::CollectionKind::Favorites,
+            Rack::Cabinet(Platform::Neogeo) | Rack::Of(Platform::Neogeo) => {
+                slot_ui::CollectionKind::Neogeo
+            }
+            Rack::Cabinet(_) | Rack::Of(Platform::Arcade) => slot_ui::CollectionKind::Arcade,
             Rack::Of(Platform::Gba) => slot_ui::CollectionKind::Gba,
             Rack::Of(Platform::Gbc) => slot_ui::CollectionKind::Gbc,
             Rack::Of(Platform::Gb) => slot_ui::CollectionKind::Gb,
@@ -2215,6 +2397,7 @@ impl Rack {
         match self {
             Rack::Recents => slot_ui::collection_style::recents().base,
             Rack::Favorites => slot_ui::collection_style::favorites().base,
+            Rack::Cabinet(p) => slot_ui::collection_style::platform(p).base,
             Rack::Of(platform) => slot_ui::collection_style::platform(platform).base,
         }
     }
@@ -2223,6 +2406,7 @@ impl Rack {
         match self {
             Rack::Recents => slot_ui::collection_style::recents().on_dark,
             Rack::Favorites => slot_ui::collection_style::favorites().on_dark,
+            Rack::Cabinet(p) => slot_ui::collection_style::platform(p).on_dark,
             Rack::Of(platform) => slot_ui::collection_style::platform(platform).on_dark,
         }
     }
@@ -2237,12 +2421,22 @@ const FAVORITES_AT: usize = 1;
 /// then panicked with an out-of-bounds index instead of reaching the shelf.
 const COLLECTION_KINDS: usize = slot_ui::CollectionKind::ALL.len();
 
-fn shelves_of(carts: Vec<Cart>, state: &SlotState) -> Vec<(Rack, Shelf)> {
+/// 货架的完整清单：Recents、Favorites、内置六台，然后按 `hosted` 追加柜子。
+///
+/// `hosted` 是**已激活**的平台包机种（`available_platforms` 去掉内置六台）；
+/// 没装包时传空切片，书架就还是原来那 8 架，不会出现空柜。
+pub(crate) fn shelves_of(
+    carts: Vec<Cart>,
+    state: &SlotState,
+    hosted: &[Platform],
+) -> Vec<(Rack, Shelf)> {
     let mut rows: Vec<(Rack, Vec<Cart>)> = vec![
         (Rack::Recents, Vec::new()),
         (Rack::Favorites, Vec::new()),
     ];
-    rows.extend(Platform::ALL.iter().map(|p| (Rack::Of(*p), Vec::new())));
+    rows.extend(Platform::BUILTIN.iter().map(|p| (Rack::Of(*p), Vec::new())));
+    // 柜子追加在**末尾**，顺序与 `hosted` 一致（Arcade 在前、NeoGeo 在后）。
+    rows.extend(hosted.iter().map(|p| (Rack::Cabinet(*p), Vec::new())));
     let original: Vec<Cart> = carts.clone();
     for cart in carts {
         if let Some((_, row)) = rows
@@ -2278,10 +2472,151 @@ fn shelves_of(carts: Vec<Cart>, state: &SlotState) -> Vec<(Rack, Shelf)> {
         .collect()
 }
 
+/// 在环上按 `by` 走 **`|by|` 步**，每一步都落到"下一个可选的位置"。
+///
+/// `selectable` 与 `len` 用切片表达，方便脱离 `App` 单测；`shelves` 的"可选"
+/// 是 `!carts.is_empty() || rack.is_cabinet()`（柜子的架子恒空，但它要能被选中）。
+///
+/// 语义（每条都有用例）：
+/// - **`|by|` 是"走几步"，不是"一次跳几格"**：`by = 2` = 连走两次单步
+///   （`0→2→3`）；`L1` 连按两次就是两次单步。
+/// - **每一步都跳过不可选的架**：一步 = 沿方向找下一个可选；一步之内绕完整圈
+///   仍没有可选的 → `None`。（这条是货架导航的底线：一张只玩 GBA 的卡，从柜子
+///   往回按一下必须落到 GBA，而不是停在中间的 MD/SFC 空架上。）
+/// - **`by == 0` / `by` 是 `len` 的整数倍**：位置不变，但**只有起点可选时**才
+///   成立；不可选的起点返回 `None`——那里本来就不该停，拒绝移动比"假装没动"诚实。
+///   整圈特判是必要的：可选架有 3 个、环长 10 时，"走 10 个单步"会落到第
+///   `10 % 3` 个可选架（≠ 起点），而契约要求 `±len` 回到起点。
+/// - **`at >= len` → `None`，不取模**：把越界下标悄悄折回合法范围，会让"调用方
+///   传了坏下标"这件事永远查不出来。
+pub(crate) fn ring_step(len: usize, at: usize, by: i32, selectable: &[bool]) -> Option<usize> {
+    if len == 0 || selectable.len() != len || at >= len {
+        return None;
+    }
+    let len_i = len as i32;
+    if by == 0 || by.rem_euclid(len_i) == 0 {
+        // 不动：起点可选才算"没动"。
+        return selectable[at].then_some(at);
+    }
+    let direction = by.signum();
+    let mut position = at;
+    for _ in 0..by.unsigned_abs() {
+        let mut next = None;
+        for step in 1..=len_i {
+            let candidate = (position as i32 + direction * step).rem_euclid(len_i) as usize;
+            if selectable[candidate] {
+                next = Some(candidate);
+                break;
+            }
+        }
+        position = next?;
+    }
+    Some(position)
+}
+
+/// 书架重建（装/卸平台包、库刷新）后，把光标落回一个**可选**的架子上。
+///
+/// 规则：优先留在原位；原位不可选时先往**前**找最近的，再往**后**找，都没有
+/// 才回 0。柜子被卸载时它会从末尾消失，索引可能直接越界——这条路径必须不 panic。
+pub(crate) fn reconcile_shelf_at(shelves: &[(Rack, Shelf)], at: usize) -> usize {
+    let selectable = |index: usize| {
+        shelves
+            .get(index)
+            .is_some_and(|(rack, shelf)| !shelf.carts.is_empty() || rack.is_cabinet())
+    };
+    if selectable(at) {
+        return at;
+    }
+    (0..at).rev().find(|index| selectable(*index)).unwrap_or_else(|| {
+        (at + 1..shelves.len())
+            .find(|index| selectable(*index))
+            .unwrap_or(0)
+    })
+}
+
+/// 主界面要显示的文字（`app` 只算字符串，`frontend` 负责光栅化）。
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ArcadeView {
+    pub header: String,
+    /// 筛选 chip：`[0]` 是"全部"，其余是机板名。
+    pub filters: Vec<String>,
+    /// 当前筛选项（`filters` 的下标）。
+    pub filter_index: usize,
+    pub title: String,
+    pub meta: Option<String>,
+    pub set: Option<String>,
+    pub bios_missing: bool,
+    /// 上一次 START 因核心缺失失败（CRT 上的一行红字）。
+    pub core_missing: bool,
+    /// 屏幕几何（只有 NeoGeo 有固定值：`304×224 · 2x`）。
+    pub geometry: Option<String>,
+    /// 当前阶段（**无载荷**的拷贝枚举：`t`/`coin_t`/`blink` 这类每帧量不能进来，
+    /// 否则"视图变了才重建纹理"会变成每帧重建）。
+    pub stage: crate::arcade::ArcadeStage,
+    pub credits: u8,
+    pub free_play: bool,
+    pub index: usize,
+    pub count: usize,
+}
+
+/// 主界面的文字纹理。由 `frontend::sync_arcade` 在 `ArcadeView` 变化时重建。
+#[derive(Clone, Default)]
+pub struct ArcadeFaces {
+    pub header: Option<(TexId, u32, u32)>,
+    /// `(chip 下标, 纹理, 宽, 高)`；每个 chip 一张，当前项由 `app` 高亮绘制。
+    pub filters: Vec<(usize, TexId, u32, u32)>,
+    pub title: Option<(TexId, u32, u32)>,
+    pub meta: Option<(TexId, u32, u32)>,
+    pub set: Option<(TexId, u32, u32)>,
+    pub bios: Option<(TexId, u32, u32)>,
+    /// 屏幕几何（`304×224 · 2x`），画在 CRT 下方。
+    pub geometry: Option<(TexId, u32, u32)>,
+    /// `A 插板` 按钮上的字。
+    pub insert: Option<(TexId, u32, u32)>,
+    /// 右侧 `JAMMA PCB 架` 标题。
+    pub rack: Option<(TexId, u32, u32)>,
+    /// `INSERT COIN`（闪烁只改 alpha，不重建）。
+    pub insert_coin: Option<(TexId, u32, u32)>,
+    /// `CREDIT {n}`（只在 credits 变化时重建）。
+    pub credit: Option<(TexId, u32, u32)>,
+    /// `核心缺失`（与 BIOS 红字同一位置）。
+    pub core_missing: Option<(TexId, u32, u32)>,
+    /// `FREE PLAY`（自由游玩，右上角）。
+    pub free_play: Option<(TexId, u32, u32)>,
+}
+
+/// 服务门要显示的文字（`app` 只算字符串，`frontend` 光栅化）。
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ServiceView {
+    /// 页标题。
+    pub title: String,
+    /// 只读说明 / 页脚提示（灰字）。
+    pub note: Option<String>,
+    /// 正文行，每行一张纹理。
+    pub rows: Vec<String>,
+    /// `dirty` 时的确认框："保存并关闭 / 放弃 / 取消"三行，选中项由 `focus` 决定。
+    pub confirm: Option<Vec<String>>,
+    pub focus: usize,
+    pub dirty: bool,
+}
+
+/// 服务门的文字纹理。
+#[derive(Clone, Default)]
+pub struct ServiceFaces {
+    pub title: Option<(TexId, u32, u32)>,
+    pub note: Option<(TexId, u32, u32)>,
+    pub rows: Vec<(TexId, u32, u32)>,
+    pub confirm: Vec<(TexId, u32, u32)>,
+}
+
 impl App {
     pub fn new(carts: Vec<Cart>) -> Self {
         let folder_catalog = FolderCatalog::build_from_paths(&carts);
-        let shelves = shelves_of(carts, &SlotState::default());
+        // `App::new` 时还没有 `root`（`session.rs` 之后才赋），所以这里拿不到
+        // 平台包记录：先按"没有柜子"建架，`sync_hosted_platforms()` 在 root
+        // 到位后补上两台柜子。
+        let library = carts.clone();
+        let shelves = shelves_of(carts, &SlotState::default(), &[]);
         let mut carousel = CarouselKeys::default();
         carousel.set(CarouselAction::Favorite, Binding::plain(Device::R2));
         let shelf_at = shelves
@@ -2349,6 +2684,7 @@ impl App {
             cloud_merged_checked: 0,
             shelves,
             shelf_at,
+            library,
             folder_catalog,
             folder_mode: false,
             folder_view: None,
@@ -2444,6 +2780,9 @@ impl App {
             transfer_leaving_at: None,
             transfer_progress_started: None,
             transfer_done_pending: false,
+            transfer_docket_at: None,
+            transfer_done_at: None,
+            transfer_art: None,
             transfer_faces: None,
             transfer_blank_face: None,
             restarting: false,
@@ -2541,6 +2880,17 @@ impl App {
             wifi_off_job: None,
             wifi_off_retry_at: 0,
             shelf_legend: (Vec::new(), Vec::new()),
+            hosted: Vec::new(),
+            arcade_catalog: None,
+            arcade_systems: Vec::new(),
+            arcade_boards: Vec::new(),
+            arcade_return: None,
+            arcade_legend: (Vec::new(), Vec::new()),
+            arcade_attract_legend: (Vec::new(), Vec::new()),
+            cabinet_legend: (Vec::new(), Vec::new()),
+            arcade_faces: ArcadeFaces::default(),
+            service_faces: ServiceFaces::default(),
+            service_legend: (Vec::new(), Vec::new()),
             transfer_legend: (Vec::new(), Vec::new()),
             favorite_star: None,
             headphones: false,
@@ -2646,6 +2996,8 @@ impl App {
         let mut app = App::new(carts);
         crate::boot_time::mark("app constructed");
         app.root = Some(root.to_path_buf());
+        // 平台包记录现在读得到：把两台柜子补进书架（没装包时这是一次空操作）。
+        app.sync_hosted_platforms();
         let library: Vec<Cart> = app.carts().cloned().collect();
         app.folder_catalog = FolderCatalog::build(root, &library);
         let clock_settings = linkcfg::read_clock_settings(root);
@@ -2952,22 +3304,39 @@ impl App {
         // (Recents, Favorites) have no platform of their own, so use the
         // selected cart's platform and jump to its rack: SELECT still opens
         // the game's folder from any shelf.
-        let platform = self.shelves[self.shelf_at]
+        let wanted = self.shelves[self.shelf_at]
             .0
             .platform()
             .unwrap_or(cart.platform);
-        if !self.folder_catalog.is_browsable(platform) {
-            self.hud.toast(Toast::FolderNone, self.now());
-            return false;
-        }
+        // Entry is not a property of the machine on screen: a rack whose ROMs
+        // all sit in `Games/<platform>/` has nothing to browse, so the hold
+        // opens the first machine that does have folders instead of refusing.
+        // Only a card with no folders at all has nothing to show.
+        let platform = if self.folder_catalog.is_browsable(wanted) {
+            wanted
+        } else {
+            match self.folder_catalog.groups.first() {
+                Some(group) => group.platform,
+                None => {
+                    self.hud.toast(Toast::FolderNone, self.now());
+                    return false;
+                }
+            }
+        };
         let Some(rack_at) = self.rack_at(platform) else {
             self.hud.toast(Toast::FolderNone, self.now());
             return false;
         };
-        let Some(group_index) = self
-            .folder_catalog
-            .group_or_first(&cart, self.root.as_deref())
-        else {
+        // A folder of the machine on screen opens the selected cart's own
+        // folder when it has one; a fallback machine opens its first folder
+        // (the selected cart lives elsewhere, so it has no folder here).
+        let group_index = if platform == wanted {
+            self.folder_catalog
+                .group_or_first(&cart, self.root.as_deref())
+        } else {
+            self.folder_catalog.first_index(platform)
+        };
+        let Some(group_index) = group_index else {
             self.hud.toast(Toast::FolderNone, self.now());
             return false;
         };
@@ -3412,11 +3781,652 @@ impl App {
         SLOT_NAME_ALPHA * ease(level)
     }
 
+    /// 当前已激活的平台包机种；没 `root`（`App::new` 阶段）时为空。
+    fn hosted_now(&self) -> Vec<Platform> {
+        let Some(root) = self.root.as_deref() else {
+            return Vec::new();
+        };
+        slot_store::platform_packs::active_platforms(root)
+    }
+
+    /// 平台包被装上/卸掉后同步两台柜子。
+    ///
+    /// 只在"柜子列表真的变了"时重建书架：每次库刷新都重建会丢掉各架的选中项，
+    /// 而装包/卸包是低频事件。重建时按 rack key 找回光标，找不到就按
+    /// [`reconcile_shelf_at`] 的规则回落到最近的可选架。
+    pub(crate) fn sync_hosted_platforms(&mut self) {
+        let hosted = self.hosted_now();
+        if hosted == self.hosted {
+            return;
+        }
+        self.hosted = hosted;
+        // 主界面若开着而它的平台没了，直接回书架，别画一个空柜。
+        self.leave_arcade_if_unhosted();
+        let carts: Vec<Cart> = self.library.clone();
+        let current = self.shelves[self.shelf_at].0.key();
+        let cursors: Vec<(String, Option<(Platform, String)>)> = self
+            .shelves
+            .iter()
+            .map(|(rack, shelf)| {
+                let cursor = shelf
+                    .carts
+                    .get(shelf.index)
+                    .map(|cart| (cart.platform, cart.stem.clone()));
+                (rack.key(), cursor)
+            })
+            .collect();
+        let old_at = self.shelf_at;
+        self.shelves = shelves_of(carts, &self.state, &self.hosted);
+        self.shelf_at = self
+            .shelves
+            .iter()
+            .position(|(rack, _)| rack.key() == current)
+            .unwrap_or_else(|| {
+                reconcile_shelf_at(&self.shelves, old_at.min(self.shelves.len().saturating_sub(1)))
+            });
+        for (rack, shelf) in &mut self.shelves {
+            let Some((_, Some((platform, stem)))) =
+                cursors.iter().find(|(key, _)| *key == rack.key())
+            else {
+                continue;
+            };
+            if let Some(index) = shelf
+                .carts
+                .iter()
+                .position(|cart| cart.platform == *platform && cart.stem == *stem)
+            {
+                shelf.select(index);
+            }
+        }
+        let len = self.shelves[self.shelf_at].1.carts.len();
+        self.shelves[self.shelf_at].1.index = self.shelves[self.shelf_at].1.index.min(len.saturating_sub(1));
+    }
+
+    /// 主界面若还开着、但它依赖的平台已经不在 `hosted` 里，就回书架。
+    ///
+    /// 这条必须跟着"平台包列表变化"走：Web 页面可以在浏览主界面时卸载平台包，
+    /// 柜子会从书架消失、板列表变空；若 `phase` 还停在 `Arcade`，用户就滞留在
+    /// 一个已经不存在的主机上（不 panic，但状态是错的）。
+    fn leave_arcade_if_unhosted(&mut self) {
+        match &self.phase {
+            Phase::Arcade { screen } => {
+                if !self.hosted.contains(&screen.platform) {
+                    self.phase = Phase::Shelf;
+                }
+            }
+            // 门开着时包被卸掉：直接关门回书架（记录留在卡上，不丢）。
+            Phase::Service { state } => {
+                if !self.hosted.contains(&state.platform) {
+                    self.phase = Phase::Shelf;
+                    self.hud.toast(Toast::PacksChanged, self.now());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// 库或平台包变化后的书架重建（**这是生产路径**：`reload_shelves` 扫完盘就
+    /// 调它，测试也调它，没有第二份拷贝）。
+    ///
+    /// 做四件事：同步柜子列表（并让已失去平台的主界面退回书架）、按 `carts`
+    /// 重建书架、按 rack key 还原每架的选中项、主界面开着时刷新 DAT 与板列表。
+    ///
+    /// `cursors` 由调用方在**清空书架之前**收集（`reload_shelves` 还要把 folder
+    /// 模式下的当前项覆盖进去）；测试传空切片即可。
+    pub(crate) fn resync_after_library_change(
+        &mut self,
+        carts: Vec<Cart>,
+        folder_catalog: FolderCatalog,
+        cursors: Vec<(String, Option<(Platform, String)>)>,
+    ) {
+        self.hosted = self.hosted_now();
+        self.leave_arcade_if_unhosted();
+        let current = self.shelves[self.shelf_at].0.key();
+        let old_at = self.shelf_at;
+        self.library = carts.clone();
+        self.shelves = shelves_of(carts, &self.state, &self.hosted);
+        self.folder_catalog = folder_catalog;
+        self.shelf_at = self
+            .shelves
+            .iter()
+            .position(|(rack, _)| rack.key() == current)
+            .unwrap_or_else(|| {
+                reconcile_shelf_at(&self.shelves, old_at.min(self.shelves.len().saturating_sub(1)))
+            });
+        for (rack, shelf) in &mut self.shelves {
+            let Some((_, Some((platform, stem)))) =
+                cursors.iter().find(|(key, _)| *key == rack.key())
+            else {
+                continue;
+            };
+            if let Some(index) = shelf
+                .carts
+                .iter()
+                .position(|cart| cart.platform == *platform && cart.stem == *stem)
+            {
+                shelf.select(index);
+            }
+        }
+        if let Phase::Arcade { screen } = &self.phase {
+            let platform = screen.platform;
+            self.reload_arcade_catalog(platform);
+            self.refresh_arcade_boards();
+        }
+    }
+
+    /// 进入柜子对应的主界面（A 键）。
+    fn enter_arcade(&mut self, platform: Platform) {
+        let mut screen = crate::arcade::ArcadeScreen::new(platform);
+        // FREE PLAY 存在 `Config/arcade.ini`；读不到就用默认（开）。
+        if let Some(root) = self.root.clone() {
+            screen.free_play = crate::service::read_records(&root).free_play;
+        }
+        self.phase = Phase::Arcade { screen };
+        self.reload_arcade_catalog(platform);
+        self.refresh_arcade_boards();
+    }
+
+    /// 加载主界面用的 DAT 与筛选条。只在进入 Arcade / 切平台 / 库刷新时调用，
+    /// 不能每帧调：一张 8039 条的 DAT release 也要 13 ms。
+    fn reload_arcade_catalog(&mut self, platform: Platform) {
+        let Some(root) = self.root.clone() else {
+            self.arcade_catalog = None;
+            self.arcade_systems = Vec::new();
+            return;
+        };
+        let catalog = slot_store::arcade_dat::Catalog::load(&root, platform);
+        let screen = crate::arcade::ArcadeScreen::new(platform);
+        self.arcade_systems = screen.systems(&catalog, &self.library);
+        self.arcade_catalog = Some(catalog);
+    }
+
+    /// 按当前筛选重算"这一屏有哪些板"，并把 `index` 夹进新长度。
+    fn refresh_arcade_boards(&mut self) {
+        let Phase::Arcade { screen } = &self.phase else {
+            self.arcade_boards.clear();
+            return;
+        };
+        let boards = match self.arcade_catalog.as_ref() {
+            Some(catalog) => screen
+                .boards(catalog, &self.library)
+                .into_iter()
+                .cloned()
+                .collect(),
+            None => Vec::new(),
+        };
+        self.arcade_boards = boards;
+        let len = self.arcade_boards.len();
+        if let Phase::Arcade { screen } = &mut self.phase {
+            screen.set_index(screen.index, len);
+        }
+    }
+
+    /// 主界面的按键：全部在这里消化，**绝不**落到书架的翻架/启动/返回分支。
+    fn arcade_input(&mut self, action: Action) {
+        use crate::arcade::{ArcadeAction, ArcadeKey, ArcadeStage};
+        let stage = match &self.phase {
+            Phase::Arcade { screen } => screen.stage(),
+            _ => return,
+        };
+        match stage {
+            // 插板动画期间所有键都吞掉（状态机自己也拒绝，这里是双保险）。
+            ArcadeStage::Inserting => return,
+            ArcadeStage::Attract => {
+                match action {
+                    Action::GbaDown(Btn::Select) => self.arcade_coin(),
+                    Action::GbaDown(Btn::Start) => self.arcade_start(),
+                    Action::GbaUp(Btn::B) => self.arcade_back(),
+                    // 其余键（含 ←/→、A、X、Y、MENU）在 attract 里不响应。
+                    _ => {}
+                }
+                return;
+            }
+            ArcadeStage::Main => {}
+        }
+        let key = match action {
+            Action::ShelfLeft | Action::GbaDown(Btn::Left) => ArcadeKey::Left,
+            Action::ShelfRight | Action::GbaDown(Btn::Right) => ArcadeKey::Right,
+            Action::GbaUp(Btn::X) => ArcadeKey::Filter,
+            Action::GbaUp(Btn::Y) | Action::FfStart => ArcadeKey::Favorite,
+            Action::GbaUp(Btn::B) => ArcadeKey::Back,
+            Action::GbaUp(Btn::A) | Action::Insert => ArcadeKey::Insert,
+            // Main 下 START 开门；Attract 的 START 走 `arcade_start()`（已在上面的
+            // 阶段分派里处理），这里只处理 Main。
+            Action::GbaDown(Btn::Start) => {
+                self.open_service();
+                return;
+            }
+            // 其余键（MENU、字母跳转、L2/R2…）在本阶段一律吞掉。
+            _ => return,
+        };
+        let boards = self.arcade_boards.len();
+        let systems = self.arcade_systems.clone();
+        let Phase::Arcade { screen } = &mut self.phase else {
+            return;
+        };
+        let outcome = screen.key(key, boards, &systems);
+        match outcome {
+            ArcadeAction::Back => self.exit_arcade(),
+            ArcadeAction::Favorite => self.toggle_arcade_favorite(),
+            ArcadeAction::Insert => {
+                // A：把选中的板插进 JAMMA 槽，进入消磁/attract（5b 才启动核心）。
+                let Phase::Arcade { screen } = &mut self.phase else {
+                    return;
+                };
+                screen.insert(boards);
+            }
+            ArcadeAction::None => {
+                // 换了筛选 → 板列表变了，重算缓存。
+                if key == ArcadeKey::Filter {
+                    self.refresh_arcade_boards();
+                }
+            }
+        }
+    }
+
+    /// SELECT：投币（只在 attract 生效）。
+    fn arcade_coin(&mut self) {
+        if let Phase::Arcade { screen } = &mut self.phase {
+            screen.coin();
+        }
+    }
+
+    /// START：开始游戏。**5a 不启动核心**，只留一条日志并留在 attract。
+    fn arcade_start(&mut self) {
+        let Phase::Arcade { screen } = &self.phase else {
+            return;
+        };
+        let stem = self
+            .arcade_boards
+            .get(screen.index)
+            .map(|cart| cart.stem.clone())
+            .unwrap_or_default();
+        let Phase::Arcade { screen } = &mut self.phase else {
+            return;
+        };
+        if !screen.start() {
+            return;
+        }
+        // 记一次开局（`Config/arcade.ini`），失败只打日志。
+        if let Some(root) = self.root.clone() {
+            let mut records = crate::service::read_records(&root);
+            crate::service::bump_launch(&mut records, &stem, &slot_store::stamp_now());
+            if let Err(error) = crate::service::write_records(&root, &records) {
+                eprintln!("slot: arcade records: {error}");
+            }
+        }
+        // 真正启动走卡带那条管线：`session::sync_core` 看到 `Inserting` 才开核心、
+        // 起 emu，`core_ready` 回调后才进 `Playing`。`app` 自己 `open_core` 只会
+        // 得到一个没有线程喂帧的 `Playing`（黑屏）。
+        let platform = screen.platform;
+        self.arcade_return = Some(platform);
+        self.state.cart = None;
+        self.state.cart_platform = None;
+        self.phase = Phase::Inserting {
+            cart: stem,
+            t: 0.0,
+            core_ready: false,
+            resumed: false,
+            clean: false,
+        };
+    }
+
+    /// B：attract → 回到 PCB 架。
+    fn arcade_back(&mut self) {
+        if let Phase::Arcade { screen } = &mut self.phase {
+            screen.back();
+        }
+    }
+
+    /// 收藏主界面当前选中的板（与卡带架共用同一份收藏记录）。
+    fn toggle_arcade_favorite(&mut self) {
+        let Phase::Arcade { screen } = &self.phase else {
+            return;
+        };
+        let Some(cart) = self.arcade_boards.get(screen.index) else {
+            return;
+        };
+        let platform = cart.platform;
+        let stem = cart.stem.clone();
+        let on = self.state.toggle_favorite(platform, &stem);
+        self.restock_favorites();
+        self.persist();
+        let said = if on {
+            Toast::FavoriteOn
+        } else {
+            Toast::FavoriteOff
+        };
+        self.hud.toast(said, self.now());
+    }
+
+    /// 主界面退出（B）：只回书架，不动书架的光标与选中项。
+    fn exit_arcade(&mut self) {
+        if matches!(self.phase, Phase::Arcade { .. }) {
+            self.phase = Phase::Shelf;
+        }
+    }
+
+    /// 服务门要显示的文字（`frontend` 光栅化）。只算字符串，不碰 `Draw`。
+    pub fn service_view(&self) -> Option<ServiceView> {
+        let Phase::Service { state } = &self.phase else {
+            return None;
+        };
+        let lang = self.language;
+        fn t(lang: slot_i18n::Language, key: &'static str) -> String {
+            slot_i18n::t(lang, key).to_string()
+        }
+        let on_off = |on: bool| {
+            if on {
+                t(lang, "device.app.arcade.service.on")
+            } else {
+                t(lang, "device.app.arcade.service.off")
+            }
+        };
+        let bios = match self.root.as_deref().map(|root| state.bios(root)) {
+            Some(crate::arcade::BiosState::Present) => "Present".to_string(),
+            Some(crate::arcade::BiosState::Missing) => "Missing".to_string(),
+            _ => "—".to_string(),
+        };
+        let record = state.records.set(&state.set);
+        let meta = self
+            .arcade_catalog
+            .as_ref()
+            .and_then(|catalog| catalog.get(&state.set))
+            .map(|entry| {
+                (
+                    entry.title.clone(),
+                    entry.system.clone(),
+                    entry.year.clone(),
+                )
+            });
+        let mut rows = Vec::new();
+        let mut note = None;
+        match state.page {
+            crate::service::ServicePage::Overview => {
+                rows.push(format!("{}: FBNeo", t(lang, "device.app.arcade.service.selected_core")));
+                rows.push(format!("BIOS: {bios}"));
+                rows.push(format!(
+                    "{}: {}",
+                    t(lang, "device.app.arcade.service.free_play"),
+                    on_off(state.free_play())
+                ));
+                rows.push(format!("{}: {}", t(lang, "device.app.arcade.service.jamma"), ""));
+            }
+            crate::service::ServicePage::Board => {
+                let (title, system, year) = meta.unwrap_or_default();
+                rows.push(format!("SET: {}", state.set));
+                rows.push(format!("TITLE: {title}"));
+                rows.push(format!("SYSTEM: {system} · {year}"));
+                rows.push(format!(
+                    "{}: {}",
+                    t(lang, "device.app.arcade.service.launches"),
+                    record.launches
+                ));
+                rows.push(format!(
+                    "{}: {}",
+                    t(lang, "device.app.arcade.service.last_played"),
+                    record
+                        .last_played
+                        .unwrap_or_else(|| t(lang, "device.app.arcade.service.never"))
+                ));
+                rows.push(t(lang, "device.app.arcade.service.leave_board"));
+            }
+            crate::service::ServicePage::Bios => {
+                rows.push(format!("BIOS/fbneo/neogeo.zip: {bios}"));
+                rows.push(format!("BIOS/neogeo.zip: {bios}"));
+                note = Some(t(lang, "device.app.arcade.service.read_only"));
+            }
+            crate::service::ServicePage::Core => {
+                rows.push(format!("{}: FBNeo", t(lang, "device.app.arcade.service.selected_core")));
+                note = Some(t(lang, "device.app.arcade.service.only_core"));
+            }
+            crate::service::ServicePage::Dip => {
+                note = Some(t(lang, "device.app.arcade.service.no_dip"));
+            }
+        }
+        let confirm = state.confirm.map(|_| {
+            vec![
+                t(lang, "device.app.arcade.service.save_close"),
+                t(lang, "device.app.arcade.service.discard"),
+                t(lang, "device.app.arcade.service.cancel"),
+            ]
+        });
+        Some(ServiceView {
+            // 标题就是页名；`dirty` 只在底栏与确认框里体现，不塞进标题。
+            title: t(lang, state.page.title_key()),
+            note,
+            rows,
+            confirm,
+            focus: state.focus,
+            dirty: state.dirty,
+        })
+    }
+
+    pub fn set_service_faces(&mut self, faces: ServiceFaces) {
+        self.service_faces = faces;
+    }
+
+    pub fn set_service_legend_faces(&mut self, left: Vec<(TexId, u32)>, right: Vec<(TexId, u32)>) {
+        self.service_legend = (left, right);
+    }
+
+    /// 开门（`Main` + START）。记录从 `Config/arcade.ini` 读；FREE PLAY 也从那里来。
+    fn open_service(&mut self) {
+        let Phase::Arcade { screen } = &self.phase else {
+            return;
+        };
+        if !crate::service::door_opens(screen.stage()) {
+            return;
+        }
+        let platform = screen.platform;
+        let set = self
+            .arcade_boards
+            .get(screen.index)
+            .map(|cart| cart.stem.clone())
+            .unwrap_or_default();
+        let records = match self.root.as_deref() {
+            Some(root) => crate::service::read_records(root),
+            None => crate::service::Records::default(),
+        };
+        let state = crate::service::ServiceState::open(records, platform, set);
+        self.phase = Phase::Service { state };
+    }
+
+    /// 关门（`save` 为真是"保存并关闭"）。
+    fn close_service(&mut self, save: bool) {
+        let Phase::Service { state } = &mut self.phase else {
+            return;
+        };
+        let platform = state.platform;
+        if save {
+            if let Some(root) = self.root.clone() {
+                state.save(&root);
+            }
+        }
+        let free_play = state.free_play();
+        self.phase = Phase::Arcade {
+            screen: crate::arcade::ArcadeScreen::new(platform),
+        };
+        if let Phase::Arcade { screen } = &mut self.phase {
+            screen.free_play = free_play;
+        }
+    }
+
+    /// 门内的按键：全部在这里消化，绝不穿透到书架/主界面。
+    fn service_input(&mut self, action: Action) {
+        let Phase::Service { state } = &mut self.phase else {
+            return;
+        };
+        if state.confirm.is_some() {
+            match action {
+                Action::GbaDown(Btn::Left) | Action::ShelfLeft => state.move_confirm(-1),
+                Action::GbaDown(Btn::Right) | Action::ShelfRight => state.move_confirm(1),
+                Action::GbaUp(Btn::A) | Action::Insert => {
+                    let choice = state.resolve_confirm();
+                    match choice {
+                        Some(save) => self.close_service(save),
+                        None => {}
+                    }
+                }
+                Action::GbaUp(Btn::B) => {
+                    state.confirm = None;
+                }
+                _ => {}
+            }
+            return;
+        }
+        match action {
+            Action::ShelfLeft | Action::GbaDown(Btn::Left) | Action::GbaDown(Btn::L1) => {
+                state.prev_page()
+            }
+            Action::ShelfRight | Action::GbaDown(Btn::Right) | Action::GbaDown(Btn::R1) => {
+                state.next_page()
+            }
+            Action::GbaDown(Btn::Up) => state.move_focus(-1),
+            Action::GbaDown(Btn::Down) => state.move_focus(1),
+            Action::GbaUp(Btn::A) | Action::Insert => {
+                let leave = state.activate();
+                if leave {
+                    self.close_service(true);
+                }
+            }
+            Action::GbaUp(Btn::B) => {
+                if state.request_close() {
+                    self.close_service(false);
+                }
+            }
+            // 其余键（START / MENU / X / Y…）在门里没有动作，吞掉。
+            _ => {}
+        }
+    }
+
+    /// 主界面当前要显示的一切**文字**，由 `frontend` 光栅化。
+    ///
+    /// `app` 只会用已上传的纹理，不能自己排版；所以这里把字符串算好，前端只负责
+    /// "把这段字做成贴图"。返回值同样被前端当作签名：相等就复用旧纹理。
+    pub fn arcade_view(&self) -> Option<ArcadeView> {
+        let Phase::Arcade { screen } = &self.phase else {
+            return None;
+        };
+        let lang = self.language;
+        let platform = screen.platform;
+        let boards = &self.arcade_boards;
+        let count = boards.len();
+        let current = boards.get(screen.index);
+
+        let mut filters = vec![slot_i18n::t(lang, "device.app.arcade.filter_all").to_string()];
+        filters.extend(self.arcade_systems.iter().cloned());
+        let filter_index = match screen.filter.system() {
+            None => 0,
+            Some(system) => self
+                .arcade_systems
+                .iter()
+                .position(|name| name == system)
+                .map(|index| index + 1)
+                .unwrap_or(0),
+        };
+
+        let title = match platform {
+            Platform::Neogeo => slot_i18n::t(lang, "device.app.arcade.neogeo"),
+            _ => slot_i18n::t(lang, "device.app.arcade.title"),
+        };
+        let header = format!(
+            "{title} · {}",
+            slot_i18n::t(lang, "device.app.arcade.boards")
+                .replace("{n}", &count.to_string())
+        );
+        let meta = current.map(|cart| {
+            let (system, year, players, orientation) = match self
+                .arcade_catalog
+                .as_ref()
+                .and_then(|catalog| catalog.get(&cart.stem))
+            {
+                Some(entry) => (
+                    entry.system.clone(),
+                    entry.year.clone(),
+                    entry.players,
+                    entry.orientation,
+                ),
+                None => (String::new(), String::new(), 1, Default::default()),
+            };
+            let orientation = match orientation {
+                slot_store::arcade_dat::Orientation::Vertical => {
+                    slot_i18n::t(lang, "device.app.arcade.orientation_v").to_string()
+                }
+                _ => slot_i18n::t(lang, "device.app.arcade.orientation_h").to_string(),
+            };
+            let system = if system.is_empty() {
+                "—".to_string()
+            } else {
+                system
+            };
+            let year = if year.is_empty() {
+                "—".to_string()
+            } else {
+                year
+            };
+            format!("{system} · {year} · {players}P · {orientation}")
+        });
+        let set = current.map(|cart| {
+            slot_i18n::t(lang, "device.app.arcade.set")
+                .replace("{set}", &cart.stem)
+                .replace("{core}", "FBNeo")
+        });
+        let bios_missing = matches!(
+            self.arcade_catalog.is_some()
+                .then(|| self.root.as_deref())
+                .flatten()
+                .map(|root| crate::arcade::bios_state(root, platform)),
+            Some(crate::arcade::BiosState::Missing)
+        );
+        // NeoGeo 的屏幕是固定的 304×224（MVS 硬件），Arcade 的各板不同就不写死。
+        //
+        // 注意 `304` 是**可视区**（设计稿画的框），帧缓冲是 `320×224`（见
+        // `slot_model::machine::NEOGEO.canvas`）。两者不是同一个数，别当成 bug
+        // 把文案改成 320：玩家看到的是可视区。
+        let geometry = match platform {
+            Platform::Neogeo => Some("304×224 · 2x".to_string()),
+            _ => None,
+        };
+        Some(ArcadeView {
+            header,
+            filters,
+            filter_index,
+            title: current
+                .map(|cart| cart.title.clone())
+                .unwrap_or_else(|| slot_i18n::t(lang, "device.app.arcade.no_boards").to_string()),
+            meta,
+            set,
+            bios_missing,
+            core_missing: screen.core_missing(),
+            geometry,
+            stage: screen.stage(),
+            credits: match screen.stage {
+                crate::arcade::Stage::Attract { credits, .. } => credits,
+                _ => 0,
+            },
+            free_play: screen.free_play(),
+            index: screen.index,
+            count,
+        })
+    }
+
+    pub fn set_arcade_faces(&mut self, faces: ArcadeFaces) {
+        self.arcade_faces = faces;
+    }
+
     fn next_shelf(&self, by: i32) -> Option<usize> {
-        let n = self.shelves.len() as i32;
-        (1..n)
-            .map(|step| (self.shelf_at as i32 + by * step).rem_euclid(n) as usize)
-            .find(|at| !self.shelves[*at].1.carts.is_empty())
+        let selectable: Vec<bool> = self
+            .shelves
+            .iter()
+            .map(|(rack, shelf)| !shelf.carts.is_empty() || rack.is_cabinet())
+            .collect();
+        // `ring_step` 的整圈那一步（`by == ±len` 在可选起点上回原地）是它自己的
+        // 契约；对"换架"来说"回到自己"不算换架——只有一个可选架时（一张只玩
+        // GBA 的卡）必须返回 `None`，否则 `neighbour_shelves()` 会把自己当邻居，
+        // 同一张卡的贴纸被要两遍，`switch_shelf` 还会因为"移动到自己"重播机种牌。
+        ring_step(self.shelves.len(), self.shelf_at, by, &selectable)
+            .filter(|at| *at != self.shelf_at)
     }
 
     fn restock(&mut self, at: usize, carts: Vec<Cart>) {
@@ -4152,6 +5162,9 @@ impl App {
             Platform::Sfc => Some("SFC"),
             Platform::Md => None,
             Platform::Gba => None,
+            // TODO(phase 5): 街机 / NeoGeo 的"叠加层"是柜子的 CRT 玻璃框，
+            // 与这里的 Overlay 遮罩不是一回事；先声明为 none。
+            Platform::Arcade | Platform::Neogeo => None,
         }
     }
 
@@ -4167,6 +5180,7 @@ impl App {
             Platform::Sfc => Some((&self.sfc_masks, self.sfc_mask_index)),
             Platform::Md => None,
             Platform::Gba => None,
+            Platform::Arcade | Platform::Neogeo => None,
         }
     }
 
@@ -4221,7 +5235,7 @@ impl App {
                 self.sfc_mask_index = next;
                 self.state.sfc_mask = name;
             }
-            Platform::Md | Platform::Gba => {}
+            Platform::Md | Platform::Gba | Platform::Arcade | Platform::Neogeo => {}
         }
     }
 
@@ -4271,6 +5285,25 @@ impl App {
 
     pub fn set_shelf_legend_faces(&mut self, left: Vec<(TexId, u32)>, right: Vec<(TexId, u32)>) {
         self.shelf_legend = (left, right);
+    }
+
+    /// 停在柜子上时的底栏：A 进入 / ←→ 选柜。
+    pub fn set_cabinet_legend_faces(&mut self, left: Vec<(TexId, u32)>, right: Vec<(TexId, u32)>) {
+        self.cabinet_legend = (left, right);
+    }
+
+    /// 主界面底栏：B 返回 / ←→ 选板 / A 插板 / Y 收藏 / X 筛选 / START 服务。
+    pub fn set_arcade_legend_faces(&mut self, left: Vec<(TexId, u32)>, right: Vec<(TexId, u32)>) {
+        self.arcade_legend = (left, right);
+    }
+
+    /// attract 阶段的底栏（B 返回 / SELECT 投币 / START 开始）。
+    pub fn set_arcade_attract_legend_faces(
+        &mut self,
+        left: Vec<(TexId, u32)>,
+        right: Vec<(TexId, u32)>,
+    ) {
+        self.arcade_attract_legend = (left, right);
     }
 
     pub fn set_transfer_legend_faces(
@@ -4342,6 +5375,27 @@ impl App {
         &self.phase
     }
 
+    /// 这次游戏是不是从街机主界面启动的（退出要回主界面而不是书架）。
+    ///
+    /// 生产侧直接读字段就够；这个访问器是给验收用例与 Phase 6 的服务门用的。
+    #[allow(dead_code)]
+    pub(crate) fn arcade_return(&self) -> Option<Platform> {
+        self.arcade_return
+    }
+
+    /// 书架光标停在哪个架子上。
+    #[allow(dead_code)]
+    pub(crate) fn shelf_at(&self) -> usize {
+        self.shelf_at
+    }
+
+    /// quick menu 现在可不可用。街机开始游戏后 `phase` 就是 `Playing`，走的是
+    /// 同一套菜单（存档 / 读档 / 重启 / 退出）。
+    #[allow(dead_code)]
+    pub(crate) fn quick_menu_available(&self) -> bool {
+        matches!(self.phase, Phase::Playing { .. })
+    }
+
     pub fn carts(&self) -> impl Iterator<Item = &Cart> {
         self.shelves
             .iter()
@@ -4363,6 +5417,9 @@ impl App {
             .iter()
             .find(|c| c.stem == *stem)
             .or_else(|| self.carts().find(|c| c.stem == *stem))
+            // 街机 / NeoGeo 的板不在任何卡带架里，只在 `library`；`session`
+            // 靠 `seated_cart()` 找 ROM，缺了这条就永远开不了核心。
+            .or_else(|| self.library.iter().find(|c| c.stem == *stem))
     }
 
     pub fn single_cart(&self) -> bool {
@@ -4923,10 +5980,10 @@ impl App {
         // The cart's *own* shelf, not the one on screen: the joiner may be
         // looking at another platform (or the shelf) when the invite arrives.
         let platform = self.cart_platform(stem).ok_or(FollowRefusal::MissingRom)?;
-        // The host's game is played on the host's core: a wireless cart needs
-        // gpSP and a cable one needs mGBA, so the joiner adopts that choice
-        // for this cart before the core is opened.
-        let want = [Core::Mgba, Core::Gpsp]
+        // The host's game is played on the host's core: mGBA carries the
+        // cable, gpSP the wireless adapter, and armGBA either over netpacket.
+        // The joiner adopts that choice for this cart before the core opens.
+        let want = [Core::Mgba, Core::Gpsp, Core::Armgba]
             .into_iter()
             .find(|candidate| candidate.index() as u8 == core);
         match self.phase {
@@ -4995,6 +6052,12 @@ impl App {
             Core::Gpsp => self
                 .auto_link(stem)
                 .is_some_and(|(cart, _)| crate::link_kind::link_carried(&cart.code, &cart.title)),
+            // armGBA's netpacket link starts with gpSP's carried whitelist:
+            // an unproven cart runs solo instead of announcing a game the
+            // host would wait for forever.
+            Core::Armgba => self.auto_link(stem).is_some_and(|(cart, _)| {
+                crate::link_kind::armgba_link_carried(&cart.code, &cart.title)
+            }),
             _ => false,
         }
     }
@@ -5362,6 +6425,9 @@ impl App {
             Platform::Gb | Platform::Gbc | Platform::Fc | Platform::Sfc | Platform::Md => {
                 self.state.shader_gb
             }
+            // TODO(phase 5): 街机的扫描线要按柜子的 CRT 单独一套预设；本阶段
+            // 让它跟其它 2x 非 Advance 画面共用 Game Boy 那一桶。
+            Platform::Arcade | Platform::Neogeo => self.state.shader_gb,
         }
     }
 
@@ -5484,6 +6550,21 @@ impl App {
 
     pub fn link_player(&self) -> Option<u8> {
         self.link_player
+    }
+
+    /// The armGBA link this core open is for: a reload in flight names the
+    /// port; otherwise a live session keeps the hardware it opened with.
+    pub fn armgba_link(&self) -> Option<LinkKind> {
+        if self.core != Core::Armgba {
+            return None;
+        }
+        if let Some(reload) = &self.reload {
+            return Some(reload.from);
+        }
+        if self.starting.is_some() || self.link_active() {
+            return Some(self.link_hardware);
+        }
+        None
     }
 
     pub fn take_colour_correction(&mut self) -> Option<bool> {
@@ -6122,6 +7203,10 @@ impl App {
                 kinds.push(LinkAdminRow::Status);
                 rows.push(slot_i18n::t(lang, "device.app.link.gpsp_hint").to_string());
                 kinds.push(LinkAdminRow::Status);
+                if self.core == Core::Armgba {
+                    rows.push(slot_i18n::t(lang, "device.app.link.armgba_build").to_string());
+                    kinds.push(LinkAdminRow::Status);
+                }
             }
             // The joiner's door back into the host's game, after it declined
             // or after the host changed carts.
@@ -6228,6 +7313,11 @@ impl App {
                 let selected = index.min(rows.len().saturating_sub(1));
                 (title, rows, selected)
             }
+            TRANSFER_CONTENT => (
+                slot_i18n::t(lang, "device.app.transfer.content").into(),
+                Vec::new(),
+                index.min(2),
+            ),
             10 => {
                 let title = self
                     .shelf()
@@ -6647,7 +7737,7 @@ impl App {
             return self.link_popup_input(action);
         }
         if self.transfer.is_some()
-            || matches!(self.utility, Some((5 | 6 | 7, _)))
+            || matches!(self.utility, Some((5 | 6 | 7 | TRANSFER_CONTENT, _)))
         {
             return self.transfer_input(action);
         }
@@ -6678,6 +7768,22 @@ impl App {
         let now = self.now();
         match self.phase {
             Phase::Shelf => match action {
+                // 柜子上只认三个键：←/→ 翻架、A 进入。其余键在柜子上 no-op，
+                // 免得把"开搜索/翻字母/换专辑"这些卡带架动作套到柜子上。
+                _ if self.shelves[self.shelf_at].0.is_cabinet() => match action {
+                    Action::ShelfLeft
+                    | Action::GbaDown(Btn::Left)
+                    | Action::GbaDown(Btn::L1) => self.switch_shelf(-1),
+                    Action::ShelfRight
+                    | Action::GbaDown(Btn::Right)
+                    | Action::GbaDown(Btn::R1) => self.switch_shelf(1),
+                    Action::GbaUp(Btn::A) | Action::Insert => {
+                        if let Some(platform) = self.shelves[self.shelf_at].0.cabinet() {
+                            self.enter_arcade(platform);
+                        }
+                    }
+                    _ => {}
+                },
                 Action::GbaDown(Btn::Start) if self.core_picker.is_none() => {
                     self.open_core_picker()
                 }
@@ -6727,8 +7833,16 @@ impl App {
                 }
                 _ => {}
             },
+            // 主界面：所有键都在这里消化，绝不落到书架的翻架/启动/返回分支。
+            Phase::Arcade { .. } => self.arcade_input(action),
+            // 服务门：同样全部吞掉，不穿透。
+            Phase::Service { .. } => self.service_input(action),
             Phase::Inserting { .. } if action == Action::Eject => self.eject(),
             Phase::Playing { .. } => match action {
+                // 设备运行中不能开门：只给一条 toast，按键吞掉。
+                Action::GbaDown(Btn::Start) => {
+                    self.hud.toast(Toast::ServiceBusy, self.now());
+                }
                 Action::GbaDown(Btn::L1) if self.shoulders_change_picture() => {
                     self.set_picture(VideoMode::Stretch)
                 }
@@ -7016,34 +8130,58 @@ impl App {
                 0,
             ),
             TransferStage::Incoming => {
-                let name = transfer
-                    .incoming
-                    .as_ref()
-                    .map(|offer| offer.name.clone())
-                    .unwrap_or_default();
+                let offer = transfer.incoming.as_ref();
+                let name = offer.map(|offer| offer.name.clone()).unwrap_or_default();
+                let mode = offer.map(|offer| offer.mode).unwrap_or_default();
+                let (title, first) = match mode {
+                    TransferMode::SaveOnly => (
+                        slot_i18n::t_args(
+                            lang,
+                            "device.app.transfer.confirm_save",
+                            &[("name", name.as_str())],
+                        ),
+                        slot_i18n::t(lang, "device.app.transfer.confirm_save_detail").into(),
+                    ),
+                    TransferMode::All => (
+                        slot_i18n::t_args(
+                            lang,
+                            "device.app.transfer.confirm_all",
+                            &[("name", name.as_str())],
+                        ),
+                        slot_i18n::t(lang, "device.app.transfer.confirm_all_detail").into(),
+                    ),
+                    TransferMode::CartOnly => (
+                        slot_i18n::t_args(lang, "device.app.confirm.receive", &[("name", name.as_str())]),
+                        slot_i18n::t(lang, "device.app.confirm.receive_yes").into(),
+                    ),
+                };
                 (
-                    slot_i18n::t_args(lang, "device.app.confirm.receive", &[("name", name.as_str())]),
-                    vec![slot_i18n::t(lang, "device.app.confirm.receive_yes").into(), slot_i18n::t(lang, "device.app.common.cancel").into()],
+                    title,
+                    vec![first, slot_i18n::t(lang, "device.app.common.cancel").into()],
                     0,
                 )
             }
-            TransferStage::IncomingMeta => {
+            TransferStage::IncomingPartial => {
                 let name = transfer
                     .incoming
                     .as_ref()
                     .map(|offer| offer.name.clone())
                     .unwrap_or_default();
                 let labels: Vec<&str> = transfer
-                    .metadata_missing
+                    .parts
                     .iter()
                     .copied()
                     .map(crate::cart_transfer::asset_label)
                     .collect();
                 let fields = labels.join("、");
                 (
-                    slot_i18n::t_args(lang, "device.app.confirm.metadata", &[("name", name.as_str())]),
+                    slot_i18n::t_args(lang, "device.app.transfer.confirm_parts", &[("name", name.as_str())]),
                     vec![
-                        slot_i18n::t_args(lang, "device.app.confirm.metadata_detail", &[("fields", fields.as_str())]),
+                        slot_i18n::t_args(
+                            lang,
+                            "device.app.transfer.confirm_parts_detail",
+                            &[("fields", fields.as_str())],
+                        ),
                         slot_i18n::t(lang, "device.app.common.cancel").into(),
                     ],
                     0,
@@ -7064,9 +8202,58 @@ impl App {
         }
         self.wifi_activity_started();
         self.phase = Phase::Shelf;
-        self.transfer = Some(Transfer::start(host, link_port(), self.link_network));
+        let mode = self.transfer_content();
+        self.transfer = Some(Transfer::start(host, link_port(), self.link_network, mode));
         self.utility = Some((5, 0));
         self.hud.toast(Toast::CartTransferWaiting, self.now());
+    }
+
+    /// What the transfer room sends.  Persisted so the choice survives a
+    /// restart; an unset line reads as 仅卡带, which is what older builds did.
+    pub fn transfer_content(&self) -> TransferMode {
+        TransferMode::from_code(self.state.transfer_content)
+    }
+
+    fn set_transfer_content(&mut self, mode: TransferMode) {
+        self.state.transfer_content = mode.code();
+        if let Some(transfer) = &mut self.transfer {
+            transfer.set_mode(mode);
+        }
+        self.persist();
+    }
+
+    /// The content panel is open, with the row the cursor is on.
+    pub fn transfer_content_menu(&self) -> Option<usize> {
+        match self.utility {
+            Some((TRANSFER_CONTENT, index)) => Some(index),
+            _ => None,
+        }
+    }
+
+    fn transfer_content_index(&self) -> usize {
+        match self.transfer_content() {
+            TransferMode::CartOnly => 0,
+            TransferMode::SaveOnly => 1,
+            TransferMode::All => 2,
+        }
+    }
+
+    fn content_at(index: usize) -> TransferMode {
+        match index {
+            1 => TransferMode::SaveOnly,
+            2 => TransferMode::All,
+            _ => TransferMode::CartOnly,
+        }
+    }
+
+    /// Close the content panel: back to the transfer room when one is open,
+    /// otherwise back to the create/join menu it was opened from.
+    fn return_from_content(&self) -> Option<(u8, usize)> {
+        if self.transfer.is_some() {
+            None
+        } else {
+            Some((5, 0))
+        }
     }
 
     fn begin_transfer_insert(&mut self, stem: String) {
@@ -7074,6 +8261,8 @@ impl App {
         self.transfer_insert_stem = Some(stem);
         self.transfer_seated = true;
         self.transfer_eject_at = None;
+        self.transfer_docket_at = None;
+        self.transfer_done_at = None;
     }
 
     fn begin_transfer_eject(&mut self) {
@@ -7158,6 +8347,8 @@ impl App {
         self.transfer_eject_at = None;
         self.transfer_progress_started = None;
         self.transfer_done_pending = false;
+        self.transfer_docket_at = None;
+        self.transfer_done_at = None;
         self.transfer_faces = None;
         self.transfer_blank_face = None;
         self.transfer_header_at = None;
@@ -7183,6 +8374,11 @@ impl App {
             match action {
                 Action::QuickMenu | Action::GameMenu => {
                     self.utility = Some((6, 0));
+                }
+                // Y picks what this transfer carries.  Only the room allows
+                // it: once an offer is out, the choice is already on the wire.
+                Action::GbaDown(Btn::Y) if stage == TransferStage::Shelf => {
+                    self.utility = Some((TRANSFER_CONTENT, self.transfer_content_index()));
                 }
                 Action::GbaUp(Btn::Left) => self.shelf_mut().release_left(),
                 Action::GbaUp(Btn::Right) => self.shelf_mut().release_right(),
@@ -7271,6 +8467,9 @@ impl App {
                         }
                     }
                     Action::GbaDown(Btn::Select) => self.switch_link_network(),
+                    Action::GbaDown(Btn::Y) if self.transfer.is_none() => {
+                        self.utility = Some((TRANSFER_CONTENT, self.transfer_content_index()));
+                    }
                     Action::GbaDown(Btn::B) => self.close_cart_transfer(),
                     Action::QuickMenu => {
                         if self.transfer.is_some() {
@@ -7291,7 +8490,7 @@ impl App {
                         self.close_cart_transfer();
                     } else {
                         self.utility = match self.transfer.as_ref().map(|t| t.stage.clone()) {
-                            Some(TransferStage::Incoming | TransferStage::IncomingMeta) => Some((7, 0)),
+                            Some(TransferStage::Incoming | TransferStage::IncomingPartial) => Some((7, 0)),
                             Some(TransferStage::OfferSent) | Some(TransferStage::Connecting) => {
                                 Some((5, 0))
                             }
@@ -7301,7 +8500,7 @@ impl App {
                 }
                 Action::GbaDown(Btn::B) | Action::QuickMenu => {
                     self.utility = match self.transfer.as_ref().map(|t| t.stage.clone()) {
-                        Some(TransferStage::Incoming | TransferStage::IncomingMeta) => Some((7, 0)),
+                        Some(TransferStage::Incoming | TransferStage::IncomingPartial) => Some((7, 0)),
                         Some(TransferStage::OfferSent) | Some(TransferStage::Connecting) => {
                             Some((5, 0))
                         }
@@ -7322,8 +8521,8 @@ impl App {
                         let Some(transfer) = &mut self.transfer else {
                             return;
                         };
-                        let accepted = if transfer.stage == TransferStage::IncomingMeta {
-                            transfer.accept_metadata(&root)
+                        let accepted = if transfer.stage == TransferStage::IncomingPartial {
+                            transfer.accept_parts(&root)
                         } else {
                             transfer.accept(&root)
                         };
@@ -7358,6 +8557,22 @@ impl App {
                     self.utility = None;
                 }
                 Action::QuickMenu => self.utility = Some((6, 0)),
+                _ => {}
+            },
+            TRANSFER_CONTENT => match action {
+                Action::GbaDown(Btn::Up) => {
+                    self.utility = Some((TRANSFER_CONTENT, (index + 2) % 3));
+                }
+                Action::GbaDown(Btn::Down) => {
+                    self.utility = Some((TRANSFER_CONTENT, (index + 1) % 3));
+                }
+                Action::GbaDown(Btn::A) => {
+                    self.set_transfer_content(Self::content_at(index.min(2)));
+                    self.utility = self.return_from_content();
+                }
+                Action::GbaDown(Btn::B) | Action::GbaDown(Btn::Y) | Action::QuickMenu => {
+                    self.utility = self.return_from_content();
+                }
                 _ => {}
             },
             _ => {}
@@ -7423,6 +8638,16 @@ impl App {
         }
         self.transfer_done_pending = false;
         self.transfer_progress_started = None;
+        if received {
+            if let Some(path) = self.transfer.as_ref().and_then(|t| t.backups.first()) {
+                // A replaced save is one keystroke away from being recovered;
+                // say where it went without blocking the room behind a modal.
+                crate::link_log::warn(format!(
+                    "transfer: 旧存档已备份到 {}",
+                    path.display()
+                ));
+            }
+        }
         self.hud.toast(Toast::CartTransferDone, now);
         self.utility = None;
         self.begin_transfer_eject();
@@ -7453,33 +8678,45 @@ impl App {
         };
         if after == TransferStage::Incoming {
             if let Some(offer) = offer {
-                let metadata = if offer.hash != [0u8; 32] {
+                // What this device still needs: side material it lacks, plus
+                // every save kind the player asked to send.  A save-only offer
+                // is useless without a local cartridge to seat it on.
+                let local = if offer.hash != [0u8; 32] {
                     self.cached_rom_cart(offer.platform, offer.hash)
-                        .map(|cart| (cart.stem.clone(), offer.metadata_missing(&root, cart)))
+                        .map(|cart| (cart.stem.clone(), offer.parts_missing(&root, cart)))
                 } else {
                     None
                 };
-                match metadata {
-                    Some((_stem, missing)) if !missing.is_empty() => {
+                match (offer.mode, local) {
+                    (TransferMode::SaveOnly, None) => {
                         if let Some(transfer) = &mut self.transfer {
-                            transfer.offer_metadata(_stem, missing);
+                            transfer.fail_with(
+                                slot_i18n::t(lang, "device.app.transfer.peer_no_cart"),
+                            );
                         }
-                        after = TransferStage::IncomingMeta;
+                        after = TransferStage::Failed;
                     }
-                    Some(_) => {
-                        // Same ROM and every offered side asset is already
-                        // present: keep the old duplicate refusal.
+                    (_, Some((stem, parts))) if !parts.is_empty() => {
+                        if let Some(transfer) = &mut self.transfer {
+                            transfer.offer_parts(stem, parts);
+                        }
+                        after = TransferStage::IncomingPartial;
+                    }
+                    (_, Some(_)) => {
+                        // Same ROM and every offered part is already present:
+                        // keep the old duplicate refusal.
                         if let Some(transfer) = &mut self.transfer {
                             transfer.mark_duplicate(true);
                         }
                         after = TransferStage::Duplicate;
                         duplicate_receiver = true;
                     }
-                    None => {}
+                    _ => {}
                 }
             }
         }
         if done {
+            self.transfer_done_at.get_or_insert(now);
             let started = self
                 .transfer_progress_started
                 .get_or_insert(now)
@@ -7503,7 +8740,7 @@ impl App {
                 self.begin_transfer_eject();
                 self.hud.toast(Toast::CartTransferReady, now);
             }
-            TransferStage::Incoming | TransferStage::IncomingMeta => {
+            TransferStage::Incoming | TransferStage::IncomingPartial => {
                 self.utility = Some((7, 0));
             }
             TransferStage::Sending | TransferStage::Receiving => {
@@ -7555,6 +8792,9 @@ impl App {
                 self.utility = None;
                 self.begin_transfer_eject();
                 self.say_notice(slot_i18n::t(lang, "device.app.transfer.failed"), reason);
+            }
+            TransferStage::Done => {
+                self.transfer_done_at.get_or_insert(now);
             }
             _ => {}
         }
@@ -7632,27 +8872,9 @@ impl App {
         self.folder_view = None;
         self.folder_mode = false;
         self.folder_anim = None;
-        self.shelves = shelves_of(carts, &self.state);
-        self.folder_catalog = folder_catalog;
-        self.shelf_at = self
-            .shelves
-            .iter()
-            .position(|(rack, _)| rack.key() == current)
-            .unwrap_or(self.shelf_at.min(self.shelves.len().saturating_sub(1)));
-        for (rack, shelf) in &mut self.shelves {
-            let Some((_, Some((platform, stem)))) =
-                cursors.iter().find(|(key, _)| *key == rack.key())
-            else {
-                continue;
-            };
-            if let Some(index) = shelf
-                .carts
-                .iter()
-                .position(|cart| cart.platform == *platform && cart.stem == *stem)
-            {
-                shelf.select(index);
-            }
-        }
+        // 平台包可能刚被 Web 装上/卸掉、卡也可能被改过：重建书架这一步与
+        // `resync_after_library_change` 共用同一份实现（生产路径与测试不再分叉）。
+        self.resync_after_library_change(carts, folder_catalog, cursors);
         self.shelf_platform = slot_ui::Printed::default();
         self.slot_letter = None;
         self.shelf_named = None;
@@ -7675,9 +8897,20 @@ impl App {
             }
         }
         if !self.folder_mode && self.shelves[self.shelf_at].1.carts.is_empty() {
-            if let Some(next) = self.shelves.iter().position(|(_, shelf)| !shelf.carts.is_empty()) {
+            // 柜子也是合法落点：它的架子恒空，但用户能停在上面按 A 进入。
+            if let Some(next) = self
+                .shelves
+                .iter()
+                .position(|(rack, shelf)| !shelf.carts.is_empty() || rack.is_cabinet())
+            {
                 self.shelf_at = next;
             }
+        }
+        // 主界面开着时，DAT / 筛选条 / 板列表都可能已经过期（刚装/卸了包）。
+        if let Phase::Arcade { screen } = &self.phase {
+            let platform = screen.platform;
+            self.reload_arcade_catalog(platform);
+            self.refresh_arcade_boards();
         }
     }
 
@@ -7738,6 +8971,27 @@ impl App {
         .draw(out);
     }
 
+    /// The seat card's face for the docket's product photo: the real shelf card
+    /// while sending (and after a received cart is reloaded), the generated
+    /// preview face while the receiver is still receiving.
+    fn transfer_docket_card(&self) -> Option<TexId> {
+        let receiving = self
+            .transfer
+            .as_ref()
+            .is_some_and(|transfer| transfer.stage == TransferStage::Receiving);
+        if receiving {
+            if let Some((tex, _, _)) = self.transfer_blank_face {
+                return Some(tex);
+            }
+        }
+        if let Some(stem) = self.transfer_insert_stem.as_deref() {
+            if let Some((_, Some(tex))) = self.shelf().find(stem) {
+                return Some(tex);
+            }
+        }
+        self.transfer_blank_face.map(|(tex, _, _)| tex)
+    }
+
     fn draw_cart_transfer(&self, out: &mut Vec<Draw>) {
         let Some(transfer) = &self.transfer else {
             return;
@@ -7758,145 +9012,252 @@ impl App {
         let Some(faces) = self.transfer_faces.as_ref() else {
             return;
         };
+        let Some(docket) = faces.docket else {
+            return;
+        };
+        let Some(view) = self.transfer_view() else {
+            return;
+        };
+        let now = self.now();
+        let open = self.transfer_docket_at.map_or(1.0, |start| {
+            (now.saturating_sub(start) as f32 / 180.0).clamp(0.0, 1.0)
+        });
+        let close = self.transfer_eject_at.map_or(0.0, |start| {
+            (now.saturating_sub(start) as f32 / 160.0).clamp(0.0, 1.0)
+        });
+        let alpha = (slot_ui::ease(open) * (1.0 - slot_ui::ease(close))).clamp(0.0, 1.0);
+        let dy = 12.0 * (1.0 - slot_ui::ease(open)) + 8.0 * slot_ui::ease(close);
+        let (dx, top) = slot_ui::transfer_docket::DOCKET_AT;
+        let top = top + dy;
 
-        // The card, data arc and orbiting particles are the interface.  The
-        // only textual element left is the large percentage.
-        let (_, pw, ph) = faces.percent;
-        if pw > 0 && ph > 0 {
-            out.push(Draw::Tex {
-                x: (OUT_W as f32 - pw as f32) / 2.0,
-                y: 130.0,
-                w: pw as f32,
-                h: ph as f32,
-                tex: faces.percent.0,
-                alpha: 1.0,
-            });
-        }
-
-        // The four cartridge assets are back; each one lights up as its
-        // data reaches the receiver.
-        let reached_all = transfer.stage == TransferStage::Done;
-        for (index, (tex, aw, ah)) in faces.assets.iter().copied().enumerate() {
-            if aw == 0 || ah == 0 {
-                continue;
+        if let Some(art) = self.transfer_art.as_ref() {
+            if art.shadow.w > 0 {
+                out.push(Draw::Tex {
+                    x: dx - 4.0,
+                    y: top + 4.0,
+                    w: art.shadow.w as f32,
+                    h: art.shadow.h as f32,
+                    tex: art.shadow.tex,
+                    alpha: 0.55 * alpha,
+                });
             }
-            let x = 248.0 + index as f32 * 60.0;
-            let reached = reached_all || transfer.progress + 0.02 >= (index + 1) as f32 / 4.0;
-            let alpha = if reached { 1.0 } else { 0.38 };
-            out.push(Draw::Rect {
-                x,
-                y: 208.0,
-                w: 52.0,
-                h: 24.0,
-                colour: [0.06, 0.16, 0.21, 0.90 * alpha],
-            });
-            out.push(Draw::Rect {
-                x: x + 6.0,
-                y: 217.0,
-                w: 4.0,
-                h: 4.0,
-                colour: [0.36, 0.92, 0.96, alpha],
-            });
-            let scale = 0.9;
+        }
+        out.push(Draw::Tex {
+            x: dx,
+            y: top,
+            w: docket.w as f32,
+            h: docket.h as f32,
+            tex: docket.tex,
+            alpha,
+        });
+
+        // Product photo.  Fit the card's own aspect inside the paper frame.
+        if let Some(tex) = self.transfer_docket_card() {
+            let (cw, ch) = slot_ui::cart_box(view.platform);
+            let scale = (84.0 / cw as f32).min(47.0 / ch as f32);
+            let (w, h) = (cw as f32 * scale, ch as f32 * scale);
             out.push(Draw::Tex {
-                x: x + (52.0 - aw as f32 * scale) / 2.0,
-                y: 212.0,
-                w: aw as f32 * scale,
-                h: ah as f32 * scale,
+                x: 99.0 + (84.0 - w) / 2.0,
+                y: 165.0 + (47.0 - h) / 2.0 + dy,
+                w,
+                h,
                 tex,
                 alpha,
             });
         }
 
-        // The inserted card is drawn by the shelf chrome.  Draw the source
-        // mini-cart and the moving data arc over the same composition.
-        let source = if transfer.incoming.is_some() {
-            None
-        } else {
-            self.transfer_insert_stem
-                .as_deref()
-                .and_then(|stem| self.shelf().find(stem))
-        };
-        let (sx, sy, sw, sh) = (44.0, 266.0, 174.0, 98.0);
-        out.push(Draw::Rect {
-            x: sx,
-            y: sy,
-            w: sw,
-            h: sh,
-            colour: [0.03, 0.06, 0.09, 0.70],
-        });
-        if let Some((_, Some(face))) = source {
-            out.push(Draw::Tex {
-                x: sx + 5.0,
-                y: sy + 4.0,
-                w: sw - 10.0,
-                h: sh - 8.0,
-                tex: face,
-                alpha: 1.0,
-            });
-        } else if let Some((tex, _, _)) = self.transfer_blank_face {
-            out.push(Draw::Tex {
-                x: sx + 5.0,
-                y: sy + 4.0,
-                w: sw - 10.0,
-                h: sh - 8.0,
-                tex,
-                alpha: 1.0,
-            });
-        } else {
-            out.push(Draw::Rect {
-                x: sx + 18.0,
-                y: sy + 15.0,
-                w: sw - 36.0,
-                h: sh - 30.0,
-                colour: [0.12, 0.30, 0.48, 0.95],
-            });
-            out.push(Draw::Rect {
-                x: sx + 18.0,
-                y: sy + sh - 27.0,
-                w: sw - 36.0,
-                h: 10.0,
-                colour: [0.45, 0.18, 0.50, 0.95],
-            });
+        if !matches!(view.flow, TransferFlow::Waiting) {
+            if let Some(percent) = faces.percent.filter(|face| face.w > 0 && face.h > 0) {
+                out.push(Draw::Tex {
+                    x: slot_ui::transfer_docket::PERCENT_AT.0,
+                    y: slot_ui::transfer_docket::PERCENT_AT.1 + dy,
+                    w: percent.w as f32,
+                    h: percent.h as f32,
+                    tex: percent.tex,
+                    alpha,
+                });
+            }
+            if let Some(bytes) = faces.bytes.filter(|face| face.w > 0 && face.h > 0) {
+                out.push(Draw::Tex {
+                    x: slot_ui::transfer_docket::BYTES_AT.0,
+                    y: slot_ui::transfer_docket::BYTES_AT.1 + dy,
+                    w: bytes.w as f32,
+                    h: bytes.h as f32,
+                    tex: bytes.tex,
+                    alpha,
+                });
+            }
+            let (bx, by, bw, bh) = slot_ui::transfer_docket::BAR;
+            let accent = slot_ui::switch_style::accent();
+            let accent = [
+                accent[0] as f32 / 255.0,
+                accent[1] as f32 / 255.0,
+                accent[2] as f32 / 255.0,
+                alpha,
+            ];
+            let filled = bw * view.percent.min(100) as f32 / 100.0;
+            if filled > 0.0 {
+                out.push(Draw::Rect {
+                    x: bx,
+                    y: by + dy,
+                    w: filled.max(2.0),
+                    h: bh,
+                    colour: accent,
+                });
+                out.push(Draw::Rect {
+                    x: bx + 2.0,
+                    y: by + 1.0 + dy,
+                    w: (filled - 4.0).max(0.0),
+                    h: 1.0,
+                    colour: [0.96, 0.54, 0.57, 0.55 * alpha],
+                });
+            }
         }
-        out.push(Draw::Rect {
-            x: sx + 5.0,
-            y: sy,
-            w: 1.0,
-            h: sh,
-            colour: [0.34, 0.89, 0.95, 0.55],
-        });
 
-        let (x0, y0) = (220.0, 315.0);
-        let (cx, cy) = (300.0, 235.0);
-        let (x1, y1) = (345.0, 300.0);
-        let phase = (self.now() % 1200) as f32 / 1200.0;
-        for step in 0..34 {
-            let t = step as f32 / 33.0;
-            let x = (1.0 - t) * (1.0 - t) * x0 + 2.0 * (1.0 - t) * t * cx + t * t * x1;
-            let y = (1.0 - t) * (1.0 - t) * y0 + 2.0 * (1.0 - t) * t * cy + t * t * y1;
-            let pulse = (phase - t).rem_euclid(1.0);
-            let bright = if pulse < 0.14 { 1.0 } else { 0.36 };
-            out.push(Draw::Rect {
-                x,
-                y,
-                w: if pulse < 0.14 { 5.0 } else { 3.0 },
-                h: if pulse < 0.14 { 5.0 } else { 3.0 },
-                colour: [0.34, 0.89, 0.95, bright],
-            });
+        // Per-item check boxes and the current item's own progress.  The paper
+        // already carries the labels and sizes; this layer only changes state.
+        let accent = slot_ui::switch_style::accent();
+        let accent = [
+            accent[0] as f32 / 255.0,
+            accent[1] as f32 / 255.0,
+            accent[2] as f32 / 255.0,
+            alpha,
+        ];
+        let edge = slot_ui::transfer_docket::PAPER_EDGE;
+        let edge = [
+            edge[0] as f32 / 255.0,
+            edge[1] as f32 / 255.0,
+            edge[2] as f32 / 255.0,
+            alpha,
+        ];
+        let faint = slot_ui::transfer_docket::PAPER_FAINT;
+        let faint = [
+            faint[0] as f32 / 255.0,
+            faint[1] as f32 / 255.0,
+            faint[2] as f32 / 255.0,
+            alpha,
+        ];
+        let check = self.transfer_art.map(|art| art.check);
+        let mut rows = [0usize; 2];
+        for asset in &view.assets {
+            let group = match asset.group {
+                TransferAssetGroup::Cart => 0,
+                TransferAssetGroup::Save => 1,
+            };
+            let index = rows[group];
+            if index >= 4 {
+                continue;
+            }
+            rows[group] += 1;
+            let (x, right) = if group == 0 {
+                (
+                    slot_ui::transfer_docket::COL_L,
+                    slot_ui::transfer_docket::COL_L_RIGHT,
+                )
+            } else {
+                (
+                    slot_ui::transfer_docket::COL_R,
+                    slot_ui::transfer_docket::COL_R_RIGHT,
+                )
+            };
+            let y = slot_ui::transfer_docket::ROW_Y[index] + slot_ui::transfer_docket::CHECK_DY
+                + dy;
+            if asset.progress >= 1000 {
+                if let Some(check) = check.filter(|face| face.w > 0) {
+                    out.push(Draw::Tex {
+                        x,
+                        y,
+                        w: check.w as f32,
+                        h: check.h as f32,
+                        tex: check.tex,
+                        alpha,
+                    });
+                }
+            } else {
+                let colour = if asset.progress > 0 { accent } else { faint };
+                out.push(Draw::Rect {
+                    x,
+                    y,
+                    w: 10.0,
+                    h: 1.0,
+                    colour,
+                });
+                out.push(Draw::Rect {
+                    x,
+                    y: y + 9.0,
+                    w: 10.0,
+                    h: 1.0,
+                    colour,
+                });
+                out.push(Draw::Rect {
+                    x,
+                    y: y + 1.0,
+                    w: 1.0,
+                    h: 8.0,
+                    colour,
+                });
+                out.push(Draw::Rect {
+                    x: x + 9.0,
+                    y: y + 1.0,
+                    w: 1.0,
+                    h: 8.0,
+                    colour,
+                });
+                if asset.progress > 0 {
+                    out.push(Draw::Rect {
+                        x: x + 3.0,
+                        y: y + 4.0,
+                        w: 4.0,
+                        h: 4.0,
+                        colour: accent,
+                    });
+                    let track_x = x + 16.0;
+                    let track_w = (right - track_x - slot_ui::transfer_docket::MINI_BAR_RIGHT)
+                        .max(2.0);
+                    let track_y =
+                        slot_ui::transfer_docket::ROW_Y[index] + slot_ui::transfer_docket::MINI_BAR_DY
+                            + dy;
+                    out.push(Draw::Rect {
+                        x: track_x,
+                        y: track_y,
+                        w: track_w,
+                        h: 2.0,
+                        colour: edge,
+                    });
+                    out.push(Draw::Rect {
+                        x: track_x,
+                        y: track_y,
+                        w: (track_w * asset.progress as f32 / 1000.0).max(2.0),
+                        h: 2.0,
+                        colour: accent,
+                    });
+                }
+            }
         }
-        let orbit = (self.now() % 1600) as f32 / 1600.0;
-        for index in 0..3 {
-            let t = orbit + index as f32 / 3.0;
-            let x = 360.0 + (t * std::f32::consts::TAU).cos() * 138.0;
-            let y = 350.0 + (t * std::f32::consts::TAU).sin() * 86.0;
-            out.push(Draw::Rect {
-                x,
-                y,
-                w: 5.0,
-                h: 5.0,
-                colour: [0.56, 0.96, 1.0, 0.80],
-            });
+
+        if matches!(view.flow, TransferFlow::Done) {
+            if let Some(art) = self.transfer_art.as_ref() {
+                if art.stamp.w > 0 {
+                    let t = self.transfer_done_at.map_or(1.0, |start| {
+                        (now.saturating_sub(start) as f32 / 180.0).clamp(0.0, 1.0)
+                    });
+                    // 0.6 → 1.05 at three quarters, then settle back to 1.0.
+                    let scale = if t < 0.75 {
+                        0.6 + 0.45 * (t / 0.75)
+                    } else {
+                        1.05 - 0.05 * ((t - 0.75) / 0.25)
+                    };
+                    let size = art.stamp.w as f32 * scale;
+                    out.push(Draw::Tex {
+                        x: slot_ui::transfer_docket::STAMP_CENTRE.0 - size / 2.0,
+                        y: slot_ui::transfer_docket::STAMP_CENTRE.1 - size / 2.0 + dy,
+                        w: size,
+                        h: size,
+                        tex: art.stamp.tex,
+                        alpha,
+                    });
+                }
+            }
         }
     }
 
@@ -10085,6 +11446,10 @@ impl App {
             Platform::Gb | Platform::Gbc | Platform::Fc | Platform::Sfc | Platform::Md => {
                 (&mut self.state.shader_gb, &Shader::GB[..])
             }
+            // 同上：街机 / NeoGeo 暂时共用 Game Boy 的预设桶。
+            Platform::Arcade | Platform::Neogeo => {
+                (&mut self.state.shader_gb, &Shader::GB[..])
+            }
         };
         *shader = shader.step(choices, right);
         let said = match *shader {
@@ -10282,6 +11647,10 @@ impl App {
     }
 
     pub fn update(&mut self, dt: f32) {
+        // 街机主界面的动画（插板 / attract 闪烁 / token）只在这里推进。
+        if let Phase::Arcade { screen } = &mut self.phase {
+            screen.tick(dt);
+        }
         self.achievement_tick();
         self.notice_tick();
         self.clock += dt as f64 * 1000.0;
@@ -10312,6 +11681,7 @@ impl App {
         if let Some(at) = self.transfer_insert_at {
             if self.now().saturating_sub(at) as f32 >= INSERT_S * 1000.0 {
                 self.transfer_insert_at = None;
+                self.transfer_docket_at = Some(self.now());
             }
         }
         if self.transfer_done_pending {
@@ -10331,6 +11701,8 @@ impl App {
                 self.transfer_seated = false;
                 self.transfer_progress_started = None;
                 self.transfer_done_pending = false;
+                self.transfer_docket_at = None;
+                self.transfer_done_at = None;
                 self.transfer_blank_face = None;
                 if let Some(transfer) = &mut self.transfer {
                     if transfer.stage == TransferStage::Duplicate {
@@ -10397,6 +11769,7 @@ impl App {
         let mut touched = false;
         let mut fresh_launch = false;
         let at = self.shelf_at;
+        let arcade_return = self.arcade_return;
         let next = match &mut self.phase {
             Phase::Shelf => {
                 if let Some(view) = &mut self.folder_view {
@@ -10434,7 +11807,13 @@ impl App {
                     *t += dt;
                     touched = was < 0.0 && *t >= 0.0;
                 }
-                (*t >= EJECT_S).then_some(Phase::Shelf)
+                // 从主界面 START 的游戏退出后回主界面（Main、无币），不是书架。
+                (*t >= EJECT_S).then(|| match arcade_return {
+                    Some(platform) => Phase::Arcade {
+                        screen: crate::arcade::ArcadeScreen::new(platform),
+                    },
+                    None => Phase::Shelf,
+                })
             }
             _ => None,
         };
@@ -10455,6 +11834,9 @@ impl App {
                 self.invalidate_cart_faces();
             }
             self.refused_from = None;
+            if matches!(self.phase, Phase::Arcade { .. } | Phase::Shelf) {
+                self.arcade_return = None;
+            }
             let seated = match &self.phase {
                 Phase::Playing { cart } => Some(cart.clone()),
                 _ => None,
@@ -10775,6 +12157,12 @@ impl App {
 
     fn record_cart(&mut self, cart: Option<String>) {
         let platform = self.seated_cart().map(|c| c.platform);
+        // 街机板只在主界面里"插着"，不是卡带：写进 `state.cart` 会让下次开机的
+        // 续玩路径去书架里找一块根本不存在的卡带。
+        let cart = match platform {
+            Some(Platform::Arcade) | Some(Platform::Neogeo) => None,
+            _ => cart,
+        };
         if self.state.cart == cart && self.state.cart_platform == platform {
             return;
         }
@@ -11202,6 +12590,19 @@ impl App {
     }
 
     pub fn on_core_failed(&mut self) {
+        // 街机：回到 attract 并在 CRT 上留一行"核心缺失"，不弹出书架/eject 动画。
+        if let Some(platform) = self.arcade_return.take() {
+            let mut screen = crate::arcade::ArcadeScreen::new(platform);
+            screen.note_core_missing();
+            screen.stage = crate::arcade::Stage::Attract {
+                credits: 0,
+                coin_t: 0.0,
+                blink: 0.0,
+            };
+            eprintln!("slot: arcade: core missing, back to attract");
+            self.phase = Phase::Arcade { screen };
+            return;
+        }
         let caught = self.seat();
         let Phase::Inserting { cart, .. } = &mut self.phase else {
             return;
@@ -11310,6 +12711,8 @@ impl App {
                 faces: self.quick_menu_faces.as_ref(),
             }
             .draw(out),
+            Phase::Arcade { .. } => self.draw_arcade(out),
+            Phase::Service { state } => self.draw_service(state, out),
             Phase::Shelf => {
                 let accent = self.shelves[self.shelf_at].0.accent();
                 let kind = self.shelves[self.shelf_at].0.collection_kind();
@@ -11322,6 +12725,28 @@ impl App {
                     self.collection_overlay(kind),
                     out,
                 );
+                // 柜子不是卡带架：它没有卡带行，本阶段先画一块占位面板（4b 换成
+                // `slot_ui::cabinet` 的小柜）。
+                if let Some(platform) = self.shelves[self.shelf_at].0.cabinet() {
+                    self.draw_cabinet_placeholder(accent, platform, out);
+                    StatusBar {
+                        clock: self.shelf_clock,
+                        battery: self.battery,
+                        percent: self.battery_percent,
+                        bolt: self.bolt,
+                        wifi: self.wifi_face,
+                        wifi_on: self.wifi_connected,
+                    }
+                    .draw(out);
+                    if !self.core_picker_shown().is_some()
+                        && self.game_menu.is_none()
+                        && self.utility.is_none()
+                        && !self.transfer_seated
+                    {
+                        draw_shelf_legend(&self.cabinet_legend.0, &self.cabinet_legend.1, out);
+                    }
+                    return;
+                }
                 match (self.core_picker_shown(), self.selected_stem()) {
                     (Some(picker), Some(stem)) => {
                         let open = ease(picker.openness(self.now()));
@@ -11388,8 +12813,20 @@ impl App {
                         } else {
                             None
                         };
+                        // The sheet is deliberately see-through; dim the shelf
+                        // cards behind it so the ghost stays quiet.
+                        let shelf_dim = if matches!(
+                            &self.shelf_sync,
+                            ShelfSync::Running { .. }
+                                | ShelfSync::Connecting { .. }
+                                | ShelfSync::Settling { .. }
+                        ) {
+                            0.35
+                        } else {
+                            1.0
+                        };
                         self.shelf()
-                            .draw_row(hidden, self.shelf_shake(), 0.0, 1.0, out);
+                            .draw_row(hidden, self.shelf_shake(), 0.0, shelf_dim, out);
                         if hidden.is_none() {
                             self.draw_favorite_star(out);
                         }
@@ -11413,18 +12850,26 @@ impl App {
                         }
                     }
                 }
-                // The sync overlay owns the top edge while it is active: draw
-                // the translucent header first so its cloud icon is not cut in
-                // half by the status band.
-                StatusBar {
-                    clock: self.shelf_clock,
-                    battery: self.battery,
-                    percent: self.battery_percent,
-                    bolt: self.bolt,
-                    wifi: self.wifi_face,
-                    wifi_on: self.wifi_connected,
+                // The sync sheet owns the whole screen; its semi-transparent
+                // background should show the shelf, not a half-cut clock and
+                // battery strip above the panel.
+                let sheet_up = matches!(
+                    &self.shelf_sync,
+                    ShelfSync::Running { .. }
+                        | ShelfSync::Connecting { .. }
+                        | ShelfSync::Settling { .. }
+                );
+                if !sheet_up {
+                    StatusBar {
+                        clock: self.shelf_clock,
+                        battery: self.battery,
+                        percent: self.battery_percent,
+                        bolt: self.bolt,
+                        wifi: self.wifi_face,
+                        wifi_on: self.wifi_connected,
+                    }
+                    .draw(out);
                 }
-                .draw(out);
                 self.draw_shelf_sync(out);
                 // Legend keys only work while the shelf owns the pad; overlays
                 // draw their own hints.
@@ -11454,6 +12899,36 @@ impl App {
                 return;
             }
             Phase::Inserting { cart, resumed, .. } => {
+                // 街机不是卡带：不画"卡带滑入 + 机种牌"，只做 180ms 的黑场 +
+                // 顶部一条 accent 闪（等价于 CRT 消磁），然后交给 `chrome` 起亮。
+                if self.arcade_return.is_some() {
+                    let accent = slot_ui::collection_style::platform(
+                        self.arcade_return.unwrap_or(Platform::Arcade),
+                    )
+                    .base;
+                    let open = ease(self.seat());
+                    out.push(Draw::Rect {
+                        x: 0.0,
+                        y: 0.0,
+                        w: OUT_W as f32,
+                        h: OUT_H as f32,
+                        colour: [0.0, 0.0, 0.0, 1.0],
+                    });
+                    out.push(Draw::Rect {
+                        x: 0.0,
+                        y: 0.0,
+                        w: OUT_W as f32,
+                        h: 3.0,
+                        colour: [
+                            accent[0] as f32 / 255.0,
+                            accent[1] as f32 / 255.0,
+                            accent[2] as f32 / 255.0,
+                            open,
+                        ],
+                    });
+                    self.hud.draw(self.now(), out);
+                    return;
+                }
                 if !resumed {
                     let accent = self.shelves[self.shelf_at].0.accent();
                     let kind = self.shelves[self.shelf_at].0.collection_kind();
@@ -14345,9 +15820,30 @@ impl App {
             return;
         }
         if self.core == Core::Armgba {
-            // armGBA's own netplay isn't linkslot's cable/netpacket session:
-            // say so plainly instead of opening a link that can never pair.
-            self.hud.toast(Toast::CoreNoLink, self.now());
+            // armGBA carries a two-player session over libretro's netpacket
+            // interface (Link Mode Separate): the cable, or the Wireless
+            // Adapter. Its netpacket implementation starts from gpSP's
+            // carried whitelist, so an unproven cart is refused before a
+            // session can start waiting for a reply that never comes.
+            if self.platform != Platform::Gba {
+                self.hud.toast(Toast::NoLink, self.now());
+                return;
+            }
+            let carried = self
+                .seated()
+                .and_then(|stem| self.auto_link(stem))
+                .is_some_and(|(cart, _)| {
+                    crate::link_kind::armgba_link_carried(&cart.code, &cart.title)
+                });
+            if !carried {
+                self.hud.toast(Toast::NoLink, self.now());
+                return;
+            }
+            self.link_hardware = self
+                .seated()
+                .map_or(LinkKind::Cable, |stem| self.link_mode(stem).0);
+            self.radio.ask(RadioJob::Warm);
+            self.game_menu = Some(GameMenu::Pick(self.last_role));
             return;
         }
         if self.platform != Platform::Gba {
@@ -14444,9 +15940,9 @@ impl App {
         }
     }
 
-    /// The cloud and arrow art the overlay animates, uploaded once at boot.
-    pub fn set_sync_art(&mut self, cloud: SyncFace, up: SyncFace, down: SyncFace) {
-        self.sync_art = Some(SyncArt { cloud, up, down });
+    /// The generated sync-stage art, uploaded once at boot.
+    pub fn set_sync_art(&mut self, art: SyncArt) {
+        self.sync_art = Some(art);
     }
 
     /// The text faces the frontend rasterised from [`App::sync_texts`].
@@ -14468,89 +15964,123 @@ impl App {
     /// faces when it changes.
     pub fn sync_texts(&self) -> SyncTexts {
         let lang = self.language;
+        // Idle/opening/holding frames do not draw the sheet; do not build five
+        // i18n strings for them on every frame.
+        if !matches!(
+            &self.shelf_sync,
+            ShelfSync::Running { .. }
+                | ShelfSync::Settling { .. }
+                | ShelfSync::Connecting { .. }
+                | ShelfSync::Ejecting { .. }
+                | ShelfSync::Result { .. }
+        ) {
+            return SyncTexts::default();
+        }
+        let side_local = slot_i18n::t(lang, "device.app.sync.side_this").to_string();
+        let side_cloud = slot_i18n::t(lang, "device.app.sync.side_cloud").to_string();
+        let side_target = slot_i18n::t(lang, "device.app.sync.side_target").to_string();
+        let cloud_label = slot_i18n::t(lang, "device.app.sync.cloud_label").to_string();
+        let target_label = slot_i18n::t(lang, "device.app.sync.target").to_string();
         match &self.shelf_sync {
             ShelfSync::Running {
                 stage,
-                direction,
                 request,
                 progress,
                 progress_label,
                 ..
-            } => SyncTexts {
-                title: match &request.ui {
-                    Some(ui) if ui.animation == "cloud_sync" => {
-                        let title = ui.title.trim();
-                        if title.is_empty() {
-                            slot_i18n::t(lang, "device.app.cheats.syncing").to_string()
-                        } else {
-                            title.to_string()
-                        }
-                    }
-                    _ => slot_i18n::t(lang, "device.app.sync.title").to_string(),
-                },
-                banner: stage.map_or_else(
-                    || slot_i18n::t(lang, "device.app.sync.preparing").to_string(),
-                    |stage| stage.line().to_string(),
-                ),
-                progress_left: if request.mode == SyncRequestMode::Mods {
-                    progress_label
-                        .clone()
-                        .filter(|label| !label.trim().is_empty())
-                        .unwrap_or_else(|| {
-                            stage.map_or_else(
-                                || slot_i18n::t(lang, "device.app.sync.running").to_string(),
-                                |stage| stage.line().to_string(),
-                            )
-                        })
-                } else {
-                    stage.map_or_else(
-                        || slot_i18n::t(lang, "device.app.sync.preparing").to_string(),
+            } => {
+                let manual = request.mode == SyncRequestMode::Mods;
+                let show_cloud = request.ui.as_ref().map_or(true, |ui| ui.show_cloud);
+                SyncTexts {
+                    title: Self::sync_title(lang, request.ui.as_ref()),
+                    subtitle: self.sync_subtitle(lang, manual),
+                    banner: stage.map_or_else(
+                        || {
+                            if manual {
+                                slot_i18n::t(lang, "device.app.sync.running").to_string()
+                            } else {
+                                slot_i18n::t(lang, "device.app.sync.preparing").to_string()
+                            }
+                        },
                         |stage| stage.line().to_string(),
-                    )
-                },
-                progress_right: if request.mode == SyncRequestMode::Mods {
-                    progress
-                        .map(|value| format!("{}%", (value.clamp(0.0, 1.0) * 100.0).round() as u32))
-                        .unwrap_or_default()
-                } else {
-                    sync_stage_step(*stage)
-                        .map(|step| {
-                            slot_i18n::t_args(
-                                lang,
-                                "device.app.sync.stage",
-                                &[("step", step.to_string().as_str())],
-                            )
-                        })
-                        .unwrap_or_default()
-                },
-                upload_label: if direction == &Some(Direction::Upload) {
-                    slot_i18n::t(lang, "device.app.sync.upload").to_string()
-                } else {
-                    String::new()
-                },
-                download_label: if direction == &Some(Direction::Download) {
-                    slot_i18n::t(lang, "device.app.sync.download").to_string()
-                } else {
-                    String::new()
-                },
-                ..SyncTexts::default()
-            },
+                    ),
+                    side_local: side_local.clone(),
+                    side_remote: if show_cloud {
+                        side_cloud.clone()
+                    } else {
+                        side_target.clone()
+                    },
+                    cloud_label: cloud_label.clone(),
+                    target_label: target_label.clone(),
+                    rail: Self::sync_rail_labels(lang, show_cloud),
+                    progress_left: if manual {
+                        progress_label
+                            .clone()
+                            .filter(|label| !label.trim().is_empty())
+                            .unwrap_or_else(|| {
+                                stage.map_or_else(
+                                    || slot_i18n::t(lang, "device.app.sync.running").to_string(),
+                                    |stage| stage.line().to_string(),
+                                )
+                            })
+                    } else {
+                        sync_stage_step(*stage)
+                            .map(|step| Self::sync_stage_counter(lang, step))
+                            .unwrap_or_default()
+                    },
+                    progress_right: if manual {
+                        progress
+                            .map(|value| {
+                                format!("{}%", (value.clamp(0.0, 1.0) * 100.0).round() as u32)
+                            })
+                            .unwrap_or_default()
+                    } else {
+                        String::new()
+                    },
+                    completion_hint: String::new(),
+                }
+            }
             // The conflict pages are full-screen faces; they own their copy.
             ShelfSync::Conflict { .. } => SyncTexts::default(),
-            ShelfSync::Settling { text, .. } => SyncTexts {
-                title: slot_i18n::t(lang, "device.app.sync.title").to_string(),
-                banner: text.clone(),
-                progress_left: slot_i18n::t(lang, "device.app.sync.done").to_string(),
-                ..SyncTexts::default()
-            },
+            ShelfSync::Settling {
+                text,
+                ui,
+                manual,
+                ..
+            } => {
+                let show_cloud = ui.as_ref().map_or(true, |ui| ui.show_cloud);
+                SyncTexts {
+                    title: Self::sync_title(lang, ui.as_ref()),
+                    subtitle: self.sync_subtitle(lang, *manual),
+                    banner: text.clone(),
+                    side_local,
+                    side_remote: if show_cloud {
+                        side_cloud
+                    } else {
+                        side_target
+                    },
+                    cloud_label,
+                    target_label,
+                    rail: Self::sync_rail_labels(lang, show_cloud),
+                    progress_left: Self::sync_stage_counter(lang, 5),
+                    progress_right: String::new(),
+                    completion_hint: slot_i18n::t(lang, "device.app.sync.return_soon")
+                        .to_string(),
+                }
+            }
             ShelfSync::Result { text, .. } => SyncTexts {
                 banner: text.clone(),
                 ..SyncTexts::default()
             },
             ShelfSync::Connecting { .. } => SyncTexts {
                 title: slot_i18n::t(lang, "device.app.sync.title").to_string(),
+                subtitle: self.sync_subtitle(lang, false),
                 banner: slot_i18n::t(lang, "device.app.sync.connecting").to_string(),
-                progress_left: slot_i18n::t(lang, "device.app.sync.connecting").to_string(),
+                side_local,
+                side_remote: side_cloud,
+                cloud_label,
+                target_label,
+                rail: Self::sync_rail_labels(lang, true),
                 ..SyncTexts::default()
             },
             ShelfSync::Ejecting { text, .. } => SyncTexts {
@@ -14565,6 +16095,65 @@ impl App {
             | ShelfSync::Swapping { .. }
             | ShelfSync::Choice { .. } => SyncTexts::default(),
         }
+    }
+
+    /// The sheet's title: the mod's declare title, or the built-in cloud title.
+    fn sync_title(lang: Language, ui: Option<&slot_mods::ActionUi>) -> String {
+        match ui {
+            Some(ui) if ui.animation == "cloud_sync" => {
+                let title = ui.title.trim();
+                if title.is_empty() {
+                    slot_i18n::t(lang, "device.app.cheats.syncing").to_string()
+                } else {
+                    title.to_string()
+                }
+            }
+            _ => slot_i18n::t(lang, "device.app.sync.title").to_string(),
+        }
+    }
+
+    /// `《游戏名》` or `《游戏名》 · 手动同步`.
+    fn sync_subtitle(&self, lang: Language, manual: bool) -> String {
+        let Some(cart) = self.shelf().carts.get(self.shelf().index) else {
+            return String::new();
+        };
+        let game = slot_ui::label_text(cart);
+        let game = game.trim();
+        if game.is_empty() {
+            return String::new();
+        }
+        let key = if manual {
+            "device.app.sync.subtitle_manual"
+        } else {
+            "device.app.sync.subtitle"
+        };
+        slot_i18n::t_args(lang, key, &[("game", game)])
+    }
+
+    fn sync_rail_labels(lang: Language, show_cloud: bool) -> [String; 5] {
+        [
+            slot_i18n::t(lang, "device.app.sync.rail.network").to_string(),
+            slot_i18n::t(
+                lang,
+                if show_cloud {
+                    "device.app.sync.rail.cloud"
+                } else {
+                    "device.app.sync.rail.connect"
+                },
+            )
+            .to_string(),
+            slot_i18n::t(lang, "device.app.sync.rail.transfer").to_string(),
+            slot_i18n::t(lang, "device.app.sync.rail.verify").to_string(),
+            slot_i18n::t(lang, "device.app.sync.rail.done").to_string(),
+        ]
+    }
+
+    fn sync_stage_counter(lang: Language, step: u8) -> String {
+        slot_i18n::t_args(
+            lang,
+            "device.app.sync.stage",
+            &[("step", step.to_string().as_str())],
+        )
     }
 
     /// Y went down on the shelf: arm the long-press timer.
@@ -15162,6 +16751,7 @@ impl App {
             host: transfer.host,
             game: self.rom_title().map(str::to_string),
             language: self.language,
+            content: transfer.mode,
         })
     }
 
@@ -15217,31 +16807,167 @@ impl App {
     }
 
     pub fn transfer_view(&self) -> Option<TransferView> {
+        let lang = self.language;
         let transfer = self.transfer.as_ref()?;
-        match transfer.stage {
-            TransferStage::OfferSent
-            | TransferStage::Sending
-            | TransferStage::Receiving
-            | TransferStage::Done => {}
+        let flow = match transfer.stage {
+            TransferStage::OfferSent => TransferFlow::Waiting,
+            TransferStage::Sending => TransferFlow::Sending,
+            TransferStage::Receiving => TransferFlow::Receiving,
+            TransferStage::Done => TransferFlow::Done,
             _ => return None,
-        }
+        };
+        let reverse = matches!(transfer.stage, TransferStage::Receiving)
+            || (matches!(transfer.stage, TransferStage::Done) && transfer.received);
         let percent = if transfer.stage == TransferStage::Done {
             100
         } else {
             (transfer.progress.clamp(0.0, 1.0) * 100.0).round() as u32
         };
+        let (bytes_done, bytes_total) = transfer.view_bytes();
+        let preview = self.transfer_preview_cart();
+        let source = self
+            .transfer_insert_stem
+            .as_deref()
+            .and_then(|stem| self.shelf().find(stem))
+            .map(|(cart, _)| cart.clone());
+        let (game, platform) = preview
+            .map(|cart| (cart.stem, cart.platform))
+            .or_else(|| source.map(|cart| (cart.stem, cart.platform)))
+            .unwrap_or_else(|| (String::new(), self.platform));
+        let partial = transfer.parts_only;
+        let content = if partial {
+            slot_i18n::t(lang, "device.app.transfer.docket.content_partial").to_string()
+        } else {
+            match transfer.mode {
+                TransferMode::CartOnly => {
+                    slot_i18n::t(lang, "device.app.transfer.content_cart").to_string()
+                }
+                TransferMode::SaveOnly => {
+                    slot_i18n::t(lang, "device.app.transfer.content_save").to_string()
+                }
+                TransferMode::All => {
+                    slot_i18n::t(lang, "device.app.transfer.content_all").to_string()
+                }
+            }
+        };
+        let status = match flow {
+            TransferFlow::Waiting => {
+                slot_i18n::t(lang, "device.app.transfer.docket.waiting").to_string()
+            }
+            TransferFlow::Sending if partial => {
+                slot_i18n::t(lang, "device.app.transfer.docket.partial_send").to_string()
+            }
+            TransferFlow::Sending => {
+                slot_i18n::t(lang, "device.app.transfer.docket.sending").to_string()
+            }
+            TransferFlow::Receiving if partial => {
+                slot_i18n::t(lang, "device.app.transfer.docket.partial_recv").to_string()
+            }
+            TransferFlow::Receiving => {
+                slot_i18n::t(lang, "device.app.transfer.docket.receiving").to_string()
+            }
+            TransferFlow::Done => {
+                slot_i18n::t(lang, "device.app.transfer.docket.done").to_string()
+            }
+        };
+        let partial_note = if partial {
+            if reverse {
+                slot_i18n::t(lang, "device.app.transfer.docket.partial_note").to_string()
+            } else {
+                slot_i18n::t(lang, "device.app.transfer.docket.partial_note_peer").to_string()
+            }
+        } else {
+            String::new()
+        };
+        let network = self.transfer_network_label(lang);
+        let footer_hint = match flow {
+            TransferFlow::Waiting => format!(
+                "{network} · {}",
+                slot_i18n::t(lang, "device.app.transfer.docket.hint_wait")
+            ),
+            TransferFlow::Done => {
+                slot_i18n::t(lang, "device.app.transfer.docket.hint_done").to_string()
+            }
+            _ => format!(
+                "{network} · {}",
+                slot_i18n::t(lang, "device.app.transfer.docket.hint_transfer")
+            ),
+        };
+        let assets = transfer
+            .view_assets()
+            .into_iter()
+            .map(|asset| TransferAssetView {
+                label: Self::transfer_asset_label(lang, asset.kind).to_string(),
+                group: if asset.kind <= 3 {
+                    TransferAssetGroup::Cart
+                } else {
+                    TransferAssetGroup::Save
+                },
+                size: asset.size,
+                progress: asset.progress,
+            })
+            .collect();
+        let platform_line = format!(
+            "{} · {}",
+            platform.dir_name().to_ascii_uppercase(),
+            transfer_size_text(bytes_total)
+        );
+        let role_local = format!(
+            "{} · {}",
+            slot_i18n::t(lang, "device.app.transfer.docket.role_local"),
+            self.transfer_role_label(transfer.host)
+        );
+        let role_peer = format!(
+            "{} · {}",
+            slot_i18n::t(lang, "device.app.transfer.docket.role_peer"),
+            self.transfer_role_label(!transfer.host)
+        );
         Some(TransferView {
             percent,
-            assets: transfer
-                .display_assets()
-                .into_iter()
-                .map(str::to_string)
-                .collect(),
+            flow,
+            reverse,
+            host: transfer.host,
+            partial,
+            game,
+            platform,
+            bytes_done,
+            bytes_total,
+            assets,
+            title: slot_i18n::t(lang, "device.app.transfer.docket.title").to_string(),
+            status,
+            content,
+            platform_line,
+            role_local,
+            role_peer,
+            group_cart: slot_i18n::t(lang, "device.app.transfer.docket.group_cart").to_string(),
+            group_save: slot_i18n::t(lang, "device.app.transfer.docket.group_save").to_string(),
+            not_included: slot_i18n::t(lang, "device.app.transfer.docket.not_included").to_string(),
+            partial_note,
+            waiting_line: slot_i18n::t(lang, "device.app.transfer.docket.waiting_hint").to_string(),
+            waiting_after: slot_i18n::t(lang, "device.app.transfer.docket.waiting_after").to_string(),
+            footer_hint,
         })
+    }
+
+    fn transfer_asset_label(lang: Language, kind: u8) -> &'static str {
+        match kind {
+            0 => slot_i18n::t(lang, "device.app.transfer.asset.rom"),
+            1 => slot_i18n::t(lang, "device.app.transfer.asset.cover"),
+            2 => slot_i18n::t(lang, "device.app.transfer.asset.intro"),
+            3 => slot_i18n::t(lang, "device.app.transfer.asset.video"),
+            4 => slot_i18n::t(lang, "device.app.transfer.asset.sav"),
+            5 => slot_i18n::t(lang, "device.app.transfer.asset.state"),
+            6 => slot_i18n::t(lang, "device.app.transfer.asset.thumb"),
+            _ => slot_i18n::t(lang, "device.app.transfer.asset.other"),
+        }
     }
 
     pub fn set_transfer_faces(&mut self, faces: TransferFaces) {
         self.transfer_faces = Some(faces);
+    }
+
+    pub fn set_transfer_art(&mut self, art: TransferArt) {
+        self.transfer_art = Some(art);
     }
 
     pub fn game_intro(&self) -> Option<&GameIntro> {
@@ -15856,35 +17582,58 @@ impl App {
             self.finish_conflict_stage(state, outcome, now);
             return;
         }
-        if !was_mods && previous_request.as_ref().is_some_and(|r| r.mode == SyncRequestMode::Cloud)
-        {
+        // Cloud syncs and manual mods that opted into the cloud-sync animation
+        // get the same settle beat.  A mod without `ui` keeps its old quiet
+        // result banner.
+        let settle_ui = previous_request
+            .as_ref()
+            .and_then(|request| request.ui.clone());
+        let cloud = previous_request
+            .as_ref()
+            .is_some_and(|request| request.mode == SyncRequestMode::Cloud);
+        let ui_mod = was_mods && settle_ui.is_some();
+        if cloud || ui_mod {
             let settled = match outcome.result {
                 SyncResult::Ok => Some(false),
                 SyncResult::Noop => Some(true),
                 _ => None,
             };
             if let Some(noop) = settled {
-                let text = if noop {
-                    slot_i18n::t(lang, "device.app.common.up_to_date").to_string()
-                } else {
-                    match (outcome.direction, outcome.version) {
-                        (Some(Direction::Download), Some(version)) => {
-                            slot_i18n::t_args(
-                                lang,
-                                "device.app.sync.pulled",
-                                &[("version", version.to_string().as_str())],
-                            )
+                let text = if cloud {
+                    if noop {
+                        slot_i18n::t(lang, "device.app.common.up_to_date").to_string()
+                    } else {
+                        match (outcome.direction, outcome.version) {
+                            (Some(Direction::Download), Some(version)) => {
+                                slot_i18n::t_args(
+                                    lang,
+                                    "device.app.sync.pulled",
+                                    &[("version", version.to_string().as_str())],
+                                )
+                            }
+                            (Some(Direction::Upload), Some(version)) => {
+                                slot_i18n::t_args(
+                                    lang,
+                                    "device.app.sync.pushed",
+                                    &[("version", version.to_string().as_str())],
+                                )
+                            }
+                            _ => outcome.banner_text(),
                         }
-                        (Some(Direction::Upload), Some(version)) => {
-                            slot_i18n::t_args(
-                                lang,
-                                "device.app.sync.pushed",
-                                &[("version", version.to_string().as_str())],
-                            )
-                        }
-                        _ => outcome.banner_text(),
                     }
+                } else if noop {
+                    outcome.detail.clone().unwrap_or_else(|| {
+                        slot_i18n::t(lang, "device.app.common.up_to_date").to_string()
+                    })
+                } else {
+                    outcome
+                        .detail
+                        .clone()
+                        .unwrap_or_else(|| outcome.banner_text())
                 };
+                if mods_wrote {
+                    self.refresh_library_after_web();
+                }
                 self.sync_close_at = Some(now);
                 self.shelf_sync = ShelfSync::Settling {
                     until: now + SYNC_SETTLE_MS,
@@ -15892,6 +17641,8 @@ impl App {
                     direction: outcome.direction,
                     noop,
                     only: previous_request.as_ref().and_then(|request| request.only),
+                    ui: settle_ui,
+                    manual: was_mods,
                 };
                 return;
             }
@@ -16110,6 +17861,531 @@ impl App {
         });
     }
 
+    /// 书架里"停在柜子上"时画的小柜子（`slot_ui::cabinet::draw_mini_cabinet`）。
+    ///
+    /// 槽位尺度：宽 180、贴到书架基线；呼吸灯用一个 1.6 s 的三角波，和机种牌
+    /// 的节拍一致。书架里没有主界面那几张文字纹理，所以 marquee / CRT 只画背光。
+    fn draw_cabinet_placeholder(&self, accent: [u8; 3], platform: Platform, out: &mut Vec<Draw>) {
+        let rect = slot_ui::cabinet::Rect::new(270.0, 150.0, 180.0, 250.0);
+        let phase = (self.now() % 1600) as f32 / 1600.0;
+        let glow = 1.0 - (phase * 2.0 - 1.0).abs();
+        let skin = slot_ui::cabinet::Skin {
+            accent: [
+                accent[0] as f32 / 255.0,
+                accent[1] as f32 / 255.0,
+                accent[2] as f32 / 255.0,
+                1.0,
+            ],
+            marquee: None,
+            crt: None,
+            glow,
+        };
+        let _ = platform;
+        slot_ui::cabinet::draw_mini_cabinet(out, rect, &skin);
+    }
+
+    /// 街机 / NeoGeo 主界面：顶栏 + 左柜预览 + 右侧 JAMMA PCB 架 + 信息卡 + 底栏。
+    ///
+    /// 布局（720×480）：顶栏 `0..44`，左柜 `20..330 × 56..432`，右栏
+    /// `348..712`（标题 `56..80`、PCB `84..286`、信息卡 `296..428`），底栏
+    /// `440..480`。所有坐标都是常量，不随内容变化——滚动只换 PCB 的内容，不换槽位。
+    /// 服务门：左侧竖排页面名（当前页高亮），右侧正文行 + 只读说明 + 确认框。
+    ///
+    /// 文字全部来自 `frontend::sync_service` 上传的纹理；这里只做排版，**不画任何
+    /// 可点控件**（DIP / 核心页的"不支持"就是一行灰字）。
+    fn draw_service(&self, state: &crate::service::ServiceState, out: &mut Vec<Draw>) {
+        let platform = state.platform;
+        let style = slot_ui::collection_style::platform(platform);
+        let accent = [
+            style.base[0] as f32 / 255.0,
+            style.base[1] as f32 / 255.0,
+            style.base[2] as f32 / 255.0,
+            1.0,
+        ];
+        out.push(Draw::Rect {
+            x: 0.0,
+            y: 0.0,
+            w: OUT_W as f32,
+            h: OUT_H as f32,
+            colour: [0.03, 0.035, 0.045, 1.0],
+        });
+        out.push(Draw::Rect {
+            x: 0.0,
+            y: 0.0,
+            w: OUT_W as f32,
+            h: 2.0,
+            colour: accent,
+        });
+        // 顶栏：页标题 + "PCB 仍在 JAMMA" 的说明（设计稿 §8.4 要求文字即可）。
+        if let Some((tex, w, h)) = self.service_faces.title {
+            out.push(Draw::Tex {
+                x: 24.0,
+                y: 16.0,
+                w: w as f32,
+                h: h as f32,
+                tex,
+                alpha: 1.0,
+            });
+        }
+        out.push(Draw::Rect {
+            x: 24.0,
+            y: 44.0,
+            w: 672.0,
+            h: 1.0,
+            colour: [0.16, 0.17, 0.20, 1.0],
+        });
+        // 左侧页面指示（五页，当前页 accent 底）。
+        let mut y = 56.0;
+        for page in crate::service::SERVICE_PAGES {
+            let selected = page == state.page;
+            out.push(Draw::Rect {
+                x: 24.0,
+                y,
+                w: 8.0,
+                h: 12.0,
+                colour: if selected {
+                    accent
+                } else {
+                    [0.14, 0.15, 0.18, 1.0]
+                },
+            });
+            y += 20.0;
+        }
+        // 正文：每行一张纹理；有焦点页的第一行用 accent 左侧条标记。
+        let mut row_y = 56.0;
+        for (index, (tex, w, h)) in self.service_faces.rows.iter().enumerate() {
+            let focused = state.rows() > 0 && index == state.focus && state.confirm.is_none();
+            if focused {
+                out.push(Draw::Rect {
+                    x: 44.0,
+                    y: row_y - 2.0,
+                    w: 3.0,
+                    h: *h as f32 + 4.0,
+                    colour: accent,
+                });
+            }
+            out.push(Draw::Tex {
+                x: 54.0,
+                y: row_y,
+                w: *w as f32,
+                h: *h as f32,
+                tex: *tex,
+                alpha: 1.0,
+            });
+            row_y += *h as f32 + 10.0;
+        }
+        // 只读说明（灰字，比正文低一行）。
+        if let Some((tex, w, h)) = self.service_faces.note {
+            out.push(Draw::Tex {
+                x: 54.0,
+                y: (row_y + 8.0).min(OUT_H as f32 - 60.0),
+                w: w as f32,
+                h: h as f32,
+                tex,
+                alpha: 0.7,
+            });
+        }
+        // 确认框：三行，当前选项 accent 底。
+        if state.confirm.is_some() {
+            let box_rect = (232.0f32, 168.0f32, 256.0f32, 132.0f32);
+            out.push(Draw::Rect {
+                x: box_rect.0,
+                y: box_rect.1,
+                w: box_rect.2,
+                h: box_rect.3,
+                colour: [0.06, 0.065, 0.08, 0.98],
+            });
+            out.push(Draw::Rect {
+                x: box_rect.0,
+                y: box_rect.1,
+                w: box_rect.2,
+                h: 2.0,
+                colour: accent,
+            });
+            let mut choice_y = box_rect.1 + 16.0;
+            for (index, (tex, w, h)) in self.service_faces.confirm.iter().enumerate() {
+                let selected = index == state.focus;
+                if selected {
+                    out.push(Draw::Rect {
+                        x: box_rect.0 + 12.0,
+                        y: choice_y - 3.0,
+                        w: box_rect.2 - 24.0,
+                        h: *h as f32 + 6.0,
+                        colour: [accent[0] * 0.45, accent[1] * 0.45, accent[2] * 0.45, 1.0],
+                    });
+                }
+                out.push(Draw::Tex {
+                    x: box_rect.0 + 20.0,
+                    y: choice_y,
+                    w: *w as f32,
+                    h: *h as f32,
+                    tex: *tex,
+                    alpha: 1.0,
+                });
+                choice_y += *h as f32 + 14.0;
+            }
+        }
+        StatusBar {
+            clock: self.shelf_clock,
+            battery: self.battery,
+            percent: self.battery_percent,
+            bolt: self.bolt,
+            wifi: self.wifi_face,
+            wifi_on: self.wifi_connected,
+        }
+        .draw(out);
+        draw_shelf_legend(&self.service_legend.0, &self.service_legend.1, out);
+    }
+
+    fn draw_arcade(&self, out: &mut Vec<Draw>) {
+        let Phase::Arcade { screen } = &self.phase else {
+            return;
+        };
+        let style = slot_ui::collection_style::platform(screen.platform);
+        let accent = style.base;
+        let accent_f = [
+            accent[0] as f32 / 255.0,
+            accent[1] as f32 / 255.0,
+            accent[2] as f32 / 255.0,
+            1.0,
+        ];
+
+        // 底色：近黑 + 顶部一条 accent 光带。
+        out.push(Draw::Rect {
+            x: 0.0,
+            y: 0.0,
+            w: OUT_W as f32,
+            h: OUT_H as f32,
+            colour: [0.03, 0.035, 0.045, 1.0],
+        });
+        out.push(Draw::Rect {
+            x: 0.0,
+            y: 0.0,
+            w: OUT_W as f32,
+            h: 2.0,
+            colour: accent_f,
+        });
+
+        // 顶栏：标题 + 右侧筛选 chip。
+        if let Some((tex, w, h)) = self.arcade_faces.header {
+            out.push(Draw::Tex {
+                x: 20.0,
+                y: 12.0,
+                w: w as f32,
+                h: h as f32,
+                tex,
+                alpha: 1.0,
+            });
+        }
+        let active_chip = self
+            .arcade_view()
+            .map(|view| view.filter_index)
+            .unwrap_or(0);
+        let mut chip_x = OUT_W as f32 - 20.0;
+        for (index, tex, w, h) in self.arcade_faces.filters.iter().rev() {
+            let width = *w as f32 + 16.0;
+            chip_x -= width;
+            out.push(Draw::Rect {
+                x: chip_x,
+                y: 8.0,
+                w: width,
+                h: *h as f32 + 8.0,
+                colour: if *index == active_chip {
+                    [accent_f[0] * 0.55, accent_f[1] * 0.55, accent_f[2] * 0.55, 1.0]
+                } else {
+                    [0.10, 0.11, 0.13, 0.85]
+                },
+            });
+            out.push(Draw::Tex {
+                x: chip_x + 8.0,
+                y: 12.0,
+                w: *w as f32,
+                h: *h as f32,
+                tex: *tex,
+                alpha: if *index == active_chip { 1.0 } else { 0.75 },
+            });
+            chip_x -= 6.0;
+        }
+
+        // 左侧：柜内预览（marquee = 选中板标题，CRT = attract 占位）。
+        let buttons = if screen.platform == Platform::Neogeo { 4 } else { 6 };
+        let phase = (self.now() % 1600) as f32 / 1600.0;
+        let glow = 1.0 - (phase * 2.0 - 1.0).abs();
+        let skin = slot_ui::cabinet::Skin {
+            accent: accent_f,
+            marquee: self.arcade_faces.title.map(|(tex, _, _)| tex),
+            crt: None,
+            glow,
+        };
+        let cabinet = slot_ui::cabinet::Rect::new(20.0, 56.0, 310.0, 376.0);
+        slot_ui::cabinet::draw_cabinet_preview(
+            out,
+            cabinet,
+            &skin,
+            buttons,
+            self.arcade_faces.title.map(|(tex, _, _)| tex),
+            self.arcade_faces.geometry.map(|(tex, _, _)| tex),
+        );
+        // 柜内覆盖层：插板消磁 / attract 的 INSERT COIN、CREDIT、FREE PLAY、token。
+        let parts = slot_ui::cabinet::preview_parts(cabinet);
+        match screen.stage {
+            crate::arcade::Stage::Inserting { t } => {
+                // 消磁：CRT 上一层白光，亮度随动画衰减到 0。
+                let p = (t / crate::arcade::INSERT_SECS).clamp(0.0, 1.0);
+                out.push(Draw::Rect {
+                    x: parts.screen.x,
+                    y: parts.screen.y,
+                    w: parts.screen.w,
+                    h: parts.screen.h,
+                    colour: [1.0, 1.0, 1.0, (1.0 - p) * 0.6],
+                });
+                // marquee：待机条纹淡出、标题淡入（两条矩形交叉）。
+                out.push(Draw::Rect {
+                    x: parts.marquee.x,
+                    y: parts.marquee.y,
+                    w: parts.marquee.w,
+                    h: parts.marquee.h,
+                    colour: [accent_f[0], accent_f[1], accent_f[2], 1.0 - p],
+                });
+                if let Some((tex, w, h)) = self.arcade_faces.title {
+                    out.push(Draw::Tex {
+                        x: parts.marquee.x + 4.0,
+                        y: parts.marquee.y + (parts.marquee.h - h as f32) / 2.0,
+                        w: w as f32,
+                        h: h as f32,
+                        tex,
+                        alpha: p,
+                    });
+                }
+            }
+            crate::arcade::Stage::Attract { credits, coin_t, blink } => {
+                // CRT 里闪烁的 INSERT COIN（1 Hz 方波：<0.5s 亮）。
+                if let Some((tex, w, h)) = self.arcade_faces.insert_coin {
+                    let on = if blink < 0.5 { 1.0 } else { 0.0 };
+                    out.push(Draw::Tex {
+                        x: parts.screen.x + (parts.screen.w - w as f32) / 2.0,
+                        y: parts.screen.y + parts.screen.h * 0.62,
+                        w: w as f32,
+                        h: h as f32,
+                        tex,
+                        alpha: on,
+                    });
+                }
+                // 左下 CREDIT，右上 FREE PLAY。
+                if credits > 0 {
+                    if let Some((tex, w, h)) = self.arcade_faces.credit {
+                        out.push(Draw::Tex {
+                            x: parts.screen.x + 6.0,
+                            y: parts.screen.bottom() - h as f32 - 6.0,
+                            w: w as f32,
+                            h: h as f32,
+                            tex,
+                            alpha: 1.0,
+                        });
+                    }
+                }
+                if self.arcade_view().map(|view| view.free_play).unwrap_or(false) {
+                    if let Some((tex, w, h)) = self.arcade_faces.free_play {
+                        out.push(Draw::Tex {
+                            x: parts.screen.right() - w as f32 - 6.0,
+                            y: parts.screen.y + 6.0,
+                            w: w as f32,
+                            h: h as f32,
+                            tex,
+                            alpha: 0.9,
+                        });
+                    }
+                }
+                // 投币 token：从投币口上方 24×10 上浮。
+                if coin_t > 0.0 {
+                    let rise = (coin_t / crate::arcade::COIN_SECS).clamp(0.0, 1.0);
+                    out.push(Draw::Rect {
+                        x: parts.coin.x + parts.coin.w * 0.5 - 12.0,
+                        y: parts.coin.y - 18.0 + (1.0 - rise) * 14.0,
+                        w: 24.0,
+                        h: 10.0,
+                        colour: [0.85, 0.70, 0.25, 1.0],
+                    });
+                }
+            }
+            crate::arcade::Stage::Main => {}
+        }
+
+        // 右侧：JAMMA PCB 架。
+        if let Some((tex, w, h)) = self.arcade_faces.rack {
+            out.push(Draw::Tex {
+                x: 348.0,
+                y: 56.0,
+                w: w as f32,
+                h: h as f32,
+                tex,
+                alpha: 0.9,
+            });
+        }
+        let area = slot_ui::cabinet::Rect::new(348.0, 84.0, 364.0, 202.0);
+        let len = self.arcade_boards.len();
+        let window = crate::arcade::visible_window(screen.index, len);
+        // 只有选中那一格贴标题（`titles` 按槽位给，不是按板下标）。
+        let selected_slot = screen.index.saturating_sub(window.start);
+        let title = self.arcade_faces.title.map(|(tex, _, _)| tex);
+        let titles: Vec<Option<TexId>> = (0..window.len())
+            .map(|slot| if slot == selected_slot { title } else { None })
+            .collect();
+        let stage = screen.stage();
+        let inserting_t = match screen.stage {
+            crate::arcade::Stage::Inserting { t } => Some(t),
+            _ => None,
+        };
+        match inserting_t {
+            // 插板动画：选中的 PCB 从右侧架位滑进 JAMMA 槽（其余两块原位不动）。
+            Some(t) => {
+                let p = (t / crate::arcade::INSERT_SECS).clamp(0.0, 1.0);
+                let eased = slot_ui::ease(p);
+                for (board, rect) in slot_ui::cabinet::board_rects(area, window.clone(), len) {
+                    let selected = board == screen.index;
+                    let rect = if selected {
+                        slot_ui::cabinet::Rect::new(rect.x + (1.0 - eased) * 220.0, rect.y, rect.w, rect.h)
+                    } else {
+                        rect
+                    };
+                    let title = if selected { title } else { None };
+                    slot_ui::cabinet::draw_pcb(out, rect, selected, accent_f, title, None);
+                }
+            }
+            // 浏览 / attract：静态 PCB 架。
+            None => {
+                slot_ui::cabinet::draw_boards(out, area, window.clone(), screen.index, len, accent_f, &titles);
+            }
+        }
+
+        // 信息卡：大标题 / 机板·年份·人数·方向 / SET 行 / `A 插板` 按钮 / BIOS 红字。
+        let card = slot_ui::cabinet::Rect::new(348.0, 296.0, 364.0, 132.0);
+        out.push(Draw::Rect {
+            x: card.x,
+            y: card.y,
+            w: card.w,
+            h: card.h,
+            colour: [0.06, 0.065, 0.08, 0.9],
+        });
+        out.push(Draw::Rect {
+            x: card.x,
+            y: card.y,
+            w: 2.0,
+            h: card.h,
+            colour: accent_f,
+        });
+        let mut y = card.y + 10.0;
+        for face in [self.arcade_faces.title, self.arcade_faces.meta] {
+            if let Some((tex, w, h)) = face {
+                out.push(Draw::Tex {
+                    x: card.x + 12.0,
+                    y,
+                    w: w as f32,
+                    h: h as f32,
+                    tex,
+                    alpha: 1.0,
+                });
+                y += h as f32 + 6.0;
+            }
+        }
+        if let Some((tex, w, h)) = self.arcade_faces.geometry {
+            out.push(Draw::Tex {
+                x: card.x + 12.0,
+                y,
+                w: w as f32,
+                h: h as f32,
+                tex,
+                alpha: 0.85,
+            });
+            y += h as f32 + 4.0;
+        }
+        if let Some((tex, w, h)) = self.arcade_faces.set {
+            out.push(Draw::Tex {
+                x: card.x + 12.0,
+                y,
+                w: w as f32,
+                h: h as f32,
+                tex,
+                alpha: 0.85,
+            });
+            y += h as f32 + 6.0;
+        }
+        if let Some((tex, w, h)) = self.arcade_faces.bios {
+            out.push(Draw::Tex {
+                x: card.x + 12.0,
+                y,
+                w: w as f32,
+                h: h as f32,
+                tex,
+                alpha: 1.0,
+            });
+            y += h as f32 + 4.0;
+        }
+        if let Some((tex, w, h)) = self.arcade_faces.core_missing {
+            out.push(Draw::Tex {
+                x: card.x + 12.0,
+                y,
+                w: w as f32,
+                h: h as f32,
+                tex,
+                alpha: 1.0,
+            });
+        }
+        // `A 插板` 按钮：双层矩形做圆角感（外圈 accent、内芯深色）。
+        if let Some((tex, w, h)) = self.arcade_faces.insert {
+            let button = slot_ui::cabinet::Rect::new(
+                card.right() - (w as f32) - 26.0,
+                card.bottom() - (h as f32) - 14.0,
+                w as f32 + 16.0,
+                h as f32 + 12.0,
+            );
+            out.push(Draw::Rect {
+                x: button.x,
+                y: button.y,
+                w: button.w,
+                h: button.h,
+                colour: accent_f,
+            });
+            out.push(Draw::Rect {
+                x: button.x + 2.0,
+                y: button.y + 2.0,
+                w: button.w - 4.0,
+                h: button.h - 4.0,
+                colour: [0.05, 0.055, 0.07, 1.0],
+            });
+            out.push(Draw::Tex {
+                x: button.x + 8.0,
+                y: button.y + 6.0,
+                w: w as f32,
+                h: h as f32,
+                tex,
+                alpha: 1.0,
+            });
+        }
+
+        StatusBar {
+            clock: self.shelf_clock,
+            battery: self.battery,
+            percent: self.battery_percent,
+            bolt: self.bolt,
+            wifi: self.wifi_face,
+            wifi_on: self.wifi_connected,
+        }
+        .draw(out);
+        if !self.core_picker_shown().is_some() && self.game_menu.is_none() && self.utility.is_none()
+        {
+            // 底栏随阶段变：Main 是 PCB 架的键，Attract 是投币/开始，Inserting 不画。
+            let legend = match stage {
+                crate::arcade::ArcadeStage::Main => Some(&self.arcade_legend),
+                crate::arcade::ArcadeStage::Attract => Some(&self.arcade_attract_legend),
+                crate::arcade::ArcadeStage::Inserting => None,
+            };
+            if let Some(legend) = legend {
+                draw_shelf_legend(&legend.0, &legend.1, out);
+            }
+        }
+    }
+
     fn draw_shelf_playtime(&self, out: &mut Vec<Draw>) {
         let Some((_, _, (cart_x, cart_y, cart_w, cart_h))) = self.selected_cart_rect() else {
             return;
@@ -16185,16 +18461,13 @@ impl App {
                 direction,
                 stage,
                 request,
-                progress,
                 ..
             } if request.mode == SyncRequestMode::Cloud || request.ui.is_some() => {
                 self.draw_sync_running(
                     *started,
                     *direction,
                     *stage,
-                    request.only,
                     request.ui.as_ref(),
-                    *progress,
                     out,
                 )
             }
@@ -16205,17 +18478,15 @@ impl App {
             ShelfSync::Settling {
                 direction,
                 noop,
-                only,
+                ui,
                 ..
-            } => self.draw_sync_settled(*direction, *noop, *only, out),
+            } => self.draw_sync_settled(*direction, *noop, ui.as_ref(), out),
             ShelfSync::Conflict { .. } => {}
             ShelfSync::Choice { .. } => {}
             ShelfSync::Connecting { since } => self.draw_sync_anim(
                 *since,
                 None,
-                None,
-                None,
-                None,
+                Some(SyncStage::Net),
                 None,
                 false,
                 false,
@@ -16569,172 +18840,275 @@ impl App {
 
     /// The transfer animation: dim mask, cart cycling towards/away from the
     /// cloud, direction arrow and the stage line.
+    /// The transfer animation: the docked game card, the cloud sticker card,
+    /// one short lane, the five-stage rail and the final stamp.
     fn draw_sync_running(
         &self,
         started: Millis,
         direction: Option<Direction>,
         stage: Option<SyncStage>,
-        only: Option<UnitKind>,
         ui: Option<&slot_mods::ActionUi>,
-        progress: Option<f32>,
         out: &mut Vec<Draw>,
     ) {
-        self.draw_sync_anim(started, direction, stage, only, ui, progress, false, false, out);
+        // A manual mod that only reports `mods` (or no stage at all) still
+        // moves bytes; show the transfer lane rather than an idle wait disc.
+        let stage = match stage {
+            None | Some(SyncStage::Mods) if ui.is_some() => Some(SyncStage::Upload),
+            other => other,
+        };
+        self.draw_sync_anim(started, direction, stage, ui, false, false, out);
     }
 
     fn draw_sync_settled(
         &self,
         direction: Option<Direction>,
         noop: bool,
-        only: Option<UnitKind>,
+        ui: Option<&slot_mods::ActionUi>,
         out: &mut Vec<Draw>,
     ) {
         self.draw_sync_anim(
             self.now(),
             direction,
             Some(SyncStage::Commit),
-            only,
-            None,
-            Some(1.0),
+            ui,
             true,
             noop,
             out,
         );
     }
 
-    /// The source cartridge's box on the sync stage.  The slot is a
-    /// GBA-shaped footprint, so the card keeps its own aspect and its foot
-    /// stays on the design's baseline instead of being stretched.
+    /// The source cartridge's box on the sync stage.  The box is a GBA-shaped
+    /// footprint; every platform keeps its own aspect inside it and its foot
+    /// stays on the dock's lip instead of being stretched.
     fn sync_stage_cart(aspect: f32) -> (f32, f32, f32, f32) {
-        let (x0, y0, w0, h0) = (84.0, 212.0, 188.0, 104.0);
-        let h = (w0 / aspect.max(0.01)).min(150.0);
+        let (x0, y0, w0, h0) = SYNC_STAGE_BOX;
+        let h = (w0 / aspect.max(0.01)).min(h0);
         let w = h * aspect;
         (x0 + (w0 - w) / 2.0, y0 + h0 - h, w, h)
     }
 
-    /// The cloud-sync stage: cart on the left, cloud on the right, one lane
-    /// for STATE and one for SAV. The rail replaces a false percentage because
-    /// the CLI reports stages, not bytes.
+    /// The sync bench: an opaque sheet with the game card in a dock, the cloud
+    /// sticker card, a short transfer lane and the stage rail.  The old
+    /// neon-grid stage lived in its own visual world; this one uses the same
+    /// charcoal / paper / red-accent vocabulary as the rest of the menus.
     fn draw_sync_anim(
         &self,
         started: Millis,
         direction: Option<Direction>,
         stage: Option<SyncStage>,
-        only: Option<UnitKind>,
         ui: Option<&slot_mods::ActionUi>,
-        progress: Option<f32>,
         settled: bool,
         noop: bool,
         out: &mut Vec<Draw>,
     ) {
+        let now = self.now();
         out.push(Draw::Rect {
             x: 0.0,
             y: 0.0,
             w: OUT_W as f32,
             h: OUT_H as f32,
-            colour: [0.016, 0.031, 0.047, 0.92],
+            colour: SYNC_PAGE_BG,
         });
-        // A very quiet horizontal wash keeps the grid readable without the
-        // old full-screen disc covering the cloud and cart.
-        for i in 0..12 {
-            let y = 90.0 + i as f32 * 14.0;
-            out.push(Draw::Rect {
-                x: 0.0,
-                y,
-                w: OUT_W as f32,
-                h: 14.0,
-                colour: [0.018 + i as f32 * 0.001, 0.036 + i as f32 * 0.001, 0.048 + i as f32 * 0.001, 1.0],
-            });
-        }
-        // Perspective floor.
-        let horizon = 318.0;
-        for i in -6..15 {
-            let x1 = i as f32 * 72.0;
-            out.push(Draw::Rect {
-                x: 360.0 + (x1 - 360.0) * 0.25,
-                y: horizon,
-                w: 1.0,
-                h: OUT_H as f32 - horizon,
-                colour: [0.06, 0.17, 0.21, 1.0],
-            });
-        }
-        for i in 1..5 {
-            let y = horizon + (480.0 - horizon) * (i as f32 / 5.0).powf(1.7);
-            out.push(Draw::Rect {
-                x: 0.0,
-                y,
-                w: OUT_W as f32,
-                h: 1.0,
-                colour: [0.05, 0.13, 0.16, 1.0],
-            });
-        }
-
-        let now = self.now();
-        let wave = triangle(now.saturating_sub(started), 800);
+        let Some(art) = self.sync_art.as_ref() else {
+            self.draw_sync_banner(out);
+            return;
+        };
         let faces = &self.sync_faces;
+
+        // The sheet opens with the CRT window; the parts settle in with it.
+        let open = self.sync_open_at.map_or(1.0, |start| {
+            (now.saturating_sub(start) as f32 / (SYNC_FADE_S * 1000.0)).clamp(0.0, 1.0)
+        });
+        let open_e = slot_ui::ease(open);
+
+        let (sx, sy) = SYNC_SHEET_AT;
+        out.push(Draw::Tex {
+            x: sx,
+            y: sy,
+            w: art.sheet.w as f32,
+            h: art.sheet.h as f32,
+            tex: art.sheet.tex,
+            alpha: 1.0,
+        });
+
         if let Some(title) = faces.title.filter(|face| face.w > 0 && face.h > 0) {
             out.push(Draw::Tex {
-                x: 28.0,
-                y: 42.0,
+                x: SYNC_TITLE_AT.0,
+                y: SYNC_TITLE_AT.1,
                 w: title.w as f32,
                 h: title.h as f32,
                 tex: title.tex,
                 alpha: 1.0,
             });
         }
+        if let Some(subtitle) = faces.subtitle.filter(|face| face.w > 0 && face.h > 0) {
+            out.push(Draw::Tex {
+                x: SYNC_SUBTITLE_AT.0,
+                y: SYNC_SUBTITLE_AT.1,
+                w: subtitle.w as f32,
+                h: subtitle.h as f32,
+                tex: subtitle.tex,
+                alpha: 0.68,
+            });
+        }
+        if let Some(banner) = faces.banner.filter(|face| face.w > 0 && face.h > 0) {
+            out.push(Draw::Tex {
+                x: (OUT_W as f32 - banner.w as f32) / 2.0,
+                y: SYNC_BANNER_Y,
+                w: banner.w as f32,
+                h: banner.h as f32,
+                tex: banner.tex,
+                alpha: 1.0,
+            });
+        }
+        if let Some(percent) = faces.progress_right.filter(|face| face.w > 0 && face.h > 0) {
+            if art.chip.w > 0 && art.chip.h > 0 {
+                out.push(Draw::Tex {
+                    x: SYNC_PERCENT_CHIP_AT.0,
+                    y: SYNC_PERCENT_CHIP_AT.1,
+                    w: art.chip.w as f32,
+                    h: art.chip.h as f32,
+                    tex: art.chip.tex,
+                    alpha: 1.0,
+                });
+                out.push(Draw::Tex {
+                    x: SYNC_PERCENT_CHIP_AT.0 + (art.chip.w as f32 - percent.w as f32) / 2.0,
+                    y: SYNC_PERCENT_CHIP_AT.1 + (art.chip.h as f32 - percent.h as f32) / 2.0,
+                    w: percent.w as f32,
+                    h: percent.h as f32,
+                    tex: percent.tex,
+                    alpha: 1.0,
+                });
+            }
+        }
 
-        // Source cartridge at the design's fixed stage position.  The slot is
-        // a GBA-shaped box, so the card keeps its own aspect inside it: an FC
-        // cassette is 1.20, not 1.78, and stretching it here was very visible.
+        let show_cloud = ui.map_or(true, |ui| ui.show_cloud);
+        if let Some(side) = faces.side_local.filter(|face| face.w > 0 && face.h > 0) {
+            out.push(Draw::Tex {
+                x: 102.0,
+                y: SYNC_SIDE_LABEL_Y,
+                w: side.w as f32,
+                h: side.h as f32,
+                tex: side.tex,
+                alpha: 0.62,
+            });
+        }
+        if let Some(side) = faces.side_remote.filter(|face| face.w > 0 && face.h > 0) {
+            out.push(Draw::Tex {
+                x: 616.0 - side.w as f32,
+                y: SYNC_SIDE_LABEL_Y,
+                w: side.w as f32,
+                h: side.h as f32,
+                tex: side.tex,
+                alpha: 0.62,
+            });
+        }
+
+        // The cartridge and its dock.
         let (platform, face) = match self.selected_cart_rect() {
             Some((index, platform, _)) => (platform, self.shelf().face(index)),
             None => (self.platform, None),
         };
         let (cw, ch) = slot_ui::cart_box(platform);
-        let aspect = if ch == 0 { 1.78 } else { cw as f32 / ch as f32 };
-        let cart = Self::sync_stage_cart(aspect);
+        let aspect = if ch == 0 {
+            1.78
+        } else {
+            cw as f32 / ch as f32
+        };
+        let (cart_x, cart_y, cart_w, cart_h) = Self::sync_stage_cart(aspect);
+        let drop = SYNC_CART_DROP * (1.0 - open_e);
+        if art.shadow.w > 0 && art.shadow.h > 0 {
+            let shadow_w = cart_w + 14.0;
+            out.push(Draw::Tex {
+                x: cart_x - 7.0,
+                y: 284.0,
+                w: shadow_w,
+                h: art.shadow.h as f32,
+                tex: art.shadow.tex,
+                alpha: 0.55 * open_e,
+            });
+        }
         match face {
             Some(tex) => out.push(Draw::Tex {
-                x: cart.0,
-                y: cart.1,
-                w: cart.2,
-                h: cart.3,
+                x: cart_x,
+                y: cart_y - drop,
+                w: cart_w,
+                h: cart_h,
                 tex,
                 alpha: if settled { 0.9 } else { 1.0 },
             }),
             None => out.push(Draw::Rect {
-                x: cart.0,
-                y: cart.1,
-                w: cart.2,
-                h: cart.3,
+                x: cart_x,
+                y: cart_y - drop,
+                w: cart_w,
+                h: cart_h,
                 colour: with_alpha(SYNC_PLACEHOLDER, 0.95),
             }),
         }
-
-        let Some(art) = self.sync_art.as_ref() else {
-            self.draw_sync_banner(out);
-            return;
-        };
-        let show_cloud = ui.map_or(true, |ui| ui.show_cloud);
-        let (cx, cy, cw, ch) = (502.0, 222.0, 126.0, 82.0);
-        if show_cloud {
+        if art.dock.w > 0 && art.dock.h > 0 {
             out.push(Draw::Tex {
-                x: cx,
-                y: cy,
-                w: cw,
-                h: ch,
-                tex: art.cloud.tex,
-                alpha: if noop || settled { 1.0 } else { 0.72 + 0.28 * wave },
+                x: SYNC_DOCK_AT.0,
+                y: SYNC_DOCK_AT.1,
+                w: art.dock.w as f32,
+                h: art.dock.h as f32,
+                tex: art.dock.tex,
+                alpha: 1.0,
             });
         }
 
-        let transport = matches!(
-            stage,
-            Some(SyncStage::Upload)
-                | Some(SyncStage::Download)
-                | Some(SyncStage::Verify)
-                | Some(SyncStage::Commit)
-        );
+        // The cloud sticker card (or the neutral target card for a mod).
+        let card_dx = SYNC_CARD_SLIDE * (1.0 - open_e);
+        let card_alpha = if settled {
+            1.0
+        } else {
+            0.62 + 0.38 * open_e
+        };
+        let (card_x, card_y) = SYNC_CLOUD_CARD_AT;
+        if show_cloud {
+            if art.cloud_card.w > 0 && art.cloud_card.h > 0 {
+                out.push(Draw::Tex {
+                    x: card_x + card_dx,
+                    y: card_y,
+                    w: art.cloud_card.w as f32,
+                    h: art.cloud_card.h as f32,
+                    tex: art.cloud_card.tex,
+                    alpha: card_alpha,
+                });
+            }
+            if let Some(label) = faces.cloud_label.filter(|face| face.w > 0 && face.h > 0) {
+                out.push(Draw::Tex {
+                    x: SYNC_CLOUD_LABEL_AT.0 + card_dx,
+                    y: SYNC_CLOUD_LABEL_AT.1,
+                    w: label.w as f32,
+                    h: label.h as f32,
+                    tex: label.tex,
+                    alpha: card_alpha,
+                });
+            }
+        } else {
+            if art.target_card.w > 0 && art.target_card.h > 0 {
+                out.push(Draw::Tex {
+                    x: card_x + card_dx,
+                    y: card_y,
+                    w: art.target_card.w as f32,
+                    h: art.target_card.h as f32,
+                    tex: art.target_card.tex,
+                    alpha: card_alpha,
+                });
+            }
+            if let Some(label) = faces.target_label.filter(|face| face.w > 0 && face.h > 0) {
+                out.push(Draw::Tex {
+                    x: card_x + card_dx + (art.target_card.w as f32 - label.w as f32) / 2.0,
+                    y: SYNC_TARGET_LABEL_Y,
+                    w: label.w as f32,
+                    h: label.h as f32,
+                    tex: label.tex,
+                    alpha: card_alpha,
+                });
+            }
+        }
+
+        // The lane: slots and packets while running, a plain white cable when done.
         let direction = ui
             .and_then(|ui| match ui.direction.as_deref() {
                 Some("upload") => Some(Direction::Upload),
@@ -16742,255 +19116,312 @@ impl App {
                 _ => None,
             })
             .or(direction);
-        let upload = direction != Some(Direction::Download);
-        let (show_state, show_sav) = match ui {
-            Some(ui) if !ui.units.is_empty() => (
-                ui.units.iter().any(|unit| unit == "state"),
-                ui.units.iter().any(|unit| unit == "sav"),
-            ),
-            _ => (
-                only != Some(UnitKind::Sav),
-                only != Some(UnitKind::State),
-            ),
+        let active = if settled {
+            6
+        } else {
+            sync_stage_step(stage).map_or(0, u8::from)
         };
-        if transport && !noop {
-            let upper = ((274.0, 252.0), (405.0, 150.0), (504.0, 238.0));
-            let lower = ((274.0, 302.0), (405.0, 340.0), (504.0, 300.0));
-            let mut lanes = Vec::new();
-            if show_state {
-                lanes.push((upper, (0.34, 0.89, 0.96)));
+        if settled {
+            out.push(Draw::Rect {
+                x: 302.0,
+                y: SYNC_LANE_Y - 1.0,
+                w: SYNC_LANE_W,
+                h: 2.0,
+                colour: [1.0, 1.0, 1.0, 1.0],
+            });
+            for x in [300.0, 442.0] {
+                out.push(Draw::Rect {
+                    x,
+                    y: SYNC_LANE_Y - 2.0,
+                    w: 4.0,
+                    h: 4.0,
+                    colour: [1.0, 1.0, 1.0, 1.0],
+                });
             }
-            if show_sav {
-                lanes.push((lower, (0.49, 0.82, 0.97)));
+        } else {
+            if art.lane.w > 0 && art.lane.h > 0 {
+                out.push(Draw::Tex {
+                    x: SYNC_LANE_AT.0,
+                    y: SYNC_LANE_AT.1,
+                    w: art.lane.w as f32,
+                    h: art.lane.h as f32,
+                    tex: art.lane.tex,
+                    alpha: 1.0,
+                });
             }
-            if lanes.is_empty() && ui.is_some() {
-                // Network-only mods (for example AI lookup) have no save unit
-                // but still want a visible request stream.
-                lanes.push((upper, (0.34, 0.89, 0.96)));
-            }
-            for (arc, color) in lanes {
-                let points = 24;
-                for step in 0..points {
-                    let t0 = step as f32 / points as f32;
-                    let t1 = (step + 1) as f32 / points as f32;
-                    let t = if upload { t0 } else { 1.0 - t0 };
-                    let tt = if upload { t1 } else { 1.0 - t1 };
-                    let p0 = cubic_point(arc.0, arc.1, arc.2, t);
-                    let p1 = cubic_point(arc.0, arc.1, arc.2, tt);
-                    let fade = if settled { 0.5 } else { 0.65 };
-                    out.push(Draw::Rect {
-                        x: p0.0.min(p1.0),
-                        y: p0.1.min(p1.1),
-                        w: (p0.0 - p1.0).abs().max(1.0),
-                        h: (p0.1 - p1.1).abs().max(1.0),
-                        colour: [color.0, color.1, color.2, fade],
-                    });
-                }
-                for bead in 0..7 {
-                    let mut t = (bead as f32 / 7.0 + wave * 0.9).rem_euclid(1.0);
-                    if !upload {
-                        t = 1.0 - t;
+            match stage {
+                Some(SyncStage::Upload) | Some(SyncStage::Download) => {
+                    if let Some(dir) = direction {
+                        let right = dir == Direction::Upload;
+                        let phase = ((now.saturating_sub(started) as f32) / 1000.0).rem_euclid(1.0);
+                        for packet in 0..3 {
+                            let mut t = (packet as f32 / 3.0 + phase).rem_euclid(1.0);
+                            if !right {
+                                t = 1.0 - t;
+                            }
+                            let fade = (t / 0.12).min((1.0 - t) / 0.12).clamp(0.0, 1.0);
+                            if art.packet.w > 0 && art.packet.h > 0 {
+                                out.push(Draw::Tex {
+                                    x: 308.0 + t * 130.0 - 4.5,
+                                    y: SYNC_LANE_Y - 6.5,
+                                    w: art.packet.w as f32,
+                                    h: art.packet.h as f32,
+                                    tex: art.packet.tex,
+                                    alpha: fade,
+                                });
+                            }
+                        }
+                        let face = if right { art.dir_right } else { art.dir_left };
+                        if face.w > 0 {
+                            out.push(Draw::Tex {
+                                x: SYNC_DIRECTION_CENTRE.0 - face.w as f32 / 2.0,
+                                y: SYNC_DIRECTION_CENTRE.1 - face.h as f32 / 2.0,
+                                w: face.w as f32,
+                                h: face.h as f32,
+                                tex: face.tex,
+                                alpha: 1.0,
+                            });
+                        }
+                    } else if art.dir_wait.w > 0 {
+                        out.push(Draw::Tex {
+                            x: SYNC_DIRECTION_CENTRE.0 - art.dir_wait.w as f32 / 2.0,
+                            y: SYNC_DIRECTION_CENTRE.1 - art.dir_wait.h as f32 / 2.0,
+                            w: art.dir_wait.w as f32,
+                            h: art.dir_wait.h as f32,
+                            tex: art.dir_wait.tex,
+                            alpha: 1.0,
+                        });
                     }
-                    let point = cubic_point(arc.0, arc.1, arc.2, t);
+                }
+                Some(SyncStage::Verify) => {
+                    let phase = ((now.saturating_sub(started) as f32) / 800.0).rem_euclid(1.0);
+                    let scan = 438.0 - phase * 130.0;
+                    for (offset, alpha) in [(-6.0, 0.08), (-2.0, 0.16), (2.0, 0.08)] {
+                        out.push(Draw::Rect {
+                            x: scan + offset,
+                            y: SYNC_LANE_Y - 3.0,
+                            w: 4.0,
+                            h: 6.0,
+                            colour: [1.0, 1.0, 1.0, alpha],
+                        });
+                    }
                     out.push(Draw::Rect {
-                        x: point.0 - 2.0,
-                        y: point.1 - 2.0,
-                        w: 4.0,
-                        h: 4.0,
-                        colour: [color.0, color.1, color.2, 1.0],
+                        x: scan,
+                        y: SYNC_LANE_Y - 11.0,
+                        w: 1.5,
+                        h: 22.0,
+                        colour: [0.92, 0.92, 0.94, 0.9],
                     });
+                    let face = match direction {
+                        Some(Direction::Upload) => art.dir_right,
+                        Some(Direction::Download) => art.dir_left,
+                        None => art.dir_wait,
+                    };
+                    if face.w > 0 {
+                        out.push(Draw::Tex {
+                            x: SYNC_DIRECTION_CENTRE.0 - face.w as f32 / 2.0,
+                            y: SYNC_DIRECTION_CENTRE.1 - face.h as f32 / 2.0,
+                            w: face.w as f32,
+                            h: face.h as f32,
+                            tex: face.tex,
+                            alpha: 1.0,
+                        });
+                    }
+                }
+                Some(SyncStage::Commit) => {
+                    let face = match direction {
+                        Some(Direction::Upload) => art.dir_right,
+                        Some(Direction::Download) => art.dir_left,
+                        None => art.dir_wait,
+                    };
+                    if face.w > 0 {
+                        out.push(Draw::Tex {
+                            x: SYNC_DIRECTION_CENTRE.0 - face.w as f32 / 2.0,
+                            y: SYNC_DIRECTION_CENTRE.1 - face.h as f32 / 2.0,
+                            w: face.w as f32,
+                            h: face.h as f32,
+                            tex: face.tex,
+                            alpha: 1.0,
+                        });
+                    }
+                }
+                _ => {
+                    if art.dir_wait.w > 0 {
+                        out.push(Draw::Tex {
+                            x: SYNC_DIRECTION_CENTRE.0 - art.dir_wait.w as f32 / 2.0,
+                            y: SYNC_DIRECTION_CENTRE.1 - art.dir_wait.h as f32 / 2.0,
+                            w: art.dir_wait.w as f32,
+                            h: art.dir_wait.h as f32,
+                            tex: art.dir_wait.tex,
+                            alpha: 1.0,
+                        });
+                    }
                 }
             }
         }
 
-        if let Some(dir) = direction.filter(|_| transport && !noop) {
-            let arrow = match dir {
-                Direction::Upload => art.up,
-                Direction::Download => art.down,
+        // The five-stage rail.  It reports stages, not bytes; a real percentage
+        // is only drawn when a manual mod supplies one.  The dots fade in one
+        // after another while the sheet opens.
+        let rail_alpha = if settled { 1.0 } else { open_e };
+        out.push(Draw::Rect {
+            x: SYNC_NODE_X[0],
+            y: SYNC_RAIL_Y - 1.0,
+            w: SYNC_NODE_X[4] - SYNC_NODE_X[0],
+            h: 2.0,
+            colour: [0.227, 0.227, 0.267, rail_alpha],
+        });
+        if active > 1 {
+            let end = if settled {
+                SYNC_NODE_X[4]
+            } else {
+                SYNC_NODE_X[(active - 1) as usize]
             };
-            let (aw, ah) = (arrow.w as f32, arrow.h as f32);
-            out.push(Draw::Tex {
-                x: 455.0 - aw / 2.0,
-                y: 224.0 - ah / 2.0,
-                w: aw,
-                h: ah,
-                tex: arrow.tex,
-                alpha: 0.85,
+            out.push(Draw::Rect {
+                x: SYNC_NODE_X[0],
+                y: SYNC_RAIL_Y - 1.0,
+                w: end - SYNC_NODE_X[0],
+                h: 2.0,
+                colour: [1.0, 1.0, 1.0, rail_alpha],
             });
-            let label = match dir {
-                Direction::Upload => faces.upload_label,
-                Direction::Download => faces.download_label,
+        }
+        for (i, cx) in SYNC_NODE_X.iter().enumerate() {
+            let n = i as u8 + 1;
+            let node_alpha = (open_e * 5.0 - i as f32).clamp(0.0, 1.0);
+            let (face, x, y) = if settled || (active > 0 && n < active) {
+                (art.dot_done, cx - 5.0, SYNC_RAIL_Y - 5.0)
+            } else if active == n {
+                (art.dot_active, cx - 9.5, SYNC_RAIL_Y - 9.5)
+            } else {
+                (art.dot_pending, cx - 4.5, SYNC_RAIL_Y - 4.5)
             };
-            if let Some(label) = label.filter(|face| face.w > 0 && face.h > 0) {
+            if face.w > 0 {
                 out.push(Draw::Tex {
-                    x: 405.0 - label.w as f32 / 2.0,
-                    y: 292.0,
+                    x,
+                    y,
+                    w: face.w as f32,
+                    h: face.h as f32,
+                    tex: face.tex,
+                    alpha: node_alpha,
+                });
+            }
+            if let Some(label) = faces.rail_labels[i].filter(|face| face.w > 0 && face.h > 0) {
+                let alpha = if settled || (active > 0 && n <= active) {
+                    1.0
+                } else {
+                    0.58
+                };
+                out.push(Draw::Tex {
+                    x: cx - label.w as f32 / 2.0,
+                    y: SYNC_RAIL_LABEL_Y,
                     w: label.w as f32,
                     h: label.h as f32,
                     tex: label.tex,
-                    alpha: 0.9,
+                    alpha: alpha * node_alpha,
                 });
             }
         }
 
-        // One generic label replaces the STATE / SAV chips.  The two data
-        // arcs stay, but the animation no longer names internal units.
-        if let Some(label) = faces.data_label.filter(|face| face.w > 0 && face.h > 0) {
-            out.push(Draw::Rect {
-                x: 350.0,
-                y: 236.0,
-                w: 110.0,
-                h: 30.0,
-                colour: [0.04, 0.10, 0.13, 0.95],
-            });
-            out.push(Draw::Rect {
-                x: 350.0,
-                y: 236.0,
-                w: 110.0,
-                h: 1.0,
-                colour: [0.21, 0.56, 0.62, 0.7],
-            });
+        if let Some(left) = faces.progress_left.filter(|face| face.w > 0 && face.h > 0) {
             out.push(Draw::Tex {
-                x: 405.0 - label.w as f32 / 2.0,
-                y: 251.0 - label.h as f32 / 2.0,
-                w: label.w as f32,
-                h: label.h as f32,
-                tex: label.tex,
-                alpha: 0.95,
+                x: 56.0,
+                y: SYNC_FOOTER_Y,
+                w: left.w as f32,
+                h: left.h as f32,
+                tex: left.tex,
+                alpha: 0.62,
+            });
+        }
+        if settled {
+            if let Some(hint) = faces.completion_hint.filter(|face| face.w > 0 && face.h > 0) {
+                out.push(Draw::Tex {
+                    x: 664.0 - hint.w as f32,
+                    y: SYNC_FOOTER_Y,
+                    w: hint.w as f32,
+                    h: hint.h as f32,
+                    tex: hint.tex,
+                    alpha: 0.5,
+                });
+            }
+        } else if let Some(cancel) = faces.cancel_hint.filter(|face| face.w > 0 && face.h > 0) {
+            out.push(Draw::Tex {
+                x: 664.0 - cancel.w as f32,
+                y: 414.0,
+                w: cancel.w as f32,
+                h: cancel.h as f32,
+                tex: cancel.tex,
+                alpha: 0.82,
             });
         }
 
         if settled && !noop {
-            if let Some(check) = faces.check.filter(|face| face.w > 0 && face.h > 0) {
-                out.push(Draw::Rect {
-                    x: 381.0,
-                    y: 228.0,
-                    w: 48.0,
-                    h: 48.0,
-                    colour: [0.02, 0.10, 0.13, 0.95],
-                });
+            let started = self.sync_close_at.unwrap_or(now);
+            let t = ((now.saturating_sub(started) as f32) / 180.0).clamp(0.0, 1.0);
+            let scale = 0.6 + 0.4 * slot_ui::ease(t);
+            let size = art.stamp.w as f32 * scale;
+            if art.stamp.w > 0 && art.stamp.h > 0 {
                 out.push(Draw::Tex {
-                    x: 405.0 - check.w as f32 / 2.0,
-                    y: 252.0 - check.h as f32 / 2.0,
-                    w: check.w as f32,
-                    h: check.h as f32,
-                    tex: check.tex,
+                    x: SYNC_STAMP_CENTRE.0 - size / 2.0,
+                    y: SYNC_STAMP_CENTRE.1 - size / 2.0,
+                    w: size,
+                    h: size,
+                    tex: art.stamp.tex,
                     alpha: 1.0,
                 });
             }
         }
-
-        // Bottom progress bar: cloud follows the five stages; a mod that
-        // reports mods.progress fills the same bar with its real value.
-        let bar_x = 96.0;
-        let bar_y = 414.0;
-        let bar_w = 528.0;
-        let bar_h = 10.0;
-        if let Some(left) = faces.progress_left.filter(|face| face.w > 0 && face.h > 0) {
-            out.push(Draw::Tex {
-                x: bar_x,
-                y: bar_y - 24.0,
-                w: left.w as f32,
-                h: left.h as f32,
-                tex: left.tex,
-                alpha: 0.95,
-            });
-        }
-        if let Some(right) = faces.progress_right.filter(|face| face.w > 0 && face.h > 0) {
-            out.push(Draw::Tex {
-                x: bar_x + bar_w - right.w as f32,
-                y: bar_y - 24.0,
-                w: right.w as f32,
-                h: right.h as f32,
-                tex: right.tex,
-                alpha: 0.95,
-            });
-        }
-        out.push(Draw::Rect {
-            x: bar_x,
-            y: bar_y,
-            w: bar_w,
-            h: bar_h,
-            colour: [0.086, 0.153, 0.180, 0.96],
-        });
-        let filled = if let Some(value) = progress {
-            Some(value.clamp(0.0, 1.0))
-        } else if settled {
-            Some(1.0)
-        } else {
-            match stage {
-                Some(SyncStage::Net) => Some(0.05),
-                Some(SyncStage::Connect) => Some(0.18),
-                Some(SyncStage::Upload | SyncStage::Download) => Some(0.60),
-                Some(SyncStage::Verify) => Some(0.85),
-                Some(SyncStage::Commit) => Some(0.95),
-                _ => None,
-            }
-        };
-        if let Some(value) = filled {
-            if value > 0.0 {
+        if settled && noop {
+            let started = self.sync_close_at.unwrap_or(now);
+            let t = ((now.saturating_sub(started) as f32) / 120.0).clamp(0.0, 1.0);
+            if t < 1.0 {
+                let alpha = 0.45 * (1.0 - t);
+                let (px, py, pw, ph) = if show_cloud {
+                    SYNC_PAPER_RECT
+                } else {
+                    (
+                        SYNC_CLOUD_CARD_AT.0,
+                        SYNC_CLOUD_CARD_AT.1,
+                        art.target_card.w as f32,
+                        art.target_card.h as f32,
+                    )
+                };
                 out.push(Draw::Rect {
-                    x: bar_x,
-                    y: bar_y,
-                    w: bar_w * value,
-                    h: bar_h,
-                    colour: [0.337, 0.886, 0.961, 1.0],
-                });
-                out.push(Draw::Rect {
-                    x: bar_x + 4.0,
-                    y: bar_y + 2.0,
-                    w: (bar_w * value - 8.0).max(0.0),
+                    x: px,
+                    y: py,
+                    w: pw,
                     h: 1.0,
-                    colour: [0.631, 0.957, 1.0, 0.8],
+                    colour: [1.0, 1.0, 1.0, alpha],
+                });
+                out.push(Draw::Rect {
+                    x: px,
+                    y: py + ph - 1.0,
+                    w: pw,
+                    h: 1.0,
+                    colour: [1.0, 1.0, 1.0, alpha],
+                });
+                out.push(Draw::Rect {
+                    x: px,
+                    y: py,
+                    w: 1.0,
+                    h: ph,
+                    colour: [1.0, 1.0, 1.0, alpha],
+                });
+                out.push(Draw::Rect {
+                    x: px + pw - 1.0,
+                    y: py,
+                    w: 1.0,
+                    h: ph,
+                    colour: [1.0, 1.0, 1.0, alpha],
                 });
             }
-        } else {
-            // Mod did not report progress: a moving 28% sweep, no fake value.
-            let u = (self.now().saturating_sub(started) as f32 / 1400.0).rem_euclid(1.0);
-            let segment = bar_w * 0.28;
-            let sx = bar_x + (bar_w - segment) * u;
-            out.push(Draw::Rect {
-                x: sx,
-                y: bar_y,
-                w: segment,
-                h: bar_h,
-                colour: [0.337, 0.886, 0.961, 0.9],
-            });
-        }
-        for tick in [0.25, 0.5, 0.75] {
-            out.push(Draw::Rect {
-                x: bar_x + bar_w * tick,
-                y: bar_y - 2.0,
-                w: 1.0,
-                h: bar_h + 4.0,
-                colour: [0.15, 0.28, 0.32, 1.0],
-            });
-        }
-        if let Some(hint) = faces.cancel_hint.filter(|face| face.w > 0 && face.h > 0) {
-            out.push(Draw::Tex {
-                x: OUT_W as f32 - 36.0 - hint.w as f32,
-                y: 438.0,
-                w: hint.w as f32,
-                h: hint.h as f32,
-                tex: hint.tex,
-                alpha: 0.9,
-            });
         }
 
-        // The animation's stage line sits under the title; the result banner
-        // keeps the old bottom placement.
-        self.draw_sync_banner_at(80.0, out);
         self.draw_sync_open_fade(out);
         if settled {
             self.draw_sync_close_fade(out);
         }
     }
 
-    /// The rectangle the sync screen reveals, in output pixels.
-    ///
-    /// It borrows the cartridge power-on curves verbatim (`screen_width` widens
-    /// a 2 px line first, `screen_scale` opens it up and down), so a network
-    /// cartridge and a game cartridge power up with the same gesture.
     fn sync_open_rect(t: f32) -> (f32, f32, f32, f32) {
     let t = t.clamp(0.0, 1.0);
     let w = OUT_W as f32 * slot_gfx::screen_width(t);
@@ -17073,7 +19504,7 @@ impl App {
     }
 
     fn draw_sync_banner(&self, out: &mut Vec<Draw>) {
-        let Some(face) = self.sync_faces.banner else {
+        let Some(face) = self.sync_faces.result.or(self.sync_faces.banner) else {
             return;
         };
         let y = (OUT_H as f32 - 58.0 - 12.0 - face.h as f32).round();
@@ -17081,7 +19512,7 @@ impl App {
     }
 
     fn draw_sync_banner_at(&self, y: f32, out: &mut Vec<Draw>) {
-        let Some(face) = self.sync_faces.banner else {
+        let Some(face) = self.sync_faces.result.or(self.sync_faces.banner) else {
             return;
         };
         let (w, h) = (face.w as f32, face.h as f32);
@@ -17398,6 +19829,43 @@ impl App {
                 role,
                 cancelled: false,
                 from: self.link_hardware,
+                from_serial: loaded,
+                fallback: false,
+            });
+            self.game_menu = Some(GameMenu::Working {
+                role,
+                step: LinkStep::Radio,
+                since: self.now(),
+            });
+            return;
+        }
+        if self.core == Core::Armgba {
+            // armGBA reads Link Mode and the port at load (changing either
+            // restarts the console), so the cart comes up again with the
+            // netpacket link already on. The link itself starts after the
+            // reload, and `attach_link` hands the socket to the core.
+            self.link_hardware = kind;
+            crate::link_log::debug(
+                "armGBA: both ends must run the same build (armGBA link 3)",
+            );
+            let port = crate::link_kind::armgba_port(kind);
+            if loaded == port {
+                // This core is already open on the same netpacket port: no
+                // second restart, just start the cable.
+                return self.start_link(
+                    LinkStarter::spawn(role.role(), link_port()),
+                    role.client_id(),
+                );
+            }
+            if self.snapshot.as_ref().is_some_and(|s| !s.resume_trusted()) {
+                return self.refuse();
+            }
+            self.link_reload = Some((stem.clone(), port));
+            self.reload = Some(Reload {
+                stem,
+                role,
+                cancelled: false,
+                from: kind,
                 from_serial: loaded,
                 fallback: false,
             });
@@ -18222,7 +20690,18 @@ fn with_alpha(colour: [f32; 4], alpha: f32) -> [f32; 4] {
     [colour[0], colour[1], colour[2], colour[3] * alpha]
 }
 
-/// 0 → 1 → 0 every `period` ms: a cheap pulse that needs no trig.
+/// Human byte size for the transfer docket.
+fn transfer_size_text(bytes: u64) -> String {
+    if bytes >= 1_000_000 {
+        format!("{:.1} MB", bytes as f64 / 1_000_000.0)
+    } else if bytes >= 1_000 {
+        format!("{} KB", (bytes as f64 / 1_000.0).round() as u64)
+    } else {
+        format!("{bytes} B")
+    }
+}
+
+/// Which of the five stage-rail nodes is live.
 fn sync_stage_step(stage: Option<SyncStage>) -> Option<u8> {
     match stage {
         Some(SyncStage::Net) => Some(1),
@@ -18232,26 +20711,6 @@ fn sync_stage_step(stage: Option<SyncStage>) -> Option<u8> {
         Some(SyncStage::Commit) => Some(5),
         _ => None,
     }
-}
-
-fn triangle(elapsed: Millis, period: Millis) -> f32 {
-    let period = period.max(1);
-    let u = (elapsed % period) as f32 / period as f32;
-    1.0 - (2.0 * u - 1.0).abs()
-}
-
-/// One point on a quadratic data arc, in screen pixels.
-fn cubic_point(
-    start: (f32, f32),
-    control: (f32, f32),
-    end: (f32, f32),
-    t: f32,
-) -> (f32, f32) {
-    let u = 1.0 - t;
-    (
-        u * u * start.0 + 2.0 * u * t * control.0 + t * t * end.0,
-        u * u * start.1 + 2.0 * u * t * control.1 + t * t * end.1,
-    )
 }
 
 fn trusted_write(
@@ -18730,11 +21189,25 @@ mod sync_stage_tests {
                 w / h
             );
             assert!(
-                (y + h - (212.0 + 104.0)).abs() < 0.5,
-                "{platform:?} cart foot left the baseline"
+                (y + h - 290.0).abs() < 0.5,
+                "{platform:?} cart foot left the dock"
             );
-            assert!(x >= 84.0 && x + w <= 84.0 + 188.0 + 0.5, "{platform:?} cart left its slot");
+            assert!(
+                x >= 102.0 && x + w <= 102.0 + 196.0 + 0.5,
+                "{platform:?} cart left its stage box"
+            );
         }
+    }
+
+    #[test]
+    fn the_stage_rail_follows_the_cli_stage() {
+        assert_eq!(sync_stage_step(None), None);
+        assert_eq!(sync_stage_step(Some(SyncStage::Net)), Some(1));
+        assert_eq!(sync_stage_step(Some(SyncStage::Connect)), Some(2));
+        assert_eq!(sync_stage_step(Some(SyncStage::Upload)), Some(3));
+        assert_eq!(sync_stage_step(Some(SyncStage::Download)), Some(3));
+        assert_eq!(sync_stage_step(Some(SyncStage::Verify)), Some(4));
+        assert_eq!(sync_stage_step(Some(SyncStage::Commit)), Some(5));
     }
 }
 
@@ -19530,6 +22003,73 @@ mod transfer_header_tests {
 }
 
 #[cfg(test)]
+mod transfer_docket_tests {
+    use super::*;
+
+    #[test]
+    fn the_docket_view_names_the_direction_and_the_sides() {
+        let mut app = App::new(Vec::new());
+        app.phase = Phase::Shelf;
+        app.language = Language::ZhCn;
+        app.transfer = Some(Transfer::stub(true, TransferStage::Sending));
+        let view = app.transfer_view().expect("no docket view");
+        assert_eq!(view.flow, TransferFlow::Sending);
+        assert!(!view.reverse);
+        assert_eq!(view.role_local, "本机 · 主机");
+        assert_eq!(view.role_peer, "对方 · 副机");
+        assert_eq!(view.group_cart, "卡带");
+        assert_eq!(view.group_save, "存档");
+        assert!(!view.status.is_empty());
+        assert_eq!(view.footer_hint.split(" · ").next(), Some("同一 Wi-Fi"));
+
+        app.transfer = Some(Transfer::stub(false, TransferStage::Receiving));
+        let view = app.transfer_view().expect("no receiving view");
+        assert_eq!(view.flow, TransferFlow::Receiving);
+        assert!(view.reverse);
+        assert_eq!(view.role_local, "本机 · 副机");
+        assert_eq!(view.role_peer, "对方 · 主机");
+
+        app.transfer.as_mut().unwrap().stage = TransferStage::Done;
+        app.transfer.as_mut().unwrap().received = true;
+        let view = app.transfer_view().expect("no done view");
+        assert_eq!(view.flow, TransferFlow::Done);
+        assert_eq!(view.percent, 100);
+        assert!(view.reverse);
+        assert_eq!(view.content, "仅卡带");
+
+        app.language = Language::EnUs;
+        app.transfer = Some(Transfer::stub(true, TransferStage::Sending));
+        let view = app.transfer_view().expect("no English view");
+        assert_eq!(view.role_local, "This device · Host");
+        assert_eq!(view.role_peer, "Other device · Joiner");
+        assert_eq!(view.group_cart, "Cartridge");
+        assert!(view.status.contains("Sending"), "{}", view.status);
+    }
+
+    #[test]
+    fn the_size_text_uses_kb_and_mb() {
+        assert_eq!(transfer_size_text(0), "0 B");
+        assert_eq!(transfer_size_text(999), "999 B");
+        assert_eq!(transfer_size_text(1_000), "1 KB");
+        assert_eq!(transfer_size_text(568_000), "568 KB");
+        assert_eq!(transfer_size_text(8_914_752), "8.9 MB");
+    }
+
+    #[test]
+    fn the_asset_labels_are_player_facing() {
+        assert_eq!(App::transfer_asset_label(Language::ZhCn, 0), "游戏本体");
+        assert_eq!(App::transfer_asset_label(Language::ZhCn, 1), "封面");
+        assert_eq!(App::transfer_asset_label(Language::ZhCn, 2), "介绍");
+        assert_eq!(App::transfer_asset_label(Language::ZhCn, 3), "视频");
+        assert_eq!(App::transfer_asset_label(Language::ZhCn, 4), "电池存档");
+        assert_eq!(App::transfer_asset_label(Language::ZhCn, 5), "即时存档");
+        assert_eq!(App::transfer_asset_label(Language::ZhCn, 6), "缩略图");
+        assert_eq!(App::transfer_asset_label(Language::EnUs, 4), "Battery save");
+        assert_eq!(App::transfer_asset_label(Language::EnUs, 5), "Save state");
+    }
+}
+
+#[cfg(test)]
 mod favorite_star_tests {
     use super::*;
 
@@ -19602,5 +22142,364 @@ mod favorite_star_tests {
         )
         .expect("no half-size star");
         assert!((full - 2.0 * half).abs() < 0.01);
+    }
+}
+
+#[cfg(test)]
+mod arcade_tests {
+    use super::*;
+
+    fn cart(platform: Platform, stem: &str) -> Cart {
+        Cart {
+            platform,
+            stem: stem.to_string(),
+            rom: PathBuf::from(format!("Games/{}/{stem}.zip", platform.dir_name())),
+            label: None,
+            title: stem.to_uppercase(),
+            code: String::new(),
+            shell: None,
+            model: Default::default(),
+            front: None,
+        }
+    }
+
+    fn selectable(shelves: &[(Rack, Shelf)]) -> Vec<bool> {
+        shelves
+            .iter()
+            .map(|(rack, shelf)| !shelf.carts.is_empty() || rack.is_cabinet())
+            .collect()
+    }
+
+    #[test]
+    fn cabinets_only_exist_when_the_pack_is_active() {
+        let carts = vec![cart(Platform::Gba, "emerald"), cart(Platform::Arcade, "sf2")];
+
+        let dormant = shelves_of(carts.clone(), &SlotState::default(), &[]);
+        assert_eq!(dormant.len(), 8, "没装包时只有 Recents/Favorites + 六台");
+        assert!(
+            dormant.iter().all(|(rack, _)| !rack.is_cabinet()),
+            "没装包不该出现空柜"
+        );
+
+        let hosted = [Platform::Arcade, Platform::Neogeo];
+        let active = shelves_of(carts, &SlotState::default(), &hosted);
+        assert_eq!(active.len(), 10);
+        assert_eq!(active[8].0.cabinet(), Some(Platform::Arcade), "柜子追加在末尾");
+        assert_eq!(active[9].0.cabinet(), Some(Platform::Neogeo));
+        assert!(
+            active[8].1.carts.is_empty() && active[9].1.carts.is_empty(),
+            "柜子的架子恒空"
+        );
+        // 街机卡带不落在任何卡带架里：它们只通过主界面出现。
+        assert!(
+            active
+                .iter()
+                .filter(|(rack, _)| !rack.is_cabinet())
+                .all(|(_, shelf)| shelf.carts.iter().all(|c| c.platform != Platform::Arcade)),
+            "街机卡带被塞进了卡带架"
+        );
+        // 柜子的 key 不与平台架冲突，否则 reload 会把光标挪走。
+        assert_eq!(active[8].0.key(), "cabinet-arcade");
+        assert_ne!(active[8].0.key(), Rack::Of(Platform::Arcade).key());
+    }
+
+    #[test]
+    fn the_shelf_ring_reaches_the_cabinets() {
+        let carts = vec![cart(Platform::Gba, "emerald")];
+        let hosted = [Platform::Arcade, Platform::Neogeo];
+        let shelves = shelves_of(carts, &SlotState::default(), &hosted);
+        let flags = selectable(&shelves);
+        let n = shelves.len() as i32;
+
+        // GBA 架（2）往前走：跳过空的 FC/SFC/MD，直接进 Arcade 柜子。
+        assert_eq!(ring_step(shelves.len(), 2, 1, &flags), Some(8));
+        assert_eq!(ring_step(shelves.len(), 8, 1, &flags), Some(9), "Arcade → NeoGeo");
+        assert_eq!(ring_step(shelves.len(), 9, 1, &flags), Some(2), "NeoGeo 绕回 GBA");
+        assert_eq!(ring_step(shelves.len(), 2, -1, &flags), Some(9), "往回走先进柜子");
+
+        // 转一圈回到原地。
+        assert_eq!(ring_step(shelves.len(), 2, n, &flags), Some(2));
+        assert_eq!(ring_step(shelves.len(), 2, -n, &flags), Some(2));
+
+        // 全不可选（新卡、没有游戏、没装包）：不 panic，返回 None。
+        assert_eq!(ring_step(3, 0, 1, &[false, false, false]), None);
+        assert_eq!(ring_step(0, 0, 1, &[]), None);
+    }
+
+    #[test]
+    fn a_cursor_on_an_uninstalled_cabinet_falls_back_to_the_nearest_rack() {
+        let carts = vec![cart(Platform::Gba, "emerald")];
+        let after = shelves_of(carts, &SlotState::default(), &[]);
+        assert_eq!(after.len(), 8);
+
+        // 卸载前光标停在柜子（下标 8）上：夹到末尾后按"往前找最近的"回落到 GBA。
+        assert_eq!(reconcile_shelf_at(&after, 8.min(after.len() - 1)), 2);
+        // 原位可选就不动。
+        assert_eq!(reconcile_shelf_at(&after, 2), 2);
+        // 前面的都不可选时往**后**找。
+        assert_eq!(reconcile_shelf_at(&after, 0), 2);
+        // 全空：回 0，不 panic。
+        let empty = shelves_of(Vec::new(), &SlotState::default(), &[]);
+        assert_eq!(reconcile_shelf_at(&empty, 5), 0);
+        assert_eq!(reconcile_shelf_at(&[], 0), 0);
+    }
+}
+
+#[cfg(test)]
+mod arcade_resync_tests {
+    use super::*;
+
+    fn cart(platform: Platform, stem: &str) -> Cart {
+        Cart {
+            platform,
+            stem: stem.to_string(),
+            rom: PathBuf::from(format!("Games/{}/{stem}.zip", platform.dir_name())),
+            label: None,
+            title: stem.to_uppercase(),
+            code: String::new(),
+            shell: None,
+            model: Default::default(),
+            front: None,
+        }
+    }
+
+    /// Web 页面在浏览主界面时卸载平台包：柜子从书架消失的同时，主界面必须退出。
+    ///
+    /// 不 panic 只说明状态没崩；这条验的是"用户不会滞留在一个不存在的主机上"，
+    /// 而且 `refresh_arcade_boards()` 不再对着一台没有平台的空列表画界面。
+    #[test]
+    fn uninstalling_the_pack_while_the_arcade_screen_is_open_returns_to_the_shelf() {
+        let mut app = App::new(vec![
+            cart(Platform::Gba, "emerald"),
+            cart(Platform::Arcade, "sf2"),
+        ]);
+        // 模拟"包已装好"：hosted 有两台，书架 10 架，主界面开着 Arcade。
+        app.hosted = vec![Platform::Arcade, Platform::Neogeo];
+        app.shelves = shelves_of(app.library.clone(), &app.state, &app.hosted);
+        app.shelf_at = 8;
+        app.phase = Phase::Arcade {
+            screen: crate::arcade::ArcadeScreen::new(Platform::Arcade),
+        };
+        assert_eq!(app.shelves.len(), 10);
+
+        // 卸载：没有 root 时 `hosted_now()` 就是空，正好等价于"记录消失"。
+        let carts = app.library.clone();
+        let catalog = FolderCatalog::build_from_paths(&carts);
+        app.resync_after_library_change(carts, catalog, Vec::new());
+
+        assert!(
+            matches!(app.phase, Phase::Shelf),
+            "平台包卸载后主界面还开着：{:?}",
+            app.phase
+        );
+        assert_eq!(app.shelves.len(), 8, "柜子应当从书架消失");
+        assert!(
+            app.arcade_boards.is_empty(),
+            "退出主界面后不该留着板列表缓存"
+        );
+        // 光标从柜子（8，越界）回落到最近的可选架（GBA=2），不 panic。
+        assert_eq!(app.shelves[app.shelf_at].0.platform(), Some(Platform::Gba));
+    }
+
+    /// 没有 `root` 时"柜子列表"恒为空：一次 resync 会把主界面关掉，且**不会**
+    /// 在后台偷偷恢复——重装平台包后要用户自己按 A 重新进入。
+    #[test]
+    fn a_resync_without_a_root_closes_the_screen_and_does_not_reopen_it() {
+        let mut app = App::new(vec![
+            cart(Platform::Gba, "emerald"),
+            cart(Platform::Arcade, "sf2"),
+        ]);
+        app.hosted = vec![Platform::Arcade];
+        app.shelves = shelves_of(app.library.clone(), &app.state, &app.hosted);
+        app.phase = Phase::Arcade {
+            screen: crate::arcade::ArcadeScreen::new(Platform::Arcade),
+        };
+
+        let carts = app.library.clone();
+        let catalog = FolderCatalog::build_from_paths(&carts);
+        app.resync_after_library_change(carts, catalog, Vec::new());
+        // 没有 root ⇒ hosted_now() 为空，这里等价于"刚被卸载"，因此回到书架。
+        assert!(matches!(app.phase, Phase::Shelf));
+
+        // 再装回来：主界面需要用户重新按 A 进入（不在后台偷偷恢复）。
+        app.hosted = vec![Platform::Arcade];
+        app.shelves = shelves_of(app.library.clone(), &app.state, &app.hosted);
+        assert_eq!(app.shelves.last().unwrap().0.cabinet(), Some(Platform::Arcade));
+    }
+}
+
+#[cfg(test)]
+mod shelf_neighbour_tests {
+    use super::*;
+
+    fn cart(platform: Platform, stem: &str) -> Cart {
+        Cart {
+            platform,
+            stem: stem.to_string(),
+            rom: PathBuf::from(format!("Games/{}/{stem}.zip", platform.dir_name())),
+            label: None,
+            title: stem.to_uppercase(),
+            code: String::new(),
+            shell: None,
+            model: Default::default(),
+            front: None,
+        }
+    }
+
+    /// 环上只有一个可选架时，"换架"必须是 no-op。
+    ///
+    /// 回归：`ring_step` 的整圈那一步会让 `next_shelf(±1)` 回到自己，于是
+    /// `neighbour_shelves()` 把自己当邻居（同一批贴纸被要两遍），
+    /// `switch_shelf` 还会因为"移动到自己"重播机种牌动画。
+    #[test]
+    fn a_single_selectable_rack_does_not_become_its_own_neighbour() {
+        let mut app = App::new(vec![cart(Platform::Gba, "emerald")]);
+        let selectable = app
+            .shelves
+            .iter()
+            .filter(|(rack, shelf)| !shelf.carts.is_empty() || rack.is_cabinet())
+            .count();
+        assert_eq!(selectable, 1, "夹具前提：只有一个可选架");
+
+        assert_eq!(app.next_shelf(1), None, "只有一个可选架时不该换到自己");
+        assert_eq!(app.next_shelf(-1), None);
+
+        let at = app.shelf_at;
+        app.switch_shelf(1);
+        assert_eq!(app.shelf_at, at, "switch_shelf 不该移动");
+    }
+
+    /// 两台可选架时仍然正常换架（别把修复做过头）。
+    #[test]
+    fn two_selectable_racks_still_switch() {
+        let mut app = App::new(vec![
+            cart(Platform::Gba, "emerald"),
+            cart(Platform::Fc, "mario"),
+        ]);
+        let at = app.shelf_at;
+        let to = app.next_shelf(1).expect("两台可选架必须能换");
+        assert_ne!(to, at);
+        app.switch_shelf(1);
+        assert_eq!(app.shelf_at, to);
+    }
+}
+
+#[cfg(test)]
+mod arcade_launch_tests {
+    use super::*;
+
+    fn cart(platform: Platform, stem: &str) -> Cart {
+        Cart {
+            platform,
+            stem: stem.to_string(),
+            rom: PathBuf::from(format!("Games/{}/{stem}.zip", platform.dir_name())),
+            label: None,
+            title: stem.to_uppercase(),
+            code: String::new(),
+            shell: None,
+            model: Default::default(),
+            front: None,
+        }
+    }
+
+    /// 街机 START 走的是卡带那条 `Inserting` 管线，并记住来源平台。
+    #[test]
+    fn starting_from_attract_enters_the_insert_pipeline() {
+        let mut app = App::new(vec![cart(Platform::Gba, "emerald"), cart(Platform::Arcade, "sf2")]);
+        app.hosted = vec![Platform::Arcade];
+        app.shelves = shelves_of(app.library.clone(), &app.state, &app.hosted);
+        app.arcade_boards = vec![cart(Platform::Arcade, "sf2")];
+        let mut screen = crate::arcade::ArcadeScreen::new(Platform::Arcade);
+        screen.stage = crate::arcade::Stage::Attract {
+            credits: 0,
+            coin_t: 0.0,
+            blink: 0.0,
+        };
+        app.phase = Phase::Arcade { screen };
+
+        app.arcade_start();
+
+        match &app.phase {
+            Phase::Inserting { cart, core_ready, .. } => {
+                assert_eq!(cart, "sf2");
+                assert!(!core_ready, "核心由 session 打开后再回调");
+            }
+            other => panic!("应当进入 Inserting，实际 {other:?}"),
+        }
+        assert_eq!(app.arcade_return, Some(Platform::Arcade));
+        assert_eq!(app.state.cart, None, "街机不能污染卡带续玩指针");
+    }
+
+    /// 缺核心：留在 attract 并记一行"核心缺失"，不 eject 回书架。
+    #[test]
+    fn a_missing_core_does_not_enter_playing() {
+        let mut app = App::new(vec![cart(Platform::Arcade, "sf2")]);
+        app.arcade_boards = vec![cart(Platform::Arcade, "sf2")];
+        let mut screen = crate::arcade::ArcadeScreen::new(Platform::Arcade);
+        screen.stage = crate::arcade::Stage::Attract {
+            credits: 0,
+            coin_t: 0.0,
+            blink: 0.0,
+        };
+        app.phase = Phase::Arcade { screen };
+        app.arcade_start();
+        assert!(matches!(app.phase, Phase::Inserting { .. }));
+
+        // session 开核心失败时回调这个。
+        app.on_core_failed();
+
+        match &app.phase {
+            Phase::Arcade { screen } => {
+                assert_eq!(screen.stage(), crate::arcade::ArcadeStage::Attract);
+                assert!(screen.core_missing, "CRT 上要挂一行红字");
+                assert_eq!(screen.credits(), 0);
+            }
+            other => panic!("应当回到 attract，实际 {other:?}"),
+        }
+        assert_eq!(app.arcade_return, None);
+        assert!(!matches!(app.phase, Phase::Playing { .. }));
+    }
+
+    /// 退出游戏回主界面 Main（不是书架），credits 清零、书架光标不动。
+    #[test]
+    fn leaving_the_game_returns_to_main_with_no_credits() {
+        let mut app = App::new(vec![cart(Platform::Gba, "emerald"), cart(Platform::Arcade, "sf2")]);
+        app.hosted = vec![Platform::Arcade];
+        app.shelves = shelves_of(app.library.clone(), &app.state, &app.hosted);
+        app.shelf_at = 8; // 停在 Arcade 柜子上
+        app.arcade_boards = vec![cart(Platform::Arcade, "sf2")];
+        let mut screen = crate::arcade::ArcadeScreen::new(Platform::Arcade);
+        screen.stage = crate::arcade::Stage::Attract {
+            credits: 2,
+            coin_t: 0.0,
+            blink: 0.0,
+        };
+        app.phase = Phase::Arcade { screen };
+        app.arcade_start();
+        let shelf_before = app.shelf_at;
+
+        // 直接把它当成"已经在跑"的游戏，然后走 eject。
+        app.phase = Phase::Playing {
+            cart: "sf2".to_string(),
+        };
+        // 单卡库会被 `eject()` 的"至少留一张卡"守卫拒绝，测试里直接放行。
+        app.eject_inner(true);
+        // 推进到 eject 动画结束。
+        for _ in 0..240 {
+            app.update(1.0 / 60.0);
+            if !matches!(app.phase, Phase::Ejecting { .. }) {
+                break;
+            }
+        }
+
+        match &app.phase {
+            Phase::Arcade { screen } => {
+                assert_eq!(screen.stage(), crate::arcade::ArcadeStage::Main);
+                assert_eq!(screen.credits(), 0, "回 Main 时币要清零");
+            }
+            other => panic!("应当回到主界面，实际 {other:?}"),
+        }
+        assert_eq!(app.shelf_at, shelf_before, "书架光标不该动");
+        assert_eq!(app.arcade_return, None);
     }
 }

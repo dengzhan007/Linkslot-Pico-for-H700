@@ -22,14 +22,27 @@ pub struct StateRing {
     dir: PathBuf,
 }
 
+/// 即时存档的目录：`States/<平台目录>/<核心>/<stem>/`（ring，不是单个文件）。
+///
+/// **只有一个入口，核心名必须由调用方给**：`slot_store::core_for` 允许用户为某张
+/// 卡带换核心（core picker），换完核心后它的即时存档本来就落在
+/// `States/<平台>/<新核心>/<stem>/`。如果这里偷偷用"平台默认核心"，换过核心的
+/// 卡带会**找不到自己以前的即时存档**（读档列表突然变空、旧档变成孤儿文件）。
+///
+/// 也不提供"默认核心"的重载：同平台有多个核心时（SFC 的 snes9x / supafaust、
+/// FC 的 fceumm / nestopia），"默认"与"实际"必然分叉，两个入口早晚有人挑错那个。
+/// 调用方（`StateRing::new`、`arcade::save_paths`）显式把核心传进来。
+pub fn state_dir(root: &Path, platform: Platform, core: Core, stem: &str) -> PathBuf {
+    root.join("States")
+        .join(platform.dir_name())
+        .join(core.as_str())
+        .join(stem)
+}
+
 impl StateRing {
     pub fn new(root: &Path, platform: Platform, core: Core, stem: &str) -> Self {
         StateRing {
-            dir: root
-                .join("States")
-                .join(platform.dir_name())
-                .join(core.as_str())
-                .join(stem),
+            dir: state_dir(root, platform, core, stem),
         }
     }
 

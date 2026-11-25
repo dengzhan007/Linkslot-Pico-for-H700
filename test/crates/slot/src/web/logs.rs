@@ -4,6 +4,8 @@
 
 use std::path::Path;
 
+use serde_json::json;
+
 use crate::web::http::{self, Response};
 use crate::web::Shared;
 
@@ -39,6 +41,66 @@ pub(crate) fn export(shared: &Shared) -> Response {
             http::content_disposition("attachment", &name),
         )
         .with_header("Cache-Control", "no-store")
+}
+
+/// `POST /api/logs/clear`: truncate every regular file under `Logs/` (including
+/// `crash/`) in place. The files stay so the processes that already write them
+/// keep appending (`diag` opens with `append`, stderr is redirected with `>>`);
+/// symlinks and non-files are left alone. `freed` is the size before truncation.
+pub(crate) fn clear(shared: &Shared) -> Response {
+    let mut cleared = 0u64;
+    let mut freed = 0u64;
+    let mut failed = 0u64;
+    clear_dir(
+        &shared.root.join("linkSlot/Logs"),
+        &mut cleared,
+        &mut freed,
+        &mut failed,
+    );
+    Response::json(
+        200,
+        json!({
+            "cleared": cleared,
+            "freed": freed,
+            "failed": failed,
+        }),
+    )
+}
+
+fn clear_dir(dir: &Path, cleared: &mut u64, freed: &mut u64, failed: &mut u64) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    let mut entries: Vec<_> = entries.flatten().collect();
+    entries.sort_by_key(|entry| entry.file_name());
+    for entry in entries {
+        let path = entry.path();
+        let Ok(meta) = std::fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if meta.file_type().is_symlink() {
+            continue;
+        }
+        if meta.is_dir() {
+            clear_dir(&path, cleared, freed, failed);
+            continue;
+        }
+        if !meta.is_file() {
+            continue;
+        }
+        let before = meta.len();
+        let truncated = std::fs::OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .and_then(|file| file.set_len(0));
+        match truncated {
+            Ok(()) => {
+                *cleared += 1;
+                *freed += before;
+            }
+            Err(_) => *failed += 1,
+        }
+    }
 }
 
 fn collect(dir: &Path, prefix: &str, files: &mut Vec<(String, Vec<u8>)>, total: &mut u64) {
@@ -245,5 +307,58 @@ mod tests {
         ]);
         assert_eq!(entries, 3, "unexpected entry count");
         let _ = request(Method::Get, "/api/logs/export", "");
+    }
+
+    #[test]
+    fn clearing_truncates_every_log_and_keeps_the_files_and_the_config() {
+        let dir = tempfile::tempdir().unwrap();
+        let logs = dir.path().join("linkSlot/Logs");
+        std::fs::create_dir_all(logs.join("crash")).unwrap();
+        std::fs::write(logs.join("linkSlot.log"), b"link line\n").unwrap();
+        std::fs::write(logs.join("slot.log"), b"second\n").unwrap();
+        std::fs::write(logs.join("crash/cores.log"), b"signal\n").unwrap();
+        std::fs::create_dir_all(dir.path().join("linkSlot/Config")).unwrap();
+        std::fs::write(
+            dir.path().join("linkSlot/Config/config.toml"),
+            b"secret",
+        )
+        .unwrap();
+        let shared = test_shared(dir.path().to_path_buf());
+
+        let response = super::clear(&shared);
+        assert_eq!(response.status, 200);
+        let value: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(value["cleared"].as_u64(), Some(3));
+        assert_eq!(value["failed"].as_u64(), Some(0));
+        assert!(value["freed"].as_u64().unwrap() > 0);
+        for path in [
+            logs.join("linkSlot.log"),
+            logs.join("slot.log"),
+            logs.join("crash/cores.log"),
+        ] {
+            assert!(path.is_file(), "{} was removed", path.display());
+            assert_eq!(
+                std::fs::metadata(&path).unwrap().len(),
+                0,
+                "{} was not truncated",
+                path.display()
+            );
+        }
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("linkSlot/Config/config.toml")).unwrap(),
+            "secret",
+            "a file outside Logs/ was touched"
+        );
+    }
+
+    #[test]
+    fn clearing_without_a_logs_directory_reports_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let shared = test_shared(dir.path().to_path_buf());
+        let response = super::clear(&shared);
+        assert_eq!(response.status, 200);
+        let value: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(value["cleared"].as_u64(), Some(0));
+        assert_eq!(value["failed"].as_u64(), Some(0));
     }
 }

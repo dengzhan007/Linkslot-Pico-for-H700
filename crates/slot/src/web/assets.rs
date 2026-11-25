@@ -423,15 +423,34 @@ mod tests {
         // go out, then the verify shimmer once they are in.
         assert!(INDEX_HTML.contains("id=\"upgradeProgress\""));
         assert!(INDEX_HTML.contains("id=\"upgradeProgressBar\""));
+        assert!(APP_JS.contains("/api/log/level"));
+        assert!(INDEX_HTML.contains("id=\"logLevel\""));
+        assert!(INDEX_HTML.contains("id=\"saveLogLevel\""));
+        assert!(INDEX_HTML.contains("id=\"logLevelStatus\""));
+        assert!(APP_JS.contains("logLevelStatus"));
         // Log export: one button that downloads Logs/ plus its crash records.
         assert!(INDEX_HTML.contains("id=\"exportLogs\""));
         assert!(INDEX_HTML.contains("id=\"exportLogsStatus\""));
         assert!(APP_JS.contains("/api/logs/export"));
+        // Log cleanup sits beside the export, before the long service-log view.
+        assert!(INDEX_HTML.contains("id=\"clearLogs\""));
+        assert!(INDEX_HTML.contains("id=\"clearLogsStatus\""));
+        assert!(APP_JS.contains("/api/logs/clear"));
+        assert!(
+            INDEX_HTML.find("id=\"exportLogs\"").unwrap()
+                < INDEX_HTML.find("id=\"clearLogs\"").unwrap(),
+            "log cleanup should follow the export button"
+        );
         // Users look for the one-click export before the long service-log view.
         assert!(
             INDEX_HTML.find("id=\"exportLogs\"").unwrap()
                 < INDEX_HTML.find("id=\"syncLog\"").unwrap(),
             "log export should precede the service log"
+        );
+        assert!(
+            INDEX_HTML.find("id=\"clearLogs\"").unwrap()
+                < INDEX_HTML.find("id=\"syncLog\"").unwrap(),
+            "log cleanup should precede the service log"
         );
         assert!(INDEX_HTML.contains("id=\"upgradeProgressText\""));
         for id in [

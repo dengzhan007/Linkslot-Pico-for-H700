@@ -156,7 +156,13 @@ enum Shape {
 
 pub fn gb_shell_of(cart: &Cart) -> Option<GbShell> {
     match cart.platform {
-        Platform::Gba | Platform::Fc | Platform::Sfc | Platform::Md => None,
+        // 街机 / NeoGeo 没有 GB 式的外壳：它们是柜子里的板与卡座。
+        Platform::Gba
+        | Platform::Fc
+        | Platform::Sfc
+        | Platform::Md
+        | Platform::Arcade
+        | Platform::Neogeo => None,
         Platform::Gb | Platform::Gbc => Some(match cart.shell.map(|c| c.outline) {
             Some(Outline::Notched) => GbShell::Notched,
             Some(Outline::Rounded) => GbShell::Rounded,
@@ -297,6 +303,9 @@ pub fn seated_box(platform: Platform) -> (u32, u32) {
         Platform::Sfc => (SEATED_W, SFC_SEATED_H),
         Platform::Md => (SEATED_W, MD_SEATED_H),
         Platform::Gb | Platform::Gbc => (SEATED_W, GB_SEATED_H),
+        // TODO(phase 4): 街机在柜子里不"落座"，MVS 卡座也是另一种形状；
+        // 先按 MD 的高度摆，保证布局不塌。
+        Platform::Arcade | Platform::Neogeo => (SEATED_W, MD_SEATED_H),
     }
 }
 
@@ -310,6 +319,8 @@ pub fn cart_art_box(platform: Platform) -> (u32, u32) {
         Platform::Sfc => Shape::Sfc,
         Platform::Md => Shape::Md,
         Platform::Gb | Platform::Gbc => Shape::Gb(GbShell::Notched),
+        // 借 MD 的卡面几何（`reference_art` 也指向 MD 的图）。
+        Platform::Arcade | Platform::Neogeo => Shape::Md,
     });
     reference_spec(&mut s, platform);
     (s.w, s.h)
@@ -322,6 +333,7 @@ pub fn cart_box(platform: Platform) -> (u32, u32) {
         Platform::Sfc => Shape::Sfc,
         Platform::Md => Shape::Md,
         Platform::Gb | Platform::Gbc => Shape::Gb(GbShell::Notched),
+        Platform::Arcade | Platform::Neogeo => Shape::Md,
     });
     reference_spec(&mut s, platform);
     match platform {
@@ -490,6 +502,8 @@ fn card_shape(platform: Platform, gb_shell: Option<GbShell>) -> Shape {
             Platform::Sfc => Shape::Sfc,
             Platform::Md => Shape::Md,
             Platform::Gba => Shape::Gba,
+            // 卡面借用 MD 的图，形状也必须跟着 MD，否则阴影轮廓对不上。
+            Platform::Arcade | Platform::Neogeo => Shape::Md,
         },
     }
 }
@@ -547,13 +561,15 @@ fn reference_art_model(platform: Platform, model: CartModel) -> Option<&'static 
 }
 
 fn reference_art(platform: Platform) -> Option<&'static ReferenceArt> {
+    // TODO(phase 4): 街机与 NeoGeo 还没有自己的封面图，暂时共用 MD 的那张，
+    // 这样 `OnceLock` 只会被初始化一次，两个机种不会各自解一遍同样的 PNG。
     let slot = match platform {
         Platform::Gba => &REF_GBA,
         Platform::Gb => &REF_GB,
         Platform::Gbc => &REF_GBC,
         Platform::Fc => &REF_FC,
         Platform::Sfc => &REF_SFC,
-        Platform::Md => &REF_MD,
+        Platform::Md | Platform::Arcade | Platform::Neogeo => &REF_MD,
     };
     slot.get_or_init(|| {
         let (bytes, label) = match platform {
@@ -580,7 +596,7 @@ fn reference_art(platform: Platform) -> Option<&'static ReferenceArt> {
                  (SFC_CART_W * 332 / 360), (SFC_CART_H * 121 / 252)),
             ),
             // Measured from the reference MD art: (52,4)-(308,210).
-            Platform::Md => (
+            Platform::Md | Platform::Arcade | Platform::Neogeo => (
                 &include_bytes!("../assets/md_cart.png")[..],
                 ((MD_CART_W * 52 / 360), (MD_CART_H * 4 / 244),
                  (MD_CART_W * 308 / 360), (MD_CART_H * 210 / 244)),
@@ -702,6 +718,8 @@ fn shape_of_platform(platform: Platform) -> Shape {
         Platform::Fc => Shape::Fc,
         Platform::Sfc => Shape::Sfc,
         Platform::Md => Shape::Md,
+        // 借 MD 的卡面，形状也跟 MD 走（见 `reference_art`）。
+        Platform::Arcade | Platform::Neogeo => Shape::Md,
     }
 }
 
@@ -740,6 +758,7 @@ pub fn label_rect(platform: Platform, model: CartModel) -> (u32, u32, u32, u32) 
         (Platform::Md, _) => Shape::Md,
         (Platform::Gb | Platform::Gbc, _) => Shape::Gb(GbShell::Notched),
         (Platform::Gba, _) => Shape::Gba,
+        (Platform::Arcade | Platform::Neogeo, _) => Shape::Md,
     };
     spec(shape).label
 }

@@ -40,6 +40,16 @@ pub struct Opened {
     pub named: bool,
 }
 
+/// How a core is told to open for a link, before `load`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LinkSetup {
+    /// mGBA's cable: the core needs the player this device drives.
+    Mgba { player: u8 },
+    /// armGBA's netpacket link: Link Mode Separate and the port in use.
+    /// (The core reads both at load; changing either restarts the console.)
+    Armgba { wireless: bool },
+}
+
 pub fn open_core(
     root: &Path,
     core: Core,
@@ -47,7 +57,7 @@ pub fn open_core(
     serial: &str,
     colour: bool,
     palette: Option<GbPalette>,
-    link: Option<u8>,
+    link: Option<LinkSetup>,
 ) -> Opened {
     let paths = candidates(root, core);
     match open_named(root, core, platform, serial, colour, palette, link, &paths) {
@@ -95,7 +105,7 @@ fn open_named(
     serial: &str,
     colour: bool,
     palette: Option<GbPalette>,
-    link: Option<u8>,
+    link: Option<LinkSetup>,
     paths: &[PathBuf],
 ) -> Option<Box<dyn RetroCore>> {
     let bios = root::bios_dir(root);
@@ -120,8 +130,8 @@ fn open_named(
                     colour,
                     palette,
                 );
-                if let Some(player) = link {
-                    apply_link_options(&mut opened, core, player);
+                if let Some(link) = link {
+                    apply_link_options(&mut opened, core, link);
                 }
                 eprintln!("slot: core {}", path.display());
                 return Some(Box::new(opened));
@@ -182,14 +192,43 @@ pub fn colour_option(which: Core, on: bool) -> Option<(&'static str, &'static st
         .map(|c| (c.key, if on { c.on } else { c.off }))
 }
 
-pub fn apply_link_options(core: &mut LibretroCore, which: Core, player: u8) {
-    // 目前只有 mGBA 声明了连机选项；能力位来自核心表。
-    if !which.spec().link {
-        return;
+/// armGBA 的 netpacket 联机选项：必须在 `load` 前设好。核心的 Link Mode /
+/// GBA Link Port 都是“重启生效”，改了会内部重启主机。
+pub fn armgba_link_options(wireless: bool) -> [(&'static str, &'static str); 3] {
+    [
+        ("armgba_link_mode", "separate"),
+        ("armgba_link_players", "2"),
+        (
+            "armgba_link_port",
+            if wireless { "wireless" } else { "cable" },
+        ),
+    ]
+}
+
+pub fn apply_link_options(core: &mut LibretroCore, which: Core, link: LinkSetup) {
+    match link {
+        LinkSetup::Mgba { player } => {
+            // 目前只有 mGBA 声明了这条电缆选项；能力位来自核心表。
+            if !which.spec().link {
+                return;
+            }
+            core.set_option("mgba_link", "on");
+            core.set_option("mgba_link_player", &player.to_string());
+            eprintln!("slot: core: link mode on, player {player}");
+        }
+        LinkSetup::Armgba { wireless } => {
+            if which != Core::Armgba {
+                return;
+            }
+            for (key, value) in armgba_link_options(wireless) {
+                core.set_option(key, value);
+            }
+            eprintln!(
+                "slot: core: armGBA link separate, {} port",
+                if wireless { "wireless" } else { "cable" }
+            );
+        }
     }
-    core.set_option("mgba_link", "on");
-    core.set_option("mgba_link_player", &player.to_string());
-    eprintln!("slot: core: link mode on, player {player}");
 }
 
 pub fn apply_core_options(
@@ -301,6 +340,26 @@ mod tests {
         assert_eq!(
             colour_option(Core::Armgba, false),
             Some(("armgba_color_correction", "disabled"))
+        );
+    }
+
+    #[test]
+    fn armgba_opens_a_two_player_separate_link_on_the_chosen_port() {
+        assert_eq!(
+            armgba_link_options(false),
+            [
+                ("armgba_link_mode", "separate"),
+                ("armgba_link_players", "2"),
+                ("armgba_link_port", "cable"),
+            ]
+        );
+        assert_eq!(
+            armgba_link_options(true),
+            [
+                ("armgba_link_mode", "separate"),
+                ("armgba_link_players", "2"),
+                ("armgba_link_port", "wireless"),
+            ]
         );
     }
 

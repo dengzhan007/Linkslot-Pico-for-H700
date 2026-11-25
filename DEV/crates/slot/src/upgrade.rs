@@ -399,6 +399,21 @@ fn parse_version(text: &str) -> Option<Vec<u64>> {
 }
 
 pub(crate) fn parse_zip(data: &[u8]) -> Result<Vec<ZipEntry>, String> {
+    parse_zip_with_limits(data, MAX_ENTRY, MAX_UNCOMPRESSED)
+}
+
+/// 解析 ZIP，两个上限都由调用方给：`max_entry` 是**单个条目解压后**的上限，
+/// `max_total` 是该 ZIP **所有条目解压后之和**的上限。
+///
+/// 升级包与扩展包的上限不同：升级包装的是几 MB 的前端二进制，而扩展包要装
+/// FBNeo（aarch64 `.so` 79.6 MiB），所以后者用 96 MiB。做成参数而不是直接抬高
+/// [`MAX_ENTRY`]，是因为解压全在内存里——顺手放宽升级路径会连带抬高设备峰值
+/// 内存，而那条路径永远用不到这么大的文件。
+pub(crate) fn parse_zip_with_limits(
+    data: &[u8],
+    max_entry: usize,
+    max_total: usize,
+) -> Result<Vec<ZipEntry>, String> {
     if data.len() < 22 {
         return Err("不是完整的 ZIP 文件".into());
     }
@@ -454,16 +469,19 @@ pub(crate) fn parse_zip(data: &[u8]) -> Result<Vec<ZipEntry>, String> {
         validate_name(&name)?;
         let is_dir = name.ends_with('/');
         if !is_dir {
-            if uncompressed_size > MAX_ENTRY {
-                return Err(format!("ZIP 单文件超过 {} MiB", MAX_ENTRY / (1024 * 1024)));
+            if uncompressed_size > max_entry {
+                return Err(format!(
+                    "ZIP 单文件超过 {} MiB",
+                    max_entry / (1024 * 1024)
+                ));
             }
             total_uncompressed = total_uncompressed
                 .checked_add(uncompressed_size)
                 .ok_or_else(|| "ZIP 解压总量越界".to_string())?;
-            if total_uncompressed > MAX_UNCOMPRESSED {
+            if total_uncompressed > max_total {
                 return Err(format!(
                     "ZIP 解压超过 {} MiB",
-                    MAX_UNCOMPRESSED / (1024 * 1024)
+                    max_total / (1024 * 1024)
                 ));
             }
         }
@@ -490,10 +508,10 @@ pub(crate) fn parse_zip(data: &[u8]) -> Result<Vec<ZipEntry>, String> {
                 let mut out = Vec::new();
                 decoder
                     .by_ref()
-                    .take(MAX_ENTRY as u64 + 1)
+                    .take(max_entry as u64 + 1)
                     .read_to_end(&mut out)
                     .map_err(|e| format!("ZIP 解压失败：{e}"))?;
-                if out.len() > MAX_ENTRY {
+                if out.len() > max_entry {
                     return Err("ZIP 单文件解压超过上限".into());
                 }
                 out
@@ -515,6 +533,18 @@ pub(crate) fn parse_zip(data: &[u8]) -> Result<Vec<ZipEntry>, String> {
             .ok_or_else(|| "ZIP 中央目录越界".to_string())?;
     }
     Ok(entries)
+}
+
+/// 只放宽单文件上限、总量沿用升级包上限的便捷形式。
+///
+/// 仅供测试构造"扩展包入口能过、升级包入口过不去"的对照（`packs_qa`）；生产
+/// 代码一律显式给出两个上限，免得"总量用哪个数"变成隐含约定。
+#[cfg(test)]
+pub(crate) fn parse_zip_with_entry_limit(
+    data: &[u8],
+    max_entry: usize,
+) -> Result<Vec<ZipEntry>, String> {
+    parse_zip_with_limits(data, max_entry, MAX_UNCOMPRESSED)
 }
 
 fn validate_name(name: &str) -> Result<(), String> {

@@ -6,11 +6,11 @@
 |---|---|---|
 | `linkslot-pack-supafaust-v1.0.0.lsp` | SFC | 第二个 SFC 核心，兼容性选项 |
 | `linkslot-pack-nestopia-v1.0.0.lsp` | FC | 高兼容 FC 核心，适合汉化/特殊 mapper 游戏 |
-| `linkslot-pack-armgba-v1.0.0.lsp` | GBA | 第三个 GBA 核心（AArch64 重编译器），单人；不支持 linkSlot 联机 |
+| `linkslot-pack-armgba-v1.0.0.lsp` | GBA | 第三个 GBA 核心（AArch64 重编译器）；netpacket 联机（Link Mode Separate，电缆/无线） |
 | `linkslot-pack-contra-1447-v1.0.0.lsp` | FC | 《魂斗罗》RA 中文化成就 + 徽章 |
 
-> `armGBA` 的联机是 RetroArch netplay 自己的一套，linkSlot 的电缆/netpacket
-> 会话不接；要联机请继续用 mGBA / gpSP。
+> `armGBA` 的 libretro 核心通过 netpacket 提供联机（`Link Mode = Separate`，
+> 电缆或无线适配器）；linkSlot 的 2 人会话走这条接口（Together 不接，两端需同一构建）。
 
 ## 使用
 

@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 
 use common::tmp_root_with_carts;
 use slot::app::{
-    App, ConflictPage, ConflictUi, KeyboardPurpose, Phase, ShelfSync, SyncChoice,
+    App, ConflictPage, ConflictUi, KeyboardPurpose, Phase, ShelfSync, SyncArt, SyncChoice,
     SyncFace, SyncFaces,
 };
 use slot::sync_job::{
@@ -768,6 +768,37 @@ fn a_mod_progress_update_reaches_the_sync_bar() {
 }
 
 #[test]
+fn a_mod_without_a_cloud_uses_the_target_side() {
+    let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
+    install_manual_mod_as(d.path(), "savedeck-battery-bridge", "SaveDeck bridge", 100);
+    let action = d
+        .path()
+        .join("linkSlot/mods/savedeck-battery-bridge/actions/sync/action.json");
+    std::fs::write(
+        &action,
+        r#"{"schema":1,"name":"同步","timing":"manual","enabled":true,"order":100,
+            "ui":{"animation":"cloud_sync","title":"同步电池存档","units":["sav"],
+                  "show_cloud":false,"direction":"upload"}}"#,
+    )
+    .unwrap();
+    let (mut a, _fake) = rig(d.path());
+    pick_network_card(&mut a, 1);
+    start_sync(&mut a);
+
+    let texts = a.sync_texts();
+    assert_eq!(texts.side_remote, "目标");
+    assert_eq!(texts.rail[1], "连接");
+    assert_eq!(texts.target_label, "网络目标");
+    assert_eq!(texts.side_local, "本机");
+    assert_eq!(texts.title, "同步电池存档");
+    assert!(
+        texts.subtitle.contains("Emerald") && texts.subtitle.contains("手动同步"),
+        "subtitle was {:?}",
+        texts.subtitle
+    );
+}
+
+#[test]
 fn a_mod_card_also_plays_the_insert_before_starting() {
     let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
     install_manual_mod(d.path(), true, true);
@@ -1006,6 +1037,43 @@ fn manual_mods_show_their_own_success_detail() {
     });
     a.update(0.1);
     assert_eq!(banner(&a), "已从 GBAStation 拉取电池存档");
+}
+
+#[test]
+fn a_mod_with_the_cloud_animation_gets_the_settle_beat() {
+    let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
+    install_manual_mod(d.path(), true, true);
+    let (mut a, fake) = rig(d.path());
+    pick_network_card(&mut a, 1);
+    start_sync(&mut a);
+    fake.finish(SyncOutcome {
+        result: SyncResult::Ok,
+        direction: Some(Direction::Upload),
+        detail: Some("已推送到 GBAStation".to_string()),
+        ..outcome(SyncResult::Ok)
+    });
+    a.update(0.1);
+
+    assert!(
+        matches!(a.shelf_sync(), ShelfSync::Settling { .. }),
+        "the mod skipped the shared settle beat"
+    );
+    let texts = a.sync_texts();
+    assert_eq!(texts.title, "同步 GBAStation");
+    assert_eq!(texts.side_remote, "云端");
+    assert_eq!(texts.banner, "已推送到 GBAStation");
+    assert!(texts.completion_hint.contains("即将返回"));
+
+    for _ in 0..300 {
+        a.update(1.0 / 60.0);
+        if matches!(a.shelf_sync(), ShelfSync::Result { .. }) {
+            break;
+        }
+    }
+    assert!(
+        matches!(a.shelf_sync(), ShelfSync::Result { .. }),
+        "the mod settle never handed over to the result banner"
+    );
 }
 
 // ---- the other shelf keys keep working ------------------------------------
@@ -2049,35 +2117,65 @@ fn face(tex: usize, w: u32, h: u32) -> SyncFace {
     }
 }
 
+/// A complete set of stand-in stage textures; the drawing code only needs
+/// non-zero sizes and stable ids.
+fn test_sync_art() -> SyncArt {
+    let mut next = 40;
+    let mut art = || {
+        let tex = next;
+        next += 1;
+        face(tex, 32, 32)
+    };
+    SyncArt {
+        sheet: face(40, 656, 440),
+        dock: face(41, 232, 16),
+        cloud_card: face(42, 172, 110),
+        target_card: face(43, 172, 110),
+        shadow: art(),
+        lane: art(),
+        packet: art(),
+        stamp: art(),
+        dot_done: art(),
+        dot_active: art(),
+        dot_pending: art(),
+        dir_left: art(),
+        dir_right: art(),
+        dir_wait: art(),
+        chip: art(),
+    }
+}
+
 #[test]
-fn the_sync_cloud_is_drawn_over_the_translucent_header() {
+fn the_sync_stage_draws_its_sheet_and_cloud_card() {
     let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
     let (mut a, _fake) = rig(d.path());
-    let (cloud, up, down) = (face(31, 132, 88), face(32, 42, 42), face(33, 42, 42));
-    a.set_sync_art(cloud, up, down);
+    a.set_sync_art(test_sync_art());
     start_sync(&mut a);
     let out = drew(&a);
 
-    let header = out.iter().position(|draw| {
-        matches!(
-            *draw,
-            Draw::Rect { w, h, colour, .. }
-                if (w - 720.0).abs() < 0.01
-                    && (h - 36.0).abs() < 0.01
-                    && colour[3] < 0.5
-        )
-    });
-    let cloud = out
+    let page = out
         .iter()
-        .position(|draw| matches!(*draw, Draw::Tex { tex, .. } if tex == TexId::from_raw(31)));
-    let (header, cloud) = (
-        header.expect("the translucent status band was not drawn"),
-        cloud.expect("the sync cloud was not drawn"),
-    );
-    assert!(
-        cloud > header,
-        "the status band is painted over the sync cloud"
-    );
+        .position(|draw| {
+            matches!(
+                *draw,
+                Draw::Rect { w, h, colour, .. }
+                    if (w - 720.0).abs() < 0.01
+                        && (h - 480.0).abs() < 0.01
+                        && colour[3] > 0.2
+                        && colour[3] < 1.0
+            )
+        })
+        .expect("the translucent stage mask was not drawn");
+    let sheet = out
+        .iter()
+        .position(|draw| matches!(*draw, Draw::Tex { tex, .. } if tex == TexId::from_raw(40)))
+        .expect("the sync sheet was not drawn");
+    let card = out
+        .iter()
+        .position(|draw| matches!(*draw, Draw::Tex { tex, .. } if tex == TexId::from_raw(42)))
+        .expect("the cloud card was not drawn");
+    assert!(sheet > page, "the sheet is under the dim mask");
+    assert!(card > sheet, "the cloud card is under the sheet");
 }
 
 #[test]

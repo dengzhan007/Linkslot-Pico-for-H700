@@ -363,7 +363,12 @@ fn serve_connection(mut stream: std::net::TcpStream, shared: &Arc<Shared>) {
     let _ = stream.set_read_timeout(Some(IO_TIMEOUT));
     let _ = stream.set_write_timeout(Some(IO_TIMEOUT));
     let _ = stream.set_nodelay(true);
-    match http::read_request_with_limit(&mut stream, shared.upload_limit()) {
+    // 请求体上限取"用户设置"与"扩展包安装需要"的较大者：FBNeo 的平台包有
+    // 80 MB 级，而上传大小默认 32 MB。放宽的只有**读进内存**这一步；每个
+    // handler 仍按 `shared.upload_limit()` 自己拒绝超限请求（`/api/packs/install`
+    // 用的是 `http::PACK_BODY_BYTES`），所以别处的语义没有变。
+    let body_limit = shared.upload_limit().max(http::PACK_BODY_BYTES);
+    match http::read_request_with_limit(&mut stream, body_limit) {
         Ok(request) => {
             let head_only = request.method == Method::Head;
             let response = route(shared, &request);

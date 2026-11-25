@@ -89,7 +89,15 @@ pub struct SlotState {
     /// `Some("动作")`; `None` and `Some("")` are legacy "全部" / 根目录 states
     /// and restore to the platform's first real folder.
     pub folder_path: Option<String>,
+    /// What the cartridge-transfer room sends: 0 = cart only, 1 = saves only,
+    /// 2 = cart and saves.  Kept here so the choice survives a restart; an old
+    /// card without the line reads as 0 (cart only), which is what every
+    /// previous build did.
+    pub transfer_content: u8,
 }
+
+/// The three cartridge-transfer content choices, as stored on the card.
+pub const TRANSFER_CONTENT_MAX: u8 = 2;
 
 impl SlotState {
     pub fn played(&mut self, platform: Platform, stem: &str) {
@@ -296,6 +304,7 @@ impl Default for SlotState {
             shelf_cart: None,
             folder_mode: false,
             folder_path: None,
+            transfer_content: 0,
         }
     }
 }
@@ -411,6 +420,10 @@ pub fn write_slot_state(root: &Path, s: &SlotState) -> std::io::Result<()> {
     // encoding so existing cards still parse; the shelf itself now only writes
     // real subdirectory names while folder mode is active.
     text.push_str(&format!("folder_mode={}\n", s.folder_mode as u8));
+    text.push_str(&format!(
+        "transfer_content={}\n",
+        s.transfer_content.min(TRANSFER_CONTENT_MAX)
+    ));
     if let Some(path) = &s.folder_path {
         text.push_str(&format!(
             "folder_path={}\n",
@@ -453,6 +466,7 @@ fn parse(text: &str) -> Option<SlotState> {
     let mut shelf_cart = None;
     let mut folder_mode = false;
     let mut folder_path = None;
+    let mut transfer_content = 0u8;
     let mut lid_minutes = 3;
     let mut rewind = None;
     let mut gb_palettes = None;
@@ -521,6 +535,13 @@ fn parse(text: &str) -> Option<SlotState> {
             "shelf" => shelf = Some(value.to_string()).filter(|v| !v.is_empty()),
             "shelf_cart" => shelf_cart = recent_value(value),
             "folder_mode" => folder_mode = flag(value).unwrap_or(false),
+            "transfer_content" => {
+                transfer_content = value
+                    .parse::<u8>()
+                    .ok()
+                    .filter(|v| *v <= TRANSFER_CONTENT_MAX)
+                    .unwrap_or(0)
+            }
             "folder_path" => folder_path = folder_path_value(value).flatten(),
             "button_layout" => button_layout = ButtonLayout::parse(value),
             "rewind" => rewind = flag(value),
@@ -597,6 +618,7 @@ fn parse(text: &str) -> Option<SlotState> {
         shelf_cart,
         folder_mode,
         folder_path,
+        transfer_content,
     })
 }
 
@@ -720,6 +742,28 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         write_slot_state(dir.path(), &state).unwrap();
         read_slot_state(dir.path())
+    }
+
+    #[test]
+    fn the_transfer_content_choice_survives_a_roundtrip() {
+        let state = SlotState {
+            transfer_content: 2,
+            ..SlotState::default()
+        };
+        assert_eq!(roundtrip(state).transfer_content, 2);
+    }
+
+    #[test]
+    fn an_old_state_file_reads_as_cart_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = dir.path().join("linkSlot/Config");
+        std::fs::create_dir_all(&config).unwrap();
+        std::fs::write(
+            config.join("slot.state"),
+            "cart=\ncart_platform=\nbrightness=5\nblue_light=0\nvolume=60\nvolume_hp=60\nmuted=0\nmuted_hp=0\nclock_set=1\nutc_offset_min=480\nutc_offset_initialized=1\nrumble=1\nff_speed=6\nff_sound=0\ncolour_correction=0\nshader_gba=grid\nshader_gb=simpletex\nturbo_enabled=0\nrewind=1\ngb_palettes=0\ngb_palette=default\nfc_mask=none\ngb_mask=none\ngbc_mask=none\nsfc_mask=none\nbutton_layout=off\nshow_rom_title=1\nfallback_cover=0\nlid_minutes=3\nresume_load_default=1\nresume_save_default=1\n",
+        )
+        .unwrap();
+        assert_eq!(read_slot_state(dir.path()).transfer_content, 0);
     }
 
     #[test]

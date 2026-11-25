@@ -7,7 +7,8 @@
         --payload System/linkSlot/cores/supafaust/supafaust_libretro.so=vendor/supafaust_libretro.so \\
         --out dist/packs/linkslot-pack-supafaust-v1.0.0.lsp
 
-- `--payload` 可以重复，格式是「卡内相对路径=本地文件」；
+- `--payload` 可以重复，格式是「卡内相对路径=本地文件」；平台包（schema 2）
+  需要多份 payload（核心 + DAT + 可选资产）；
 - `pack.json` 里的 `files` 由脚本按实际文件计算（大小 + sha256）；
 - ZIP 内层就是卡内目标路径，安装器只接受白名单目录；
 - 时间戳跟随 `SOURCE_DATE_EPOCH`，同样的输入产生同样的包。
@@ -39,6 +40,40 @@ def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+PLATFORM_PREFIX = "System/linkSlot/extensions/platforms/"
+ASSET_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp")
+
+
+def check_platform_path(meta: dict, card_path: str) -> None:
+    """平台包的轻量白名单（真校验在 app 里，这里只挡住明显的错）。
+
+    三类：核心 `.so`、`metadata/<platform>.dat.json`、`assets/` 下的图片。
+    脚本不做 schema 全面校验——那是 `packs.rs::validate_platform_pack` 的事，
+    两边重复实现只会让两边一起漂移。
+    """
+    pack_id = str(meta.get("id") or "")
+    cores = [str(core.get("id") or "") for core in meta.get("cores") or []]
+    platforms = [str(decl.get("id") or "") for decl in meta.get("platforms") or []]
+
+    for core in cores:
+        if card_path == f"{CORE_PREFIX}{core}/{core}_libretro.so":
+            return
+    own_prefix = f"{PLATFORM_PREFIX}{pack_id}/"
+    if card_path.startswith(f"{own_prefix}metadata/"):
+        name = card_path[len(f"{own_prefix}metadata/"):]
+        if name.endswith(".dat.json") and name[: -len(".dat.json")] in platforms:
+            return
+        raise SystemExit(f"平台包 DAT 必须是 {own_prefix}metadata/<platform>.dat.json：{card_path}")
+    if card_path.startswith(f"{own_prefix}assets/"):
+        rest = card_path[len(f"{own_prefix}assets/"):]
+        if rest.count("/") <= 3 and rest.lower().endswith(ASSET_EXTENSIONS):
+            return
+        raise SystemExit(f"平台包 assets 只接受 1–4 层、{ASSET_EXTENSIONS} 图片：{card_path}")
+    raise SystemExit(
+        f"平台包只允许核心库、{own_prefix}metadata/ 与 {own_prefix}assets/：{card_path}"
+    )
+
+
 def load_payloads(specs: list[str]) -> dict[str, bytes]:
     payloads: dict[str, bytes] = {}
     for spec in specs:
@@ -65,11 +100,13 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
 
     meta = json.loads(Path(args.meta).read_text(encoding="utf-8"))
-    if meta.get("schema") != 1:
-        raise SystemExit("pack.json schema 必须是 1")
     kind = meta.get("kind")
-    if kind not in ("core", "achievements"):
+    if kind not in ("core", "achievements", "platform"):
         raise SystemExit(f"不支持的扩展包类型：{kind}")
+    # 平台包是新格式（多文件 + 模板声明），用 schema 2；旧包仍是 1。
+    expected_schema = 2 if kind == "platform" else 1
+    if meta.get("schema") != expected_schema:
+        raise SystemExit(f"{kind} 包的 schema 必须是 {expected_schema}")
     pack_id = str(meta.get("id") or "")
     if not pack_id:
         raise SystemExit("pack.json 缺少 id")
@@ -83,6 +120,8 @@ def main(argv: list[str]) -> int:
                 raise SystemExit(f"核心包路径必须在 {expected_prefix} 下：{card_path}")
             if not card_path.endswith(f"{pack_id}_libretro.so"):
                 raise SystemExit(f"核心文件名必须是 {pack_id}_libretro.so：{card_path}")
+        elif kind == "platform":
+            check_platform_path(meta, card_path)
         else:
             if not card_path.startswith("linkSlot/Achievements/"):
                 raise SystemExit(
@@ -91,6 +130,10 @@ def main(argv: list[str]) -> int:
             if not card_path.endswith((".json", ".png")):
                 raise SystemExit(f"成就包只接受 .json/.png：{card_path}")
         files.append({"path": card_path, "size": len(data), "sha256": sha256(data)})
+    if kind == "platform" and not any(
+        card_path.endswith("_libretro.so") for card_path in payloads
+    ):
+        raise SystemExit("平台包必须带核心：缺少 <core>_libretro.so")
     meta["files"] = files
 
     out = Path(args.out)

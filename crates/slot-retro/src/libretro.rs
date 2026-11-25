@@ -253,6 +253,7 @@ unsafe extern "C" fn environment(cmd: c_uint, data: *mut c_void) -> bool {
             if data.is_null() {
                 return with_host(|h| h.netpacket = None).is_some();
             }
+            eprintln!("slot: core: netpacket interface offered");
             with_host(|h| {
                 h.netpacket = Some(std::ptr::read(data as *const NetpacketCallback));
             })
@@ -294,6 +295,7 @@ unsafe extern "C" fn netpacket_poll_receive() {
 
 unsafe fn begin_link(client_id: u16) {
     let Some(start) = with_host(|h| h.netpacket.as_ref().and_then(|cb| cb.start)).flatten() else {
+        eprintln!("slot: link: the core offered no netpacket interface");
         return;
     };
     start(client_id, netpacket_send, netpacket_poll_receive);

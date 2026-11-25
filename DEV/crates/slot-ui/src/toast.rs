@@ -20,6 +20,8 @@ pub enum Toast {
     CoreMissing,
     /// An extension pack was installed/removed through the Web page.
     PacksChanged,
+    /// 街机服务门在设备运行中打不开。
+    ServiceBusy,
     LinkEnded,
     ColourOn,
     ColourOff,
@@ -177,6 +179,7 @@ impl Toast {
             Toast::CoreNoLink => slot_i18n::t(lang, "device.toast.core_no_link"),
             Toast::CoreMissing => slot_i18n::t(lang, "device.toast.core_missing"),
             Toast::PacksChanged => slot_i18n::t(lang, "device.toast.packs_changed"),
+            Toast::ServiceBusy => slot_i18n::t(lang, "device.toast.service_busy"),
             Toast::LinkEnded => slot_i18n::t(lang, "device.toast.link_ended"),
             Toast::ColourOn => slot_i18n::t(lang, "device.toast.colour_on"),
             Toast::ColourOff => slot_i18n::t(lang, "device.toast.colour_off"),

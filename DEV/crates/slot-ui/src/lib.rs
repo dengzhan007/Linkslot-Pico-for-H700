@@ -1,6 +1,8 @@
 mod art;
 pub use art::{contain, cover, decode, decode_bytes};
 mod backdrop;
+pub mod cabinet;
+#[cfg(test)] mod cabinet_qa;
 mod barcode;
 mod battery;
 mod board;
@@ -38,11 +40,13 @@ mod status_bar;
 mod sticker;
 pub mod sync_menu;
 pub mod sync_overlay;
+mod sync_stage;
 pub mod switch_style;
 pub mod text;
 pub use text::install_font;
 mod theme;
 mod toast;
+pub mod transfer_docket;
 
 pub use backdrop::{
     bezel_face, collection_overlay_face, collection_plate_face, draw_backdrop,
@@ -133,5 +137,13 @@ pub use sticker::{
     ORIGINAL_URL, ORIGINAL_VERSION, PROJECT_VERSION, TEST_WARNING, THANKS,
 };
 pub use sync_menu::{draw_sync_menu, sync_menu_face, SyncMenuRow, SyncMenuView};
-pub use sync_overlay::{arrow_face, cloud_face, line_face, Arrow};
+pub use sync_overlay::{
+    arrow_face, cloud_face, line_face, line_face_coloured, Arrow, StageDot, Travel,
+    CLOUD_CARD_H, CLOUD_CARD_W, DIRECTION_PX, DOCK_H, DOCK_W, DOT_ACTIVE_PX, DOT_DONE_PX,
+    DOT_PENDING_PX, LANE_H, LANE_W, PACKET_H, PACKET_W, SHEET_H, SHEET_W, STAMP_PX, STICKER_INK,
+};
+pub use sync_stage::{
+    cloud_card_face, direction_face, dock_face, lane_face, packet_face, percent_chip_face,
+    shadow_face, stage_dot_face, stage_sheet_face, stamp_face, target_card_face, wait_face,
+};
 pub use toast::{toast_box, toast_face, toast_rect, Toast};

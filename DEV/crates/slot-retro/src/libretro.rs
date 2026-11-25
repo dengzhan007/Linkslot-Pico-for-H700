@@ -253,6 +253,7 @@ unsafe extern "C" fn environment(cmd: c_uint, data: *mut c_void) -> bool {
             if data.is_null() {
                 return with_host(|h| h.netpacket = None).is_some();
             }
+            eprintln!("slot: core: netpacket interface offered");
             with_host(|h| {
                 h.netpacket = Some(std::ptr::read(data as *const NetpacketCallback));
             })
@@ -294,6 +295,7 @@ unsafe extern "C" fn netpacket_poll_receive() {
 
 unsafe fn begin_link(client_id: u16) {
     let Some(start) = with_host(|h| h.netpacket.as_ref().and_then(|cb| cb.start)).flatten() else {
+        eprintln!("slot: link: the core offered no netpacket interface");
         return;
     };
     start(client_id, netpacket_send, netpacket_poll_receive);
@@ -440,6 +442,8 @@ pub struct LibretroCore {
     rom_path: Option<CString>,
     av: AvInfo,
     loaded: bool,
+    /// Ask for the six-button pad on both ports (Mega Drive).
+    six_button: bool,
     state_size: Option<(usize, usize)>,
     _lib: Library,
 }
@@ -478,6 +482,37 @@ impl LibretroCore {
 
     pub fn reported_save_dir(&self) -> String {
         self.host.save_dir.to_string_lossy().into_owned()
+    }
+
+    /// Ask the core for six-button pads on both ports (the Mega Drive).
+    ///
+    /// Call it before [`RetroCore::load`]: the device is applied when the ROM
+    /// loads, so the first frame already uses the six-button pad.  Without it
+    /// genesis_plus_gx falls back to a 3-button pad for ROMs whose header does
+    /// not advertise the 6-button one, and the extra buttons do nothing.
+    pub fn set_six_button_pads(&mut self, on: bool) {
+        self.six_button = on;
+        if self.loaded {
+            self.apply_port_devices();
+        }
+    }
+
+    fn apply_port_devices(&mut self) {
+        let device = if self.six_button {
+            DEVICE_MDPAD_6B
+        } else {
+            DEVICE_JOYPAD
+        };
+        unsafe {
+            (self.api.set_controller_port_device)(0, device);
+            if self.six_button {
+                // Player two reads port 2; the cable link feeds it.
+                (self.api.set_controller_port_device)(1, device);
+            }
+        }
+        if self.six_button {
+            eprintln!("slot: input: six-button pad on both ports");
+        }
     }
 
     pub fn asked_for_rumble(&self) -> bool {
@@ -568,6 +603,7 @@ impl LibretroCore {
                 sample_rate: 0.0,
             },
             loaded: false,
+            six_button: false,
             state_size: None,
             _lib: lib,
         })
@@ -665,7 +701,7 @@ impl RetroCore for LibretroCore {
             fps: av.timing.fps,
             sample_rate: av.timing.sample_rate,
         };
-        unsafe { (self.api.set_controller_port_device)(0, DEVICE_JOYPAD) };
+        self.apply_port_devices();
         Ok(())
     }
 

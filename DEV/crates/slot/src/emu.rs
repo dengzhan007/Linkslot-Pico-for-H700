@@ -522,6 +522,12 @@ impl EmuHandle {
         self.shared.direct_xy.store(on, Ordering::Relaxed);
     }
 
+    /// Whether X/Y reach the core as themselves instead of the turbo keys.
+    /// Exposed for tests and diagnostics.
+    pub fn direct_xy(&self) -> bool {
+        self.shared.direct_xy.load(Ordering::Relaxed)
+    }
+
     pub fn set_rewind_recording(&self, on: bool) {
         self.shared.recording.store(on, Ordering::Relaxed);
     }
@@ -1621,7 +1627,9 @@ fn drain_transport(transport: &mut dyn LinkChannel, link: &Link, cap: u32) {
 }
 
 /// The one place a physical mask becomes the mask the core (and the cable)
-/// sees. MD keeps X/Y as real buttons; FC/SFC still use them for turbo A/B.
+/// sees.  A `direct_xy` platform (the Mega Drive's six-button X/Z, the Super
+/// Famicom's X/Y) keeps those bits; the Famicom and the Game Boys use them
+/// for turbo A/B instead.
 fn frame_input(input: ButtonMask, turbo: bool, direct_xy: bool, frame: u32) -> ButtonMask {
     if direct_xy {
         input
@@ -1640,14 +1648,14 @@ mod tests {
     const PANEL: Duration = Duration::from_micros(16_760);
 
     #[test]
-    fn md_keeps_x_and_y_as_real_buttons() {
+    fn a_direct_xy_platform_keeps_x_and_y_as_real_buttons() {
         let x_and_y = ButtonMask(ButtonMask::X | ButtonMask::Y);
         assert_eq!(frame_input(x_and_y, false, true, 0), x_and_y);
         assert_eq!(frame_input(x_and_y, true, true, 0), x_and_y);
     }
 
     #[test]
-    fn fc_and_sfc_still_use_x_and_y_for_turbo() {
+    fn the_famicom_still_uses_x_and_y_for_turbo() {
         let x_and_y = ButtonMask(ButtonMask::X | ButtonMask::Y);
         let off = frame_input(x_and_y, false, false, 0);
         assert_eq!(off.0 & (ButtonMask::X | ButtonMask::Y), 0);

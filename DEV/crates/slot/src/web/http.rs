@@ -17,6 +17,13 @@ pub const MAX_HEADER_BYTES: usize = 16 * 1024;
 pub const DEFAULT_BODY_BYTES: usize = 32 * 1024 * 1024;
 /// Absolute in-memory request-body ceiling, regardless of the user setting.
 pub const MAX_BODY_BYTES: usize = 256 * 1024 * 1024;
+/// 扩展包安装所需的最小请求体上限。
+///
+/// FBNeo 的 aarch64 `.so` 是 79.6 MiB，加上 DAT/资产后 `.lsp` 也有 80 MB 级，
+/// 而用户设置里的"上传大小"默认只有 32 MB。只有 `/api/packs/install` 这一条
+/// 路径把它抬到这个数；其它 handler 仍在各自的 `if request.body.len() >
+/// shared.upload_limit()` 处按用户设置拒绝，免得一张照片也能吃掉 128 MB 内存。
+pub const PACK_BODY_BYTES: usize = 128 * 1024 * 1024;
 /// A request target longer than this is rejected before decoding.
 const MAX_TARGET_BYTES: usize = 8 * 1024;
 

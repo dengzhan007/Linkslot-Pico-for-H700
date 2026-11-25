@@ -24,8 +24,9 @@ FC / SFC / MD 机种、Web 管理端与云存档同步（`linkSlot` CLI）。
 > `System/linkSlot/cores/supafaust/` 后会自动出现在核心选择器里。
 >
 > **GBA 第三核心**：`armGBA` 通过 `linkslot-pack-armgba-v1.0.0.lsp` 安装，是 GBA
-> 的第三个可选核心（AArch64 重编译器，GPL-2.0）。它不接 linkSlot 的联机，联机请
-> 继续用 mGBA / gpSP。
+> 的第三个可选核心（AArch64 重编译器，GPL-2.0）。它的 libretro 核心通过 netpacket
+> 提供联机（`Link Mode = Separate`，电缆或无线适配器）；linkSlot 的 2 人会话走这条接口。
+> 联机游戏沿用 gpSP 的 carried 白名单；未验证游戏（如马车）会被直接拒绝，请改用 mGBA。
 
 ## 安装
 

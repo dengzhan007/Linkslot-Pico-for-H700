@@ -39,15 +39,27 @@ const DOZE_TIMEOUT: Duration = Duration::from_secs(180);
 
 const ALERT_INK: [u8; 3] = [0xf0, 0xb4, 0x3c];
 
-/// The shelf-sync overlay art, in pixels (the cloud face is a height).
-const SYNC_CLOUD_PX: f32 = 88.0;
-const SYNC_ARROW_PX: f32 = 42.0;
-const SYNC_BANNER_PX: f32 = 26.0;
-const SYNC_BANNER_MAX_W: f32 = 620.0;
-const SYNC_LINE_PX: f32 = 22.0;
-const SYNC_LINE_MAX_W: f32 = 600.0;
-const SYNC_LABEL_PX: f32 = 24.0;
-const SYNC_LABEL_MAX_W: f32 = 220.0;
+/// The shelf-sync overlay text sizes, in 720x480 pixels.
+const SYNC_TITLE_PX: f32 = 26.0;
+const SYNC_TITLE_MAX_W: f32 = 420.0;
+const SYNC_SUBTITLE_PX: f32 = 12.0;
+const SYNC_SUBTITLE_MAX_W: f32 = 540.0;
+const SYNC_BANNER_PX: f32 = 20.0;
+const SYNC_BANNER_MAX_W: f32 = 560.0;
+const SYNC_RESULT_PX: f32 = 26.0;
+const SYNC_RESULT_MAX_W: f32 = 620.0;
+const SYNC_SIDE_PX: f32 = 11.0;
+const SYNC_SIDE_MAX_W: f32 = 80.0;
+const SYNC_STICKER_PX: f32 = 13.0;
+const SYNC_STICKER_MAX_W: f32 = 90.0;
+const SYNC_RAIL_PX: f32 = 11.0;
+const SYNC_RAIL_MAX_W: f32 = 60.0;
+const SYNC_FOOTER_PX: f32 = 11.0;
+const SYNC_FOOTER_MAX_W: f32 = 400.0;
+const SYNC_PERCENT_PX: f32 = 12.0;
+const SYNC_PERCENT_MAX_W: f32 = 56.0;
+const SYNC_HINT_PX: f32 = 11.0;
+const SYNC_HINT_MAX_W: f32 = 90.0;
 
 /// Which language the baked [`UiFaces`] belong to, and which build is in
 /// flight.
@@ -250,8 +262,11 @@ pub struct Frontend {
     /// when the card closes, so opening videos repeatedly cannot grow the
     /// compositor's texture vector without bound.
     intro_texs: Vec<TexId>,
-    transfer_texs: Vec<TexId>,
-    transfer_shown: Option<u32>,
+    transfer_docket: Option<SyncFace>,
+    transfer_docket_key: Option<String>,
+    transfer_percent: Option<SyncFace>,
+    transfer_bytes: Option<SyncFace>,
+    transfer_dynamic_key: Option<(u32, u64, u64, bool)>,
     transfer_blank_tex: Option<TexId>,
     transfer_blank_key: Option<String>,
 }
@@ -270,24 +285,20 @@ struct IntroVideoJob {
 #[derive(Default)]
 struct SyncTextCache {
     texts: Option<SyncTexts>,
-    banner: Option<TexId>,
-    cloud: Option<TexId>,
-    local: Option<TexId>,
-    upload: Option<TexId>,
-    download: Option<TexId>,
     title: Option<TexId>,
+    subtitle: Option<TexId>,
+    banner: Option<TexId>,
+    result: Option<TexId>,
+    side_local: Option<TexId>,
+    side_remote: Option<TexId>,
+    cloud_label: Option<TexId>,
+    target_label: Option<TexId>,
+    rail_labels: [Option<TexId>; 5],
     progress_left: Option<TexId>,
     progress_right: Option<TexId>,
+    completion_hint: Option<TexId>,
     cancel_hint: Option<SyncFace>,
-    data_label: Option<SyncFace>,
-    net_label: Option<SyncFace>,
-    card_label: Option<SyncFace>,
-    net_slot_title: Option<SyncFace>,
-    net_slot_hint: Option<SyncFace>,
-    state_label: Option<SyncFace>,
-    sav_label: Option<SyncFace>,
-    rail_labels: [Option<SyncFace>; 5],
-    check: Option<SyncFace>,
+    cancel_lang: Option<Language>,
 }
 
 #[derive(Default)]
@@ -440,8 +451,11 @@ impl Frontend {
             upgrade_shown: None,
             intro_video: None,
             intro_texs: Vec::new(),
-            transfer_texs: Vec::new(),
-            transfer_shown: None,
+            transfer_docket: None,
+            transfer_docket_key: None,
+            transfer_percent: None,
+            transfer_bytes: None,
+            transfer_dynamic_key: None,
             transfer_blank_tex: None,
             transfer_blank_key: None,
         }
@@ -773,19 +787,45 @@ impl Frontend {
         self.session
             .app_mut()
             .set_transfer_legend_faces(transfer_left, transfer_right);
-        let cloud = sync_face(
-            compositor,
-            slot_ui::sync_overlay::cloud_face(SYNC_CLOUD_PX),
-        );
-        let up = sync_face(
-            compositor,
-            slot_ui::sync_overlay::arrow_face(slot_ui::sync_overlay::Arrow::Up, SYNC_ARROW_PX),
-        );
-        let down = sync_face(
-            compositor,
-            slot_ui::sync_overlay::arrow_face(slot_ui::sync_overlay::Arrow::Down, SYNC_ARROW_PX),
-        );
-        self.session.app_mut().set_sync_art(cloud, up, down);
+        let sync = crate::app::SyncArt {
+            sheet: sync_face(compositor, slot_ui::stage_sheet_face()),
+            dock: sync_face(compositor, slot_ui::dock_face()),
+            cloud_card: sync_face(compositor, slot_ui::cloud_card_face()),
+            target_card: sync_face(compositor, slot_ui::target_card_face()),
+            shadow: sync_face(compositor, slot_ui::shadow_face()),
+            lane: sync_face(compositor, slot_ui::lane_face()),
+            packet: sync_face(compositor, slot_ui::packet_face()),
+            stamp: sync_face(compositor, slot_ui::stamp_face()),
+            dot_done: sync_face(
+                compositor,
+                slot_ui::stage_dot_face(slot_ui::StageDot::Done),
+            ),
+            dot_active: sync_face(
+                compositor,
+                slot_ui::stage_dot_face(slot_ui::StageDot::Active),
+            ),
+            dot_pending: sync_face(
+                compositor,
+                slot_ui::stage_dot_face(slot_ui::StageDot::Pending),
+            ),
+            dir_left: sync_face(
+                compositor,
+                slot_ui::direction_face(slot_ui::Travel::Left),
+            ),
+            dir_right: sync_face(
+                compositor,
+                slot_ui::direction_face(slot_ui::Travel::Right),
+            ),
+            dir_wait: sync_face(compositor, slot_ui::wait_face()),
+            chip: sync_face(compositor, slot_ui::percent_chip_face()),
+        };
+        self.session.app_mut().set_sync_art(sync);
+        let transfer_art = crate::app::TransferArt {
+            stamp: sync_face(compositor, slot_ui::transfer_docket::stamp_face()),
+            check: sync_face(compositor, slot_ui::transfer_docket::check_face()),
+            shadow: sync_face(compositor, slot_ui::transfer_docket::shadow_face()),
+        };
+        self.session.app_mut().set_transfer_art(transfer_art);
         crate::boot_time::mark("shelf faces");
         let backdrop = slot_ui::shelf_backdrop_face();
         let backdrop = compositor.create_texture(backdrop.w, backdrop.h, &backdrop.rgba);
@@ -1134,39 +1174,173 @@ impl Frontend {
 
     fn sync_transfer(&mut self, compositor: &mut Compositor) {
         let Some(view) = self.session.app().transfer_view() else {
-            if !self.transfer_texs.is_empty() {
-                for texture in self.transfer_texs.drain(..) {
-                    compositor.delete_texture(texture);
-                }
-                self.transfer_shown = None;
-            }
-            self.release_transfer_blank(compositor);
+            self.release_transfer(compositor);
             return;
         };
         self.sync_transfer_blank(compositor);
-        let key = view.percent;
-        if self.transfer_shown.as_ref() == Some(&key) {
-            return;
+        let sizes: Vec<String> = view
+            .assets
+            .iter()
+            .map(|asset| transfer_size_text(asset.size))
+            .collect();
+        let mut key = format!(
+            "{:?}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}",
+            view.flow,
+            view.reverse,
+            view.host,
+            view.partial,
+            view.title,
+            view.status,
+            view.content,
+            view.game,
+            view.platform_line,
+            view.role_local,
+            view.role_peer,
+            view.group_cart,
+            view.group_save,
+            view.not_included,
+            view.partial_note,
+            view.waiting_line,
+            view.waiting_after,
+        );
+        for (asset, size) in view.assets.iter().zip(&sizes) {
+            key.push_str(&format!("|{:?}:{}:{}", asset.group, asset.label, size));
         }
-        let percent = large_word_face(&format!("{}%", view.percent), 54.0, [89, 231, 244]);
-        let assets: Vec<_> = view.assets.iter().map(|asset| word_face(asset)).collect();
+        if self.transfer_docket_key.as_deref() != Some(key.as_str()) {
+            let cart: Vec<_> = view
+                .assets
+                .iter()
+                .zip(&sizes)
+                .filter(|(asset, _)| asset.group == crate::app::TransferAssetGroup::Cart)
+                .map(|(asset, size)| slot_ui::transfer_docket::DocketAsset {
+                    label: &asset.label,
+                    size,
+                })
+                .collect();
+            let save: Vec<_> = view
+                .assets
+                .iter()
+                .zip(&sizes)
+                .filter(|(asset, _)| asset.group == crate::app::TransferAssetGroup::Save)
+                .map(|(asset, size)| slot_ui::transfer_docket::DocketAsset {
+                    label: &asset.label,
+                    size,
+                })
+                .collect();
+            let flow = match view.flow {
+                crate::app::TransferFlow::Waiting => slot_ui::transfer_docket::DocketFlow::Waiting,
+                crate::app::TransferFlow::Sending => slot_ui::transfer_docket::DocketFlow::Sending,
+                crate::app::TransferFlow::Receiving => {
+                    slot_ui::transfer_docket::DocketFlow::Receiving
+                }
+                crate::app::TransferFlow::Done => slot_ui::transfer_docket::DocketFlow::Done,
+            };
+            let face = slot_ui::transfer_docket::docket_face(&slot_ui::transfer_docket::DocketView {
+                flow,
+                reverse: view.reverse,
+                host: view.host,
+                title: &view.title,
+                status: &view.status,
+                content: &view.content,
+                game: &view.game,
+                platform_line: &view.platform_line,
+                role_local: &view.role_local,
+                role_peer: &view.role_peer,
+                group_cart: &view.group_cart,
+                group_save: &view.group_save,
+                not_included: &view.not_included,
+                partial_note: &view.partial_note,
+                waiting_line: &view.waiting_line,
+                waiting_after: &view.waiting_after,
+                footer_hint: &view.footer_hint,
+                cart: &cart,
+                save: &save,
+            });
+            let tex = compositor.create_texture(face.w, face.h, &face.rgba);
+            if let Some(old) = self.transfer_docket.take() {
+                compositor.delete_texture(old.tex);
+            }
+            self.transfer_docket = Some(SyncFace {
+                tex,
+                w: face.w,
+                h: face.h,
+            });
+            self.transfer_docket_key = Some(key);
+        }
 
-        for texture in self.transfer_texs.drain(..) {
-            compositor.delete_texture(texture);
+        let dynamic = (
+            view.percent,
+            view.bytes_done,
+            view.bytes_total,
+            matches!(view.flow, crate::app::TransferFlow::Waiting),
+        );
+        if self.transfer_dynamic_key != Some(dynamic) {
+            if let Some(old) = self.transfer_percent.take() {
+                compositor.delete_texture(old.tex);
+            }
+            if let Some(old) = self.transfer_bytes.take() {
+                compositor.delete_texture(old.tex);
+            }
+            if view.flow != crate::app::TransferFlow::Waiting {
+                let percent = slot_ui::line_face_coloured(
+                    &format!("{}%", view.percent),
+                    140.0,
+                    36.0,
+                    slot_ui::transfer_docket::PAPER_INK,
+                );
+                if percent.w > 0 && percent.h > 0 {
+                    let tex = compositor.create_texture(percent.w, percent.h, &percent.rgba);
+                    self.transfer_percent = Some(SyncFace {
+                        tex,
+                        w: percent.w,
+                        h: percent.h,
+                    });
+                }
+                let bytes = slot_ui::line_face_coloured(
+                    &format!(
+                        "{} / {}",
+                        transfer_size_text(view.bytes_done),
+                        transfer_size_text(view.bytes_total)
+                    ),
+                    220.0,
+                    11.0,
+                    slot_ui::transfer_docket::PAPER_DIM,
+                );
+                if bytes.w > 0 && bytes.h > 0 {
+                    let tex = compositor.create_texture(bytes.w, bytes.h, &bytes.rgba);
+                    self.transfer_bytes = Some(SyncFace {
+                        tex,
+                        w: bytes.w,
+                        h: bytes.h,
+                    });
+                }
+            }
+            self.transfer_dynamic_key = Some(dynamic);
         }
-        let percent_tex = compositor.create_texture(percent.w, percent.h, &percent.rgba);
-        self.transfer_texs.push(percent_tex);
-        let mut assets_out = Vec::with_capacity(assets.len());
-        for asset in assets {
-            let tex = compositor.create_texture(asset.w, asset.h, &asset.rgba);
-            assets_out.push((tex, asset.w, asset.h));
-            self.transfer_texs.push(tex);
-        }
+
         self.session.app_mut().set_transfer_faces(TransferFaces {
-            percent: (percent_tex, percent.w, percent.h),
-            assets: assets_out,
+            docket: self.transfer_docket,
+            percent: self.transfer_percent,
+            bytes: self.transfer_bytes,
         });
-        self.transfer_shown = Some(key);
+    }
+
+    fn release_transfer(&mut self, compositor: &mut Compositor) {
+        if let Some(old) = self.transfer_docket.take() {
+            compositor.delete_texture(old.tex);
+        }
+        if let Some(old) = self.transfer_percent.take() {
+            compositor.delete_texture(old.tex);
+        }
+        if let Some(old) = self.transfer_bytes.take() {
+            compositor.delete_texture(old.tex);
+        }
+        self.transfer_docket_key = None;
+        self.transfer_dynamic_key = None;
+        self.session
+            .app_mut()
+            .set_transfer_faces(TransferFaces::default());
+        self.release_transfer_blank(compositor);
     }
 
     fn sync_transfer_blank(&mut self, compositor: &mut Compositor) {
@@ -3630,19 +3804,14 @@ fn sync_face(compositor: &mut Compositor, face: slot_ui::CartFace) -> SyncFace {
     }
 }
 
-/// Build one of the animation's fixed labels once and reuse its texture.
-fn static_sync_face(
-    compositor: &mut Compositor,
-    slot: &mut Option<SyncFace>,
-    text: &str,
-    max_w: f32,
-    px: f32,
-) -> Option<SyncFace> {
-    if slot.is_none() {
-        let mut tex = None;
-        *slot = upload_line(compositor, &mut tex, text, max_w, px);
+fn transfer_size_text(bytes: u64) -> String {
+    if bytes >= 1_000_000 {
+        format!("{:.1} MB", bytes as f64 / 1_000_000.0)
+    } else if bytes >= 1_000 {
+        format!("{} KB", (bytes as f64 / 1_000.0).round() as u64)
+    } else {
+        format!("{bytes} B")
     }
-    *slot
 }
 
 /// Rasterise the app's overlay strings when they change.  The app owns the
@@ -3658,117 +3827,159 @@ fn sync_shelf_sync(app: &mut App, compositor: &mut Compositor, cache: &mut SyncT
         let tex = compositor.create_texture(face.w, face.h, &face.rgba);
         app.set_auto_cloud_card((tex, face.w, face.h));
     }
-    let data_label = static_sync_face(
-        compositor,
-        &mut cache.data_label,
-        slot_i18n::t(lang, "device.app.sync.data"),
-        110.0,
-        12.0,
-    );
-    let net_label = static_sync_face(compositor, &mut cache.net_label, "NET", 40.0, 9.0);
-    if cache.card_label.is_none() {
-        let face = slot_ui::net_card_label_face(slot_i18n::t(lang, "device.app.sync.cloud_label"));
-        let tex = compositor.create_texture(face.w, face.h, &face.rgba);
-        cache.card_label = Some(SyncFace { tex, w: face.w, h: face.h });
-    }
-    let card_label = cache.card_label;
-    let net_slot_title = static_sync_face(compositor, &mut cache.net_slot_title, "NET SLOT", 90.0, 10.0);
-    let net_slot_hint = static_sync_face(
-        compositor,
-        &mut cache.net_slot_hint,
-        slot_i18n::t(lang, "device.app.sync.net_slot"),
-        90.0,
-        10.0,
-    );
-    let state_label = static_sync_face(compositor, &mut cache.state_label, "STATE", 100.0, 14.0);
-    let sav_label = static_sync_face(compositor, &mut cache.sav_label, "SAV", 100.0, 14.0);
-    let rail_labels = [
-        static_sync_face(compositor, &mut cache.rail_labels[0], slot_i18n::t(lang, "device.app.sync.rail.network"), 60.0, 10.0),
-        static_sync_face(compositor, &mut cache.rail_labels[1], slot_i18n::t(lang, "device.app.sync.rail.cloud"), 60.0, 10.0),
-        static_sync_face(compositor, &mut cache.rail_labels[2], slot_i18n::t(lang, "device.app.sync.rail.transfer"), 60.0, 10.0),
-        static_sync_face(compositor, &mut cache.rail_labels[3], slot_i18n::t(lang, "device.app.sync.rail.verify"), 60.0, 10.0),
-        static_sync_face(compositor, &mut cache.rail_labels[4], slot_i18n::t(lang, "device.app.sync.rail.done"), 60.0, 10.0),
-    ];
-    let check = static_sync_face(compositor, &mut cache.check, "✓", 48.0, 28.0);
-    if cache.cancel_hint.is_none() {
+    let mut hint_rebuilt = false;
+    if cache.cancel_lang != Some(lang) {
+        if let Some(old) = cache.cancel_hint.take() {
+            compositor.delete_texture(old.tex);
+        }
         let face = hint_face("B", slot_i18n::t(lang, "device.app.common.cancel"));
         let tex = compositor.create_texture(face.w, face.h, &face.rgba);
-        cache.cancel_hint = Some(SyncFace { tex, w: face.w, h: face.h });
+        cache.cancel_hint = Some(SyncFace {
+            tex,
+            w: face.w,
+            h: face.h,
+        });
+        cache.cancel_lang = Some(lang);
+        hint_rebuilt = true;
     }
     let cancel_hint = cache.cancel_hint;
     let texts = app.sync_texts();
-    if cache.texts.as_ref() == Some(&texts) {
+    if cache.texts.as_ref() == Some(&texts) && !hint_rebuilt {
         return;
     }
-    let title = upload_line(compositor, &mut cache.title, &texts.title, 360.0, 22.0);
-    let progress_left = upload_line(
+    let title = upload_line_coloured(
         compositor,
-        &mut cache.progress_left,
-        &texts.progress_left,
-        320.0,
-        13.0,
+        &mut cache.title,
+        &texts.title,
+        SYNC_TITLE_MAX_W,
+        SYNC_TITLE_PX,
+        slot_ui::HUD_INK,
     );
-    let progress_right = upload_line(
+    let subtitle = upload_line_coloured(
         compositor,
-        &mut cache.progress_right,
-        &texts.progress_right,
-        180.0,
-        13.0,
+        &mut cache.subtitle,
+        &texts.subtitle,
+        SYNC_SUBTITLE_MAX_W,
+        SYNC_SUBTITLE_PX,
+        slot_ui::HUD_INK,
     );
-    let banner = upload_line(
+    let banner = upload_line_coloured(
         compositor,
         &mut cache.banner,
         &texts.banner,
         SYNC_BANNER_MAX_W,
         SYNC_BANNER_PX,
+        slot_ui::HUD_INK,
     );
-    let cloud_line = upload_line(
+    let result = upload_line(
         compositor,
-        &mut cache.cloud,
-        &texts.cloud_line,
-        SYNC_LINE_MAX_W,
-        SYNC_LINE_PX,
+        &mut cache.result,
+        &texts.banner,
+        SYNC_RESULT_MAX_W,
+        SYNC_RESULT_PX,
     );
-    let local_line = upload_line(
+    let side_local = upload_line(
         compositor,
-        &mut cache.local,
-        &texts.local_line,
-        SYNC_LINE_MAX_W,
-        SYNC_LINE_PX,
+        &mut cache.side_local,
+        &texts.side_local,
+        SYNC_SIDE_MAX_W,
+        SYNC_SIDE_PX,
     );
-    let upload_label = upload_line(
+    let side_remote = upload_line(
         compositor,
-        &mut cache.upload,
-        &texts.upload_label,
-        SYNC_LABEL_MAX_W,
-        SYNC_LABEL_PX,
+        &mut cache.side_remote,
+        &texts.side_remote,
+        SYNC_SIDE_MAX_W,
+        SYNC_SIDE_PX,
     );
-    let download_label = upload_line(
+    let cloud_label = upload_line_coloured(
         compositor,
-        &mut cache.download,
-        &texts.download_label,
-        SYNC_LABEL_MAX_W,
-        SYNC_LABEL_PX,
+        &mut cache.cloud_label,
+        &texts.cloud_label,
+        SYNC_STICKER_MAX_W,
+        SYNC_STICKER_PX,
+        slot_ui::STICKER_INK,
+    );
+    let target_label = upload_line_coloured(
+        compositor,
+        &mut cache.target_label,
+        &texts.target_label,
+        SYNC_STICKER_MAX_W,
+        SYNC_STICKER_PX,
+        slot_ui::HUD_INK,
+    );
+    let rail_labels = [
+        upload_line(
+            compositor,
+            &mut cache.rail_labels[0],
+            &texts.rail[0],
+            SYNC_RAIL_MAX_W,
+            SYNC_RAIL_PX,
+        ),
+        upload_line(
+            compositor,
+            &mut cache.rail_labels[1],
+            &texts.rail[1],
+            SYNC_RAIL_MAX_W,
+            SYNC_RAIL_PX,
+        ),
+        upload_line(
+            compositor,
+            &mut cache.rail_labels[2],
+            &texts.rail[2],
+            SYNC_RAIL_MAX_W,
+            SYNC_RAIL_PX,
+        ),
+        upload_line(
+            compositor,
+            &mut cache.rail_labels[3],
+            &texts.rail[3],
+            SYNC_RAIL_MAX_W,
+            SYNC_RAIL_PX,
+        ),
+        upload_line(
+            compositor,
+            &mut cache.rail_labels[4],
+            &texts.rail[4],
+            SYNC_RAIL_MAX_W,
+            SYNC_RAIL_PX,
+        ),
+    ];
+    let progress_left = upload_line(
+        compositor,
+        &mut cache.progress_left,
+        &texts.progress_left,
+        SYNC_FOOTER_MAX_W,
+        SYNC_FOOTER_PX,
+    );
+    let progress_right = upload_line(
+        compositor,
+        &mut cache.progress_right,
+        &texts.progress_right,
+        SYNC_PERCENT_MAX_W,
+        SYNC_PERCENT_PX,
+    );
+    let completion_hint = upload_line(
+        compositor,
+        &mut cache.completion_hint,
+        &texts.completion_hint,
+        SYNC_HINT_MAX_W,
+        SYNC_HINT_PX,
     );
     app.set_sync_text_faces(SyncFaces {
-        banner,
-        cloud_line,
-        local_line,
-        upload_label,
-        download_label,
         title,
-        data_label,
-        net_label,
-        card_label,
-        net_slot_title,
-        net_slot_hint,
-        state_label,
-        sav_label,
+        subtitle,
+        banner,
+        result,
+        side_local,
+        side_remote,
+        cloud_label,
+        target_label,
         rail_labels,
         progress_left,
         progress_right,
+        completion_hint,
         cancel_hint,
-        check,
     });
     cache.texts = Some(texts);
 }
@@ -3780,11 +3991,22 @@ fn upload_line(
     max_w: f32,
     px: f32,
 ) -> Option<SyncFace> {
+    upload_line_coloured(compositor, slot, text, max_w, px, slot_ui::HUD_INK)
+}
+
+fn upload_line_coloured(
+    compositor: &mut Compositor,
+    slot: &mut Option<TexId>,
+    text: &str,
+    max_w: f32,
+    px: f32,
+    ink: [u8; 3],
+) -> Option<SyncFace> {
     if text.is_empty() {
         *slot = None;
         return None;
     }
-    let face = slot_ui::sync_overlay::line_face(text, max_w, px);
+    let face = slot_ui::sync_overlay::line_face_coloured(text, max_w, px, ink);
     if face.w == 0 || face.h == 0 {
         return None;
     }

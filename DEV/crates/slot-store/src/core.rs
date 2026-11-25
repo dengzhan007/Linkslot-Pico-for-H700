@@ -32,6 +32,9 @@ pub enum Core {
     Nestopia,
     /// GBA 的第三个核心（LSP 扩展包安装）；单人游玩，联机仍走 mGBA/gpSP。
     Armgba,
+    /// FBNeo：街机 + NeoGeo 的唯一核心，由平台扩展包提供。追加在最后，
+    /// 因为 `index()` 就是判别值，中间插入会让旧记录错位。
+    Fbneo,
 }
 
 impl Core {
@@ -43,7 +46,7 @@ impl Core {
 
     /// Every core the app can load, including ones with no picker socket
     /// (the Famicom core is chosen by the cart's platform, not by hand).
-    pub const EVERY: [Core; 8] = [
+    pub const EVERY: [Core; 9] = [
         Core::Mgba,
         Core::Gpsp,
         Core::Nes,
@@ -52,6 +55,7 @@ impl Core {
         Core::Snes9x,
         Core::Nestopia,
         Core::Armgba,
+        Core::Fbneo,
     ];
 
     /// 核心 id（与 `slot-model` 表一致）。
@@ -65,6 +69,7 @@ impl Core {
             Core::Snes9x => "snes9x",
             Core::Nestopia => "nestopia",
             Core::Armgba => "armgba",
+            Core::Fbneo => "fbneo",
         }
     }
 
@@ -85,20 +90,31 @@ impl Core {
         /// SFC 默认 snes9x；supafaust 为可选核心（用户自备，见 README）。
         const SFC: [Core; 2] = [Core::Snes9x, Core::Snes];
         const GENESIS: [Core; 1] = [Core::Gpgx];
+        /// 街机与 NeoGeo 共用 FBNeo；它在卡上出现之前选择器里不该有它。
+        const FBNEO: [Core; 1] = [Core::Fbneo];
         match platform {
             Platform::Gba => &GBA,
             Platform::Gb | Platform::Gbc => &MGBA,
             Platform::Fc => &FC,
             Platform::Sfc => &SFC,
             Platform::Md => &GENESIS,
+            Platform::Arcade | Platform::Neogeo => &FBNEO,
         }
     }
 
     /// 核心二进制是否在卡上（`System/linkSlot/cores/<核心>/<dylib>_libretro.so`）。
+    ///
+    /// 只看**宿主**扩展名：桌面板能加载的就是本机格式的核心，卡上那个给设备
+    /// 用的 Linux `.so` 不能被当成"桌面也跑得起来"。平台包的激活门另有规则
+    /// （见 `platform_packs::core_present`），两者刻意不同。
     pub fn is_available(self, root: &Path) -> bool {
         root.join(slot_model::layout::SYSTEM_CORES)
             .join(self.as_str())
-            .join(format!("{}_libretro.{}", self.as_str(), std::env::consts::DLL_EXTENSION))
+            .join(format!(
+                "{}_libretro.{}",
+                self.as_str(),
+                std::env::consts::DLL_EXTENSION
+            ))
             .is_file()
     }
 
@@ -131,6 +147,7 @@ impl Core {
             "nestopia" | "nestopia_libretro" => Some(Core::Nestopia),
             "genesis_plus_gx" | "genesisplusgx" | "gpgx" | "genplusgx" => Some(Core::Gpgx),
             "armgba" | "armgba_libretro" => Some(Core::Armgba),
+            "fbneo" | "fbneo_libretro" => Some(Core::Fbneo),
             _ => None,
         }
     }
@@ -179,7 +196,20 @@ pub fn core_for_platform(root: &Path, stem: &str, platform: Platform) -> Core {
 ///
 /// 这样"把核心丢进 System/"就等于把它加进了选择器，不需要改配置；全部缺失时
 /// 仍返回默认核心，保证 UI 不为空。
+///
+/// 街机 / NeoGeo 是唯一例外：它们默认不注册，所以平台没有激活时返回**空**列表，
+/// 而不是回退到默认核心。否则"没装包"也会被当成"有 FBNeo 可跑"，屏蔽条件就
+/// 从平台包跑到选择器里去了。
 pub fn available_options(root: &Path, platform: Platform) -> Vec<Core> {
+    if matches!(platform, Platform::Arcade | Platform::Neogeo) {
+        if !crate::platform_packs::active(root, platform) {
+            return Vec::new();
+        }
+        // `active()` 已经证明卡上有能跑这台机种的核心文件；这里直接返回该机种
+        // 声明的核心，不再走 `is_available`——后者按**宿主**扩展名判定，桌面板
+        // 上会给一个装着设备 `.so` 的平台包判出空列表，与激活门自相矛盾。
+        return Core::options_for(platform).to_vec();
+    }
     let mut out: Vec<Core> = Core::options_for(platform)
         .iter()
         .copied()

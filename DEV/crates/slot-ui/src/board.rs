@@ -40,6 +40,9 @@ pub fn board_size(platform: Platform) -> (u32, u32) {
         Platform::Sfc => (BOARD_W, 310),
         // MD is a shorter, wider cassette; its PCB keeps the same width.
         Platform::Md => (BOARD_W, 252),
+        // TODO(phase 4): 街机 PCB 是竖装的大板（FBNeo 的 JAMMA 卡），柜子里
+        // 的可视区也另算；现在沿用 MD 的横板尺寸。
+        Platform::Arcade | Platform::Neogeo => (BOARD_W, 252),
     }
 }
 
@@ -51,6 +54,8 @@ pub fn board_units(platform: Platform) -> (f32, f32) {
         Platform::Fc => (240.0, 200.0),
         Platform::Sfc => (240.0, 200.0),
         Platform::Md => (240.0, 163.0),
+        // 复用 MD 板（`board_md.svg`）时这两台机种的板坐标也沿用 MD 的。
+        Platform::Arcade | Platform::Neogeo => (240.0, 163.0),
     }
 }
 
@@ -69,6 +74,8 @@ fn rom_marking_at(platform: Platform) -> (u32, u32) {
         Platform::Sfc => (157, 143),
         Platform::Md => (98, 68),
         Platform::Gbc => (114, 130),
+        // 复用 MD 板，所以游戏名也刻在 MD 的位置上。
+        Platform::Arcade | Platform::Neogeo => (98, 68),
     }
 }
 
@@ -135,15 +142,23 @@ pub fn board_face(cart: &Cart) -> CartFace {
         Platform::Fc => BOARD_FC_SVG,
         Platform::Sfc => BOARD_FC_SVG,
         Platform::Md => BOARD_MD_SVG,
+        // TODO(phase 4): 街机要的是 JAMMA 大板、NeoGeo 是 MVS 卡座；两者
+        // 现在都借 MD 的板画出来，保证 Phase 1 不出空贴图。
+        Platform::Arcade | Platform::Neogeo => BOARD_MD_SVG,
     };
     // GBA keeps the cart shell colour. The GB/GBC/FC boards are always the
     // deep service-board green, so a red/yellow FC shell cannot turn the PCB
     // into a yellow slab.
     let pcb = match cart.platform {
         Platform::Gba => shell.colour,
-        Platform::Gb | Platform::Gbc | Platform::Fc | Platform::Sfc | Platform::Md => {
-            [0x2f, 0x7f, 0x31]
-        }
+        // 街机板复用 MD 的深绿服务板：它本来就不该跟着"壳色"变。
+        Platform::Gb
+        | Platform::Gbc
+        | Platform::Fc
+        | Platform::Sfc
+        | Platform::Md
+        | Platform::Arcade
+        | Platform::Neogeo => [0x2f, 0x7f, 0x31],
     };
     let svg = board_svg
         .replace(DEEP, &hex(shade(pcb, 0.35)))
@@ -451,6 +466,8 @@ pub fn network_spot(platform: Platform) -> (f32, f32) {
         Platform::Fc => (182.0, 108.0),
         Platform::Sfc => (182.0, 108.0),
         Platform::Md => (182.0, 36.0),
+        // 借 MD 板，同步模块也落在 MD 空出来的那块角上。
+        Platform::Arcade | Platform::Neogeo => (182.0, 36.0),
     }
 }
 
@@ -922,6 +939,9 @@ pub fn board_from_for(platform: Platform, shelf: Placed, progress: f32) -> Place
         Platform::Gb | Platform::Gbc => (210.0, 90.0),
         Platform::Gba | Platform::Fc | Platform::Sfc => (BOARD_X, BOARD_Y),
         Platform::Md => (BOARD_X, 174.0),
+        // TODO(phase 4): 街机没有"抬板"这一动作（柜子里是屏幕亮起来）。
+        // 先按 MD 的落位摆，免得动画中途飞到屏幕外。
+        Platform::Arcade | Platform::Neogeo => (BOARD_X, 174.0),
     };
     let rest = Placed {
         x,
@@ -953,6 +973,8 @@ pub fn lid_from_for(platform: Platform, shelf: Placed, progress: f32) -> (Placed
         Platform::Fc => FC_LID_REST,
         Platform::Sfc => FC_LID_REST,
         Platform::Md => MD_LID_REST,
+        // TODO(phase 4): 街机的"开盖"其实是柜子的屏幕亮起，没有可取下的盖子。
+        Platform::Arcade | Platform::Neogeo => MD_LID_REST,
     };
     let slid = Placed {
         y: shelf.y - slide_up_for(platform) * slide_of(progress),
@@ -1053,6 +1075,8 @@ pub fn chip_face_for(platform: Platform, core: Option<Core>) -> CartFace {
         Platform::Fc => CHIP_FC_SVG,
         Platform::Sfc => CHIP_FC_SVG,
         Platform::Md => CHIP_FC_SVG,
+        // FBNeo 是裸芯片（卡上只有 .so，没有插槽板），先借 FC 的芯片贴图。
+        Platform::Arcade | Platform::Neogeo => CHIP_FC_SVG,
     };
     let rgba = art::render_svg(svg, CHIP_W, CHIP_H)
         .unwrap_or_else(|| vec![0; (CHIP_W * CHIP_H * 4) as usize]);

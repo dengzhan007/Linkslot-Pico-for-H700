@@ -4200,3 +4200,46 @@ fn a_script_only_save_keeps_the_action_ui_and_capabilities() {
     ));
     assert_eq!(detail["ui"]["animation"], "cloud_sync");
 }
+
+#[test]
+fn clearing_logs_requires_the_header_and_a_writable_device() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::create_dir_all(root.join("linkSlot/Logs/crash")).unwrap();
+    std::fs::write(root.join("linkSlot/Logs/linkSlot.log"), b"line\n").unwrap();
+    std::fs::write(root.join("linkSlot/Logs/crash/cores.log"), b"signal\n").unwrap();
+    std::fs::create_dir_all(root.join("linkSlot/Config")).unwrap();
+    std::fs::write(root.join("linkSlot/Config/config.toml"), b"keep\n").unwrap();
+    let shared = test_support::test_shared(root.to_path_buf());
+
+    let response = post_query(&shared, "/api/logs/clear", "", false);
+    assert_eq!(response.status, 403);
+    assert_eq!(
+        std::fs::read_to_string(root.join("linkSlot/Logs/linkSlot.log")).unwrap(),
+        "line\n"
+    );
+
+    shared.writable.store(false, Ordering::Relaxed);
+    let response = post_query(&shared, "/api/logs/clear", "", true);
+    assert_eq!(response.status, 409);
+    shared.writable.store(true, Ordering::Relaxed);
+
+    let response = post_query(&shared, "/api/logs/clear", "", true);
+    assert_eq!(response.status, 200, "{}", body_text(&response));
+    let value = response_json(&response);
+    assert_eq!(value["cleared"].as_u64(), Some(2));
+    assert_eq!(value["failed"].as_u64(), Some(0));
+    for path in ["linkSlot/Logs/linkSlot.log", "linkSlot/Logs/crash/cores.log"] {
+        assert!(root.join(path).is_file(), "{path} was removed");
+        assert_eq!(
+            std::fs::metadata(root.join(path)).unwrap().len(),
+            0,
+            "{path} was not truncated"
+        );
+    }
+    assert_eq!(
+        std::fs::read_to_string(root.join("linkSlot/Config/config.toml")).unwrap(),
+        "keep\n",
+        "a file outside Logs/ was touched"
+    );
+}

@@ -200,9 +200,13 @@ mod tests {
     /// Adding a game is a platform choice in the library page. Every machine
     /// the shelf scans must be selectable there, and the filter must offer it
     /// too, or a freshly uploaded SFC game would be invisible.
+    ///
+    /// 遍历 `BUILTIN` 而不是 `ALL`：街机 / NeoGeo 要靠平台包才会被扫描（见
+    /// `slot_store::platform_packs`），而 Web 库本阶段既不上传也不筛选它们。
+    /// TODO(phase 4): 柜子入口做好后，这里要跟着 `available_platforms` 走。
     #[test]
     fn the_library_page_offers_every_platform() {
-        for platform in slot_store::Platform::ALL {
+        for platform in slot_store::Platform::BUILTIN {
             let name = platform.dir_name();
             assert!(
                 INDEX_HTML.contains(&format!("data-platform=\"{name}\"")),
@@ -423,15 +427,34 @@ mod tests {
         // go out, then the verify shimmer once they are in.
         assert!(INDEX_HTML.contains("id=\"upgradeProgress\""));
         assert!(INDEX_HTML.contains("id=\"upgradeProgressBar\""));
+        assert!(APP_JS.contains("/api/log/level"));
+        assert!(INDEX_HTML.contains("id=\"logLevel\""));
+        assert!(INDEX_HTML.contains("id=\"saveLogLevel\""));
+        assert!(INDEX_HTML.contains("id=\"logLevelStatus\""));
+        assert!(APP_JS.contains("logLevelStatus"));
         // Log export: one button that downloads Logs/ plus its crash records.
         assert!(INDEX_HTML.contains("id=\"exportLogs\""));
         assert!(INDEX_HTML.contains("id=\"exportLogsStatus\""));
         assert!(APP_JS.contains("/api/logs/export"));
+        // Log cleanup sits beside the export, before the long service-log view.
+        assert!(INDEX_HTML.contains("id=\"clearLogs\""));
+        assert!(INDEX_HTML.contains("id=\"clearLogsStatus\""));
+        assert!(APP_JS.contains("/api/logs/clear"));
+        assert!(
+            INDEX_HTML.find("id=\"exportLogs\"").unwrap()
+                < INDEX_HTML.find("id=\"clearLogs\"").unwrap(),
+            "log cleanup should follow the export button"
+        );
         // Users look for the one-click export before the long service-log view.
         assert!(
             INDEX_HTML.find("id=\"exportLogs\"").unwrap()
                 < INDEX_HTML.find("id=\"syncLog\"").unwrap(),
             "log export should precede the service log"
+        );
+        assert!(
+            INDEX_HTML.find("id=\"clearLogs\"").unwrap()
+                < INDEX_HTML.find("id=\"syncLog\"").unwrap(),
+            "log cleanup should precede the service log"
         );
         assert!(INDEX_HTML.contains("id=\"upgradeProgressText\""));
         for id in [

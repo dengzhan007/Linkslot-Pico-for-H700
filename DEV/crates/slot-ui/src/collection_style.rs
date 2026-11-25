@@ -71,6 +71,21 @@ pub const MD: AccentStyle = AccentStyle {
     on_light: Some([0x1f, 0x2d, 0x4f]),
 };
 
+/// 街机：投币厅的青色霓虹。取蓝绿之间，好和 Advance 的纯蓝、NeoGeo 的琥珀
+/// 在同一排货架上分得开。
+pub const ARCADE: AccentStyle = AccentStyle {
+    base: [0x12, 0x8f, 0xa8],
+    on_dark: [0x62, 0xd8, 0xea],
+    on_light: Some([0x0c, 0x67, 0x7a]),
+};
+
+/// NeoGeo：机台面板上的琥珀色丝印。
+pub const NEOGEO: AccentStyle = AccentStyle {
+    base: [0xc0, 0x76, 0x14],
+    on_dark: [0xff, 0xc4, 0x62],
+    on_light: Some([0x8f, 0x55, 0x0b]),
+};
+
 pub fn platform(platform: Platform) -> AccentStyle {
     match platform {
         Platform::Gba => GBA,
@@ -79,6 +94,8 @@ pub fn platform(platform: Platform) -> AccentStyle {
         Platform::Fc => FC,
         Platform::Sfc => SFC,
         Platform::Md => MD,
+        Platform::Arcade => ARCADE,
+        Platform::Neogeo => NEOGEO,
     }
 }
 

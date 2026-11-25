@@ -120,7 +120,11 @@ fn a_cable_session_leaves_the_bios_to_the_card() {
         return;
     }
     let mut core = LibretroCore::open(&path).expect("open core");
-    slot::core::apply_link_options(&mut core, Core::Mgba, 1);
+    slot::core::apply_link_options(
+        &mut core,
+        Core::Mgba,
+        slot::core::LinkSetup::Mgba { player: 1 },
+    );
     let set: std::collections::HashMap<String, String> = core.options().into_iter().collect();
     assert_eq!(
         set.get("mgba_use_bios").map(String::as_str),
@@ -145,7 +149,11 @@ fn a_cable_session_sets_nothing_on_gpsp() {
         return;
     }
     let mut core = LibretroCore::open(&path).expect("open core");
-    slot::core::apply_link_options(&mut core, Core::Gpsp, 0);
+    slot::core::apply_link_options(
+        &mut core,
+        Core::Gpsp,
+        slot::core::LinkSetup::Mgba { player: 0 },
+    );
     assert!(
         core.options().is_empty(),
         "a cable session reached into gpSP, which has no cable to offer"

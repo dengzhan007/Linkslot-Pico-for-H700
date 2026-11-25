@@ -30,10 +30,15 @@ pub enum CollectionKind {
     Sfc,
     /// Mega Drive / Genesis, appended for the same reason.
     Md,
+    /// 街机，追加在最后。Phase 1 只做宿主与激活门，柜子这一层画面还没有，
+    /// 但阴影 / 色板按 `index` 缓存在 app 里，所以只能往后追加。
+    Arcade,
+    /// NeoGeo。
+    Neogeo,
 }
 
 impl CollectionKind {
-    pub const ALL: [CollectionKind; 8] = [
+    pub const ALL: [CollectionKind; 10] = [
         Self::Recents,
         Self::Favorites,
         Self::Gba,
@@ -42,6 +47,8 @@ impl CollectionKind {
         Self::Fc,
         Self::Sfc,
         Self::Md,
+        Self::Arcade,
+        Self::Neogeo,
     ];
 
     /// Stable slot used by the app's cached overlay textures.
@@ -55,6 +62,8 @@ impl CollectionKind {
             Self::Fc => 5,
             Self::Sfc => 6,
             Self::Md => 7,
+            Self::Arcade => 8,
+            Self::Neogeo => 9,
         }
     }
 
@@ -68,6 +77,9 @@ impl CollectionKind {
             Self::Fc => 0.070,
             Self::Sfc => 0.068,
             Self::Md => 0.070,
+            // 街机 / NeoGeo 沿用 Md 的强度：Phase 1 没有柜子画面，先保证
+            // 这两台机种被选中时地面不会突变。
+            Self::Arcade | Self::Neogeo => 0.070,
         }
     }
 
@@ -108,6 +120,10 @@ impl CollectionKind {
                 Language::ZhCn => slot_i18n::t(lang, "device.app.platform.md"),
                 Language::EnUs => "MEGA DRIVE",
             },
+            // TODO(phase 4): 街机与 NeoGeo 的铭牌要做成柜子上的灯箱字，
+            // 中英两套文案随柜子一起定；现在两种语言先共用同一块英文牌。
+            Self::Arcade => "ARCADE",
+            Self::Neogeo => "NEOGEO",
         }
     }
 
@@ -130,6 +146,8 @@ impl CollectionKind {
             Self::Fc => "FC",
             Self::Sfc => "SFC",
             Self::Md => "MD",
+            Self::Arcade => "ARCADE",
+            Self::Neogeo => "NEOGEO",
         }
     }
 
@@ -145,6 +163,11 @@ impl CollectionKind {
             Self::Fc => "slot_back_fc.png",
             Self::Sfc => "slot_back_sfc.png",
             Self::Md => "slot_back_md.png",
+            // 卡上暂时没有这两张牌：加载器会回退到程序绘制的铭牌，这比借用
+            // 一台任天堂机器的字标要诚实。
+            // TODO(phase 4): 画 slot_back_arcade.png / slot_back_neogeo.png。
+            Self::Arcade => "slot_back_arcade.png",
+            Self::Neogeo => "slot_back_neogeo.png",
         }
     }
 }
@@ -311,6 +334,10 @@ pub fn collection_overlay_face(kind: CollectionKind) -> UndoFace {
         CollectionKind::Fc => collection_style::platform(slot_store::Platform::Fc),
         CollectionKind::Sfc => collection_style::platform(slot_store::Platform::Sfc),
         CollectionKind::Md => collection_style::platform(slot_store::Platform::Md),
+        // TODO(phase 4): 街机要的是"投币厅"的斜向灯带、NeoGeo 是斜条纹，
+        // 现在先各自用已登记的色相位画共享几何。
+        CollectionKind::Arcade => collection_style::platform(slot_store::Platform::Arcade),
+        CollectionKind::Neogeo => collection_style::platform(slot_store::Platform::Neogeo),
     };
     let base = style.base;
     let ink = style.on_dark;
@@ -464,6 +491,40 @@ pub fn collection_overlay_face(kind: CollectionKind) -> UndoFace {
             }
         }
         CollectionKind::Favorites => unreachable!(),
+        // TODO(phase 4): 街机柜子的投币厅灯带、NeoGeo 的面板斜纹。两者都只
+        // 占四角，中间 220..450 × 140..330 必须留给卡带（有测试守着）。
+        CollectionKind::Arcade => {
+            for (x0, y0, rise) in [(40.0f32, 92.0f32, 40.0f32), (500.0, 300.0, -40.0)] {
+                for offset in [0.0, 26.0] {
+                    polygon(
+                        &mut face,
+                        &[
+                            (x0 + offset, y0),
+                            (x0 + 150.0 + offset, y0 - rise),
+                            (x0 + 178.0 + offset, y0 - rise),
+                            (x0 + 28.0 + offset, y0),
+                        ],
+                        tint(46),
+                    );
+                }
+            }
+            for (cx, cy) in [(110.0, 258.0), (610.0, 232.0)] {
+                circle(&mut face, cx, cy, 34.0, node(40));
+                circle(&mut face, cx, cy, 20.0, tint(56));
+            }
+        }
+        CollectionKind::Neogeo => {
+            for (x0, y0) in [(60.0f32, 64.0f32), (470.0, 340.0)] {
+                for i in 0..3 {
+                    let y = y0 + i as f32 * 18.0;
+                    sw::fill_round(&mut face, x0, y, 140.0, 8.0, 4.0, tint(44));
+                    sw::fill_round(&mut face, x0 + 24.0, y + 10.0, 92.0, 6.0, 3.0, tint(28));
+                }
+            }
+            for (cx, cy) in [(126.0, 246.0), (594.0, 214.0)] {
+                circle(&mut face, cx, cy, 30.0, node(44));
+            }
+        }
     }
     face
 }

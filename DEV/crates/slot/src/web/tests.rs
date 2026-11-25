@@ -4200,3 +4200,100 @@ fn a_script_only_save_keeps_the_action_ui_and_capabilities() {
     ));
     assert_eq!(detail["ui"]["animation"], "cloud_sync");
 }
+
+// ---------------------------------------------------------- extension packs
+
+/// 平台包安装/卸载后，书架必须马上重扫。
+///
+/// 激活门读的是 `installed.json`：装完包不置位 `library_changed`，用户就得
+/// 重启才看得见街机；卸载后不置位，货架上会留着点开报错的条目。
+#[test]
+fn installing_and_removing_a_platform_pack_marks_the_library_changed() {
+    let dir = temp_root();
+    let shared = test_support::test_shared(dir.path().to_path_buf());
+    assert!(
+        !shared.library_changed.load(Ordering::Acquire),
+        "启动时不该有待刷新的库"
+    );
+
+    let mut install = with_slot_header(request(Method::Post, "/api/packs/install", ""));
+    install.body = crate::packs::tests::platform_pack(b"\x7fELF fbneo");
+    let response = route(&shared, &install);
+    assert_eq!(response.status, 200, "{}", body_text(&response));
+    assert!(
+        shared.library_changed.swap(false, Ordering::AcqRel),
+        "安装平台包后没有标记库变更，街机要重启才出现"
+    );
+    assert!(
+        slot_store::platform_packs::active(dir.path(), slot_store::Platform::Arcade),
+        "包装好了但激活门没认到"
+    );
+
+    // 失败路径不得置位：一个坏包不该让整台机器重扫游戏库。
+    let mut broken = with_slot_header(request(Method::Post, "/api/packs/install", ""));
+    broken.body = b"not a zip".to_vec();
+    assert_eq!(route(&shared, &broken).status, 400);
+    assert!(
+        !shared.library_changed.load(Ordering::Acquire),
+        "安装失败却标了库变更"
+    );
+
+    let response = post(
+        &shared,
+        "/api/packs/remove",
+        serde_json::json!({ "id": "arcade-neogeo" }),
+        true,
+    );
+    assert_eq!(response.status, 200, "{}", body_text(&response));
+    assert!(
+        shared.library_changed.swap(false, Ordering::AcqRel),
+        "卸载平台包后没有标记库变更，货架会留着点不开的条目"
+    );
+    assert!(
+        !slot_store::platform_packs::active(dir.path(), slot_store::Platform::Arcade),
+        "卸载后平台还亮着"
+    );
+}
+
+#[test]
+fn clearing_logs_requires_the_header_and_a_writable_device() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::create_dir_all(root.join("linkSlot/Logs/crash")).unwrap();
+    std::fs::write(root.join("linkSlot/Logs/linkSlot.log"), b"line\n").unwrap();
+    std::fs::write(root.join("linkSlot/Logs/crash/cores.log"), b"signal\n").unwrap();
+    std::fs::create_dir_all(root.join("linkSlot/Config")).unwrap();
+    std::fs::write(root.join("linkSlot/Config/config.toml"), b"keep\n").unwrap();
+    let shared = test_support::test_shared(root.to_path_buf());
+
+    let response = post_query(&shared, "/api/logs/clear", "", false);
+    assert_eq!(response.status, 403);
+    assert_eq!(
+        std::fs::read_to_string(root.join("linkSlot/Logs/linkSlot.log")).unwrap(),
+        "line\n"
+    );
+
+    shared.writable.store(false, Ordering::Relaxed);
+    let response = post_query(&shared, "/api/logs/clear", "", true);
+    assert_eq!(response.status, 409);
+    shared.writable.store(true, Ordering::Relaxed);
+
+    let response = post_query(&shared, "/api/logs/clear", "", true);
+    assert_eq!(response.status, 200, "{}", body_text(&response));
+    let value = response_json(&response);
+    assert_eq!(value["cleared"].as_u64(), Some(2));
+    assert_eq!(value["failed"].as_u64(), Some(0));
+    for path in ["linkSlot/Logs/linkSlot.log", "linkSlot/Logs/crash/cores.log"] {
+        assert!(root.join(path).is_file(), "{path} was removed");
+        assert_eq!(
+            std::fs::metadata(root.join(path)).unwrap().len(),
+            0,
+            "{path} was not truncated"
+        );
+    }
+    assert_eq!(
+        std::fs::read_to_string(root.join("linkSlot/Config/config.toml")).unwrap(),
+        "keep\n",
+        "a file outside Logs/ was touched"
+    );
+}

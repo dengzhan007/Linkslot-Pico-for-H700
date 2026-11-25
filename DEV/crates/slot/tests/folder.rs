@@ -245,6 +245,56 @@ fn a_platform_with_no_subfolders_refuses_folder_mode() {
     assert_eq!(app.toast(), Some(slot_ui::Toast::FolderNone));
 }
 
+/// Entry is not a property of the machine on screen: a rack whose ROMs all
+/// sit in `Games/<platform>/` opens the first machine that does have folders
+/// instead of refusing the hold.
+#[test]
+fn a_machine_without_folders_opens_the_first_machine_that_has_them() {
+    let mut app = App::new(vec![
+        cart(Platform::Gba, "阿拉丁", "动作"),
+        cart(Platform::Gba, "合金弹头", "动作/横版"),
+        cart(Platform::Fc, "魂斗罗", ""),
+    ]);
+    // R1 walks the racks with cartridges: GBA -> FC (GB/GBC are empty).
+    tap(&mut app, Btn::R1);
+    assert_eq!(app.shelf_platform_name(), Some("FC"));
+    assert_eq!(app.selected_stem(), Some("魂斗罗"));
+
+    enter_folder_mode(&mut app);
+    let header = app.folder_header().expect("no folder header");
+    assert_eq!(
+        header.platform, "GBA",
+        "folder mode did not leave the folderless FC rack"
+    );
+    assert_eq!(header.folder, "动作");
+    assert_eq!(app.selected_stem(), Some("阿拉丁"));
+
+    // The view is the card's whole folder list, so R1 still steps folders.
+    tap(&mut app, Btn::R1);
+    assert_eq!(app.folder_header().unwrap().folder, "动作/横版");
+}
+
+/// The same rule from a collection rack: a cart of a machine with no folders
+/// still opens a folder view instead of refusing.
+#[test]
+fn a_folderless_cart_in_favorites_opens_another_machines_folder() {
+    let mut app = App::new(vec![
+        cart(Platform::Gba, "阿拉丁", "动作"),
+        cart(Platform::Fc, "魂斗罗", ""),
+    ]);
+    tap(&mut app, Btn::R1);
+    assert_eq!(app.selected_stem(), Some("魂斗罗"));
+    app.apply(Action::FfStart); // favourite the FC cart
+    app.apply(Action::RewindStart); // L2 jumps to Favorites
+    assert_eq!(app.shelf_platform_name(), Some("收藏"));
+    assert_eq!(app.selected_stem(), Some("魂斗罗"));
+
+    enter_folder_mode(&mut app);
+    let header = app.folder_header().expect("no folder header");
+    assert_eq!(header.platform, "GBA");
+    assert_eq!(header.folder, "动作");
+}
+
 #[test]
 fn a_booted_folder_mode_restores_the_path_and_selection() {
     let d = common::tmp_root_with_carts(&["龙珠"]);

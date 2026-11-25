@@ -226,7 +226,7 @@ fn the_picker_board_has_exactly_two_sockets() {
 
 #[test]
 fn every_core_we_ship_is_in_the_every_list() {
-    assert_eq!(Core::EVERY.len(), 8);
+    assert_eq!(Core::EVERY.len(), 9);
     assert_eq!(
         Core::EVERY,
         [
@@ -237,7 +237,8 @@ fn every_core_we_ship_is_in_the_every_list() {
             Core::Gpgx,
             Core::Snes9x,
             Core::Nestopia,
-            Core::Armgba
+            Core::Armgba,
+            Core::Fbneo
         ]
     );
     for core in Core::EVERY {
@@ -262,6 +263,10 @@ fn every_core_we_ship_is_in_the_every_list() {
     assert_eq!(Core::Armgba.text(), "armGBA");
     assert_eq!(Core::Armgba.chip_text(), "armGBA");
     assert_eq!(Core::parse("armgba"), Some(Core::Armgba));
+    assert_eq!(Core::Fbneo.as_str(), "fbneo");
+    assert_eq!(Core::Fbneo.text(), "FBNeo");
+    assert_eq!(Core::parse("fbneo"), Some(Core::Fbneo));
+    assert_eq!(Core::parse("fbneo_libretro"), Some(Core::Fbneo));
 }
 
 #[test]
