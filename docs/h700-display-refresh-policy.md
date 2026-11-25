@@ -53,6 +53,13 @@ The difference is small (less than 0.011 Hz), but should remain visible in docum
 
 This differs from pvaibhav/slot: that fork retains the 26-MHz / 820×536 live tuple and attempts to write divider/PLL values at app startup/wake. Its 120-Hz candidate is divider 10 + PLL 528 MHz, not the original boot package's 54-MHz / HT=840 profile. Both reference implementations select a global physical mode; neither implements automatic UI-120 / GAME-60 scene switching.
 
+
+### Kernel #19 divider/PLL implication for the original 54-MHz package
+
+The matched stock kernel #19 panel audit shows the live RGB/HV path (`lcd_if=0`) defaults to divider 6; the divider-11 override is specific to `lcd_dclk_freq=26`. Thus the original repository's 54-MHz FDT profile, if consumed by this Linux panel-init path, would request 54×6=**324 MHz**, an exact supported PLL factor-table rate, and return a nominal 54-MHz DCLK. Its 60/120 timing distinction is then the horizontal total (1679 vs 840). This differs from pvaibhav/slot's runtime candidate of PLL 528 MHz plus forced divider 10 while preserving HT=820.
+
+This is an inference from the byte-matched kernel #19 code and the original DT profile; it is not a live test of that boot package on BaseOS. The original boot-package FDT label and U-Boot-to-Linux handoff still need qualification against `rg34xx_v1 + lcd_type=old`. Do not program 324/528 MHz, change the DT, or flash the package based on this arithmetic alone.
+
 ### Panel-driver provenance cross-check
 
 The initial name mismatch is now backed by independent RG34XX firmware and
