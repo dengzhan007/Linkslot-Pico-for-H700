@@ -139,7 +139,7 @@
 - [ ] 确认本轮 collector/synchronized-sample 变更对应的 H700 workflow 执行结果；在 Actions 明确通过前，不把新增安全回归标为已验证。
 - [x] 完成 2026-11-25 RG34XX CPUX live read-only inventory：Linux 观察到 CPU0–CPU3 online 且属于同一 cpufreq policy；`clk_summary` 显示 `pll_cpu → cpu → cpuapb`，CPU/CPUAPB 为 1512/378 MHz，AXI 756 MHz，独立 `pll_periph0` 为 600 MHz。该结果证明 Linux 运行态的父时钟关系，不证明 BL33-entry MMIO 状态。
 - [x] 审查同为 Linux 4.9.170 的 pinned vendor cpufreq/OPP 源候选：`sun50i-cpufreq-nvmem.c` 对两字节 SID cell 用 `u32 *` 解引用且不检查 `len`；raw `0x6c00` 无显式 case，会走默认 `supported_hw=0x4`。同一源码 OPP 过滤使用 bitwise intersection；该候选 mask 预测的有电压 OPP 频点 480/600/792/1008/1200/1344 MHz，与现场 `scaling_available_frequencies` 480/720/936/1008/1104/1200/1320/1416/1512 MHz 不匹配。因此该同版本源码不能代替现场运行内核的精确源版本，`0x4` 也不能作为真实 OPP mask。
-- [x] 确认本次采样的频率读数存在冲突：per-CPU cpufreq 读数 1416 MHz、policy0 后续读数 1320 MHz，但 `clk_summary` 报 `pll_cpu=1512 MHz`；更早重复样本也存在 cpufreq/PLL 值不一致。物理 CPU 频率尚不能定值，不能用任一单点生成 OPP。
+- [x] 复核 inventory v1 的 cpufreq/clk_summary 样本时序：per-CPU `scaling_cur_freq` 为 1416 MHz，后续 policy0 为 1320 MHz，稍后 `clk_summary` 为 1512 MHz；同版本 cpufreq-dt 候选显示 `cpuinfo_cur_freq` 通过 `clk_get_rate()` 读取、`scaling_cur_freq` 取缓存 `policy->cur`，所以不同时间的样本不能证明 clock provider 不一致。六轮 uptime-bracketed 同步采样已加入 collector，待实机重新采集。
 - [x] 发现 live DT 的 shared OPP table 有多个 supported-hw / 电压变体；1416 MHz 1160 mV 变体与当前 regulator 框架采样数值吻合，但 raw SID / OPP mask 语义尚未批准，不把这项相关性作为 OPP 认证。
 - [x] 记录温度校准阻塞：SID 有 4 个 raw 12-bit calibration fields，但内核报告 `avcc is not calibrated`；zone 温度仅作诊断，不可用于 Auto/Boost 闭环。
 - [x] 审查同版本 cpufreq 取频语义：候选 `cpufreq-dt` 的 `cpuinfo_cur_freq` 通过 `cpufreq_generic_get()` 读取 `clk_get_rate()`；`scaling_cur_freq` 对 target-based driver 返回缓存 `policy->cur`。inventory v1 将 cpufreq 属性和后续 `clk_summary` 分时读取，原先看到的差异可能来自 schedutil 变频时序，尚无同步快照证明 provider 不一致。
