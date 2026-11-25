@@ -2,10 +2,19 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-25（stock p4 kernel 与 live kernel GNU Build ID 精确匹配；cpufreq probe 完整 CFG 为 287 指令/69 严格块/106 edges，解出十个显式 speed 值及 name/mask/cleanup 路径；b0/b1 保持 mask=0 并跳过 `set_supported_hw`；目标 OPP core 与 parser-v4 38 节点 live-FDT / 九档 runtime list 对账支持 no-mask+b1 高置信软件模型；NVMEM 2-byte/32-bit 读取宽度风险已界定；新增 RG34XX UI120/GAME 默认 60 并可选请求 120 的纯 C 策略开关（游戏 120 Hz 默认关闭，待实测决定最终默认值）。仍待 live 32-bit speed operand、live `soc_ver&7`、真实 LCD HAL、温度、BL31 多核与 PMIC/CCU 门槛）  
+**最后核对时间：** 2026-11-26（Linkslot main 1.0.49 完整 feasibility 最新 run #45646868006 为 71/71 成功；H700 boot-audit #45646868087 两 job 成功；新增 ADB UI/GAME 实测均约 59.6 Hz。120-Hz writer 保持关闭；下一步独立采集 Slot successful presents 与 armGBA committed frames。）
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **下一项显示分析（优先级最高）：** FDT timing 与 TCON/PLL 只读回读已完成：live panel 为 `rg34xx_v1 + lcd_type=old`，TCON divider word `0xf000000b`，PLL raw `0x88001703`。固定参考 sun50iw9 时钟代码将 live PLL 解为 288 MHz；同一公式把 pvaibhav 高刷候选 `0x88002b03` 解为 528 MHz，配合 divider 10 得 52.8-MHz DCLK / 约 120.13 Hz（820×536），但这不是 kernel #19 已确认的 decode，也不证明面板支持。Anbernic 未公开该内核源码；项目已有 stock p4 解压 ELF 且 GNU Build ID 与 live kernel 精确匹配。**该离线分析已完成**（见下方第 4 条与 `reports/kernel19-display-reverse-audit/ADDENDUM.md`）：panel init、PLL bitfield、divider 来源、TCON parent 继承均已闭合，不再重复导出 p4 或重复读 divider。随后分别补 Slot 600-present trace 与 armGBA committed-frame 计数；LCD IRQ 仍只作 scanout proxy。禁止使用 `/sys/class/sunxi_dump/write`，不接入、不调用硬件 writer。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
+
+**2026-11-26 最新续接更新：**
+
+- **ADB 显示复测：** reports 分支 `reports/slot-refresh-audit/` 保存 UI/GAME 两份只读原始输出。UI 12 s IRQ 293 Δ716 = 59.667 Hz；GBA/armGBA 12 s Δ715 = 59.583 Hz。两态 live panel 均为 `rg34xx_v1`、720×480、820×536、26-MHz DCLK property；PLL `0x03001040` 均读为 `0x88001703`。TCON divider `0x06511044` 本轮返回 I/O error，未取得直接读数。结论为两态均无 120-Hz 应用证据；IRQ 只是 scanout proxy，不是 UI present 或 game FPS。原始脚本没有访问 sunxi_dump/write。
+- **校正高刷寄存器候选：** 固定 pvaibhav 源码 `5206e3fa39aa4a9b702cd9048a07dab3b5ab95da` 的高刷组合是 divider `0xf000000a` + PLL `0x88002b03`；60-Hz 组合是 PLL `0x88001703` + divider `0xf000000b`。ADB SUMMARY 中旧写的 `0x88001701` 不是该 fork 的高刷值，已在 reports/SUMMARY.md 校正。面板名 `rg34xx_v1` 不满足 fork 的 `fog_fj035fhd05_v1` 精确 gate，按该源码路径启动 setter 会被跳过；不能通过改字符串绕过。
+- **Linkslot 1.0.49 全量 CI：** 最新 `#45646868006` 在当前检查 HEAD `018e0b30d14965b56003e23e06da5593a94808d6` 上 **71/71 steps 成功**，artifact `15038716689`。H700 boot-audit `#45646868087` 的 host-tools 与 windows-powershell 两个 job 均成功。两项均为 host/cross-build 和工具验证，不是完整可刷写固件或实机启动证明。
+- **下一显示测量：** 1) 先核对设备已安装 `System/slot` SHA `8f0fd40da4ac161e5fbb9a56a99c254acf8b2f31806e2be6bdaa929b5ee28505` 与 `armgba_libretro.so` SHA `4ebae098cc4848fb459fc18299c39acbdbbbeb732db5c3f66d1ff3f6e142e889` 是否匹配官方 H700 release ZIP；2) 若 Slot 二进制与固定源码一致，利用启动前 `SLOT_TRACE_LATENCY` / `System/trace-latency.on` 启用已有 600 次成功 `surface.swap()` 计数，单独测 UI presents/s；3) armGBA 必须读取其专有 `gba->video.frameCounter`，不能复用 pvaibhav `probe.rs` 中指向 mGBA 的 `gba` selector；先验证 ELF symbol/ABI/offset，再做只读进程内存采样。不得用 IRQ 替代 FPS，也不得写显示寄存器。
+
+
 
 **Linkslot 1.0.49 runtime-slices 迁移验证（2026-11-25）：** [#45624285300](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45624285300) **成功**。完整 job 通过：H700 no_std workspace host tests、AArch32/AArch64 freestanding checks、renderer + business overlay 应用、上游 input/model regression、Linkslot 1.0.49 完整 Frontend + SoftwareCompositor 的 `cargo check`、CPU Performance QuickRow unavailable/不写存储的 2 项回归，以及 H700 C input ABI/queue job。首次 1.0.49 run [#45623895416](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45623895416) 曾因 H700 `slot-link-kind` 未提供上游新增的 `armgba_link_carried` / `armgba_port` 失败；已补齐 no_std 实现、测试和 re-export，第二轮通过。此结果仍是 host/cross-build，不是 LK 完整镜像或实机运行。
 
