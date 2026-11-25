@@ -268,3 +268,25 @@ The pinned armGBA source `MagnominusGit/armGBA@fad6c4b0c0176a76e10667f4aa071a8fe
 The pinned pvaibhav Slot build recipe `cores/armgba/build.sh` takes an armGBA commit as a build argument, downloads that archive, applies `link-stop-queued-once.patch`, builds the shared core for Cortex-A53, and writes a sibling `.meta` file containing source commit, build recipe, flags and patch SHA-256. This makes the `.meta` file (if preserved in the release ZIP) the preferred provenance check. The known device core SHA is `4ebae098cc4848fb459fc18299c39acbdbbbeb732db5c3f66d1ff3f6e142e889`; the official H700 ZIP SHA is `1f9bdaa1110eb4f6006cc9da6a8bb34bca694ea53555c3138dcf656f0dfd1fca`. They have not yet been compared.
 
 Before enabling Slot tracing, inspect PID 2301's stderr FD and its environment/marker state. The trace switch is cached on first use; do not create `System/trace-latency.on` or restart Slot until the log destination is known. Before a frame-counter memory read, match the installed ELF to the release, inspect full `.symtab` and `.dynsym`, prove the `gba` symbol/load bias and use the verified layout. No blind scan or current `/proc/PID/mem` access.
+
+
+## 11. v1.16.0 H700 二进制身份报告与 armGBA 源码 pin 更正（2026-11-26）
+
+最新 ADB/ZIP 报告见 [reports/slot-refresh-audit/binary-identity/REPORT.md](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/slot-refresh-audit/binary-identity/REPORT.md)。
+
+### Provenance 结果
+
+- 官方 H700 ZIP SHA-256 与发布页预期一致；设备 `System/slot` 和 `SYSTEM/armgba_libretro.so` 与 ZIP 内对应文件逐字节一致，另外三个模拟器 core 和两个启动脚本也匹配。
+- armGBA ELF Build ID `08309a288967a62cf4155e27d1b10ce13a5e33ef`；`.symtab` 存在且有 4,960 个条目，未 strip；`.dynsym` 有 240 个条目。
+- 官方 ZIP 中的 meta 将实际 armGBA 源码 pin 到 `df6b2631291f249d54a00dd14f49bc893e438feb`，不是先前用作布局探针的 `fad6c4b0c0176a76e10667f4aa071a8feb4425c0`。所以此前从 fad6c4b0 得出的 11948-byte offset 不能用于当前 release core。
+- 已把 `scripts/test-armgba-frame-layout.py` 与 workflow checkout 更新为 `df6b263...`，新 CI [#45724910634](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45724910634) 正在重新计算 exact-build layout；待 JSON 后才记录新 offset。
+- 完整符号表中存在两个同名 `gba` LOCAL OBJECT（`0x4c16a8` 与 `0x4259b8`），动态符号表中没有 `gba`。源码同时含 `libretro/libretro.c` 主 GBA 指针和 `libretro/link.c` 私有指针；后续要通过 `retro_run` 等引用反汇编区分它们，再计算主指针的运行时地址，不能仅按符号名选取。
+- PID 2301 的 fd/1、fd/2 都写入 `/mnt/sdcard/Logs/slot.log`。tracing 当前未启用；环境变量 `SLOT_TRACE_LATENCY` 缺失，`System/trace-latency.on` 不存在。没有写入 marker 或重启前端。
+
+### high_refresh 失效原因已确定
+
+pinned `device.rs` 明确将 `refresh` 定义为 `Option<PanelRefresh>`，`supports_high_refresh()` 检查 `refresh.is_some()`，`set_high_refresh()` 只有在 Some 时才调用 writer。普通 target `rg34xx` 对应的 `PanelRefresh::probe` 要求 `lcd_driver_name=fog_fj035fhd05_v1`。现场 live FDT 是 `rg34xx_v1`，因此探测返回 None，设置里的 `high_refresh=1` 不会产生任何硬件写入。这个结论由源码和 live FDT 即可闭合，无需 dump Rust 运行时结构或读进程内存。
+
+### 下一步边界
+
+下一次只读采集应补 `/proc/2301/maps`、`readlink /proc/2301/exe` 以及 core 的 ELF `PT_LOAD` headers，求出 load bias 并关联两个同名 `gba` 符号。此阶段仍不读 `/proc/2301/mem`、不创建 tracing marker、不重启 Slot。待 exact-build layout 与主 GBA 指针均闭合，再独立决定是否进行有界进程内存读取。UI presents、armGBA committed frames、LCD IRQ 继续分开统计。
