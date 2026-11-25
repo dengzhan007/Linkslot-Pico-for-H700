@@ -33,7 +33,7 @@
 - **硬件平台：** Allwinner H700，四核 Cortex-A53，Mali-G31 MP2，1 GB LPDDR4，720×480 屏幕，无 eMMC。
 - **启动介质：** 只考虑 SD 卡启动；不设计 eMMC 安装或回退到原 Linux/BaseOS 的启动流程。
 - **硬件证据：** [RG34XX 硬件基线](docs/rg34xx-hardware-profile.md)，其中区分了 BaseOS 已验证行为、固件分析结果和仍待裸机验证的项目。
-- UI / 用户功能来源：[luguiyi/linkslot](https://github.com/luguiyi/linkslot)
+- UI / 用户功能最新来源：[upstream/linkslot 归档快照](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/upstream/linkslot)（main/test 1.0.49、DEV 1.1.0）；公开参考仓库：[luguiyi/linkslot](https://github.com/luguiyi/linkslot)
 - 裸机 / LK 参考：[TheGammaSqueeze/lk-mt6785](https://github.com/TheGammaSqueeze/lk-mt6785)
 - 首期平台：GB、GBC、GBA。
 - 核心建议：GB/GBC 优先 Gambatte；mGBA 保留为 GB/GBC 可选核心。GBA 优先 mGBA，gpSP 作为备选；armGBA-pico 暂列实验候选，待 mGBA 存档兼容验证后再决定是否进入正式候选。
