@@ -17,9 +17,36 @@ SHA-256 of `rg34xx-inventory-20261122-195053.zip`:
 - `debugfs-memory-reservations.txt`: verbatim copy of the same-named file inside the archive above
   (2,664 bytes, SHA-256 `6d256713f030dd6093c6f04770cf20a9561b93db76f288c01f2da179f1603ced`).
 
+## 2026-11-22 20:47 capture — ION / TEE runtime focus
+
+Directory `rg34xx-inventory-20261122-204742/` contains a sanitized subset from the read-only
+inventory captured at `9b68302` (device ADB serial redacted here as well):
+
+- `tee-ion-runtime.txt`
+- `dmesg-hardware-lines.txt` — one occurrence of `usb_serial_number:` redacted; all other bytes verbatim
+- `iomem.txt`
+- `debugfs-memory-reservations.txt`
+- `meminfo.txt`
+
+Sanitization: only the device USB serial number was replaced with `[REDACTED]`; kernel virtual
+addresses and physical MMIO ranges are kept because they are diagnostic, not unique identifiers.
+No firmware images or environment partition were uploaded.
+
+Key findings in `tee-ion-runtime.txt`:
+
+- Kernel config exports `CONFIG_ION=y`, `CONFIG_TEE=y`, `CONFIG_OPTEE=y`;
+  `/dev/ion` exists, `/dev/tee0` and `/dev/teepriv0` are `NOT_PRESENT`.
+- ION heaps: `sys_user` (`ion_vin`, `ion_disp2`), `cma` (`nextui.elf`, 4,153,344 bytes), and an
+  empty `secure` heap. No orphaned allocations.
+- CMA area `0x77c00000..0x7bc00000`, 64 MiB total / 60,360 KiB free (~58 MiB), consistent with
+  `CmaTotal`/`CmaFree` in `meminfo.txt`.
+- Kernel log shows `optee: probing for conduit method from DT` followed by
+  `optee: api uid mismatch` — TEE conduit probed but UID did not match.
+- `NO_MATCHING_MODULES` for ION/TEE drivers (built into the kernel rather than loadable modules).
+
 ## Capture conditions
 
-- Device: `<serial-redacted>`, block device `/dev/mmcblk0`
+- Device: `[REDACTED]`, block device `/dev/mmcblk0`
 - Collector: `scripts/collect-rg34xx-readonly-inventory.sh` (read-only; device side confirmed no writes)
 - Environment: ADB platform-tools from Uotan Toolbox, Python 3.13.14
 
