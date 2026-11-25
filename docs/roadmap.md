@@ -347,3 +347,6 @@ The live FDT is now re-parsed and published with byte-matched DTB/JSON hashes. I
 
 
 The vendor U-Boot survey now resolves an additional identity nuance: RG34XX selects the `rg34xx_v1` panel struct, but that struct calls a common U-Boot init routine whose symbol name includes `fj035fhd05`. The routine label is not a replacement for the live DT driver name. The survey maps PE6 high → `lcd_type=old`, low → `boe`, matching the live `old` bootarg. Use target + DT driver + `lcd_type` + complete timing as the display-profile identity; do not equate the FJ035 init routine with support for pvaibhav's FJ035 Linux writer.
+
+
+The [related RG34XX-H divider-mismatch report](https://community.muos.dev/t/rg34xx-h-incorrect-display-refresh-rate/1825) is retained as a caution, not a transferable profile: a different unit reported ~106.6 Hz from nominal ~60 Hz with a related fixed /6 TCON path, and a later DTS revision changed DCLK/HT to 54 MHz/1679. Another unit could not reproduce the symptom. The user's RG34XX non-SP is measured near 59.63 Hz with 26 MHz/820×536; resolve its exact final DCLK divider from its byte-matched kernel #19 before testing any 120-Hz candidate. Never apply the MustardOS timing to this device by analogy.
