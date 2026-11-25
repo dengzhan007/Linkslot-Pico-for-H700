@@ -1,0 +1,75 @@
+# RG34XX PI12 电源灯生命周期
+
+## 默认行为
+
+| 阶段 | PI12 工作/电源灯 | 说明 |
+|---|---|---|
+| LK 早期启动钩子 | 点亮 | 目标是灯亮即可表示已越过早期初始化，用户可松开电源键 |
+| 前端 / 菜单 | 点亮 | 默认常亮 |
+| 游戏运行 `Phase::Playing` | 熄灭 | 只在状态变化时调用 C 服务 |
+| 游戏成就拍立得页 `Phase::Polaroids` | 熄灭 | 仍属于当前游戏会话 |
+| 游戏退出、退卡动画、前端菜单 | 点亮 | 离开 Playing/Polaroids 后恢复 |
+| 睡眠 / 唤醒 | 暂无独立策略 | 后续按 suspend/resume 生命周期补充 |
+
+当前默认启用“玩游戏熄灯”，没有用户设置项。前端设置开关等后续前端选项规划时再增加，未来默认仍为开启。
+
+**实机行为尚未验证。** 目前代码按高电平点亮实现；实际极性、灯亮时间和用户松开电源键的可操作时机，仍需 RG34XX 冷启动验证。
+
+## 板级证据与寄存器
+
+RG34XX（非 SP）原厂启动设备树（KNULLI 固定提交
+[57afa662009641d181f57241bcc480119b131530](https://github.com/knulli-cfw/knulli-linux/blob/57afa662009641d181f57241bcc480119b131530/package/boot/uboot-h700/rg34xx/boot_package/rg34xx.dts)）
+映射：
+
+- `work_led` → PIO bank I / PI12；
+- `low_pwr_led` → PIO bank I / PI11。
+
+[MustardOS RG34XX-H DTS](https://github.com/MustardOS/internal/blob/aef38ed9a870419a0fe4f351dac1bac58a84ba5e/device/rg34xx-h/package/sunxi.dts)
+包含相同映射。PI11 不属于本功能，不会被修改。原厂设备树将 UART3 控制器标记为 disabled，启动控制台为 UART0；PI12 配置不会占用 UART0 控制台。
+
+H700 PIO 字段：
+
+- PIO base：`0x0300b000`；
+- Port I bank index：8，bank stride：`0x24`；
+- PI12 CFG1/MUX1：偏移 `0x124`，pin12 的 4-bit mux 位域在 bits 19:16，function 1 = GPIO output；
+- PI12 DATA：偏移 `0x130`，bit 12；
+- PI11 是同一 DATA 寄存器 bit 11，使用 read-modify-write 保留此位和其他 GPIO。
+
+主线 H700 RG35XX-2024 DTS 对同一 PI12 使用 active-high LED 配置，仅作为 H700 同族极性旁证，不替代 RG34XX 本机电气验证：
+[mainline RG35XX-2024 DTS](https://github.com/torvalds/linux/blob/master/arch/arm64/boot/dts/allwinner/sun50i-h700-anbernic-rg35xx-2024.dts)。
+
+## 启动时序
+
+1. LK 的 `platform_init_mmu_mappings()` 把 `0x03000000–0x03100000` 1 MiB 外设窗口以 VA=PA 映射为 Device memory，覆盖 PIO@0x0300b000。
+2. `target_early_init()` 调用 `h700_rg34xx_power_led_early_init()`，早于 LK heap/thread 启动。
+3. 先把 PI12 输出数据锁存置高，再把 PI12 mux 切为 GPIO output，最后读回验证，避免 pinmux 切换期间误拉低。
+4. 若早期访问失败，`target_init()` 在 `platform_init()` 后重试；Linkslot C ABI 首次请求时也会在必要时尝试初始化。
+
+PIO MMU 映射只更新已有 ARM section translation table 的一个外设条目，不分配 DRAM，不改变 LK heap/stack/BSS/BL31 保留区，也不写 CCU/APB1、PMIC 或 CPU PLL。v2 Linux 运行态报告中 PIO/APB1 时钟为 100 MHz；LED driver 不改变这个时钟树。
+
+## Linkslot 游戏生命周期
+
+- `slot-frontend-state::GamePowerLedState` 是 no_std transition latch：首次同步请求前端态（`game_active=false`），之后仅在 `false ↔ true` 变化时发出请求。
+- 临时 overlay 修改 Linkslot 1.0.45 的 `crates/slot/src/session.rs`。Session 读取 `App::phase()`；Playing/Polaroids 代表游戏活动，其余阶段视为前端态。
+- `Session::feed()` 在处理动作后同步一次；`Session::update()` 在 App 动画更新后同步一次。状态 latch 让真实 C ABI/GPIO 访问只发生在状态转换时，不会逐帧写寄存器。
+- C service 只改 PI12 bit 12，使用 read-modify-write 保留 PI11 和同 Bank 其他位。开始游戏拉低熄灭，退出游戏拉高点亮。
+- FFI 失败会输出一次 transition error，不做逐帧重试；后续状态变化会再次请求。早期 target hook 与 target_init retry 负责常规启动时初始化。
+
+`upstream/linkslot` 保持不可变，所有 Session Rust 补丁由 `scripts/apply-linkslot-h700-frontend-core.py` 在隔离工作树生成。
+
+## 测试与未完成项
+
+已加入 fake PIO C host test，覆盖：
+- 初始化先置 output latch，再切 pinmux；
+- 保留 PI11 和 Port I 其他位；
+- 游戏开始/结束切换和重复请求幂等；
+- 无效 ABI、未初始化、pinmux 丢失和读回失败。
+
+Rust no_std state tests 覆盖初始前端态、开始/退出游戏各一次请求，以及 600 次重复状态采样不会重复发出硬件请求。
+
+仍需完成：
+- H700 AArch32/AArch64 cross-object 和 GitHub Actions 实际执行结果；
+- RG34XX 冷启动验证灯亮时机是否足够作为松开电源键提示；
+- 实机验证游戏时熄灭、退出后点亮，并确认 PI11 低电量灯不受影响；
+- 验证休眠唤醒是否会重置 pinmux，必要时在 resume hook 恢复；
+- 后续前端设置开关规划。

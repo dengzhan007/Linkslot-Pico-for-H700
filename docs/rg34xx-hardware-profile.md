@@ -29,6 +29,7 @@
 | Wi-Fi / Bluetooth | 2.4/5 GHz Wi-Fi，Bluetooth 4.2 | BaseOS 使用 RTL8821CS SDIO WLAN 模块和 RTL 蓝牙低功耗支持；固件/供电顺序需按本机验证 |
 | USB | H700 USB 2.0 OTG/Host 能力 | SoC 能力不等于本机连接器的具体角色/PHY 路由，需实机探测 |
 | PMIC / Power | BaseOS 提供 AXP2202 关机路径及电源状态集成 | 本 profile 暂不把 PMIC 寄存器访问当作已验证的裸机实现；需读取 RG34XX live DT/sysfs/内核日志确认实际绑定器件 |
+| Work/power LED | 工作灯 PI12；当前按高电平点亮实现 | RG34XX 原厂 DTS 与 MustardOS 配置均映射 `work_led=PI12`、`low_pwr_led=PI11`；PI11 不修改。实际极性与开机亮灯时机待本机冷启动实测，见 [电源灯生命周期](h700-power-led-lifecycle.md) |
 | Audio | BaseOS 有 RG34XX 专属 speaker amp kernel profile | 可用作 codec/功放行为参考；Linux 内核模块不能直接作为裸机驱动 |
 
 ## 3.1 BaseOS 已验证固件输入指纹

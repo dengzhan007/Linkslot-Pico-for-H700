@@ -291,3 +291,13 @@ The full evidence and caveats are recorded in [RG34XX CPUX live read-only audit]
 The Linux capture confirms useful runtime properties but does not authorize any PLL/CCU/PMIC writes.
 
 The read-only inventory collector now also emits a focused, indentation-preserving excerpt for `pll_cpu`, `pll_periph0`, `cpux` and `cpu` entries from Linux `/sys/kernel/debug/clk/clk_summary`. This can make Linux clock-tree/rate evidence easier to review when debugfs exports it, but it is not a direct `PLL_CPU`/`CPU_CFG` MMIO read and does not prove the BL33-entry clock state. Its static safety regression is wired into `.github/workflows/h700-arch-check.yml`; the new push run has not yet been confirmed.
+
+### 8.2 Parser-v2 and synchronized CPUX samples (2026-11-25)
+
+The second read-only report is archived at [reports/rg34xx-inventory-20261125-cpux-v2](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261125-cpux-v2). It regenerates the live FDT JSON with parser-v2 and adds six uptime-bracketed CPUFreq/clock-tree samples plus eight 150 ms samples including DCDC1 voltage.
+
+- The live `/opp_l_table` now exposes its table-level NVMEM `speed` reference and named `opp-microvolt-a1/b0/b1/c0/c1/c2` variants. The kernel drops 600/792/1032/1296/1344 MHz because selected voltage-property lookup yields `minuV=maxuV=0`. The final Linux table remains 480/720/936/1008/1104/1200/1320/1416/1512 MHz.
+- In eight repeated 150 ms samples, `scaling_cur_freq` reports 480 MHz for at least 1.1 seconds while `cpuinfo_cur_freq` reports 1008/1104 MHz and `pll_cpu` remains at 1008/1104 MHz; DCDC1 reads 950/1000 mV. This is a persistent policy-vs-clock reporting discrepancy, not evidence that the CPU physically ran at 480 MHz. The capture cannot distinguish a governor/thermal-policy constraint from a clock-driver request rejection.
+- CPU0–CPU3 remain in one shared cpufreq policy; CPU supply is AXP2202 DCDC1. Thermal AVCC remains uncalibrated. Raw SID `0x6c00` still does not authorize a speed-bin mask or voltage suffix.
+
+The report is read-only and does not authorize OPP expansion or any PLL/CCU/PMIC write. Keep the service `POLICY_ONLY`, `hardware_applied=0`; continue to block Auto/Boost and CPU voltage/frequency writes.

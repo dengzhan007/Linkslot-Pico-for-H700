@@ -11,23 +11,30 @@ This adds a real GammaOS LK project/target/platform selection path for the
 - `target/rg34xx_h700/rules.mk` selects the H700 platform and refuses to
   continue unless an explicit memory-layout approval and both memory values
   are supplied.
-- `target/rg34xx_h700/init.c` supplies side-effect-free `target_early_init()`
-  and `target_init()` hooks. LK `kernel/main.c` invokes both unconditionally;
-  the generic `target/init.c` is excluded because it includes MTK-only
-  defaults. The H700 hooks intentionally do not create fake fastboot/eMMC or
-  memory-scratch capabilities. Future board service initialization belongs
-  in `target_init()`, after `platform_init()` and before `apps_init()`, once
-  its hardware and memory prerequisites are validated.
+- `target/rg34xx_h700/init.c` supplies the RG34XX target lifecycle hooks. The
+  generic `target/init.c` is excluded because it imports MTK-only defaults.
+  H700 `platform_init_mmu_mappings()` maps the 1 MiB PIO/CCU register window
+  as Device memory; then `target_early_init()` turns on the PI12 work LED before
+  heap/thread startup. `target_init()` retries if early PIO access failed.
+  Neither hook creates fake fastboot/eMMC or memory-scratch capabilities.
 - `platform/h700/rules.mk` selects `ARCH=arm` / `ARM_CPU=cortex-a53` and assigns LK's generated `system-onesegment.ld` as the ELF linker script.
-- The same H700 platform rules list the policy-only CPU selector, C service ABI and static runtime owner as LK objects. These C units have no MMIO/PMIC/PLL access and no startup call site; listing them only makes their C ABI symbols available to a future validated H700 startup path.
+- The H700 platform rules list the policy-only CPU selector/service/runtime owner,
+  the RG34XX PI12 LED C service and the early PIO MMU mapping object. CPU
+  performance units remain policy-only; the LED service is the only current
+  board GPIO MMIO path and does not touch PMIC/CCU clocks or CPU PLL registers.
 - MediaTek `drvgen`/DWS generation is disabled for this non-MediaTek target.
   The separate six-file H700 overlay also excludes the incompatible MediaTek
   platform/common, platform/PAL, device and target-init sources. The MTK PAL
   timer uses MTK GPT, and its mutex implementation is only a no-op placeholder;
   H700 must provide its own timer, logging and synchronization services.
 
-The project currently enables **no H700 device drivers**. Its only target-owned lifecycle code is the two no-op LK hooks described above; its CPU policy/service/owner objects are policy-only C units with no hardware IO. This remains a build-system entry point and a memory-guard test, not a completed LK port.
+The project currently enables one minimal RG34XX board function: the PI12 work/power LED. It is not a general GPIO driver or input scanner. CPU performance objects remain policy-only; CPU DVFS, PMIC, MMC/SD hardware init and other H700 device drivers are not activated. This remains a scaffold, not a completed or bootable LK port.
 
+## RG34XX PI12 power LED startup
+
+The RG34XX non-SP vendor boot DTS in the pinned [KNULLI RG34XX boot package](https://github.com/knulli-cfw/knulli-linux/blob/57afa662009641d181f57241bcc480119b131530/package/boot/uboot-h700/rg34xx/boot_package/rg34xx.dts) maps `work_led` to PIO bank I / PI12 and `low_pwr_led` to PI11. [MustardOS RG34XX-H DTS](https://github.com/MustardOS/internal/blob/aef38ed9a870419a0fe4f351dac1bac58a84ba5e/device/rg34xx-h/package/sunxi.dts) has the same mapping. PI11 remains untouched. The boot DTS marks UART3 disabled; the active boot console is UART0.
+
+The driver uses PIO base `0x0300b000`, bank stride `0x24`, PI12 CFG1/MUX1 offset `0x124` (function 1 / GPIO output) and DATA offset `0x130` bit 12. It preloads the active-high on-level before pinmux transition and reads both fields back. Mainline H700 RG35XX-2024 configuration is only sibling-board polarity corroboration; exact RG34XX electrical polarity and power-key release timing still require a cold-boot test. See [power LED lifecycle](h700-power-led-lifecycle.md).
 ## Memory approval is deliberately fail-closed
 
 A normal invocation such as:
@@ -131,8 +138,10 @@ No addresses are assigned here for:
 - MMU page tables, DMA buffers or framebuffer ownership;
 - secondary-core parking or A53 coherency state.
 
-No H700 MMIO drivers, clock changes, pinmux writes, PMIC operations, storage
-writes, Boot0/TOC1 changes or device flash operations are introduced.
+The only introduced MMIO path is the narrowly scoped PI12 work LED: one
+1 MiB peripheral Device mapping plus PI12 pinmux/data read-modify-write. It
+does not alter CCU/APB1 rates or gates, PMIC registers, CPU PLL/OPP state,
+storage contents, Boot0/TOC1 or device flash.
 
 ## Validation scope
 
@@ -152,8 +161,10 @@ overlay in a disposable worktree and proves that:
 6. `target/rg34xx_h700/rules.mk` links its target lifecycle object and the
    source defines exactly one `target_early_init()` and `target_init()`.
 
-The fifth assertion is a source/build-graph check only. It does not execute the
-full LK target link or prove the object set fits an approved RG34XX memory map.
+The source/build-graph assertions do not execute the full LK target link or
+prove the object set fits an approved RG34XX memory map. The fake-PIO host test
+checks register ordering and bit preservation, not physical LED polarity or
+boot-time behavior on the handheld.
 
 The sentinel values are parser fixtures only; they are never written to the
 project defaults or treated as device addresses.

@@ -129,6 +129,18 @@ The SID thermal calibration bytes exist and decode into plausible 12-bit fields,
 
 Therefore calibration_status=not_certified. Do not use these temperatures for an automatic frequency controller, thermal cap certification, or Boost enablement.
 
+### 1.7 Parser-v2 live FDT and synchronized sampler result
+
+The follow-up capture at **2026-11-25 00:41:21 UTC** is archived in [reports/rg34xx-inventory-20261125-cpux-v2](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261125-cpux-v2). Its original `live-fdt.dtb` hash is identical to v1; parser output is now complete for named voltage variants and OPP-table NVMEM references.
+
+- `/opp_l_table` has `nvmem-cells = <&speed>` and `nvmem-cell-names = "speed"`; parser-v2 emits `opp-microvolt-a1/b0/b1/c0/c1/c2` properties.
+- The boot log drops 600/792/1032/1296/1344 MHz because regulator lookup returns `minuV=0 maxuV=0`. The Linux frequency list remains 480/720/936/1008/1104/1200/1320/1416/1512 MHz. This identifies an unavailable voltage-property lookup; it does not identify the correct SID mask or authorize the dropped OPPs.
+- Eight additional samples at 150 ms spacing show `scaling_cur_freq=480 MHz` continuously for at least 1.1 seconds, while `cpuinfo_cur_freq` reports 1008/1104 MHz, `pll_cpu` stays at 1008/1104 MHz and DCDC1 reports 950/1000 mV. The capture cannot distinguish a policy/governor constraint from a clock-driver rejection. This is not evidence of the CPU physically running at 480 MHz.
+- CPU0–CPU3 remain in one Linux shared policy; DCDC1 is the CPU supply. AVCC thermal calibration is still rejected by the kernel.
+
+The capture remains read-only and does not authorize any DVFS, PMIC or clock register write. The original raw FDT binary stays on the acquisition PC; only parser-v2 JSON was uploaded.
+
+
 ## 2. Memory ownership observations relevant to the broader port
 
 The capture reports one 1 GiB memory range [0x40000000, 0x80000000), 46 reserved ranges, and the following noteworthy regions:
@@ -161,8 +173,8 @@ The live FDT has no reserved-memory node; CMA debugfs is absent on this Linux 4.
 
 ## 4. Next actions
 
-1. Regenerate the live FDT report with parser v2, including named voltage variants and the OPP table's SID-cell reference; identify the exact running Linux 4.9.170 cpufreq source/build and reconcile its supported-hw mask / property suffix against the runtime frequency list. Do not borrow any candidate mapping as authorization.
-2. Run the six-sample uptime-bracketed collector added after inventory v1; compare each `cpuinfo_cur_freq` clock-framework read with `scaling_cur_freq` cached policy state and the adjacent CPUX `clk_summary` tree.
+1. Identify the exact running Linux 4.9.170 cpufreq source/build and reconcile its SID mask / voltage-property suffix with the now-complete parser-v2 live FDT and runtime frequency list. Do not borrow any candidate mapping as authorization.
+2. Explain the v2 persistent `scaling_cur_freq=480 MHz` versus `cpuinfo_cur_freq` / `pll_cpu=1008/1104 MHz` interval. Distinguish policy/governor/IPA constraints from a clock-driver refusal without writing hardware registers.
 3. Keep the shared CPUX PLL write path disabled until BL31→BL33 CPU1–CPU3 state, single-core handoff, pll_periph0 fallback behavior and timer continuity are proven.
 4. Resolve why the thermal driver rejects AVCC calibration or establish a separately verified sensor path before implementing closed-loop thermal policy.
 5. Keep the runtime C service POLICY_ONLY, hardware_applied=0, and the Linkslot CPU Performance row display-only/unavailable.
@@ -175,3 +187,10 @@ The live FDT has no reserved-memory node; CMA debugfs is absent on this Linux 4.
 - [SID cell decode](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261125-cpux/sid-cell-report.json)
 - [Memory map report](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261125-cpux/memory-map-report.json)
 - [Filtered hardware boot log](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261125-cpux/dmesg-hardware-lines.txt)
+
+### 5.1 Parser-v2 follow-up report
+
+- [Inventory v2 README](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261125-cpux-v2/README.md)
+- [Parser-v2 live FDT](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261125-cpux-v2/live-fdt.json)
+- [Synchronized CPU/regulator/clock sampler](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261125-cpux-v2/cpu-power-runtime.txt)
+- [SID decode](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261125-cpux-v2/sid-cell-report.json)
