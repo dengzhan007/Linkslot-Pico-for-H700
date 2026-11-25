@@ -29,7 +29,7 @@ The new FDT report is intentionally explicit that `opp-hz`/`opp-microvolt` value
 
 The matching Allwinner AXP2202 U-Boot reference driver describes DCDC1 voltage selector register `0x83` (mask `0x7f`), the DCDC enable register `0x80` (bit 0), 10 mV steps up to 1.2 V and 20 mV steps above 1.2 V, with a declared 0.5–1.54 V control range. These are register-format and driver-range references only; they do not authorize writes or establish the actual regulator voltage left by the stock boot chain. Never copy AXP717 descriptors or regulator limits from RG35XX-2024 into the RG34XX board profile.
 
-The same RG34XX device-tree reference exposes the SID speed cell at `/sunxi-sid-ng@03006000/speed@00` (offset 0, 2 bytes) and thermal calibration cell at `/sunxi-sid-ng@03006000/calib@14` (offset `0x14`, 8 bytes). The 2026-11-25 bounded capture reads speed raw `0x6c00` and thermal bytes `181113ab191b16bb`; mainline diagnostic classification calls `0x6c00` candidate bin 5, but the pinned vendor literal decoder does not match it, generic SoC identity is unavailable, and OPP authorization stays `not_approved`. The kernel log reports the H700 thermal sensor at `0x05070400` with **avcc is not calibrated**. The calibration bytes exist, but the driver did not accept AVCC calibration; temperatures remain diagnostic only and cannot drive closed-loop automatic DVFS. Full analysis: [RG34XX CPUX live read-only audit](rg34xx-cpux-live-audit-2026-11-25.md).
+The same RG34XX device-tree reference exposes the SID speed cell at `/sunxi-sid-ng@03006000/speed@00` (offset 0, 2 bytes) and thermal calibration cell at `/sunxi-sid-ng@03006000/calib@14` (offset `0x14`, 8 bytes). The 2026-11-25 bounded capture reads speed raw `0x6c00` and thermal bytes `181113ab191b16bb`; the mainline diagnostic classifier calls `0x6c00` candidate bin 5, but vendor source trees differ: two 4.9.170 candidates map it to mask 1 or default mask 4, while one 4.9.191 candidate maps it to mask 1 with a safer length-checked read. None is proven to match the running image, so OPP authorization stays `not_approved`. The kernel log reports the H700 thermal sensor at `0x05070400` with **avcc is not calibrated**. The calibration bytes exist, but the driver did not accept AVCC calibration; temperatures remain diagnostic only and cannot drive closed-loop automatic DVFS. Full source comparison and parser limitation: [RG34XX CPUX live read-only audit](rg34xx-cpux-live-audit-2026-11-25.md) §1.5.
 
 The current H700 handoff audit also leaves CPU1–CPU3 state unknown at BL31→BL33. CPU frequency is a shared cluster clock domain, not a per-Linkslot-core setting. Changing the shared CPU clock while an unaccounted secondary PE is running is unsafe. Keep the CPU service write path disabled until the single-core handoff invariant is positively proven.
 
@@ -204,17 +204,37 @@ The upstream 1.0.45 UI extension point was reviewed in the immutable snapshot. T
 - [ ] Add transition-ordering tests for voltage-before-frequency on upshift and frequency-before-voltage on downshift, plus PLL timeout and PMIC failure handling when a hardware transition layer is eventually introduced.
 - [ ] Add on-device sustained-load, cold/warm boot, battery/charger, audio-underrun, frame-pacing and thermal-soak tests before enabling Performance/Boost in release builds.
 
-### 8.2 Linux 4.9.170 cpufreq/OPP candidate-source audit (2026-11-25)
+### 8.2 Linux 4.9.170 cpufreq/OPP source variants and parser-v1 limits (2026-11-25)
 
-The pinned vendor tree `qiaoweibiao/T507_Kernel@98fcc7d3f112e51b0edfb71536da89cb2115106f` reports the same Linux version, 4.9.170, as the device. The running kernel's build ID/image hash has not been matched to this exact source tree, so this is a **same-version candidate**, not proof of the binary's source.
+The device reports Linux `4.9.170`, but no running-kernel build ID or image hash ties it to an exact public source commit. The reviewed branches disagree on raw SID `0x6c00`:
 
-The candidate `sun50i-cpufreq-nvmem.c` reads the two-byte SID speed cell into a `u32 *`, ignores the returned `len`, then switches on `*efuse_value`; `0x6c00` has no explicit case and would take the default branch assigning `supported_hw=0x4`. This is a potential out-of-bounds 32-bit read and must not be copied or trusted.
+| Candidate | Version / driver blob | `0x6c00` handling | Read safety |
+|---|---|---|---|
+| [qiaoweibiao/T507_Kernel@98fcc7d3f112e51b0edfb71536da89cb2115106f](https://github.com/qiaoweibiao/T507_Kernel/tree/98fcc7d3f112e51b0edfb71536da89cb2115106f) | 4.9.170 / `e121a4ddf28adb55e0b6bf78b450bd783b8b27bc` | No case; default `supported_hw=0x4` | Unsafe `u32 *` dereference of a two-byte cell without validating `len` |
+| [lineage-on-allwinner/android_kernel_allwinner_4.9@ce0c8395b269a6748a10f4917a0e1d06bd4978d0](https://github.com/lineage-on-allwinner/android_kernel_allwinner_4.9/tree/ce0c8395b269a6748a10f4917a0e1d06bd4978d0) | 4.9.170 / `9adc22b6782589b80e58ed86e5f97ff231cfda59` | Explicit `0x6c00 → supported_hw=0x1` | Same unsafe `u32 *` / missing-length-check pattern |
+| [CrealityTech/sonic_pad_os@7f37a7fbf4ad59907034715e3d967b9177de1cd4](https://github.com/CrealityTech/sonic_pad_os/tree/7f37a7fbf4ad59907034715e3d967b9177de1cd4) | 4.9.191 / `b524aa53e1bc047624d0bf78ce8504f959095fe7` | Explicit `0x6c00 → supported_hw=0x1` | Length-checked `u8 *` read, byte-wise little-endian assembly; not the target's reported version |
 
-In the same tree, OPP filtering uses bitwise intersection: an OPP node is accepted when `opp-supported-hw & supported_hw` is nonzero. Applying candidate mask `0x4` to the voltage-bearing live-DT OPP entries predicts 480/600/792/1008/1200/1344 MHz. The device's reported `scaling_available_frequencies` is 480/720/936/1008/1104/1200/1320/1416/1512 MHz. The mismatch demonstrates that the pinned same-version source cannot yet be used to infer the actual running supported-hardware mask or approved OPP list.
+The matching version number is therefore insufficient to identify the actual SID mapping. The two 4.9.170 candidates are both unsafe to copy. The 4.9.191 driver is a useful safety reference only, not evidence that it is the running target implementation.
 
-The same candidate source says `cpufreq-dt` uses `cpufreq_generic_get() = clk_get_rate(policy->clk)/1000`. Thus `cpuinfo_cur_freq` is a clock-framework sample, while `scaling_cur_freq` normally reports cached `policy->cur` for this target-based driver. Inventory v1 read these values and the later `clk_summary` at different times. The collector now takes six uptime-bracketed samples, 200 ms apart, reading both cpufreq values and CPUX clock-summary rows in each sample. The new static safety assertions have been added to the inventory test; complete Python/Actions verification is still pending.
+The Creality 4.9.191 source also demonstrates the named-voltage path: for some speed-cell groups it reads a separate `Icpu` cell and calls `dev_pm_opp_set_prop_name()` with a suffix such as `a0/a1/a2` or `b0/b1/b2`; the OPP core then looks for `opp-microvolt-<suffix>`. In that candidate, `0x6c00` uses the version-mask path, not the named suffix path. This behavior must not be assumed for the RG34XX binary.
 
-Do not infer an OPP mask from either mainline candidate bin 5 or the pinned vendor default mask 0x4. Keep all real DVFS paths disabled.
+#### Parser-v1 gap now fixed in source
+
+The uploaded live-FDT JSON was generated by parser v1. That parser emitted only base `opp-microvolt` and did not export:
+- `opp-microvolt-a1/b0/c0/c1/c2...` named voltage properties;
+- table-level OPP `nvmem-cells` and `nvmem-cell-names`.
+
+An RG34XX-H device-tree reference ([MustardOS DTS](https://github.com/MustardOS/internal/blob/aef38ed9a870419a0fe4f351dac1bac58a84ba5e/device/rg34xx-h/package/sunxi.dts), blob `64cad2f59b9596dfe6d31e0b52d4f682b1081b4c`) contains precisely these named voltage properties and a table-level `speed` NVMEM reference. This is family-level reference evidence, not proof of the exact live FDT content.
+
+The project parser now emits `voltage_microvolt_variants`, `nvmem_cells` and `nvmem_cell_names`; synthetic tests cover them and the H700 workflow has been wired to execute the new test. The existing report cannot be retroactively enriched from the old JSON—the original `live-fdt.dtb` was not uploaded. A new on-device inventory must regenerate `live-fdt.json` with parser v2 before the OPP table can be reconciled.
+
+#### OPP conclusion
+
+Earlier comparisons of candidate masks against parser-v1's base `opp-microvolt` entries are preliminary. They do not cover all named-voltage OPP variants or prove the table-level SID provider configuration. Neither the T507 default mask `0x4`, the Lineage mask `0x1`, nor mainline candidate bin 5 can be used to generate the RG34XX runtime OPP profile. The exact running cpufreq source/build, parser-v2 live OPP table, voltage-property selection and runtime frequency list must all be reconciled first.
+
+The same-version cpufreq-dt source candidate says `cpuinfo_cur_freq` reads `clk_get_rate(policy->clk)`, while `scaling_cur_freq` uses cached `policy->cur`. Inventory v1 read these fields and the later `clk_summary` sequentially. The collector now performs six uptime-bracketed samples, 200 ms apart, but a new device report is still required. Full Python/Actions verification of the parser/sampler changes is pending.
+
+Do not infer an OPP mask from either vendor candidate or the mainline diagnostic decode. Keep all real DVFS paths disabled.
 
 ## 9. Current project status
 
@@ -223,7 +243,7 @@ The H700 scaffold still has **no hardware DVFS driver and no register-write path
 Hardware status remains:
 - AXP2202 on I²C-5 / `0x34` is confirmed by the live Linux log.
 - CPU0's live-FDT `cpu-supply` phandle `0x4f` is confirmed to resolve to AXP2202 DCDC1. Linux regulator debugfs identifies the `cpu0` consumer and reports 1160 mV in the 2026-11-25 sample; this is framework state, not raw PMIC register readback.
-- The SID speed cell is read from the exact bounded NVMEM range: raw `0x6c00`. Mainline reference decode suggests candidate bin 5, but vendor literal matching fails, generic SoC revision is unavailable and `opp_authorization` remains `not_approved`.
+- The SID speed cell is read from the exact bounded NVMEM range: raw `0x6c00`. The mainline reference decoder labels it candidate bin 5; a T507 4.9.170 vendor source falls back to mask 4, a Lineage 4.9.170 source explicitly maps it to mask 1, and a Creality 4.9.191 source maps it to mask 1 using a length-checked read. The parser's earlier “vendor literal match” only referred to the T507 candidate and is not a universal vendor interpretation. No mapping is authorized; `opp_authorization` stays `not_approved`.
 - The pinned `sun50iw9` vendor-source audit provides CPUX offsets and a candidate parent-switch/lock sequence. Linux `clk_summary` observes `pll_cpu → cpu` and `pll_periph0=600 MHz`. The first inventory read cpufreq and `clk_summary` at different times; pinned cpufreq-dt source shows `cpuinfo_cur_freq` reads `clk_get_rate()` while `scaling_cur_freq` is cached `policy->cur`, so a schedutil transition may explain the apparent discrepancy. A six-sample uptime-bracketed collector has been added; synchronized runtime capture and exact BL33 CCU readback are still pending.
 - The H700 thermal sensor is present; raw calibration fields exist, but the kernel says `AVCC is not calibrated`. Current temperature values are diagnostic, not calibrated control input.
 - Linux has CPUs 0–3 online in one shared cpufreq policy. CPU1–CPU3 state at BL31→BL33 remains unknown.
