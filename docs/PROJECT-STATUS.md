@@ -391,3 +391,16 @@ KNULLI's [RG34XX developer documentation](https://knulli.org/devices/anbernic/rg
 - 上述均是 host/cross-build 和工具回归，不是刷写固件或实机启动证据。
 
 下一步先完成 release ZIP 与设备 `System/slot` / `armgba_libretro.so` 的 SHA 对照、ELF 符号表检查、armGBA C 结构偏移编译探针；并只读确认 Slot stderr 日志去向。完成这些前，不启用标记文件、不重启前端、不读进程内存。随后先测 UI presents，再在 GBA 运行时按已验证地址采样 committed frame counter。硬件 writer 继续禁用，`hardware_applied=0`。
+
+
+## 10. 原始 RG34XX boot-package 120 Hz 方案对照（2026-11-26）
+
+已直接审查 [TheGammaSqueeze/rgxx_boot_package_mods `rg34xx` branch](https://github.com/TheGammaSqueeze/rgxx_boot_package_mods/tree/rg34xx)，HEAD `64300b3b6137f7676b63b2e969e58db2870db48b`。完整解析记录见 [原始 boot-package 方案审计](rgxx-boot-package-120hz-review.md)。
+
+核心发现：
+- 这是**刷写后固定模式**，不是 runtime writer。60/120 两个包均包含 U-Boot、monitor、p1.dtbo、sunxi FDT；三项非 FDT 组件哈希一致。两份 137,728-byte DTB 的全属性对比只发现一项差异：`lcd_ht=840`（120）或 `1679`（60）；两者 `lcd_dclk_freq=54`、`lcd_vt=536`、720×480，面板名均为 `fog_fj035fhd05_v1`。对应 FDT nominal 119.936 / 60.004 Hz。
+- README 指示在 raw `/dev/mmcblk0` 的 `0x1004000` 偏移覆盖 1,310,720-byte `boot_package.fex` 并重启。脚本只检查 `sunxi-package` magic 后执行 `dd conv=notrunc`，不做写后 hash/readback；README 限定 Stock firmware 测试。当前设备不得执行该脚本。
+- pvaibhav Slot 是另一条 Linux runtime register writer 路线：对 stock-like 26 MHz / 820×536 profile 直接写 divider10 + PLL528-MHz pair；boot-package 路线则由内核初始化读取 54-MHz FDT 并使用不同的 HT。Slot probe 的硬条件是 26 MHz / HT820，原始 boot package 是 54 MHz / HT840/1679，因此两者 profile 不兼容，不能叠加。
+- 更关键的是，两个第三方方案的 FDT/allowlist panel string 都是 `fog_fj035fhd05_v1`；当前测试设备真实 live panel 为 `rg34xx_v1` + `lcd_type=old`。不得通过改面板名或降低 gate 来套用第三方实现。
+
+两种方式都没有实现本项目想要的 UI 120 Hz / GAME 默认 60 Hz 场景策略：boot package 是跨 UI/GAME 固定模式、刷包重启切换；pvaibhav Slot 是启动/唤醒应用同一个全局偏好，游戏进入不切换。保持本项目硬件 writer 关闭、`hardware_applied=0`。
