@@ -212,7 +212,7 @@ The device reports Linux `4.9.170`, but no running-kernel build ID or image hash
 |---|---|---|---|
 | [qiaoweibiao/T507_Kernel@98fcc7d3f112e51b0edfb71536da89cb2115106f](https://github.com/qiaoweibiao/T507_Kernel/tree/98fcc7d3f112e51b0edfb71536da89cb2115106f) | 4.9.170 / `e121a4ddf28adb55e0b6bf78b450bd783b8b27bc` | No case; default `supported_hw=0x4` | Unsafe `u32 *` dereference of a two-byte cell without validating `len` |
 | [lineage-on-allwinner/android_kernel_allwinner_4.9@ce0c8395b269a6748a10f4917a0e1d06bd4978d0](https://github.com/lineage-on-allwinner/android_kernel_allwinner_4.9/tree/ce0c8395b269a6748a10f4917a0e1d06bd4978d0) | 4.9.170 / `9adc22b6782589b80e58ed86e5f97ff231cfda59` | Explicit `0x6c00 → supported_hw=0x1` | Same unsafe `u32 *` / missing-length-check pattern |
-| [CrealityTech/sonic_pad_os@7f37a7fbf4ad59907034715e3d967b9177de1cd4](https://github.com/CrealityTech/sonic_pad_os/tree/7f37a7fbf4ad59907034715e3d967b9177de1cd4) | 4.9.191 / `b524aa53e1bc047624d0bf78ce8504f959095fe7` | Explicit `0x6c00 → supported_hw=0x1` | Length-checked `u8 *` read, byte-wise little-endian assembly; not the target's reported version |
+| [CrealityTech/sonic_pad_os@7f37a7fbf4ad59907034715e3d967b9177de1cd4](https://github.com/CrealityTech/sonic_pad_os/tree/7f37a7fbf4ad59907034715e3d967b9177de1cd4) | 4.9.191 / `b524aa53e1bc047624d0bf62ce8504f959095fe7` | Explicit `0x6c00 → supported_hw=0x1` | Length-checked `u8 *` read, byte-wise little-endian assembly; not the target's reported version |
 
 The matching version number is therefore insufficient to identify the actual SID mapping. The two 4.9.170 candidates are both unsafe to copy. The 4.9.191 driver is a useful safety reference only, not evidence that it is the running target implementation.
 
