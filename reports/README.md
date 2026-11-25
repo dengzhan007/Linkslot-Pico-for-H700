@@ -14,7 +14,7 @@
   AXP2202 ALDO1. `sdc1@0x04021000` (`mmc_host2`) is the SDIO DDR50 device consistent with Wi-Fi.
   The raw `cd-gpios` cells contain port 4 / pin 22 followed by vendor-specific config cells
   (the trailing `0x06` is not the pin); sysfs p6/p7 names also differ from the cmdline aliases.
-  This is topology/config evidence only: sdc2 was empty, no block read/write or LK card test was done.
+  Live pinctrl/CCU debugfs: sdc0 uses PF0–PF5 in default state with sdmmc0 module clock 100 MHz and bus/reset gates enabled; sdc1 uses PG0–PG5 with sdmmc1 module clock 200 MHz; sdc2 was in sleep state with its sdmmc2 clock/gates off. Raw pinconf values remain undecoded. The report corrects H616 MASK_DATA0 handling as a shared clock-update requirement for sdc0 too, not sdc2 only. This is topology/config evidence only: sdc2 was empty, no block read/write or LK card test was done.
 
 ### 2026-11-23 — RG34XX MMC map, second device capture (r2)
 
