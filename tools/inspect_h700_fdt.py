@@ -291,18 +291,40 @@ def _cpu_power_inventory(nodes: dict[str, dict[str, bytes]]) -> dict[str, Any]:
                     frequency = _number(child_props.get("opp-hz"))
                     if frequency is None:
                         continue
+                    voltage_variants = {}
+                    for property_name, raw_value in child_props.items():
+                        if not property_name.startswith("opp-microvolt-"):
+                            continue
+                        variant_name = property_name[len("opp-microvolt-"):]
+                        values = _cells(raw_value)
+                        if values:
+                            voltage_variants[variant_name] = values
                     entries.append({
                         "node": child_path,
                         "frequency_hz": frequency,
                         "voltage_microvolt_cells": _cells(child_props.get("opp-microvolt")),
+                        "voltage_microvolt_variants": voltage_variants,
                         "supported_hw_cells": _cells(child_props.get("opp-supported-hw")),
                         "turbo": "turbo-mode" in child_props,
                         "status": (_strings(child_props.get("status")) or ["okay"])[0],
                     })
+                table_props = nodes[table_path]
+                table_nvmem_names = _strings(table_props.get("nvmem-cell-names"))
+                table_nvmem_refs = _phandle_refs(
+                    table_props.get("nvmem-cells"),
+                    phandles,
+                    nodes,
+                    "#nvmem-cell-cells",
+                )
+                for index, ref in enumerate(table_nvmem_refs):
+                    if index < len(table_nvmem_names):
+                        ref["name"] = table_nvmem_names[index]
                 opp_tables[table_path] = {
                     "node": table_path,
-                    "compatible": _strings(nodes[table_path].get("compatible")),
-                    "shared": "opp-shared" in nodes[table_path],
+                    "compatible": _strings(table_props.get("compatible")),
+                    "shared": "opp-shared" in table_props,
+                    "nvmem_cells": table_nvmem_refs,
+                    "nvmem_cell_names": table_nvmem_names,
                     "entries": sorted(entries, key=lambda entry: entry["frequency_hz"]),
                 }
 
