@@ -199,3 +199,22 @@ The [`pvaibhav/slot` fork at `5206e3fa39aa4a9b702cd9048a07dab3b5ab95da`](https:/
 Do **not** copy its register addresses/values into this project. Its `rg34xx` allowlist expects `fog_fj035fhd05_v1`, 26 MHz and 820×536, while our live RG34XX report identifies `rg34xx_v1`; the fork's non-SP RG34XX support is not backed by a connected-device test. Its global 120-Hz startup/wake policy also does not implement our independent UI preference plus opt-in GAME 120-Hz switch (default off).
 
 Reuse only the engineering pattern: identify the exact live panel tuple, refuse unsupported combinations, separate policy from hardware ownership, verify every applied state, expose failure clearly and attempt a known-safe rollback. Our own C HAL must be based on fresh live `rg34xx_v1` timing readback and target-specific source/register evidence. No writer is approved.
+
+
+## 10. pvaibhav/slot on-device observation: RG34XX non-SP (2026-11-25)
+
+The [same-device UI/GAME read-only capture](pvaibhav-slot-rg34xx-live-capture-2026-11-25.md) confirms the live display stayed at approximately 60 Hz in both phases:
+
+| IRQ proxy | UI | GAME |
+|---|---:|---:|
+| display IRQ 292 | 59.648 Hz | 59.632 Hz |
+| display IRQ 293 | 59.614 Hz | 59.632 Hz |
+| driver `fps` values | 60.2 / 59.8 | 60.2 / 59.8 |
+
+The Slot process was found at `/mnt/sdcard/System/slot` (PID 2842); the GAME capture maps `armgba_libretro.so`. The config contains `high_refresh=1`, but no hardware refresh transition was observed. Neither UI-present FPS nor armGBA committed game FPS was measured. LCD IRQ is a scanout/vblank proxy, not either FPS metric.
+
+The report README records live FDT timing 26 MHz / HT 820 / VT 536, but the uploaded `live-fdt.json` omits the `interface` and `timing` subobjects and the raw DTB remains local. Re-run the current FDT parser and verify the generated JSON before using these values as a reproducible machine-readable record.
+
+The fork's target `rg34xx` path expects `fog_fj035fhd05_v1`; this device identifies as `rg34xx_v1`. Its exact panel gate therefore rejects the device. The timing tuple alone does not authorize the fork's PLL/divider writes. The `sunxi_dump` files exist and are root-writable, but no writes were performed. Do not bypass the model/panel gate, copy register constants, or enable our HAL writer. Retain `hardware_applied=0`.
+
+The capture also exposed first-version collector defects (ADB multi-argument `shell sh -c` quoting, multiline CRLF, IRQ regex variable clobbering, nested IRQ arrays, missing `/mnt/sdcard/System/slot` process path and an `fps` regex that matched `ref_fps`). Version and regression-check a corrected collector before the next capture.
