@@ -4,11 +4,11 @@
 
 **最后核对时间：** 2026-11-25（stock p4 kernel 与 live kernel GNU Build ID 精确匹配；cpufreq probe 完整 CFG 为 287 指令/69 严格块/106 edges，解出十个显式 speed 值及 name/mask/cleanup 路径；b0/b1 保持 mask=0 并跳过 `set_supported_hw`；目标 OPP core 与 parser-v4 38 节点 live-FDT / 九档 runtime list 对账支持 no-mask+b1 高置信软件模型；NVMEM 2-byte/32-bit 读取宽度风险已界定；新增 RG34XX UI120/GAME 默认 60 并可选请求 120 的纯 C 策略开关（游戏 120 Hz 默认关闭，待实测决定最终默认值）。仍待 live 32-bit speed operand、live `soc_ver&7`、真实 LCD HAL、温度、BL31 多核与 PMIC/CCU 门槛）  
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
-**下一项显示实机取证（优先级最高）：** 相关 sun50iw9 Linux 4.9 BSP 的 LCD_IF_HV 通常将 TCON DCLK divider 设为 6；而 pvaibhav writer 所称 0x06511044 正是 TCON0 DCLK register（offset 0x44，低 7 bits 为 divider），pvaibhav 60Hz word 0xf000000b 的 divider 为 11。设备现有 tcon_lcd=288MHz：/11 得 26.1818MHz、约59.57Hz，与 IRQ proxy 相近；/6 则 48MHz、约109.21Hz。两者冲突必须从 /sys/class/sunxi_dump/dump 只读请求 0x06511044、0x03001040 核实，绝不触碰 /sys/class/sunxi_dump/write。细节、来源与 Agent 命令见 [实机分析报告](pvaibhav-slot-rg34xx-live-capture-2026-11-25.md)。以上 BSP 是参考源，不是已证实的 running kernel #19 源码。  
+**下一项显示实机取证（优先级最高）：** RG34XX non-SP 的 `0x06511044` / `0x03001040` 已通过 `/sys/class/sunxi_dump/dump` 完成只读回读；当前值分别为 `0xf000000b`（TCON DCLK divider=11）与 `0x88001703`（PLL raw value，与 pvaibhav/slot 的 60-Hz baseline word 一致）。结合 `tcon_lcd=288 MHz`，若该时钟直接进入 TCON divider，则 DCLK 推算约 26.1818 MHz、820×536 下约 59.57 Hz，与显示 IRQ proxy 约 59.6 Hz 吻合。下一项不是再次读取 divider，而是匹配并反汇编精确 Linux 4.9.170 #19 的 `rg34xx_v1 + lcd_type=old` panel/TCON/PLL 初始化路径，并确认 PLL 位域与时钟父链；绝不使用 `/sys/class/sunxi_dump/write`，也不进行寄存器写入。随后分别补 UI present 与 armGBA committed-frame 计数，不能拿 LCD IRQ 代替前端/游戏 FPS。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`  
 
-**最新显示刷新实机结论（2026-11-25）：** pvaibhav/slot 在同一台 RG34XX non-SP 的 UI/GAME 两轮均约 59.6 Hz；未观察到 120 Hz 或场景切换。完整 live FDT 已上传并解析为 `rg34xx_v1` / RGB666 / 720×480 / DCLK property 26 MHz / HT×VT 820×536 / `lcd_type=old`，DTB 派生 nominal 59.155 Hz，显示 IRQ 计数斜率约 59.63 Hz（仅为 scanout/vblank proxy，不等于已确认的面板物理刷新率），最终 pixel-clock divider 尚未读回。Pinned BaseOS survey 的 vendor profile 是 PE6 high→old、low→boe，目标 rg34xx 使用 `rg34xx_v1`；其 U-Boot panel struct 选择 `rg34xx_v1`，虽调用一个 symbol 名含 `fj035fhd05` 的共享 init routine，但该函数标签不是 FDT 驱动名。pvaibhav fork 的 `rg34xx→fog_fj035fhd05_v1` allowlist 因而不匹配标准目标 profile，不能直接移植 writer。设备 Slot/core 文件 SHA 已记录，但尚未与 release ZIP 解包文件比较。详情见 [实机分析](pvaibhav-slot-rg34xx-live-capture-2026-11-25.md)。硬件 writer 保持禁用、`hardware_applied=0`。  
-**当前文档/工具验证：** FDT timing parser schema regression 修正后，H700 boot audit host/Windows tests 与 AArch32/AArch64 compile 通过（#45603372022 / #45603372281）；本轮 panel evidence / TCON divider 分析文档相关 H700 boot audit tools #45606763119 和 #45606769974 已完成成功（Linux host-tools + Windows PowerShell 两平台）。完整 Linkslot/LK feasibility 最新 run #45606529437 仍 in progress，不计为通过。  
+**最新显示刷新实机结论（2026-11-25）：** pvaibhav/slot 在同一台 RG34XX non-SP 的 UI/GAME 两轮均约 59.6 Hz；未观察到 120 Hz 或场景切换。完整 live FDT 已上传并解析为 `rg34xx_v1` / RGB666 / 720×480 / DCLK property 26 MHz / HT×VT 820×536 / `lcd_type=old`，DTB 派生 nominal 59.155 Hz，显示 IRQ 计数斜率约 59.63 Hz（仅为 scanout/vblank proxy，不等于已确认的面板物理刷新率），TCON0 DCLK divider 已读回为 11（`0xf000000b`），PLL raw value 为 `0x88001703`；实际 DCLK 仍是基于 288 MHz / 11 的推算值，未做独立物理测量。Pinned BaseOS survey 的 vendor profile 是 PE6 high→old、low→boe，目标 rg34xx 使用 `rg34xx_v1`；其 U-Boot panel struct 选择 `rg34xx_v1`，虽调用一个 symbol 名含 `fj035fhd05` 的共享 init routine，但该函数标签不是 FDT 驱动名。pvaibhav fork 的 `rg34xx→fog_fj035fhd05_v1` allowlist 因而不匹配标准目标 profile，不能直接移植 writer。设备 Slot/core 文件 SHA 已记录，但尚未与 release ZIP 解包文件比较。详情见 [实机分析](pvaibhav-slot-rg34xx-live-capture-2026-11-25.md)。硬件 writer 保持禁用、`hardware_applied=0`。  
+**当前文档/工具验证：** FDT timing parser schema regression 修正后，H700 boot audit host/Windows tests 与 AArch32/AArch64 compile 通过（#45603372022 / #45603372281）；本轮 panel evidence / TCON divider 分析文档相关 H700 boot audit tools #45606763119 和 #45606769974 已完成成功（Linux host-tools + Windows PowerShell 两平台）。完整 Linkslot/LK feasibility run [#45606529437](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45606529437) 已成功；随后状态文档 HEAD `d920adc` 的 H700 boot audit [#45606993197](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45606993197) 也成功。  
 **最近一次完整 feasibility 通过的 HEAD：** `8d44874db413c6bd5be71a293edb2b34682b4ba5`（[workflow #45579608578](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45579608578)，71/71 步骤成功；工件 ID `15005762318`）。
 **当前显示刷新策略实现提交：** `40113045a685413fb6887c621d9e0e982aee9303`，新增独立 `game_120hz_enabled` C policy 开关（默认关闭）。对应 AArch64/AArch32 ARM/Thumb-2 编译和 storage host regression [#45581459152](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45581459152) 已通过；Linux/Windows host-tools audit [#45581459275](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45581459275) 已通过，其中 `test-h700-display-refresh-policy.sh` 明确 PASS。完整 Linkslot/LK feasibility [#45581815012](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45581815012) 尚未取得终态；不将新提交标为完整 feasibility 通过。
 **本轮 CPU runtime owner 最新代码提交：** `072793f8b4bfce00683aa3d303eee62613fe41ab`（7 个连续提交）  
@@ -295,3 +295,18 @@ Linkslot 1.0.45 UI 当前已追加 display-only CPU row：`SYSTEM_SETTINGS` 为 
 
 
 **报告脱敏提醒（2026-11-25）：** 新上传的 `reports/pvaibhav-slot-runtime/fdt-reparse/` 当前包含设备唯一序列号字段：`device-sha256.txt` 中有 serial 行，`live-fdt.json` 的 bootargs 保留 androidboot.serialno，raw `live-fdt.dtb` 也包含该 bootargs。不要在后续提交/聊天中复制该编号。公开报告当前应以脱敏副本替换这些字段并删除公开的原始 DTB；但仅更新当前分支文件不能清除已公开 Git commit 历史，若需要彻底撤回，应先限制仓库访问或按仓库策略重写相关历史。首轮 UI/GAME 报告的 serial 已脱敏。
+
+
+### 8.1 TCON / PLL 只读回读更新（2026-11-25 19:59 +08:00）
+
+最新报告位于 [reports/pvaibhav-slot-runtime/tcon-readback](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/pvaibhav-slot-runtime/tcon-readback)，采集于 Linux 4.9.170 #19、与 FDT 重解析报告相同的启动周期：
+
+- `0x06511044` 原始值 `0xf000000b`；按已审查 TCON 字段定义，低 7 bits 为 divider=11，高 nibble 为 enable。
+- `0x03001040` 原始值 `0x88001703`；不解码 PLL N/M 位域。
+- `clk_summary` 同时记录 `tcon_lcd=288 MHz` / `pll_video0x4=288 MHz`、`pll_video0=72 MHz`、`display_top=200 MHz`；显示驱动状态 `ref_fps=59`、`fps=60.2`。
+
+pvaibhav/slot 固定源码 `crates/slot-power/src/refresh.rs` 的 60-Hz register pair 正好是 PLL `0x88001703` + DCLK divider `0xf000000b`，与本机只读值完全相同；其 120-Hz 写入候选则是 divider `0xf000000a` + PLL `0x88002b03`。这验证了该 fork 对当前 60-Hz 基线所用寄存器地址/值与本机状态相符，但**不授权移植 120-Hz writer**：该 fork 的 `rg34xx` allowlist 仍要求 `fog_fj035fhd05_v1`，本机真实 panel 是 `rg34xx_v1` 且 bootargs 为 `lcd_type=old`。
+
+以 `tcon_lcd=288 MHz` 直接馈入 divider 为条件，DCLK 推算为 26.1818 MHz；除以 live FDT 的 820×536 totals 得 59.569 Hz，与 UI/GAME IRQ proxy 59.61–59.65 Hz 一致到约 0.1%。这解释了 live FDT 26 MHz 整数属性计算出的 59.155 Hz 与 IRQ proxy 的差距，但仍不是示波器/光学测量，也没有验证 120-Hz 模式。PLL raw 位域、精确 kernel #19 显示驱动源码对应关系以及时钟树完整父链仍待核验。
+
+报告中的 FDT JSON 已脱敏；raw DTB 未发布。所有显示硬件 writer 继续关闭，`hardware_applied=0`。
