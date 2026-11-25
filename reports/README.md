@@ -11,8 +11,6 @@
 
 ### 2026-11-25 — pvaibhav/slot RG34XX UI vs GAME runtime capture (read-only, 30 s each)
 
-### 2026-11-25 — pvaibhav/slot RG34XX UI vs GAME runtime capture (read-only, 30 s each)
-
 - `pvaibhav-slot-runtime/` — two read-only runtime captures of the same RG34xx (`sun50iw9p1`, Linux `4.9.170`)
   taken back to back: `20261125-184406-ui` (27 samples / 29.6 s) and `20261125-184508-game` (23 samples /
   29.7 s). Display scanout IRQ rates are indistinguishable between phases — IRQ 292 `wakeupgen 88 dispaly`
