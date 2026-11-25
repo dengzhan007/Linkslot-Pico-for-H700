@@ -216,3 +216,8 @@ setter. The vendor LCD path derives FPS from DCLK/(HT×VT), configures PLL/LCD
 clock parents/rates and TCON timing fields. This is a reference only; the
 exact installed RG34XX kernel revision has not been identified from source.
 See [H700 display refresh policy §8](h700-display-refresh-policy.md#8-allwinner-sun50iw9-vendor-display-driver-reference).
+
+
+### Third-party 120 Hz implementation compatibility note
+
+The pinned [`pvaibhav/slot` refresh backend](https://github.com/pvaibhav/slot/blob/5206e3fa39aa4a9b702cd9048a07dab3b5ab95da/crates/slot-power/src/refresh.rs) has a useful fail-closed model/panel/timing gate and verified register-write/rollback pattern. However, its `rg34xx` allowlist requires `fog_fj035fhd05_v1` and 26 MHz / 820×536; the live RG34XX tested for this project reports `rg34xx_v1`. The third-party documentation explicitly lacks a connected non-SP RG34XX live test. Do not add `rg34xx_v1` to that writer's allowlist or copy its PLL/divider values. See [the full review](slot-pvaibhav-120hz-review.md).

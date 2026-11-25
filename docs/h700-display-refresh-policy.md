@@ -189,3 +189,12 @@ Consequences for our target:
 2. The actual operation spans panel timing, TCON, DE/display routing and clock parents/dividers. A dynamic UI/game mode switch must either use a proven driver API with explicit synchronization or own the whole LK display path; changing the emulator's frame cap alone only changes content update cadence.
 3. Treat the vendor Linux sources as a sequencing/reference map only. Before implementing LK MMIO/clock writes, confirm the exact H700 register map, the live `rg34xx_v1` panel initialization sequence, current scanout ownership, and a safe VBlank transition. Do not copy Linux `clk_set_rate()` calls or guessed register addresses into LK.
 
+
+
+## 9. Reference implementation review: pvaibhav/slot
+
+The [`pvaibhav/slot` fork at `5206e3fa39aa4a9b702cd9048a07dab3b5ab95da`](https://github.com/pvaibhav/slot/tree/5206e3fa39aa4a9b702cd9048a07dab3b5ab95da) provides a substantially more complete Linux-side H700 refresh implementation than our current policy-only code: exact DT/model gating, a two-register divider/PLL sequence, register readback, a best-effort 60-Hz rollback, startup/wake reapplication and LCD IRQ measurement. See the [detailed compatibility review](slot-pvaibhav-120hz-review.md).
+
+Do **not** copy its register addresses/values into this project. Its `rg34xx` allowlist expects `fog_fj035fhd05_v1`, 26 MHz and 820×536, while our live RG34XX report identifies `rg34xx_v1`; the fork's non-SP RG34XX support is not backed by a connected-device test. Its global 120-Hz startup/wake policy also does not implement our UI=120/GAME=60 scene policy.
+
+Reuse only the engineering pattern: identify the exact live panel tuple, refuse unsupported combinations, separate policy from hardware ownership, verify every applied state, expose failure clearly and attempt a known-safe rollback. Our own C HAL must be based on fresh live `rg34xx_v1` timing readback and target-specific source/register evidence. No writer is approved.

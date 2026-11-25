@@ -332,3 +332,8 @@
 4. 功能实现与验收测试同一个 PR 提交。
 5. 任何跨核心存档兼容结论必须附真实文件、SHA-256、长度和复现步骤。
 6. 先支持一台明确型号，再扩展其他 H700 设备 profile。
+
+
+### pvaibhav/slot 120 Hz reference review (2026-11-25)
+
+Reviewed the pinned [`pvaibhav/slot` implementation](https://github.com/pvaibhav/slot/tree/5206e3fa39aa4a9b702cd9048a07dab3b5ab95da). Its exact hardware gate, ordered PLL/divider writes, readback, 60-Hz rollback attempt and LCD-IRQ validation are valuable design references. It is not a compatible drop-in: its `rg34xx` gate requires `fog_fj035fhd05_v1` / 26 MHz / 820×536, whereas our live RG34XX identifies as `rg34xx_v1`; its non-SP RG34XX has no connected-device live test. The fork applies a global 120-Hz mode at startup/wake and does not switch UI/GAME modes. See [detailed review](slot-pvaibhav-120hz-review.md). Next: run the enhanced read-only FDT inventory on our actual device, then source the exact `rg34xx_v1` display initialization and clock route. Do not port its register values or enable hardware writes.

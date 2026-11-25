@@ -254,3 +254,6 @@ Linkslot 1.0.45 UI 当前已追加 display-only CPU row：`SYSTEM_SETTINGS` 为 
    - BL33/内存交接： [RG34XX boot handoff audit](rg34xx-boot-handoff-audit.md)
 4. 只把 CI 明确通过的提交标为已验证；host compile 不等于实机启动，合成 OPP 不等于真实可用频点。
 5. 每轮完成后先更新本文，再更新 roadmap 和对应专项文档；把新 commit SHA、Actions run URL、失败及尚存风险写入本文。
+
+
+**第三方 H700 120 Hz 实现审查（2026-11-25）：** 已审查 [`pvaibhav/slot` `5206e3fa39aa4a9b702cd9048a07dab3b5ab95da`](https://github.com/pvaibhav/slot/tree/5206e3fa39aa4a9b702cd9048a07dab3b5ab95da)。该 fork 的 Linux 侧实现确实比我们当前 policy-only 完整：`PanelRefresh::probe()` 对 model/panel/DT timing 严格 allowlist，使用 `sunxi_dump` 写 `DIVIDER 0x06511044` / `PLL 0x03001040`，120 Hz 先 divider 后 PLL，60 Hz 先 PLL 后 divider，读回两寄存器并在失败时 best-effort 回滚 60 Hz；启动时应用，唤醒时在开背光前重应用。其测量工具读取 LCD IRQ，而非依赖 stale `ref_fps`。但 **不能直接移植到本机**：fork 对 target `rg34xx` 的 gate 要求 `fog_fj035fhd05_v1 + 720×480 + lcd_dclk_freq=26 + HT/VT=820×536`，而本机最新 live FDT 是 `rg34xx_v1`；fork 自己也注明非 SP RG34XX 没有连接实机做 live test。BaseOS fleet panel survey 同样将 RG34XX 标为 `rg34xx_v1`。此外该 fork 设定为全局默认 120 Hz，启动/唤醒恢复，不在游戏期间切换；不满足我们的 UI 120 / GAME 60 需求。详细分析见 [`slot-pvaibhav-120hz-review.md`](slot-pvaibhav-120hz-review.md)。结论：借鉴 strict gate、C HAL owner、write ordering、readback、rollback 和 IRQ 验证；不复制其地址/数值或修改 panel allowlist。先用增强 FDT parser 重新只读采集本机 live `lcd_*` timing，再追查 `rg34xx_v1` 专用初始化和 TCON/DE/CCU/PLL 路径。硬件 writer 继续关闭，`hardware_applied=0`。
