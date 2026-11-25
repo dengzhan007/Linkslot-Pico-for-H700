@@ -228,3 +228,8 @@ The on-device process environment records `BASEOS_TARGET=rg34xx`, `BASEOS_PLATFO
 ### Panel driver identity and lcd_type are part of the qualified tuple
 
 The pinned BaseOS [H700 variant survey](https://github.com/pvaibhav/BaseOS/tree/63137afeda1c0bc4ff771be6f03012b7f8147aca/experiments/h700-boot-speed/variant-survey) maps `rg34xx` to panel driver `rg34xx_v1` at 720×480, while `fog_fj035fhd05_v1` is used by other targets/geometries. The live bootargs record `lcd_type=old`; the survey notes that the Linux panel driver uses this token to select a panel init sequence. Therefore panel capability qualification must include at least target, exact `lcd_driver_name`, `lcd_type`, and timing/clock profile. The pvaibhav fork's `rg34xx → fog_fj035fhd05_v1` gate does not cover the observed standard RG34XX profile. Do not replace the panel name in its allowlist or reuse its PLL/divider constants until the `rg34xx_v1 + lcd_type=old` path is independently proven.
+
+
+### Vendor U-Boot selected panel versus init routine label
+
+The pinned BaseOS RG34XX U-Boot inventory selects DT panel struct `rg34xx_v1` (`selected_by_dt=true`), then calls a shared init function with a symbol string containing `lcd_panel_uboot_fj035fhd05_v1_init`. The function label is not the selected DT driver name. The same BaseOS survey maps RG34XX PE6 high → `lcd_type=old`, low → `boe`; the live bootargs show `old`. Therefore the pvaibhav fork's `rg34xx → fog_fj035fhd05_v1` gate mismatches the standard RG34XX firmware profile; it must not be made to pass by aliasing the name. U-Boot sequencing does not prove Linux DCLK divider or runtime mode-switch safety.
