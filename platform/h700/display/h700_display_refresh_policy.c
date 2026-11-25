@@ -205,3 +205,35 @@ h700_display_refresh_get_rg34xx_timing_v1(
 
     return NULL;
 }
+
+int h700_display_refresh_get_period_ns_v1(
+    enum h700_display_refresh_mode mode,
+    uint64_t *period_ns
+)
+{
+    const h700_display_refresh_timing_v1_t *timing;
+    uint64_t total_pixels;
+
+    if (period_ns == NULL) {
+        return H700_DISPLAY_REFRESH_ERR_INVALID_ARGUMENT;
+    }
+
+    timing = h700_display_refresh_get_rg34xx_timing_v1(mode);
+    if (timing == NULL ||
+        timing->lcd_dclk_freq_mhz == 0u ||
+        timing->lcd_ht == 0u ||
+        timing->lcd_vt == 0u) {
+        return H700_DISPLAY_REFRESH_ERR_INVALID_ARGUMENT;
+    }
+
+    /*
+     * Period = htotal * vtotal / pixel_clock.
+     * With the profile clock expressed in MHz:
+     *   period_ns = htotal * vtotal * 1000 / clock_MHz.
+     * Integer truncation matches the upstream Slot KMS mode_period helper.
+     */
+    total_pixels = (uint64_t)timing->lcd_ht * (uint64_t)timing->lcd_vt;
+    *period_ns = (total_pixels * 1000ull) /
+                 (uint64_t)timing->lcd_dclk_freq_mhz;
+    return H700_DISPLAY_REFRESH_STATUS_OK;
+}

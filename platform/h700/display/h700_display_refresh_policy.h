@@ -112,4 +112,13 @@ h700_display_refresh_get_rg34xx_timing_v1(
     enum h700_display_refresh_mode mode
 );
 
+/*
+ * Returns the frame period derived from htotal * vtotal / pixel clock.
+ * This is timing arithmetic only; it does not wait for VBlank or apply a mode.
+ */
+int h700_display_refresh_get_period_ns_v1(
+    enum h700_display_refresh_mode mode,
+    uint64_t *period_ns
+);
+
 #endif /* H700_DISPLAY_REFRESH_POLICY_H */

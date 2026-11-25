@@ -51,6 +51,30 @@ int main(void)
           timing->refresh_millihz == 60006u,
           "60 Hz profile matches the RG34XX timing source");
 
+    period_ns = 0u;
+    rc = h700_display_refresh_get_period_ns_v1(
+        H700_DISPLAY_REFRESH_120HZ, &period_ns);
+    CHECK(rc == H700_DISPLAY_REFRESH_STATUS_OK &&
+          period_ns == 8337777ull,
+          "120 Hz period is derived from pixel clock and totals");
+
+    period_ns = 0u;
+    rc = h700_display_refresh_get_period_ns_v1(
+        H700_DISPLAY_REFRESH_60HZ, &period_ns);
+    CHECK(rc == H700_DISPLAY_REFRESH_STATUS_OK &&
+          period_ns == 16665629ull,
+          "60 Hz period is derived from pixel clock and totals");
+
+    CHECK(h700_display_refresh_get_period_ns_v1(
+              H700_DISPLAY_REFRESH_120HZ, NULL) ==
+              H700_DISPLAY_REFRESH_ERR_INVALID_ARGUMENT,
+          "null period output is rejected");
+
+    CHECK(h700_display_refresh_get_period_ns_v1(
+              (enum h700_display_refresh_mode)90, &period_ns) ==
+              H700_DISPLAY_REFRESH_ERR_INVALID_ARGUMENT,
+          "period calculation rejects unsupported modes");
+
     rc = h700_display_refresh_policy_set_scene_v1(
         &policy, H700_DISPLAY_SCENE_GAME);
     CHECK(rc == H700_DISPLAY_REFRESH_POLICY_ONLY,

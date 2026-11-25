@@ -56,7 +56,48 @@ The versioned C API provides:
 
 No Frontend/Linkslot interface, event hook, persistent configuration format, or user-visible settings row is created yet. The policy can be unit-tested and linked into the H700 build graph without binding it to an emulator or game frontend.
 
-## 4. Runtime switching is not implemented
+## 4. Slot upstream reference audit
+
+Reviewed [slot-cfw/slot](https://github.com/slot-cfw/slot) at `main` commit
+[8fbc6084ece5bc9b4b18a0fb6ef423df21606f49](https://github.com/slot-cfw/slot/commit/8fbc6084ece5bc9b4b18a0fb6ef423df21606f49).
+
+The current source does **not** contain an RG34XX-specific 120 Hz mode write or
+a UI/game refresh-mode toggle. The relevant behavior is split by the BaseOS
+platform:
+
+- `crates/slot/tests/baseos.rs` uses `BASEOS_PLATFORM=h700` and
+  `BASEOS_TARGET=rg34xx` in its RG34XX release fixture.
+- `crates/slot/src/device_app.rs` selects `KmsSurface` only when
+  `BASEOS_PLATFORM == "rk3568"`; the H700 value selects `FbdevSurface`.
+- `crates/slot-gfx/src/fbdev.rs` probes `/sys/class/graphics/fb0/{mode,modes}`,
+  visible framebuffer size and virtual size. These paths provide dimensions,
+  not a refresh-rate timing. It calls `eglSwapInterval(display, 1)`.
+- The common `Surface::refresh_period()` default is `None`. With the H700
+  FBDEV surface, `device_app` therefore creates `Pacer::new()`, whose default
+  interval is 16,760 µs (about 59.67 presentations/s). This is not a 120 Hz
+  frontend frame loop and it does not program the panel mode.
+- The separate RK3568 KMS path enumerates DRM connector modes, chooses a mode
+  carrying `DRM_MODE_TYPE_PREFERRED` (otherwise the first available), passes
+  the selected full mode to `drmModeSetCrtc`, and computes the frame interval
+  from `clock × htotal × vtotal`. `device_app` then uses `Pacer::fixed(period)`.
+  It follows the mode exported by the display driver; it does not hard-code
+  `120` or switch to 60 Hz when a game starts.
+
+This is useful as an architectural reference: **the display driver/HAL owns
+mode enumeration and application; the renderer consumes the actual timing to
+pace frames**. The Slot Linux FBDEV/EGL/DRM implementation is not portable to
+our GammaOS LK bare-metal target. Our requested UI-120/game-60 policy remains
+a separate target behavior and must be implemented by a future RG34XX C
+display HAL plus a timing-aware scheduler; it is not evidence that Slot itself
+performs this scene switch.
+
+The H700 timing helper added in this project follows the same arithmetic as
+Slot's KMS `mode_period`: `period_ns = htotal × vtotal × 1000 / clock_MHz`.
+For the candidate profiles it yields 8,337,777 ns at 119.947 Hz and
+16,665,629 ns at 60.006 Hz. These are calculated periods, not observed
+VBlank intervals.
+
+## 5. Runtime switching is not implemented
 
 Changing `lcd_ht` is a panel/TCON timing change, not simply changing an emulator's FPS cap. A future display HAL must establish, at minimum:
 
@@ -68,7 +109,7 @@ Changing `lcd_ht` is a panel/TCON timing change, not simply changing an emulator
 
 No such hardware transition function exists yet. Do not add register writes, PLL changes, panel power cycling, or automatic boot-package modifications until these gates are supported by RG34XX-specific evidence and tests. The default 120 Hz value in the policy is currently a **requested mode only**.
 
-## 5. Validation
+## 6. Validation
 
 The display policy test script is `scripts/test-h700-display-refresh-policy.sh`. The H700 AArch32/AArch64 build script compiles the policy for AArch64, AArch32 ARM-state and AArch32 Thumb-2; `platform/h700/rules.mk` links the policy object into the target graph. GitHub Actions invokes the host policy test from `.github/workflows/h700-arch-check.yml`.
 

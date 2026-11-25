@@ -41,6 +41,19 @@ The RG34XX-specific [`rgxx_boot_package_mods` branch](https://github.com/TheGamm
 The external DTB says `lcd_driver_name="fog_fj035fhd05_v1"`; the project's existing live-FDT evidence reports `rg34xx_v1`. Until the physical panel/revision mapping is confirmed, these timings are a candidate reference only. The project does not flash or modify the external boot-package image and has no real TCON timing writer yet. See [H700 display refresh policy](h700-display-refresh-policy.md) for the policy API, exact values and pending hardware gates.
 
 
+### Slot frontend comparison
+
+The current `slot-cfw/slot` `main` source was checked at commit
+`8fbc6084ece5bc9b4b18a0fb6ef423df21606f49`. Its RG34XX BaseOS fixture
+sets `BASEOS_PLATFORM=h700`, and the frontend selects FBDEV for that
+platform; it does not set a 120 Hz panel mode. FBDEV reads framebuffer
+dimensions and uses EGL swap interval 1, while the common pacer falls back to
+16,760 µs. The source's distinct RK3568 KMS backend selects the DRM preferred
+mode and derives its pacing period from the actual DRM timing. See the
+[Slot upstream reference audit](h700-display-refresh-policy.md#4-slot-upstream-reference-audit).
+This is a useful display/HAL separation pattern, not proof of a Slot-provided
+RG34XX 120 Hz mode switch.
+
 ## 3.1 BaseOS 已验证固件输入指纹
 
 BaseOS-MultiFrontend 为 RG34XX 准备的输入镜像固定为：
