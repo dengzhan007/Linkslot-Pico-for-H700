@@ -4,6 +4,7 @@
 
 **最后核对时间：** 2026-11-25（stock p4 kernel 与 live kernel GNU Build ID 精确匹配；cpufreq probe 完整 CFG 为 287 指令/69 严格块/106 edges，解出十个显式 speed 值及 name/mask/cleanup 路径；b0/b1 保持 mask=0 并跳过 `set_supported_hw`；目标 OPP core 与 parser-v4 38 节点 live-FDT / 九档 runtime list 对账支持 no-mask+b1 高置信软件模型；NVMEM 2-byte/32-bit 读取宽度风险已界定；新增 RG34XX UI120/GAME 默认 60 并可选请求 120 的纯 C 策略开关（游戏 120 Hz 默认关闭，待实测决定最终默认值）。仍待 live 32-bit speed operand、live `soc_ver&7`、真实 LCD HAL、温度、BL31 多核与 PMIC/CCU 门槛）  
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
+**下一项显示实机取证（优先级最高）：** 相关 sun50iw9 Linux 4.9 BSP 的 LCD_IF_HV 通常将 TCON DCLK divider 设为 6；而 pvaibhav writer 所称 0x06511044 正是 TCON0 DCLK register（offset 0x44，低 7 bits 为 divider），pvaibhav 60Hz word 0xf000000b 的 divider 为 11。设备现有 tcon_lcd=288MHz：/11 得 26.1818MHz、约59.57Hz，与 IRQ proxy 相近；/6 则 48MHz、约109.21Hz。两者冲突必须从 /sys/class/sunxi_dump/dump 只读请求 0x06511044、0x03001040 核实，绝不触碰 /sys/class/sunxi_dump/write。细节、来源与 Agent 命令见 [实机分析报告](pvaibhav-slot-rg34xx-live-capture-2026-11-25.md)。以上 BSP 是参考源，不是已证实的 running kernel #19 源码。  
 **工作分支：** `porting/linkslot-1.0.45-feasibility`  
 
 **最新显示刷新实机结论（2026-11-25）：** pvaibhav/slot 在同一台 RG34XX non-SP 的 UI/GAME 两轮均约 59.6 Hz；未观察到 120 Hz 或场景切换。完整 live FDT 已上传并解析为 `rg34xx_v1` / RGB666 / 720×480 / DCLK property 26 MHz / HT×VT 820×536 / `lcd_type=old`，DTB 派生 nominal 59.155 Hz，IRQ 实测约 59.63 Hz，最终 pixel-clock divider 尚未读回。Pinned BaseOS survey 的 vendor profile 是 PE6 high→old、low→boe，目标 rg34xx 使用 `rg34xx_v1`；其 U-Boot panel struct 选择 `rg34xx_v1`，虽调用一个 symbol 名含 `fj035fhd05` 的共享 init routine，但该函数标签不是 FDT 驱动名。pvaibhav fork 的 `rg34xx→fog_fj035fhd05_v1` allowlist 因而不匹配标准目标 profile，不能直接移植 writer。设备 Slot/core 文件 SHA 已记录，但尚未与 release ZIP 解包文件比较。详情见 [实机分析](pvaibhav-slot-rg34xx-live-capture-2026-11-25.md)。硬件 writer 保持禁用、`hardware_applied=0`。  
@@ -288,3 +289,6 @@ Linkslot 1.0.45 UI 当前已追加 display-only CPU row：`SYSTEM_SETTINGS` 为 
 
 
 **相关 H700 时钟分频风险参考（非本机证据）：** MustardOS 2026-11-02 的另一台 RG34XX-H 曾因相关 `sun50iw9` BSP 的 RGB/HV TCON 固定 /6 与 PLL 最低 288 MHz，出现 DTB 标称约 59.97 Hz、实测约 106.6 Hz；其 DTS 后来将该机 DCLK/HT 改为 54 MHz/1679，见 [讨论](https://community.muos.dev/t/rg34xx-h-incorrect-display-refresh-rate/1825) 和 [修正提交](https://github.com/MustardOS/internal/commit/76e454dfa9758a99f85115f80a29121dabb13a01)。另一台 RG34XX-H 无法复现，说明不同修订/内核组合有差别。该数据不能用于本机，只支持一个结论：必须从精确 kernel #19 追出最终 TCON DCLK divider，不能只信 DTB property 或复制 54MHz/1679。
+
+
+**TCON divider investigation added:** 0x06511044 corresponds to TCON0 DCLK at struct offset 0x44 in the related pinned sun50iw9 BSP; bits [6:0] are divider, bits [31:28] enable. That BSP's generic HV path picks divider 6, while pvaibhav's 60-Hz mode word encodes divider 11. With our observed 288-MHz tcon_lcd clock, /11 predicts ~59.57 Hz, /6 predicts ~109.21 Hz. This makes a read-only sunxi_dump/dump request for 0x06511044 and 0x03001040 the next decisive check; no write-node or MMIO writes are allowed. Exact 4.9.170 #19 implementation still needs provenance.
