@@ -243,11 +243,14 @@ The live FDT has no reserved-memory node; CMA debugfs is absent on this Linux 4.
 
 ## 4. Next actions
 
-1. Identify the exact shipping Linux 4.9.170 cpufreq/OPP binary or a source/build fingerprint that explains the unique `no-mask + b1` behavior. Determine whether the target driver calls `dev_pm_opp_set_prop_name("b1")`, how the table speed NVMEM cell is used, and whether `supported_hw` is registered. Do not infer `0x6c00 → b1` from the frequency match alone.
+1. Run the updated read-only collector and inspect `kernel-driver-provenance.txt`: `/sys/kernel/notes` hash / finite notes prefix (GNU build-id when present), `/proc/version`, relevant config, cpufreq platform driver/device binding, and filtered kallsyms symbol names. Then identify the exact shipping Linux 4.9.170 cpufreq/OPP binary/source path and explain the unique `no-mask + b1` behavior. Determine whether the target driver calls `dev_pm_opp_set_prop_name("b1")`, how the table speed NVMEM cell is used, and whether `supported_hw` is registered. Do not infer `0x6c00 → b1` from the frequency match alone.
 2. Obtain a safe, read-only BL33-entry CPUX / PMIC state record only after the entry ABI and MMIO access prerequisites are proven. Distinguish Linux framework regulator readings from raw AXP2202 registers and Linux clk_summary from direct CCU readback. Do not issue test writes.
 3. Prove BL31→BL33 CPU1–CPU3 state, single-core execution ownership, shared CPUX PLL coordination, pll_periph0 fallback behavior and timer continuity before any shared-PLL transition design.
 4. Resolve AVCC/thermal calibration rejection or establish an independently validated temperature sensor path.
 5. Keep the runtime C service `POLICY_ONLY`, `hardware_applied=0`, and the Linkslot CPU Performance row display-only/unavailable. No Balanced/Performance/Boost transition is authorized.
+
+
+The new provenance-only collector is validated on Linux and Windows and across the three H700 target compile modes. The next device report should be named `reports/rg34xx-inventory-20261125-cpux-v4/`; it must include `kernel-driver-provenance.txt`. This collection does not touch CPUFreq controls, PMIC/PLL/CCU registers, SID contents beyond the existing two bounded cells, or vendor SMC/ioctl interfaces.
 
 ## 5. Source report files
 

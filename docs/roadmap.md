@@ -144,7 +144,8 @@
 - [x] OPP candidate analyzer 的完整 u32 mask 假设、多版本 OPP cells、set-cover exact witness 与 voltage-triplet 回归通过 H700 Linux/Windows、storage-host regression 和 AArch64/AArch32 ARM/Thumb-2 编译：#45537478202、#45537478198；验证 HEAD `da41806e47dbd2e0d57e23e9ff6ff405a5514e29`。
 - [x] 已用真实 parser-v3 `live-fdt.json` + 同次 `cpu-power-runtime.txt` 运行修正后的 OPP candidate analyzer：38 个 OPP entry 中 14 个 `-ab` 节点均 `supported_hw_present=false`；五组 runtime list 一致为九档。唯一精确模型为 no table-level `supported_hw` + named voltage suffix `b1`，全部 one-cell mask 模型均无 exact witness。此为运行表结构指纹，不是 SID 解码或 OPP 授权。
 - [x] 对照四个公开 `sun50iw9` cpufreq-NVMEM 候选：两个 Linux 4.9.170 版本分别把 `0x6c00` 映射为 mask `0x4` / `0x1` 且不设置 named voltage；Creality 4.9.191 版本需要额外 `Icpu` cell 且 `0x6c00` 仍走 mask；Radxa variant 的 speed-only 路径走 `a0` + mask。均无法复现 v3 的 no-mask + `b1`。这只是公开候选排除，不是目标 binary 识别。
-- [ ] 取得/识别 RG34XX 实际 Linux 4.9.170 kernel build fingerprint 或匹配源码，解释 custom OPP property-selection path；在此之前不解码 SID `0x6c00 → b1`。
+- [x] 扩展只读 collector，增加 `kernel-driver-provenance.txt`：kernel release/version、`/sys/kernel/notes` hash/有限 notes bytes、相关 config、cpufreq platform driver/device bindings、模块名与过滤后的 OPP/NVMEM kallsyms symbol names（不输出地址）；H700 Linux/Windows audit + H700 cross-compile/storage regression 全通过 #45543371548、#45543371507。
+- [ ] 运行 v4 inventory 并检查 `kernel-driver-provenance.txt`；利用实际 build-id / driver binding / symbol names 识别 RG34XX Linux 4.9.170 cpufreq/OPP 实际 binary/source path，解释 custom OPP property-selection path；不得推断 SID `0x6c00 → b1`。
 - [ ] 在具备安全 BL33-entry 只读访问依据后读取/验证 AXP2202 DCDC1 与 CPUX PLL/CCU 实际状态；先证明 CPU1–CPU3 handoff、单核所有权和 timer continuity，完成前不允许任何共享 CPU PLL 写入。
 
 ### C1. CPU performance modes / H700 DVFS (architecture first)
