@@ -535,6 +535,91 @@ mod h700_cpu_performance_quick_row_tests {
     app_path.write_text(app, encoding="utf-8")
 
 
+
+def patch_session_power_led(source: Path) -> None:
+    """Tie the RG34XX PI12 work LED to Linkslot's actual game session."""
+    path = source / "crates/slot/src/session.rs"
+    text = path.read_text(encoding="utf-8")
+
+    import_anchor = "use crate::prefetch::Prefetch;\n"
+    if text.count(import_anchor) != 1:
+        raise RuntimeError("unexpected Linkslot Session imports")
+    rust_ffi = """
+#[cfg(target_os = "none")]
+extern "C" {
+    fn h700_rg34xx_power_led_set_game_active(active: u32) -> i32;
+}
+
+fn set_h700_power_led_game_active(active: bool) -> i32 {
+    #[cfg(target_os = "none")]
+    {
+        // The C service retries initialization when the early target hook
+        // could not access PIO yet.
+        unsafe { h700_rg34xx_power_led_set_game_active(u32::from(active)) }
+    }
+    #[cfg(not(target_os = "none"))]
+    {
+        let _ = active;
+        0
+    }
+}
+"""
+    text = text.replace(import_anchor, import_anchor + rust_ffi, 1)
+
+    field_anchor = "    driven: bool,\n"
+    if text.count(field_anchor) != 1:
+        raise RuntimeError("unexpected Linkslot Session fields")
+    text = text.replace(
+        field_anchor,
+        field_anchor + "    power_led: slot_frontend_state::GamePowerLedState,\n",
+        1,
+    )
+
+    init_anchor = "            driven: false,\n"
+    if text.count(init_anchor) != 1:
+        raise RuntimeError("unexpected Linkslot Session initializer")
+    text = text.replace(
+        init_anchor,
+        init_anchor + "            power_led: slot_frontend_state::GamePowerLedState::default(),\n",
+        1,
+    )
+
+    feed_anchor = "        self.sync_pad();\n    }\n\n    fn sync_pad(&mut self) {"
+    if text.count(feed_anchor) != 1:
+        raise RuntimeError("unexpected Linkslot input-feed tail")
+    text = text.replace(
+        feed_anchor,
+        "        self.sync_power_led();\n" + feed_anchor,
+        1,
+    )
+
+    update_anchor = "    pub fn update(&mut self, dt: f32) {\n        self.bridge_link(|app| app.update(dt));\n"
+    if text.count(update_anchor) != 1:
+        raise RuntimeError("unexpected Linkslot Session update entry")
+    method = """    /// Keep the work LED aligned with game lifecycle transitions. The
+    /// no_std state suppresses repeat requests, so MMIO is called only once
+    /// on each transition rather than on every rendered frame.
+    fn sync_power_led(&mut self) {
+        let active = matches!(
+            self.app.phase(),
+            Phase::Playing { .. } | Phase::Polaroids { .. }
+        );
+        if let Some(active) = self.power_led.request_game_active(active) {
+            let result = set_h700_power_led_game_active(active);
+            if result != 0 {
+                eprintln!("slot: RG34XX power LED transition failed: {result}");
+            }
+        }
+    }
+
+"""
+    text = text.replace(update_anchor, method + update_anchor, 1)
+    text = text.replace(update_anchor + "        self.collect_cheevos();",
+                        update_anchor + "        self.sync_power_led();\n        self.collect_cheevos();",
+                        1)
+
+    path.write_text(text, encoding="utf-8")
+
 def apply(source: Path, crate_root: Path) -> None:
     source = source.resolve()
     crate_root = crate_root.resolve()
@@ -713,6 +798,7 @@ pub fn sha256_reader<R: Read>(reader: R) -> std::io::Result<String> {
     )
 
     patch_frontend(source)
+    patch_session_power_led(source)
 
     paths = [
         "crates/slot-input",
@@ -739,12 +825,13 @@ pub fn sha256_reader<R: Read>(reader: R) -> std::io::Result<String> {
         "crates/slot/src/frontend.rs",
         "crates/slot/src/app.rs",
         "crates/slot/src/core_picker.rs",
+        "crates/slot/src/session.rs",
     ]
     changed = run_git(source, "status", "--short", "--", *paths)
     if not changed:
         raise RuntimeError("business/state overlay produced no source changes")
     run_git(source, "diff", "--check", "--", *paths)
-    print("Applied persistent H700 no_std Linkslot packages to the isolated 1.0.36 checkout:")
+    print("Applied persistent H700 no_std Linkslot packages to the isolated 1.0.45 checkout:")
     print(changed)
     print("The repository's upstream/linkslot branch is not modified by this host-only tool.")
 

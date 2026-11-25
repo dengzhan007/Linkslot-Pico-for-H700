@@ -134,6 +134,14 @@ def main() -> None:
                 raise RuntimeError("H700 CPU service object has no source file: " + str(source_path))
         summary.append("PASS cpu-performance-objects: policy, ABI service and static runtime owner are in the H700 link object list")
 
+        led_object = "power/h700_rg34xx_power_led.o"
+        if f"$(LOCAL_DIR)/{led_object}" not in platform_rules:
+            raise RuntimeError("RG34XX PI12 power LED object is missing from H700 platform rules")
+        led_source = root / "platform/h700" / Path(led_object).with_suffix(".c")
+        if not led_source.is_file():
+            raise RuntimeError("RG34XX PI12 power LED object has no source file")
+        summary.append("PASS rg34xx-power-led-object: PI12 board LED service is linked")
+
         target_rules = (worktree / "target/rg34xx_h700/rules.mk").read_text(encoding="utf-8")
         target_init = root / "target/rg34xx_h700/init.c"
         if "$(LOCAL_DIR)/init.o" not in target_rules:
@@ -146,7 +154,9 @@ def main() -> None:
                 raise RuntimeError("RG34XX H700 target lifecycle source must define exactly one " + hook)
         if "target/$(TARGET)/init.o" in platform_rules or "$(LOCAL_DIR)/init.o" in platform_rules:
             raise RuntimeError("H700 target init object was incorrectly placed in platform rules")
-        summary.append("PASS target-lifecycle-hooks: target_early_init/target_init are supplied by the H700 target, not the MTK generic target")
+        if "h700_rg34xx_power_led_early_init" not in target_text or "h700_rg34xx_power_led_is_ready" not in target_text:
+            raise RuntimeError("RG34XX target hooks must initialize PI12 LED early and retry after platform_init")
+        summary.append("PASS target-lifecycle-hooks: early PI12 power LED startup and safe retry are owned by RG34XX target hooks")
 
         generic_target_rules = (worktree / "target/rules.mk").read_text(encoding="utf-8")
         generic_init_excluded = re.search(

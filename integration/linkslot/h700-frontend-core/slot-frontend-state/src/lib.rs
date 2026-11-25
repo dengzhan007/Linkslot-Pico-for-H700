@@ -1,5 +1,65 @@
 #![no_std]
 
+/// Tracks game activity and emits one hardware request per state transition.
+/// This no_std state type never performs GPIO access itself.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct GamePowerLedState {
+    last_requested_game_active: Option<bool>,
+}
+
+impl GamePowerLedState {
+    /// Return Some(active) once when the desired game state changes.
+    /// The first false request restores the front-end LED after LK startup.
+    pub fn request_game_active(&mut self, active: bool) -> Option<bool> {
+        if self.last_requested_game_active == Some(active) {
+            return None;
+        }
+        self.last_requested_game_active = Some(active);
+        Some(active)
+    }
+
+    pub fn last_requested_game_active(&self) -> Option<bool> {
+        self.last_requested_game_active
+    }
+}
+
+#[cfg(test)]
+mod game_power_led_tests {
+    use super::GamePowerLedState;
+
+    #[test]
+    fn frontend_on_is_requested_once_and_frame_polling_is_silent() {
+        let mut state = GamePowerLedState::default();
+        assert_eq!(state.request_game_active(false), Some(false));
+        for _ in 0..600 {
+            assert_eq!(state.request_game_active(false), None);
+        }
+    }
+
+    #[test]
+    fn game_start_and_exit_each_emit_one_transition() {
+        let mut state = GamePowerLedState::default();
+        assert_eq!(state.request_game_active(false), Some(false));
+        assert_eq!(state.request_game_active(true), Some(true));
+        for _ in 0..600 {
+            assert_eq!(state.request_game_active(true), None);
+        }
+        assert_eq!(state.request_game_active(false), Some(false));
+        assert_eq!(state.last_requested_game_active(), Some(false));
+    }
+
+    #[test]
+    fn failed_attempt_does_not_repeat_gpio_access_every_frame() {
+        let mut state = GamePowerLedState::default();
+        assert_eq!(state.request_game_active(false), Some(false));
+        // A failed platform call is reported by the Session; its state change
+        // is still consumed instead of retrying MMIO on every rendered frame.
+        assert_eq!(state.request_game_active(false), None);
+        assert_eq!(state.request_game_active(true), Some(true));
+    }
+}
+
+
 /// Tracks which language-specific UI resource generation is baked and which
 /// generation is currently being built.
 ///

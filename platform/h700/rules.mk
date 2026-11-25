@@ -16,7 +16,8 @@ LINKER_SCRIPT += $(BUILDDIR)/system-onesegment.ld
 OBJS += \
 	$(LOCAL_DIR)/power/h700_cpu_performance_policy.o \
 	$(LOCAL_DIR)/power/h700_cpu_performance_service.o \
-	$(LOCAL_DIR)/power/h700_cpu_performance_runtime.o \\
+	$(LOCAL_DIR)/power/h700_cpu_performance_runtime.o \
+	$(LOCAL_DIR)/power/h700_rg34xx_power_led.o \\
 	$(LOCAL_DIR)/power/h700_rg34xx_power_led.o
 
 # RG34XX PI12 power LED is the first board MMIO service. It only changes the
