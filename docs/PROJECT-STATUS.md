@@ -318,3 +318,13 @@ pvaibhav/slot 固定源码 `crates/slot-power/src/refresh.rs` 的 60-Hz register
 - armGBA pinned source `MagnominusGit/armGBA@fad6c4b0c0176a76e10667f4aa071a8feb4425c0` defines global `struct GBA* gba`; `struct Video` contains `uint32_t frameCounter`; `src/video/video.c` increments it at V-blank frame end and `retro_run()` waits for it. This is a source-confirmed committed emulation-frame counter.
 - The current public `probe.rs` only supports gpSP and mGBA. Before reading armGBA through `/proc/PID/mem`, match the deployed core hash to an exact build/release, verify ELF symbol visibility and pointer mapping, and calculate `offsetof(struct GBA, video)+offsetof(struct Video, frameCounter)` from that exact source. No memory probe has been run yet.
 - Required output columns remain separate: `slot_presents_per_s`, `armgba_committed_frames_per_s`, `lcd_irq_per_s`, plus CPU MHz and temperature. No one metric substitutes for another.
+
+
+### 8.3 Public sun50iw9 PLL formula cross-check (reference only; 2026-11-25)
+
+The related pinned `qiaoweibiao/T507_Kernel@98fcc7d3f112e51b0edfb71536da89cb2115106f` clock driver places the `pll_video0x4` N field at bits [15:8], D1 at bit 1, and calculates `24 MHz × (N+1)/(D1+1)`; its DTS assigns `tcon_lcd` parent `pll_video0x4`. Under that public BSP layout:
+
+- Live raw `0x88001703`: N=23, D1=1 → `pll_video0x4=288 MHz`; `/11` → 26.1818-MHz DCLK → 59.569 Hz at 820×536.
+- pvaibhav 120-Hz candidate `0x88002b03`: N=43, D1=1 → `pll_video0x4=528 MHz`; `/10` → 52.8-MHz DCLK → 120.13 Hz at 820×536.
+
+This is a strong internal-consistency check for the reference pair, not a proven decode of shipping kernel #19. The exact binary's PLL layout and live TCON parent/mux still need source matching; panel tolerance and runtime transition safety are unproven. Keep hardware writes disabled and `hardware_applied=0`.
