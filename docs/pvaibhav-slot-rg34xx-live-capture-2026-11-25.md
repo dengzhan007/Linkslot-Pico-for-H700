@@ -230,3 +230,14 @@ The runtime report shows /sys/class/sunxi_dump/dump is present and accessible as
 - 0x03001040 — video PLL register used by the reviewed fork (cross-check against clk_summary).
 
 This request must use only /sys/class/sunxi_dump/dump; **never write to /sys/class/sunxi_dump/write**. Writing the query to the dump sysfs control file asks the kernel dump helper to read MMIO; it is not a write to the MMIO register. Capture the unmodified response and kernel clock summary together. Until the values are read back, neither the 6 nor 11 divider is accepted as the actual running configuration.
+
+
+ADB single-command example (substitute the connected device serial locally; do not write to the sibling /write node):
+
+```powershell
+$serial = (adb devices | Select-String '\\sdevice$' | Select-Object -First 1).ToString().Split()[0]
+adb -s $serial shell "echo '0x06511044,0x06511044' > /sys/class/sunxi_dump/dump; cat /sys/class/sunxi_dump/dump"
+adb -s $serial shell "echo '0x03001040,0x03001040' > /sys/class/sunxi_dump/dump; cat /sys/class/sunxi_dump/dump"
+```
+
+The only write in these commands is a read request to the kernel's dump-control interface. The second path, /sys/class/sunxi_dump/write, must not be opened, written or used. Save the exact returned text alongside a contemporaneous display clock summary; do not decode PLL frequency until the register layout and running-kernel implementation are matched.
