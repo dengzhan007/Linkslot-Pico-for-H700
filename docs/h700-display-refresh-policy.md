@@ -81,13 +81,14 @@ Files:
 - `platform/h700/display/tests/h700_display_refresh_policy_test.c`
 
 The versioned C API provides:
-- `h700_display_refresh_policy_init_v1()`: initializes UI preference to 120 Hz and scene to UI.
-- `h700_display_refresh_policy_set_ui_preference_v1(60|120)`: future settings toggle.
-- `h700_display_refresh_policy_set_scene_v1(UI|GAME)`: GAME resolves to 120 Hz only when `game_120hz_enabled=1`, otherwise it remains at 60 Hz; UI resolves to the stored UI preference.
-- `h700_display_refresh_policy_get_state_v1()`: returns current preference, scene, requested profile, generation and `hardware_applied`.
+- `h700_display_refresh_policy_init_v1()`: initializes UI preference to 120 Hz, sets `game_120hz_enabled=0`, and starts in the UI scene.
+- `h700_display_refresh_policy_set_ui_preference_v1(60|120)`: changes only the UI preference; it does not override the GAME switch.
+- `h700_display_refresh_policy_set_game_120hz_enabled_v1(0|1)`: independent GAME 120 Hz switch. Default 0 requests 60 Hz; 1 requests the 120-Hz candidate while GAME is active.
+- `h700_display_refresh_policy_set_scene_v1(UI|GAME)`: UI resolves to the stored UI preference; GAME resolves to 120 Hz only when `game_120hz_enabled=1`, otherwise it remains at 60 Hz.
+- `h700_display_refresh_policy_get_state_v1()`: returns UI preference, game toggle state, scene, requested profile, generation and `hardware_applied`.
 - `h700_display_refresh_get_rg34xx_timing_v1(60|120)`: returns the fixed RG34XX timing candidate above.
 
-No Frontend/Linkslot interface, event hook, persistent configuration format, or user-visible settings row is created yet. The policy can be unit-tested and linked into the H700 build graph without binding it to an emulator or game frontend.
+The C policy switch and host regression are present, but no Linkslot Frontend setting row, event hook, or persistent configuration format is wired yet. The future settings UI should expose this as an independent “120 Hz in games” on/off option and persist it separately from the UI 60/120 Hz preference.
 
 ## 4. Slot upstream reference audit
 
@@ -146,7 +147,7 @@ No such hardware transition function exists yet. Do not add register writes, PLL
 
 The display policy test script is `scripts/test-h700-display-refresh-policy.sh`. The H700 AArch32/AArch64 build script compiles the policy for AArch64, AArch32 ARM-state and AArch32 Thumb-2; `platform/h700/rules.mk` links the policy object into the target graph. GitHub Actions invokes the host policy test from `.github/workflows/h700-arch-check.yml`.
 
-Host tests verify the state rules, timing constants, period calculations (8,337,777 ns for the 119.947 Hz candidate and 16,665,629 ns for the 60.006 Hz candidate), and invalid arguments. The helper was added in code commit [`237ee131d5926ee79b049a1d3915b4da7f5c8d0b`](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/237ee131d5926ee79b049a1d3915b4da7f5c8d0b); its host test initially missed a local variable declaration, corrected in [`d20550ab2cd6c4e7dbaa758f09e1b5993988878b`](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/d20550ab2cd6c4e7dbaa758f09e1b5993988878b). [H700 AArch32/AArch64 compile check #45572079415](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45572079415) passed the host-regression job and the freestanding AArch64, AArch32 ARM-state and AArch32 Thumb-2 compile job. This is not a full LK target link, hardware timing application, or physical 120/60 Hz display test.
+Host tests verify independent UI/game settings, default-OFF GAME 120 Hz behavior, opt-in/opt-out during gameplay, unchanged-value generation behavior, UI/GAME scene restoration, unchanged v1 structure sizes (48-byte policy and 32-byte state), timing constants, period calculations (8,337,777 ns for the 119.947 Hz candidate and 16,665,629 ns for the 60.006 Hz candidate), and invalid arguments. The helper was added in code commit [`237ee131d5926ee79b049a1d3915b4da7f5c8d0b`](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/237ee131d5926ee79b049a1d3915b4da7f5c8d0b); its host test initially missed a local variable declaration, corrected in [`d20550ab2cd6c4e7dbaa758f09e1b5993988878b`](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/d20550ab2cd6c4e7dbaa758f09e1b5993988878b). [H700 AArch32/AArch64 compile check #45572079415](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45572079415) passed the host-regression job and the freestanding AArch64, AArch32 ARM-state and AArch32 Thumb-2 compile job. This is not a full LK target link, hardware timing application, or physical 120/60 Hz display test.
 ## 7. On-device timing readback collection
 
 The read-only inventory script now writes `display-runtime.txt` with:
