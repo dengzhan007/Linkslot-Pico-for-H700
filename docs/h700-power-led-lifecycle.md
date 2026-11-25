@@ -88,7 +88,7 @@ on an unverified assumption.
 - 游戏开始/结束切换和重复请求幂等；
 - 无效 ABI、未初始化、pinmux 丢失和读回失败。
 
-Rust no_std state tests 覆盖初始前端态、开始/退出游戏各一次请求，以及 600 次重复状态采样不会重复发出硬件请求。H700 AArch32/AArch64 compile check [#45526769732](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45526769732) 已通过，包括 AArch64、AArch32 ARM、Thumb-2 对象编译和 MMU/PIO fake-register tests；Linkslot runtime slices [#45524236833](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45524236833) 已通过 no_std tests 与完整 Frontend overlay 编译。
+Rust no_std state tests 覆盖初始前端态、开始/退出游戏各一次请求，以及 600 次重复状态采样不会重复发出硬件请求。H700 AArch32/AArch64 compile check [#45526769732](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45526769732) 已通过，包括 AArch64、AArch32 ARM、Thumb-2 对象编译和 MMU/PIO fake-register tests；Linkslot runtime slices [#45524785105](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45524785105) 已通过 no_std state tests 与完整 Linkslot 1.0.45 Frontend overlay 编译。
 
 仍需完成：
 - 后续完整 LK target link / 固件构建（当前仍受独立内存批准 gate 限制）；

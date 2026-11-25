@@ -200,6 +200,20 @@ The only introduced MMIO path is the narrowly scoped PI12 work LED: one
 does not alter CCU/APB1 rates or gates, PMIC registers, CPU PLL/OPP state,
 storage contents, Boot0/TOC1 or device flash.
 
+### Pinned LK header/API cross-check
+
+The MMU hook includes the actual pinned LK headers
+[`arch/arm/arm/mmu.h`](https://github.com/TheGammaSqueeze/lk-mt6785/blob/9bf1419a49e0af6dba8b05916df382c9c9c6d0a8/arch/arm/include/arch/arm/mmu.h)
+and
+[`include/arch/ops.h`](https://github.com/TheGammaSqueeze/lk-mt6785/blob/9bf1419a49e0af6dba8b05916df382c9c9c6d0a8/include/arch/ops.h):
+the pinned source declares `arm_mmu_init()`, `arm_mmu_map_section()` and
+`arch_enable_mmu()`, and provides the exact normal-write-back, shared-Device,
+read/write and XN attribute constants used by the board mapping. The current
+cross-compile script compiles this object against freestanding test headers;
+the LK project guard separately verifies the source call/attribute contract.
+A full LK target link against this board object is still blocked on the
+independent approved image/BSS/stack/heap memory layout.
+
 ## Validation scope
 
 `scripts/test-h700-lk-project-guard.py` applies the pinned six-file LK

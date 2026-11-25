@@ -41,6 +41,8 @@
 **本轮 PIO clock-boundary 审计：** H616-family 参考 PIO DTS 以 `CLK_APB1` 为主总线时钟且无独立 PIO reset property；参考 CCU `apb1_clk` 为 `SUNXI_CCU_MP_WITH_MUX`（offset `0x520`），无 PIO 专属 gate。RG34XX v2 Linux clk_summary 报告 APB1=100 MHz、PIO consumer=1。该证据支持不添加未经验证的 PIO gate/reset 写入，但 BL33-entry APB1 parent/rate 仍未实测；LED 代码不改 CCU。
 **本轮 LK MMU static footprint：** pinned LK `arch/arm/mmu.c` 使用 `tt[4096]` 静态 section table，占 16 KiB、16 KiB 对齐的 BSS footprint。MMU hook 本身不动态申请 DRAM，但这块 BSS 和其余 LK BSS/stack/heap 的实际 placement 仍在内存 ownership 审批范围内。
 
+**下一次 RG34XX 设备采集：** 新只读 collector 已提交（cpufreq path identity、getter 前后 cached frequency、cooling-device state/bindings）。使用 Windows PowerShell：`.\scripts\run-rg34xx-inventory.ps1 -OutputDirectory ".\build\rg34xx-inventory-20261125-cpux-v3"`；完成后把目录上传到 reports 分支 `reports/rg34xx-inventory-20261125-cpux-v3/`。不需要调整 governor/min/max，也不需要触碰 PMIC/CCU/CPU PLL。
+
 ## 1. 项目目标与固定约束
 
 - 目标设备是 **Anbernic RG34XX（非 SP）/ Allwinner H700 / Cortex-A53**，不是 RG353PS/RK3566，也不是 RG34XX SP。
