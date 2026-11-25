@@ -2,6 +2,11 @@
 
 ## Index
 
+### 2026-11-25 — RG34XX kernel #19 display-path static reverse audit (offline first pass)
+
+- [`kernel19-display-reverse-audit/`](kernel19-display-reverse-audit/) — Build-ID matched stock ELF, GNU Build ID `a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68`; bounded PLL/TCON disassembly resolves the live 288-MHz / divider-11 / ~59.57-Hz baseline. No 120-Hz mode table or runtime refresh-switch path found. This is a first-pass static audit: `tcon_lcd` code-side mux, full panel callback lifecycle, and the exact panel/config field at offset `+0x80` remain unresolved; see the project follow-up task before considering the display path closed. No device access or hardware writes.
+
+
 ### 2026-11-25 — RG34XX stock kernel identity + CPUFreq NVMEM probe reverse engineering (offline)
 
 - `rg34xx-boot-p4-verified.json` confirms the uncompressed stock kernel SHA-256 `39cf8c3eb9a75ff0eda51b4074cd65860c5aa5386093bcaf69339819421d84b7` matches the public BaseOS survey prefix; GNU Build ID `a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68` matches the live kernel.
