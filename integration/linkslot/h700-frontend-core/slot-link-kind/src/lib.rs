@@ -15,6 +15,14 @@ impl LinkKind {
     }
 }
 
+/// The armGBA core option value for a link port.
+pub fn armgba_port(kind: LinkKind) -> &'static str {
+    match kind {
+        LinkKind::Cable => "cable",
+        LinkKind::Wireless => "wireless",
+    }
+}
+
 const WIRELESS: [&str; 43] = [
     "B2WE", "B3AE", "B4UE", "B4UP", "B85A", "B85P", "BDGE", "BDGP", "BG3E", "BKRJ", "BMGD", "BMGE",
     "BMGF", "BMGI", "BMGJ", "BMGP", "BMGS", "BMGU", "BPED", "BPEE", "BPEF", "BPEI", "BPEJ", "BPES",
@@ -58,6 +66,13 @@ pub fn link_carried(code: &str, title: &str) -> bool {
         || pokemon(code, title)
         || code.starts_with("AWR")
         || code.starts_with("AW2")
+}
+
+/// armGBA's netpacket link starts from gpSP's carried list. A cart is only
+/// offered a link after its game has been proven to survive the game's own
+/// link checks on armGBA; unknown carts run solo instead of waiting forever.
+pub fn armgba_link_carried(code: &str, title: &str) -> bool {
+    link_carried(code, title)
 }
 
 fn pokemon(code: &str, title: &str) -> bool {
@@ -127,5 +142,20 @@ mod tests {
         assert!(link_carried("AWRX", "OTHER"));
         assert!(link_carried("AW2X", "OTHER"));
         assert!(!link_carried("ABCD", "OTHER"));
+    }
+
+    #[test]
+    fn armgba_uses_the_gp_sp_carried_list_without_overclaiming_unknown_games() {
+        assert!(armgba_link_carried("BPEE", "POKEMON EMER"));
+        assert!(armgba_link_carried("AXVE", "POKEMON RUBY"));
+        assert!(armgba_link_carried("AWRE", "ADVANCEWARS"));
+        assert!(!armgba_link_carried("AMKE", "MARIO KART"));
+        assert!(!armgba_link_carried("2ATE", "APOTRIS"));
+    }
+
+    #[test]
+    fn armgba_port_option_matches_link_kind() {
+        assert_eq!(armgba_port(LinkKind::Cable), "cable");
+        assert_eq!(armgba_port(LinkKind::Wireless), "wireless");
     }
 }
