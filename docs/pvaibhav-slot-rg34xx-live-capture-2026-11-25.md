@@ -241,3 +241,17 @@ adb -s $serial shell "echo '0x03001040,0x03001040' > /sys/class/sunxi_dump/dump;
 ```
 
 The only write in these commands is a read request to the kernel's dump-control interface. The second path, /sys/class/sunxi_dump/write, must not be opened, written or used. Save the exact returned text alongside a contemporaneous display clock summary; do not decode PLL frequency until the register layout and running-kernel implementation are matched.
+
+
+## TCON / PLL readback follow-up (2026-11-25 19:59 +08:00)
+
+The subsequent [read-only TCON/PLL capture](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/pvaibhav-slot-runtime/tcon-readback) closes the previous open item about the active divider:
+
+- TCON0 DCLK register `0x06511044`: `0xf000000b` (divider field 11).
+- Video PLL register `0x03001040`: `0x88001703` (raw only; not decoded).
+- Concurrent `clk_summary`: `tcon_lcd=288 MHz` / `pll_video0x4=288 MHz`.
+- Capture method: read request through `/sys/class/sunxi_dump/dump`; `/sys/class/sunxi_dump/write` was never opened; no register, panel, or refresh-mode writes were performed.
+
+The raw pair matches the pvaibhav/slot pinned implementation's 60-Hz register pair exactly. With the 820×536 live FDT totals, 288 MHz / 11 estimates a 26.1818-MHz DCLK and 59.569 Hz scanout, which agrees with the 59.61–59.65-Hz IRQ proxy to roughly 0.1%. This explains the previous 59.155-Hz DTB-vs-IRQ difference as consistent with a rounded 26-MHz FDT property and the observed divider/clock summary; the derived DCLK is still not an independent physical measurement.
+
+The pvaibhav high-mode pair is divider `0xf000000a` then PLL `0x88002b03`. Its `rg34xx` panel gate requires `fog_fj035fhd05_v1`, whereas this unit reports `rg34xx_v1` and `lcd_type=old`. The 120-Hz sequence is therefore still **not approved** for this board. The exact 4.9.170 #19 panel/PLL source, complete clock-parent chain, UI present FPS, and armGBA committed-frame FPS remain outstanding. Keep hardware writes disabled.
