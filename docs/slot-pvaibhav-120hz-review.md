@@ -53,7 +53,7 @@ The fork's `PanelRefresh::probe()` maps target `rg34xx` to `fog_fj035fhd05_v1`, 
 
 This is consistent with the pinned BaseOS fleet survey: [`panel-survey.txt`](https://github.com/pvaibhav/BaseOS/blob/63137afeda1c0bc4ff771be6f03012b7f8147aca/experiments/h700-boot-speed/variant-survey/panel-survey.txt) lists RG34XX as `rg34xx_v1` (720×480), and [`panel-contract.json`](https://github.com/pvaibhav/BaseOS/blob/63137afeda1c0bc4ff771be6f03012b7f8147aca/experiments/h700-boot-speed/native/panel-contract.json) records the RG34XX-specific PE6 strap outcomes. Our 16:30 bootargs snapshot also records `lcd_type=old`.
 
-The same fork gate further requires 26 MHz / 820×536. The current uploaded live-FDT JSON predates our new panel-timing parser fields, so it does **not** establish our device's live `lcd_dclk_freq/lcd_ht/lcd_vt`. A separate MustardOS RG34XX-H DTS reference has `rg34xx_v1`, 54 MHz and 1679×536 totals; that is corroborating source data, not a replacement for a new read-only capture from our device. The 120-Hz candidate `lcd_ht=840` in our policy likewise remains unapproved for `rg34xx_v1`.
+The same fork gate further requires 26 MHz / 820×536. The current live-FDT reparse now establishes our device's fields as DCLK property 26 MHz, HT/VT 820×536, with `lcd_type=old`; same-boot TCON/PLL readback establishes divider 11 and PLL raw `0x88001703`. The 54 MHz / 1679×536 MustardOS RG34XX-H DTS remains a different profile. The 120-Hz candidate `lcd_ht=840` in our policy likewise remains unapproved for `rg34xx_v1`.
 
 ## Decision for our H700 port
 
