@@ -357,3 +357,18 @@ The [related RG34XX-H divider-mismatch report](https://community.muos.dev/t/rg34
 
 
 The TCON DCLK / PLL readback is complete. The next display milestone is to validate the public sun50iw9 PLL bitfield calculation against the exact kernel #19 source, trace `rg34xx_v1 + lcd_type=old` panel initialization and TCON clock parent, and establish whether a panel-qualified 120-Hz timing exists. The external reference math predicts 528 MHz PLL parent / divider 10 = 52.8-MHz DCLK for the pvaibhav high-mode pair, or about 120.13 Hz at live 820×536 totals; this is a candidate calculation only, not a validated profile or authorization to write registers. Keep the hardware writer disabled.
+
+
+## Linkslot 1.0.49 / 1.1.0 三分支更新（2026-11-25）
+
+上游三分支已更新并归档：main 1.0.49、test 1.0.49、DEV 1.1.0。main/test 的 851 个源码文件一致，作为稳定移植基线只适配一次；DEV 相对 main 有 21 个新增、1 个删除、46 个修改，新增 schema 2 平台扩展包、Arcade/NeoGeo 机柜、FBNeo 与 DAT 数据支持。
+
+路线调整：
+
+1. 先把此前 1.0.45 的已验证 H700 no_std 业务切片、renderer overlay 和 mGBA 静态链接探针迁移到 main 1.0.49。Libretro FFI blob 未变是兼容依据，但不能代替完整编译。
+2. 更新并回归 H700 持久化核心元数据表，保留 no_std/alloc 分离；重点检查 armGBA 元数据与 netpacket 联机语义。
+3. 对 `slot/src/app.rs`、`slot-frontend`、`slot-gfx` 的 patcher 逐个重新验证锚点和语义，不能只改 1.0.45 SHA / Cargo version。
+4. DEV 1.1.0 作为第二阶段差异审计，重点核查平台枚举的落盘序号兼容、平台包安装/卸载/损坏回退、核心可用性和扫描器边界。Arcade/NeoGeo/FBNeo 不进入首期可启动切片。
+5. 上游 Linux/glibc 文件、shell、动态核心加载、网络和 Web 服务不得直接纳入 LK；继续采用 C HAL + C ABI + Rust no_std 业务层 + C/C++ 静态核心。
+
+本次仅完成来源核对与文档同步，不代表新基线已完成 H700 编译、LK 链接或实机验证。
