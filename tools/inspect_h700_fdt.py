@@ -292,19 +292,27 @@ def _cpu_power_inventory(nodes: dict[str, dict[str, bytes]]) -> dict[str, Any]:
                     if frequency is None:
                         continue
                     voltage_variants = {}
+                    voltage_variant_names = []
                     for property_name, raw_value in child_props.items():
                         if not property_name.startswith("opp-microvolt-"):
                             continue
                         variant_name = property_name[len("opp-microvolt-"):]
+                        voltage_variant_names.append(variant_name)
                         values = _cells(raw_value)
                         if values:
                             voltage_variants[variant_name] = values
+                    supported_hw_present = "opp-supported-hw" in child_props
+                    voltage_microvolt_present = "opp-microvolt" in child_props
                     entries.append({
                         "node": child_path,
                         "frequency_hz": frequency,
+                        "voltage_microvolt_present": voltage_microvolt_present,
                         "voltage_microvolt_cells": _cells(child_props.get("opp-microvolt")),
+                        "voltage_microvolt_variant_names": sorted(voltage_variant_names),
                         "voltage_microvolt_variants": voltage_variants,
+                        "supported_hw_present": supported_hw_present,
                         "supported_hw_cells": _cells(child_props.get("opp-supported-hw")),
+                        "supported_hw_cell_count": len(_cells(child_props.get("opp-supported-hw"))),
                         "turbo": "turbo-mode" in child_props,
                         "status": (_strings(child_props.get("status")) or ["okay"])[0],
                     })

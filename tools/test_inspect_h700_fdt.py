@@ -31,7 +31,8 @@ def make_fdt():
         "phandle", "cpu-supply", "regulator-name", "regulator-min-microvolt",
         "regulator-max-microvolt", "regulator-always-on", "regulator-boot-on",
         "operating-points-v2", "opp-hz", "opp-microvolt", "opp-supported-hw",
-        "opp-shared", "nvmem-cells", "nvmem-cell-names", "opp-microvolt-a1", "opp-microvolt-b0", "thermal-sensors",
+        "opp-shared", "nvmem-cells", "nvmem-cell-names", "opp-microvolt-a1", "opp-microvolt-b0",
+        "opp-microvolt-c1", "thermal-sensors",
         "clock-frequency", "turbo-mode", "#thermal-sensor-cells",
     )
     strings = bytearray()
@@ -183,6 +184,15 @@ def make_fdt():
     prop("opp-supported-hw", cells(1, 0xff))
     prop("turbo-mode", b"")
     end()
+    begin("opp-1800000000-no-supported-hw")
+    prop("opp-hz", cells(0, 1800000000))
+    prop("opp-microvolt-c1", cells(1180000))
+    end()
+    begin("opp-2000000000-empty-supported-hw")
+    prop("opp-hz", cells(0, 2000000000))
+    prop("opp-supported-hw", b"")
+    prop("opp-microvolt", cells(1200000))
+    end()
     end()
 
     begin("disp@01000000")
@@ -245,12 +255,29 @@ class FdtInspectorTests(unittest.TestCase):
         self.assertEqual(opp_table["nvmem_cells"][0]["node"], "/soc@03000000/efuse@03006000/speed-bin@0")
         self.assertEqual(opp_table["nvmem_cells"][0]["name"], "speed-bin")
         opp_entries = opp_table["entries"]
-        self.assertEqual([entry["frequency_hz"] for entry in opp_entries], [1000000000, 1512000000])
+        self.assertEqual(
+            [entry["frequency_hz"] for entry in opp_entries],
+            [1000000000, 1512000000, 1800000000, 2000000000],
+        )
+        self.assertTrue(opp_entries[0]["supported_hw_present"])
+        self.assertEqual(opp_entries[0]["supported_hw_cell_count"], 2)
+        self.assertTrue(opp_entries[0]["voltage_microvolt_present"])
         self.assertEqual(opp_entries[1]["voltage_microvolt_cells"], [1100000, 1050000, 1150000])
+        self.assertTrue(opp_entries[1]["voltage_microvolt_present"])
+        self.assertEqual(opp_entries[1]["voltage_microvolt_variant_names"], ["a1", "b0"])
         self.assertEqual(opp_entries[1]["voltage_microvolt_variants"], {
             "a1": [1150000],
             "b0": [1100000, 1050000, 1150000],
         })
+        self.assertFalse(opp_entries[2]["supported_hw_present"])
+        self.assertEqual(opp_entries[2]["supported_hw_cell_count"], 0)
+        self.assertFalse(opp_entries[2]["voltage_microvolt_present"])
+        self.assertEqual(opp_entries[2]["voltage_microvolt_variant_names"], ["c1"])
+        self.assertEqual(opp_entries[2]["voltage_microvolt_variants"], {"c1": [1180000]})
+        self.assertTrue(opp_entries[3]["supported_hw_present"])
+        self.assertEqual(opp_entries[3]["supported_hw_cells"], [])
+        self.assertEqual(opp_entries[3]["supported_hw_cell_count"], 0)
+        self.assertTrue(opp_entries[3]["voltage_microvolt_present"])
         self.assertIn("do not prove", cpu_power["note"])
         self.assertEqual([x["status"] for x in report["usb_controllers"]], ["okay", "late"])
         self.assertEqual(report["debug_modes"][0]["value"], 0)
