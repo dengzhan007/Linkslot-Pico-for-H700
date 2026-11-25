@@ -75,3 +75,6 @@ A read-only UI/GAME capture and a complete live-FDT reparse are now published; s
 ### New profile evidence after FDT reparse
 
 The live machine-readable FDT now confirms `rg34xx_v1`, RGB666, 720×480, 26 MHz DCLK property, HT/VT 820×536 and `lcd_type=old` bootarg. The BaseOS H700 variant survey independently maps the standard `rg34xx` target to `rg34xx_v1`; `fog_fj035fhd05_v1` belongs to other target profiles. The reviewed fork's gate is therefore not a valid match for this standard non-SP RG34XX. Capability work must qualify the tuple including `lcd_type`, not only the driver string and geometry. Actual final DCLK/divider remains unmeasured; IRQ rate (~59.63 Hz) differs from DTB-derived nominal 59.155 Hz. No register writes are authorized.
+
+
+The vendor U-Boot disassembly nuance is documented in [the live capture analysis](pvaibhav-slot-rg34xx-live-capture-2026-11-25.md): the selected DT panel struct is `rg34xx_v1`; its init function happens to carry a `fj035fhd05` symbol string. Do not confuse this function label with the FDT panel identity required by the fork's Linux-side gate.
