@@ -242,3 +242,20 @@ The pvaibhav high-mode pair is divider `0xf000000a` then PLL `0x88002b03`. Its `
 ## External sun50iw9 PLL formula cross-check (reference only)
 
 The pinned public `qiaoweibiao/T507_Kernel` sun50iw9 clock driver defines PLL-video0x4 N at bits [15:8], D1 at bit 1, and computes `24 MHz × (N+1)/(D1+1)`. Its pinned DTS assigns `tcon_lcd` to `pll_video0x4`. Under that related BSP's layout, the live raw PLL word `0x88001703` decodes to 288 MHz, while pvaibhav's candidate `0x88002b03` decodes to 528 MHz. Paired with DCLK dividers 11 and 10 respectively, those yield 26.1818-MHz and 52.8-MHz pixel-clock estimates; the latter is about 120.13 Hz at 820×536. This makes the candidate internally consistent but **does not identify the exact running kernel #19 PLL layout or prove panel support**. Exact source/build-ID correspondence and runtime parent mux still need verification. No register write is authorized.
+
+
+## 9. 2026-11-26 follow-up capture and counter-read plan
+
+The new [ADB report](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/slot-refresh-audit) includes a second, same-device UI/GAME check (GBA core actively loaded during GAME). IRQ293 measured 59.667 Hz in UI and 59.583 Hz in GAME; the display driver showed `fps=60.2` / `ref_fps=59` / `de_rate=696 MHz` in both. PLL `0x03001040` remained `0x88001703`. The TCON divider read in this specific run returned I/O error, so this run does not provide a new divider readback. Slot PID 2301 persisted across both captures; GAME added the `armgba_libretro.so` mapping but did not restart the display stack. `high_refresh=1` remained set without changing the actual scanout path.
+
+The new report's first version incorrectly treated a second FDT timing node as a prerequisite for runtime refresh switching and called 576 MHz the pvaibhav high-mode PLL value. The correction in [reports/slot-refresh-audit/SUMMARY.md §10](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/slot-refresh-audit/SUMMARY.md) records the exact pinned-source sequence: divider `0xf000000a`, PLL `0x88002b03` (528 MHz under the related sun50iw9 reference formula), which computes to about 120.131 Hz at 820×536. This does not alter the live-device result: the observed PLL stayed at its 288-MHz baseline value and IRQ stayed near 60 Hz.
+
+### UI present rate
+
+At pinned Slot source `5206e3fa39aa4a9b702cd9048a07dab3b5ab95da`, `device_app.rs` emits `presents/s` every 600 surface swaps when `slot::latency::tracing()` is enabled. The switch is nonzero `SLOT_TRACE_LATENCY` or `$SLOT_ROOT/System/trace-latency.on`; its `OnceLock` caches the first lookup, so a marker must exist before Slot starts. Before enabling it, inspect `/proc/2301/fd/2` to establish where stderr goes and compare the installed `System/slot` hash with the official H700 release.
+
+### armGBA committed frames
+
+Pinned armGBA source `MagnominusGit/armGBA@fad6c4b0c0176a76e10667f4aa071a8feb4425c0` increments `gba->video.frameCounter` at VBlank frame end. `struct GBA` has a source-level fixed-size assertion of 788712 bytes and uses eight-byte host-pointer slots, so a C layout probe can calculate the stable offset from the exact pinned source. However, `libretro/link.T` exports only `retro_*` and marks the rest `local: *`: the global `gba` is not a dependable dynamic export. Do not use `dlsym` or `nm -D` as the pointer source. First compare the installed `armgba_libretro.so` SHA with the exact release/build, inspect whether its full ELF symbol table retains `gba`, and verify the object load bias and pointer mapping. Only then may a bounded read-only `/proc/PID/mem` sampler be considered; no blind scanning.
+
+Keep three outputs distinct: Slot surface presents/s, armGBA VBlank-committed frames/s, and LCD IRQ/s. The last is only scanout/vblank proxy. No hardware register writes are authorized.
