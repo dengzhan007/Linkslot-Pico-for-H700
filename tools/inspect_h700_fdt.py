@@ -180,6 +180,72 @@ def _reg_ranges(value: bytes | None, address_cells: int, size_cells: int) -> lis
     return ranges
 
 
+LCD_INTERFACE_NAMES = {0: "hv", 1: "cpu", 2: "lvds", 3: "dsi", 4: "edp"}
+LCD_HV_INTERFACE_NAMES = {0: "rgb666", 1: "rgb565", 2: "rgb888", 3: "rgb888_24bit"}
+
+
+def _panel_timing(props: dict[str, bytes]) -> dict[str, Any]:
+    """Decode the sunxi lcd_* timing properties into one comparable block."""
+    dclk_mhz = _number(props.get("lcd_dclk_freq"))
+    width = _number(props.get("lcd_x"))
+    height = _number(props.get("lcd_y"))
+    h_total = _number(props.get("lcd_ht"))
+    v_total = _number(props.get("lcd_vt"))
+    hbp = _number(props.get("lcd_hbp"))
+    hspw = _number(props.get("lcd_hspw"))
+    vbp = _number(props.get("lcd_vbp"))
+    vspw = _number(props.get("lcd_vspw"))
+    have_porch = None not in (h_total, width, hbp, hspw)
+    have_vporch = None not in (v_total, height, vbp, vspw)
+    hfp = h_total - width - hbp - hspw if have_porch else None
+    vfp = v_total - height - vbp - vspw if have_vporch else None
+    refresh = None
+    if dclk_mhz is not None and h_total and v_total:
+        refresh = round(dclk_mhz * 1_000_000 / (h_total * v_total), 3)
+    pwm_freq = _number(props.get("lcd_pwm_freq"))
+    phys_w = _number(props.get("lcd_width"))
+    phys_h = _number(props.get("lcd_height"))
+    return {
+        "pixel_clock_hz": dclk_mhz * 1_000_000 if dclk_mhz is not None else None,
+        "pixel_clock_mhz": dclk_mhz,
+        "h_total": h_total,
+        "h_active": width,
+        "h_back_porch": hbp,
+        "h_sync_pulse": hspw,
+        "h_front_porch": hfp,
+        "v_total": v_total,
+        "v_active": height,
+        "v_back_porch": vbp,
+        "v_sync_pulse": vspw,
+        "v_front_porch": vfp,
+        "nominal_refresh_hz": refresh,
+        "physical_mm": {"width": phys_w, "height": phys_h},
+        "pwm": {
+            "used": bool(_number(props.get("lcd_pwm_used"))),
+            "channel": _number(props.get("lcd_pwm_ch")),
+            "freq_hz": pwm_freq,
+            "polarity": _number(props.get("lcd_pwm_pol")),
+            "max_limit": _number(props.get("lcd_pwm_max_limit")),
+            "backlight": _number(props.get("lcd_backlight")),
+        },
+    }
+
+
+def _panel_interface(props: dict[str, bytes]) -> dict[str, Any]:
+    lcd_if = _number(props.get("lcd_if"))
+    hv_if = _number(props.get("lcd_hv_if"))
+    lvds_if = _number(props.get("lcd_lvds_if"))
+    raw = {"lcd_if": lcd_if, "lcd_hv_if": hv_if, "lcd_lvds_if": lvds_if,
+           "lcd_hv_clk_phase": _number(props.get("lcd_hv_clk_phase")),
+           "lcd_hv_sync_polarity": _number(props.get("lcd_hv_sync_polarity")),
+           "lcd_lvds_colordepth": _number(props.get("lcd_lvds_colordepth")),
+           "lcd_lvds_mode": _number(props.get("lcd_lvds_mode"))}
+    name = LCD_INTERFACE_NAMES.get(lcd_if) if lcd_if is not None else None
+    if name == "hv" and hv_if is not None:
+        name = LCD_HV_INTERFACE_NAMES.get(hv_if, f"hv_{hv_if}")
+    return {"name": name, "raw": raw}
+
+
 def _phandle_index(nodes: dict[str, dict[str, bytes]]) -> dict[int, str]:
     index: dict[int, str] = {}
     for node_path, props in nodes.items():
@@ -450,6 +516,7 @@ def inspect_fdt(path: Path) -> dict[str, Any]:
     ion_heaps = []
     for node_path, props in nodes.items():
         if "lcd_driver_name" in props:
+            interface = _panel_interface(props)
             panels.append({
                 "node": node_path,
                 "driver": (_strings(props.get("lcd_driver_name")) or [""])[0],
@@ -470,6 +537,10 @@ def inspect_fdt(path: Path) -> dict[str, Any]:
                     "lcd_vspw": _number(props.get("lcd_vspw")),
                 },
                 "status": (_strings(props.get("status")) or ["okay"])[0],
+                "used": bool(_number(props.get("lcd_used"))),
+                "interface": interface["name"],
+                "interface_props": interface["raw"],
+                "timing": _panel_timing(props),
             })
         comp = _strings(props.get("compatible"))
         if node_path.startswith("/firmware/") and comp:
