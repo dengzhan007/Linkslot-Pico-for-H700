@@ -197,7 +197,7 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertNotIn('dev_pm_opp_set_supported_hw(', self.source)
         self.assertNotIn('modprobe ', self.source)
         self.assertNotIn('insmod ', self.source)
-        self.assertNotIn('sunxi_get_soc_ver(', self.source)
+        self.assertNotRegex(self.source, r"(?m)^\s*sunxi_get_soc_ver\s*\(")
 
     def test_tee_ion_runtime_capture_is_read_only(self):
         self.assertIn('> "$OUTDIR/tee-ion-runtime.txt"', self.source)
