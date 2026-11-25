@@ -686,7 +686,7 @@ pub fn source_rect(platform: Platform, mode: VideoMode) -> [f32; 4] {
 
     link_kind_path = source / "crates/slot/src/link_kind.rs"
     link_kind_path.write_text(
-        "pub use slot_link_kind::{link_carried, link_kind, serial_option, LinkKind};" + chr(10),
+        "pub use slot_link_kind::{armgba_link_carried, armgba_port, link_carried, link_kind, serial_option, LinkKind};" + chr(10),
         encoding="utf-8",
     )
     link_state_path = source / "crates/slot/src/link_state.rs"
