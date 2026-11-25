@@ -58,7 +58,7 @@
 **最新增量：stock kernel ELF 与 cpufreq driver 初步反汇编（2026-11-25）：**
 - reports 分支已上传 `rg34xx-boot-p4-verified.json`：解压内核 17,461,256 bytes，SHA-256 `39cf8c3eb9a75ff0eda51b4074cd65860c5aa5386093bcaf69339819421d84b7`，前 16 位与公开 BaseOS V1.0.6 RG34XX survey 的 SHA 前缀一致；aligned GNU notes 位于 `0x9082b8` 和 `0xc8fc50`，后者为运行内核 Build ID。
 - `vmlinux-to-elf` 已将本地 p4 镜像恢复为 AArch64 ET_EXEC，找回 89,675 symbols；报告 `rg34xx-cpufreq-driver-disasm.txt` 记录 `sun50i_cpufreq_nvmem_probe`、NVMEM、OPP setter 和 call-site 摘录。
-- 目标 probe 的 speed cell 在 FDT 中声明为 2 bytes，但二进制执行 32-bit `ldr`，当前摘录未发现长度检查；这是匹配 shipping binary 中的逻辑越界读取风险。probe 同时出现 `dev_pm_opp_set_prop_name()` 与 `dev_pm_opp_set_supported_hw(..., 1)` 调用，不能再把静态 analyzer 的 no-mask + b1 fingerprint 描述为有效运行配置。
+- 目标 probe 的 speed cell 在 FDT 中声明为 2 bytes（捕获字节 `00 6c`），但二进制执行 32-bit `ldr` 且当前摘录未发现长度检查；比较使用的高 2 bytes 尚未知。若实际 32-bit word 为 `0x6c00/0x7c00`，代码选 `b` 前缀；后缀为 `sunxi_get_soc_ver() & 7` 非零时 `1`、否则 `0`，所以 `b1` 是条件分支而非由 2-byte SID 直接证明。probe 同时出现 `dev_pm_opp_set_prop_name()` 与 `dev_pm_opp_set_supported_hw(..., 1)` 调用，不能再把静态 analyzer 的 no-mask + b1 fingerprint 描述为有效运行配置。
 - 下一步是完整 CFG/分支映射、setter 返回处理、cpufreq-dt 注册路径，以及目标 OPP core 的 `_opp_is_supported()` / named-voltage parser。不得从有限摘录推断 `0x6c00 → mask/name`；所有 OPP 授权和 DVFS 写操作保持关闭。详见 [RG34XX CPUX live audit §1.11–1.12](rg34xx-cpux-live-audit-2026-11-25.md)。
 ## 1. 项目目标与固定约束
 
