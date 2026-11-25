@@ -6,7 +6,7 @@
 
 #define CHECK(condition, message) do { \
     if (!(condition)) { \
-        fprintf(stderr, "FAIL: %s\\n", message); \
+        fprintf(stderr, "FAIL: %s\n", message); \
         return EXIT_FAILURE; \
     } \
 } while (0)
