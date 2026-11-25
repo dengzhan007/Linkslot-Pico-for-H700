@@ -6,9 +6,10 @@
 
 - `linkslot-h700-live-mmc-map-2026-11-23-round16.md` — analyzed the r2 read-only capture and
   decoded the live controller/host relationships. The active boot/system SD is `sdc0@0x04020000` (`sunxi-mmc-v4p1x`, Linux `mmc_host0`): it owns
-  `mmcblk0`, the running rootfs p5, and the cmdline-designated `UDISK` p7. This is the first
-  controller to support when implementing the same-card ROM storage path; Linux reports an
-  SDHC card, not eMMC. `sdc2@0x04022000` (`sunxi-mmc-v4p6x`, Linux `mmc_host1`) is the optional
+  `mmcblk0`, the running rootfs p5, and the actual ROM/user-data volume p7. Bootargs designate p7
+  as UDISK, and the mount table confirms p7 is mounted at `/mnt/sdcard` with `/mnt/sdcard/Roms`
+  and other user paths; p6 is `/data` (ext4) despite its conflicting sysfs `PARTNAME=UDISK`.
+  This is the first controller to support for same-card ROM storage; Linux reports SDHC, not eMMC. `sdc2@0x04022000` (`sunxi-mmc-v4p6x`, Linux `mmc_host1`) is the optional
   second-card-slot candidate, with 4-bit bus, GPIO card detect, and `vqmmc-supply` referencing
   AXP2202 ALDO1. `sdc1@0x04021000` (`mmc_host2`) is the SDIO DDR50 device consistent with Wi-Fi.
   The raw `cd-gpios` cells contain port 4 / pin 22 followed by vendor-specific config cells
