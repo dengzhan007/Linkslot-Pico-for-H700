@@ -1,0 +1,6 @@
+# Keep the published bytes identical to the recorded SHA-256 list.
+# This host has core.autocrlf=true, so without -text a checkout would
+# rewrite these files to CRLF and sha256sum -c would fail.
+*.md   -text
+*.json -text
+*.txt  -text
