@@ -2,6 +2,11 @@
 
 ## Index
 
+### 2026-11-23 — Linkslot 1.0.36 static Libretro core registry ABI (round 4)
+
+- `linkslot-lk-rust-feasibility-2026-11-23-round4-static-core-abi.md` — successful GitHub Actions run 45107173305. Links a no_std Rust table matching Linkslot's current `slot-retro::ffi::Api` shape to two namespaced mock cores (`mgba_retro_*` / `gpsp_retro_*`). AArch32 and AArch64 ELF links have no undefined symbols; x86_64 harness actually exercises environment/video/audio/input callbacks, ROM load/run, save-state, memory, cheats and deinit. This establishes the static function-table pattern only; it does **not** compile mGBA/gpSP. [Workflow run 45107173305](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45107173305); [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16).
+
+
 ### 2026-11-23 — Linkslot 1.0.36 static i18n and A32 BL33 layout (round 3)
 
 - `linkslot-lk-rust-feasibility-2026-11-23-round3.md` — successful GitHub Actions run 45106548485. Adds `slot-i18n` no_std static-table proof: 6 domains, 1,763 unique translation keys and 1,763 entries per language; upstream 9 unit + 9 translations integration tests pass; generated no_std candidate 13 tests pass; AArch32/AArch64 checks pass. The same workflow reruns `slot-input`, `slot-model`, Rust/C ABI and A32 BL33 host layout probes. Records LK's uniprocessor scheduler, incorrect A53 compiler flag, missing A53 SMP init, and the Libretro `libloading` porting boundary. **No full LK firmware, device test, SD write or payload execution.** [Workflow run 45106548485](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45106548485); [PR #16](https://github.com/dengzhan007/Linkslot-Pico-for-H700/pull/16).
