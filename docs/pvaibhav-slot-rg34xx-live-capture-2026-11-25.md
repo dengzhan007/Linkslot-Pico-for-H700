@@ -94,3 +94,19 @@ A follow-up game probe must be armGBA-specific; the fork's existing sample probe
 5. Preserve the C policy contract: UI preference and GAME 120-Hz opt-in are separate; GAME 120 Hz remains default-off. `hardware_applied=0` until an RG34XX-specific HAL proves the applied mode by readback.
 
 **Current conclusion:** the device is observed at approximately 60 Hz in both UI and gameplay. No 120-Hz support or UI/GAME FPS result is claimed.
+
+
+## Runtime identity and gate confirmation
+
+Both captured `proc-2842/selected-environ.txt` files show the same multi-frontend environment:
+
+- `BASEOS_TARGET=rg34xx`, `BASEOS_PLATFORM=h700`;
+- `BASEOS_PACKAGE_ID=slot-pvaibhav`, `BASEOS_FRONTEND_ID=slot-pvaibhav--default`;
+- `SLOT_ROOT=/mnt/sdcard`, `BASEOS_LAUNCHER=/mnt/sdcard/.baseos/compat/slot-pvaibhav/launch.sh`;
+- `BASEOS_FRONTEND_PROGRAM_ROOT=/mnt/sdcard/Frontends/slot-pvaibhav`.
+
+The running process status is `Uid: 0 0 0 0` with effective capabilities `0000003fffffffff`. Thus root permissions do not explain the absence of a mode change. The `sunxi_dump` nodes are root-owned and root-writable; they were not written.
+
+The reviewed pvaibhav source confirms the exact decision chain: `DevicePlatform::new()` reads `BASEOS_TARGET`; `DevicePlatform::probe()` calls `PanelRefresh::probe()`; `supports_high_refresh()` is `self.refresh.is_some()`; and `app.rs::set_power()` calls `set_high_refresh()` only when that capability is true. The fork's `rg34xx` panel gate requires the exact bytes `fog_fj035fhd05_v1\\0`, while this live panel reports `rg34xx_v1`. Therefore the reviewed source path rejects this board before any hardware write and skips the startup setter even though the stored preference is 1.
+
+The report did not capture a SHA-256 or version string for the installed Slot executable/core, so the deployed binary cannot be proven byte-for-byte identical to reviewed commit `5206e3fa39aa4a9b702cd9048a07dab3b5ab95da`. The environment and runtime observations match the expected target, but the source-level explanation is pinned to that reviewed source revision rather than an independently verified installed binary.
