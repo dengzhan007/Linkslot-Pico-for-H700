@@ -230,6 +230,23 @@ Platform::set_high_refresh @ 0x4f37d0
 
 这解释了上一轮实测为什么「`high_refresh=1` 但仍是 60 Hz」：设置项只是一个输入，真正生效与否取决于平台能力字段。**本次没有证明该字段在 rg34xx 上到底是哪个分支**（需要 dump 运行时结构体，属禁止的 `/proc/PID/mem` 范畴），只证明了门控存在且不满足时静默返回。
 
+### 6.1 与仓库内 boot-package 路线的关系
+
+仓库另有 [docs/rgxx-boot-package-120hz-review.md](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/porting/linkslot-1.0.45-feasibility/docs/rgxx-boot-package-120hz-review.md)，记录的是一条**完全不同的**路径：改 `boot_package.fex` 后刷到裸盘偏移 `0x1004000` 再重启，由 FDT 固定 DCLK 54 MHz / HT 840 / VT 536（约 119.94 Hz），运行期没有切换点。
+
+两条路径可以用本次读数直接区分：
+
+| 判据 | 120 Hz boot package | 本文档记录的 runtime 60 Hz | 本机实测 |
+| --- | --- | --- | --- |
+| FDT `lcd_dclk_freq` | 54 MHz | — | **26 MHz** |
+| FDT `lcd_ht` / `lcd_vt` | 840 / 536 | — | **820 / 536** |
+| PLL video0x4 | — | `0x88001703` | **`0x88001703`** |
+| TCON divider | — | `0xf000000b` | 未读到（dump `I/O error`） |
+
+值得注意：那份评审把 pvaibhav/slot 的 **60 Hz** 运行期配置记作 `0x88001703` + `0xf000000b`，与本次实测的 PLL 字逐位相符；divider 因 dump 不可读未能直接验证，但 288 MHz / 11 与 59.57 Hz 的观测一致。
+
+结论：本机既没刷 120 Hz 的 boot package（FDT 仍是 26 MHz / 820×536），运行期也没离开 60 Hz 那一档（PLL 仍是 288 MHz）。两条路都停在 60 Hz 侧，与上一轮 IRQ 59.6 Hz 的实测吻合。
+
 ## 7. 合规
 
 - 仅 ADB；`id` 已是 `uid=0(root)`，**未执行 `adb root`**。
