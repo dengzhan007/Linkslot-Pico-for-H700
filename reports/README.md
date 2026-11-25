@@ -1,5 +1,14 @@
 # RG34XX read-only inventory reports
 
+## Index
+
+- `rg34xx-inventory-20261122-195053.zip` — full read-only inventory archive (`main` @ `acc5e09`).
+- `debugfs-memory-reservations.txt` — standalone extract from that archive.
+- `rg34xx-inventory-20261122-204742/` — sanitized ION/TEE runtime subset (`main` @ `9b68302`).
+- `rg34xx-inventory-20261122-210352/` — sanitized Allwinner DRM-info SMC follow-up
+  (`audit/rg34xx-ion-drm-followup-20261122` @ `00fe17d`); see `DRM-SMC-finding.md`.
+
+
 This branch is dedicated to field reports captured from the RG34XX handheld. Source code
 lives on `main`; report archives are kept here because `build/` is gitignored there.
 

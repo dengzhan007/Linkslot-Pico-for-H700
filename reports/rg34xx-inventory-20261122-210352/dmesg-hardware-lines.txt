@@ -1,0 +1,146 @@
+[    0.767508] usb_serial_number:[REDACTED]
+[    0.775700] input: axp2202-pek as /devices/platform/soc/twi5/i2c-5/5-0034/axp2101-pek.0/input/input0
+[    0.780808] sunxi-rtc rtc: rtc core: registered sunxi-rtc as rtc1
+[    0.780871] sunxi-rtc rtc: RTC enabled
+[    0.781613] sunxi cedar version 0.1
+[    0.782085] VE: sunxi ve debug register driver failed!
+[    0.785629] axp2202_usb_power: axp2202-acin device is not configed, not use vbus-det
+[    0.798181] axp2202_battery: radio:100
+[    0.798480] axp2202_battery: 
+[    0.822275] Bluetooth: HCI UART driver ver 2.3
+[    0.822285] Bluetooth: HCI UART protocol H4 registered
+[    0.822291] Bluetooth: HCI UART protocol LL registered
+[    0.822297] Bluetooth: HCI UART protocol Three-wire (H5) registered
+[    0.826878] sun50iw9p1-pinctrl pio: expect_func as:uart0_jtag, but muxsel(3) is func:jtag
+[    0.826895] sun50iw9p1-pinctrl pio: expect_func as:uart0_jtag, but muxsel(3) is func:jtag
+[    0.826910] sun50iw9p1-pinctrl pio: expect_func as:uart0_jtag, but muxsel(3) is func:uart0
+[    0.826925] sun50iw9p1-pinctrl pio: expect_func as:uart0_jtag, but muxsel(3) is func:jtag
+[    0.826940] sun50iw9p1-pinctrl pio: expect_func as:uart0_jtag, but muxsel(3) is func:uart0
+[    0.826955] sun50iw9p1-pinctrl pio: expect_func as:uart0_jtag, but muxsel(3) is func:jtag
+[    0.827317] sunxi-mmc sdc0: SD/MMC/SDIO Host Controller Driver(v3.35 2019-12-11 14:29)
+[    0.827383] sunxi-mmc sdc0: ***ctl-spec-caps*** 608
+[    0.827552] sunxi-mmc sdc0: No vmmc regulator found
+[    0.827560] sunxi-mmc sdc0: No vqmmc regulator found
+[    0.827567] sunxi-mmc sdc0: No vdmmc regulator found
+[    0.827574] sunxi-mmc sdc0: No vd33sw regulator found
+[    0.827581] sunxi-mmc sdc0: No vd18sw regulator found
+[    0.827588] sunxi-mmc sdc0: No vq33sw regulator found
+[    0.827594] sunxi-mmc sdc0: No vq18sw regulator found
+[    0.828064] sunxi-mmc sdc0: set host busy
+[    0.828138] mmc:failed to get gpios
+[    0.828373] sunxi-mmc sdc0: sdc set ios:clk 0Hz bm PP pm UP vdd 21 width 1 timing LEGACY(SDR12) dt B
+[    0.853749] sunxi-mmc sdc0: sdc set ios:clk 400000Hz bm PP pm ON vdd 21 width 1 timing LEGACY(SDR12) dt B
+[    0.883774] sunxi-mmc sdc0: detmode:alway in(non removable)
+[    0.883798] sunxi-mmc sdc0: sdc set ios:clk 400000Hz bm PP pm ON vdd 21 width 1 timing LEGACY(SDR12) dt B
+[    0.886248] sunxi-mmc sdc0: sdc set ios:clk 400000Hz bm PP pm ON vdd 21 width 1 timing LEGACY(SDR12) dt B
+[    0.887498] sunxi-mmc sdc2: SD/MMC/SDIO Host Controller Driver(v3.35 2019-12-11 14:29)
+[    0.887556] sunxi-mmc sdc2: ***ctl-spec-caps*** 608
+[    0.887828] sunxi-mmc sdc2: No vmmc regulator found
+[    0.887835] sunxi-mmc sdc2: No vdmmc regulator found
+[    0.887842] sunxi-mmc sdc2: No vd33sw regulator found
+[    0.887849] sunxi-mmc sdc2: No vd18sw regulator found
+[    0.887856] sunxi-mmc sdc2: No vq33sw regulator found
+[    0.887863] sunxi-mmc sdc2: No vq18sw regulator found
+[    0.888268] mmc0: mmc_sd_init_card() debug
+[    0.888281] sunxi-mmc sdc0: sdc set ios:clk 400000Hz bm PP pm ON vdd 21 width 1 timing LEGACY(SDR12) dt B
+[    0.889554] sunxi-mmc sdc2: set host busy
+[    0.889625] sunxi-mmc sdc2: Got CD GPIO
+[    0.890723] sunxi-mmc sdc0: sdc set ios:clk 400000Hz bm PP pm ON vdd 21 width 1 timing LEGACY(SDR12) dt B
+[    0.892077] sunxi-mmc sdc2: sdc set ios:clk 0Hz bm PP pm UP vdd 21 width 1 timing LEGACY(SDR12) dt B
+[    0.913798] sunxi-mmc sdc2: sdc set ios:clk 400000Hz bm PP pm ON vdd 21 width 1 timing LEGACY(SDR12) dt B
+[    0.921383] mmc0: host does not support reading read-only switch, assuming write-enable
+[    0.923114] sunxi-mmc sdc0: sdc set ios:clk 400000Hz bm PP pm ON vdd 21 width 1 timing SD-HS(SDR25) dt B
+[    0.923179] sunxi-mmc sdc0: sdc set ios:clk 50000000Hz bm PP pm ON vdd 21 width 1 timing SD-HS(SDR25) dt B
+[    0.923323] sunxi-mmc sdc0: sdc set ios:clk 50000000Hz bm PP pm ON vdd 21 width 4 timing SD-HS(SDR25) dt B
+[    0.923409] mmc0: new high speed SDHC card at address 1234
+[    0.924137] mmcblk0: mmc0:1234 SA16G 14.5 GiB 
+[    0.926779]  mmcblk0: p1 p2 p3 p4 p5 p6 p7
+[    0.953870] sunxi-mmc sdc2: detmode:gpio polling
+[    0.954469] sunxi-mmc sdc1: SD/MMC/SDIO Host Controller Driver(v3.35 2019-12-11 14:29)
+[    0.954539] sunxi-mmc sdc1: ***ctl-spec-caps*** 8
+[    0.954703] sunxi-mmc sdc1: No vmmc regulator found
+[    0.954710] sunxi-mmc sdc1: No vqmmc regulator found
+[    0.954717] sunxi-mmc sdc1: No vdmmc regulator found
+[    0.954724] sunxi-mmc sdc1: No vd33sw regulator found
+[    0.954731] sunxi-mmc sdc1: No vd18sw regulator found
+[    0.954738] sunxi-mmc sdc1: No vq33sw regulator found
+[    0.954745] sunxi-mmc sdc1: No vq18sw regulator found
+[    0.955441] sunxi-mmc sdc1: set host busy
+[    0.955527] mmc:failed to get gpios
+[    0.955733] sunxi-mmc sdc1: sdc set ios:clk 0Hz bm PP pm UP vdd 21 width 1 timing LEGACY(SDR12) dt B
+[    0.965234] sunxi-mmc sdc2: sdc set ios:clk 0Hz bm PP pm OFF vdd 0 width 1 timing LEGACY(SDR12) dt B
+[    0.993852] sunxi-mmc sdc1: sdc set ios:clk 400000Hz bm PP pm ON vdd 21 width 1 timing LEGACY(SDR12) dt B
+[    1.033855] sunxi-mmc sdc1: detmode:manually by software
+[    1.040792] optee: probing for conduit method from DT.
+[    1.040801] optee: api uid mismatch
+[    1.064574] boot_hdmi=false
+[    1.078390] sunxi-thermal 5070400.thermal_sensor: avcc is not calibrated
+[    1.123382] [sound  402][CODEC-HDMI sunxi_codec_dev_probe] register codec-hdmi success
+[    1.125003] sunxi-snd-mach soc@03000000:codec_mach: sunxi-snd-codec <-> soc@03000000:codec_plat mapping ok
+[    1.125858] sunxi-snd-mach soc@03000000:ahub_dam_mach: snd-soc-dummy-dai <-> 5097000.ahub_dam_plat mapping ok
+[    1.126917] sunxi-snd-mach soc@03000000:ahub1_mach: soc@03000000:hdmi_codec <-> soc@03000000:ahub1_plat mapping ok
+[    1.128227] axp2202-dcdc4: disabling
+[    1.130877] EXT4-fs (mmcblk0p5): couldn't mount as ext3 due to feature incompatibilities
+[    1.133621] EXT4-fs (mmcblk0p5): INFO: recovery required on readonly filesystem
+[    1.133626] EXT4-fs (mmcblk0p5): write access will be enabled during recovery
+[    1.159646] EXT4-fs (mmcblk0p5): recovery complete
+[    1.165526] EXT4-fs (mmcblk0p5): mounted filesystem with ordered data mode. Opts: (null)
+[    1.166841] Freeing unused kernel memory: 2688K
+[    1.229532] EXT4-fs (mmcblk0p5): re-mounted. Opts: data=ordered,nobarrier,noauto_da_alloc
+[    1.308076] sunxi ehci1-controller don't init wakeup source
+[    1.308114] [sunxi-ehci1]: probe, pdev->name: 5200000.ehci1-controller, sunxi_ehci: 0xffffff800919a568, 0x:ffffff8009cfd000, irq_no:163
+[    1.308269] sunxi-ehci 5200000.ehci1-controller: SW USB2.0 'Enhanced' Host Controller (EHCI) Driver
+[    1.308289] sunxi-ehci 5200000.ehci1-controller: new USB bus registered, assigned bus number 2
+[    1.308692] sunxi-ehci 5200000.ehci1-controller: irq 355, io mem 0x4df4e743
+[    1.333810] sunxi-ehci 5200000.ehci1-controller: USB 0.0 started, EHCI 1.00
+[    1.344348] sunxi ohci1-controller don't init wakeup source
+[    1.344435] [sunxi-ohci1]: probe, pdev->name: 5200000.ohci1-controller, sunxi_ohci: 0xffffff8009199828
+[    1.344572] sunxi-ohci 5200000.ohci1-controller: SW USB2.0 'Open' Host Controller (OHCI) Driver
+[    1.344592] sunxi-ohci 5200000.ohci1-controller: new USB bus registered, assigned bus number 3
+[    1.344656] sunxi-ohci 5200000.ohci1-controller: irq 356, io mem 0x501eb366
+[    1.349680] EXT4-fs (mmcblk0p6): recovery complete
+[    1.368897] EXT4-fs (mmcblk0p6): mounted filesystem with ordered data mode. Opts: (null)
+[    1.371343] mali gpu: No memory group manager is configured
+[    1.420686] sunxi ohci2-controller don't init wakeup source
+[    1.420767] [sunxi-ohci2]: probe, pdev->name: 5310000.ohci2-controller, sunxi_ohci: 0xffffff8009199b78
+[    1.420901] sunxi-ohci 5310000.ohci2-controller: SW USB2.0 'Open' Host Controller (OHCI) Driver
+[    1.420920] sunxi-ohci 5310000.ohci2-controller: new USB bus registered, assigned bus number 4
+[    1.420992] sunxi-ohci 5310000.ohci2-controller: irq 357, io mem 0x54abda34
+[    1.490904] sunxi ehci3-controller don't init wakeup source
+[    1.490912] [sunxi-ehci3]: probe, pdev->name: 5311000.ehci3-controller, sunxi_ehci: 0xffffff800919ac08, 0x:ffffff8009f31000, irq_no:166
+[    1.491051] sunxi-ehci 5311000.ehci3-controller: SW USB2.0 'Enhanced' Host Controller (EHCI) Driver
+[    1.491071] sunxi-ehci 5311000.ehci3-controller: new USB bus registered, assigned bus number 5
+[    1.491450] sunxi-ehci 5311000.ehci3-controller: irq 358, io mem 0x58db45bb
+[    1.513867] sunxi-ehci 5311000.ehci3-controller: USB 0.0 started, EHCI 1.00
+[    1.517347] sunxi ohci3-controller don't init wakeup source
+[    1.517432] [sunxi-ohci3]: probe, pdev->name: 5311000.ohci3-controller, sunxi_ohci: 0xffffff8009199ec8
+[    1.517582] sunxi-ohci 5311000.ohci3-controller: SW USB2.0 'Open' Host Controller (OHCI) Driver
+[    1.517603] sunxi-ohci 5311000.ohci3-controller: new USB bus registered, assigned bus number 6
+[    1.517666] sunxi-ohci 5311000.ohci3-controller: irq 313, io mem 0x5a6e43e9
+[    1.544918] FAT-fs (mmcblk0p7): Volume was not properly unmounted. Some data may be corrupt. Please run fsck.
+[    2.033402] sunxi-mmc sdc1: sdc set ios:clk 400000Hz bm PP pm ON vdd 21 width 1 timing LEGACY(SDR12) dt B
+[    2.035978] sunxi-mmc sdc1: sdc set ios:clk 400000Hz bm PP pm ON vdd 21 width 1 timing LEGACY(SDR12) dt B
+[    2.037381] sunxi-mmc sdc1: smc 2 p1 err, cmd 5, RE !!
+[    2.037710] sunxi-mmc sdc1: smc 2 p1 err, cmd 5, RE !!
+[    2.038038] sunxi-mmc sdc1: smc 2 p1 err, cmd 5, RE !!
+[    2.038317] sunxi-mmc sdc1: smc 2 p1 err, cmd 5, RE !!
+[    2.038334] sunxi-mmc sdc1: sdc set ios:clk 0Hz bm PP pm OFF vdd 0 width 1 timing LEGACY(SDR12) dt B
+[    2.272190] misc sunxi-wlan: start scan device on bus_index: 1
+[    2.272531] sunxi-mmc sdc1: sdc set ios:clk 0Hz bm PP pm UP vdd 21 width 1 timing LEGACY(SDR12) dt B
+[    2.293956] sunxi-mmc sdc1: sdc set ios:clk 400000Hz bm PP pm ON vdd 21 width 1 timing LEGACY(SDR12) dt B
+[    2.419877] sunxi-wlan soc@03000000:wlan: bus_index: 1
+[    2.421400] sunxi-wlan soc@03000000:wlan: check wlan wlan_power voltage: 3300000
+[    2.435927] sunxi-mmc sdc1: smc 2 p1 err, cmd 52, RTO !!
+[    2.436753] sunxi-mmc sdc1: smc 2 p1 err, cmd 52, RTO !!
+[    2.436771] sunxi-mmc sdc1: sdc set ios:clk 400000Hz bm PP pm ON vdd 21 width 1 timing LEGACY(SDR12) dt B
+[    2.439262] sunxi-mmc sdc1: sdc set ios:clk 400000Hz bm PP pm ON vdd 21 width 1 timing LEGACY(SDR12) dt B
+[    2.440652] sunxi-mmc sdc1: card claims to support voltages below defined range
+[    2.475443] sunxi-mmc sdc1: sdc set ios:clk 0Hz bm PP pm ON vdd 21 width 1 timing LEGACY(SDR12) dt B
+[    2.503773] sunxi-mmc sdc1: sdc set ios:clk 400000Hz bm PP pm ON vdd 21 width 1 timing LEGACY(SDR12) dt B
+[    2.514909] sunxi-mmc sdc1: sdc set ios:clk 400000Hz bm PP pm ON vdd 21 width 4 timing LEGACY(SDR12) dt B
+[    2.515690] sunxi-mmc sdc1: sdc set ios:clk 400000Hz bm PP pm ON vdd 21 width 4 timing UHS-DDR50 dt B
+[    2.515743] sunxi-mmc sdc1: sdc set ios:clk 50000000Hz bm PP pm ON vdd 21 width 4 timing UHS-DDR50 dt B
+[    2.516474] mmc2: new ultra high speed DDR50 SDIO card at address 0001
+[    5.549168] sunxi-bt soc@03000000:bt: block state already is 1
+[   20.954504] axp2202_usb_power: current limit not set: usb adapter type
+[  991.884999] [sound  164][CODEC sunxi_internal_codec_dai_set_pll] stream -> OUT, freq_in ->90316800, freq_out ->90316800
