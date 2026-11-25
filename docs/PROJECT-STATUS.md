@@ -217,8 +217,8 @@
 2. CPU Performance QuickRow 已完成 display-only/unavailable 接入和 App 回归测试。后续只有在 board-approved RG34XX profile、C owner 初始化和真实只读 telemetry 路径齐备后，才把 `CpuPerformanceRuntime` typed client 接入 App；在此之前继续保持不可选、不可 persist、无计划 MHz 展示。
 
 Linkslot 1.0.45 UI 当前已追加 display-only CPU row：`SYSTEM_SETTINGS` 为 7 行，`QuickRow::ALL` 为 88 项，Language index=86、CPU Performance index=87；`QuickValue::ALL` 为 38 项，新 unavailable value index=37。两项 App unit tests 已在 runtime-slices/full feasibility CI 实际通过；Rust typed client 仍未接入 App。
-3. **运行 RG34XX inventory v4**：使用更新后的 `scripts/run-rg34xx-inventory.ps1`，输出目录为 `build/rg34xx-inventory-20261125-cpux-v4`；确认报告包含 `kernel-driver-provenance.txt`（kernel notes/build-id、cpufreq platform binding、过滤后的 OPP/NVMEM symbol names），再上传到 reports 分支 `reports/rg34xx-inventory-20261125-cpux-v4/`。不改 governor、min/max、PMIC、PLL 或 CCU。
-4. **确认实机正在运行的 cpufreq-nvmem/OPP 精确源码和 build**：目前公开 4.9.170 source candidates 的 raw `0x6c00` mapping 不一致；需找到目标镜像对应 source commit/patch 或可识别的只读驱动证据，不能推定 mask。
+3. **已完成 RG34XX inventory v4**：[报告](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261125-cpux-v4) 已确认 GNU Build ID `a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68`、`sun50i-cpufreq-nvmem` / `cpufreq-dt` 实际绑定及运行列表与 `b1` 电压子集的对应关系；无需重复 inventory。
+4. **确认实机正在运行的 cpufreq-nvmem/OPP 精确源码和 build**：从 stock `boot` 分区 `mmcblk0p4` 或匹配的 `vmlinux` 获取二进制，离线比对 GNU Build ID 并审查 driver machine code，重点确认 `dev_pm_opp_set_prop_name` 与 raw `0x6c00` 的路径；不要从符号名或频率表直接推断源码和 mask。
 5. 证明 BL31→BL33 CPU1–CPU3 状态、单核 invariant、备用父时钟切换和 timer continuity；同时解决 AVCC thermal calibration 或确认独立可信温度来源。前述门槛闭合后才设计 C HAL transition（升频先升压、降频先降频后降压、readback/timeout/rollback/hysteresis）。
 6. 最后才开放实际 Performance/Boost。不得把 ABI v1 的 `POLICY_ONLY` 当作 DVFS 已完成。
 
