@@ -1,0 +1,69 @@
+{
+  "cells": {
+    "speed": {
+      "dts_provider_offset": "0x0",
+      "length_bytes": 2,
+      "report": {
+        "mainline_reference_decode": {
+          "candidate_bin": 5,
+          "opp_authorization": "not_approved",
+          "raw_u16": "0x6c00",
+          "requires_smccc_arch_soc_id_revision": false,
+          "status": "recognized_reference_value",
+          "warning": "This is a Linux mainline reference classification only, not an RG34XX OPP approval."
+        },
+        "matches_pinned_vendor_literal": false,
+        "opp_authorization": "not_approved",
+        "pinned_vendor_literal_set": [
+          "0x2400",
+          "0x2c00",
+          "0x5000",
+          "0x5400",
+          "0x5c00",
+          "0x7400",
+          "0x7c00"
+        ],
+        "raw_bytes_hex": "006c",
+        "raw_u16_le": "0x6c00",
+        "status": "captured",
+        "warning": "Do not use the pinned vendor cpufreq raw-value switch as an OPP approval: its consumer casts the NVMEM result to u32* even though the DTS cell is 2 bytes and the pinned NVMEM core allocates exactly cell->bytes. Silicon-revision semantics also remain unverified."
+      }
+    },
+    "thermal_calibration": {
+      "dts_provider_offset": "0x14",
+      "length_bytes": 8,
+      "report": {
+        "calibration_status": "not_certified",
+        "factory_test_temperature_raw_0p1c": 280,
+        "raw_bytes_hex": "181113ab191b16bb",
+        "sensor0_calibration_raw_12bit": 2835,
+        "sensor1_calibration_raw_12bit": 2841,
+        "sensor2_calibration_raw_12bit": 2838,
+        "sensor3_calibration_raw_12bit": 2842,
+        "status": "captured",
+        "u16_le_words": [
+          "0x1118",
+          "0xab13",
+          "0x1b19",
+          "0xbb16"
+        ],
+        "warning": "The field layout mirrors the pinned sunxi-thermal-ng source for sun50iw9p1. Raw fields do not prove that AVCC/thermal calibration was accepted, that live temperatures are valid, or that closed-loop DVFS is safe."
+      }
+    }
+  },
+  "generic_soc_identity": {
+    "attributes": {},
+    "note": "These are generic SoC bus sysfs strings only. They are not substituted for the vendor sunxi_get_soc_ver() result and do not certify a speed bin or authorize any OPP.",
+    "opp_authorization": "not_approved",
+    "status": "unavailable"
+  },
+  "limitations": [
+    "This report decodes only the two bounded NVMEM cells captured by the read-only inventory collector.",
+    "The speed-bin value is raw evidence only. No OPP mask is inferred and no operating point is approved.",
+    "The thermal calibration fields are diagnostic only and do not certify a calibrated sensor or temperature limit.",
+    "No CPU clock, PMIC, regulator, PLL or thermal control register was read or written by this parser."
+  ],
+  "sid_provider": "sunxi-sid-ng@03006000",
+  "source_file": "cpu-power-runtime.txt",
+  "source_sha256": "c4632005eab4973182df4a6d809c2cea11f57c8c5b29452905a8f96cd76e37c7"
+}

@@ -2,6 +2,24 @@
 
 ## Index
 
+### 2026-11-25 — RG34XX/H700 CPU clock, OPP table, SID and BaseOS FDT handoff (v2)
+
+- `rg34xx-inventory-20261125-cpux-v2/` — second read-only inventory (`porting/linkslot-1.0.45-feasibility`
+  @ `7f07ea2`, collector `94cce9b7…`, same device `sun50iw9p1` / Linux `4.9.170`). All five partition-level
+  captures (`boot0` ×2, `toc1`, `env`, live FDT) are **byte-identical** to the 07:37 run, so the read path is
+  reproducible. New collector block samples cpufreq + `clk_summary` + `uptime` back to back: most
+  frequency/PLL disagreements are read-skew across the switch, but one window of ≥1.1 s holds
+  `scaling_cur_freq` at 480 MHz while `cpuinfo_cur_freq` and `pll_cpu` stay at 1008 MHz and dcdc1 tracks
+  1008's voltage — request recorded, clock and regulator not applied. The OPP table is now fully decoded:
+  table-level `nvmem-cells = <&speed>` plus per-OPP `opp-microvolt-{a1,b0,b1,c0,c1,c2}`; the five dropped
+  OPPs (600/792/1032/1296/1344 MHz) are exactly those left with variant-only entries, so
+  `_opp_supported_by_regulators` sees `minuV 0 maxuV 0`. SID values are identical to the earlier run
+  (`speed` `0x6c00`, `calib` four 12-bit 2835/2841/2838/2842) and `avcc is not calibrated` still stands.
+  Runtime FDT vs packaged DTB: +4,114 B at equal 573 nodes, an extra memreserve at `0x42000000`+512 B, and
+  boot-chain-injected `/chosen` properties `baseos,native-boot` / `baseos,native-timing` /
+  `baseos,boot-display` plus `boot_disp*` / `boot_fb0` (`7bf24800,2d0,1e0,20,b40,…` = the 720×480
+  framebuffer handoff). Serial numbers redacted; binaries stay local.
+
 ### 2026-11-25 — RG34XX/H700 CPU clock, CPU rail, SID and memory reservations
 
 - `rg34xx-inventory-20261125-cpux/` — read-only inventory (`porting/linkslot-1.0.45-feasibility` @ `aad78d4`,
