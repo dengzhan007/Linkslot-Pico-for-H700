@@ -92,9 +92,9 @@ The pinned mainline reference classifier labels `0x6c00` as candidate bin 5. Tha
 
 The 1416 MHz / 1160 mV runtime observation is numerically consistent with the DT 1416 MHz 0x20 / 1160 mV variant, but the cpufreq-vs-clk_summary divergence and unresolved vendor speed-bin semantics make this a correlation only—not proof that bit 5 was selected or that the pair is safe.
 
-### 1.5 cpufreq/OPP source variants and parser-v1 limitations — none is proven to be the running binary
+### 1.5 cpufreq/OPP source variants and v4 running-kernel provenance
 
-The device reports Linux `4.9.170`. The running kernel has no captured build ID or image hash that maps it to a specific public source commit. Several candidate trees have been checked, and they do **not** agree on how raw SID `0x6c00` is classified.
+The device reports Linux `4.9.170`. v4 now captures its GNU Build ID and runtime driver binding, but no public source commit or kernel image has yet been matched to that fingerprint. Several candidate trees have been checked, and they do **not** agree on how raw SID `0x6c00` is classified.
 
 | Candidate source | Kernel version / source | `0x6c00` behavior | Safety / applicability |
 |---|---|---|---|
@@ -133,10 +133,10 @@ The corrected v3 result was compared against additional public `sun50iw9` cpufre
 |---|---|---|
 | [qiaoweibiao/T507_Kernel, Linux 4.9.170](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/cpufreq/sun50i-cpufreq-nvmem.c#L42-L110) | Reads only `speed`; no explicit `0x6c00` case, so its switch default sets `supported_hw=0x4`; it does not call `dev_pm_opp_set_prop_name()` | v3 shows no table-level supported-hw match and `b1` is required |
 | [lineage-on-allwinner/android_kernel_allwinner_4.9, Linux 4.9.170](https://github.com/lineage-on-allwinner/android_kernel_allwinner_4.9/blob/ce0c8395b269a6748a10f4917a0e1d06bd4978d0/drivers/cpufreq/sun50i-cpufreq-nvmem.c#L42-L120) | Reads only `speed`; explicitly maps `0x6c00` to `supported_hw=0x1`; no named-property setter in this source | v3's exact no-mask + `b1` model is different |
-| [CrealityTech/sonic_pad_os, Linux 4.9.191](https://github.com/CrealityTech/sonic_pad_os/blob/7f37a7fbf4ad59907034715e3d967b9177de1cd4/lichee/linux-4.9/drivers/cpufreq/sun50i-cpufreq-nvmem.c#L101-L143) | Requires both `speed` and `Icpu`; `0x6c00` sets mask 1. The `b1` name is generated only in other speed-code branches (`0x2c00/0x7c00`) with Icpu data | v3's OPP table exposes only the `speed` NVMEM cell, and its raw `0x6c00` does not fit this candidate's `b1` path |
+| [CrealityTech/sonic_pad_os, Linux 4.9.191](https://github.com/CrealityTech/sonic_pad_os/blob/7f37a7fbf4ad59907034715e3d967b9177de1cd4/lichee/linux-4.9/drivers/cpufreq/sun50i-cpufreq-nvmem.c#L101-L143) | The `sun50iw9` path requires both `speed` and `Icpu`; `0x6c00` sets mask 1. The `b1` name is generated only for other speed-code branches (`0x2c00/0x7c00`) with Icpu data | v4 live OPP table exposes only `speed`, not `Icpu`; this source's probe would need the missing cell and its `0x6c00` path is not `b1` |
 | [Radxa allwinner-bsp `sun50iw9` variant](https://github.com/radxa/allwinner-bsp/blob/2045a3ca2a01f088c0314dc924bda59d154e363e/drivers/cpufreq/sun50i-cpufreq-nvmem.c#L146-L205) | Its speed-only `sun50iw9` data path falls through to property `a0` plus a one-cell supported-hw mask for `0x6c00` | It sets a property name and a hardware mask; it does not produce no-mask + `b1` |
 
-The Creality device tree also declares both `speed` and `Icpu` at the OPP table ([DTS lines 139–143](https://github.com/CrealityTech/sonic_pad_os/blob/7f37a7fbf4ad59907034715e3d967b9177de1cd4/lichee/linux-4.9/arch/arm64/boot/dts/sunxi/sun50iw9p1.dtsi#L139-L143)), unlike the uploaded RG34XX live FDT's single `speed` cell. These are candidate-source comparisons only, not proof of the target kernel source. The current evidence therefore points to a **different/custom vendor driver path or build**; obtain a kernel build/source fingerprint before assigning that path. Do not infer the target implementation from the family-compatible DTS alone.
+The Creality device tree also declares both `speed` and `Icpu` at the OPP table ([DTS lines 139–143](https://github.com/CrealityTech/sonic_pad_os/blob/7f37a7fbf4ad59907034715e3d967b9177de1cd4/lichee/linux-4.9/arch/arm64/boot/dts/sunxi/sun50iw9p1.dtsi#L139-L143)), unlike the uploaded RG34XX live FDT's single `speed` cell. These are candidate-source comparisons only, not proof of the target kernel source. The current evidence points to a **different/custom vendor driver path or build**; v4 supplies a stronger fingerprint but still does not identify the source tree. Do not infer the target implementation from the family-compatible DTS alone.
 
 ### 1.6 Thermal telemetry is not safe for automatic DVFS
 
@@ -211,6 +211,23 @@ CPU zone0 is 47.69 °C with passive trips at 60/70 °C and critical at 115 °C. 
 
 The five boot-chain captures (Boot0 primary/secondary, TOC1, env partition and original live FDT) match the v1/v2 capture hashes. Memory-map findings are unchanged: 1 GiB RAM, 46 reserved ranges, 64 MiB CMA, framebuffer `[0x7bf24800,0x7c076000)`, and un-attributed `[0x7ec00000,0x7fc00000)` remains excluded.
 
+
+### 1.10 Parser-v4 kernel provenance and live OPP corroboration
+
+The v4 read-only capture at 2026-11-25 04:05:51 UTC is archived at [reports/rg34xx-inventory-20261125-cpux-v4](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261125-cpux-v4). It closes the missing build-identity / binding evidence gap, but it does not identify a public source commit:
+
+- Running kernel: Linux `4.9.170 #19 SMP PREEMPT`, built 2026-05-26 13:58:08 CST with Linaro GCC 5.3.1 (2016.05); build host string is `flower@flower-B85M-D2V`.
+- `/sys/kernel/notes` begins with a GNU build-id note (namesz=4, descsz=20, type=GNU): **`a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68`**. The SHA-256 of the complete notes file is `6065c1a7ae894047f0e902551811b39d0c5a11b5afd894083eae46497d56e12d`. Exact Build ID / build-host searches did not surface a public matching source or image in the repositories checked; this is a fingerprint, not a source mapping.
+- The kernel config confirms `CONFIG_CPUFREQ_DT=y`, `CONFIG_CPUFREQ_DT_PLATDEV=y`, `CONFIG_PM_OPP=y`, `CONFIG_NVMEM=y`, `CONFIG_NVMEM_AXP=y` and `CONFIG_NVMEM_SUN50I_SID=y`. Filtered kallsyms contains `sun50i_cpufreq_nvmem_probe`, `sun50i_cpufreq_init`, `sun50i_cpufreq_match_list`, `dev_pm_opp_set_prop_name` and `dev_pm_opp_set_supported_hw`; no matching loadable modules are listed, consistent with the relevant driver being built in.
+- Both `/sys/bus/platform/devices/sun50i-cpufreq-nvmem` and `cpufreq-dt` expose their corresponding `driver` symlink and `DRIVER=` uevent. This confirms the platform devices are bound, and is stronger than seeing symbols or a device-tree node alone. It still does not reveal the driver's selected property string or its SID decoder.
+- The v4 live FDT continues to declare a single table NVMEM input, `nvmem-cell-names = "speed"`, with raw SID `0x6c00`. All five runtime cpufreq lists still agree on exactly nine rates: 480/720/936/1008/1104/1200/1320/1416/1512 MHz. These are exactly the rates whose `-ab` OPP entries contain a `b1` voltage; their declared `b1` values are 900/900/900/950/1000/1050/1100/1150/1160 mV. The five excluded rates (600/792/1032/1296/1344 MHz) still have no matching `b1` variant. This is now a strong runtime-to-`b1` fingerprint, but it is not direct proof that the source calls `dev_pm_opp_set_prop_name("b1")`, nor that SID `0x6c00` is the rule used to select it.
+- Six new getter/clock samples preserve the non-atomic cpufreq-cache behavior. For example, sample 2 goes from cached 1008 MHz to getter/PLL 1104 MHz with DCDC1 framework readback 1000 mV; sample 1 moves from cached/getter 1200 MHz to a later 1320 MHz read with 1100 mV. These voltage/frequency pairs agree numerically with the corresponding `b1` entries. They remain Linux clock/regulator-framework observations, not direct PMIC selector or CCU register reads at BL33 entry.
+- CPU thermal zone0 is 51.74 °C in this capture; passive trips remain 60/70 °C and critical 115 °C. The kernel still reports `avcc is not calibrated`; the raw thermal SID bytes do not certify sensor calibration.
+
+The public Creality 4.9.191 `sun50iw9` implementation was rechecked against v4: its `sun50iw9_soc_data` sets `nvmem_Icpu=true`, causing the probe to request an `Icpu` cell as well as `speed`; its `0x6c00` branch selects supported-hardware mask 1 rather than a `b1` property. Since the live OPP table exports only `speed` and the runtime frequency set fingerprints `b1`, this exact public source cannot be the matching driver implementation. The two checked public 4.9.170 candidates likewise do not match the active no-mask / named-voltage behavior. A custom or separately modified vendor driver remains the leading explanation, not a proven source identity.
+
+**Result:** the running cpufreq/OPP path is now confirmed active and its effective OPP set strongly matches `b1`; the exact Build ID-to-source relationship and raw SID-to-property-selection logic remain unresolved. Keep `opp_authorization=not_approved`, `POLICY_ONLY`, `hardware_applied=0`, and all DVFS writes disabled.
+
 ## 2. Memory ownership observations relevant to the broader port
 
 The capture reports one 1 GiB memory range [0x40000000, 0x80000000), 46 reserved ranges, and the following noteworthy regions:
@@ -230,10 +247,10 @@ The live FDT has no reserved-memory node; CMA debugfs is absent on this Linux 4.
 | CPU0–CPU3 Linux cpufreq grouping | **Confirmed:** one shared policy, all four online in this Linux snapshot |
 | Current Linux CPU clock parent | **Confirmed at Linux snapshot:** pll_cpu → cpu; pll_periph0 is separate |
 | pll_periph0 Linux rate | **Observed:** 600 MHz, 4/4 prepare/enable users |
-| cpufreq getter/cache reconciliation | **Captured in v3:** repeated reads show `scaling_cur_freq` moving from 1008 to 1104 MHz after getter reads; individual sysfs/clock/regulator attributes remain non-atomic |
+| cpufreq getter/cache reconciliation | **Captured in v3/v4:** getter-triggered cache refresh is repeated; reads remain non-atomic |
 | SID speed raw value | **Captured:** 0x6c00; candidate classifications differ by vendor source tree |
-| OPP table/runtime-list structural fingerprint | **Unique exact match:** no table-level `supported_hw` + `b1` named voltage suffix; shipping binary path and `0x6c00 → b1` mapping remain unproven |
-| DCDC1 runtime framework observation | **Captured:** v3 samples include 1416/1150, 1104/1000 and 1200/1050 MHz/mV pairs matching `b1` declarations; framework-only, not raw PMIC readback |
+| OPP table/runtime-list structural fingerprint | **Strong v4 runtime match:** active `sun50i-cpufreq-nvmem` + `cpufreq-dt` are bound; nine runtime rates exactly match the `b1`-voltage OPP subset. Exact property-selection code and `0x6c00 → b1` rule remain unproven |
+| DCDC1 runtime framework observation | **Captured:** v3/v4 frequency-voltage pairs (including 1320/1100 and 1104/1000 MHz/mV) align with `b1`; framework-only, not raw PMIC readback |
 | Raw PMIC voltage register at BL33 entry | **Not captured** |
 | Thermal cooling / calibration | **Cooling states observed at 0/8 and 0/5;** no active state in this snapshot. AVCC calibration remains rejected, so temperatures are not certified for closed-loop control |
 | CPU1–CPU3 state at BL31→BL33 | **Unresolved** |
@@ -243,14 +260,14 @@ The live FDT has no reserved-memory node; CMA debugfs is absent on this Linux 4.
 
 ## 4. Next actions
 
-1. Run the updated read-only collector and inspect `kernel-driver-provenance.txt`: `/sys/kernel/notes` hash / finite notes prefix (GNU build-id when present), `/proc/version`, relevant config, cpufreq platform driver/device binding, and filtered kallsyms symbol names. Then identify the exact shipping Linux 4.9.170 cpufreq/OPP binary/source path and explain the unique `no-mask + b1` behavior. Determine whether the target driver calls `dev_pm_opp_set_prop_name("b1")`, how the table speed NVMEM cell is used, and whether `supported_hw` is registered. Do not infer `0x6c00 → b1` from the frequency match alone.
+1. v4 has captured the GNU Build ID, compiler/build host, built-in CPUFreq/NVMEM configuration, and successful `sun50i-cpufreq-nvmem` / `cpufreq-dt` platform bindings. The remaining source-identification step is to obtain the stock `boot` partition (`mmcblk0p4`) or matching `vmlinux`/unstripped kernel image and compare its embedded kernel Build ID / disassembly with the live kernel. Keep the binary local or provide only extracted metadata/small relevant fragments; do not upload a full boot image to the reports branch by default. Do not infer the exact SID decoder or property setter from function names and frequency matching alone.
 2. Obtain a safe, read-only BL33-entry CPUX / PMIC state record only after the entry ABI and MMIO access prerequisites are proven. Distinguish Linux framework regulator readings from raw AXP2202 registers and Linux clk_summary from direct CCU readback. Do not issue test writes.
 3. Prove BL31→BL33 CPU1–CPU3 state, single-core execution ownership, shared CPUX PLL coordination, pll_periph0 fallback behavior and timer continuity before any shared-PLL transition design.
 4. Resolve AVCC/thermal calibration rejection or establish an independently validated temperature sensor path.
 5. Keep the runtime C service `POLICY_ONLY`, `hardware_applied=0`, and the Linkslot CPU Performance row display-only/unavailable. No Balanced/Performance/Boost transition is authorized.
 
 
-The new provenance-only collector is validated on Linux and Windows and across the three H700 target compile modes. The next device report should be named `reports/rg34xx-inventory-20261125-cpux-v4/`; it must include `kernel-driver-provenance.txt`. This collection does not touch CPUFreq controls, PMIC/PLL/CCU registers, SID contents beyond the existing two bounded cells, or vendor SMC/ioctl interfaces.
+The v4 provenance report is now archived at [reports/rg34xx-inventory-20261125-cpux-v4](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261125-cpux-v4). The collector is validated on Linux and Windows and across the three H700 target compile modes. It reads kernel metadata, sysfs links and filtered symbol names only; it does not touch CPUFreq controls, PMIC/PLL/CCU registers, SID contents beyond the existing two bounded cells, or vendor SMC/ioctl interfaces.
 
 ## 5. Source report files
 
@@ -288,6 +305,15 @@ thermal, regulator, clock or NVMEM sysfs controls.
 - [SID cell decode](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261125-cpux-v3/sid-cell-report.json)
 - [Memory map report](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261125-cpux-v3/memory-map-report.json)
 - [Filtered hardware boot log](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261125-cpux-v3/dmesg-hardware-lines.txt)
+
+### 5.5 Kernel provenance / OPP corroboration v4
+
+- [v4 report README](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261125-cpux-v4/README.md)
+- [Kernel build ID, config and driver bindings](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261125-cpux-v4/kernel-driver-provenance.txt)
+- [Parser-v4 live FDT and OPP table](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261125-cpux-v4/live-fdt.json)
+- [CPUFreq / clock / regulator / thermal samples](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261125-cpux-v4/cpu-power-runtime.txt)
+- [SID cell decode](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261125-cpux-v4/sid-cell-report.json)
+- [Filtered hardware boot log](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-inventory-20261125-cpux-v4/dmesg-hardware-lines.txt)
 
 ### 5.4 OPP candidate analyzer and CI status
 
