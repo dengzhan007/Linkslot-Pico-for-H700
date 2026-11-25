@@ -10,7 +10,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-PINNED_COMMIT = "fad6c4b0c0176a76e10667f4aa071a8feb4425c0"
+PINNED_COMMIT = "df6b2631291f249d54a00dd14f49bc893e438feb"
 EXPECTED_GBA_SIZE = 788712
 
 
