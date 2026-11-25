@@ -1,0 +1,39 @@
+{
+  "format": "RG34XX active BaseOS Android v2 / BOL4 input extraction",
+  "host_only": true,
+  "device_io_performed": false,
+  "source_partition_file": "boot-partition.bin",
+  "source_partition_bytes": 67108864,
+  "source_partition_sha256": "41cfaa8f9ade4a5e05a89188abb7db154243e38b8e19c53b730f0a45ff325516",
+  "source_image_offset": "0x3000000",
+  "source_image_bytes": 8556544,
+  "source_image_sha256": "d71e5bd87b23fb409d7a837cf90d153ae117af518fe6ee330a96d2c7a5f76fc3",
+  "components": {
+    "active-boot.img": {
+      "bytes": 8556544,
+      "sha256": "d71e5bd87b23fb409d7a837cf90d153ae117af518fe6ee330a96d2c7a5f76fc3"
+    },
+    "android-v2-header.bin": {
+      "bytes": 2048,
+      "sha256": "d924e2f3e73db16f39dbec84c1de3e2216040656e521177799a89e738e7586df"
+    },
+    "kernel.BOL4": {
+      "bytes": 8406862,
+      "sha256": "df5b391030794dec176a16b50b96efd0881e57f46acbad65a4f15fdbbe2074b8"
+    },
+    "kernel.Image": {
+      "bytes": 17461256,
+      "sha256": "39cf8c3eb9a75ff0eda51b4074cd65860c5aa5386093bcaf69339819421d84b7"
+    },
+    "initrd.img": {
+      "bytes": 512,
+      "sha256": "c0b1f70675c793df96e958306c94b3086375c35b2e91e497ffc3484bb93228d8"
+    },
+    "dtb.bin": {
+      "bytes": 144384,
+      "sha256": "c28c87380ffab00148bf4dc457e70b8c6c576470dcfbc53df64addddf89603a1"
+    }
+  },
+  "not_installable": true,
+  "not_hardware_validated": true
+}
