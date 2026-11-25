@@ -53,6 +53,14 @@
   nine mutation tests proving every refusal writes nothing. States explicitly that painting is
   not the same claim as *being visible*, so a dark panel on hardware must be reported as
   inconclusive. No binaries, serial numbers or local paths.
+- `rg34xx-a64-hardware-readiness.md` — fifth round, host-only. Audits the watchdog recovery chain
+  from the live FDT (`allwinner,sun50i-wdt` at `0x030090a0`), the matching T507 driver semantics,
+  capsule/SPL/BL31/A32-loader writes and the reset→BROM→capsule→STOCK state machine; the remaining
+  BL31 reachability and RTC-retention gaps are marked UNKNOWN. Hardens `probe_fb.c` with the loader's
+  FDT arena bounds, strict header/token/duplicate checks and passes 228 ASan/UBSan FDT cases.
+  Records final hashes (probe64 `3cb5c440…`, framebuffer probe `d77c9ae6…`), all build commands and
+  an explicit **NO-GO** conclusion with a shortest unblocking path. No binaries, device writes or
+  payload execution.
 
 This branch is dedicated to field reports captured from the RG34XX handheld. Source code
 lives on `main`; report archives are kept here because `build/` is gitignored there.
