@@ -358,3 +358,35 @@ This is a strong internal-consistency check for the reference pair, not a proven
 ### 8.4 Exact kernel #19 reverse-engineering path (2026-11-25)
 
 KNULLI's [RG34XX developer documentation](https://knulli.org/devices/anbernic/rg34xx/#extracting-the-kernel-and-bootloader) states that Anbernic has not published the RG34XX kernel/U-Boot source; KNULLI's release uses bootloader/kernel binaries extracted from stock firmware. Our `reports/rg34xx-inventory-20261125-cpux-v4` records Linux 4.9.170 #19's GNU Build ID, and the stock `mmcblk0p4` extracted kernel ELF was previously confirmed to have that exact same GNU Build ID. The complete ELF remains local; do not upload the 64-MiB partition or whole ELF. Continue offline using that already symbolized ELF: locate `sunxi_clk_factor_pll_video0x4`, PLL factor/CCU functions, `disp_al_lcd_get_clk_info`, `disp_al_lcd_cfg`, `tcon0_set_dclk_div`, TCON LCD init/driver callbacks and `lcd_type` branches; disassemble bounded function ranges and compare register offsets, masks, divider encoding, PLL N/D1 layout, clock-parent selection and call ordering against the live readback. Publish only bounded disassembly excerpts, symbol names and verification JSON. The public sun50iw9 reference is a hypothesis until this binary-level check closes.
+
+
+## 9. 2026-11-26 pvaibhav/slot 120 Hz 复测与 FPS 采样下一步
+
+### 新增 ADB 实测结果
+
+最新证据已上传至 [reports/slot-refresh-audit](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/slot-refresh-audit)，reports 分支原始报告提交 `e320277a08f70524853a631881d2bc8bb7fe7745`；报告解释更正随后提交至 reports 分支（见该目录 `SUMMARY.md` §10）。
+
+同一台 RG34XX non-SP、BaseOS 1.5.3 / Linux 4.9.170 #19，通过 ADB 分别在 UI 和实际运行 GBA 的场景采样 12 秒：
+- IRQ293：UI **59.667 Hz**，GAME **59.583 Hz**；显示 driver 两态均为 `fps=60.2`、`ref_fps=59`、`de_rate=696 MHz`。
+- PLL `0x03001040` 两态均为 `0x88001703`（按已记录的相关 sun50iw9 参考公式解为 288 MHz）；没有观察到 120-Hz PLL 编程。
+- 本轮 TCON `0x06511044` 读取返回 I/O error，不能把本轮 divider 当作已读回；另一次独立同设备采集中曾读到 `0xf000000b`。
+- 面板 `rg34xx_v1`、720×480、820×536、DCLK property 26 MHz、`lcd_if=0`；Slot PID 2301 在两态相同，GAME 只新增加载 `armgba_libretro.so`，显示栈没有重初始化。两态 `high_refresh=1`，但没有带来模式变化。
+- 结论：这次运行 UI/GAME 均处于约 60-Hz 路径。LCD IRQ 只是 scanout/vblank proxy；UI presents 和 GBA core committed frames 仍未测量。
+
+### 报告解释更正
+
+新报告最初把“FDT 只有一套 timing”当成动态 120-Hz 模式的否决证据，并把 576-MHz raw word 写成 pvaibhav 的目标配置；这两处已在 reports 分支 [SUMMARY.md §10](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/slot-refresh-audit/SUMMARY.md) 修正。pinned `pvaibhav/slot@5206e3fa39aa4a9b702cd9048a07dab3b5ab95da` 的真实 high pair 是 divider `0xf000000a` + PLL `0x88002b03`（参考公式 528 MHz / 10，约 120.131 Hz）；动态 writer 不依赖 FDT 第二个 timing 节点。这不改变实测结论：设备仍读到 60-Hz PLL word，IRQ 约 59.6 Hz，而且本机 `rg34xx_v1` 不满足 fork 的 `fog_fj035fhd05_v1` 精确 allowlist。
+
+### FPS 计数器审查与安全边界
+
+- UI：pinned Slot 的 `device_app.rs` 在 tracing 开启时每 600 次主 surface swap 输出 `presents/s`。开关为非零 `SLOT_TRACE_LATENCY` 或 `$SLOT_ROOT/System/trace-latency.on`；`OnceLock` 在首次读取时缓存，所以标记文件必须在 Slot 进程启动前存在。下一轮先只读确认 PID 2301 的 stderr fd 去向和安装的 `System/slot` SHA，再决定如何开启/收集日志。
+- GBA：pinned armGBA 源码在 VBlank 帧结束递增 `gba->video.frameCounter`，是 core committed-frame 候选。其 `libretro/link.T` 只导出 `retro_*`、对其余符号使用 `local: *`；源码全局 `gba` 并非可依赖的动态导出符号，禁止假设 `dlsym` / `nm -D` 可取得它。必须先将设备 `armgba_libretro.so` SHA 与确切 release/build 匹配，并检查完整 ELF symbol table。只有符号、load bias、指针映射和由 pinned `gba.h` 计算的 `offsetof(GBA, video)+offsetof(Video, frameCounter)` 全部闭合后，才允许做有界、只读的 `/proc/PID/mem` 采样；否则改为自建带诊断导出的 core，不做盲目内存扫描。
+- 三项指标必须分别报告：`slot_presents_per_s`、`armgba_committed_frames_per_s`、`lcd_irq_per_s`。LCD IRQ 不代表 UI FPS 或模拟器 FPS。
+
+### 当前 CI 与后续执行顺序
+
+- Linkslot LK Rust feasibility [#45646868006](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45646868006)：**成功**，最新已核验 70 余步综合 host/cross-build 流程全通过（含完整 H700 BL33 overlay、Linkslot 1.0.49、mGBA VFS v3、存储只读回归）。
+- H700 boot audit tools [#45646868087](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45646868087)：**成功**。
+- 上述均是 host/cross-build 和工具回归，不是刷写固件或实机启动证据。
+
+下一步先完成 release ZIP 与设备 `System/slot` / `armgba_libretro.so` 的 SHA 对照、ELF 符号表检查、armGBA C 结构偏移编译探针；并只读确认 Slot stderr 日志去向。完成这些前，不启用标记文件、不重启前端、不读进程内存。随后先测 UI presents，再在 GBA 运行时按已验证地址采样 committed frame counter。硬件 writer 继续禁用，`hardware_applied=0`。
