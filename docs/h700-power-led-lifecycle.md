@@ -17,15 +17,18 @@
 
 ## 板级证据与寄存器
 
-RG34XX（非 SP）原厂启动设备树（KNULLI 固定提交
+RG34XX（非 SP）KNULLI 启动设备树（固定提交
 [57afa662009641d181f57241bcc480119b131530](https://github.com/knulli-cfw/knulli-linux/blob/57afa662009641d181f57241bcc480119b131530/package/boot/uboot-h700/rg34xx/boot_package/rg34xx.dts)）
-映射：
+在 PMU 节点明确给出：
 
-- `work_led` → PIO bank I / PI12；
-- `low_pwr_led` → PIO bank I / PI11。
+- `work_led = <0x4b 0x08 0x0c 0x01 0x01 0xffffffff 0x00>` → PIO phandle `0x4b` / bank I / PI12；
+- `low_pwr_led = <0x4b 0x08 0x0b 0x01 0x01 0xffffffff 0x00>` → 同一 PIO / bank I / PI11。
 
-[MustardOS RG34XX-H DTS](https://github.com/MustardOS/internal/blob/aef38ed9a870419a0fe4f351dac1bac58a84ba5e/device/rg34xx-h/package/sunxi.dts)
-包含相同映射。PI11 不属于本功能，不会被修改。原厂设备树将 UART3 控制器标记为 disabled，启动控制台为 UART0；PI12 配置不会占用 UART0 控制台。
+同一提交的 `pinctrl@0300b000` 定义 phandle `0x4b`。其 GPIO provider 使用六个参数；Linux 4.9 `pinctrl-sunxi` 的 `of_xlate` 对应解释为 bank、pin、mux、pull、drive、data。因此上面 PI12 的 mux=1 表示 GPIO output，最后 data=0 是初始输出低电平，**不是 active-low 极性标志**。MustardOS 的 [RG34XX-H DTS](https://github.com/MustardOS/internal/blob/aef38ed9a870419a0fe4f351dac1bac58a84ba5e/device/rg34xx-h/package/sunxi.dts) 也有相同 PI12/PI11 映射，作为 H 系列交叉参考。
+
+KNULLI DTS 同时把 UART3 控制器（`uart@05000c00`）设为 `disabled`，UART0（`uart@05000000`）为 `okay` 且是 `serial0`。UART3 pinctrl 组虽然列出 PI9–PI12，但当前启动配置未启用 UART3；PI12 GPIO 不占用 UART0 控制台。PI11 不属于本功能，不会被修改。
+
+**极性证据要分开看：** 主线 H700 RG35XX-2024 DTS 将 PI12 定义为 `GPIO_ACTIVE_HIGH` 并默认点亮；这是同 SoC 掌机的 active-high 旁证，不等于 RG34XX 本机的 LED 电气读回。本实现暂采用高电平点亮，冷启动实测仍是验收项。
 
 H700 PIO 字段：
 

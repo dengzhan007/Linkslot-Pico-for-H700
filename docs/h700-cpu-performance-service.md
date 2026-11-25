@@ -354,3 +354,21 @@ and boot audit tools
 passed. A new on-device capture is still needed to resolve cached-frequency
 reconciliation and the active cooling state. Keep the service POLICY_ONLY,
 `hardware_applied=0`; no governor/limit/PMIC/PLL/OPP writes are approved.
+
+
+### 8.4 Runtime OPP-list fingerprint points to a conditional `b1` property path
+
+A new static comparison of the parser-v2 live OPP entries against the device's `scaling_available_frequencies` list found an exact match under this **conditional** Linux 4.9 OPP-core path:
+
+1. no `supported_hw` array is registered for the OPP table;
+2. the selected OPP voltage property name is `b1`;
+3. the `-ab` OPP nodes have no `opp-supported-hw` property;
+4. only an OPP with a valid selected `opp-microvolt-b1` (or a base fallback) survives the CPU regulator voltage filter.
+
+Under that model, the untagged `b1` nodes produce exactly 480/720/936/1008/1104/1200/1320/1416/1512 MHz. The untagged `-ab` nodes at 600/792/1032/1296/1344 MHz have no `b1` and no base voltage, matching the five OPPs that the boot log says were rejected with `minuV=maxuV=0`.
+
+This is a much closer structural match than the previously examined stock-style 4.9.170 `supported_hw` mask candidates: those candidates do not reproduce the runtime list when their masks and voltage lookups are applied to the parsed table. It suggests the shipping kernel may use a vendor-specific property-name selection path rather than the simple SID-to-mask path, but the exact running driver/source is not identified.
+
+**Important ambiguity in parser-v2:** an absent `opp-supported-hw` property and a present zero-cell `opp-supported-hw` property were both serialized as an empty `supported_hw_cells` array. The Linux OPP core treats them differently when no hardware mask is registered: absent means the OPP may be accepted; present (even with zero cells) means unsupported. The parser was therefore extended in commit `284f48e71ad93145c15bbf034d88d2f4c404789e` to emit `supported_hw_present`, `supported_hw_cell_count`, `voltage_microvolt_present`, and `voltage_microvolt_variant_names`. Synthetic regression covers absent and empty-present properties. H700 Linux/Windows validation passed in [#45529626035](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45529626035) and [#45529626080](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45529626080).
+
+A parser-v3 report is still required from the original device `live-fdt.dtb` to confirm the property-presence condition. Even if it matches, that would identify an OPP-selection mechanism—not decode SID raw `0x6c00` and not authorize any new OPP or frequency/voltage write. Keep the runtime `POLICY_ONLY`, `hardware_applied=0`, and all actual DVFS controls disabled.
