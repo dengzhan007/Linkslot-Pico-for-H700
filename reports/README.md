@@ -26,6 +26,12 @@
   A32→A64 SMC contract (`0x8000ff04` / SPSR `0x3c5`), recovered kernel kallsyms addresses for
   the DRM path, **BOL4 decoded as LZ4 holding a byte-identical kernel**, and an A/B/C comparison
   of LK take-over architectures. No binaries, serial numbers or local paths included.
+- `rg34xx-active-loader-provenance.md` — read-only provenance check establishing that the
+  unit is **already running** the BaseOS native chain (native SPL → vendor BL31 → A32
+  loader → BOL4 image), not TOC1 U-Boot: p4 + 40 MiB firmware extent map, p4 + 48 MiB
+  BOL4 frame verification, exact bootargs-template match, live FDT generation/DRAM/timing
+  cross-check, active-vs-fallback image distinction, ABI table, corrections to the two
+  earlier reports, and unresolved items. No binaries, serial numbers or local paths.
 
 This branch is dedicated to field reports captured from the RG34XX handheld. Source code
 lives on `main`; report archives are kept here because `build/` is gitignored there.
