@@ -123,14 +123,21 @@ get_factors_pll_video0     0xffffff800845f780
 
 **选中**：索引 0，因子字 `0x00001702`，N=23，D2=1，速率 **288 MHz**（依据：请求低于表首项，`sunxi_clk_freq_search` 在 `hi = -1` 时返回 0）。请求低于表首项 288 MHz，被夹到索引 0；这与 live `clk_summary` 的 `tcon_lcd = 288 MHz` 一致。
 
-#### 120 Hz 算术：52 MHz × divider 11（请求 572 MHz）
+#### 52 MHz 输入时的 stock 路径，以及两个强制分频候选
 
-| 位置 | 索引 | 因子字 | N | D2 | 表内速率 | 与请求之差 |
-| --- | --- | --- | --- | --- | --- | --- |
-| 下侧最近 | 23 | `0x00002e02` | 46 | 1 | 564 MHz | -8 MHz |
-| 上侧最近 | 24 | `0x00001700` | 23 | 0 | 576 MHz | +4 MHz |
+**先区分 stock LCD 初始化与外部强制分频。** 第三轮的 572-MHz 请求（52 MHz × 11）只在 divider=11 被外部强制保持时成立，**不是**把 stock 配置中的 `lcd_dclk_freq` 改成 52 MHz 后的实际路径。第二轮已还原的 `disp_al_lcd_get_clk_info` 逻辑明确规定：`lcd_if=0` 时先取表值 6；只有 `lcd_dclk_freq == 26` 才覆盖为 11。52 不等于 26，因此 stock helper 会返回 divider 6。
 
-**选中**：索引 24，因子字 `0x00001700`，N=23，D2=0，速率 **576 MHz**（依据：上侧更近）。表内存在 576 MHz 这一行，因此 120 Hz 的时钟源在表内可达；但 CCF 会落在 576 而不是 572，实际 DCLK 将是 576/11 = 52.3636 MHz，对应 820×536 下 119.1382 Hz（约 119.14 Hz）（名义 120.13 Hz）。
+| 场景 | PLL 请求 | divider | 选中行 | PLL 实际速率 | DCLK | 推算刷新 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| **Stock path**：`lcd_dclk_freq=52`、`lcd_if=0` | 312 MHz | 6 | 2（`0x00001902`） | 312 MHz | 52.000 MHz | **118.3109 Hz** |
+| **强制 divider=11** 的反事实 | 572 MHz | 11 | 24（`0x00001700`） | 576 MHz | 52.3636 MHz | **119.1382 Hz** |
+| **强制 divider=10** 的候选 | 528 MHz | 10 | 20（`0x00001500`） | 528 MHz | 52.8000 MHz | **120.1311 Hz** |
+
+- Stock path：`lcd_dclk_freq=52` → divider 6 → PLL 请求 312 MHz，表索引 2 精确命中 `0x1902`，输出 DCLK=312/6=52 MHz。按 820×536 totals 得 118.3109 Hz。
+- Forced-divider-11 counterfactual：保留 572-MHz 请求来说明 nearest-neighbour 选择会得到 576 MHz；但这必须由独立 writer/改动强制 divider=11，不能称为 stock `lcd_dclk_freq=52` 行为。
+- Forced-divider-10 candidate：表内 528 MHz 精确可达，且 528/10=52.8 MHz 对应 120.1311 Hz；divider 10 并非当前 `lcd_if=0` stock 表/特例所产生，仍是外部强制候选，不能据此启用。
+
+以上都是 PLL/TCON 算术推算；没有证明 `rg34xx_v1` 面板接受这些时序、TCON 在该组合下稳定，或具备 TE/VBlank 切换与回滚。120 Hz 仍然 **未验证 / 不支持启用**。
 
 ### 4.4 策略归纳
 
