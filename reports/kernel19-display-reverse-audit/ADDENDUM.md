@@ -577,25 +577,37 @@ python build/k19f_selfcheck.py
    真值由 `sunxi_clk_factor_initlimits` 从表末项 rate 字段装入，即 **2 520 000 000**。
 2. `udiv` 把请求截断到整 MHz。
 3. 二分查找返回精确值或 floor；若请求低于表首项，`hi = −1` 时函数返回 0，于是映射到 288 MHz。
-4. 再比较该行与下一行的距离，`cinc w0, w0, gt` 只在"当前差值严格更大"时进位 → **等距取低**。
+4. 再比较该行与下一行的距离，`cinc w0, w0, gt` 只在“当前差值严格更大”时进位 → **等距取低**。
 
 结论：**夹取 + 最近邻 + 等距取低**。
 
-| 请求 | 下侧 | 上侧 | 选中 | 因子字 |
-| --- | --- | --- | --- | --- |
-| 286 MHz（26 × 11） | 无（低于表首项） | 288 | **288 MHz** | `0x00001702` |
-| 572 MHz（52 × 11） | 564（索引 23） | 576（索引 24） | **576 MHz** | `0x00001700` |
+| 场景 | PLL 请求 | divider | 选中 | PLL 速率 | DCLK / 刷新率 |
+| --- | ---: | ---: | --- | ---: | --- |
+| 基线 stock：26 MHz | 286 MHz | 11（26-MHz 特例） | row 0 `0x1702` | 288 MHz | 26.1818 MHz / 59.5691 Hz |
+| Stock path：`lcd_dclk_freq=52` | 312 MHz | **6**（52 不触发 26-MHz 特例） | row 2 `0x1902` | 312 MHz | 52.0000 MHz / 118.3109 Hz |
+| 外部强制 divider 11 的反事实 | 572 MHz | 11（强制） | row 24 `0x1700` | 576 MHz | 52.3636 MHz / 119.1382 Hz |
+| 外部强制 divider 10 的候选 | 528 MHz | 10（强制） | row 20 `0x1500` | 528 MHz | 52.8000 MHz / 120.1311 Hz |
 
-### 13.3 与本报告前文的两处口径修正
+**关键路径约束：** `disp_al_lcd_get_clk_info` 对 `lcd_if=0` 先取 divider 表值 6，只有
+`lcd_dclk_freq == 26` 才覆盖为 11。因此，“52 MHz × 11 = 572 MHz”仅是保持 divider=11 的
+反事实选频测试，不是 stock 驱动把 `lcd_dclk_freq` 改成 52 MHz 后会执行的路径；stock 路径实际是
+52 MHz × 6 = 312 MHz。divider 10 / PLL 528 MHz 是表内可达的手动候选，但当前 stock 路径不会生成
+divider 10。
 
-- **`lcd_clk_enable` 确实调用 `clk_set_rate`**（3 处）与 `clk_set_parent`（4 处）。§7 的"LCD 初始化
-  不改写时钟"只对 `disp_lcd_init` 成立：`disp_lcd_init` 用 `clk_get_parent` 捕获、`lcd_clk_enable`
-  回写同一父钟，随后**再**下发 `clk_set_rate(286 MHz)` 并 `clk_get_rate` 回读。请求值的算式是
-  `clk_info.w4 × divider × lcd_dclk_freq`，其中 `lcd_dclk_freq` 来自 `priv + 0x170`
-  （正是 `panel_info + 0x80`）。
-- **120 Hz 的时钟源可达性**：576 MHz 在表内存在，所以 PLL 侧不再是缺口；但落在 576 而非 572，
-  DCLK 会是 `576/11 = 52.3636 MHz`，按 820×536 得 119.1382 Hz（约 119.14 Hz） 而不是 120.13 Hz。结论仍是
-  **未验证 / 不支持启用**，缺的是面板与 TCON 侧证据，而不是表能力。
+### 13.3 与显示时序的关系及口径修正
+
+- `lcd_clk_enable` 确实调用 `clk_set_rate`（3 处）与 `clk_set_parent`（4 处）。`disp_lcd_init`
+  用 `clk_get_parent` 捕获，`lcd_clk_enable` 回写同一父钟，然后按
+  `clk_info.w4 × divider × lcd_dclk_freq` 下发 PLL 请求。
+- 26 MHz 基线仍是：特例 divider 11 → PLL 请求 286 MHz → table 选 288 MHz → DCLK 26.1818 MHz
+  → 59.5691 Hz，与 live baseline 一致。
+- 若 stock 配置把 `lcd_dclk_freq` 改为 52 MHz，divider 会改回 6；PLL 请求 312 MHz 精确命中
+  row 2，DCLK 52 MHz，820×536 totals 下约 118.3109 Hz。
+- 576/11 的 119.1382 Hz 仅属于外部强制 divider=11 场景；528/10 的 120.1311 Hz 是另一个
+  外部强制候选。两者都不是 stock LCD init 的配置输出，也没有面板侧验证。
+
+以上结果不改变 verdict：**120 Hz 未验证 / 不支持启用**。仍缺第二套 panel timing、
+该分频组合的面板接受证据、TE/VBlank 边界、rollback 路径。所有硬件 writer 保持关闭。
 
 ### 13.4 未解
 
