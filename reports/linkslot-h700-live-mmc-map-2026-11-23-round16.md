@@ -89,15 +89,25 @@ The CCU clock-summary rates are module-clock framework rates, not the card's SDC
 2. Treat `sdc2` at `0x04022000` (`sunxi-mmc-v4p6x`) as the optional second-card slot candidate. Its CD GPIO and vqmmc path must be implemented separately if the intended Linkslot ROM layout uses that slot; it has no vmmc provider.
 3. Keep `sdc1` out of the first storage path: the live kernel identifies it as SDIO DDR50, consistent with Wi-Fi.
 4. Decode the live GPIO provider and clock-provider bindings from the DT before setting pin function, polarity, pull, drive strength, clock parent/rate, or reset sequencing.
-5. Audit and implement the H616 MMC2 `mask_data0` clock-update quirk for sdc2 where applicable. Do not apply it to every controller by assumption; distinguish the v4p1x sdc0 node from v4p6x sdc2 and verify the exact LK/U-Boot configuration.
+5. Implement H616-family `MASK_DATA0` handling in the shared clock-update path for the primary sdc0 driver. The current Linux H616 configuration sets `mask_data0 = true`; a July 2026 U-Boot fix also applies masking to H6-family clock-on/off updates around `UPCLK_ONLY`, because an H616 initial clock update can time out while sampling DAT0. This is not an sdc2-only feature. Confirm the vendor v4p1x/v4p6x controller details, but do not omit the H616 mask from sdc0 merely because its vendor compatible is v4p1x.
 6. Keep the first LK block-device probe strictly **read-only**. The current capture proves sdc0 successfully enumerates in Linux and proves sdc2 has a card-detect path but no card is present. It does not prove LK initialization, block reads, timing stability, or writes.
 
 ## Corrections to the preliminary r2 summary
 
 - `sdc0` should be called the current non-removable-designated system medium, **not confirmed eMMC**; the kernel identifies it as SDHC.
 - The raw `cd-gpios` cells contain `4, 0x16` (port 4 / pin 22) followed by provider-specific configuration values. The final `0x06` is not the pin number. PE22 is consistent with the board reference, but electrical semantics still require provider-cell decoding.
-- The sysfs partition names p6/p7 disagree with the cmdline `partitions=` labels; both are recorded above.
+- The sysfs partition names p6/p7 disagree with the cmdline `partitions=` labels; the live mount table confirms p7 is the actual `/mnt/sdcard` volume and p6 is `/data`.
+- H616 `MASK_DATA0` is a shared clock-update concern, not an sdc2-only quirk; mainline Linux and the July 2026 U-Boot fix both document it.
 
 ## Safety boundary
 
 The capture ran read-only. It did not open or read any block device, access CID/CSD, write a partition, or touch bootloader/firmware. It is not an SD/MMC functional test. No driver has yet been executed on hardware, no ROM storage path is connected, and the project remains **NO-GO for boot or persistence writes**.
+
+
+## Driver source references
+
+- [U-Boot sunxi MMC implementation at pinned reference commit](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/drivers/mmc/sunxi_mmc.c) — common command/FIFO path, H616 CCU gate/reset, initial clock and H616 FIFO threshold handling.
+- [U-Boot sunxi MMC register definitions](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/drivers/mmc/sunxi_mmc.h) — register offsets, CLKCR and command/status flags.
+- [H616 clock register definitions](https://github.com/u-boot/u-boot/blob/e578056c766d653270b14557c2a9d8daec414c17/arch/arm/include/asm/arch-sunxi/clock_sun50i_h6.h) — MMC module clock registers 0x830/0x834/0x838 and common gate/reset register 0x84c.
+- [Mainline Linux H616 MMC configuration](https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux/+/fa2933aac170dd19c6a7f0d7b81a8f537e40915c/drivers/mmc/host/sunxi-mmc.c#1197) — H616 config has mask_data0 = true and uses a 16-bit IDMA descriptor size with a 2-bit address shift.
+- [U-Boot H6-family DATA0 mask clock-update fix, July 7 2026](https://www.mail-archive.com/u-boot%40lists.denx.de/msg579824.html) — explains the observed H616 initial clock-update timeout and scopes the mask around the shared clock on/off update sequence.
