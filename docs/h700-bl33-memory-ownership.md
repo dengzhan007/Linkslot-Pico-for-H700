@@ -82,6 +82,24 @@ The current Linkslot BL33 packager separately enforces a padded image-size ceili
 
 This makes the present boundary clearer, but does **not** yet define LK's MEMBASE/MEMSIZE, BSS, heap, stack guard, page tables, DMA pool or core payload address. LK's own startup/MMU code may have different requirements from the BaseOS loader.
 
+
+### Host-only A32 BL33 prototype layout (2026-11-26)
+
+The FIQ-safe entry-snapshot change was linked with the pinned GammaOS LK CRT0
+and original exception assembly plus minimal host stubs. The probe reported
+ELF32/ARM, _start=0x4a000000, vector table 0x4a001000, wrapper 0x4a001024,
+boot-argument scratch 0x4a001020, five-word entry snapshot BSS at
+0x4a003428..0x4a00343c, _end=0x4a00343c, and 5,148 flat-image bytes. All eight
+vector branch targets resolved. Full feasibility #45779682226 passed 76/76;
+see [workflow artifact 15098435220](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45779682226/artifacts/15098435220).
+
+This only demonstrates that the prototype sections and snapshot object fit
+in the host linker's researched image bound. It does not establish deployed
+SPL acceptance, a valid stack/heap/MMU arrangement, free ownership of any
+physical RAM, or the correctness of the runtime firmware handoff. The probe
+bound 0x4a000000..0x4a0e0000 remains a packaging/source-analysis bound, not an
+allocation grant; H700_MEMORY_LAYOUT_APPROVED remains unset.
+
 ## 4. Consequence for Linkslot and mGBA
 
 The namespaced AArch32 mGBA static archive is approximately 1.78 MiB, larger than the current 896 KiB BL33 package ceiling. It should not be linked into the BL33 image under the current size policy.
