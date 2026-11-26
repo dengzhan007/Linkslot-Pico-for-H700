@@ -969,10 +969,12 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
   define this word or bit29. Treat it as an undocumented SID-window gate,
   not a known feature register. Do not collect a full SID dump; a future
   approved pre-BL33 probe should expose only the masked bit value.
-- The pinned native SPL writes the primary RVBAR pair only. The matched BL31
-  reachable scan recovered CPU-related MMIO at `0x09010010` (CPU0 mode path)
-  and `0x08100020` (CPU subsystem control), but no direct reset or
-  CPU1-CPU3 RVBAR accesses.
+- The pinned native SPL writes the primary RVBAR pair only. The original
+  BL31 first-entry/direct-CFG scan recovered CPU-related MMIO at
+  `0x09010010` (CPU0 mode path) and `0x08100020` (CPU subsystem control),
+  but does not follow indirect platform-operation callbacks. The separate
+  PSCI CPU_ON audit below confirms such an indirect callback can start cores
+  later on request; these two audit results are complementary, not conflicting.
 - H616 manual family-reference default for `C0_RST_CTRL` is `0x13ff0101`:
   low nibble `0x1` (CPU0 reset deasserted, CPU1-3 asserted). H700 live
   semantics/state still require a target readback; this is not a hardware
