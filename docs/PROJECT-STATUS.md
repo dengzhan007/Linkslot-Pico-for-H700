@@ -885,3 +885,70 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 - 新增 scripts/test-baseos-native-lk-override.py，覆盖有效 raw image、超 32 KiB、缺失 vector、非零 header、错误 entry branch、patch transformation、输入哈希接入、幂等及 template ELF/map 改名晚于原 map 检查的顺序。首轮 fixture 因未镜像 pinned manifest 缩进失败，已修正。当前完整 feasibility [#45785521254](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45785521254) 的 BaseOS 原生验证步骤已全部通过：pinned checkout、patcher host regression、对真实 native/build.py 执行 apply/check/AST parse/restore，随后 git diff 与 status 均确认工作树恢复干净。完整 workflow 其余 Linkslot/mGBA 步骤仍在执行；这证明补丁可接入并恢复上游源码，不代表已完成 LK image/full SPL release build，也不允许刷写。
 - Patcher 输出中的 native-loader-template.elf/.map 明确属于被替换的 BaseOS loader 模板，不代表 LK 最终镜像；原 loader.map 的 trampoline 检查先执行，随后才改名。LK raw image 单独保存在 lk-bl33-override.raw，必须以单独 LK target ELF/map 做内存审计。`--restore` 已改成备份字节原样写回，避免文本换行规范化；CI 对 pinned BaseOS 源码执行 apply/check/restore 后已确认 diff/status clean。
 - 该路径只支持当前 extent 内的紧凑型 proof-of-life stub；目前 5,148-byte layout probe 尚无可见硬件 proof-of-life 信号，也不是完整 LK。完整 LK / Linkslot / mGBA 不能假设可塞入 32 KiB；更大的 loader extent 需要单独重构与配对固件审核。无设备写入/无 payload 执行。
+
+
+## 2026-11-26 H700 DRAM provider linked into LK and BL31 memory triage
+
+### Physical DRAM provider object-graph correction
+
+- Found that `platform/h700/arch/h700_physical_memory.c` provided the
+  `physical_memory_size()` weak-symbol implementation required by the pinned
+  GammaOS LK `arch/arm/mmu.c`, but the provider had not been included in the
+  actual `platform/h700/rules.mk` `OBJS` list. Earlier host tests therefore
+  did not prove the real LK object graph contained the provider.
+- Added `$(LOCAL_DIR)/arch/h700_physical_memory.o` to the H700 LK object list
+  and expanded `scripts/test-h700-lk-project-guard.py` to require its object,
+  source and header.
+- Added the provider to `scripts/build-h700-objects.sh`; the compile matrix now
+  explicitly builds and architecture-checks the object in AArch64,
+  AArch32 ARM-state and AArch32 Thumb-2 modes. The H700 compile workflow
+  [#45791967631](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45791967631)
+  passed all three variants and logged `h700_physical_memory.o: ... object OK`
+  for each ABI.
+- Added an explicit one-GiB provider host regression to the H700
+  `storage-host-regression` job. The workflow triggered by the current
+  documentation/test update is [#45793968708](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45793968708);
+  verify its final conclusion before treating this newest host-test wiring as
+  green. The 1 GiB capacity result is only the physical DRAM size ABI; it does
+  not authorize allocating the entire range.
+
+### Matched BL31 control-flow-aware static memory audit
+
+- Verified the monitor payload extracted from the 2026-11-26 reports branch
+  against both the TOC1 and native-firmware manifests: 107,216 bytes,
+  SHA-256 `676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31`,
+  load base `0x48000000`, entry branch target `0x480000f8`.
+- Added a read-only Capstone audit that follows direct control-flow edges
+  instead of linearly decoding the entire binary (which had treated embedded
+  data as instructions). The final report decodes 1,849 reachable instructions
+  and records 268 recoverable address references: 188 into the actual payload
+  bytes and 80 into the wider 16 MiB BL31 audit window outside the file.
+- The BL31 code writes `TTBR0_EL3 = 0x4803cb40`, loads the `TCR_EL3`
+  configuration source at `0x4803c8e0`, and uses `0x4803cd40` as the
+  per-core `TPIDR_EL3` context base. Therefore the monitor's runtime memory
+  footprint extends beyond its 107,216-byte packaged payload.
+- No direct candidate-range reference was recovered for
+  `[0x40080000,0x42000000)`; this does not prove the candidate free. Indirect
+  control flow, secure-world/DMA, cache aliases and dynamic/secondary-core
+  accesses remain outside the proof. Keep `[0x48000000,0x49000000)`
+  excluded and `H700_MEMORY_LAYOUT_APPROVED` unset.
+- The matched BL31 audit and regression workflow
+  [#45793968827](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45793968827)
+  passed and uploaded its disassembly/JSON/Markdown artifact. The report
+  documents all limitations and confirms no hardware I/O or writes occurred.
+
+### Current blocking items / next action
+
+1. Finish the vendor BL31 lifetime/ownership audit beyond static direct
+   references, including secure-world, DMA, cache aliases and secondary-core
+   state; do not infer that the candidate Linux kernel destination is free.
+2. Obtain a defensible complete BL33 + BL31 + application memory map, including
+   LK code/BSS/stack/heap/page tables, loader extent, native handoff, framebuffer,
+   SD/DMA and separate Linkslot/mGBA payload footprint.
+3. Only after the memory and recovery gates are approved, produce a compact
+   <=32 KiB diagnostic payload with a deterministic proof-of-life signal and
+   rebuild the matched native firmware/SPL pair. The current host layout probe
+   is not that diagnostic payload.
+
+No Boot0/TOC1/SD write, flash, hardware MMIO write or payload execution was
+performed in this phase. 
