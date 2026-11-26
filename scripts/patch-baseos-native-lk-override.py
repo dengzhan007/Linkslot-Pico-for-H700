@@ -129,14 +129,21 @@ def patch_source(source: str) -> str:
     blob_patch = (
         blob_anchor
         + '    if lk_bl33_override_data is not None:\n'
-        '        # The ELF/map above describe the discarded native loader template, not this LK raw image.\n'
-        '        (output / "loader.elf").replace(output / "native-loader-template.elf")\n'
-        '        (output / "loader.map").replace(output / "native-loader-template.map")\n'
-        '        (output / "lk-bl33-override.raw").write_bytes(lk_bl33_override_data)\n'
-        '        # The existing verified native header is copied below from the paired TOC item.\n'
         '        blob = bytearray(lk_bl33_override_data)\n'
     )
     replace_once(blob_anchor, blob_patch, "loader blob selection")
+
+    map_anchor = "    assert bool(match) == kernel_probes\n"
+    map_patch = (
+        map_anchor
+        + '    if lk_bl33_override_data is not None:\n'
+        '        # The map was consumed above; these files describe the native\n'
+        '        # loader template, not the replacement LK raw binary.\n'
+        '        (output / "loader.elf").replace(output / "native-loader-template.elf")\n'
+        '        (output / "loader.map").replace(output / "native-loader-template.map")\n'
+        '        (output / "lk-bl33-override.raw").write_bytes(lk_bl33_override_data)\n'
+    )
+    replace_once(map_anchor, map_patch, "post-map template artifact labeling")
 
     padding_anchor = (
         "    blob += bytes(-len(blob) % 512)\n"
