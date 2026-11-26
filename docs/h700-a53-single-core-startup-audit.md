@@ -156,33 +156,48 @@ direct branches from BL31's first entry.
   `AON_POWERON_RESET=0x07000440`, `AON_CLAMP=0x07000444` and
   `DBG_REG0=0x090100c0`.
 - The selector register `0x03000024` is SYS_CFG VER_REG (H616 family
-  reference), not the SID window. The public H616 manual lists offset
-  `0x24` as VER_REG but leaves bits [7:0] undefined/reserved.
-- BL31 reads VER_REG and tests its low three bits. Its decoded RVBAR helper
+  reference), **not** the SID window. The H616 manual lists SYS_CFG base
+  `0x03000000` and VER_REG offset `0x24` (page 133). Its public field
+  table documents bits [13:8] but leaves [7:0] undefined (page 134); the
+  firmware's low-bit die selector is therefore not described by that manual.
+- BL31 reads VER_REG and tests `VER_REG & 7`. The decoded RVBAR helper
   selects:
   - low3 = 0: `0x09010040 + core * 8`
-  - low3 != 0: `0x08100040 + core * 8`
+  - low3 = 1..7: `0x08100040 + core * 8`
 - The pinned BaseOS native SPL at commit
   `cbe253a43f46cf551cc9a6c79a84015bde3686cf` uses
   `(readl(0x03000024) & 7) == 2` to select the alternate bank
-  `0x08100040`; otherwise it selects `0x09010040`. Thus BL31 and SPL
-  select the same bank for values 0 and 2, but would diverge for values
-  1 or 3–7.
-- The H616-oriented linux-sunxi tools database independently records
-  `0x09010040` and alternate `0x08100040` RVBAR banks, with VER_REG at
-  `0x03000024`; its FEL helper treats a nonzero low byte as the alternate
-  die. This is family-level corroboration, not an H700 runtime value.
-- The target selector value has not been read. A future read-only probe needs
-  only `readl(0x03000024) & 7`; do not dump the entire SYS_CFG/VER_REG word.
-  The active bank must not be assumed from H616 naming alone.
+  `0x08100040`; otherwise it selects `0x09010040`.
+- **This is a real selector-rule mismatch.** The two implementations agree
+  only for VER_REG low3 values `0` and `2`; they diverge for
+  `1, 3, 4, 5, 6, 7`. If the target value is one of those six values,
+  the initial SPL CPU0 RVBAR bank and the later BL31 PSCI per-core RVBAR
+  bank would differ. No claim is made that the target currently has one of
+  those values.
+- The H616-oriented linux-sunxi tools database independently associates
+  H616 with main RVBAR bank `0x09010040`, alternate bank `0x08100040`,
+  and VER_REG `0x03000024`. Its FEL helper treats a nonzero low byte as
+  the alternate die. Upstream U-Boot's sunxi Kconfig likewise describes
+  SRAM_VER_REG[7:0] as the H616 variant selector and uses the alternate
+  bank when nonzero. These corroborate the *existence* of a die selector,
+  but they do not resolve the different equality test in this project's
+  pinned SPL or establish H700-specific semantics.
+- The target selector value has not been read. A trusted read-only probe
+  needs only `readl(0x03000024) & 7`; do not dump the full SYS_CFG word.
+  Do not change the SPL or BL31 selector based on H616 naming alone. First
+  establish the target value and intended H700 mapping, then make both
+  stages use one identical tested rule.
 
 References:
-- H616 User Manual v1.0, SYS_CFG VER_REG at offset 0x24:
+- H616 User Manual v1.0, SYS_CFG/VER_REG register list and field table,
+  pages 133–134:
   https://linux-sunxi.org/images/1/1d/H616_User_Manual_V1.0.pdf
 - linux-sunxi RVBAR/die-variant database:
   https://github.com/linux-sunxi/sunxi-tools/blob/master/soc_info.c
 - linux-sunxi FEL alternate-RVBAR selection:
   https://github.com/linux-sunxi/sunxi-tools/blob/master/fel.c
+- Upstream U-Boot H616 alternate RVBAR Kconfig explanation:
+  https://qemu.googlesource.com/u-boot/+/c7aafb20ce9937f1e178ded46d8f22742f54c982/arch/arm/mach-sunxi/Kconfig
 
 This is strong static evidence that the matched vendor BL31 **can start
 secondary CPUs on a PSCI power-on request**. It is not evidence that BL31
