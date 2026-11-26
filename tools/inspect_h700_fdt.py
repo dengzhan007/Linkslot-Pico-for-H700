@@ -504,6 +504,8 @@ def _gpio_references(
                 "active_low": bool(gpio_flags & 0x1),
             })
 
+        refs.append(ref)
+
     return refs
 
 
