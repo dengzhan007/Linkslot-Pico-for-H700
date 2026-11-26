@@ -83,3 +83,84 @@ PIO load. The scanner is being widened to 40 instructions, with a host
 regression for register setup spread over 24 intervening instructions, so
 the next CI artifact can report the complete candidate sequence more
 reliably. Keep the production PI12 gate closed.
+
+
+## Expanded scan result and PIO register decode (2026-11-26)
+
+The 40-instruction scanner and its long-setup regression passed in BL31 audit
+run [#45852546186](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45852546186)
+on code HEAD baf8f4dd02453c1c42772ee4d4782edda4de5855. It reported 605
+decoded memory-operation candidates across the full image:
+
+| Range | Candidate rows |
+|---|---:|
+| CPUX_CCU | 152 |
+| PIO | 6 |
+| SID_SYS | 275 |
+| AON_CPUCFG_PRCM | 148 |
+| C0_CPUX_CFG | 20 |
+| CPU_SUBSYSTEM | 4 |
+
+These are scanner rows from overlapping decode windows, not 605 unique,
+reachable, executed hardware transactions. The six PIO rows are the three
+read/modify/write pairs at offsets 0x100, 0x110, and 0x118.
+
+### The PIO sequence is PH10 / S_CIR0, not PI12
+
+The live RG34XX FDT reports the controller at 0x0300b000 with compatible
+allwinner,sun50iw9p1-pinctrl. As a source-family cross-reference, the
+sun50iw9p1 pinctrl implementation and pinctrl DTSI in
+[qiaoweibiao/T507_Kernel at commit
+98fcc7d3f112e51b0edfb71536da89cb2115106f](https://github.com/qiaoweibiao/T507_Kernel/tree/98fcc7d3f112e51b0edfb71536da89cb2115106f)
+use a 0x24-byte bank stride, MUX offset 0x00, drive-level offset 0x14, and
+pull offset 0x1c. PH is bank 7, so its PH_CFG1 / PH_DRV0 / PH_PUL0 offsets
+are respectively 0x100, 0x110, and 0x118.
+
+The matched BL31 instructions construct these three addresses and apply:
+- PH_CFG1 at 0x0300b100: PH10 mux field set to function 3;
+- PH_DRV0 at 0x0300b110: PH10 drive field set to 2;
+- PH_PUL0 at 0x0300b118: PH10 pull field set to 1 (pull-up).
+
+That is an exact semantic match for the reference DTSI's s_cir0_pins_a
+entry: PH10, function ir, muxsel=3, drive=2, pull=1. The low-level
+routine at 0x48013490 is therefore configuring the PH10 infrared-receiver
+pin. The relevant address sequence does not touch the RG34XX PI12 work-LED
+registers.
+
+For contrast, the same bank formula places PI12's mux/data/drive/pull fields
+at 0x0300b124, 0x0300b130, 0x0300b134, and 0x0300b13c. The scanner now adds
+source-family register/pin-field labels to matching PIO rows, and host tests
+assert both PH10 and PI12 offsets. This remains static source-based
+classification; the exact vendor 4.9.170 pinctrl source revision was not
+separately pinned.
+
+### Execution-path boundary
+
+The local branch path is still:
+```
+0x4800c404 -> 0x4800c4d0
+0x4800c53c -> 0x48013df0  (conditional)
+0x48013e40 -> 0x48013490  (PH10 setup)
+```
+The enclosing code manipulates SCR_EL3 and executes WFI; the PH10 routine is
+called only on a conditional bit-2 path inside 0x48013df0. The entry or
+registration of the enclosing routine remains unresolved and the path is
+absent from the primary-entry direct-CFG report. The binary therefore proves
+the presence of this conditional low-power infrared-pin setup, not that it
+executes at every cold boot or establishes PIO access for non-secure BL33.
+
+### CPUX / CCU candidate interpretation
+
+The expanded scan produced 152 CPUX_CCU rows. A manual disassembly review
+finds a coherent non-primary-entry save/restore sequence: code around
+0x48001790 snapshots 0x03001000, 0x03001a78, and 0x03001a8c, modifies
+selected bits, and saves context; the paired 0x480018d8 path restores the
+saved values. It is called from a path containing power-state checks and
+AON/PRCM accesses (including 0x07000200). This is consistent with vendor
+low-power clock/context preservation, but the exact register names, callback
+registration, and runtime invocation have not yet been proven. These rows
+are not evidence that BL31 exposes CPU DVFS or that Linkslot's CPU-frequency
+service can be enabled. No clock or voltage write is approved.
+
+The PI12 production gate, APB1/PIO handoff gate, memory-ownership gate, and
+secondary-A53 gate remain closed. No hardware was touched.

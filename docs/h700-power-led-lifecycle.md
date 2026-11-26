@@ -224,3 +224,18 @@ separates a register's low address seed from its high-half `MOVK` by 24
 instructions, proving the scanner still recognizes the later MMIO load.
 Re-run CI and review the complete CCU/PIO rows before drawing any further
 conclusion. PI12 remains production default-off.
+
+
+## BL31 PIO scan clarification — PH10 is not the PI12 LED
+
+The full-image BL31 scan now identifies six PIO read/write candidates. Their
+offsets 0x100, 0x110, and 0x118 decode against the live sun50iw9p1-compatible
+controller layout as PH10 mux/drive/pull fields; the reference s_cir0_pins_a
+DTSI configures PH10 as the IR input. The sequence does not target PI12.
+PI12 uses distinct fields at offsets 0x124, 0x130, 0x134, and 0x13c.
+
+This narrows the BL31 finding: it contains a conditional low-power PH10/IR
+configuration path, not a discovered PI12 LED operation. It does not prove
+that PI12 is accessible from non-secure BL33 after handoff. Keep
+H700_RG34XX_PI12_EARLY_ACCESS_ENABLE default-off and retain all existing
+memory and secondary-core gates.

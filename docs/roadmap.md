@@ -843,3 +843,32 @@ Hard size boundary: this first integration path is only for a small diagnostic p
 - [ ] Prove APB1/PIO clock/reset/access state at BL33 entry after vendor BL31; Linux later clock-summary and pre-BL31 SPL PIO use are insufficient substitutes.
 - [ ] Close BL31/Boot0 memory ownership and secondary A53 hold-off/SMP gates before any firmware packaging or execution.
 - Hardware remains unchanged: `hardware_applied=0`.
+
+
+## 2026-11-26 — matched BL31 full-image PIO/CCU review
+
+- [x] Split the whole-image classifier into a 4 KiB CPUX/CCU source window
+  [0x03001000,0x03002000) and the exact live-FDT PIO window
+  [0x0300b000,0x0300b400); preserve broad SYS_CFG/SID fallback labels.
+- [x] Widen register-constant tracking to 40 instructions and add a host
+  regression where MOVZ/MOVK address setup is separated by 24 instructions.
+- [x] Run the full-image audit against the exact matched 107,216-byte BL31
+  payload. CI #27 [#45852546186](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45852546186)
+  passed all steps; 605 candidate rows: CPUX_CCU 152, PIO 6, SID_SYS 275,
+  AON_CPUCFG_PRCM 148, C0_CPUX_CFG 20, CPU_SUBSYSTEM 4.
+- [x] Manually decode PIO offsets: the three BL31 accesses are PH10
+  mux/drive/pull fields and match the sun50iw9p1 family s_cir0 IR-input
+  definition; they are not PI12 LED registers. Add PIO register labels and
+  PH10/PI12 host assertions (new scanner test requires CI rerun).
+- [x] Inspect CPUX/CCU candidates: non-primary-entry save/restore code around
+  0x48001790 / 0x480018d8 accesses 0x03001000, 0x03001a78, and 0x03001a8c;
+  likely power-state context handling, exact register semantics and callback
+  reachability remain unresolved.
+- [ ] Establish PM callback registration/dispatch path and determine which
+  conditional routines can execute before BL33 handoff versus only after a
+  later PSCI/low-power request. Do not treat full-image scan rows as executed
+  boot traces.
+- [ ] Confirm APB1/PIO access permission and clock/reset state at BL33 entry;
+  keep PI12 MMIO default-off.
+- [ ] Close BL31/Boot0 RAM ownership and secondary A53 hold-off/SMP gates.
+- Hardware unchanged: hardware_applied=0.

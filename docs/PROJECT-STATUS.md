@@ -2,7 +2,7 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-26。当前代码基线 `166e3a97a4a011dff98ea9b33c959d47b643745e` 的完整 Linkslot/LK feasibility [#45847816950](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847816950) **81/81 steps 成功（0 failures / 0 skipped）**，产物 [15133935777](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847816950/artifacts/15133935777)（387,985,689 bytes）。同一代码阶段的 H700 AArch64/AArch32 ARM/Thumb-2 compile + host regressions [#45847406072](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847406072) 成功；boot-audit Linux/Windows [#45847165507](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847165507) 成功。真实 LK early-MMU + PI12 source/layout ELF 为 7,912 bytes（32 KiB raw extent 余量 24,856 bytes），section table `tt=0x4a008000`，`_end=0x4a00c024`；它不是完整 LK 或可刷写镜像。**PI12 production MMIO 当前默认关闭**：只有诊断 layout test 编译时显式 opt-in；BL31 后 APB1/PIO 入口状态、BL31/Boot0 内存所有权、secondary A53 hold-off/SMP 仍未关闭。无实机 MMIO、存储写入、刷写或 payload execution，`hardware_applied=0`.
+**最后核对时间：** 2026-11-26。当前工作分支 HEAD 为 `96e171bd9c298c6f735393670b086270ef2dfc08`。最近一次完整 Linkslot/LK feasibility [#45850518021](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45850518021) 在 HEAD `ae0722f89bbd94fa17fa84ff89de1eef95d3ffbe` 上 **81/81 steps 成功（0 failures / 0 skipped）**；之后提交仅扩展 host-only BL31 PIO/CCU 静态扫描、回归和文档。当前 HEAD 的 BL31 静态审计 [#45852546186](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45852546186) 全部步骤成功；扫描匹配 BL31 全镜像得到 605 个重叠反汇编候选行（CPUX_CCU 152、PIO 6、SID_SYS 275、AON_CPUCFG_PRCM 148、C0_CPUX_CFG 20、CPU_SUBSYSTEM 4）。H700 boot-audit [#45852315408](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45852315408) 成功；H700 三 ABI 编译/host 回归 [#45847406072](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847406072) 成功。**重要新结论：** BL31 六条 PIO 候选位于 PH10 mux/drive/pull 寄存器，匹配 sun50iw9p1 family 的 S_CIR 红外输入配置，并非 PI12 电源灯寄存器；执行入口仍未证明。**PI12 production MMIO 继续默认关闭**，BL31→BL33 PIO/clock/权限、BL31/Boot0 内存所有权与 secondary A53 hold-off/SMP 仍未关闭。当前结果仍不是完整 LK 或可刷写镜像，无实机 MMIO、存储写入、刷写或 payload execution，`hardware_applied=0`.
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
@@ -1259,3 +1259,33 @@ feasibility [#45834208280](https://github.com/dengzhan007/Linkslot-Pico-for-H700
 5. 实机冷启动与 PI12 游戏生命周期验证仍未执行。SYS_CFG probe 保持 dormant；不把 SYS_CFG 诊断和 PI12 诊断捆绑。
 
 全程 `hardware_applied=0`：无实机 MMIO 读/写、无模块加载、无 SD/Boot0/TOC1 写入、无刷写、无 payload execution。
+
+
+## 2026-11-26 续接：BL31 PIO/CCU 全镜像静态复核
+
+**当前代码 HEAD：** 96e171bd9c298c6f735393670b086270ef2dfc08。  
+**当前 reports HEAD：** 2963c8c479486a98c5202dad86e14dbe6e0f466f。
+
+### CI 与报告
+- 完整 Linkslot/LK feasibility [#45850518021](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45850518021)（HEAD ae0722f...）：81/81，0 failures，0 skipped。当前 HEAD 在该 run 之后只改动全镜像审计工具/host tests/文档，没有产品启动代码变化。
+- 当前 HEAD 的 RG34XX BL31 static memory audit [#45852546186](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45852546186) 全部步骤成功；40-insn scanner、PIO/CCU 区间、PSCI CPU_ON verifier 和 artifact 上传均通过。PIO 寄存器名称补充后仍需等待新提交触发的回归。
+- H700 boot-audit Linux/Windows [#45852315408](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45852315408) 成功；H700 AArch64/AArch32 ARM/Thumb-2 编译/host [#45847406072](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847406072) 成功。
+
+### BL31 全镜像 PIO 结论
+- 完整 107,216-byte monitor 身份校验通过；扫描结果 605 个候选行，其中 CPUX_CCU 152、PIO 6、SID_SYS 275、AON_CPUCFG_PRCM 148、C0_CPUX_CFG 20、CPU_SUBSYSTEM 4。计数是重叠反汇编候选行，不是唯一或执行次数。
+- PIO 六行是 0x0300b100、0x0300b110、0x0300b118 各一条 load/store。根据 active live-FDT 的 sun50iw9p1 pinctrl compatible 和同 SoC family pinctrl bank layout，这三个 offset 对应 PH10 mux/drive/pull；reference DTSI 的 s_cir0_pins_a 正好配置 PH10 为 IR function/mux3/drive2/pull1。**这不是 PI12 LED**；PI12 的寄存器在 0x0300b124/130/134/13c。
+- PH10 setup 经 0x48013df0 的条件 bit-2 分支调用，外围路径访问 SCR_EL3 并执行 WFI。它是 BL31 中一个条件低功耗/红外输入配置路径；入口注册与是否会在 initial handoff 执行仍未知，不能据此证明 BL33 入口 PIO 权限。
+- CPUX_CCU 152 行中发现一个非主入口的状态保存/恢复候选：0x48001790 保存 0x03001000、0x03001a78、0x03001a8c，配对恢复路径在 0x480018d8，附近还访问 AON/PRCM 0x07000200。形状符合低功耗上下文保留，但寄存器语义、callback 注册和实际执行尚未完全确认；**这不证明 CPU DVFS 已可用**。
+- 详细反汇编和来源边界见 [h700-bl31-pio-ccu-audit.md](h700-bl31-pio-ccu-audit.md)。
+
+### 实机探测与安全门槛
+- reports 最新 kernel preflight 没有匹配 4.9.170 build tree、headers 或 Module.symvers；用户态 /dev/mem 所有测试地址均 EFAULT，不再用 devmem/dd/mmap/模块猜测方式重试。
+- H700_RG34XX_PI12_EARLY_ACCESS_ENABLE 保持 production default-off；Data Abort 保护只覆盖受限 SYS_CFG load，PIO abort 仍 fatal。
+- BL31→BL33 时 secondary A53 状态、PSCI 可用性、1 MiB loader arena/section table/BSS/Abort stack 的生命周期和内存所有权未闭合；H700_MEMORY_LAYOUT_APPROVED 保持 unset。
+- 当前没有完整可启动 LK、没有配对 vendor-header firmware/SPL，没有实机启动证据。hardware_applied=0：无 MMIO 读写、无模块加载、无 SD/Boot0/TOC1 写入、无刷写、无 payload execution。
+
+### 下一步
+1. 将 BL31 PIO/CCU callbacks 与注册表/PSCI dispatch 对应起来，区分 initial entry 和后续 low-power paths。
+2. 从 pinctrl/clock 的确切 vendor 4.9.170 源码或其他可验证资料完成 PH10/CCU 寄存器语义交叉核对；不要把 family reference 当作已锁定的设备 kernel source commit。
+3. 继续关闭 BL31/Boot0 内存所有权和 secondary A53 reset/hold-off/SMP 门槛。
+4. 门槛关闭后再考虑完整 LK platform init（GIC/timer/console/heap/storage/scheduler）及 firmware/SPL builder；目前不生成可刷写镜像。
