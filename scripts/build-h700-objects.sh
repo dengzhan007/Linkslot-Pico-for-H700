@@ -146,7 +146,20 @@ COMMON_FLAGS=(
 "$CC" "${COMMON_FLAGS[@]}" -std=c11 \
     -I"$ROOT/platform/h700/arch/tests/freestanding_include" \
     -c "$ROOT/platform/h700/arch/h700_pio_mmu_mapping.c" \
-    -o "$OUT_DIR/h700_pio_mmu_mapping.o"
+    -o "$OUT_DIR/h700_pio_mmu_mapping.o" "$OUT_DIR/h700_data_abort_recovery.o"
+
+"$CC" "${COMMON_FLAGS[@]}" -std=c11 -I"$ROOT/platform/h700/arch" -c "$ROOT/platform/h700/arch/h700_data_abort_recovery.c" -o "$OUT_DIR/h700_data_abort_recovery.o"
+
+if [[ "$H700_ARCH" == "aarch32" ]]; then
+    # The source selects ARM state itself, even when the C variant is Thumb-2.
+    "$CC" "${COMMON_FLAGS[@]}" -c "$ROOT/platform/h700/arch/h700_syscfg_probe.S" -o "$OUT_DIR/h700_syscfg_probe.o"
+    format="$("$OBJDUMP" -f "$OUT_DIR/h700_syscfg_probe.o")"
+    if ! grep -q "architecture: arm" <<<"$format"; then
+        echo "error: H700 SYS_CFG diagnostic probe is not an ARM-state object" >&2
+        printf '%s\\n' "$format" >&2
+        exit 1
+    fi
+fi
 
 "$CC" "${COMMON_FLAGS[@]}" -std=c11 \
     -c "$ROOT/target/rg34xx_h700/init.c" \
