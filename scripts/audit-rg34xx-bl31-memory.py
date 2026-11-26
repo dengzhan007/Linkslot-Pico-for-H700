@@ -82,21 +82,26 @@ def shift_value(operand) -> int:
         return 0
 
 def scan_addresses(raw: bytes, entry: int) -> tuple[list[dict], str, int]:
+    """Disassemble only control-flow-reachable instructions from the BL31 entry.
+
+    Direct calls and conditional branches are followed with a work queue.
+    Indirect targets are not guessed; register constants are reported only
+    when consumed by a statically resolved load/store base.
+    """
     engine = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
     engine.detail = True
-    engine.skipdata = True
     refs: list[dict] = []
-    seen: set[tuple[int, str, int]] = set()
-    regs: dict[str, int] = {}
-    lines: list[str] = []
-    count = 0
+    seen_refs: set[tuple[int, str, int]] = set()
+    visited: set[int] = set()
+    queued = [entry]
+    decoded_lines: dict[int, str] = {}
 
     def record(pc: int, kind: str, address: int, expression: str) -> None:
         label = classify_address(address)
         key = (pc, kind, address)
-        if label is None or key in seen:
+        if label is None or key in seen_refs:
             return
-        seen.add(key)
+        seen_refs.add(key)
         refs.append({
             "pc": "0x%08x" % pc,
             "kind": kind,
@@ -105,74 +110,109 @@ def scan_addresses(raw: bytes, entry: int) -> tuple[list[dict], str, int]:
             "expression": expression,
         })
 
-    offset = entry - IMAGE_BASE
-    if offset < 0 or offset >= len(raw):
-        raise RuntimeError("decoded BL31 entry is outside the monitor image")
+    while queued:
+        pc = queued.pop()
+        regs: dict[str, int] = {}
+        while IMAGE_BASE <= pc < IMAGE_BASE + len(raw) and pc not in visited:
+            offset = pc - IMAGE_BASE
+            decoded = next(engine.disasm(raw[offset:offset + 4], pc, count=1), None)
+            if decoded is None or decoded.size != 4:
+                break
+            insn = decoded
+            visited.add(pc)
+            byte_text = " ".join("%02x" % byte for byte in insn.bytes)
+            decoded_lines[pc] = "%08x: %-11s %s %s" % (
+                insn.address, byte_text, insn.mnemonic, insn.op_str
+            )
+            ops = insn.operands if insn.id else []
 
-    for insn in engine.disasm(raw[offset:], entry):
-        count += 1
-        byte_text = " ".join("%02x" % byte for byte in insn.bytes)
-        lines.append("%08x: %-11s %s %s" % (insn.address, byte_text, insn.mnemonic, insn.op_str))
-        ops = insn.operands if insn.id else []
+            if insn.mnemonic in ("adr", "adrp") and len(ops) >= 2:
+                if ops[0].type == ARM64_OP_REG and ops[1].type == ARM64_OP_IMM:
+                    dest = canonical_register(insn.reg_name(ops[0].reg))
+                    address = int(ops[1].imm)
+                    if insn.mnemonic == "adrp":
+                        address &= ~0xFFF
+                    regs[dest] = address
+                    record(insn.address, insn.mnemonic, address, insn.op_str)
 
-        if insn.mnemonic in ("adr", "adrp") and len(ops) >= 2:
-            if ops[0].type == ARM64_OP_REG and ops[1].type == ARM64_OP_IMM:
-                dest = canonical_register(insn.reg_name(ops[0].reg))
-                address = int(ops[1].imm)
-                if insn.mnemonic == "adrp":
-                    address &= ~0xFFF
-                regs[dest] = address
-                record(insn.address, insn.mnemonic, address, insn.op_str)
+            elif insn.mnemonic in ("movz", "movk", "movn") and len(ops) >= 2:
+                if ops[0].type == ARM64_OP_REG and ops[1].type == ARM64_OP_IMM:
+                    dest_name = insn.reg_name(ops[0].reg)
+                    dest = canonical_register(dest_name)
+                    immediate = int(ops[1].imm)
+                    shift = shift_value(ops[1])
+                    mask = (1 << (32 if dest_name.startswith("w") else 64)) - 1
+                    chunk_mask = 0xFFFF << shift
+                    if insn.mnemonic == "movz":
+                        value = (immediate << shift) & mask
+                    elif insn.mnemonic == "movn":
+                        value = (~(immediate << shift)) & mask
+                    else:
+                        value = (regs.get(dest, 0) & ~chunk_mask) | ((immediate << shift) & chunk_mask)
+                    regs[dest] = value & mask
 
-        elif insn.mnemonic in ("movz", "movk", "movn") and len(ops) >= 2:
-            if ops[0].type == ARM64_OP_REG and ops[1].type == ARM64_OP_IMM:
-                dest_name = insn.reg_name(ops[0].reg)
-                dest = canonical_register(dest_name)
-                immediate = int(ops[1].imm)
-                shift = shift_value(ops[1])
-                mask = (1 << (32 if dest_name.startswith("w") else 64)) - 1
-                chunk_mask = 0xFFFF << shift
-                if insn.mnemonic == "movz":
-                    value = (immediate << shift) & mask
-                elif insn.mnemonic == "movn":
-                    value = (~(immediate << shift)) & mask
-                else:
-                    value = (regs.get(dest, 0) & ~chunk_mask) | ((immediate << shift) & chunk_mask)
-                regs[dest] = value & mask
-                record(insn.address, "register-constant", value & mask, insn.op_str)
+            elif insn.mnemonic == "mov" and len(ops) >= 2:
+                if ops[0].type == ARM64_OP_REG:
+                    dest_name = insn.reg_name(ops[0].reg)
+                    dest = canonical_register(dest_name)
+                    if ops[1].type == ARM64_OP_REG:
+                        source = canonical_register(insn.reg_name(ops[1].reg))
+                        if source in regs:
+                            regs[dest] = regs[source]
+                    elif ops[1].type == ARM64_OP_IMM:
+                        value = int(ops[1].imm)
+                        if dest_name.startswith("w"):
+                            value &= 0xFFFFFFFF
+                        regs[dest] = value
 
-        elif insn.mnemonic in ("add", "sub") and len(ops) >= 3:
-            if ops[0].type == ARM64_OP_REG and ops[1].type == ARM64_OP_REG and ops[2].type == ARM64_OP_IMM:
-                dest = canonical_register(insn.reg_name(ops[0].reg))
-                source = canonical_register(insn.reg_name(ops[1].reg))
-                if source in regs:
-                    amount = int(ops[2].imm) << shift_value(ops[2])
-                    value = regs[source] + amount if insn.mnemonic == "add" else regs[source] - amount
-                    if insn.reg_name(ops[0].reg).startswith("w"):
-                        value &= 0xFFFFFFFF
-                    regs[dest] = value & 0xFFFFFFFFFFFFFFFF
-                    record(insn.address, "derived-register-address", regs[dest], insn.op_str)
+            elif insn.mnemonic in ("add", "sub") and len(ops) >= 3:
+                if ops[0].type == ARM64_OP_REG and ops[1].type == ARM64_OP_REG and ops[2].type == ARM64_OP_IMM:
+                    dest_name = insn.reg_name(ops[0].reg)
+                    dest = canonical_register(dest_name)
+                    source = canonical_register(insn.reg_name(ops[1].reg))
+                    if source in regs:
+                        amount = int(ops[2].imm) << shift_value(ops[2])
+                        value = regs[source] + amount if insn.mnemonic == "add" else regs[source] - amount
+                        if dest_name.startswith("w"):
+                            value &= 0xFFFFFFFF
+                        regs[dest] = value & 0xFFFFFFFFFFFFFFFF
 
-        elif insn.mnemonic == "mov" and len(ops) >= 2:
-            if ops[0].type == ARM64_OP_REG and ops[1].type == ARM64_OP_REG:
-                dest = canonical_register(insn.reg_name(ops[0].reg))
-                source = canonical_register(insn.reg_name(ops[1].reg))
-                if source in regs:
-                    regs[dest] = regs[source]
+            for op in ops:
+                if op.type == ARM64_OP_IMM and insn.mnemonic in ("ldr", "ldrsw", "prfm"):
+                    record(insn.address, "literal-reference", int(op.imm), insn.op_str)
+                if op.type == ARM64_OP_MEM:
+                    base = canonical_register(insn.reg_name(op.mem.base)) if op.mem.base else ""
+                    index = canonical_register(insn.reg_name(op.mem.index)) if op.mem.index else ""
+                    if base in regs and not index:
+                        effective = regs[base] + int(op.mem.disp)
+                        record(insn.address, "memory-effective-address", effective, insn.op_str)
 
-        for op in ops:
-            if op.type == ARM64_OP_IMM and insn.mnemonic in ("ldr", "ldrsw", "prfm"):
-                record(insn.address, "literal-reference", int(op.imm), insn.op_str)
-            if op.type == ARM64_OP_MEM:
-                base = canonical_register(insn.reg_name(op.mem.base)) if op.mem.base else ""
-                index = canonical_register(insn.reg_name(op.mem.index)) if op.mem.index else ""
-                if base in regs and not index:
-                    record(insn.address, "memory-effective-address", regs[base] + int(op.mem.disp), insn.op_str)
+            mnemonic = insn.mnemonic
+            immediate_operands = [int(op.imm) for op in ops if op.type == ARM64_OP_IMM]
+            if mnemonic in ("b", "bl", "b.eq", "b.ne", "b.cs", "b.hs", "b.cc", "b.lo",
+                            "b.mi", "b.pl", "b.vs", "b.vc", "b.hi", "b.ls", "b.ge",
+                            "b.lt", "b.gt", "b.le", "b.al") or mnemonic.startswith("b."):
+                if immediate_operands:
+                    target = immediate_operands[-1]
+                    if IMAGE_BASE <= target < IMAGE_BASE + len(raw):
+                        queued.append(target)
+                if mnemonic == "b":
+                    break
+                regs.clear()
+            elif mnemonic in ("cbz", "cbnz", "tbz", "tbnz"):
+                if immediate_operands:
+                    target = immediate_operands[-1]
+                    if IMAGE_BASE <= target < IMAGE_BASE + len(raw):
+                        queued.append(target)
+            elif mnemonic in ("ret", "br", "eret", "drps"):
+                break
+            elif mnemonic == "blr":
+                regs.clear()
 
-        if insn.mnemonic in ("b", "bl", "br", "blr", "ret") or insn.mnemonic.startswith("b."):
-            regs.clear()
+            pc += insn.size
 
-    return refs, "\n".join(lines) + "\n", count
+    lines = "\n".join(decoded_lines[address] for address in sorted(decoded_lines))
+    return refs, lines + "\n", len(visited)
 
 def build_report(identity: dict, entry: int, refs: list[dict], count: int) -> tuple[dict, str]:
     counts: dict[str, int] = {}
@@ -183,13 +223,13 @@ def build_report(identity: dict, entry: int, refs: list[dict], count: int) -> tu
         "monitor": identity,
         "image_base": "0x%08x" % IMAGE_BASE,
         "entry": "0x%08x" % entry,
-        "linear_disassembly_instruction_count": count,
+        "reachable_decoded_instruction_count": count,
         "recoverable_address_reference_count": len(refs),
         "reference_counts_by_range": counts,
         "references": refs,
         "limits": [
             "Linear disassembly can include literal/data bytes that happen to decode as instructions.",
-            "Register tracking is local and conservative; indirect pointers and runtime-computed addresses may be missed.",
+            "Register tracking is block-local and conservative; computed and indirect pointers may be missed.",
             "No references found in a range would not prove that BL31 never accesses it.",
             "This does not prove Secure/Non-secure ownership, DMA reachability, cache aliases, runtime scratch, or per-boot behavior.",
             "No hardware registers were read or written; no image was flashed or executed.",
@@ -202,7 +242,7 @@ def build_report(identity: dict, entry: int, refs: list[dict], count: int) -> tu
         "- Matched native firmware / TOC1 component: yes",
         "- BL31 image base: 0x%08x" % IMAGE_BASE,
         "- First-entry branch target: 0x%08x" % entry,
-        "- Linear-disassembly instructions: %d" % count,
+        "- Reachable decoded instructions: %d" % count,
         "- Recoverable address references: %d" % len(refs), "",
         "## References grouped by mapped range", "",
     ]
@@ -223,7 +263,7 @@ def build_report(identity: dict, entry: int, refs: list[dict], count: int) -> tu
     lines += [
         "", "## Interpretation limits", "",
         "- This is static triage of a matched BL31 binary, not memory-ownership approval.",
-        "- Linear decoding may interpret data as instructions; references are leads for manual review, not a complete call graph.",
+        "- Only instructions reachable via direct control-flow edges are decoded; indirect branches/calls and exception-return paths may be incomplete.",
         "- Dynamic address construction, indirect calls, secure-world services, DMA, runtime scratch, cache aliases and secondary-core activity are not fully modeled.",
         "- The candidate [0x40080000,0x42000000) remains UNAPPROVED. Keep H700_MEMORY_LAYOUT_APPROVED unset; do not assign MEMBASE/MEMSIZE or execute a payload.",
         "- No hardware MMIO access, boot-media write, flash, or device payload execution was performed.", "",
@@ -248,7 +288,7 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     (out / "report.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     (out / "REPORT.md").write_text(markdown + "\n", encoding="utf-8")
-    (out / "bl31-linear-disassembly.txt").write_text(disassembly, encoding="utf-8")
+    (out / "bl31-reachable-disassembly.txt").write_text(disassembly, encoding="utf-8")
     print(markdown)
     return 0
 
