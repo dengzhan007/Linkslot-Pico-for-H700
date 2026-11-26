@@ -95,6 +95,9 @@ def main() -> int:
     assert window_map["suspend_afflvl1_wrapper"][0] == 0x48008AB8
     assert window_map["suspend_afflvl2_wrapper"][0] == 0x48008A00
     assert window_map["system_suspend_power_entry"][0] == 0x48001A04
+    assert window_map["system_suspend_power_entry"][1] >= 0x300
+    assert window_map["normal_suspend_powerdown_helper"][0] == 0x48015D70
+    assert window_map["system_suspend_caller_full"][0] == 0x480096F8
     assert "ops_slot_3_raw" in window_map
     assert window_map["ops_slot_3_raw"][0] <= 0x48002998 < window_map["ops_slot_3_raw"][0] + window_map["ops_slot_3_raw"][1]
     assert window_map["ops_slot_5_raw"][0] <= 0x48002858 < window_map["ops_slot_5_raw"][0] + window_map["ops_slot_5_raw"][1]

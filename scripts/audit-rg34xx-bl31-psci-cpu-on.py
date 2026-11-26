@@ -125,7 +125,9 @@ DISASSEMBLY_WINDOWS = (
     ("suspend_afflvl0_wrapper", 0x48008b84, 0x100),
     ("suspend_afflvl1_wrapper", 0x48008ab8, 0x100),
     ("suspend_afflvl2_wrapper", 0x48008a00, 0x100),
-    ("system_suspend_power_entry", 0x48001a04, 0x100),
+    ("system_suspend_power_entry", 0x48001a04, 0x300),
+    ("normal_suspend_powerdown_helper", 0x48015d70, 0x80),
+    ("system_suspend_caller_full", 0x480096f8, 0xa0),
 
     ("ccu_save_helper", 0x48001790, 0x100),
     ("ccu_restore_helper", 0x480018d8, 0x100),
