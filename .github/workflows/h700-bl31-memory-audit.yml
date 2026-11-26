@@ -1,0 +1,57 @@
+name: RG34XX BL31 static memory audit
+
+on:
+  push:
+    branches: [porting/linkslot-1.0.45-feasibility]
+    paths:
+      - "scripts/audit-rg34xx-bl31-memory.py"
+      - "scripts/test-audit-rg34xx-bl31-memory.py"
+      - ".github/workflows/h700-bl31-memory-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-matched-bl31:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout audit scripts
+        uses: actions/checkout@v4
+
+      - name: Checkout read-only RG34XX reports
+        uses: actions/checkout@v4
+        with:
+          ref: reports
+          path: .ci/reports
+
+      - name: Install pinned Capstone disassembler
+        run: |
+          python3 -m pip install --disable-pip-version-check capstone==5.0.6
+
+      - name: Test BL31 audit primitives
+        run: |
+          python3 scripts/test-audit-rg34xx-bl31-memory.py
+
+      - name: Verify matched monitor identity and scan BL31 references
+        run: |
+          python3 scripts/audit-rg34xx-bl31-memory.py \
+            --reports-root .ci/reports/reports \
+            --out build/rg34xx-bl31-static-audit
+
+      - name: Publish audit report
+        if: always()
+        run: |
+          if [ -f build/rg34xx-bl31-static-audit/REPORT.md ]; then
+            cat build/rg34xx-bl31-static-audit/REPORT.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload BL31 disassembly and audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rg34xx-bl31-static-audit
+          path: build/rg34xx-bl31-static-audit/
+          if-no-files-found: warn
+          retention-days: 30
