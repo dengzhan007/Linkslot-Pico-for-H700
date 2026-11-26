@@ -493,3 +493,18 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 - 例外与恢复：首次 SIGTERM 后 `frontend-session` 进入 `baseos-control-center --diagnostics` 并阻塞，60 s 内没有新 Slot PID；该失败已如实记录。B 键切到前端选择器，MENU 无效，只对该辅助进程发 SIGTERM 后 init 正常 respawn。用户后来提示在选择器上选中 `slot-pvaibhav` 按 A 也可返回，此时已完成 respawn，故未再操作。
 
 结论：UI presents、armGBA committed frames、LCD IRQ 三项均约 60/s，但这只说明当前都在 60 Hz 路径上，不构成 120 Hz 可用的证据。`hardware_applied=0` 保持不变；PLL/TCON/CCU/PMIC、`/dev/mem`、面板 allowlist 和 120 Hz writer 均未触碰。
+
+
+## 15. FPS 采样数据独立复核与补充（2026-11-26）
+
+对 [reports/fps-sampling](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/slot-refresh-audit/fps-sampling) 的原始 CSV/日志/JSON 做了第二次独立计算，复核笔记在 [ANALYSIS.md](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/slot-refresh-audit/fps-sampling/ANALYSIS.md)。
+
+- CSV 的 79 行、78 个间隔、首末 counter 11263→12447、逐行 delta 总和 1184 全部一致；1184 / 19.8252277 s = **59.7218866 armGBA committed frames/s**。实际采样频率 **3.934 Hz**（计划 5 Hz），每轮 12 B、共 948 B；瞬时 fps 抖动来自 15/16 帧整数差分量化。
+- 完整 `slot-game-launch.log` 比首份 UI 摘要多包含窗口：进入游戏前 25 个 600-swap 窗口均值 **59.503 presents/s**；进入 armGBA 后 31 个窗口均值 **59.561 presents/s**。原始 `slot-ui-trace.log` 中最初 4 个窗口均值 59.345 仍正确，但只代表启动后首段，不是整个 UI/游戏期间的总均值。
+- IRQ293 仍为 **59.590 IRQ/s**。游戏态 presents 59.561、核心 committed frames 59.722、IRQ 59.590 三项互相接近，但分别代表前端 swap、核心完成帧、LCD IRQ。
+- 报告 bundle 的 9 个原始文件 SHA-256 全部匹配清单。后增 `ANALYSIS.md` 的 SHA 也已加入 fps-sampling 清单。
+- 证据完整性补充：本次采样文件记录 load bias `0x7f55ae0000` 与 map signature，但没有上传本次 PID 22514 的原始三条 maps 行；因此 CSV 的 counter 算术可独立完整复算，当前 bias 的 PT_LOAD 三行交叉验证仍是报告摘要声明，需后续补交 maps 首尾快照（无需重读进程内存）。
+- 预检的 ADB descriptor 显示 `occam/Nexus_4/mako`，但同一 ADB session 取回的 uname、DT SoC、BaseOS release 均指向 RG34XX/H700；该 descriptor 不能单独推翻设备身份，后续报告继续记录 DT model/compatible 与 CPU info 即可。
+- 恢复记录显示第一次 SIGTERM 后前端链进入 diagnostics helper 并阻塞；处理该 helper 后 init respawn 正常。最终 marker ABSENT、tracing 关闭、Slot PID 8064 回到 UI、armgba 映射 0。不要把第一次 respawn 失败从后续自动化报告中省略。
+
+当前三项结果仍全部约 60/s；没有 120-Hz 证据。所有刷新率硬件 writer 继续关闭，`hardware_applied=0`。
