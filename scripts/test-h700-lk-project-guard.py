@@ -19,6 +19,8 @@ SCAFFOLD = (
     Path("platform/h700/runtime/lk_heap_service.h"),
     Path("platform/h700/runtime/h700_arch_timer.c"),
     Path("platform/h700/runtime/h700_arch_timer.h"),
+    Path("platform/h700/runtime/h700_bl33_entry_snapshot.c"),
+    Path("platform/h700/runtime/h700_bl33_entry_snapshot.h"),
 )
 
 
@@ -197,7 +199,30 @@ def main() -> None:
                 raise RuntimeError("H700 Generic Timer provider contains a write/IRQ path: " + forbidden)
         summary.append("PASS h700-arch-timer-object: CNTVCT/CNTFRQ read-only provider linked; no comparator or IRQ setup")
 
-
+        # The A32 CRT0 wrapper publishes its first-instruction BL31 handoff
+        # state into this C-owned BSS object; this reader is not a hardware probe.
+        snapshot_object = "runtime/h700_bl33_entry_snapshot.o"
+        if f"$(LOCAL_DIR)/{snapshot_object}" not in platform_rules:
+            raise RuntimeError("H700 platform does not link the BL33 entry snapshot reader")
+        snapshot_source = root / "platform/h700/runtime/h700_bl33_entry_snapshot.c"
+        snapshot_header = root / "platform/h700/runtime/h700_bl33_entry_snapshot.h"
+        if not snapshot_source.is_file() or not snapshot_header.is_file():
+            raise RuntimeError("H700 BL33 entry snapshot source/header missing")
+        snapshot_text = snapshot_source.read_text(encoding="utf-8")
+        for required in (
+            "H700_BL33_ENTRY_SNAPSHOT_MAGIC",
+            "H700_BL33_ENTRY_SNAPSHOT_ENOTREADY",
+            "h700_bl33_entry_snapshot_read",
+        ):
+            if required not in snapshot_text:
+                raise RuntimeError("H700 BL33 entry snapshot reader is missing: " + required)
+        for forbidden in (
+            "mcr p15", "mcrr p15", "str r", "platform_set_periodic_timer",
+            "register_int_handler", "GICD", "GICC", "CNTP_CTL", "CNTV_CTL",
+        ):
+            if forbidden.lower() in snapshot_text.lower():
+                raise RuntimeError("BL33 entry snapshot reader must remain hardware-read/write free: " + forbidden)
+        summary.append("PASS h700-bl33-entry-snapshot-object: CRT0 handoff snapshot reader is linked and has no MMIO/IRQ path")
 
         cpu_objects = (
             "power/h700_cpu_performance_policy.o",
