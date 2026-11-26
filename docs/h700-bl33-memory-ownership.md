@@ -128,22 +128,45 @@ Source references:
   https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/cbe253a43f46cf551cc9a6c79a84015bde3686cf/experiments/h700-boot-speed/spl/native-handoff.h
 
 
-### Host-only A32 BL33 prototype layout (2026-11-26)
+### Host-only A32 BL33 scoped-abort overlay layout (2026-11-26)
 
-The FIQ-safe entry-snapshot change was linked with the pinned GammaOS LK CRT0
-and original exception assembly plus minimal host stubs. The probe reported
-ELF32/ARM, _start=0x4a000000, vector table 0x4a001000, wrapper 0x4a001024,
-boot-argument scratch 0x4a001020, five-word entry snapshot BSS at
-0x4a003428..0x4a00343c, _end=0x4a00343c, and 5,148 flat-image bytes. All eight
-vector branch targets resolved. Full feasibility #45779682226 passed 76/76;
-see [workflow artifact 15098435220](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45779682226/artifacts/15098435220).
+The latest pinned GammaOS LK overlay test (code commit
+`545f944936549044dcb36d57d8b86b77f812b700`; feasibility
+[#45830394587](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394587),
+artifact [15121023960](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394587/artifacts/15121023960))
+links the modified CRT0, original exception assembly, probe-scoped Data Abort
+return trampoline, Thumb matcher C, and ARM-state SYS_CFG probe with minimal
+LK stubs.
 
-This only demonstrates that the prototype sections and snapshot object fit
-in the host linker's researched image bound. It does not establish deployed
-SPL acceptance, a valid stack/heap/MMU arrangement, free ownership of any
-physical RAM, or the correctness of the runtime firmware handoff. The probe
-bound 0x4a000000..0x4a0e0000 remains a packaging/source-analysis bound, not an
-allocation grant; H700_MEMORY_LAYOUT_APPROVED remains unset.
+The linked ELF/map reports:
+
+| Item | Value |
+|---|---|
+| ELF / entry | ELF32/ARM; `_start=0x4a000000` |
+| Vector table / wrapper | `0x4a001000` / `0x4a001024` |
+| Boot-argument scratch | `0x4a001020` |
+| Abort vector | `0x4a0011d0`; `cpsid if` is the first instruction |
+| A32→Thumb handler interworking | `BLX` at `0x4a0011f4` |
+| Thumb→ARM probe interworking | `BLX` at `0x4a001640` |
+| Probe faulting load label | `0x4a00166c`; one `LDR` to `0x03000024` |
+| Probe recovery label | `0x4a001688` |
+| Abort stack BSS | `0x4a0016ac..0x4a0036ac` (8 KiB) |
+| Probe active word / `_end` | `0x4a0036cc` / `0x4a0036d0` |
+| Flat raw image | 5,804 bytes |
+| Active 32 KiB loader file headroom | 26,964 bytes |
+
+The in-memory footprint through `_end` is `0x36d0` bytes (14,032 bytes),
+which is distinct from the 5,804-byte flat raw file. The linker's conservative
+runtime memory bound remains `0x4a0e0000`; the active native firmware's
+32-KiB extent limits the *input file* and is padded to exactly 32 KiB by the
+opt-in native builder.
+
+This is a minimal stub-linked source/layout test only. It does not include
+the complete H700 platform, a visible result signal or a full LK kernel; no
+vendor header was accepted as valid by this test, no native firmware/SPL
+package was built from this binary, and no device ran it. It does not approve
+any physical memory range, heap/stack/DMA allocation or bootloader handoff.
+`H700_MEMORY_LAYOUT_APPROVED` remains unset.
 
 ## 4. Consequence for Linkslot and mGBA
 

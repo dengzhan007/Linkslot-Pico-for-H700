@@ -17,6 +17,7 @@ IMAGE_BASE = 0x4A000000
 HEADER_END = 0x640
 VECTOR_OFFSET = 0x1000
 IMAGE_END = 0x4A0E0000
+ACTIVE_LOADER_EXTENT_BYTES = 0x8000
 
 
 def run(command: list[str], log: Path | None = None) -> str:
@@ -434,6 +435,11 @@ SECTIONS
     binary = out / "lk-bl33-overlay-layout.bin"
     run(["llvm-objcopy", "-O", "binary", str(elf), str(binary)])
     data = bytearray(binary.read_bytes())
+    if len(data) > ACTIVE_LOADER_EXTENT_BYTES:
+        raise RuntimeError(
+            f"minimal H700 BL33 test raw image exceeds active 32 KiB loader extent: "
+            f"{len(data)} > {ACTIVE_LOADER_EXTENT_BYTES}"
+        )
     if len(data) <= max(HEADER_END, VECTOR_OFFSET + 0x20):
         raise RuntimeError("flat overlay probe is too small to contain its header/vector layout")
 
@@ -490,11 +496,13 @@ SECTIONS
         f"- Overlay patch SHA-256: {manifest['patch_sha256']}\n",
         "- Result: PASS for the real patched GammaOS LK CRT0 + original LK exception assembly linked with minimal stubs.\n",
         f"- ELF: ELF32/ARM; entry 0x{start:08x}; flat image bytes {len(data)}.\n",
+        f"- Active native loader file extent: {ACTIVE_LOADER_EXTENT_BYTES} bytes; raw file headroom {ACTIVE_LOADER_EXTENT_BYTES - len(data)} bytes.\\n",
+        f"- Linked memory footprint: 0x{end - IMAGE_BASE:x} bytes through _end; linker memory bound remains 0x{IMAGE_END - IMAGE_BASE:x} bytes.\\n",
         f"- BL33 branch target: 0x{branch_target:08x}.\n",
         f"- Exception vector table: 0x{vectors:08x} (+0x{vectors - IMAGE_BASE:x}).\n",
         f"- Boot-argument scratch: 0x{boot_argument:08x}.\n",
         f"- BL33 entry wrapper: 0x{entry:08x}.\n",
-        f"- Linked _end: 0x{end:08x}; upper probe bound 0x{IMAGE_END:08x}.\n",
+        f"- Linked _end: 0x{end:08x}; conservative runtime memory bound 0x{IMAGE_END:08x}.\\n",
         "- All eight vector instructions decode as A32 branch instructions; all required exception symbols resolve.\\n",
         "- The H700-only Data Abort trampoline is compiled and linked; unrelated aborts still use the original fatal C fallback.\\n",
         "- The A32 exception vector links to the Thumb-2 C handler through an interworking BLX.\\n",
@@ -503,6 +511,7 @@ SECTIONS
         "- Synthetic bytes +4..+0x63f replace cleanly without changing the first BL33 branch; the synthetic bytes are not a vendor header.\n\n",
         "## Explicit limits\n\n",
         "- This links the actual modified GammaOS LK CRT0 and original exception assembly with tiny stubs. It is not the full LK kernel/platform build, does not include H700 platform or PAL service objects, and is not a bootable image.\n",
+        "- The flat raw file is checked against the current 32 KiB native loader file extent; the test still uses stubs and does not construct a real vendor-header/firmware package.\\n",
         "- The 0x4a000000..0x4a0e0000 boundary is only the previously researched BaseOS loader image bound; it is not an approved RAM allocation or payload arena.\n",
         "- The overlay intentionally does not set ACTLR.SMP, release or park secondary CPUs, choose H700 MMU/heap/stack ranges, initialize GIC/CCU/GPIO/SD, or implement console/RTC services.\n",
         "- No firmware is flashed, no SD/boot sector is written, and no payload is executed.\n",

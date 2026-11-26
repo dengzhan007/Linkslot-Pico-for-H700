@@ -152,10 +152,26 @@ python3 scripts/patch-baseos-native-lk-override.py \
 ```
 
 **Limit:** this is a route for a compact proof-of-life diagnostic that fits in
-the existing 32 KiB extent. It is not yet a route for the full LK kernel,
-Linkslot or mGBA. The current 5,148-byte CRT0/exception layout probe is only a
-minimal stub-linked prototype, not a diagnostic payload with a visible signal.
-A larger LK requires a separately qualified loader-extent redesign and a new
+the existing 32 KiB raw-file extent. It is not yet a route for the full LK
+kernel, Linkslot or mGBA.
+
+The latest source/link regression (final code commit
+`545f944936549044dcb36d57d8b86b77f812b700`, feasibility artifact
+[15121023960](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394587/artifacts/15121023960))
+links the patched A32 CRT0/exception vectors, real H700 matcher C object and
+fixed-address probe assembly with minimal stubs. Its raw flat image is
+5,804 bytes, leaving 26,964 bytes in the 32 KiB native loader file extent.
+The link map's in-memory `_end` is `0x4a0036d0` (offset `0x36d0`,
+14,032 bytes from the image base); the BSS includes the 8 KiB Abort stack and
+the probe-active word. This is a separate runtime-memory measurement against
+the conservative `0x4a0e0000` link bound, not the 32 KiB file-size ceiling.
+
+This is still a stub-linked layout test, not a diagnostic payload with a
+visible result signal, a full LK kernel/platform build, or a vendor-header /
+native-firmware package. The regression only establishes that this test
+image's raw bytes fit and that an exactly-32-KiB input is accepted by the
+override validator; it does not establish a bootable image. A larger raw LK
+image requires a separately qualified loader-extent redesign and a new
 SPL/firmware pairing review; do not increase the extent silently.
 
 ## 5. Scope and remaining gates

@@ -68,6 +68,10 @@ def main() -> int:
     PATCHER._validate_h700_lk_raw(raw)
     checks += 1
 
+    exact_extent = valid_raw_image(PATCHER.LOADER_EXTENT_BYTES)
+    PATCHER._validate_h700_lk_raw(exact_extent)
+    checks += 1
+
     for bad, label in (
         (valid_raw_image(0x8001), "oversize"),
         (valid_raw_image()[:0x1000], "missing vectors"),
