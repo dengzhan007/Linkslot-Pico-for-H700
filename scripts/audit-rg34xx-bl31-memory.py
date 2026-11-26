@@ -183,7 +183,7 @@ def scan_addresses(raw: bytes, entry: int) -> tuple[list[dict], str, int]:
                     if source in regs:
                         record(insn.address, "indexed-address-base", regs[source], insn.op_str)
 
-            if insn.mnemonic == "msr" and len(ops) >= 2 and ops[-1].type == ARM64_OP_REG:
+            if insn.mnemonic == "msr" and "ttbr0_el3" in insn.op_str.lower() and len(ops) >= 2 and ops[-1].type == ARM64_OP_REG:
                 source = canonical_register(insn.reg_name(ops[-1].reg))
                 if source in regs:
                     record(insn.address, "system-register-value", regs[source], insn.op_str)
@@ -271,6 +271,7 @@ def build_report(identity: dict, entry: int, refs: list[dict], count: int) -> tu
         "limits": [
             "Only instructions reachable via direct control-flow edges are decoded; indirect branches/calls and exception-return paths may be incomplete.",
             "Register tracking is block-local and conservative; computed and indirect pointers may be missed.",
+            "Recovered addresses are static leads; register aliasing/clobbers and indirect dataflow may still create false positives or miss references.",
             "No references found in a range would not prove that BL31 never accesses it.",
             "This does not prove Secure/Non-secure ownership, DMA reachability, cache aliases, runtime scratch, or per-boot behavior.",
             "The adjacent runtime window label describes statically referenced addresses outside the file payload, not a complete allocation map.",
