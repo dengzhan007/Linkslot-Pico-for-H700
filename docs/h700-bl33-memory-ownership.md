@@ -313,7 +313,11 @@ BaseOS native SPL and the matched BL31 address-reference report.
   undefined; open-source H616 tooling documents a die selector, but does not
   establish the H700 value. Read only `VER_REG & 7` in a trusted early
   environment and make SPL/BL31 share one verified target-specific rule
-  before treating CPU_ON as safe.
+  before treating CPU_ON as safe. The repository now includes
+  `scripts/read-h700-rvbar-selector-readonly.py` for an initial Linux-side
+  selector sample (one `/dev/mem O_RDONLY` read; outputs only masked low3).
+  That confirms the selector if readable but does not establish pre-BL33 CPU
+  reset state.
 - H616 documentation calls `0x09010044` `RVBARADDR0_H` (CPU0 high word),
   while the Boot0 helper ORs core2/core3 one-hot bits into it. H616
   documentation also marks `DBG_REG1.C_DBGPWRUPREQ[3:0]` read-only while
