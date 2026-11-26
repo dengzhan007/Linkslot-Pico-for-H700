@@ -1,0 +1,12 @@
+[    4.857499] configfs-gadget gadget: high-speed config #1: c
+[    4.857651] android_work: sent uevent USB_STATE=CONFIGURED
+[    5.469756] random: ld-linux-aarch6: uninitialized urandom read (16 bytes read)
+[    5.494385] RTW: nolinked power save enter
+[    5.495163] random: crng init done
+[    7.325639] [sound  164][CODEC sunxi_internal_codec_dai_set_pll] stream -> OUT, freq_in ->98304000, freq_out ->98304000
+[   12.299936] sunxi-bt soc@03000000:bt: set block: 0
+[   13.353842] hdmi_hpd_sys_config_release
+[   14.295452] Bluetooth: Non-link packet received in non-active state
+[   20.954194] axp2202_usb_power: current limit not set: usb adapter type
+[   20.954194] 
+[   96.859315] adbd (2504): /proc/2504/oom_adj is deprecated, please use /proc/2504/oom_score_adj instead.

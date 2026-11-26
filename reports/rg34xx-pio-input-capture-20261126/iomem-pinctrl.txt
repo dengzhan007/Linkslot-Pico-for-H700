@@ -1,0 +1,2 @@
+3:0300b000-0300b3ff : /soc@03000000/pinctrl@0300b000
+18:40000000-7fffffff : System RAM

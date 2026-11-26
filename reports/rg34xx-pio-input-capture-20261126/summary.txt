@@ -1,0 +1,14 @@
+collector=rg34xx-pio-input-readonly-v1
+captured_at=Thu Nov 26 05:47:20 UTC 2026
+uid=0
+kernel=Linux rg34xx 4.9.170 #19 SMP PREEMPT Tue May 26 13:58:08 CST 2026 aarch64 Linux
+samples_requested=400
+sample_sleep_seconds=0.1 (actual intervals are recorded from /proc/uptime)
+pio_base=0x0300b000
+pa_dat_address=0x0300b010
+pe_dat_address=0x0300b0a0
+read_method=dd if=/dev/mem; output files are report-local temporary files
+safety=read-only; no register, pinmux, pinconf, GPIO, EINT or GIC writes
+
+[matching /proc/iomem resource]
+0300b000-0300b3ff : /soc@03000000/pinctrl@0300b000

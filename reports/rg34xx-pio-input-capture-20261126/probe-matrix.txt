@@ -1,0 +1,18 @@
+# Read-only /dev/mem probe matrix (no writes, no key presses)
+# device serial withheld; host: adb shell as uid 0
+# command form: dd if=/dev/mem bs=<bs> skip=<idx> count=1 2>&1 >/dev/null
+# device-reported time: 2026-11-26T05:47:21Z (host clock)
+
+skip=0            bs=4   -> dd: /dev/mem: Bad address
+skip=1            bs=4   -> dd: /dev/mem: Bad address
+skip=12288        bs=4096-> dd: /dev/mem: Bad address   (page 0x03000000)
+skip=12582912     bs=4   -> dd: /dev/mem: Bad address   (0x0300b000)
+skip=12594180     bs=4   -> dd: /dev/mem: Bad address   (0x0300b010 PA_DAT)
+skip=12594216     bs=4   -> dd: /dev/mem: Bad address   (0x0300b0a0 PE_DAT)
+bs=1 count=1      @0     -> dd: /dev/mem: Bad address   rc=1
+cat /dev/mem             -> cat: read error: Bad address
+
+# Interpretation: every read() on /dev/mem returns EFAULT regardless of offset,
+# size or page alignment, including offset 0. The failure is not specific to the
+# PIO range and not caused by the requested addresses.
+# No oops/panic appeared in dmesg; the kernel simply rejected the read.
