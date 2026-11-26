@@ -184,7 +184,7 @@ def main() -> int:
         "- Low-level routine writes a per-core RVBAR and contains a CPU power/reset sequence; one SoC-selected variant uses `0x09010000`, `0x09010010`, `0x07000440`, `0x07000444` and `0x090100c0`.",
         "",
         "## Interpretation", "",
-        "- In the standard TF-A `plat_psci_ops_t` layout, the second function pointer is `pwr_domain_on`; embedded PSCI source strings and dispatcher references support the platform-ops interpretation.",
+        "- In the standard TF-A `plat_psci_ops_t` layout, the second function pointer is `pwr_domain_on`; embedded PSCI source strings and dispatcher references support the platform-ops interpretation.",\n        "- Standard TF-A setup advertises PSCI_CPU_ON_AARCH64 (FID `0xc4000003`) when both slot +8 pwr_domain_on and slot +56 pwr_domain_on_finish are non-null; this exact table contains both.",
         "- This proves the matched BL31 exposes a CPU_ON-capable callback. It does **not** prove the path runs automatically at initial BL31-to-BL33 handoff.",
         "- The exact SoC variant selected by `0x03000024 & 7` was not read on-device. Do not assume the H616-named register branch is the RG34XX H700 active branch.",
         "- The exact vendor callback ABI/source revision is not recovered; this is a binary and standard ABI-position correlation, not exact source identity.",
