@@ -907,10 +907,12 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
   for each ABI.
 - Added an explicit one-GiB provider host regression to the H700
   `storage-host-regression` job. The workflow triggered by the current
-  documentation/test update is [#45793968708](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45793968708);
-  verify its final conclusion before treating this newest host-test wiring as
-  green. The 1 GiB capacity result is only the physical DRAM size ABI; it does
-  not authorize allocating the entire range.
+  documentation/test update [#45793968708](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45793968708)
+  completed successfully: storage-host-regression and compile-freestanding-objects
+  both passed. Its logs explicitly show the 1 GiB host regression passing and
+  the provider object compiling in AArch64, AArch32 ARM-state and AArch32
+  Thumb-2. The 1 GiB capacity result is only the physical DRAM size ABI; it
+  does not authorize allocating the entire range.
 
 ### Matched BL31 control-flow-aware static memory audit
 
@@ -952,3 +954,12 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 
 No Boot0/TOC1/SD write, flash, hardware MMIO write or payload execution was
 performed in this phase. 
+
+
+**最新完整 feasibility 运行状态：** [#45791906681](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45791906681)
+仍处于 `Install LLVM cross-link tools` 步骤，GitHub 尚未给出完成结论。
+这轮完整 76-step 流程不能计为通过；最近一次已完成的完整
+feasibility 仍是 [#45788649451](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45788649451)
+（76/76）。独立 H700 编译 + DRAM host 回归 [#45793968708](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45793968708)
+和匹配 BL31 静态审计 [#45793968827](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45793968827)
+均已成功。不要将这几类独立 CI 成功混同为完整 LK target image 或实机启动。
