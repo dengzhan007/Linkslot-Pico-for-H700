@@ -635,8 +635,8 @@ The full feasibility CI at 8e7f8db completed 76/76; it tests host/cross-build co
 
 ## 2026-11-26 A32 BL33 first-entry state snapshot
 
-- [x] Add an A32 CRT0 capture at the first instruction of lk_bl33_entry: incoming CPSR, SP, LR and r4 are copied into callee-saved r8-r11 before VBAR setup or startup mode/stack changes.
-- [x] Preserve the existing r4 loader-argument path; publish the four captured words to a dedicated five-word BSS object only after the CRT0 BSS clear, with a magic word written last.
+- [x] Add an A32 CRT0 capture at the first instruction of lk_bl33_entry: CPSR/SP/LR are copied to shared callee-saved r5/r6/r7 and original r4 remains in r4, before VBAR setup or startup mode/stack changes. This avoids FIQ-banked r8-r14.
+- [x] Preserve the original r4 loader argument; change CRT0's temporary boot-argument and optional TrustZone symbol-reference registers to r0 so the r6/r7 snapshots survive; publish SP/LR/r4/CPSR to a five-word BSS object after the BSS clear, with magic written last.
 - [x] Add a C-only snapshot reader with null/unpublished failure results; no CP15, timer, GIC, or MMIO accesses are made by the reader.
 - [x] Extend the A32 BL33 overlay linker/layout probe and project guard, add C ABI host regression, and compile the new object in AArch64 / AArch32 ARM-state / Thumb-2 variants.
 - [ ] Require green host and cross-compile CI for the new branch head before treating the source change as validated.
