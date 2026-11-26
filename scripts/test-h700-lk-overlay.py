@@ -520,5 +520,207 @@ SECTIONS
     print("".join(report))
 
 
+    # Build a second, stricter layout image using the real pinned LK early
+    # architecture/MMU code and the real H700 PI12 target early-init hook.
+    # This intentionally does not link platform_early_init(), heap, timer,
+    # GIC, storage, or the full kernel; it is a source/layout regression only.
+    early_include = out / "early-include"
+    (early_include / "platform").mkdir(parents=True, exist_ok=True)
+    (early_include / "platform/mt_reg_base.h").write_text(
+        "#ifndef H700_TEST_MT_REG_BASE_H\n"
+        "#define H700_TEST_MT_REG_BASE_H\n"
+        "/* Only the generic pinned LK mmu.c DRAM base dependency. */\n"
+        "#define DRAM_PHY_ADDR 0x40000000u\n"
+        "#endif\n",
+        encoding="utf-8",
+    )
+
+    early_stubs_path = out / "h700-early-led-stubs.c"
+    early_stubs_path.write_text(
+        "volatile int critical_section_count = 1;\n"
+        "volatile unsigned int h700_bl33_entry_snapshot[5];\n"
+        "void arm_undefined_handler(void *frame) { (void)frame; for (;;) { __asm__ volatile(\"wfi\"); } }\n"
+        "void arm_syscall_handler(void *frame) { (void)frame; for (;;) { __asm__ volatile(\"wfi\"); } }\n"
+        "void arm_prefetch_abort_handler(void *frame) { (void)frame; for (;;) { __asm__ volatile(\"wfi\"); } }\n"
+        "int platform_irq(void *frame) { (void)frame; return 0; }\n"
+        "void platform_fiq(void *frame) { (void)frame; }\n"
+        "void thread_preempt(void) { }\n",
+        encoding="utf-8",
+    )
+    early_main_path = out / "h700-early-led-main.c"
+    early_main_path.write_text(
+        "#include <stdint.h>\n"
+        "extern void arch_early_init(void);\n"
+        "extern void target_early_init(void);\n"
+        "extern int h700_rg34xx_power_led_is_ready(void);\n"
+        "volatile uint32_t h700_led_diag_status;\n"
+        "void kmain(void) {\n"
+        "    arch_early_init();\n"
+        "    target_early_init();\n"
+        "    h700_led_diag_status = h700_rg34xx_power_led_is_ready() ? 0x50494f31u : 0x45525231u;\n"
+        "    for (;;) { __asm__ volatile(\"wfi\"); }\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    early_thumb_flags = [
+        flag for flag in flags if flag != "-marm"
+    ] + ["-mthumb", "-ffunction-sections", "-fdata-sections"]
+    early_common_includes = [
+        "-I", str(early_include),
+        "-I", str(repo_root / "platform/h700/arch"),
+        "-I", str(repo_root / "platform/h700/power"),
+    ]
+
+    def compile_early_thumb(name: str, source: Path) -> Path:
+        obj = out / (name + ".o")
+        run(
+            [
+                "clang", *early_thumb_flags, *early_common_includes,
+                "-std=c11", "-c", str(source), "-o", str(obj),
+            ],
+            out / (name + ".log"),
+        )
+        return obj
+
+    early_arch_obj = compile_early_thumb("h700-real-lk-arch", overlay_arch_c)
+    early_mmu_obj = compile_early_thumb("h700-real-lk-mmu", lk / "arch/arm/mmu.c")
+    early_pio_map_obj = compile_early_thumb(
+        "h700-real-pio-mmu-map",
+        repo_root / "platform/h700/arch/h700_pio_mmu_mapping.c",
+    )
+    early_physical_obj = compile_early_thumb(
+        "h700-real-physical-memory",
+        repo_root / "platform/h700/arch/h700_physical_memory.c",
+    )
+    early_led_obj = compile_early_thumb(
+        "h700-real-pi12-led",
+        repo_root / "platform/h700/power/h700_rg34xx_power_led.c",
+    )
+    early_target_obj = compile_early_thumb(
+        "h700-real-target-early-init",
+        repo_root / "target/rg34xx_h700/init.c",
+    )
+    early_stubs_obj = compile_early_thumb("h700-early-led-stubs", early_stubs_path)
+    early_main_obj = compile_early_thumb("h700-early-led-main", early_main_path)
+
+    early_cache_ops_obj = out / "h700-real-lk-cache-ops.o"
+    early_ops_obj = out / "h700-real-lk-cp15-ops.o"
+    run(
+        ["clang", *flags, "-c", str(lk / "arch/arm/cache-ops.S"), "-o", str(early_cache_ops_obj)],
+        out / "h700-real-lk-cache-ops.log",
+    )
+    run(
+        ["clang", *flags, "-c", str(lk / "arch/arm/ops.S"), "-o", str(early_ops_obj)],
+        out / "h700-real-lk-cp15-ops.log",
+    )
+
+    early_ld_script = out / "h700-early-led-layout.ld"
+    early_ld_script.write_text(linker_script, encoding="utf-8")
+    early_elf = out / "h700-early-led-layout.elf"
+    early_map = out / "h700-early-led-layout.map"
+    run(
+        [
+            "ld.lld", "-m", "armelf", "-static", "--no-undefined", "--gc-sections",
+            "-T", str(early_ld_script), "-Map=" + str(early_map), "-o", str(early_elf),
+            str(crt_obj),
+            str(exc_obj),
+            str(early_stubs_obj),
+            str(early_main_obj),
+            str(thumb_fault_obj),
+            str(h700_abort_obj),
+            str(h700_probe_obj),
+            str(early_arch_obj),
+            str(early_mmu_obj),
+            str(early_cache_ops_obj),
+            str(early_ops_obj),
+            str(early_pio_map_obj),
+            str(early_physical_obj),
+            str(early_led_obj),
+            str(early_target_obj),
+        ],
+        out / "h700-early-led-link.log",
+    )
+
+    early_header = run(["readelf", "-h", str(early_elf)])
+    if "ELF32" not in early_header or "ARM" not in early_header:
+        raise RuntimeError("H700 early-MMU/PI12 diagnostic layout is not ELF32/ARM")
+    early_nm = run(["llvm-nm", "-n", str(early_elf)])
+    early_undefined = run(["llvm-nm", "-u", str(early_elf)])
+    if early_undefined.strip():
+        raise RuntimeError("H700 early-MMU/PI12 diagnostic has unresolved symbols:\n" + early_undefined)
+
+    early_symbols = {}
+    for required in (
+        "_start",
+        "kmain",
+        "arch_early_init",
+        "platform_init_mmu_mappings",
+        "arm_mmu_init",
+        "arm_mmu_map_section",
+        "arch_enable_mmu",
+        "target_early_init",
+        "h700_rg34xx_power_led_early_init",
+        "h700_rg34xx_power_led_is_ready",
+        "physical_memory_size",
+        "tt",
+        "h700_led_diag_status",
+        "_end",
+    ):
+        early_symbols[required] = symbol_address(early_nm, required)
+
+    if early_symbols["_start"] != IMAGE_BASE:
+        raise RuntimeError("H700 early-MMU/PI12 diagnostic entry is not at the expected BL33 base")
+    if early_symbols["tt"] & 0x3FFF:
+        raise RuntimeError(f"real LK 4096-entry section table is not 16 KiB aligned: {early_symbols['tt']:#x}")
+    if early_symbols["_end"] >= IMAGE_END:
+        raise RuntimeError(f"early-MMU/PI12 BSS exceeds the researched link bound: {early_symbols['_end']:#x}")
+
+    early_binary = out / "h700-early-led-layout.bin"
+    run(["llvm-objcopy", "-O", "binary", str(early_elf), str(early_binary)])
+    early_raw = early_binary.read_bytes()
+    if len(early_raw) > ACTIVE_LOADER_EXTENT_BYTES:
+        raise RuntimeError(
+            f"early-MMU/PI12 diagnostic raw file exceeds the active 32 KiB loader extent: "
+            f"{len(early_raw)} > {ACTIVE_LOADER_EXTENT_BYTES}"
+        )
+
+    early_disasm = run(["llvm-objdump", "-d", str(early_elf)])
+    (out / "h700-early-led-layout.disasm.txt").write_text(early_disasm, encoding="utf-8")
+    kmain_at = early_disasm.find("<kmain>:")
+    if kmain_at < 0:
+        raise RuntimeError("early-MMU/PI12 diagnostic kmain is missing from disassembly")
+    kmain_block = early_disasm[kmain_at:kmain_at + 1800]
+    arch_call_at = kmain_block.find("arch_early_init")
+    target_call_at = kmain_block.find("target_early_init")
+    if arch_call_at < 0 or target_call_at < 0 or arch_call_at >= target_call_at:
+        raise RuntimeError("diagnostic must call real LK arch_early_init before the H700 target early-init hook")
+
+    early_report = [
+        "\n## Real LK early-MMU + RG34XX PI12 target-hook layout test\n\n",
+        "- Result: PASS for a minimal source/layout ELF linking the pinned LK AArch32 architecture/MMU/cache/CP15 code and the H700 PI12 service.\n",
+        f"- Raw ELF image: {len(early_raw)} bytes; 32 KiB file headroom {ACTIVE_LOADER_EXTENT_BYTES - len(early_raw)} bytes.\n",
+        f"- Linked _end: 0x{early_symbols['_end']:08x}; in-memory span 0x{early_symbols['_end'] - IMAGE_BASE:x} bytes.\n",
+        f"- Actual LK section table tt: 0x{early_symbols['tt']:08x}, 16 KiB aligned (16,384-byte table).\n",
+        f"- arch_early_init: 0x{early_symbols['arch_early_init']:08x}; platform_init_mmu_mappings: 0x{early_symbols['platform_init_mmu_mappings']:08x}.\n",
+        f"- arm_mmu_init: 0x{early_symbols['arm_mmu_init']:08x}; arm_mmu_map_section: 0x{early_symbols['arm_mmu_map_section']:08x}; arch_enable_mmu: 0x{early_symbols['arch_enable_mmu']:08x}.\n",
+        f"- target_early_init: 0x{early_symbols['target_early_init']:08x}; PI12 service: 0x{early_symbols['h700_rg34xx_power_led_early_init']:08x}.\n",
+        f"- PI12 service-ready status word: 0x{early_symbols['h700_led_diag_status']:08x}.\n",
+        "- Diagnostic kmain calls the real LK arch_early_init() first, then the real H700 target_early_init() hook; the latter calls the real PI12 service.\n",
+        "- The actual LK 4096-entry section table, arm_mmu_init(), H700 DRAM/SoC-MMIO section mapping and arch_enable_mmu() are linked; no mock MMU functions are used.\n",
+        "- The H700 platform-header shim supplies only DRAM_PHY_ADDR=0x40000000 required by the generic pinned LK mmu.c; no MTK platform register implementation is linked.\n",
+        "\n### Explicit limits\n\n",
+        "- This is a minimal layout regression, not a bootable image or a full LK target. It deliberately omits thread_init_early(), the vendor-specific platform_early_init(), GIC/timer/console, heap, storage and the rest of kmain().\n",
+        "- APB1/PIO clock state at the BL33 handoff is not proven by this link test. The LED service does not alter CCU/APB1; do not execute this payload until the early PIO bus-clock and physical memory ownership gates are separately closed.\n",
+        "- The 32 KiB check is raw-file size only. _end/BSS and the 16 KiB translation table are runtime memory; this test does not grant ownership of the [0x4a000000,0x4a0e0000) range.\n",
+        "- No vendor header or firmware/SPL pair was generated, no SD/Boot0/TOC1 was written, and no MMIO register was accessed on device.\n",
+    ]
+    (out / "H700_EARLY_LED_LAYOUT.md").write_text("".join(early_report), encoding="utf-8")
+    with (out / "REPORT.md").open("a", encoding="utf-8") as report_file:
+        report_file.write("".join(early_report))
+    print("".join(early_report))
+
+
+
 if __name__ == "__main__":
     main()
