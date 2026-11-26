@@ -187,6 +187,16 @@ direct branches from BL31's first entry.
   Do not change the SPL or BL31 selector based on H616 naming alone. First
   establish the target value and intended H700 mapping, then make both
   stages use one identical tested rule.
+- Added `scripts/read-h700-rvbar-selector-readonly.py`: run it as root on
+  the running RG34XX/H700 Linux system with
+  `python3 scripts/read-h700-rvbar-selector-readonly.py --json`. It opens
+  `/dev/mem` with `O_RDONLY`, performs one 32-bit read at
+  `0x03000024`, and emits only the masked low-three-bit value plus each
+  stage's calculated bank and match status. It never prints the raw word,
+  reads no other register, and performs no MMIO write.
+- A Linux-runtime selector sample is useful because VER_REG is a version
+  selector, but it is not a pre-BL33 readback of CPU reset/status state.
+  The latter remains a separate early-handoff gate.
 
 References:
 - H616 User Manual v1.0, SYS_CFG/VER_REG register list and field table,
