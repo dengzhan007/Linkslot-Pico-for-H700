@@ -667,7 +667,7 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 
 当前结论：**App phase routing 已实际接入 1.0.49 App 源码，并通过专项完整 Frontend 编译；完整 LK feasibility 验证仍以 workflow 最终结论为准。** 所有证据仍是 host/cross-build，不是 RG34XX 实机启动或运行；没有执行 payload、没有写 SD/Boot0/TOC1，也没有开放 VFS 写回。H700 memory gate、单核 fail-closed、显示/PCM/GPIO/电源硬件门槛保持不变。
 
-下一步按 runtime architecture §6 继续验证只读 VFS v3 与静态核心生命周期的 App-owned service descriptor / startup 顺序；先补多文件/目录句柄的独立位置、容量上限和失效句柄 host 回归，再研究持久化写入。不要将现有 FAT32 writer 的 8.3 限制或 exFAT 尚未闭合的 flush/rename 语义暴露给 Linkslot 存档路径。
+第24节已完成只读 VFS 多文件/目录句柄独立游标、16/8 槽位容量与失效句柄回归；第25节已完成 VFS backend 在 static mGBA retro_init() 之前安装、并在 retro_init() 内成功协商 VFS v3 的 host 集成验证。下一步转向把这些 C-owned service descriptor 纳入 LK startup owner/lifecycle，同时保持持久化写入关闭，直到 FAT 长文件名、flush/barrier、原子替换和掉电一致性具备证据。
 
 ## 24. H700 read-only Libretro VFS 多句柄生命周期回归（2026-11-26）
 
@@ -682,7 +682,7 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 
 验证：
 - [H700 AArch32/AArch64 compile check #45745912462](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45745912462) **success**。storage-host-regression job（包含 h700_fat_vfs_backend_test.c 与 ASan/UBSan 可用时的 sanitizer run）及 freestanding AArch64 objects job 均通过。
-- [Linkslot LK Rust feasibility #45745912439](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45745912439) 在此节写入时仍在运行；该 run 将对同一更新后的分支重复执行完整 Linkslot/LK feasibility 链，须等其最终 conclusion 后再更新聚合状态。
+- 旧 full feasibility run [#45745912439](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45745912439) 因后续提交被 supersede/cancelled，不作为验证结果。更新后的 [#45746788491](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45746788491) **success**，完整 job 75/75 steps 成功；包含存储 host regression、AArch64 freestanding objects、完整 Frontend、15-member workspace、H700 CMD17/GPT/FAT/VFS、mGBA 静态归档与 newlib/VFS v3 构建、static API 实际链接和 BL33 layout probes。详情见第25节。
 
 本节只证明 host 模拟 CMD17/FAT media 上多句柄状态和边界；不证明并发 SMP 安全、真实 SD/MMC 读性能、target LK callback threading，也不实现持久化写入。当前 provider 继续要求 serialized callbacks；FAT32 8.3 writer 与 exFAT flush/rename 差距仍不允许向 Linkslot 开放存档写回。
 
@@ -702,6 +702,9 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 验证状态：
 - H700 AArch32/AArch64 compile check [#45746324107](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45746324107) **success**；storage host regression 与 freestanding AArch64 objects 均通过。
 - 首轮完整 feasibility [#45746324138](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45746324138) 的 VFS v3 slot-retro host suite **63/63 passed**。随后 static mGBA selection test harness 因旧逻辑试图重复注入 linkslot_mgba_stub_reset_counters() 而失败；这是测试脚本与新 C stub 的重复注入冲突，不是 Cargo/C ABI/VFS negotiation 失败。该首轮 run 不记为 success。
-- 已将脚本改为验证 reset/install/request 三个 stub helper 必须存在，不再注入或改写 stub；新全量 run [#45746788491](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45746788491) 已启动。写入本节时仍在 LLVM cross-link tool installation 阶段，尚未执行 lifecycle step，必须等待该 run 的最终 conclusion 后再判定。
+- 已将脚本改为验证 reset/install/request 三个 stub helper 必须存在，不再注入或改写 stub。修正后的全量 run [#45746788491](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45746788491) **success**，75/75 steps 成功；第35步 static mGBA selection test 通过，mGBA retro_init() 中的 GET_VFS_INTERFACE(version=3) 请求成功并返回非空 interface table。其后 mGBA VFS v3/newlib、真实静态归档绑定与链接、AArch32 LK-as-BL33 layout probe 和 artifact upload 均成功。
 
 本阶段目标是验证软件层 VFS/core 初始化顺序；即使该步骤通过，也不代表可启动 Linkslot LK App。mGBA C stub 没有执行 ROM，VFS provider 仍只读；无实机 SD 访问、无写卡、无 Boot0/TOC1 操作。完整 App 仍未接入可启动 LK main loop，display/scanout、GPIO/ADC、PCM、真实定时器、内存/heap 资格化及 core payload handoff 仍是独立门槛。
+
+
+产物：[Linkslot LK feasibility artifacts #45746788491](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45746788491/artifacts/15083782750)（约 387.9 MB，SHA-256 `fe734e1cd1e04ab993b73efa6c96cdeccba5d3b861d7f9b2689dfdcafc089c88`，保留至 2026-12-26）。
