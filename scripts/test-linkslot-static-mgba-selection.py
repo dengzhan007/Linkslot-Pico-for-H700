@@ -193,16 +193,19 @@ fn open_static_mgba(
     core = core[:end] + test_code + core[end:]
 
     stub_text = stub.read_text(encoding="utf-8")
-    if "linkslot_mgba_stub_reset_counters" in stub_text:
-        raise RuntimeError("stub reset helper already exists")
-    stub_text = replace_once(
-        stub_text,
-        "static uint32_t deinit_calls;\n",
-        "static uint32_t deinit_calls;\n"
-        "void linkslot_mgba_stub_reset_counters(void) { init_calls = 0; deinit_calls = 0; }\n",
-        "mGBA C stub counters",
+    required_stub_symbols = (
+        "void linkslot_mgba_stub_reset_counters(void)",
+        "bool linkslot_mgba_stub_install_vfs(void)",
+        "bool linkslot_mgba_stub_vfs_request_ok(void)",
     )
-    stub.write_text(stub_text, encoding="utf-8")
+    missing_stub_symbols = [
+        symbol for symbol in required_stub_symbols if symbol not in stub_text
+    ]
+    if missing_stub_symbols:
+        raise RuntimeError(
+            "mGBA C stub is missing required lifecycle helpers: "
+            + ", ".join(missing_stub_symbols)
+        )
     manifest_file.write_text(manifest, encoding="utf-8")
     core_file.write_text(core, encoding="utf-8")
 
