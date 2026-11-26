@@ -565,3 +565,30 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 - [H700 Linkslot runtime slices workflow](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/workflows/h700-linkslot-runtime.yml) 的 `integration/linkslot/h700-frontend-core/**` path filter 会因本轮 workspace/manifest 变化触发；须以对应最新 run 的结论为准。
 
 当前进展是 **runtime floor 已持久化并通过专用 host/AArch32/AArch64 CI**，不是可启动 LK App。下一项为 application-owned action router，把 Quick Menu 与 game-library/search 逻辑接到 handler；之后再依次设计 VFS v3/static-core lifecycle、renderer/display service descriptors。不得提前接通未经批准的 framebuffer/scanout、GPIO、PCM 或存储硬件路径；heap/BL33 memory gate与单 active core约束保持 fail-closed。
+
+
+## 19. Linkslot Quick Menu 应用动作路由抽取（2026-11-26）
+
+按第 18 节完成 runtime floor 后，继续推进 application-owned router。对照 immutable Linkslot 1.0.49 `upstream/linkslot` 的 `crates/slot/src/app.rs`，确认：
+- Shelf 的 `Action::QuickMenu` 打开 Quick Menu（初始 `QuickRow::MAIN[0]`）。
+- Playing 的同一动作进入 in-game utility/menu 路径；不能全局捕获。
+- 只有 `Phase::QuickMenu` 时才调用 `quick_menu_input(row, action)`：Up/Down 移动 `row.up/down()`；Left/Right 调 `change_setting(row, false/true)`；A 调 `open_quick_row(row)`；B 或 MENU 返回 `row.parent()`，无 parent 则回 Shelf。
+- `open_quick_row` 负责区分嵌套页、Modal/utility、网络/设置页和无动作 leaf；这些副作用/状态仍归应用本身，路由模块不能擅自推断。
+
+已增加 `integration/linkslot/h700-frontend-core/slot-app-router`（no_std，无第三方依赖），并加入 workspace，包版本 1.0.49：
+- `QuickMenuRouter::new/at/row/route` 仅维护 Quick Menu 当前行。
+- typed command：`CursorMoved`、`ChangeSetting`、`OpenRow`、`Parent`、`Close`、`Ignore`。
+- 调用方需在 Quick Menu phase 中调用；它不拥有 App phase、不接管 MENU 全局含义、不执行配置保存/VFS/显示/音频/硬件操作。
+- 6 项单元测试覆盖入口行、上下导航、左右设置代理、A 打开代理、B/MENU 父页/退出、其他动作忽略和 page-local navigation。
+
+代码提交：
+- crate manifest：`15b7e398d04a26dc0bf60671af161e1a32070688`
+- crate implementation/tests：`0887806f3c10305e63d23db7b7e929672ab131cf`
+- 15th workspace member：`4865ee52153abe5834ed21d9dd60e209d97d97bc`
+
+验证：workspace member 更新触发 H700 runtime-slices CI；在相应 15-crate workspace host/default+no-default tests 与 AArch32/AArch64 no-default checks 完成前，不声称新 router 已过 CI。上一个 14-crate 版本的专用 runtime-slices [#45739871351](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45739871351) 已完整通过，含 full Linkslot Frontend overlay build 与 CPU QuickRow fail-closed test。当前新 router 只处理 Quick Menu phase；游戏搜索键盘/候选/结果选择是下一切片。仍不是可启动 LK App，无设备写入或实机执行。
+
+下一步：
+1. 搜索键盘/候选页/搜索结果的纯按键状态转换，依照 1.0.49 上游逻辑抽取为 typed router，保留 pinyin provider 与当前 shelf/folder hit index 归属。
+2. 将 `slot-app-router` commands 接入上层 Linkslot App adapter，调用既有状态变化逻辑，不在 router 中写 VFS/config。
+3. 再推进 VFS v3 provider 与静态 Libretro core lifecycle；display/PCM/GPIO 仍独立 gated。
