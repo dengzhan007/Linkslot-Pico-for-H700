@@ -1,0 +1,173 @@
+=== first restart attempt (60 s timeout) ===
+2026-11-26T01:05:01Z BEGIN
+
+2026-11-26T01:05:01Z OLD_PID=2301
+
+2026-11-26T01:05:01Z PARENT pid=1331 ppid=1 cmd=/bin/sh /sbin/frontend-session 
+
+2026-11-26T01:05:01Z RESPAWN_CONFIRMED=yes
+
+2026-11-26T01:05:01Z SLOT_ROOT=/mnt/sdcard MARKER=/mnt/sdcard/System/trace-latency.on LOG=/mnt/sdcard/Logs/slot.log
+
+2026-11-26T01:05:01Z ENV_SLOT_TRACE_LATENCY_count=0
+
+2026-11-26T01:05:01Z LOG_BASELINE count=0 bytes=3624
+
+2026-11-26T01:05:01Z MARKER_CREATED=-rwxr-xr-x    1 root     root             0 Nov 26 01:05 /mnt/sdcard/System/trace-latency.on
+
+2026-11-26T01:05:01Z SENDING SIGTERM to 2301
+
+2026-11-26T01:05:02Z POLL elapsed=1 newpid=none presents_total=0 presents_new=0
+
+2026-11-26T01:05:03Z POLL elapsed=2 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:04Z POLL elapsed=3 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:05Z POLL elapsed=4 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:07Z POLL elapsed=6 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:08Z POLL elapsed=7 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:09Z POLL elapsed=8 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:10Z POLL elapsed=9 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:11Z POLL elapsed=10 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:12Z POLL elapsed=11 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:13Z POLL elapsed=12 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:14Z POLL elapsed=13 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:15Z POLL elapsed=14 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:17Z POLL elapsed=16 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:18Z POLL elapsed=17 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:19Z POLL elapsed=18 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:20Z POLL elapsed=19 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:21Z POLL elapsed=20 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:22Z POLL elapsed=21 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:23Z POLL elapsed=22 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:24Z POLL elapsed=23 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:25Z POLL elapsed=24 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:27Z POLL elapsed=26 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:28Z POLL elapsed=27 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:29Z POLL elapsed=28 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:30Z POLL elapsed=29 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:31Z POLL elapsed=30 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:32Z POLL elapsed=31 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:33Z POLL elapsed=32 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:34Z POLL elapsed=33 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:36Z POLL elapsed=35 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:37Z POLL elapsed=36 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:38Z POLL elapsed=37 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:39Z POLL elapsed=38 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:40Z POLL elapsed=39 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:41Z POLL elapsed=40 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:42Z POLL elapsed=41 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:43Z POLL elapsed=42 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:44Z POLL elapsed=43 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:46Z POLL elapsed=45 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:47Z POLL elapsed=46 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:48Z POLL elapsed=47 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:49Z POLL elapsed=48 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:50Z POLL elapsed=49 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:51Z POLL elapsed=50 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:52Z POLL elapsed=51 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:53Z POLL elapsed=52 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:55Z POLL elapsed=54 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:56Z POLL elapsed=55 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:57Z POLL elapsed=56 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:58Z POLL elapsed=57 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:05:59Z POLL elapsed=58 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:06:00Z POLL elapsed=59 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:06:01Z POLL elapsed=60 newpid=none presents_total= presents_new=0
+
+2026-11-26T01:06:01Z FAIL no new slot pid within 60s
+
+
+=== final cleanup restart ===
+2026-11-26T01:19:31Z BEGIN
+
+2026-11-26T01:19:31Z OLD_PID=22514
+
+2026-11-26T01:19:31Z ARMGBA_BEFORE=0
+
+2026-11-26T01:19:31Z MARKER_REMOVED=yes
+
+2026-11-26T01:19:31Z MARKER_ABSENT_AFTER=yes
+
+2026-11-26T01:19:31Z RESPAWN_CONFIRMED parent=21811 ppid=1
+
+2026-11-26T01:19:31Z SIGTERM_SLOT=22514
+
+2026-11-26T01:19:34Z DIAG_PID=6812 cmd=/usr/sbin/baseos-control-center --diagnostics 
+
+2026-11-26T01:19:34Z SIGTERM_DIAG=6812
+
+2026-11-26T01:19:39Z NEW_PID=8064
+
+2026-11-26T01:19:39Z NEW_CMD=/lib/ld-linux-aarch64.so.1 /mnt/sdcard/System/slot 
+
+2026-11-26T01:19:39Z NEW_PPID=7349
+
+2026-11-26T01:19:39Z NEW_FD1=/mnt/sdcard/Logs/slot.log
+
+2026-11-26T01:19:39Z NEW_FD2=/mnt/sdcard/Logs/slot.log
+
+2026-11-26T01:19:39Z NEW_TRACE_ENV_COUNT=0
+
+2026-11-26T01:19:39Z NEW_ARMGBA_MAPS=0
+
+2026-11-26T01:19:39Z MARKER_FINAL=ABSENT
+
+2026-11-26T01:19:39Z LOG=/mnt/sdcard/Logs/slot.log
+
+2026-11-26T01:19:44Z PACE_LINES_AFTER_RESTART=0
+
+2026-11-26T01:19:44Z LOG_TAIL=slot: boot: input at 1192.0 ms;slot: boot: ui faces at 1295.6 ms;slot: boot: first frame at 1391.0 ms;slot: prefetch: 3704006 bytes of /mnt/sdcard/Games/GBA/CT特种部队1.gba in 8.4 ms;
+
+2026-11-26T01:19:44Z END
+

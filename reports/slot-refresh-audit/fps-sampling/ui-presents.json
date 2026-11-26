@@ -1,0 +1,76 @@
+{
+  "status": "captured",
+  "source_log": "/mnt/sdcard/Logs/slot.log (resolved from /proc/PID/fd/2, not assumed)",
+  "collected_from_pid": 22514,
+  "trace_gate": {
+    "SLOT_TRACE_LATENCY": "absent before, during and after",
+    "marker": "/mnt/sdcard/System/trace-latency.on (SLOT_ROOT=/mnt/sdcard)",
+    "marker_created_at": "2026-11-26T01:05:01Z",
+    "marker_removed_at": "2026-11-26T01:19:31Z",
+    "marker_initial_state": "absent",
+    "marker_final_state": "absent (restored to preflight state)",
+    "why_marker_was_needed": "OnceLock caches the gate at first use, so the marker must exist before Slot starts"
+  },
+  "per_line_timestamps": "not present in Slot log; host poll saw count=2 at 2026-11-26T01:09:58Z and count=3 at 2026-11-26T01:10:01Z",
+  "entries": [
+    {
+      "raw": "slot: pace: 600 presents, 602 steps, 0 stale, 58.67 presents/s, 60.00 nominal fps, 10 missed game periods",
+      "presents": 600,
+      "steps": 602,
+      "stale": 0,
+      "slot_presents_per_s": 58.67,
+      "nominal_fps": 60.0,
+      "missed_game_periods": 10
+    },
+    {
+      "raw": "slot: pace: 600 presents, 605 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 10 missed game periods",
+      "presents": 600,
+      "steps": 605,
+      "stale": 0,
+      "slot_presents_per_s": 59.57,
+      "nominal_fps": 60.0,
+      "missed_game_periods": 10
+    },
+    {
+      "raw": "slot: pace: 600 presents, 604 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 10 missed game periods",
+      "presents": 600,
+      "steps": 604,
+      "stale": 0,
+      "slot_presents_per_s": 59.57,
+      "nominal_fps": 60.0,
+      "missed_game_periods": 10
+    },
+    {
+      "raw": "slot: pace: 600 presents, 604 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 10 missed game periods",
+      "presents": 600,
+      "steps": 604,
+      "stale": 0,
+      "slot_presents_per_s": 59.57,
+      "nominal_fps": 60.0,
+      "missed_game_periods": 10
+    }
+  ],
+  "summary": {
+    "line_count": 4,
+    "presents_per_line": 600,
+    "slot_presents_per_s_min": 58.67,
+    "slot_presents_per_s_mean": 59.345,
+    "slot_presents_per_s_max": 59.57,
+    "nominal_fps": [
+      60.0
+    ],
+    "stale_values": [
+      0
+    ],
+    "missed_game_periods": [
+      10
+    ]
+  },
+  "metric_meaning": "main-surface successful swap rate of the Slot UI; not LCD scanout and not emulator committed frames",
+  "recovery": {
+    "first_attempt": "SIGTERM to PID 2301 succeeded, but frontend-session entered baseos-control-center --diagnostics and blocked; no new Slot PID appeared within 60 s (recorded in fps_ui_status.txt)",
+    "handling": "B moved the screen to the frontend selector; MENU had no effect; only the diagnostics helper process spawned by this chain was SIGTERMed",
+    "result": "busybox init respawned frontend-session and Slot at PID 22514 with the marker present; tracing became active",
+    "user_hint": "user later noted that selecting slot-pvaibhav and pressing A also returns from the selector; that path was not needed because respawn had already completed"
+  }
+}

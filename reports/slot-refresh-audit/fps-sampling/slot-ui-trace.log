@@ -1,0 +1,28 @@
+slot: boot: start at 0.0 ms
+slot: fb0 hint 720x480
+slot: boot: surface at 21.4 ms
+slot: boot: compositor at 344.6 ms
+slot: baseos target rg34xx, model RG34XX, rotation ccw 0
+slot: panel 720x480, canvas 720x480, turn None
+slot: backlight dispdbg (0 to 255), battery axp2202-battery, rtc0, motor event1
+slot: boot: platform at 355.2 ms
+slot: boot: audio at 355.3 ms
+slot: boot: root at 363.9 ms
+slot: boot: scan at 365.5 ms
+slot: boot: session at 556.9 ms
+slot: boot: frontend at 559.8 ms
+slot: boot: paper at 576.2 ms
+slot: boot: cart faces at 948.3 ms
+slot: boot: shelf faces at 1027.8 ms
+slot: boot: faces at 1141.8 ms
+slot: boot: bezel at 1141.9 ms
+slot: input /dev/input/event0 (axp2202-pek)
+slot: input /dev/input/event1 (ANBERNIC-keys)
+slot: input /dev/input/event2 (dierct-keys-polled)
+slot: boot: input at 1385.5 ms
+slot: boot: ui faces at 1488.0 ms
+slot: boot: first frame at 1583.7 ms
+slot: pace: 600 presents, 602 steps, 0 stale, 58.67 presents/s, 60.00 nominal fps, 10 missed game periods
+slot: pace: 600 presents, 605 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 10 missed game periods
+slot: pace: 600 presents, 604 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 10 missed game periods
+slot: pace: 600 presents, 604 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 10 missed game periods

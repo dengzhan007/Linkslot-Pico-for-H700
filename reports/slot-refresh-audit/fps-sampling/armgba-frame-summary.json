@@ -1,0 +1,62 @@
+{
+  "status": "captured",
+  "target": {
+    "duration_s": 20.0,
+    "sample_hz": 5.0,
+    "mem_budget_bytes": 4096
+  },
+  "actual": {
+    "samples": 79,
+    "start_utc": "2026-11-26T01:16:22.654510Z",
+    "end_utc": "2026-11-26T01:16:42.478397Z",
+    "elapsed_s": 19.8252277,
+    "effective_sample_hz": 3.9343810411821907,
+    "mem_bytes_read": 948,
+    "interval_s": {
+      "min": 0.24914585,
+      "mean": 0.2541695858974359,
+      "max": 0.2660596,
+      "stdev": 0.0033332799773444183
+    }
+  },
+  "identity": {
+    "pid": 22514,
+    "bias_hex": "0x7f55ae0000",
+    "map_signature": "8f7db48f8bb8ea5f",
+    "pid_bias_map_stable": true
+  },
+  "pointer": {
+    "count_unique": 1,
+    "first_hex": "0x7f1c0ea4d0",
+    "last_hex": "0x7f1c0ea4d0"
+  },
+  "frames": {
+    "total_delta_frames": 1184,
+    "committed_frames_per_s": 59.72188657384248,
+    "instant_fps_min": 56.37834530308247,
+    "instant_fps_mean": 59.7219012021834,
+    "instant_fps_max": 65.83626482211525,
+    "wraparound_events": 0
+  },
+  "irq293": {
+    "before": {
+      "raw": "293: 465876 0 0 0 wakeupgen 64 Level dispaly",
+      "sum": 465876,
+      "utc": "2026-11-26T01:16:22.402277Z"
+    },
+    "after": {
+      "raw": "293: 467079 0 0 0 wakeupgen 64 Level dispaly",
+      "sum": 467079,
+      "utc": "2026-11-26T01:16:42.590190Z"
+    },
+    "delta": 1203,
+    "irq_per_s": 59.59011216265891,
+    "wall_elapsed_s": 20.187913
+  },
+  "errors": [],
+  "notes": [
+    "host monotonic clock (time.monotonic_ns) sampled at the midpoint of each adb round trip",
+    "per-interval fps is quantized by +/-1 frame; short-window rates are noisy by ~1/dt",
+    "only 8+4 = 12 bytes per sample were read from /proc/PID/mem; no scan, ptrace or writes"
+  ]
+}

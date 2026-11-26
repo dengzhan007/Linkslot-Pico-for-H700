@@ -1,0 +1,100 @@
+slot: boot: start at 0.0 ms
+slot: fb0 hint 720x480
+slot: boot: surface at 21.4 ms
+slot: boot: compositor at 344.6 ms
+slot: baseos target rg34xx, model RG34XX, rotation ccw 0
+slot: panel 720x480, canvas 720x480, turn None
+slot: backlight dispdbg (0 to 255), battery axp2202-battery, rtc0, motor event1
+slot: boot: platform at 355.2 ms
+slot: boot: audio at 355.3 ms
+slot: boot: root at 363.9 ms
+slot: boot: scan at 365.5 ms
+slot: boot: session at 556.9 ms
+slot: boot: frontend at 559.8 ms
+slot: boot: paper at 576.2 ms
+slot: boot: cart faces at 948.3 ms
+slot: boot: shelf faces at 1027.8 ms
+slot: boot: faces at 1141.8 ms
+slot: boot: bezel at 1141.9 ms
+slot: input /dev/input/event0 (axp2202-pek)
+slot: input /dev/input/event1 (ANBERNIC-keys)
+slot: input /dev/input/event2 (dierct-keys-polled)
+slot: boot: input at 1385.5 ms
+slot: boot: ui faces at 1488.0 ms
+slot: boot: first frame at 1583.7 ms
+slot: pace: 600 presents, 602 steps, 0 stale, 58.67 presents/s, 60.00 nominal fps, 10 missed game periods
+slot: pace: 600 presents, 605 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 10 missed game periods
+slot: pace: 600 presents, 604 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 10 missed game periods
+slot: pace: 600 presents, 604 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 10 missed game periods
+slot: pace: 600 presents, 605 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 10 missed game periods
+slot: pace: 600 presents, 604 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 10 missed game periods
+slot: pace: 600 presents, 604 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 10 missed game periods
+slot: pace: 600 presents, 605 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 10 missed game periods
+slot: pace: 600 presents, 604 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 10 missed game periods
+slot: pace: 600 presents, 604 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 10 missed game periods
+slot: pace: 600 presents, 605 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 10 missed game periods
+slot: pace: 600 presents, 604 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 10 missed game periods
+slot: pace: 600 presents, 604 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 10 missed game periods
+slot: pace: 600 presents, 605 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 10 missed game periods
+slot: pace: 600 presents, 604 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 10 missed game periods
+slot: pace: 600 presents, 604 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 10 missed game periods
+slot: pace: 600 presents, 605 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 10 missed game periods
+slot: pace: 600 presents, 604 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 10 missed game periods
+slot: pace: 600 presents, 604 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 10 missed game periods
+Thu Nov 26 01:12:42 +00 2026
+slot: date ok
+slot: hwclock ok
+slot: prefetch: 3704006 bytes of /mnt/sdcard/Games/GBA/CT特种部队1.gba in 161.6 ms
+slot: invite: ble ready at 200793 ms, 2053 ms to start with bt up
+slot: pace: 600 presents, 605 steps, 0 stale, 58.79 presents/s, 60.00 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 604 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 604 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 605 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 604 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 604 steps, 0 stale, 59.57 presents/s, 60.00 nominal fps, 18 missed game periods
+slot: launch: insert CT特种部队1 at 256085.4 ms
+slot: launch: opening CT特种部队1 on armgba at 256085.8 ms
+slot: launch: resume state read at 256123.1 ms
+slot: core /mnt/sdcard/System/armgba_libretro.so
+slot: launch: core opened at 256127.5 ms
+slot: launch: save read at 256134.4 ms
+slot: launch: cheats read at 256134.7 ms
+slot: emu: loading /mnt/sdcard/Games/GBA/CT特种部队1.gba at 256136.1 ms
+slot: emu: save ram, 131072 bytes, at 256178.0 ms
+slot: emu: resume state, 788824 bytes, at 256178.3 ms
+slot: emu: ready at 256207.8 ms
+slot: audio plug:default at 48000 Hz
+slot: audio reopened at 256344.8 ms
+slot: launch: first frame shown at 256891.4 ms
+slot: audio released after silence
+slot: pace: 600 presents, 602 steps, 4 stale, 59.27 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 601 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 602 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 601 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 602 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 602 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 601 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 602 steps, 0 stale, 59.58 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 601 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 602 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 602 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 601 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 602 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 601 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 602 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 602 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 601 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 602 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 601 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 602 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 602 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 601 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 602 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 601 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 602 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 602 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 601 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 602 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 601 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 602 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods
+slot: pace: 600 presents, 602 steps, 0 stale, 59.57 presents/s, 59.73 nominal fps, 18 missed game periods

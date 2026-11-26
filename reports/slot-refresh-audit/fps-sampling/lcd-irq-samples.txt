@@ -1,0 +1,4 @@
+# IRQ 293 before/after, read-only from /proc/interrupts
+before 2026-11-26T01:16:22.402277Z 293:     465876          0          0          0  wakeupgen  64 Level     dispaly
+after  2026-11-26T01:16:42.590190Z 293:     467079          0          0          0  wakeupgen  64 Level     dispaly
+sum_before=465876 sum_after=467079 delta=1203
