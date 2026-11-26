@@ -236,8 +236,8 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertIn('collector did not mount it', self.source)
         self.assertIn('> "$OUTDIR/input-runtime.txt"', self.source)
         self.assertNotIn('mount -t debugfs', self.source)
-        self.assertNotRegex(self.source, r'>\\s*/sys/kernel/debug/pinctrl/')
-        self.assertNotRegex(self.source, r'(?m)^\\s*(?:gpio_request|gpiod_get|devm_gpio_request)')
+        self.assertNotRegex(self.source, r'>\s*/sys/kernel/debug/pinctrl/')
+        self.assertNotRegex(self.source, r'(?m)^\s*(?:gpio_request|gpiod_get|devm_gpio_request)')
         self.assertNotIn('getevent -lt', self.source)
 
     def test_root_argument_is_recorded_even_when_disk_is_explicit(self):
