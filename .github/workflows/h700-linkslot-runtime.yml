@@ -9,6 +9,8 @@ on:
       - "platform/h700/runtime/input_*.c"
       - "scripts/apply-linkslot-render-core.py"
       - "scripts/apply-linkslot-h700-frontend-core.py"
+      - "scripts/apply-linkslot-app-router.py"
+      - "scripts/test-linkslot-app-router-integration.py"
       - "scripts/audit-slot-i18n-nostd.py"
       - "scripts/test-h700-input-*.py"
       - "scripts/test-h700-input-queue.c"
@@ -21,6 +23,8 @@ on:
       - "platform/h700/runtime/input_*.c"
       - "scripts/apply-linkslot-render-core.py"
       - "scripts/apply-linkslot-h700-frontend-core.py"
+      - "scripts/apply-linkslot-app-router.py"
+      - "scripts/test-linkslot-app-router-integration.py"
       - "scripts/audit-slot-i18n-nostd.py"
       - "scripts/test-h700-input-*.py"
       - "scripts/test-h700-input-queue.c"
@@ -73,6 +77,10 @@ jobs:
           python3 scripts/apply-linkslot-h700-frontend-core.py \
             --source .ci/upstream-linkslot \
             --crate-root integration/linkslot/h700-frontend-core
+          python3 scripts/apply-linkslot-app-router.py \
+            --source .ci/upstream-linkslot \
+            --crate integration/linkslot/h700-frontend-core/slot-app-router
+          python3 scripts/test-linkslot-app-router-integration.py --source .ci/upstream-linkslot
 
       - name: Run upstream input/model regression tests against H700 no_std sources
         run: |
