@@ -565,7 +565,20 @@ SECTIONS
 
     early_thumb_flags = [
         flag for flag in flags if flag != "-marm"
-    ] + ["-mthumb", "-ffunction-sections", "-fdata-sections"]
+    ] + [
+        "-mthumb",
+        "-ffunction-sections",
+        "-fdata-sections",
+        "-DARM_CPU_CORTEX_A53=1",
+        "-DARM_ISA_ARMV7=1",
+        "-DARCH_ARM=1",
+        "-D_SIZE_T_DEFINED_=1",
+    ]
+    early_asm_flags = flags + [
+        "-DARM_CPU_CORTEX_A53=1",
+        "-DARM_ISA_ARMV7=1",
+        "-DARCH_ARM=1",
+    ]
     early_common_includes = [
         "-I", str(early_include),
         "-I", str(repo_root / "platform/h700/arch"),
@@ -607,11 +620,11 @@ SECTIONS
     early_cache_ops_obj = out / "h700-real-lk-cache-ops.o"
     early_ops_obj = out / "h700-real-lk-cp15-ops.o"
     run(
-        ["clang", *flags, "-c", str(lk / "arch/arm/cache-ops.S"), "-o", str(early_cache_ops_obj)],
+        ["clang", *early_asm_flags, "-c", str(lk / "arch/arm/cache-ops.S"), "-o", str(early_cache_ops_obj)],
         out / "h700-real-lk-cache-ops.log",
     )
     run(
-        ["clang", *flags, "-c", str(lk / "arch/arm/ops.S"), "-o", str(early_ops_obj)],
+        ["clang", *early_asm_flags, "-c", str(lk / "arch/arm/ops.S"), "-o", str(early_ops_obj)],
         out / "h700-real-lk-cp15-ops.log",
     )
 
