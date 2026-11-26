@@ -968,10 +968,22 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
   H700 newlib adapter tests, real mGBA export/Rust static-API binding and
   static-link probes, plus final AArch32 LK-as-BL33 entry/vector layout probe.
 - The report is explicitly host-only cross-compile/static-link feasibility.
-  The LK heap probe uses a signature-compatible C test stub; it does not link
-  the real LK heap implementation and does not prove SMP safety. No device,
-  SD card, boot media, payload or hardware execution was involved. This is
-  not yet a flashed image or first-device-boot result.
+  The AArch32 LK-as-BL33 probe links the real patched GammaOS LK CRT0 and
+  exception assembly with tiny platform/kmain stubs; it is 5,148 bytes, with
+  entry wrapper at 0x4a001024, vectors at 0x4a001000 and linked _end at
+  0x4a00343c. It is not the full LK kernel/platform, does not initialize H700
+  GIC/CCU/GPIO/SD or console services, and is not a bootable image.
+- The pinned LK baseline is uniprocessor: one global current_thread, one global
+  set of run queues and one global critical_section_count. arch_disable_ints()
+  masks IRQ on the current core only; it is not an SMP lock. The pinned CRT0
+  sets ACTLR.SMP only for ARM_CPU_CORTEX_A7 and has no Cortex-A53 branch.
+  RG34XX secondary-core state at BL31 -> BL33 is still UNKNOWN. Therefore
+  before any execution, either prove secondary A53 cores remain held off for
+  the full LK lifetime or implement and validate A53 coherency, SMP scheduler
+  state and cross-core locks. The heap compatibility probe also links only
+  against a signature-compatible test stub, not the real LK heap implementation.
+- No device, SD card, boot media, payload or hardware execution was involved.
+  This is not yet a flashed image or first-device-boot result.
 - Downloaded build report SHA-256:
   `a20b4c28d9e8eec92cae69ed93da2ce66edaebcf1dbab5bca78ce9855016473c`.
   Full workflow artifact ZIP SHA-256:
