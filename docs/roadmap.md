@@ -698,8 +698,11 @@ Hard size boundary: this first integration path is only for a small diagnostic p
   [h700-a53-single-core-startup-audit.md](h700-a53-single-core-startup-audit.md).
 - [ ] Device-verify pre-BL33 CPU state. H616 reference POR default
   `C0_RST_CTRL=0x13ff0101` implies CPU0 released and CPU1-3 reset, but H700
-  live state and bit29 gate value have not been read. A Linux register read
-  after SMP bring-up is not proof of the pre-BL33 state.
+  live state and bit29 gate value have not been read. The gate word
+  `0x03006248` sits at SID window offset `0x248`; its field is not defined
+  by the public H616 register tables. A future approved probe should return
+  only `(readl(0x03006248) >> 29) & 1`, not a full SID dump. A Linux register
+  read after SMP bring-up is not proof of the pre-BL33 state.
 - [ ] Resolve Boot0's unusual OR of core2/core3 one-hot bits into
   `0x09010044` (H616 manual calls this CPU0 `RVBARADDR0_H`) and its write
   to `DBG_REG1.C_DBGPWRUPREQ` (H616 manual marks these bits read-only).
