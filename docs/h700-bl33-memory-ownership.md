@@ -83,6 +83,51 @@ The current Linkslot BL33 packager separately enforces a padded image-size ceili
 This makes the present boundary clearer, but does **not** yet define LK's MEMBASE/MEMSIZE, BSS, heap, stack guard, page tables, DMA pool or core payload address. LK's own startup/MMU code may have different requirements from the BaseOS loader.
 
 
+### Active native SPL and later A32-loader memory accesses
+
+A direct source trace at the pinned BaseOS-MultiFrontend commit
+cbe253a43f46cf551cc9a6c79a84015bde3686cf narrows the pre-BL31 ownership
+question. In spl/native-boot.c, the native SPL reads the p4 firmware package
+into 0x42e00000, copies its four firmware extents to the monitor/DTBO/DTB/BL33
+destinations listed above, reads the BOL4 image into 0x45000000, patches the
+BL33 and monitor headers, and publishes the record at 0x4a300000. It then
+cleans caches, programs RVBAR to 0x48000000 and requests the EL3 reset. The
+pinned native-handoff.h sets the BOL4 staging capacity to 0x01000000 (16 MiB)
+at 0x45000000, the final FDT capacity to 0x00100000 at 0x44000000, and the
+native handoff record to 0x4a300000. No explicit read/copy/clear target in
+the audited native-boot.c handoff path is the candidate interval
+[0x40080000,0x42000000).
+
+The subsequent A32 loader is a separate stage. Its entry32.S sets SP to
+0x4a0f0000 and uses [0x4a0f8000,0x4a0fc000) for its 4096-entry translation
+table. native/loader.c later decodes the BOL4 kernel into
+[0x40080000,0x42000000) with a maximum output length of 0x01f80000, copies
+the initrd at 0x42000000, and opens the final FDT at 0x44000000. Therefore the
+candidate application region is demonstrably used by the existing Linux path
+after BL33 entry; a replacement LK that enters directly at BL33 would need to
+bypass the A32 Linux loader and never execute this decode/initrd path.
+
+This source trace is only a partial lifetime proof. It shows no direct native
+SPL destination in the candidate interval in the pinned source, and identifies
+the later Linux-loader writes, but it does not show every possible access by
+the opaque vendor BL31 binary or its secure-world services. The monitor's
+runtime scratch allocations, cache aliases, DMA access, and any hidden
+reservation below 0x48000000 have not been proven absent. The live Linux
+memblock map is not a substitute for that pre-Linux BL31 audit. Accordingly,
+[0x40080000,0x42000000) remains a candidate only; it is not approved for LK,
+Linkslot, mGBA, heap, stack or DMA.
+
+Source references:
+- BaseOS native SPL source at the pinned commit:
+  https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/cbe253a43f46cf551cc9a6c79a84015bde3686cf/experiments/h700-boot-speed/spl/native-boot.c
+- BaseOS A32 entry source:
+  https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/cbe253a43f46cf551cc9a6c79a84015bde3686cf/experiments/h700-boot-speed/native/entry32.S
+- BaseOS A32 loader source:
+  https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/cbe253a43f46cf551cc9a6c79a84015bde3686cf/experiments/h700-boot-speed/native/loader.c
+- Native handoff address constants:
+  https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/cbe253a43f46cf551cc9a6c79a84015bde3686cf/experiments/h700-boot-speed/spl/native-handoff.h
+
+
 ### Host-only A32 BL33 prototype layout (2026-11-26)
 
 The FIQ-safe entry-snapshot change was linked with the pinned GammaOS LK CRT0
