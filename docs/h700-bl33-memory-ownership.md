@@ -304,9 +304,16 @@ BaseOS native SPL and the matched BL31 address-reference report.
   incorrect to conclude that BL31 has no secondary-core start mechanism.
   The callback is on-demand and its presence does not prove it runs during
   the initial BL31-to-BL33 handoff.
-- The active SoC variant chosen by `0x03000024 & 7` and the live target
-  CPU reset state remain unknown. H616 register names must not be assumed to
-  identify the active RG34XX H700 CPU_ON branch.
+- The active SoC variant value from SYS_CFG VER_REG `0x03000024` and the
+  live target CPU reset state remain unknown. There is now a statically
+  confirmed bank-selection mismatch to resolve: BL31 selects the alternate
+  `0x08100040` RVBAR bank whenever low3 is nonzero, while pinned native SPL
+  selects it only when low3 equals 2. The rules agree for values 0 and 2 and
+  diverge for 1, 3, 4, 5, 6 or 7. The public H616 manual leaves VER_REG[7:0]
+  undefined; open-source H616 tooling documents a die selector, but does not
+  establish the H700 value. Read only `VER_REG & 7` in a trusted early
+  environment and make SPL/BL31 share one verified target-specific rule
+  before treating CPU_ON as safe.
 - H616 documentation calls `0x09010044` `RVBARADDR0_H` (CPU0 high word),
   while the Boot0 helper ORs core2/core3 one-hot bits into it. H616
   documentation also marks `DBG_REG1.C_DBGPWRUPREQ[3:0]` read-only while
@@ -321,4 +328,6 @@ startup during the initial handoff. See
 Boot0/BL31 CI
 [#45808401081](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45808401081),
 and PSCI callback CI
-[#45816600012](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45816600012).
+[#45816600012](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45816600012)
+and RVBAR selector parity CI
+[#45817598323](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45817598323).
