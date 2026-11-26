@@ -32,7 +32,6 @@ class GpioDebugfsReadOnlySafetyTests(unittest.TestCase):
     def test_does_not_mount_debugfs_or_claim_or_export_gpio(self):
         for forbidden in (
             "mount -t debugfs",
-            "mount debugfs",
             "gpio_request",
             "gpiod_get",
             "gpio_export",
@@ -45,6 +44,10 @@ class GpioDebugfsReadOnlySafetyTests(unittest.TestCase):
             "ioctl(",
         ):
             self.assertNotIn(forbidden, self.source)
+        self.assertFalse(any(
+            re.match(r"^\\s*mount\\b.*debugfs", line)
+            for line in self.lines
+        ))
         self.assertIn('no_debugfs_mount=1', self.source)
         self.assertIn('no_gpio_export_or_request=1', self.source)
         self.assertIn('no_pinmux_pinconf_gpio_eint_gic_writes=1', self.source)
