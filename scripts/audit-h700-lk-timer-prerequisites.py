@@ -41,12 +41,27 @@ def ordered(text: str, tokens: list[str], label: str) -> None:
 
 
 def function_body(source: str, signature: str, label: str) -> str:
-    start = source.find(signature)
-    if start < 0:
-        raise SystemExit(f"FAIL: {label}: function signature not found: {signature}")
-    brace = source.find("{", start)
-    if brace < 0:
-        raise SystemExit(f"FAIL: {label}: function body not found")
+    # A source file may contain a forward declaration before the definition.
+    # Skip any occurrence terminated by a semicolon before the next opening brace.
+    cursor = 0
+    start = -1
+    brace = -1
+    while True:
+        candidate = source.find(signature, cursor)
+        if candidate < 0:
+            break
+        candidate_brace = source.find("{", candidate)
+        candidate_semicolon = source.find(";", candidate)
+        if candidate_brace < 0:
+            break
+        if candidate_semicolon >= 0 and candidate_semicolon < candidate_brace:
+            cursor = candidate + len(signature)
+            continue
+        start = candidate
+        brace = candidate_brace
+        break
+    if start < 0 or brace < 0:
+        raise SystemExit(f"FAIL: {label}: function definition not found: {signature}")
     depth = 0
     for index in range(brace, len(source)):
         char = source[index]
