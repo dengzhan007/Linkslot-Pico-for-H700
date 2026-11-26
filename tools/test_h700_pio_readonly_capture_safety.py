@@ -18,6 +18,13 @@ class PioReadOnlyCaptureSafetyTests(unittest.TestCase):
         cls.source = SCRIPT.read_text(encoding="utf-8")
         cls.lines = cls.source.splitlines()
 
+    def _dd_command_lines(self):
+        return [
+            (index, line.strip())
+            for index, line in enumerate(self.lines)
+            if re.search(r"\bdd\s+if=/dev/mem\b", line)
+        ]
+
     def test_only_the_two_known_dat_registers_are_whitelisted(self):
         self.assertIn("PA_DAT_ADDRESS=0x0300b010", self.source)
         self.assertIn("PE_DAT_ADDRESS=0x0300b0a0", self.source)
@@ -27,10 +34,9 @@ class PioReadOnlyCaptureSafetyTests(unittest.TestCase):
         self.assertIn("register_accesses_per_sample=2", self.source)
 
     def test_iomem_resource_and_root_checks_precede_any_mmio_read(self):
-        first_mem_read = next(
-            index for index, line in enumerate(self.lines)
-            if re.match(r"^\s*dd\s+", line)
-        )
+        dd_lines = self._dd_command_lines()
+        self.assertEqual(len(dd_lines), 1)
+        first_mem_read = dd_lines[0][0]
         root_check = next(
             index for index, line in enumerate(self.lines)
             if '[ "$UID_VALUE" = "0" ]' in line
@@ -45,15 +51,12 @@ class PioReadOnlyCaptureSafetyTests(unittest.TestCase):
         self.assertIn("refusing MMIO read", self.source)
 
     def test_dev_mem_is_input_only_and_reads_exactly_four_bytes(self):
-        dd_lines = [
-            line.strip()
-            for line in self.lines
-            if re.match(r"^\s*dd\s+", line)
-        ]
+        dd_lines = self._dd_command_lines()
         self.assertEqual(len(dd_lines), 1)
-        self.assertIn("if=/dev/mem", dd_lines[0])
-        self.assertIn('of="$tmp"', dd_lines[0])
-        self.assertIn('bs=4 skip="$word_index" count=1', dd_lines[0])
+        command = dd_lines[0][1]
+        self.assertIn("if=/dev/mem", command)
+        self.assertIn('of="$tmp"', command)
+        self.assertIn('bs=4 skip="$word_index" count=1', command)
         self.assertIn('byte_count="$(wc -c < "$tmp"', self.source)
         self.assertIn('[ "$byte_count" = "4" ]', self.source)
         self.assertNotRegex(self.source, r"\bof\s*=\s*['\"]?/dev/mem")
