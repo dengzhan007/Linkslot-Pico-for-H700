@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate matched RG34XX BL31 PSCI CPU_ON and power-state callback paths."""
+"""Validate matched RG34XX BL31 PSCI CPU_ON and emit power-ops disassembly."""
 from __future__ import annotations
 import argparse
 import hashlib
@@ -57,6 +57,21 @@ STRINGS = (
     b"psci_afflvl0_on",
 )
 
+DISASSEMBLY_WINDOWS = (
+    ("ops_slot_1_cpu_on", 0x4800254c, 0x100),
+    ("ops_slot_2_raw", 0x4800264c, 0x100),
+    ("ops_slot_3_raw", 0x48002878, 0x180),
+    ("ops_slot_4_raw", 0x48002680, 0x100),
+    ("ops_slot_5_raw", 0x480026c4, 0x100),
+    ("ops_slot_6_raw", 0x480025a0, 0x100),
+    ("ops_slot_7_raw", 0x48002574, 0x100),
+    ("ops_slot_8_raw", 0x48002544, 0x100),
+    ("ccu_save_helper", 0x48001790, 0x100),
+    ("ccu_restore_helper", 0x480018d8, 0x100),
+    ("restore_callsite_context", 0x48002838, 0x80),
+    ("save_callsite_context", 0x48002978, 0x80),
+)
+
 def read_word(raw: bytes, address: int) -> int:
     offset = address - BASE
     if offset < 0 or offset + 4 > len(raw):
@@ -70,6 +85,28 @@ def decode_bl_target(pc: int, instruction: int) -> int:
     if immediate & (1 << 25):
         immediate -= 1 << 26
     return pc + (immediate << 2)
+
+def render_disassembly(raw: bytes) -> str:
+    try:
+        from capstone import Cs, CS_ARCH_ARM64, CS_MODE_ARM
+    except ImportError as exc:
+        raise RuntimeError("Capstone is required for callback disassembly") from exc
+    decoder = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
+    lines = [
+        "# Matched BL31 PSCI/CCU callback windows",
+        "# Slots other than the CPU_ON slot are intentionally not semantically labelled.",
+        "",
+    ]
+    for label, start, length in DISASSEMBLY_WINDOWS:
+        offset = start - BASE
+        if offset < 0 or offset + length > len(raw):
+            raise RuntimeError("disassembly window outside monitor: %s" % label)
+        lines.append("## %s [0x%08x, 0x%08x)" % (label, start, start + length))
+        for insn in decoder.disasm(raw[offset:offset + length], start):
+            operands = (" " + insn.op_str) if insn.op_str else ""
+            lines.append("0x%08x: %-8s%s" % (insn.address, insn.mnemonic, operands))
+        lines.append("")
+    return "\n".join(lines) + "\n"
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -102,7 +139,7 @@ def main() -> int:
     if decode_bl_target(0x4800255c, read_word(raw, 0x4800255c)) != 0x48002d78:
         raise RuntimeError("CPU_ON callback target changed")
     if table[3] != 0x48002878:
-        raise RuntimeError("pwr_domain_suspend slot changed")
+        raise RuntimeError("platform-ops slot 3 pointer changed")
     if decode_bl_target(0x48002998, read_word(raw, 0x48002998)) != 0x48001790:
         raise RuntimeError("suspend CCU context-save call changed")
     if decode_bl_target(0x48002858, read_word(raw, 0x48002858)) != 0x480018d8:
@@ -163,6 +200,7 @@ def main() -> int:
             "capability_advertisement_proof": "not established: exact vendor plat_psci_ops_t ABI and pwr_domain_on_finish slot are not pinned",
             "slot_7_unclassified_address": "0x48002574",
         },
+        "disassembly_file": "PSCI-CALLBACK-DISASSEMBLY.txt",
         "power_management_path_candidates": {
             "address": "0x%08x" % table[3],
             "save_context": {
@@ -234,6 +272,8 @@ def main() -> int:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n",
                         encoding="utf-8")
+    disassembly_path = args.out.parent / "PSCI-CALLBACK-DISASSEMBLY.txt"
+    disassembly_path.write_text(render_disassembly(raw), encoding="utf-8")
     markdown = [
         "# Matched BL31 PSCI CPU_ON callback audit", "",
         "- Monitor: 107,216 bytes; SHA-256 `%s`." % digest,
@@ -241,6 +281,7 @@ def main() -> int:
         "- PSCI dispatch loads the global `psci_plat_pm_ops` pointer, reads its +8 slot, moves that function pointer to `x5`, then branches through `x5`.",
         "- Callback `0x4800254c` calls low-level CPU_ON routine `0x48002d78` at `0x4800255c` when `W3 == 0`.",
         "- Platform-ops slot 3 contains 0x48002878. Direct BL targets confirm PC 0x48002998 -> 0x48001790 (CCU save helper) and PC 0x48002858 -> 0x480018d8 (restore helper); their exact callback ownership and CFG relationship remain unresolved.",
+        "- Full disassembly windows for all table entries and both CCU helpers are saved in PSCI-CALLBACK-DISASSEMBLY.txt for function-boundary/CFG review.",
         "- The CCU save/restore helper branch targets are present, but their callback ownership and runtime execution are unresolved; they do not establish a BL33 startup clock transition or CPU DVFS support.",
         "- Low-level routine writes a per-core RVBAR and contains a CPU power/reset sequence; one SoC-selected variant uses `0x09010000`, `0x09010010`, `0x07000440`, `0x07000444` and `0x090100c0`.",
         "- RVBAR selector cross-check: BL31 uses VER_REG low3==0 for base 0x09010040, otherwise 0x08100040; pinned native SPL uses low3==2 for the alternate bank. Both agree only for selector values 0 and 2; the target value must be read.",
@@ -257,6 +298,7 @@ def main() -> int:
     (args.out.parent / "PSCI-CPU-ON.md").write_text("\n".join(markdown), encoding="utf-8")
     print("PASS: matched BL31 PSCI ops table, dispatch, CPU_ON callback and reset sequence")
     print("  table[1] = 0x%08x -> low-level 0x48002d78" % table[1])
+    print("  callback disassembly = %s" % disassembly_path)
     print("  monitor SHA-256 = %s" % digest)
     return 0
 

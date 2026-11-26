@@ -21,6 +21,12 @@ def main() -> int:
     # Slot pointer values are verified, but non-CPU_ON callback semantics
     # remain unclassified until the exact vendor TF-A ABI is identified.
     assert module.EXPECTED_TABLE[7] == 0x48002574
+    window_map = {name: (start, size) for name, start, size in module.DISASSEMBLY_WINDOWS}
+    assert "ops_slot_3_raw" in window_map
+    assert window_map["restore_callsite_context"][0] <= 0x48002858
+    assert window_map["save_callsite_context"][0] <= 0x48002998
+    assert window_map["ccu_save_helper"][0] == 0x48001790
+    assert window_map["ccu_restore_helper"][0] == 0x480018d8
     assert module.decode_bl_target(0x48002d8c, 0x97ffffe9) == 0x48002d30
     assert module.decode_bl_target(0x48002d90, 0x97ffffe2) == 0x48002d18
     try:
