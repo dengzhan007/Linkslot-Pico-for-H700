@@ -992,6 +992,40 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
   Combined CI artifacts include the raw Boot0 capture and machine-readable
   CPU reset report.
 
+
+### 2026-11-26 Matched BL31 PSCI CPU_ON callback audit
+
+- Added scripts/audit-rg34xx-bl31-psci-cpu-on.py and host regression
+  scripts/test-audit-rg34xx-bl31-psci-cpu-on.py. The exact matched
+  107,216-byte monitor was verified by SHA-256
+  676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31.
+- Confirmed platform ops table at 0x480165f8, registration at
+  0x480029bc, and dispatch via global psci_plat_pm_ops:
+  dispatcher loads slot +8, then branches through the selected callback.
+  Slot +8 points to 0x4800254c, which calls low-level CPU power-on
+  routine 0x48002d78.
+- The low-level routine writes a per-core RVBAR and contains SoC-specific
+  CPU power/reset paths. One branch uses C0_RST_CTRL, C0_CTRL_REG0,
+  AON power-on reset/clamp and DBG_REG0. The SoC variant selected by
+  0x03000024 & 7 has not been read on the target.
+- Workflow
+  [#45816600012](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45816600012)
+  passed all steps, including the exact-word/table/branch regression.
+- Interpretation: BL31 has a statically confirmed PSCI platform CPU_ON
+  callback. This is on-demand capability, not evidence that secondaries
+  are automatically released during initial BL31-to-BL33 handoff. Initial
+  CPU1-CPU3 reset state is still not device-verified; a diagnostic LK must
+  not invoke PSCI CPU_ON before SMP/coherency and per-core initialization
+  are deliberately implemented.
+- Exact vendor source revision/callback ABI remains unconfirmed; the
+  pwr_domain_on mapping is correlated using the standard TF-A
+  plat_psci_ops_t slot order and binary registration/dispatch.
+- Updated detailed report:
+  [h700-a53-single-core-startup-audit.md](h700-a53-single-core-startup-audit.md).
+  CI artifact 15114838248 contains the exact PSCI CPU_ON report and
+  disassembly/audit output.
+
+
 ### Latest full feasibility result
 
 <badge color="success">74/74 steps passed</badge>
