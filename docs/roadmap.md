@@ -662,7 +662,7 @@ Safety boundary: 0x40080000..0x42000000 remains candidate-only. Do not set H700_
 - [x] Add a pinned-source patcher for BaseOS native/build.py, limited to a clean BaseOS-MultiFrontend checkout at cbe253a43f46cf551cc9a6c79a84015bde3686cf. The raw LK binary is constrained to the active 32 KiB extent and A32 entry/vector/header contract.
 - [x] Keep native loader extent, offsets and extent table fixed; the patched builder adds the raw payload to generation and persistent source hashes, inserts the paired header, pads exactly to 32 KiB, regenerates firmware FNV/header and then builds the matching native SPL.
 - [x] Add host regression for raw image validation, builder patch shape, hash-input ordering and idempotence.
-- [ ] Pass the new patcher regression in current full feasibility CI before recommending it for local use.
+- [x] Patcher host regression and real pinned BaseOS source apply/check/AST-parse/byte-exact restore passed in full feasibility run #45785521254; `git diff --exit-code` and clean `git status` both passed.
 - [ ] Produce a compact diagnostic payload with a deterministic proof-of-life signal, then build the matched native SPL/firmware/capsule locally. Keep the artifacts non-installable until the BL31 and memory/recovery gates are reviewed.
 
 Hard size boundary: this first integration path is only for a small diagnostic payload <= 32 KiB. The 5,148-byte CRT0/exception layout probe is not yet such a diagnostic because it has no approved visible signal and uses stubs. It does not make the complete LK or Linkslot/mGBA fit the loader extent.
