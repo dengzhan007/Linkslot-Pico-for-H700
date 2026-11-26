@@ -7,6 +7,7 @@ on:
       - "scripts/audit-rg34xx-bl31-memory.py"
       - "scripts/test-audit-rg34xx-bl31-memory.py"
       - "scripts/test-rg34xx-bl31-startup-contract.py"
+      - "scripts/audit-rg34xx-boot0-cpu-reset.py"
       - ".github/workflows/h700-bl31-memory-audit.yml"
   workflow_dispatch:
 
@@ -55,6 +56,14 @@ jobs:
             --reports-root .ci/reports/reports \
             --out build/rg34xx-bl31-static-audit
 
+      - name: Audit Boot0 CPU reset helper and BL31 secondary-core MMIO
+        run: |
+          python3 scripts/audit-rg34xx-boot0-cpu-reset.py \
+            --reports-root .ci/reports/reports \
+            --baseos-root .ci/baseos-native \
+            --bl31-report build/rg34xx-bl31-static-audit/report.json \
+            --out build/rg34xx-bl31-static-audit
+
       - name: Publish audit report
         if: always()
         run: |
@@ -63,6 +72,9 @@ jobs:
           fi
           if [ -f build/rg34xx-bl31-static-audit/STARTUP-CONTRACT.md ]; then
             cat build/rg34xx-bl31-static-audit/STARTUP-CONTRACT.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f build/rg34xx-bl31-static-audit/BOOT0-CPU-STARTUP.md ]; then
+            cat build/rg34xx-bl31-static-audit/BOOT0-CPU-STARTUP.md >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Upload captured Boot0 binaries for read-only host CPU-start audit
