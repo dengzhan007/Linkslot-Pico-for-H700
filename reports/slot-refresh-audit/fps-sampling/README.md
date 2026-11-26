@@ -69,3 +69,8 @@
 | `slot-game-launch.log` | 游戏启动阶段日志，证明 .gba 与 armgba core |
 | `recovery-log.txt` | 首次 60 s 失败与最终清理 respawn 的原始状态文件 |
 | `SHA256SUMS.txt` | 上述文件 SHA-256（不含自身） |
+
+
+## 独立复核
+
+补充计算与证据边界见 [ANALYSIS.md](ANALYSIS.md)：从完整 launch log 分别复算游戏前 25 个 presents 窗口和 armGBA 运行中的 31 个 presents 窗口，核对 79 个 counter samples 的总帧差；同时标注原始 maps 行尚未随本次采样包一并上传这一证据完整性缺口。该文件 SHA-256 已加入本目录清单。
