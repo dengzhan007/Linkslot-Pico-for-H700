@@ -191,7 +191,7 @@ def main() -> None:
         raise RuntimeError("CRT0 must preserve the original r4 boot-argument handoff without clobbering snapshot r6")
     if "ldr r0, =_binary_tzbsp_tzbsp_bin_start" not in crt0_text:
         raise RuntimeError("optional TrustZone reference must not clobber snapshot r7")
-    if re.search(r"\\b(?:r8|r9|r10|r11)\\b", entry_body):
+    if re.search(r"\b(?:r8|r9|r10|r11)\b", entry_body):
         raise RuntimeError("entry snapshot must use unbanked r4-r7, not FIQ-banked r8-r11")
     clear_loop = re.search(r"blt\s+\.L__bss_loop", crt0_text)
     publish_pos = crt0_text.find("ldr r0, =h700_bl33_entry_snapshot")
