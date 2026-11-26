@@ -86,6 +86,8 @@ def main() -> None:
     overlay_target_rules = overlay / "files/target/rules.mk"
     overlay_crt0 = overlay / "files/arch/arm/crt0.S"
     overlay_arch_c = overlay / "files/arch/arm/arch.c"
+    overlay_exceptions = overlay / "files/arch/arm/exceptions.S"
+    overlay_faults = overlay / "files/arch/arm/faults.c"
     overlay_rules = overlay / "files/arch/arm/rules.mk"
     for path in (
         overlay_makefile,
@@ -93,6 +95,8 @@ def main() -> None:
         overlay_target_rules,
         overlay_crt0,
         overlay_arch_c,
+        overlay_exceptions,
+        overlay_faults,
         overlay_rules,
     ):
         if not path.is_file():
@@ -164,6 +168,23 @@ def main() -> None:
     )
     if not a53_branch or not all(flag in a53_branch.group(1) for flag in ("-mcpu=cortex-a53", "-mfpu=neon-vfpv4", "-mfloat-abi=softfp")):
         raise RuntimeError("Cortex-A53 rules branch lacks the Cortex-A53 + NEON/VFPv4 + softfp ABI flags")
+
+    exception_text = overlay_exceptions.read_text(encoding="utf-8")
+    faults_text = overlay_faults.read_text(encoding="utf-8")
+    for token in (
+        "bl\t\tarm_data_abort_handler",
+        "cmp\tr0, #0",
+        "bne\th700_arm_data_abort_exception_return",
+        "ldmia\tsp!, { r0-r12, pc }^",
+        "msr\tspsr_cxsf, r1",
+    ):
+        if token not in exception_text:
+            raise RuntimeError("patched exception vector missing scoped recovery operation: " + repr(token))
+    if "h700_data_abort_try_recover((void *)frame)" not in faults_text:
+        raise RuntimeError("patched LK Data Abort handler does not call the H700 exact matcher")
+    if 'exception_die(frame, -8, "data abort, halting\\\\n");' not in faults_text:
+        raise RuntimeError("patched LK fatal Data Abort fallback was not preserved")
+
     crt0_text = overlay_crt0.read_text(encoding="utf-8")
     if "ARM_CPU_CORTEX_A53" in crt0_text:
         raise RuntimeError("overlay unexpectedly guesses Cortex-A53 ACTLR.SMP setup")
@@ -207,7 +228,7 @@ void kmain(void) { for (;;) { __asm__ volatile("wfi"); } }
 void arm_undefined_handler(void *frame) { (void)frame; for (;;) { __asm__ volatile("wfi"); } }
 void arm_syscall_handler(void *frame) { (void)frame; for (;;) { __asm__ volatile("wfi"); } }
 void arm_prefetch_abort_handler(void *frame) { (void)frame; for (;;) { __asm__ volatile("wfi"); } }
-void arm_data_abort_handler(void *frame) { (void)frame; for (;;) { __asm__ volatile("wfi"); } }
+int arm_data_abort_handler(void *frame) { (void)frame; return 0; }
 int platform_irq(void *frame) { (void)frame; return 0; }
 void platform_fiq(void *frame) { (void)frame; }
 void thread_preempt(void) { }
@@ -251,7 +272,7 @@ void thread_preempt(void) { }
         out / "crt0-compile.log",
     )
     run(
-        ["clang", *flags, "-c", str(lk / "arch/arm/exceptions.S"), "-o", str(exc_obj)],
+        ["clang", *flags, "-c", str(overlay_exceptions), "-o", str(exc_obj)],
         out / "exceptions-compile.log",
     )
     run(
@@ -270,6 +291,7 @@ void thread_preempt(void) { }
         "arm_syscall",
         "arm_prefetch_abort",
         "arm_data_abort",
+        "h700_arm_data_abort_exception_return",
         "arm_reserved",
         "arm_irq",
         "arm_fiq",
@@ -412,7 +434,7 @@ SECTIONS
         f"- Boot-argument scratch: 0x{boot_argument:08x}.\n",
         f"- BL33 entry wrapper: 0x{entry:08x}.\n",
         f"- Linked _end: 0x{end:08x}; upper probe bound 0x{IMAGE_END:08x}.\n",
-        "- All eight vector instructions decode as A32 branch instructions; all required exception symbols resolve.\n",
+        "- All eight vector instructions decode as A32 branch instructions; all required exception symbols resolve.\n",        "- The H700-only Data Abort trampoline is compiled and linked; unrelated aborts still use the original fatal C fallback.\n",
         "- The generated LK make rules exclude MTK platform/common, platform/pal, MTK dev modules and MTK target/init.c when H700_BUILD=yes; H700 must provide its own platform/target module lists.\n",
         "- Synthetic bytes +4..+0x63f replace cleanly without changing the first BL33 branch; the synthetic bytes are not a vendor header.\n\n",
         "## Explicit limits\n\n",

@@ -17,6 +17,8 @@ FILES = (
     Path("target/rules.mk"),
     Path("arch/arm/crt0.S"),
     Path("arch/arm/arch.c"),
+    Path("arch/arm/exceptions.S"),
+    Path("arch/arm/faults.c"),
     Path("arch/arm/rules.mk"),
 )
 
@@ -249,6 +251,56 @@ def patch_arch_c(original: str) -> str:
     return original.replace(old, new, 1)
 
 
+
+def patch_exceptions(original: str) -> str:
+    old = "\tb\t\tarm_data_abort_handler\n\tb\t\t.\n\nFUNCTION(arm_reserved)"
+    new = (
+        "\tbl\t\tarm_data_abort_handler\n"
+        "\tcmp\tr0, #0\n"
+        "\tbne\th700_arm_data_abort_exception_return\n"
+        "\tb\t\t.\n\n"
+        "/* H700-only return path, reached only after the exact probe match. */\n"
+        "FUNCTION(h700_arm_data_abort_exception_return)\n"
+        "\tldr\tr1, [sp, #0]\n"
+        "\tmsr\tspsr_cxsf, r1\n"
+        "\tadd\tsp, sp, #12\n"
+        "\tldmia\tsp!, { r0-r12, pc }^\n\n"
+        "FUNCTION(arm_reserved)"
+    )
+    if original.count(old) != 1:
+        raise RuntimeError("unexpected pinned arm_data_abort vector; refusing to patch by guess")
+    patched = original.replace(old, new, 1)
+    if patched.count("FUNCTION(h700_arm_data_abort_exception_return)") != 1:
+        raise RuntimeError("probe-scoped Data Abort return trampoline was not emitted")
+    return patched
+
+
+def patch_faults(original: str) -> str:
+    old = (
+        "void arm_data_abort_handler(struct arm_fault_frame *frame)\n"
+        "{\n"
+        "\texception_die(frame, -8, \"data abort, halting\\\\n\");\n"
+        "}\n"
+    )
+    new = (
+        "/* H700 recovers one explicitly armed SYS_CFG probe; all other faults halt. */\n"
+        "extern int h700_data_abort_try_recover(void *frame);\n\n"
+        "int arm_data_abort_handler(struct arm_fault_frame *frame)\n"
+        "{\n"
+        "\tif (h700_data_abort_try_recover((void *)frame))\n"
+        "\t\treturn 1;\n\n"
+        "\texception_die(frame, -8, \"data abort, halting\\\\n\");\n"
+        "\treturn 0;\n"
+        "}\n"
+    )
+    if original.count(old) != 1:
+        raise RuntimeError("unexpected pinned arm_data_abort_handler; refusing to weaken fatal handling")
+    patched = original.replace(old, new, 1)
+    if 'exception_die(frame, -8, "data abort, halting\\\\n");' not in patched:
+        raise RuntimeError("generic Data Abort fatal fallback was not preserved")
+    return patched
+
+
 def patch_arm_rules(original: str) -> str:
     # Do not change other CPU branches. Only correct the pinned cortex-a53
     # branch, which currently selects cortex-a9 code generation.
@@ -280,6 +332,8 @@ def main() -> None:
         Path("target/rules.mk"): patch_target_rules(originals[Path("target/rules.mk")]),
         Path("arch/arm/crt0.S"): patch_crt0(originals[Path("arch/arm/crt0.S")]),
         Path("arch/arm/arch.c"): patch_arch_c(originals[Path("arch/arm/arch.c")]),
+        Path("arch/arm/exceptions.S"): patch_exceptions(originals[Path("arch/arm/exceptions.S")]),
+        Path("arch/arm/faults.c"): patch_faults(originals[Path("arch/arm/faults.c")]),
         Path("arch/arm/rules.mk"): patch_arm_rules(originals[Path("arch/arm/rules.mk")]),
     }
 
@@ -330,6 +384,14 @@ def main() -> None:
         "source_tree_modified": False,
         "git_apply_check": "pass",
         "files": records,
+        "data_abort_recovery": {
+            "scope": "one exact A32 LDR at SYS_CFG VER_REG 0x03000024",
+            "match": ["active cookie", "saved LR_abt equals fault-load label plus 8", "DFAR equals 0x03000024", "SVC origin mode", "ARM state"],
+            "exception_return": "restore saved SPSR and r0-r12; LDM^ loads only the validated recovery label",
+            "fallback": "all non-matching Data Aborts retain exception_die() -> halt()",
+            "probe_call_site": "none; startup, timer and input hooks do not invoke the diagnostic",
+            "hardware_execution": "not performed",
+        },
         "entry_snapshot": {
             "register_order": ["SP", "LR", "r4", "CPSR"],
             "capture_registers": {"CPSR": "r5", "SP": "r6", "LR": "r7", "r4": "r4"},
