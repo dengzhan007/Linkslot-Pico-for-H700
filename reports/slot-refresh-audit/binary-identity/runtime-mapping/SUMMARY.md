@@ -66,7 +66,7 @@ rw-p 00178000 @ 0x7f641f8000  → bias = 0x7f641f8000 − (0x178000 + 0x10000) =
 retro_run           = 0x7f6408f560
 retro_load_game     = 0x7f6408cf60
 retro_unload_game   = 0x7f6408d470
-gba（主指针变量）    = 0x7f644959b8   → 解引用得 GBASystem* 堆地址（每次装载都变）
+gba（主指针变量）    = 0x7f644959b8   → 解引用得 struct GBA * 堆地址（每次装载都变）
 gba（联动缓存）      = 0x7f645316a8
 ```
 
@@ -108,7 +108,7 @@ bl   <消费函数>
 
 | 对象 | 写入指令 | 所在函数 | 写入值 |
 | --- | --- | --- | --- |
-| `0x4259b8` | `str x2, [x22]` @ `0x1a9ac` | `loadAdvance.part.0` | `startAdvance()` 的返回值（新建 `GBASystem*`），与 `gbas[0]` 同源同值 |
+| `0x4259b8` | `str x2, [x22]` @ `0x1a9ac` | `loadAdvance.part.0` | `startAdvance()` 的返回值（新建 `struct GBA *`），与 `gbas[0]` 同源同值 |
 | `0x4259b8` | `str xzr, [x1]` @ `0x1d6f0` | `retro_unload_game` | `NULL` |
 | `0x4c16a8` | `str x19, [x1, #0x70]` @ `0x3318c` | `linkSetGba` | 形参 `x0` —— 即上游传进来的主指针 |
 | `0x4c16a8` | `str xzr, [x1, #0x70]` @ `0x33228` | `linkSetGameBoy` | `NULL`（切 GB 模式） |
