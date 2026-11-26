@@ -276,7 +276,11 @@ Power. If the 17 lines or hi/lo state are not exposed, stop here and use a
 separately gated LK diagnostic build; do not try another userspace MMIO
 interface.
 
-The H700 LK scanner already performs volatile reads through the existing
+The sampler's shell syntax and safety regressions passed Linux/Windows host CI
+[#45765497473](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45765497473)
+(94 Python tests per platform, including the inventory extension, plus shell
+syntax validation). This is not a device read result. The H700 LK scanner
+already performs volatile reads through the existing
 0x03000000..0x03100000 shared Device mapping, but it is not invoked from
 target_init(), apps_init() or LK main. The Linux debugfs result is a readback
 of the Linux GPIO driver path, not proof that the LK-side direct PIO mapping
