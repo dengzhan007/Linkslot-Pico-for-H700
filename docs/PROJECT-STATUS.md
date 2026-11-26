@@ -888,7 +888,6 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 
 
 ## 2026-11-26 H700 DRAM provider linked into LK and BL31 memory triage
-
 ### H700 physical DRAM provider
 
 - Added `h700_physical_memory.o` to the real H700 LK `OBJS` list. The pinned
@@ -896,18 +895,18 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
   `uint64_t physical_memory_size(void)`; the RG34XX provider reports
   `0x40000000` (1 GiB).
 - Fixed the Make continuation in `platform/h700/rules.mk`: the provider line
-  must end in exactly one continuation backslash. The earlier doubled
+  ends in exactly one continuation backslash. The earlier doubled
   backslash was caught by the full LK project-guard dry-run
   (`recipe commences before first target`) and corrected in commit
   `a92a9e502428728c2f3ca7a321b2851b3ecc3b12`.
-- The latest independent H700 workflow
+- Latest H700 workflow
   [#45795119838](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45795119838)
   passed both jobs. It compiled and architecture-checked
   `h700_physical_memory.o` under AArch64, AArch32 ARM-state and AArch32
   Thumb-2; the storage-host-regression job explicitly passed the 1 GiB
-  provider test and the existing read-only SD/GPT/FAT/VFS tests.
+  provider test and read-only SD/GPT/FAT/VFS host regressions.
 - The 1 GiB value is the physical DRAM capacity ABI only. It does not approve
-  allocation of all DRAM or of the proposed Linkslot arena.
+  allocation of all DRAM or the proposed Linkslot arena.
 
 ### Matched BL31 static memory audit
 
@@ -918,76 +917,74 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
   payload end exclusive `0x4801a2d0`.
 - Control-flow-aware AArch64 traversal from the entry decoded 1,849 reachable
   instructions and recorded 268 recoverable address references: 188 into the
-  file payload and 80 into the immediately following runtime/page-table
-  reference range `[0x4801a2d0,0x48200000)`. This is not a complete call graph:
+  payload and 80 into the immediately following runtime/page-table reference
+  range `[0x4801a2d0,0x48200000)`. This is not a complete call graph:
   indirect calls/branches, exception returns and runtime-computed pointers are
   not fully modeled.
-- Important recovered state: `TTBR0_EL3 = 0x4803cb40` (write at
+- Recovered EL3 state: `TTBR0_EL3 = 0x4803cb40` (write at
   `0x4800bf60`); TCR_EL3 configuration load from `0x4803c8e0`
   (`0x4800bf4c`); per-core TPIDR_EL3 context base `0x4803cd40`
   (`0x4801582c`).
-- Additional translation-map calls to helper `0x4800bcb4` were decoded:
-  - callsite `0x480033a0`: base `0x48000000`, length `0x41000`,
-    raw attribute `3`, unconditional;
-  - callsite `0x480033b4`: base `0x48000000`, length `0x1a000`,
-    raw attribute `1`, unconditional;
-  - callsite `0x480033c8`: base `0x48040000`, length `0x1000`,
-    raw attribute `2`, unconditional;
-  - callsite `0x480033f4`: base `0x48200000`, length `0x1e00000`
-    (ends at `0x4a000000`), raw attribute `3`, conditional on a nonzero
-    32-bit word at `0x48000018`;
-  - callsite `0x48003408`: same base, length `0x400000`, raw attribute
-    `7`, under the same condition.
+- Decoded calls to helper `0x4800bcb4` request unconditional mappings within
+  `[0x48000000,0x48041000)`; a second mapping request spans
+  `[0x48200000,0x4a000000)` only when the 32-bit word at `0x48000018` is
+  nonzero. A nested 4 MiB request is made under the same condition. The raw
+  mapping attributes (1, 2, 3, 7) have not been assigned memory-type or
+  security semantics.
 - The page-table construction path references pool base `0x4803e000`,
   4 KiB page indexing and cursor/counter `0x4803cb80`; its local counter
-  guard permits at most two page indices on this path. This does not establish
-  the complete translation-table allocation or memory ownership. Raw mapping
-  attributes have not been assigned memory-type/security semantics, and the
-  conditional word at `0x48000018` has not been qualified from a live runtime
-  instance.
+  guard permits at most two page indices on that path. This is not a complete
+  allocation map. The conditional word has not been qualified from live
+  runtime state.
 - No direct address reference into candidate `[0x40080000,0x42000000)` was
-  recovered. This is **not** evidence that the range is free. The BL31
-  translation-map requests require the conservative BL31-associated envelope
-  `[0x48000000,0x4a000000)` to remain excluded until runtime ownership,
-  conditional behavior, security/DMA use, cache aliases and secondary-core
-  lifetime are proven. The endpoint `0x4a000000` is the start of the current
-  native BL33 loader slot; do not treat the raw request as proof that the whole
-  interval is physically allocated.
-- The refined audit/regression CI
+  recovered; this is **not** proof that the region is free. Keep the
+  conservative BL31-associated envelope `[0x48000000,0x4a000000)` excluded
+  pending runtime ownership, security/DMA, cache-alias and secondary-core
+  review. The endpoint `0x4a000000` is the start of the current native BL33
+  loader slot; raw map requests are not proof that the entire interval is
+  physically allocated.
+- Refined audit CI
   [#45795120056](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45795120056)
   passed and uploaded artifact
   [15104447110](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45795120056/artifacts/15104447110).
-  The report includes machine-readable references and reachable disassembly.
-  No hardware MMIO, boot-media write, flash or payload execution was performed.
+  No hardware MMIO, boot-media write, flash or payload execution occurred.
 
-### Latest complete feasibility state
+### Latest full feasibility result
 
-- The current full workflow
+<badge color="success">74/74 steps passed</badge>
+
+- Full workflow
   [#45795119939](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45795119939)
-  is running on `a92a9e502428728c2f3ca7a321b2851b3ecc3b12`.
-  It has passed the previously failing H700 project/memory fail-closed guard,
-  including GNU Make dry-run parsing of the corrected `rules.mk`; actual
-  GammaOS LK BL33 CRT0/exception-vector overlay link; BaseOS native override
-  host regression and apply/restore; native BL33 header packaging contract;
-  DRAM provider host test; software renderer/Frontend compile and tests; and
-  early storage/input/Libretro integration steps. At the last check it was
-  running `Test persistent H700 no_std frontend business crates`; do not call
-  the full run passed until GitHub reports its final conclusion.
-- The prior full run
-  [#45791906681](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45791906681)
-  failed because of the malformed double-backslash Make continuation. That
-  failure is corrected and guarded in the current run.
-- The last completed baseline full feasibility run remains
-  [#45788649451](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45788649451)
-  (76/76), predating the current DRAM-provider object-graph changes.
+  completed successfully on source commit
+  `a92a9e502428728c2f3ca7a321b2851b3ecc3b12`. All 74 main steps passed;
+  artifact `linkslot-lk-rust-feasibility-45795119939` (387,922,330 bytes)
+  was uploaded successfully.
+- The run passed the real H700 project/memory fail-closed Make dry-run,
+  GammaOS LK H700 BL33 CRT0/exception-vector overlay link, BaseOS native
+  override apply/restore and header packaging regressions, DRAM provider
+  host test, no_std renderer/frontend and business-crate checks, input and
+  Libretro VFS v3 tests, read-only SD -> GPT -> FAT32 -> VFS tests, FAT/exFAT
+  regressions, mGBA AArch32 namespaced static archive and VFS v3/newlib builds,
+  H700 newlib adapter tests, real mGBA export/Rust static-API binding and
+  static-link probes, plus final AArch32 LK-as-BL33 entry/vector layout probe.
+- The report is explicitly host-only cross-compile/static-link feasibility.
+  The LK heap probe uses a signature-compatible C test stub; it does not link
+  the real LK heap implementation and does not prove SMP safety. No device,
+  SD card, boot media, payload or hardware execution was involved. This is
+  not yet a flashed image or first-device-boot result.
+- Downloaded build report SHA-256:
+  `a20b4c28d9e8eec92cae69ed93da2ce66edaebcf1dbab5bca78ce9855016473c`.
+  Full workflow artifact ZIP SHA-256:
+  `421fa40fb1f0349cc3824542b71fc014f60774d9eead49cdcf12444fc533d004`.
 
 ### Remaining gates
 
-1. Finish review of the paired BL31 binary's runtime lifetime, conditional
-   page mappings, secure-world, DMA, cache aliases and secondary-core state.
+1. Finish paired BL31 runtime-lifetime/ownership review: conditional mapping
+   flag, page-table allocation bounds, secure-world, DMA, cache aliases and
+   secondary-core state.
 2. Produce a complete LK/BL33/BL31/application memory map, including code,
    BSS, heap, stack, page tables, handoff records, framebuffer/PIO, SD/DMA and
-   the separate Linkslot/mGBA payload footprint.
+   separate Linkslot/mGBA payload footprint.
 3. Keep `H700_MEMORY_LAYOUT_APPROVED` unset; do not assign `MEMBASE/MEMSIZE`
    or execute a payload until ownership is actually demonstrated.
 4. Only after memory and recovery gates are approved, implement a compact
