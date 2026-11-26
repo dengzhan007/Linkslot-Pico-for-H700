@@ -1035,6 +1035,12 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
   [#45817598323](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45817598323)
   verifies the differing SPL/BL31 rules and reports matching low3 values
   [0, 2] versus mismatching [1, 3, 4, 5, 6, 7]. It does not read the target.
+- Added a single-register device collector
+  `scripts/read-h700-rvbar-selector-readonly.py`, with host regression.
+  It reads only `0x03000024` via `/dev/mem O_RDONLY`, prints only
+  `VER_REG & 7`, and reports whether the two code paths agree. No raw word
+  is emitted and no MMIO write is performed. The physical device sample
+  remains outstanding.
 - Updated detailed report:
   [h700-a53-single-core-startup-audit.md](h700-a53-single-core-startup-audit.md).
   CI artifact 15114838248 contains the exact PSCI CPU_ON report and
