@@ -949,6 +949,44 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
   [15104447110](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45795120056/artifacts/15104447110).
   No hardware MMIO, boot-media write, flash or payload execution occurred.
 
+
+### 2026-11-26 Boot0 / BL31 single-core startup audit
+
+- Added reproducible audit script
+  `scripts/audit-rg34xx-boot0-cpu-reset.py` and expanded the BL31 scanner to
+  classify CPUCFG/CPU subsystem MMIO references. The combined workflow
+  [#45808401081](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45808401081)
+  passed all steps on commit
+  `fc5901ee49b502eab298a52b7e38add8f9611a66`.
+- Primary Boot0 input: 128 KiB, SHA-256
+  `bf886995745a0eb9b5030296f9f6163035e164b3a82183716e67ff876319289f`,
+  eGON checksum valid. Reset helper at PC `0x231e0`, caller at
+  `0x23224`. Caller checks bit29 of `0x03006248`; if set it invokes the
+  helper for core2 and core3, not core1. Helper clears the selected
+  `C0_RST_CTRL` bit, which is reset-assert under H616 reference semantics.
+- The pinned native SPL writes the primary RVBAR pair only. The matched BL31
+  reachable scan recovered CPU-related MMIO at `0x09010010` (CPU0 mode path)
+  and `0x08100020` (CPU subsystem control), but no direct reset or
+  CPU1-CPU3 RVBAR accesses.
+- H616 manual family-reference default for `C0_RST_CTRL` is `0x13ff0101`:
+  low nibble `0x1` (CPU0 reset deasserted, CPU1-3 asserted). H700 live
+  semantics/state still require a target readback; this is not a hardware
+  measurement.
+- Two discrepancies are explicitly unresolved: Boot0 ORs core2/core3 bits
+  into `0x09010044`, which H616 documentation names CPU0 RVBARADDR0_H;
+  Boot0 also writes `DBG_REG1.C_DBGPWRUPREQ`, which the H616 manual marks
+  read-only. Do not infer these writes' H700 semantics or modify these fields.
+- The CPU0-only handoff is now a **strong static hypothesis**, not an approved
+  runtime guarantee. Keep SMP disabled and the single-core gate open until
+  there is a trusted pre-BL33 read-only snapshot of `C0_RST_CTRL`,
+  `C0_CPU_STATUS`, RVBARADDR0-3 and DBG_REG0/1, or an equivalent reviewed
+  reset-hold proof. Linux userspace reads after SMP bring-up are not a
+  substitute for a pre-BL33 snapshot.
+- Detailed analysis:
+  [h700-a53-single-core-startup-audit.md](h700-a53-single-core-startup-audit.md).
+  Combined CI artifacts include the raw Boot0 capture and machine-readable
+  CPU reset report.
+
 ### Latest full feasibility result
 
 <badge color="success">74/74 steps passed</badge>
@@ -977,11 +1015,17 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
   set of run queues and one global critical_section_count. arch_disable_ints()
   masks IRQ on the current core only; it is not an SMP lock. The pinned CRT0
   sets ACTLR.SMP only for ARM_CPU_CORTEX_A7 and has no Cortex-A53 branch.
-  RG34XX secondary-core state at BL31 -> BL33 is still UNKNOWN. Therefore
-  before any execution, either prove secondary A53 cores remain held off for
-  the full LK lifetime or implement and validate A53 coherency, SMP scheduler
-  state and cross-core locks. The heap compatibility probe also links only
-  against a signature-compatible test stub, not the real LK heap implementation.
+  The new Boot0 + native SPL + matched BL31 static audit strongly supports
+  a CPU0-only handoff, but secondary CPU1-CPU3 hold-off remains PROBABLE and
+  not device-verified. Boot0's helper is gated by bit29 of 0x03006248 and,
+  when called, applies C0_RST_CTRL &= ~(1 << core) for core2/core3; it is not
+  called for core1. Under H616 reference semantics, zero asserts reset. The
+  H700 live register state at BL33 entry is still unknown. Before any new
+  payload execution, obtain an approved read-only pre-BL33 snapshot or an
+  explicitly reviewed hold-off proof; otherwise implement and validate A53
+  coherency, SMP scheduler state and cross-core locks. The heap compatibility
+  probe also links only against a signature-compatible test stub, not the real
+  LK heap implementation.
 - No device, SD card, boot media, payload or hardware execution was involved.
   This is not yet a flashed image or first-device-boot result.
 - Downloaded build report SHA-256:
