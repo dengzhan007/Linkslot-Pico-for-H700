@@ -11,7 +11,7 @@
 - 设备和官方 ZIP 内核心 SHA-256：`4ebae098cc4848fb459fc18299c39acbdbbbeb732db5c3f66d1ff3f6e142e889`。
 - Build ID：`08309a288967a62cf4155e27d1b10ce13a5e33ef`；ELF AArch64 ET_DYN，保留完整 `.symtab`（4960 项），但 `.dynsym` 不导出 `gba`。
 - 上游官方 source pin：`df6b2631291f249d54a00dd14f49bc893e438feb`。
-- exact-source cross-ABI layout probe：`sizeof(GBA)=788712`、`offsetof(GBA,video)=11944`、`offsetof(Video,frameCounter)=4`，所以 `gba->video.frameCounter` 相对 `GBASystem*` 的偏移为 **11948 bytes**。Host、AArch32 ARM、AArch32 Thumb-2、AArch64 静态断言均通过；专用 CI step 通过，不将后续取消的整个 workflow 记作通过。
+- exact-source cross-ABI layout probe：`sizeof(GBA)=788712`、`offsetof(GBA,video)=11944`、`offsetof(Video,frameCounter)=4`，所以 `gba->video.frameCounter` 相对 `struct GBA *` 的偏移为 **11948 bytes**。Host、AArch32 ARM、AArch32 Thumb-2、AArch64 静态断言均通过；专用 CI step 通过，不将后续取消的整个 workflow 记作通过。
 
 ## 2. load bias 交叉验证
 
@@ -43,7 +43,7 @@ Slot 运行 PID 本次为 2301；核心只在游戏态 `dlopen`，退出游戏�
 
 裁决依据：
 
-1. `loadAdvance.part.0` 将 `startAdvance()` 返回的新 `GBASystem*` 同时写入 `gbas[0]` 和 `gba@0x4259b8`。后者是活动核心指针。
+1. `loadAdvance.part.0` 将 `startAdvance()` 返回的新 `struct GBA *` 同时写入 `gbas[0]` 和 `gba@0x4259b8`。后者是活动核心指针。
 2. `retro_run` 中 21 处引用通过 GOT 槽取出 `gba@0x4259b8`，随后将该指针交给 `gbaSetKeys`、`linkGbaFrame`、`dolphinGbaFrame` 和帧推进逻辑。
 3. `linkSetGba` 是 `0x4c16a8` 的缓存写入者，其参数来自主指针；该地址的访问主要局限于联动链路。
 4. `retro_unload_game` 先调用 `linkSetGba(NULL)` 清缓存，随后将主 `gba` 清零，符合下游缓存依附于主指针的生命周期。
@@ -78,12 +78,12 @@ Slot 运行 PID 本次为 2301；核心只在游戏态 `dlopen`，退出游戏�
 
 ## 6. 本次采样地址换算（仅公式，不是已读取的数据）
 
-`bias + 0x4259b8` 是主指针变量的地址。取得其中 8-byte `GBASystem*` 后，计数器地址为：
+`bias + 0x4259b8` 是主指针变量的地址。取得其中 8-byte `struct GBA *` 后，计数器地址为：
 
 ```text
 gba_pointer_variable = current_load_bias + 0x4259b8
-GBASystem_pointer    = *(uint64_t *)gba_pointer_variable
-frame_counter_addr   = GBASystem_pointer + 0x2eac   # 11948 bytes
+gba_pointer    = *(uint64_t *)gba_pointer_variable
+frame_counter_addr   = gba_pointer + 0x2eac   # 11948 bytes
 frame_counter        = *(uint32_t *)frame_counter_addr
 ```
 
