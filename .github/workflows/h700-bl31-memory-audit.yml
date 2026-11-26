@@ -65,6 +65,18 @@ jobs:
             cat build/rg34xx-bl31-static-audit/STARTUP-CONTRACT.md >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      - name: Upload captured Boot0 binaries for read-only host CPU-start audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rg34xx-boot0-readonly-source-capture
+          path: |
+            .ci/reports/reports/rg34xx-inventory-20261126-timer/boot0-primary.bin
+            .ci/reports/reports/rg34xx-inventory-20261126-timer/boot0-secondary.bin
+            .ci/reports/reports/rg34xx-inventory-20261126-timer/boot0-primary.json
+            .ci/reports/reports/rg34xx-inventory-20261126-timer/boot0-secondary.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload BL31 disassembly and audit report
         if: always()
         uses: actions/upload-artifact@v4
