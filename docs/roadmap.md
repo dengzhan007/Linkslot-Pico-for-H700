@@ -531,3 +531,15 @@ request GPIO lines, or add EINT/IRQ handling before that comparison closes.
 - [ ] 评估 20 ms cadence 与去抖；当前 evdev capture 证明按键事件可达，尚未测量接点 bounce 与 PIO 采样延迟。
 
 当前边界：Linux evdev 输入链路已实测；PIO 只读采样仅完成 host/mock 和 cross-build，**没有目标机 MMIO 执行、没有 LK 输入循环、没有 LK 启动/游戏运行验证**。
+
+
+### RG34XX input hardware readback gate (2026-11-26)
+
+- [x] Linux runtime evidence confirms all 17 GPIO gamepad keys on `ANBERNIC-keys/event1`; physical X/Y labels are independently confirmed and the H700 logical map is corrected.
+- [x] Reports-side `/proc/iomem` confirms the PIO resource range `0300b000-0300b3ff` at `/soc@03000000/pinctrl@0300b000`.
+- [x] Add a separate bounded `/dev/mem` **read-only** collector for exactly PA_DAT `0x0300b010` and PE_DAT `0x0300b0a0`; gate it on root, readable `/dev/mem`, and exact `/proc/iomem` resource identity. Add static safety tests and shell syntax CI.
+- [ ] Run the collector on RG34XX while pressing each gamepad key and upload `pio-samples.csv`; establish physical pin bit positions, active-low behavior and sample cadence from readback rather than assumptions.
+- [ ] Compare raw PIO edge timing with the already-recorded Linux evdev events; only then select an LK polling cadence/debounce policy.
+- [ ] Do not connect the scanner to LK main loop until the hardware readback is complete and repeatable. No pinmux/pull/drive writes, EINT/GIC setup or changes to the GPIO kernel owner are in scope.
+
+The sampler remains host/mock and cross-build validated, not device executed. A successful PIO readback is still not an LK runtime bring-up result.

@@ -170,3 +170,49 @@ and fail-closed ABI validation.
 This is host/mock and cross-build validation only. The sampler is not called
 from target_init(), apps_init() or LK main and has not been executed on the
 device. No LK input loop or hardware input latency claim is made.
+
+
+## 8. Bounded read-only PIO register capture
+
+The Linux inventory report identifies the live PIO resource as
+`0300b000-0300b3ff : /soc@03000000/pinctrl@0300b000`. This resource
+contains both audited data-register addresses. A separate capture helper,
+`scripts/collect-rg34xx-pio-input-readonly.sh`, was added rather than
+silently extending the general inventory with an MMIO probe.
+
+The helper is fail-closed. Before its first read it requires a root shell,
+a readable character device at `/dev/mem`, a readable `/proc/iomem`, and
+the exact expected PIO resource line. It then reads only:
+
+- PA_DAT: physical address `0x0300b010`, one 32-bit word;
+- PE_DAT: physical address `0x0300b0a0`, one 32-bit word.
+
+Each `dd` opens `/dev/mem` as input and writes the four-byte result to a
+temporary file under the chosen report directory. The helper checks that
+exactly four bytes were returned, records `/proc/uptime` with each sample,
+and emits `pio-samples.csv`. The default is 240 samples with a nominal
+100-ms sleep between samples; the CSV timestamps, not the requested sleep,
+are authoritative for observed cadence.
+
+No other PIO offsets are accessed. The helper does not write `/dev/mem`,
+change GPIO ownership, alter pinmux/pull/drive, mount debugfs, invoke
+`devmem`, or touch EINT/GIC state. If the resource signature, permissions,
+or exact read length differ, it exits without broadening the probe.
+
+Run it from a root ADB shell after copying the script to the device:
+
+```sh
+adb push scripts/collect-rg34xx-pio-input-readonly.sh /data/local/tmp/pio-readonly.sh
+adb shell sh /data/local/tmp/pio-readonly.sh /data/local/tmp/rg34xx-pio-capture 240
+adb pull /data/local/tmp/rg34xx-pio-capture ./rg34xx-pio-capture
+```
+
+During the capture, press and release one gamepad key at a time, holding
+each briefly; do not press the PMIC Power key. Do not infer logical polarity
+from FDT alone: compare stable idle samples with the bit changes observed
+while each physical key is held. The sample interval may be longer than
+100 ms due to per-register `dd` process overhead.
+
+The helper and its static safety regression have host CI coverage only until
+a device report is uploaded. **No device MMIO read has yet been performed,
+and the LK sampler remains disconnected from all runtime entry points.**

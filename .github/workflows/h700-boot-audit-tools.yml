@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - "scripts/collect-rg34xx-readonly-inventory.sh"
+      - "scripts/collect-rg34xx-pio-input-readonly.sh"
+      - "scripts/collect-rg34xx-pio-input-readonly.sh"
       - "scripts/run-rg34xx-inventory.ps1"
       - "tools/**"
       - "docs/**"
@@ -11,6 +13,7 @@ on:
   pull_request:
     paths:
       - "scripts/collect-rg34xx-readonly-inventory.sh"
+      - "scripts/collect-rg34xx-pio-input-readonly.sh"
       - "scripts/run-rg34xx-inventory.ps1"
       - "tools/**"
       - "docs/**"
@@ -28,7 +31,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validate shell syntax
-        run: sh -n scripts/collect-rg34xx-readonly-inventory.sh
+        run: |
+          sh -n scripts/collect-rg34xx-readonly-inventory.sh
+          sh -n scripts/collect-rg34xx-pio-input-readonly.sh
 
       - name: Run TOC1 parser tests
         run: python3 -m unittest discover -s tools -p "test_*.py" -v

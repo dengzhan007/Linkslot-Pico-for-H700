@@ -2,12 +2,12 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-26（只读 Generic Timer provider `88d7c06b0212` 的完整 feasibility #45753607700 **75/75 steps 成功**，artifact `15087286408`；输入 FDT parser 代码集 `3f1d64f5a2c1` 的 boot-audit #45755000872 Linux/Windows 均通过，83 项测试各平台通过；H700 AArch32/AArch64/Thumb-2 编译与 storage host regression #45755000890 均通过。所有均为 host/cross-build 验证，尚无实机 LK 运行结果。UI/GAME 约 59.6 Hz；120-Hz writer/boot-package 写入保持关闭。）
+**最后核对时间：** 2026-11-26（RG34XX PIO 只读采集脚本与 host safety regression 已纳入；实机 MMIO 仍待用户设备采样。只读 Generic Timer provider `88d7c06b0212` 的完整 feasibility #45753607700 **75/75 steps 成功**，artifact `15087286408`；输入 FDT parser 代码集 `3f1d64f5a2c1` 的 boot-audit #45755000872 Linux/Windows 均通过，83 项测试各平台通过；H700 AArch32/AArch64/Thumb-2 编译与 storage host regression #45755000890 均通过。所有均为 host/cross-build 验证，尚无实机 LK 运行结果。UI/GAME 约 59.6 Hz；120-Hz writer/boot-package 写入保持关闭。）
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
 
-**2026-11-26 实机输入验证推进：** Linux evdev 已确认 17 个按键；X/Y 依实测物理丝印修正。只读 PIO single-shot sampler 已新增，H700 host regression 与 AArch64/AArch32 ARM/Thumb-2 编译通过（#45761004754）；boot-audit Linux/Windows 检查通过（#45761004741）。sampler 尚未在实机执行或接入 LK main loop。完整 Linkslot feasibility #45761214619（文档提交触发）仍待完成。
+**2026-11-26 实机输入验证推进：** Linux evdev 已确认 17 个按键；X/Y 依实测物理丝印修正。只读 PIO single-shot sampler 已新增，H700 host regression 与 AArch64/AArch32 ARM/Thumb-2 编译通过（#45761004754）；boot-audit Linux/Windows 检查通过（#45761287329）。完整 Linkslot feasibility #45761214619 在 `56a7b6668a32` 上已完成 **75/75 steps 成功**。`reports/rg34xx-inventory-20261125-163152/iomem.txt` 确认 Linux resource `0300b000-0300b3ff : /soc@03000000/pinctrl@0300b000`。新增独立 `scripts/collect-rg34xx-pio-input-readonly.sh`，只在该精确 resource + root `/dev/mem` 访问条件满足时读取 PA_DAT `0x0300b010` 与 PE_DAT `0x0300b0a0`，每个寄存器仅读取一个 32-bit word；采样 CSV/元数据全部写入报告目录。host safety test 与 shell syntax 已加入 CI。**脚本尚未在设备执行**；不自动接入 LK main loop，也不改动 pinmux/pull/drive。
 
 **2026-11-26 RG34XX live-FDT 输入映射与逻辑边沿层：**
 
