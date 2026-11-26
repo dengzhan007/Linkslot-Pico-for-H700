@@ -692,16 +692,21 @@ Hard size boundary: this first integration path is only for a small diagnostic p
 - [ ] Do not equate the presence of a PSCI CPU_ON callback with automatic
   secondary startup during the initial BL31-to-BL33 handoff. The live
   CPU1-CPU3 state before the first BL33 instruction is still unknown.
-- [ ] Read only SYS_CFG VER_REG low3 (`readl(0x03000024) & 7`) and
-  pre-BL33 CPU reset/status/RVBAR state using a trusted, read-only early
-  environment. BL31 selects the alternate RVBAR bank for any nonzero low3,
-  while pinned native SPL selects it only for value 2; they agree only for
-  values 0 and 2 and diverge for 1, 3-7. Do not use PSCI CPU_ON or execute
-  a new BL33 until the target value is known and both stages use one
-  identical target-verified RVBAR bank-selection rule. H616 documentation
-  identifies VER_REG at SYS_CFG+0x24 but leaves bits [7:0] undefined;
-  H616 open-source tooling's die selector semantics are family evidence,
-  not proof of the H700-specific mapping.
+- [x] Add `scripts/read-h700-rvbar-selector-readonly.py` and host
+  regression. The device probe opens `/dev/mem` with `O_RDONLY`, reads
+  only `0x03000024`, and outputs only `VER_REG & 7` plus the SPL/BL31
+  bank comparison. It does not inspect CPU reset state or write MMIO.
+- [ ] Run that probe on the actual H700 unit and record only the JSON output
+  in the reports branch. Then read back pre-BL33 CPU reset/status/RVBAR state
+  using a trusted, read-only early environment.
+- [ ] BL31 selects the alternate RVBAR bank for any nonzero low3, while
+  pinned native SPL selects it only for value 2; they agree only for values
+  0 and 2 and diverge for 1, 3-7. Do not use PSCI CPU_ON or execute a new
+  BL33 until the target value is known and both stages use one identical
+  target-verified RVBAR bank-selection rule. H616 documentation identifies
+  VER_REG at SYS_CFG+0x24 but leaves bits [7:0] undefined; H616 open-source
+  tooling's die selector semantics are family evidence, not proof of the
+  H700-specific mapping.
 - [ ] Keep diagnostic LK single-core: do not issue PSCI CPU_ON, start a
   secondary, or enable SMP until A53 coherency, per-core GIC/timer setup,
   scheduler state, and cross-core locks are deliberately implemented and
