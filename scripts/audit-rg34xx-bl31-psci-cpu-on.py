@@ -149,7 +149,7 @@ def render_disassembly(raw: bytes) -> str:
     decoder = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
     lines = [
         "# Matched BL31 PSCI/CCU callback windows",
-        "# Slots other than the CPU_ON slot are intentionally not semantically labelled.",
+        "Slot semantics are mapped only where table offsets, dispatcher callsites, embedded strings and behavior provide binary evidence.",
         "",
     ]
     for label, start, length in DISASSEMBLY_WINDOWS:
@@ -445,7 +445,7 @@ def main() -> int:
         "- The exact embedded strings `psci_plat_pm_ops->get_sys_suspend_power_state` and `psci_system_suspend` are present in the matched monitor.",
         "- Raw slot 3 entry 0x48002878 contains the conditional CCU save call at 0x48002998 -> 0x48001790. Separate raw slot 5 entry 0x480026c4 contains the conditional CCU restore call at 0x48002858 -> 0x480018d8; its epilogue at 0x48002874 branches to raw slot 4 entry 0x48002680.",
         "- Full disassembly windows for all table entries and both CCU helpers are saved in PSCI-CALLBACK-DISASSEMBLY.txt for function-boundary/CFG review.",
-        "- Slot 3/5 helper-call ownership by raw table-entry code regions is established; semantic callback names, runtime execution and cold-boot reachability remain unresolved. No BL33 startup clock transition or CPU DVFS support is established.",
+        "- Slot 3 and slot 5 are identified as affinst_suspend and affinst_suspend_finish by the legacy dispatcher offsets; their branches are conditional and runtime execution/cold-boot reachability remain unproven. No BL33 startup clock transition or CPU DVFS support is established.",
         "- Low-level routine writes a per-core RVBAR and contains a CPU power/reset sequence; one SoC-selected variant uses `0x09010000`, `0x09010010`, `0x07000440`, `0x07000444` and `0x090100c0`.",
         "- RVBAR selector cross-check: BL31 uses VER_REG low3==0 for base 0x09010040, otherwise 0x08100040; pinned native SPL uses low3==2 for the alternate bank. Both agree only for selector values 0 and 2; the target value must be read.",
         "",
@@ -454,7 +454,7 @@ def main() -> int:
         "- Callback semantics are mapped from binary table entries, dispatcher byte offsets, indirect calls, embedded strings and helper behavior; the exact vendor source commit remains unknown.",
         "- This proves the matched BL31 exposes a CPU_ON-capable callback. It does **not** prove the path runs automatically at initial BL31-to-BL33 handoff.",
         "- The exact SoC variant selected by `0x03000024 & 7` was not read on-device. Do not assume the H616-named register branch is the RG34XX H700 active branch.",
-        "- The exact vendor callback ABI/source revision is not recovered; this is a binary and standard ABI-position correlation, not exact source identity.",
+        "- The effective nine-member legacy callback layout is identified from this exact binary; the exact vendor TF-A source commit/build revision remains unknown.",
         "- Initial CPU1-CPU3 reset state and the moment Linux/Linkslot requests CPU_ON remain runtime questions.",
         "- No hardware MMIO, flash, boot-media write or payload execution occurred.", "",
     ]
