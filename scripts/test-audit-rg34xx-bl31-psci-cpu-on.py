@@ -18,6 +18,9 @@ def main() -> int:
     assert module.decode_bl_target(0x48002998, 0x97fffb7e) == 0x48001790
     assert module.decode_bl_target(0x48002858, 0x97fffc20) == 0x480018d8
     assert module.EXPECTED_TABLE[3] == 0x48002878
+    # Slot pointer values are verified, but non-CPU_ON callback semantics
+    # remain unclassified until the exact vendor TF-A ABI is identified.
+    assert module.EXPECTED_TABLE[7] == 0x48002574
     assert module.decode_bl_target(0x48002d8c, 0x97ffffe9) == 0x48002d30
     assert module.decode_bl_target(0x48002d90, 0x97ffffe2) == 0x48002d18
     try:
