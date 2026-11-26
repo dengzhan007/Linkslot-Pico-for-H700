@@ -65,6 +65,8 @@
 | `ui-presents.json` | 逐条解析、汇总与 respawn 经过 |
 | `armgba-frame-samples.csv` | 逐样本 host monotonic 时间、PID、bias、主指针、counter、差分与实际间隔 |
 | `armgba-frame-summary.json` | 实际采样率、帧率、误差、IRQ、错误列表 |
+| `MAPS-SUPPLEMENT.md` | 新 PID 的独立 maps-only 采集、bias 交叉验证与恢复边界 |
+| `armgba-maps-supplement-first/last.txt` | 新 PID 两份完整 `/proc/PID/maps` 快照（各 425 行） |
 | `lcd-irq-samples.txt` | IRQ 293 前后原始行与计数 |
 | `slot-game-launch.log` | 游戏启动阶段日志，证明 .gba 与 armgba core |
 | `recovery-log.txt` | 首次 60 s 失败与最终清理 respawn 的原始状态文件 |
@@ -73,7 +75,7 @@
 
 ## 独立复核
 
-补充计算与证据边界见 [ANALYSIS.md](ANALYSIS.md)：从完整 launch log 分别复算游戏前 25 个 presents 窗口和 armGBA 运行中的 31 个 presents 窗口，核对 79 个 counter samples 的总帧差；同时标注原始 maps 行尚未随本次采样包一并上传这一证据完整性缺口。该文件 SHA-256 已加入本目录清单。
+补充计算与证据边界见 [ANALYSIS.md](ANALYSIS.md)：从完整 launch log 分别复算游戏前 25 个 presents 窗口和 armGBA 运行中的 31 个 presents 窗口，核对 79 个 counter samples 的总帧差。原始 PID 22514 的 maps 行仍未找回；另有新 PID 8064 的 maps-only 独立补采，验证了 PT_LOAD 三行 bias 解算方法，但不替代旧 PID 原始证据。详情见 [MAPS-SUPPLEMENT.md](MAPS-SUPPLEMENT.md)。
 
 
 
