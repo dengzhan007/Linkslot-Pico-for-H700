@@ -102,6 +102,9 @@ def main() -> int:
     assert PATCHER.PATCH_MARKER in patched
     assert "inputs.append(lk_bl33_override_path)" in patched
     assert "blob = bytearray(lk_bl33_override_data)" in patched
+    assert 'native-loader-template.elf' in patched
+    assert 'native-loader-template.map' in patched
+    assert "'loader_elf_matches_loader_bin': False" in patched
     assert "IMAGE_BASE = 0x4a000000" in patched
     assert "LOADER_EXTENT_BYTES = 0x8000" in patched
     assert "blob.extend(bytes(0x8000 - len(blob)))" in patched
