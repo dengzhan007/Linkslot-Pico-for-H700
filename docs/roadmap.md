@@ -639,7 +639,7 @@ The full feasibility CI at 8e7f8db completed 76/76; it tests host/cross-build co
 - [x] Preserve the original r4 loader argument; change CRT0's temporary boot-argument and optional TrustZone symbol-reference registers to r0 so the r6/r7 snapshots survive; publish SP/LR/r4/CPSR to a five-word BSS object after the BSS clear, with magic written last.
 - [x] Add a C-only snapshot reader with null/unpublished failure results; no CP15, timer, GIC, or MMIO accesses are made by the reader.
 - [x] Extend the A32 BL33 overlay linker/layout probe and project guard, add C ABI host regression, and compile the new object in AArch64 / AArch32 ARM-state / Thumb-2 variants.
-- [ ] Require green host and cross-compile CI for the new branch head before treating the source change as validated.
+- [x] H700 AArch64/AArch32 ARM-state/Thumb-2 compile + host regression passed (#45779682341); full Linkslot/LK feasibility passed 76/76 (#45779682226), including A32 BL33 layout, snapshot BSS bounds, CRT0/exception links and H700 memory fail-closed guard; latest boot-audit Linux/Windows passed (#45780174078).
 - [ ] After memory ownership, firmware pairing, and a reversible boot diagnostic are approved, execute the LK entry path on RG34XX and read the captured registers. Do not infer Security state from CPSR alone, and do not start GIC/timer programming from this snapshot.
 
 The snapshot only becomes available after CRT0 reaches the post-BSS publication point; it is not a crash logger for earlier faults. Until an authorized device run exists, all entry values remain unknown and the existing SPSR=0x1d3 remains a loader/monitor model, not a measurement of this replacement LK.
