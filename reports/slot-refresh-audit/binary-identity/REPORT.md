@@ -278,3 +278,10 @@ adb shell 'ls -l /mnt/sdcard/System/trace-latency.on'
 ```
 
 Windows/MSYS 下 `adb push/pull` 需 `export MSYS2_ARG_CONV_EXCL='*'`，否则 `/tmp`、`/mnt` 会被改写成 Windows 路径。
+
+
+## 2026-11-26 armGBA runtime mapping follow-up
+
+The official-release armGBA core is now mapped while running in-game. The new [runtime-mapping report](slot-refresh-audit/binary-identity/runtime-mapping/SUMMARY.md) derives one load bias from three independent PT_LOAD-backed mappings and distinguishes the two local `gba` objects: `0x4259b8` is the primary libretro GBA pointer; `0x4c16a8` is the link-cable cache. The exact-source `video.frameCounter` offset is 11,948 bytes from the primary GBA object.
+
+This is static/runtime-address closure only: no `/proc/PID/mem` read was performed and no UI/core frame-rate measurement is claimed. See `runtime-mapping/load-bias.json`, `armgba-pt-load.txt`, `armgba-symbol-refs.txt` and `armgba-maps.txt` for the raw evidence. Slot remained running; only the reversible A/Menu input events used to load and unload the libretro core were injected.
