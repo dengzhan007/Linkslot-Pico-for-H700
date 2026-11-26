@@ -2,7 +2,7 @@
 
 Date: 2026-11-26
 
-Status: **PROBE-SCOPED SOURCE RECOVERY IMPLEMENTED; CI VALIDATION IN PROGRESS; NOT DEVICE-EXECUTED.**
+Status: **PROBE-SCOPED SOURCE RECOVERY + HOST/A32 ELF LINK VALIDATED; NOT DEVICE-EXECUTED.**
 
 This review is pinned to GammaOS LK
 `TheGammaSqueeze/lk-mt6785@9bf1419a49e0af6dba8b05916df382c9c9c6d0a8`.
@@ -155,7 +155,7 @@ The pre-BL33 snapshot remains a separate requirement.
 - The diagnostic remains dormant and is not wired into startup/input/timer.
 - The latest device-side /dev/mem attempt remains EFAULT; userspace
   retries are stopped.
-- CI for the current recovery implementation is pending.
+- CI for the current recovery implementation passed: Linkslot feasibility #45830394587 (81/81, no skipped steps), H700 compile #45830394622, and boot audit #45830394592.
 - hardware_applied=0: no MMIO read/write, module load, boot-argument change,
   SD write, firmware flash, or diagnostic payload execution.
 
@@ -175,3 +175,49 @@ successful `LDM^` return restores the original IRQ/FIQ mask state together
 with the origin mode. A non-matching abort retains the fatal path and remains
 halted with interrupts masked. The overlay test asserts `cpsid if` precedes
 the first stack-save instruction in the Data Abort vector.
+
+
+### 3.6 Final CI and linked ELF disassembly (2026-11-26)
+
+The final code commit is
+`545f944936549044dcb36d57d8b86b77f812b700`.
+
+- Full Linkslot/LK feasibility: [#45830394587](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394587),
+  **81/81 steps successful, zero failures, zero skipped**.
+- H700 AArch64 / AArch32 ARM / AArch32 Thumb-2 compile and host tests:
+  [#45830394622](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394622), success.
+- H700 boot audit tools (Linux and Windows):
+  [#45830394592](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394592), success.
+- Feasibility artifact:
+  [15121023960](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394587/artifacts/15121023960),
+  387,940,045 bytes.
+
+The linked A32 layout-test ELF disassembly confirms the following actual
+instruction sequence in this build (addresses are for the disposable test
+ELF, not a deployed image):
+
+| Address | Instruction / symbol | Verified meaning |
+|---|---|---|
+| `0x4a0011d0` | `cpsid if` | Mask IRQ/FIQ before constructing the abort frame |
+| `0x4a0011d4` | `stmfd` | Save r0-r12 and LR_abt |
+| `0x4a0011f4` | `blx 0x4a00142c` | A32 vector calls the Thumb C handler with interworking |
+| `0x4a001204` | `h700_arm_data_abort_exception_return` | Restore original frame SP/SPSR, then `LDM^` only after a positive match |
+| `0x4a001640` | `blx 0x4a001650` | Thumb API calls the ARM-state probe with interworking |
+| `0x4a00166c` | `h700_syscfg_probe_fault_load` | The one candidate 32-bit LDR instruction |
+| `0x4a001688` | `h700_syscfg_probe_recovery` | Abort recovery label; returns the aborted status without retry |
+| `0x4a0036cc` | probe active cookie | Test ELF BSS location; `_end=0x4a0036d0` |
+
+The A32 probe's literal pool resolves the read address to
+`0x03000024`; the matcher and the probe symbols are both resolved in the
+same ELF. The overlay test also confirms the original fatal C fallback
+remains for all non-matching Data Aborts.
+
+**Scope limitation:** this is a 5,804-byte minimal A32 overlay layout/link
+test with stubs, not a full LK target build, not a packaged 32 KiB BaseOS
+loader replacement, not a bootable firmware image, and not a Cortex-A53
+hardware exception test. No diagnostic API call or register read was made
+on the RG34XX. The SYS_CFG security/firewall/bus permission and actual
+exception recovery behavior therefore remain unproven on hardware.
+
+`hardware_applied=0`; no boot-media change, module load, MMIO access, flash,
+or diagnostic payload execution occurred.

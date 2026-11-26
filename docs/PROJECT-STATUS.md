@@ -2,7 +2,7 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-26。最新完整 Linkslot/LK feasibility [#45821622650](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45821622650) 在提交 `9f6136cc8ebb3452b33379138829fe3d8189f2c9` 上 **81/81 steps 成功**，产物 [15118527675](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45821622650/artifacts/15118527675)（387,916,555 bytes）；H700 boot-audit tools [#45821622509](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45821622509) 在同一提交上通过。以上是 host/cross-build、静态审计和工具回归，不代表完整可刷写 LK 镜像或设备启动。reports 分支已有脱敏 live FDT、GICv2/VGIC 与 architected timer PPI 映射；真实 BL31→LK 权限/中断归属仍未证明。当前 A32 BL33 入口仍以 SVC / SPSR 0x1d3 作为待实机验证模型，Linux 后续 A64 handoff 的 0x3c5 不适用。
+**最后核对时间：** 2026-11-26。最新完整 Linkslot/LK feasibility [#45830394587](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394587) 在提交 `545f944936549044dcb36d57d8b86b77f812b700` 上 **81/81 steps 成功（0 failures / 0 skipped）**，产物 [15121023960](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394587/artifacts/15121023960)（387,940,045 bytes）；H700 AArch32/AArch64 compile check [#45830394622](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394622) 与 H700 boot-audit tools [#45830394592](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394592) 在同一提交上通过。以上为 host/cross-build、A32 ELF overlay/link、静态审计和工具回归，不代表完整 LK target image 已刷写或设备已启动。reports 分支已有脱敏 live FDT、GICv2/VGIC 与 architected timer PPI 映射；真实 BL31→LK 权限/中断归属、SYS_CFG 总线/安全访问权限仍未由实机 LK 探测证明。当前 A32 BL33 入口仍以 SVC / SPSR 0x1d3 作为待实机验证模型，Linux 后续 A64 handoff 的 0x3c5 不适用。
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
@@ -1168,3 +1168,13 @@ LDM^ trampoline 恢复 SPSR/GPR/PC；非匹配 fault 仍走原 fatal exception_d
 被嵌套处理器覆盖、或 DFSR/DFAR 在匹配前被其它异常改写。成功的 `LDM^`
 异常返回从保存的 SPSR 恢复原中断状态；非匹配 abort 仍保持 fatal/halt。
 host/source/link CI 继续验证；没有实机探测。
+
+
+**2026-11-26 probe-scoped Data Abort 最终 CI 验收：**
+
+- 完整 Linkslot/LK feasibility [#45830394587](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394587)：**81/81 steps 成功、无失败、无跳过**；artifact [15121023960](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394587/artifacts/15121023960)，387,940,045 bytes。
+- H700 AArch64 / AArch32 ARM / AArch32 Thumb-2 freestanding compile 与 host regressions [#45830394622](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394622) 成功；H700 boot audit Linux + Windows [#45830394592](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394592) 成功。
+- pinned LK overlay 真实 CRT0 + exception-vector A32 ELF 链接通过。最终反汇编确认 Data Abort vector 首指令 `cpsid if`、保存 frame、r4 保留 frame base、Abort stack 8-byte 对齐、A32→Thumb handler 的 `BLX`、仅正匹配进入 `LDM^` return trampoline；Thumb matcher 对 A32 probe 的 `BLX` 及 probe 的单条 `LDR` 均已解析。SYS_CFG probe 位于独立显式 API，**没有默认调用点**。
+- ELF 为用于布局/符号验证的最小 overlay test image（5,804 bytes，`_end=0x4a0036d0`），含测试 stub；不是完整 LK kernel、不是可刷写固件、也不是设备启动结果。
+- 下一门槛不是继续尝试 Linux `/dev/mem`：需单独审查最小诊断 payload 的 vendor header/package 配对、BL33 32 KiB loader extent、BSS/stack ownership、安装回滚方式和实机 proof-of-life；只有这些门槛通过，才考虑明确授权的一次只读 SYS_CFG 诊断。pre-BL33 CPU reset/RVBAR snapshot 仍是独立未闭合项。
+- 全程 `hardware_applied=0`：没有实机 MMIO 读写、没有模块加载、没有 boot args/Boot0/TOC1/SD 写入、没有刷写或执行新 BL33。
