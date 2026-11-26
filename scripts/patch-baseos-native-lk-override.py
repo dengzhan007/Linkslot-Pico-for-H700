@@ -221,7 +221,7 @@ def main() -> int:
         original = backup_path.read_text(encoding="utf-8")
         if source != patch_source(original):
             parser.error("native/build.py changed after patching; refusing to overwrite later edits")
-        source_path.write_text(original, encoding="utf-8", newline="\\n")
+        source_path.write_text(original, encoding="utf-8", newline="\n")
         backup_path.unlink()
         print(f"Restored: {source_path}")
         return 0
