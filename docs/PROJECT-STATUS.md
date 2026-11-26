@@ -819,6 +819,10 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 - Linux /proc/interrupts 的 GIC-0 27 Level arch_timer 在四个 CPU 均有计数（65554 / 21050 / 28197 / 8522），与 EL1 Virtual Timer PPI 11 → GIC INTID 27 对应。这证明 Linux 运行态路径，不证明未来 LK BL33 的 PPI ownership。
 - 独立 Allwinner timer 节点 /soc@03000000/timer@03009000：compatible allwinner,sun4i-a10-timer，reg 0x03009000/0x400，父中断控制器 allwinner,sunxi-wakeupgen，specifier <0 48 4>；Linux /proc/interrupts 对应 wakeupgen 48 Level sun4i_timer0。不要与 architected GIC timer 混淆。
 
+**BL31→A32 BL33 入口状态补充**
+- reports/rg34xx-active-loader-provenance.md 对当前 BaseOS 链的首轮 BL31→BL33 ERET 记录为 entry=0x4a000000、SPSR=0x1d3，即预期恢复到 AArch32 SVC、ARM state，IRQ/FIQ masked。若 LK 替换当前 A32 loader 且保留相同入口契约，应在第一条 wrapper 指令读取 CPSR 验证这一预期。
+- SPSR=0x3c5 是 A32 loader 后续执行 vendor Linux-start SMC 后进入 AArch64 Linux 的状态，不是 LK 初始 BL33 状态。0x1d3 仍来自现有 loader/monitor 的源码/仿真审计模型，不是替换 LK 的实机寄存器采样；Secure/Non-secure world 也不能单由该 SPSR 推断，仍须独立确认。
+
 **被替代的旧结论与下一道门槛**
 - 本节替代前文“原始 live DTB 未上传、GIC compatible/reg/PPI 尚无法确认”的旧结论。现在硬件身份、寄存器窗口、PPI 声明已由 live FDT 闭合；BL31→LK 的权限与中断交接仍未闭合。
 - pinned LK arch/arm/exceptions.S 的 arm_irq 会调用 platform_irq()，非零返回后 thread_preempt()；H700 目前没有 platform_irq()/platform_fiq() 或 GICv2 provider。pinned dev/gic/mt_gic_v2.c 是 MTK 专用实现，依赖 MTK IRQ helpers / 寄存器，不可复用。
