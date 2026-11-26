@@ -29,6 +29,7 @@ def main() -> int:
     assert window_map["ops_slot_0_raw"][0] == 0x48002510
     assert window_map["psci_dispatch_cpu_on_primary"][0] <= 0x48008608
     assert window_map["psci_dispatch_cpu_on_secondary"][0] <= 0x480086a0
+    assert window_map["psci_suspend_dispatch_tail"][0] <= 0x480087f4 < window_map["psci_suspend_dispatch_tail"][0] + window_map["psci_suspend_dispatch_tail"][1]
     assert window_map["psci_platform_registration"][0] <= 0x48009dec
     assert window_map["power_system_off_helper"][0] == 0x48001ec8
     assert window_map["power_cpu_off_helper"][0] == 0x48001ed8
