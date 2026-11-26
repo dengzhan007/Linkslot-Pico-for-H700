@@ -75,6 +75,48 @@ counter wrap, zero-frequency refusal and descriptor lifetime; AArch32,
 Thumb-2 and AArch64 compile checks cover instruction syntax only. Actual
 CNTFRQ and counter growth still require device execution.
 
+## LK kernel periodic-timer contract — unresolved boot prerequisite
+
+This is a source audit of the immutable GammaOS LK pin
+[`9bf1419a49e0af6dba8b05916df382c9c9c6d0a8`](https://github.com/TheGammaSqueeze/lk-mt6785/tree/9bf1419a49e0af6dba8b05916df382c9c9c6d0a8):
+
+- `kernel/main.c` calls `target_early_init()`, then `heap_init()`,
+  `thread_init()`, `dpc_init()`, and `timer_init()`. Only after the
+  bootstrap thread starts does LK call `platform_init()`, `target_init()`,
+  and `apps_init()`.
+- `kernel/timer.c::timer_init()` unconditionally calls
+  `platform_set_periodic_timer(timer_tick, NULL, 10)` on the normal build
+  (some specific Konkr builds use 1 ms). The timer subsystem also calls
+  `current_time()` when scheduling software timers. The scheduler therefore
+  requires a real H700 timer backend before `platform_init()` and
+  `target_init()`; the Linkslot runtime coordinator is too late.
+- The pinned platform contract declares `platform_set_periodic_timer()`,
+  `mdelay()`, `udelay()`, and `platform_tick_rate()` in
+  `include/platform/timer.h`, and `current_time()` /
+  `current_time_hires()` in `include/platform.h`. The H700 read-only
+  `h700_arch_timer.c` currently exports an ABI descriptor only; it does
+  not implement the LK platform hooks or a periodic scheduler tick.
+- The pinned MT6785 implementation in `platform/mt6785/timer.c` is based
+  on GPT5 and MediaTek IRQ/GIC programming. It is not an H700 implementation
+  and must not be reused. The H700 overlay intentionally omits MTK
+  platform/PAL objects.
+- The H700 heap readiness marker runs from `target_init()`, which is later
+  than `timer_init()`; it cannot be used to qualify the first kernel tick.
+- This is an unresolved full-link/boot prerequisite. The current build
+  feasibility workflow compiles selected overlays and probes; it has not
+  linked a complete H700 LK target. Do not satisfy the missing timer contract
+  with a no-op success stub.
+
+Before implementing an H700 timer backend, obtain device evidence for the
+BL31→BL33 Generic Timer access state (including EL2 counter traps/offset and
+`CNTFRQ/CNTVCT` readback), GICv2 distributor/CPU-interface handoff, and the
+correct architected timer PPI/ownership. Linux IRQ 27 activity is evidence
+for the Linux runtime only; it does not authorize enabling the same interrupt
+from BL33. After those gates close, implement and test the LK platform time,
+periodic timer, and delay contracts as a coherent provider. Until then, keep
+the read-only Generic Timer service unregistered and do not program timer
+compare/control, GIC/PPI, or IRQ state.
+
 ## AArch32 early MMU mapping contract
 
 The H700 target uses the pinned GammaOS LK AArch32 section-table implementation
