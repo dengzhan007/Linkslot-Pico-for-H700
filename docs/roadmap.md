@@ -482,7 +482,7 @@ App::apply integration is complete as a CI source overlay, not a persistent chan
 
 The C/Rust ABI v1 aggregate (runtime_services.h, vfs_service.h) and no_std H700RuntimeSession::bootstrap() are now committed. The coordinator guarantees validation and event-loop construction before VFS install, and VFS install before the generic static-core opener. It rejects invalid ABI/version/size or missing callbacks, fails closed on VFS install failure, and leaves process-lifetime VFS installed when core open fails. Five startup/lifecycle tests and AArch32/AArch64 ABI assertions passed in runtime-slices #45748496564; full feasibility #45748496582 passed 75/75 steps.
 
-Next: run the read-only RG34XX inventory again and compare the active live-FDT input_devices block, /proc/bus/input/devices and pinmux/pinconf readback against the two reference DTS maps. The Generic Timer provider is host/cross-build validated but still needs actual CNTFRQ/counter-delta execution in LK; do not enable timer IRQ. Implement the GPIO scanner only after active pin ownership is confirmed. Do not reuse MTK GPT/GPIO/AUXADC code or guess MMIO. The heap readiness bridge is linked and guarded. Keep VFS read-only. The coordinator is still not called from LK main; no bootable image or device runtime exists.
+The RG34XX live FDT and Linux evdev input map are now corroborated by a complete gpiolib debugfs level capture: all 17 physical game keys caused one clean active-low press/release on their expected line. The pinmux/pinconf debug views still disagree and are not permission to rewrite pad configuration. Do not use /dev/mem again on this image (all tested offsets returned EFAULT). The LK PA_DAT/PE_DAT sampler remains isolated and unexecuted on target; the remaining input gate is a reversible, separately gated diagnostic in a bootable LK image, not another Linux userspace probe. The Generic Timer provider still needs actual CNTFRQ/counter-delta execution in LK; do not enable timer IRQ. Do not reuse MTK GPT/GPIO/AUXADC code or guess MMIO. The heap readiness bridge is linked and guarded. Keep VFS read-only. The coordinator is still not called from LK main; no bootable image or device runtime exists.
 
 
 ## 2026-11-26 RG34XX input-controller source audit and live-FDT parser
@@ -498,14 +498,18 @@ The read-only FDT inspector now reports PIO controllers, gpio-keys children,
 GPIO phandle arguments, analog keypad nodes and PMIC power-key nodes under
 `input_devices`. Synthetic parser regression covers the GPIO cell decoder,
 active-low flag, EV_ABS directional event, disabled ADC nodes and PMIC key.
-This is source/host validation only: the actual RG34XX live FDT has not yet
-been re-collected with the extended parser, and the LK GPIO scanner remains
-unimplemented.
+The original parser validation was source/host-only; subsequent target reports
+have now supplied the active live FDT, Linux evdev path and a full 17-key
+gpiolib debugfs readback. The readback establishes the expected Linux GPIO
+lines and active-low press/release behavior, while the conflicting
+pinmux/pinconf debug labels remain unresolved and are not write authorization.
+The LK sampler source exists, but direct PA_DAT/PE_DAT reads in LK have not
+been executed.
 
-Required next evidence: re-run the existing read-only inventory on the target,
-then compare active `input_devices`, `/proc/bus/input/devices`, and any
-already-exported pinmux/pinconf state. Do not write PIO mux/pull registers,
-request GPIO lines, or add EINT/IRQ handling before that comparison closes.
+Remaining evidence: a bootable, reversible LK diagnostic must validate the
+BL33-entry PIO state and direct PA_DAT/PE_DAT read path before a scanner is
+connected to any normal runtime loop. Do not write PIO mux/pull registers,
+request GPIO lines, or add EINT/IRQ handling as part of this readback work.
 
 
 ## 2026-11-26 RG34XX 输入设备 live-FDT 闭合与软件边沿转换层
@@ -514,10 +518,13 @@ request GPIO lines, or add EINT/IRQ handling before that comparison closes.
 - [x] 核对 pull enum：`pull=1` 是弱上拉，不是无上下拉；GPADC 和 ADC keyboard 禁用；AXP2101-PEK power key 独立。
 - [x] 建立只接收 PIO A/E 电平快照的纯软件 map/edge 转换器，向既有 bounded input queue 产生逻辑 press/release edges，不实现 GPIO 寄存器读写或硬件扫描。
 - [x] Host regression 通过；AArch64、AArch32 ARM-state、Thumb-2 编译通过。
-- [ ] 实机捕获 `/proc/bus/input/devices`、`getevent -lp` 和已经导出的 pinmux/pinconf 状态；逐键验证输入事件与硬件电平。不可为此挂载 debugfs 或改变 pin 配置。
-- [ ] 上述证据闭合后，另行实现只读 PIO bank sampling + 明确 debounce/20ms scheduling；暂不增加 EINT/GIC。
+- [x] 实机只读采集活动 live FDT、`/proc/bus/input/devices` 与原始 event1；设备缺少 `getevent`，使用已验证的 event1 char-device 原始记录离线解码。pinmux/pinconf 状态作为观察项保留，不写配置。
+- [x] 通过已挂载的 `/sys/kernel/debug/gpio` 对 17 个实体键进行 1,200 次/126 秒只读采样；17/17 条线各出现唯一 active-low press/release，未发现其他 GPIO 变化。
+- [x] 实现只读 PIO bank single-shot sampler（PA_DAT 0x10 / PE_DAT 0xA0）及 mock/cross-build 验证；该代码没有 write callback，也尚未执行于 LK 实机。
+- [ ] 待获得可启动 LK 镜像和可逆诊断流程后，在 BL33 early-boot 状态下验证直接 PA_DAT/PE_DAT readback；在此之前不接入 normal runtime。
+- [ ] 根据 direct-LK 采样结果及更高频/抖动证据，再决定 20 ms polling 与 debounce；当前约 105 ms 的 debugfs capture 不足以量化接点 bounce。
 
-当前安全边界：FDT 已确认映射；逻辑边沿层已实现；**硬件采样仍未实现**。禁止把静态 FDT 的 pull/mux 声明当作已完成的 pin ownership/readback 验证。
+当前安全边界：FDT、Linux evdev 与 Linux gpiolib 电平读回已确认 17 键实体映射和 active-low press/release；**LK 直接 PIO MMIO、早期 pin ownership、调度周期及去抖仍未验证**。禁止把静态 FDT 或 Linux driver readback 当作 LK 初始化/寄存器路径已经通过。
 
 
 ## 2026-11-26 RG34XX 实机输入链路与只读 PIO sampler
@@ -538,11 +545,12 @@ request GPIO lines, or add EINT/IRQ handling before that comparison closes.
 - [x] Linux runtime evidence confirms all 17 GPIO gamepad keys on `ANBERNIC-keys/event1`; physical X/Y labels are independently confirmed and the H700 logical map is corrected.
 - [x] Reports-side `/proc/iomem` confirms the PIO resource range `0300b000-0300b3ff` at `/soc@03000000/pinctrl@0300b000`.
 - [x] Add a separate bounded `/dev/mem` **read-only** collector for exactly PA_DAT `0x0300b010` and PE_DAT `0x0300b0a0`; gate it on root, readable `/dev/mem`, and exact `/proc/iomem` resource identity. Static safety tests and shell syntax passed on Linux + Windows [#45762940878](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45762940878), 89 tests per platform.
-- [ ] Run the collector on RG34XX while pressing each gamepad key and upload `pio-samples.csv`; establish physical pin bit positions, active-low behavior and sample cadence from readback rather than assumptions.
-- [ ] Compare raw PIO edge timing with the already-recorded Linux evdev events; only then select an LK polling cadence/debounce policy.
-- [ ] Do not connect the scanner to LK main loop until the hardware readback is complete and repeatable. No pinmux/pull/drive writes, EINT/GIC setup or changes to the GPIO kernel owner are in scope.
+- [x] Run the bounded `/dev/mem` collector on the RG34XX; the attempt failed closed at the first read with EFAULT, and the userspace path has been retired for this image.
+- [x] Use the already-mounted gpiolib debugfs view as a read-only alternative. The complete 1,200-snapshot report confirms 17/17 physical keys and 34 exact transitions; see the [device report](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-gpio-debugfs-20261126b/GPIO-DEBUGFS-TEST.md).
+- [ ] Compare direct LK PA_DAT/PE_DAT edges with the Linux gpiolib/evdev evidence through a separately gated target diagnostic; only then select an LK polling cadence/debounce policy.
+- [ ] Do not connect the scanner to LK main loop until direct-LK readback is complete and repeatable. No pinmux/pull/drive writes, EINT/GIC setup or changes to the GPIO kernel owner are in scope.
 
-The sampler remains host/mock and cross-build validated, not device executed. A successful PIO readback is still not an LK runtime bring-up result.
+Linux GPIO driver readback is now device-executed and repeatable for this one-at-a-time test. The raw LK PIO sampler remains host/mock and cross-build validated, not device executed. This is not an LK runtime bring-up result.
 
 
 ### 2026-11-26 PIO readback: /dev/mem EFAULT and gpiolib debugfs fallback
@@ -553,6 +561,7 @@ The sampler remains host/mock and cross-build validated, not device executed. A 
 - [x] Verify the generic Linux v4.9 gpiolib debugfs implementation: its default /sys/kernel/debug/gpio view reports current chip->get() values for requested lines as in hi/lo; a vendor gpio_chip.dbg_show callback can override that output, so the device format must be inspected rather than assumed. References: [gpiolib.c v4.9](https://github.com/torvalds/linux/blob/v4.9/drivers/gpio/gpiolib.c) and [GPIO legacy documentation v4.9](https://github.com/torvalds/linux/blob/v4.9/Documentation/gpio/gpio-legacy.txt).
 - [x] Extend ordinary read-only inventory to capture the already-mounted /sys/kernel/debug/gpio file when readable; do not mount debugfs.
 - [x] Add scripts/collect-rg34xx-gpio-debugfs-readonly.sh: bounded timed snapshots of that file, timestamps from /proc/uptime, no /dev/mem, no gpio export/request, no sysfs/debugfs writes. Linux and Windows host jobs both pass [#45765497473](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45765497473): 94 Python tests per platform plus shell syntax validation.
-- [ ] Run the new collector on RG34XX and upload preflight-gpio.txt, gpio-debugfs-samples.txt, and summary.txt. Determine whether all 17 requested lines are present and whether hi/lo values change with each physical key.
-- [ ] If gpiolib debugfs does not expose the 17 live levels, stop userspace probing. The next hardware route is an explicitly gated LK diagnostic build using the existing H700 PIO MMU Device mapping and h700_rg34xx_input_scan_once(); it must remain outside the normal boot/runtime path until a target LK image and reversible diagnostic procedure exist.
-- [ ] Do not retry /dev/mem with other offsets, use /dev/kmem, sunxi_dump, GPIO sysfs export, a custom kernel module or pinctrl debug write. No pinmux/pull/drive/EINT/GIC changes are authorized by this readback task.
+- [x] Run the new collector on RG34XX. All 17 requested lines are present in the existing gpiolib debugfs dump and each physical key produced exactly one `hi→lo→hi` sequence across 1,200 samples / 126.0 seconds; no non-key line changed. The device report is [GPIO-DEBUGFS-TEST.md](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-gpio-debugfs-20261126b/GPIO-DEBUGFS-TEST.md).
+- [x] Independently parse the complete 2,982,090-byte sample file: 1,200 sample blocks, 34 single-line transition points, no sample with multiple GPIO changes, and no unexpected non-key GPIO transitions.
+- [ ] Once a target LK image exists and the memory/boot safety gates are approved, create a separately gated and reversible LK diagnostic using the existing PIO Device mapping and `h700_rg34xx_input_scan_once()`; keep it outside normal boot/runtime. This is required to verify direct LK MMIO, not to re-prove Linux GPIO behavior.
+- [ ] Do not retry `/dev/mem` with other offsets, use `/dev/kmem`, `sunxi_dump`, GPIO sysfs export, a custom kernel module or pinctrl debug write. No pinmux/pull/drive/EINT/GIC changes are authorized by this readback task.

@@ -1,6 +1,6 @@
 # RG34XX non-SP input controller source audit
 
-**Status:** the active live FDT and physical evdev captures confirm all 17 GPIO keys. Physical X/Y silkscreen labels are reversed relative to DTS child names. A read-only PA_DAT/PE_DAT single-shot sampler is linked but not called from LK main; pinmux/pinconf debug views conflict and are not treated as write authorization.
+**Status:** active live FDT, Linux evdev and the full 17-key gpiolib debugfs physical-level capture agree on all gamepad GPIO mappings. Physical X/Y silkscreen labels are reversed relative to DTS child names. The PA_DAT/PE_DAT single-shot LK sampler is compiled and mock-tested, but has not been executed in LK or connected to runtime. pinmux/pinconf debug views still conflict and are not write authorization.
 
 ## 1. Independent board-source comparison
 
@@ -286,3 +286,62 @@ target_init(), apps_init() or LK main. The Linux debugfs result is a readback
 of the Linux GPIO driver path, not proof that the LK-side direct PIO mapping
 or electrical initialization works. No LK runtime or ROM execution has
 occurred.
+
+## 11. RG34XX physical key levels verified through gpiolib debugfs
+
+The complete target capture is published under
+[reports/rg34xx-gpio-debugfs-20261126b](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-gpio-debugfs-20261126b).
+The run used the committed read-only collector as root (`uid=0`) and read
+the already-mounted `/sys/kernel/debug/gpio` file only. It recorded 1,200
+full snapshots over device uptime 301.83–427.83 seconds (126.0 seconds).
+The preflight reports `gpiochip1`, GPIOs 0–287, parent `platform/pio`,
+with every expected game-key line present as an input.
+
+The raw `gpio-debugfs-samples.txt` (2,982,090 bytes) was parsed across all
+1,200 blocks. Exactly 34 level changes were found on the 17 expected input
+lines: one `hi→lo` press and one `lo→hi` release per physical key. Each
+sample containing a transition changed exactly one key line; there were no
+non-key GPIO transitions, duplicates, simultaneous line changes or missed
+keys in this prescribed one-at-a-time test. The active-low behavior is
+therefore observed in the Linux GPIO driver's readback, not inferred from
+the FDT alone.
+
+| Physical control | gpiolib line | PIO pin | Linux line label |
+|---|---:|---|---|
+| A / B | gpio-0 / gpio-1 | PA0 / PA1 | GPIO Key a / b |
+| X / Y | gpio-2 / gpio-3 | PA2 / PA3 | GPIO Key y / x |
+| Start / Select | gpio-4 / gpio-5 | PA4 / PA5 | GPIO Key start / select |
+| D-pad Up / Down | gpio-6 / gpio-128 | PA6 / PE0 | GPIO Key Up / Down |
+| D-pad Left / Right | gpio-8 / gpio-9 | PA8 / PA9 | GPIO Key left / right |
+| R2 / L1 / L2 / R1 | gpio-7 / gpio-10 / gpio-11 / gpio-12 | PA7 / PA10 / PA11 / PA12 | GPIO Key R2 / L1 / L2 / R1 |
+| Volume + / − | gpio-129 / gpio-130 | PE1 / PE2 | GPIO Key Vol up / vol down |
+| Menu | gpio-131 | PE3 | GPIO Key Menu |
+
+This is the third independent confirmation of the physical X/Y swap:
+physical X drives PA2 / gpio-2 / kernel label `GPIO Key y` / DT `keyY`
+/ evdev code 307; physical Y drives PA3 / gpio-3 / kernel label
+`GPIO Key x` / DT `keyX` / evdev code 306. The existing H700 logical
+map already routes the physical labels correctly.
+
+The actual sample interval was approximately 105 ms because each full
+debugfs read adds overhead. Key holds were only about 0.10–0.22 seconds
+and are quantized to sample boundaries. This capture is sufficient to
+confirm stable one-at-a-time press/release transitions; it does **not**
+characterize contact bounce, sub-100-ms behavior, a 20-ms scanner cadence,
+or the final LK debounce policy. The PMIC Power key was not pressed.
+
+The collector read only the existing debugfs file and `/proc/uptime`.
+It did not mount debugfs, export/request GPIOs, access `/dev/mem`,
+change pinmux/pinconf/GPIO/EINT/GIC state or write any hardware register.
+The device report records `hardware_applied = 0`; the published files
+were checked for serial, MAC, local username and host-path leakage.
+
+**Interpretation boundary:** this closes the Linux GPIO-driver readback
+and physical-key-to-line mapping. It does not prove that the LK BL33
+early-boot pin configuration is correct, that the LK Device mapping and
+volatile PA_DAT/PE_DAT reads work on target, or that an LK scheduler can
+sample keys at the intended rate. The userspace `/dev/mem` path remains
+unusable (EFAULT); do not retry it or replace it with `/dev/kmem`,
+`sunxi_dump`, GPIO export, modules or pinctrl writes. Direct LK PIO
+verification remains a separately gated diagnostic task after a bootable
+LK image and reversible test path exist.
