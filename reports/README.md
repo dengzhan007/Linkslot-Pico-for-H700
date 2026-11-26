@@ -399,3 +399,12 @@ partition contents are included. No SD/MMC driver work and no hardware test are 
 
 
 **Binary identity follow-up (2026-11-26):** [ADDENDUM-2026-11-26.md](slot-refresh-audit/binary-identity/ADDENDUM-2026-11-26.md) closes the source-level high-refresh gate: this unit's live panel name `rg34xx_v1` fails the official Slot `rg34xx` requirement `fog_fj035fhd05_v1`, so `DevicePlatform.refresh=None` and the stored `high_refresh=1` setting never reaches the writer. The addendum also records the exact official-release armGBA layout probe (commit `df6b263...`, combined frame-counter offset 11,948 bytes; dedicated CI step passed), while preserving the no-`/proc/PID/mem` boundary.
+
+
+## 2026-11-26 armGBA runtime mapping
+
+The official H700 release's armGBA core now has a read-only runtime mapping report at
+`slot-refresh-audit/binary-identity/runtime-mapping/`. It documents the three-way PT_LOAD/load-bias
+cross-check, the primary GBA pointer versus the link-cable cache, and the exact-source
+`frameCounter` offset. No process memory was read and no frame-rate sampling is claimed.
+Start with [SUMMARY.md](slot-refresh-audit/binary-identity/runtime-mapping/SUMMARY.md).
