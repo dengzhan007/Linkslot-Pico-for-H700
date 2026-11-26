@@ -164,10 +164,32 @@ def main() -> None:
     )
     if not a53_branch or not all(flag in a53_branch.group(1) for flag in ("-mcpu=cortex-a53", "-mfpu=neon-vfpv4", "-mfloat-abi=softfp")):
         raise RuntimeError("Cortex-A53 rules branch lacks the Cortex-A53 + NEON/VFPv4 + softfp ABI flags")
-    if "ARM_CPU_CORTEX_A53" in overlay_crt0.read_text(encoding="utf-8"):
+    crt0_text = overlay_crt0.read_text(encoding="utf-8")
+    if "ARM_CPU_CORTEX_A53" in crt0_text:
         raise RuntimeError("overlay unexpectedly guesses Cortex-A53 ACTLR.SMP setup")
+    entry_match = re.search(r"lk_bl33_entry:\\n(?P<body>.*?)\\nreset:", crt0_text, re.S)
+    if entry_match is None:
+        raise RuntimeError("BL33 entry wrapper is missing")
+    entry_body = entry_match.group("body")
+    capture_ops = ("mrs r11, cpsr", "mov r8, sp", "mov r9, lr", "mov r10, r4")
+    capture_positions = [entry_body.find(op) for op in capture_ops]
+    vbar_position = entry_body.find("mcr p15, 0, r0, c12, c0, 0")
+    if min(capture_positions) < 0 or capture_positions != sorted(capture_positions):
+        raise RuntimeError("entry SP/LR/r4/CPSR must be captured in order at BL33 entry")
+    if vbar_position < 0 or capture_positions[-1] > vbar_position:
+        raise RuntimeError("entry register capture must precede the VBAR write")
+    if "stmia r0, {r8-r11}" not in crt0_text or "str r1, [r0, #16]" not in crt0_text:
+        raise RuntimeError("CRT0 does not publish the four entry registers and publish-last magic")
+    clear_loop = re.search(r"blt\\s+\\.L__bss_loop", crt0_text)
+    publish_pos = crt0_text.find("ldr r0, =h700_bl33_entry_snapshot")
+    kmain_pos = crt0_text.find("\\tbl\\t\\tkmain")
+    if clear_loop is None or publish_pos <= clear_loop.end():
+        raise RuntimeError("entry snapshot must be published after the CRT0 BSS clear")
+    if kmain_pos < 0 or publish_pos > kmain_pos:
+        raise RuntimeError("entry snapshot must be published before kmain")
 
     stubs = r'''volatile int critical_section_count = 1;
+volatile unsigned int h700_bl33_entry_snapshot[5];
 void kmain(void) { for (;;) { __asm__ volatile("wfi"); } }
 void arm_undefined_handler(void *frame) { (void)frame; for (;;) { __asm__ volatile("wfi"); } }
 void arm_syscall_handler(void *frame) { (void)frame; for (;;) { __asm__ volatile("wfi"); } }
@@ -301,6 +323,7 @@ SECTIONS
     vectors = symbol_address(nm, "__lk_vectors_start")
     boot_argument = symbol_address(nm, "BOOT_ARGUMENT_LOCATION")
     end = symbol_address(nm, "_end")
+    snapshot = symbol_address(nm, "h700_bl33_entry_snapshot")
     if start != IMAGE_BASE:
         raise RuntimeError(f"unexpected image entry: {start:#x}")
     if vectors != IMAGE_BASE + VECTOR_OFFSET:
@@ -309,6 +332,8 @@ SECTIONS
         raise RuntimeError("boot-argument scratch or BL33 entry overlaps the vector table")
     if end >= IMAGE_END:
         raise RuntimeError(f"linked stub exceeds image arena: _end={end:#x}")
+    if snapshot < vectors or snapshot + 20 > end:
+        raise RuntimeError("five-word BL33 entry snapshot must be contained in the linked post-vector BSS")
 
     binary = out / "lk-bl33-overlay-layout.bin"
     run(["llvm-objcopy", "-O", "binary", str(elf), str(binary)])
