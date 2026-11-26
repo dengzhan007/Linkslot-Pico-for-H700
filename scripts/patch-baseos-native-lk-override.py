@@ -235,10 +235,14 @@ def main() -> int:
     if args.restore:
         if not backup_path.is_file():
             parser.error(f"missing original-source backup: {backup_path}")
-        original = backup_path.read_text(encoding="utf-8")
+        original_bytes = backup_path.read_bytes()
+        try:
+            original = original_bytes.decode("utf-8")
+        except UnicodeDecodeError as error:
+            parser.error(f"backup is not UTF-8 source text: {error}")
         if source != patch_source(original):
             parser.error("native/build.py changed after patching; refusing to overwrite later edits")
-        source_path.write_text(original, encoding="utf-8", newline="\n")
+        source_path.write_bytes(original_bytes)
         backup_path.unlink()
         print(f"Restored: {source_path}")
         return 0
