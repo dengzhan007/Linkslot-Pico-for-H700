@@ -34,7 +34,14 @@ def main() -> int:
     assert module.classify_address(0x42000000) == "Linux initrd reservation"
     assert module.classify_address(0x4801A2CF) == "BL31 loaded monitor payload bytes"
     assert module.classify_address(0x4801A2D0) == "BL31 adjacent runtime window outside payload file"
-    assert module.classify_address(0x4803CB40) == "BL31 adjacent runtime window outside payload file"
+    assert module.classify_address(0x4801A2D0) == "BL31 adjacent runtime/page-table references outside payload"
+    assert module.classify_address(0x48041000) == "BL31 adjacent runtime/page-table references outside payload"
+    assert module.classify_address(0x4803CB40) == "BL31 adjacent runtime/page-table references outside payload"
+    assert module.classify_address(0x48200000) == "conditional BL31 identity-map range (raw attributes not interpreted)"
+    assert module.classify_address(0x49FFFFFF) == "conditional BL31 identity-map range (raw attributes not interpreted)"
+    assert module.classify_address(0x4A000000) == "BL33 loader slot"
+    assert module.BL31_TRANSLATION_MAP_REQUESTS[3]["arg2_length"] == "0x1e00000"
+    assert module.BL31_PAGE_TABLE_ALLOCATOR["page_size"] == "0x1000"
     assert module.classify_address(0x7EC00000) == "unknown top-of-DRAM reservation"
     assert module.classify_address(0x80000000) is None
 

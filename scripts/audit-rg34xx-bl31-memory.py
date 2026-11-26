@@ -24,7 +24,8 @@ RANGES = (
     (0x44000000, 0x44100000, "Linux FDT buffer"),
     (0x45000000, 0x46000000, "BOL4 staging buffer"),
     (0x48000000, 0x4801A2D0, "BL31 loaded monitor payload bytes"),
-    (0x4801A2D0, 0x49000000, "BL31 adjacent runtime window outside payload file"),
+    (0x4801A2D0, 0x48200000, "BL31 adjacent runtime/page-table references outside payload"),
+    (0x48200000, 0x4A000000, "conditional BL31 identity-map range (raw attributes not interpreted)"),
     (0x4A000000, 0x4A100000, "BL33 loader slot"),
     (0x77C00000, 0x7BC00000, "CMA reservation"),
     (0x7BF24800, 0x7C076000, "framebuffer reservation"),
@@ -225,6 +226,33 @@ def scan_addresses(raw: bytes, entry: int) -> tuple[list[dict], str, int]:
     lines = "\n".join(decoded_lines[address] for address in sorted(decoded_lines))
     return refs, lines + "\n", len(visited)
 
+BL31_TRANSLATION_MAP_REQUESTS = [
+    {"callsite": "0x480033a0", "helper": "0x4800bcb4", "arg0_base": "0x48000000",
+     "arg1_base": "0x48000000", "arg2_length": "0x41000", "arg3_raw_attribute": "3",
+     "condition": "unconditional"},
+    {"callsite": "0x480033b4", "helper": "0x4800bcb4", "arg0_base": "0x48000000",
+     "arg1_base": "0x48000000", "arg2_length": "0x1a000", "arg3_raw_attribute": "1",
+     "condition": "unconditional"},
+    {"callsite": "0x480033c8", "helper": "0x4800bcb4", "arg0_base": "0x48040000",
+     "arg1_base": "0x48040000", "arg2_length": "0x1000", "arg3_raw_attribute": "2",
+     "condition": "unconditional"},
+    {"callsite": "0x480033f4", "helper": "0x4800bcb4", "arg0_base": "0x48200000",
+     "arg1_base": "0x48200000", "arg2_length": "0x1e00000", "arg3_raw_attribute": "3",
+     "condition": "word_at_0x48000018_nonzero"},
+    {"callsite": "0x48003408", "helper": "0x4800bcb4", "arg0_base": "0x48200000",
+     "arg1_base": "0x48200000", "arg2_length": "0x400000", "arg3_raw_attribute": "7",
+     "condition": "word_at_0x48000018_nonzero"},
+]
+BL31_PAGE_TABLE_ALLOCATOR = {
+    "pool_base": "0x4803e000",
+    "page_size": "0x1000",
+    "counter_address": "0x4803cb80",
+    "counter_guard": "incremented_counter_le_2",
+    "allocator_path_start": "0x4800bb38",
+    "page_index_shift_instruction": "0x4800bc34",
+    "page_pointer_add_instruction": "0x4800bc40",
+}
+
 def build_report(identity: dict, entry: int, refs: list[dict], count: int) -> tuple[dict, str]:
     counts: dict[str, int] = {}
     for item in refs:
@@ -236,7 +264,7 @@ def build_report(identity: dict, entry: int, refs: list[dict], count: int) -> tu
     ttbr = find_ref("system-register-value", "0x4803cb40")
     tcr_source = find_ref("memory-effective-address", "0x4803c8e0")
     per_core = find_ref("indexed-address-base", "0x4803cd40")
-    outside_payload = counts.get("BL31 adjacent runtime window outside payload file", 0)
+    outside_payload = counts.get("BL31 adjacent runtime/page-table references outside payload", 0)
     inside_payload = counts.get("BL31 loaded monitor payload bytes", 0)
     observed = {
         "ttbr0_el3": None if ttbr is None else {
@@ -267,6 +295,8 @@ def build_report(identity: dict, entry: int, refs: list[dict], count: int) -> tu
         "loaded_payload_reference_count": inside_payload,
         "adjacent_runtime_window_reference_count": outside_payload,
         "observed_el3_memory_setup": observed,
+        "observed_translation_map_requests": BL31_TRANSLATION_MAP_REQUESTS,
+        "observed_page_table_allocator": BL31_PAGE_TABLE_ALLOCATOR,
         "references": refs,
         "limits": [
             "Only instructions reachable via direct control-flow edges are decoded; indirect branches/calls and exception-return paths may be incomplete.",
@@ -275,6 +305,7 @@ def build_report(identity: dict, entry: int, refs: list[dict], count: int) -> tu
             "No references found in a range would not prove that BL31 never accesses it.",
             "This does not prove Secure/Non-secure ownership, DMA reachability, cache aliases, runtime scratch, or per-boot behavior.",
             "The adjacent runtime window label describes statically referenced addresses outside the file payload, not a complete allocation map.",
+            "Translation-map call arguments do not by themselves prove allocation, security ownership, or the runtime value of the conditional header flag.",
             "No hardware registers were read or written; no image was flashed or executed.",
         ],
     }
@@ -289,7 +320,7 @@ def build_report(identity: dict, entry: int, refs: list[dict], count: int) -> tu
         "- Reachable decoded instructions: %d" % count,
         "- Recoverable address references: %d" % len(refs),
         "- References into actual payload bytes: %d" % inside_payload,
-        "- References outside payload but inside the 16 MiB BL31 window: %d" % outside_payload,
+        "- References outside payload in the adjacent page-table/runtime range [0x4801a2d0,0x48200000): %d" % outside_payload,
         "",
         "## References grouped by mapped range", "",
     ]
@@ -298,6 +329,19 @@ def build_report(identity: dict, entry: int, refs: list[dict], count: int) -> tu
             lines.append("- %s: %d" % (name, counts[name]))
     else:
         lines.append("- No references into audited DRAM ranges were recovered by this limited scan.")
+
+    lines += ["", "## Decoded EL3 translation-map requests", ""]
+    lines.append("- The caller passes the following base/length/raw-attribute arguments to helper 0x4800bcb4:")
+    for request in BL31_TRANSLATION_MAP_REQUESTS:
+        lines.append("- Callsite %s: base args %s / %s, length %s, raw attribute %s; condition: %s." % (
+            request["callsite"], request["arg0_base"], request["arg1_base"],
+            request["arg2_length"], request["arg3_raw_attribute"], request["condition"]
+        ))
+    lines.append("- Conditional requests are guarded by a nonzero 32-bit value loaded from 0x48000018; the current report does not infer that branch's runtime value.")
+    lines.append("- The page-table construction path uses pool base %s, 4 KiB page indexing, and a cursor at %s; its local counter check permits at most two page indices on this path." % (
+        BL31_PAGE_TABLE_ALLOCATOR["pool_base"], BL31_PAGE_TABLE_ALLOCATOR["counter_address"]
+    ))
+    lines.append("- Raw mapping attributes are recorded without assigning device/normal-memory or security semantics.")
 
     lines += ["", "## EL3 memory-setup references", ""]
     if ttbr:
@@ -335,7 +379,7 @@ def build_report(identity: dict, entry: int, refs: list[dict], count: int) -> tu
         "- The BL31 code references runtime/page-table/context addresses beyond the 107,216-byte file payload; file length is not the monitor's total runtime memory footprint.",
         "- Only instructions reachable via direct control-flow edges are decoded; indirect branches/calls and exception-return paths may be incomplete.",
         "- Dynamic address construction, indirect calls, secure-world services, DMA, runtime scratch, cache aliases and secondary-core activity are not fully modeled.",
-        "- Keep the full [0x48000000,0x49000000) BL31 window excluded until its complete runtime ownership is proven.",
+        "- Keep the conservative BL31-associated envelope [0x48000000,0x4a000000) excluded pending review: the binary configures mappings inside [0x48000000,0x48041000) and conditionally requests [0x48200000,0x4a000000). The 0x4a000000 endpoint is the separate BL33 loader-slot start.",
         "- The candidate [0x40080000,0x42000000) remains UNAPPROVED. Keep H700_MEMORY_LAYOUT_APPROVED unset; do not assign MEMBASE/MEMSIZE or execute a payload.",
         "- No hardware MMIO access, boot-media write, flash, or device payload execution was performed.", "",
     ]
