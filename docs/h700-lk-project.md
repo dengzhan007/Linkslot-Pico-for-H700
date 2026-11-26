@@ -107,10 +107,38 @@ This is a source audit of the immutable GammaOS LK pin
   linked a complete H700 LK target. Do not satisfy the missing timer contract
   with a no-op success stub.
 
+The early phase is an additional prerequisite, not just a detail of
+the later scheduler callback:
+
+- `kernel/main.c` calls `platform_early_init()` after
+  `arch_early_init()`, but before `target_early_init()`, `heap_init()`,
+  and `timer_init()`.
+- The pinned generic `platform/init.c` implementation of
+  `platform_early_init()` is an empty weak fallback. The MT6785 reference
+  overrides it and calls `platform_init_interrupts()` before
+  `platform_early_init_timer()`.
+- The MT6785 early delay timebase is GPT4; its scheduler tick later uses GPT5
+  and the MTK IRQ path. Its `dev/gic/mt_gic_v2.c` driver uses MTK-specific
+  register bases and IRQ helpers. The pinned `dev/gic/rules.mk` selects it
+  via `MTK_GIC_VERSION`, and the H700 overlay excludes the `gic` module.
+- H700 currently has neither a strong `platform_early_init()` override nor
+  an H700 GIC/timer provider. The empty generic fallback cannot initialize
+  the H700 interrupt controller or timebase.
+- The archived Linux interrupt snapshot reports `GIC-0 27 arch_timer` and
+  `wakeupgen 48 sun4i_timer0`; these are Linux runtime mappings, not BL33
+  PPI ownership. The checked-in FDT summaries omit interrupt-controller
+  nodes, and the raw live DTB was not uploaded. The GIC compatible, register
+  ranges, interrupt-cell layout and timer PPI therefore remain unconfirmed
+  from repository evidence.
+
+CI now runs `scripts/audit-h700-lk-timer-prerequisites.py` against the
+immutable LK pin. This prevents drift in the audited upstream contract; it
+does not prove the H700 hardware handoff or implement the missing provider.
+
 Before implementing an H700 timer backend, obtain device evidence for the
 BL31→BL33 Generic Timer access state (including EL2 counter traps/offset and
-`CNTFRQ/CNTVCT` readback), GICv2 distributor/CPU-interface handoff, and the
-correct architected timer PPI/ownership. Linux IRQ 27 activity is evidence
+`CNTFRQ/CNTVCT` readback), interrupt-controller type/register layout and distributor/CPU-interface
+handoff (if GICv2), and the correct architected timer PPI/ownership. Linux IRQ 27 activity is evidence
 for the Linux runtime only; it does not authorize enabling the same interrupt
 from BL33. After those gates close, implement and test the LK platform time,
 periodic timer, and delay contracts as a coherent provider. Until then, keep

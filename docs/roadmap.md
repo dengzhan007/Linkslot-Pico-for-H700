@@ -588,8 +588,20 @@ than the Linkslot runtime bootstrap:
 - This is not a successful LK target link: the memory ownership approval
   gate remains closed and no boot image/device execution has occurred.
 
+The source audit also confirms that LK calls `platform_early_init()`
+before heap/thread/timer startup. The pinned generic weak fallback is empty;
+MTK's override initializes GIC before its GPT4 early timebase. MTK's later
+scheduler tick uses GPT5 and its MTK IRQ path. The pinned MTK GICv2 driver
+depends on MTK register bases/helpers and is excluded by the H700 overlay.
+The checked-in Linux snapshot shows `GIC-0 27 arch_timer` and
+`wakeupgen 48 sun4i_timer0`, but those Linux runtime mappings do not prove
+BL33 timer-PPI ownership. The uploaded FDT summary omits interrupt-controller
+nodes and the original live DTB is not in the repository. A CI source guard,
+`scripts/audit-h700-lk-timer-prerequisites.py`, now checks this upstream
+contract without reading or writing hardware registers.
+
 **Next required work:** qualify the BL31→BL33 architected-counter access and
-GICv2/timer-PPI handoff from actual RG34XX evidence. Only then implement
+actual RG34XX interrupt-controller identity/register layout, timer-counter access and timer-PPI handoff. Only then implement
 the H700 LK `current_time()`, periodic-timer and delay platform hooks. Do
 not add a no-op timer, guess a PPI, or configure timer/GIC registers before
 the handoff is understood. In parallel, the RG34XX PA_DAT/PE_DAT scanner

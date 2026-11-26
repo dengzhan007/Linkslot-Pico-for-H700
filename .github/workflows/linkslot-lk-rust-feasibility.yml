@@ -21,6 +21,7 @@ on:
       - "integration/linkslot/h700-render-core/**"
       - "scripts/audit-linkslot-nostd.py"
       - "scripts/audit-lk-bl33-layout.py"
+      - "scripts/audit-h700-lk-timer-prerequisites.py"
       - "scripts/apply-h700-lk-overlay.py"
       - "scripts/test-h700-lk-overlay.py"
       - "scripts/test-h700-lk-project-guard.py"
@@ -55,6 +56,7 @@ on:
       - ".github/workflows/linkslot-lk-rust-feasibility.yml"
       - "scripts/audit-linkslot-nostd.py"
       - "scripts/audit-lk-bl33-layout.py"
+      - "scripts/audit-h700-lk-timer-prerequisites.py"
       - "scripts/apply-h700-lk-overlay.py"
       - "scripts/test-h700-lk-overlay.py"
       - "scripts/audit-slot-i18n-nostd.py"
@@ -168,6 +170,9 @@ jobs:
           ref: 9bf1419a49e0af6dba8b05916df382c9c9c6d0a8
           path: .ci/lk-reference
           persist-credentials: false
+
+      - name: Audit pinned LK early GIC and scheduler timer prerequisites
+        run: python3 scripts/audit-h700-lk-timer-prerequisites.py --lk-source .ci/lk-reference
 
       - name: Generate H700 BL33 source overlay from pinned GammaOS LK
         run: |
