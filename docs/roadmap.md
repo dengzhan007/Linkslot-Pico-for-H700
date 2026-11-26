@@ -419,3 +419,11 @@ The earlier gates are now closed with real device data in [fps-sampling](https:/
 Marker was created only for the UI trace and removed afterwards; Slot was restarted only through the confirmed PID 1 respawn chain and restored to UI (PID 8064, tracing off, no armgba mapping). A diagnostics helper blocked the first restart and was terminated specifically, with the failure recorded rather than hidden. No refresh writer was enabled: `hardware_applied=0`.
 
 Next display work still cannot claim 120 Hz: panel acceptance, timing margin, TE/VBlank behaviour and rollback remain unverified, and all hardware writers stay disabled. Do not substitute IRQ or UI presents for the core's committed-frame metric.
+
+
+#### FPS sample audit clarification (2026-11-26)
+
+The complete game launch log adds **31** 600-swap windows during armGBA gameplay (mean **59.561 presents/s**) and 25 pre-game windows (mean **59.503 presents/s**); the README's 59.345 average describes only the first four trace windows. The 79 frame samples independently recompute to 1184 / 19.8252277 s = **59.722 frames/s** at an actual 3.934-Hz sampling cadence; IRQ293 is **59.590/s**. See [independent report analysis](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/slot-refresh-audit/fps-sampling/ANALYSIS.md).
+
+One evidence item remains to round out the raw bundle: upload the exact first/last `/proc/PID/maps` lines for the sample PID to reproduce the new ASLR bias from its three PT_LOAD-backed mappings. The report currently provides the resulting bias and map signature but not those raw rows. No repeat memory sampling is needed. The ADB `occam/Nexus_4/mako` descriptor is not treated as physical identity because the same captured ADB session returns RG34XX uname, H700 release and sun50iw9 device-tree identity.
+
