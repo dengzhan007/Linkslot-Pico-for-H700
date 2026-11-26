@@ -685,13 +685,23 @@ Hard size boundary: this first integration path is only for a small diagnostic p
   scripts/test-audit-rg34xx-bl31-psci-cpu-on.py.
 - [x] Combined CI [#45816600012](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45816600012)
   passed. The matched monitor exposes a PSCI CPU_ON-capable callback.
+- [x] Selector parity audit [#45817598323](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45817598323)
+  verifies BL31/SPL RVBAR selection. Matching VER_REG low3 values: 0, 2;
+  mismatching values: 1, 3, 4, 5, 6, 7. The device value itself remains
+  unknown and the mismatch remains a hard gate.
 - [ ] Do not equate the presence of a PSCI CPU_ON callback with automatic
   secondary startup during the initial BL31-to-BL33 handoff. The live
   CPU1-CPU3 state before the first BL33 instruction is still unknown.
-- [ ] Read the target SoC variant selector (only the masked value of
-  0x03000024 & 7) and pre-BL33 CPU reset/status/RVBAR state using a trusted,
-  read-only early environment. The active CPU_ON register bank cannot be
-  assumed from H616 documentation alone.
+- [ ] Read only SYS_CFG VER_REG low3 (`readl(0x03000024) & 7`) and
+  pre-BL33 CPU reset/status/RVBAR state using a trusted, read-only early
+  environment. BL31 selects the alternate RVBAR bank for any nonzero low3,
+  while pinned native SPL selects it only for value 2; they agree only for
+  values 0 and 2 and diverge for 1, 3-7. Do not use PSCI CPU_ON or execute
+  a new BL33 until the target value is known and both stages use one
+  identical target-verified RVBAR bank-selection rule. H616 documentation
+  identifies VER_REG at SYS_CFG+0x24 but leaves bits [7:0] undefined;
+  H616 open-source tooling's die selector semantics are family evidence,
+  not proof of the H700-specific mapping.
 - [ ] Keep diagnostic LK single-core: do not issue PSCI CPU_ON, start a
   secondary, or enable SMP until A53 coherency, per-core GIC/timer setup,
   scheduler state, and cross-core locks are deliberately implemented and
