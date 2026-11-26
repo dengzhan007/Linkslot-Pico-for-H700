@@ -124,26 +124,30 @@ the later scheduler callback:
 - H700 currently has neither a strong `platform_early_init()` override nor
   an H700 GIC/timer provider. The empty generic fallback cannot initialize
   the H700 interrupt controller or timebase.
-- The archived Linux interrupt snapshot reports `GIC-0 27 arch_timer` and
-  `wakeupgen 48 sun4i_timer0`; these are Linux runtime mappings, not BL33
-  PPI ownership. The checked-in FDT summaries omit interrupt-controller
-  nodes, and the raw live DTB was not uploaded. The GIC compatible, register
-  ranges, interrupt-cell layout and timer PPI therefore remain unconfirmed
-  from repository evidence.
+- Fresh live FDT is now available in reports/rg34xx-inventory-20261126-timer/.
+  The primary controller is arm,cortex-a15-gic + arm,cortex-a9-gic at
+  /interrupt-controller@03020000, with GICD/GICC/GICH/GICV windows
+  0x03021000/0x1000, 0x03022000/0x2000, 0x03024000/0x2000 and
+  0x03026000/0x2000. The architected timer declares PPI-relative 13/14/11/10,
+  which map to GIC INTIDs 29/30/27/26; Linux arch_timer runs on INTID 27.
+  The separate sun4i-a10-timer uses sunxi-wakeupgen input 48. Full mapping
+  and redaction evidence are recorded below in the live GICv2 section.
 
 CI now runs `scripts/audit-h700-lk-timer-prerequisites.py` against the
 immutable LK pin. This prevents drift in the audited upstream contract; it
 does not prove the H700 hardware handoff or implement the missing provider.
 
-Before implementing an H700 timer backend, obtain device evidence for the
-BL31→BL33 Generic Timer access state (including EL2 counter traps/offset and
-`CNTFRQ/CNTVCT` readback), interrupt-controller type/register layout and distributor/CPU-interface
-handoff (if GICv2), and the correct architected timer PPI/ownership. Linux IRQ 27 activity is evidence
-for the Linux runtime only; it does not authorize enabling the same interrupt
-from BL33. After those gates close, implement and test the LK platform time,
-periodic timer, and delay contracts as a coherent provider. Until then, keep
-the read-only Generic Timer service unregistered and do not program timer
-compare/control, GIC/PPI, or IRQ state.
+Before implementing an H700 timer/GIC writer, perform a separate LK-target
+read-only qualification of actual CPSR/exception mode and security state,
+CNTFRQ, monotonically increasing CNTVCT, GICD/GICC/GICH/GICV identification
+and control registers, Group0/Group1NS ownership, and whether Virtual Timer
+PPI 27 is handed to BL33. Confirm whether EL2 counter/virtual-timer traps or
+CNTVOFF offset are in effect. Linux IRQ 27 confirms the Linux runtime path
+only. Once the actual BL33 permissions and ownership are closed, implement a
+coherent H700 early GICv2 provider, platform_irq() with correct IAR/EOI
+handling, LK time/delay APIs and scheduler timer. Keep single-core bring-up;
+do not reassign security groups or clear/disable unrelated interrupts. Until
+then, do not program timer compare/control, GIC/PPI, or IRQ state.
 
 ## Live FDT interrupt-controller and timer inventory
 
@@ -162,12 +166,12 @@ references. Linux/Windows host-tool tests passed in H700 boot-audit
 `#45772025184`; AArch64/AArch32 compile and storage regressions passed in
 `#45772025265`.
 
-The previous archived inventory contains `live-fdt.json` only; it did not
-retain `live-fdt.dtb`. Consequently, the new fields still need to be
-generated from a fresh RG34XX read-only inventory. The collector already
-copies `/sys/firmware/fdt` when the kernel exports it. Re-run the inventory,
-retain the raw DTB and JSON side by side, and inspect the actual controller
-compatible/reg/cell declarations before designing the H700 GIC provider.
+The new report contains both the raw active live-fdt.dtb and its parsed
+live-fdt.json. The published DTB remains parseable after same-length serial
+redaction (five interrupt controllers / two timer nodes preserved). The FDT
+parser reports raw provider-defined interrupt specifiers; the PPI/INTID
+interpretation documented below follows the public Linux GIC and architected
+timer bindings. It does not establish runtime interrupt ownership.
 
 ## AArch32 early MMU mapping contract
 
