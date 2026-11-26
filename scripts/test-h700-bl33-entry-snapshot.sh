@@ -3,15 +3,13 @@ set -eu
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 CC="${CC:-cc}"
-OUT_DIR="${OUT_DIR:-$(mktemp -d)}"
-CLEAN_OUT=0
-
-if [ ! -d "$OUT_DIR" ]; then
+if [ -n "${OUT_DIR:-}" ]; then
     mkdir -p "$OUT_DIR"
+    CLEAN_OUT=0
+else
+    OUT_DIR="$(mktemp -d)"
+    CLEAN_OUT=1
 fi
-case "$OUT_DIR" in
-    /tmp/*) CLEAN_OUT=1 ;;
-esac
 cleanup() {
     if [ "$CLEAN_OUT" -eq 1 ]; then
         rm -rf "$OUT_DIR"
