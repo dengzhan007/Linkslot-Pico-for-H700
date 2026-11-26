@@ -552,7 +552,7 @@ mod tests {
         services.struct_size = size_of::<H700RuntimeServicesV1>() as u32;
         services.vfs.abi_version += 1;
         assert_eq!(
-            H700RuntimeSession::<()>::bootstrap(&services, || Ok(())).err(),
+            H700RuntimeSession::<()>::bootstrap(&services, || Ok::<(), u8>(())).err(),
             Some(H700BootstrapError::VfsVersionMismatch)
         );
         services.vfs.abi_version = H700_VFS_SERVICE_ABI_VERSION;

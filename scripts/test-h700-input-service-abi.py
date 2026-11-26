@@ -84,7 +84,7 @@ bool h700_runtime_services_abi_probe(const h700_runtime_services_v1_t *services)
         services->vfs.abi_version != H700_VFS_SERVICE_ABI_VERSION) {
         return false;
     }
-    return services->vfs.install != NULL &&
+    return services->vfs.install == fake_vfs_install &&
         services->vfs.install(services->vfs.context);
 }
 """
