@@ -643,3 +643,14 @@ The full feasibility CI at 8e7f8db completed 76/76; it tests host/cross-build co
 - [ ] After memory ownership, firmware pairing, and a reversible boot diagnostic are approved, execute the LK entry path on RG34XX and read the captured registers. Do not infer Security state from CPSR alone, and do not start GIC/timer programming from this snapshot.
 
 The snapshot only becomes available after CRT0 reaches the post-BSS publication point; it is not a crash logger for earlier faults. Until an authorized device run exists, all entry values remain unknown and the existing SPSR=0x1d3 remains a loader/monitor model, not a measurement of this replacement LK.
+
+
+## 2026-11-26 RG34XX BL33 memory lifetime source trace
+
+- [x] Cross-check pinned BaseOS native SPL writes: firmware package at 0x42e00000; firmware extents include BL31 at 0x48000000, DTBO/DTB at 0x4a100000/0x4a200000 and A32 loader at 0x4a000000; BOL4 staging at 0x45000000; native record at 0x4a300000; final EL3 reset uses RVBAR=0x48000000.
+- [x] Cross-check the later A32 Linux-loader writes: entry stack 0x4a0f0000, translation table 0x4a0f8000..0x4a0fc000, kernel output 0x40080000..0x42000000 (max 0x01f80000), initrd 0x42000000, final FDT 0x44000000.
+- [x] Record that the audited pinned native SPL handoff path has no explicit destination in the proposed 0x40080000..0x42000000 application candidate; its subsequent A32 Linux-loader stage does use that candidate region, so a direct replacement BL33 must bypass that loader path.
+- [ ] Audit the exact paired vendor BL31 binary for its own scratch, secure-world, DMA and low-DRAM accesses. SPL source review alone does not prove BL31 leaves the candidate free.
+- [ ] Build a complete reviewed memory map for LK image/BSS/stack/heap/page tables, firmware handoff records, framebuffer/PIO, and the separate Linkslot+mGBA application footprint; verify secondary-core and cache/MMU behavior before any MEMBASE/MEMSIZE assignment.
+
+Safety boundary: 0x40080000..0x42000000 remains candidate-only. Do not set H700_MEMORY_LAYOUT_APPROVED, reuse the unknown 0x7ec00000..0x7fc00000 reservation, execute a payload, or write Boot0/TOC1/SD as part of this source trace.
