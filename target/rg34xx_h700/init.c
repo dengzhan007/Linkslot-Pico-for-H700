@@ -25,6 +25,9 @@ void target_init(void)
     if (!h700_rg34xx_power_led_is_ready())
         (void)h700_rg34xx_power_led_early_init();
 
-    /* Pinned LK calls target_init() after heap_init() and timer_init(). */
+    /* The NAND-write bootstrap bypasses heap_init(); never qualify that path. */
+#if !defined(ENABLE_NANDWRITE) || !(ENABLE_NANDWRITE)
+    /* Normal pinned-LK path reaches target_init() after heap_init() and timer_init(). */
     h700_lk_heap_service_mark_target_init_complete();
+#endif
 }

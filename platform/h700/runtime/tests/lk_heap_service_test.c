@@ -46,7 +46,17 @@ int main(void)
     assert(!h700_platform_heap_ready());
     assert(g_heap_queries == 0u);
 
-    /* target_init is post-heap in the pinned LK startup sequence. */
+    /* target_init is post-heap in the normal pinned LK startup sequence. */
+#if defined(ENABLE_NANDWRITE) && ENABLE_NANDWRITE
+    /* This alternate LK bootstrap calls target_init without heap_init(). */
+    target_init();
+    assert(g_led_ready_queries == 1u);
+    assert(g_heap_queries == 0u);
+    assert(!h700_platform_heap_ready());
+    assert(g_heap_queries == 0u);
+    puts("PASS: NAND-write bootstrap never marks the uninitialized LK heap ready");
+    return 0;
+#else
     target_init();
     assert(g_led_ready_queries == 1u);
     assert(g_heap_queries == 0u);
@@ -68,4 +78,5 @@ int main(void)
     puts("PASS: readiness requires the post-heap target lifecycle marker");
     puts("PASS: readiness reflects current free_total/largest values");
     return 0;
+#endif
 }

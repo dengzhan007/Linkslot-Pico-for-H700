@@ -15,6 +15,8 @@ SCAFFOLD = (
     Path("target/rg34xx_h700/rules.mk"),
     Path("target/rg34xx_h700/init.c"),
     Path("platform/h700/rules.mk"),
+    Path("platform/h700/runtime/lk_heap_service.c"),
+    Path("platform/h700/runtime/lk_heap_service.h"),
 )
 
 
@@ -119,6 +121,61 @@ def main() -> None:
         platform_rules = (worktree / "platform/h700/rules.mk").read_text(encoding="utf-8")
         if "LINKER_SCRIPT += $(BUILDDIR)/system-onesegment.ld" not in platform_rules:
             raise RuntimeError("H700 platform does not assign the generated one-segment linker script")
+
+        # target_init() calls this marker, so the provider must be in the LK object graph.
+        heap_object = "runtime/lk_heap_service.o"
+        if f"$(LOCAL_DIR)/{heap_object}" not in platform_rules:
+            raise RuntimeError("H700 platform does not link the LK heap readiness service")
+        for heap_path in (
+            root / "platform/h700/runtime/lk_heap_service.c",
+            root / "platform/h700/runtime/lk_heap_service.h",
+        ):
+            if not heap_path.is_file():
+                raise RuntimeError("H700 LK heap readiness source/header missing: " + str(heap_path))
+        summary.append("PASS lk-heap-service-object: provider is present in the H700 LK OBJS list")
+
+        # Audit lifecycle assumptions against the exact pinned GammaOS LK checkout.
+        lk_main = (worktree / "kernel/main.c").read_text(encoding="utf-8")
+        lk_main_code = re.sub(r"/\*.*?\*/|//[^\n]*", "", lk_main, flags=re.S)
+        startup_calls = (
+            "arch_early_init", "platform_early_init", "target_early_init",
+            "heap_init", "thread_init", "dpc_init", "timer_init",
+            "platform_init", "target_init", "apps_init",
+        )
+        startup_positions = []
+        for symbol in startup_calls:
+            match = re.search(r"\b" + re.escape(symbol) + r"\s*\(\s*\)\s*;", lk_main_code)
+            if match is None:
+                raise RuntimeError("pinned LK startup call missing: " + symbol)
+            startup_positions.append(match.start())
+        if startup_positions != sorted(startup_positions):
+            raise RuntimeError("pinned LK normal bootstrap order changed; heap readiness lifecycle must be re-audited")
+
+        heap_header = (worktree / "include/lib/heap.h").read_text(encoding="utf-8")
+        heap_source = (worktree / "lib/heap/heap.c").read_text(encoding="utf-8")
+        if "void heap_get_info(size_t *free_total, size_t *largest);" not in heap_header:
+            raise RuntimeError("pinned LK heap_get_info ABI changed")
+        getter = re.search(
+            r"\bvoid\s+heap_get_info\s*\([^)]*\)\s*\{(?P<body>.*?)\n\}",
+            heap_source,
+            flags=re.S,
+        )
+        if getter is None:
+            raise RuntimeError("pinned LK heap_get_info implementation missing")
+        getter_body = getter.group("body")
+        getter_tokens = ("enter_critical_section();", "list_for_every_entry", "exit_critical_section();")
+        getter_positions = [getter_body.find(token) for token in getter_tokens]
+        if min(getter_positions) < 0 or getter_positions != sorted(getter_positions):
+            raise RuntimeError("pinned LK heap_get_info no longer protects its free-list walk")
+        if "list_initialize(&theheap.free_list);" not in heap_source or "heap_insert_free_chunk(heap_create_free_chunk(theheap.base, theheap.len));" not in heap_source:
+            raise RuntimeError("pinned LK heap_init free-list initialization contract changed")
+        summary.append("PASS pinned-lk-heap-contract: startup order, heap initialization and critical-section getter verified")
+
+        target_lifecycle = (root / "target/rg34xx_h700/init.c").read_text(encoding="utf-8")
+        if "#if !defined(ENABLE_NANDWRITE) || !(ENABLE_NANDWRITE)" not in target_lifecycle:
+            raise RuntimeError("H700 heap readiness marker must stay disabled for the no-heap NAND-write bootstrap")
+        summary.append("PASS lk-heap-bootstrap-gate: NAND-write path cannot mark the LK heap ready")
+
 
         cpu_objects = (
             "power/h700_cpu_performance_policy.o",

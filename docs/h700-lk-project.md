@@ -33,6 +33,32 @@ This adds a real GammaOS LK project/target/platform selection path for the
 
 The project currently enables one minimal RG34XX board function: the PI12 work/power LED. It is not a general GPIO driver or input scanner. CPU performance objects remain policy-only; CPU DVFS, PMIC, MMC/SD hardware init and other H700 device drivers are not activated. The early MMU hook sets address-translation attributes only; the 1 GiB DRAM mapping does not allocate memory or approve any LK image, heap, stack, BSS, page-table, framebuffer, DMA or payload placement. This remains a scaffold, not a completed or bootable LK port.
 
+## LK heap readiness bridge and startup contract
+
+The heap readiness bridge is part of the H700 platform object list because
+target_init() references its lifecycle marker. Its source contract is pinned
+to GammaOS LK commit 9bf1419a49e0af6dba8b05916df382c9c9c6d0a8:
+
+- The normal kernel/main.c path calls target_early_init() before heap_init(),
+  then initializes threads/DPC/timers, calls platform_init(), then target_init(),
+  and only afterward calls apps_init().
+- lib/heap/heap.c::heap_get_info() walks the free list inside LK critical
+  section enter/exit calls. heap_init() initializes that list before inserting
+  the initial free chunk.
+- h700_platform_heap_ready() does not query LK before the post-heap marker;
+  afterward it reports ready only while both total free bytes and the largest
+  free chunk are non-zero. This is a live availability predicate, not a memory
+  budget, allocation guarantee or approval of any physical range.
+- The alternate ENABLE_NANDWRITE bootstrap calls target_init() without
+  heap_init(). The H700 hook therefore does not mark the heap ready for that
+  build path; normal and NAND-write host regression cases cover the distinction.
+- scripts/test-h700-lk-project-guard.py checks the pinned startup ordering,
+  heap API and critical-section behavior, plus the actual H700 OBJS entry.
+
+This bridge does not initialize the heap, select its address/size, install the
+newlib adapter, or authorize the Linkslot runtime coordinator. The full LK
+target link and memory-layout gate remain closed.
+
 ## AArch32 early MMU mapping contract
 
 The H700 target uses the pinned GammaOS LK AArch32 section-table implementation
