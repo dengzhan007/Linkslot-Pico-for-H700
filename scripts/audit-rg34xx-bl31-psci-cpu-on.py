@@ -126,6 +126,9 @@ def main() -> int:
             "callback_move_pc": "0x48008628",
             "indirect_branch_pc": "0x48008640",
             "second_dispatch": "0x480086a0..0x480086dc",
+            "standard_tf_a_psci_cpu_on_aarch64_fid": "0xc4000003",
+            "standard_tf_a_capability_condition": "pwr_domain_on slot +8 and pwr_domain_on_finish slot +56 are both non-null",
+            "slot_7_on_finish_address": "0x48002574",
         },
         "callback": {
             "address": "0x4800254c",
@@ -161,6 +164,7 @@ def main() -> int:
         "interpretation": [
             "The matched binary registers a platform operation table whose second pointer slot is loaded by PSCI dispatcher code and invoked through an indirect branch.",
             "In the standard TF-A plat_psci_ops_t layout, the second member is pwr_domain_on; its callback reaches code that programs a per-core RVBAR and sequences CPU power/reset.",
+            "The standard TF-A PSCI setup advertises PSCI_CPU_ON_AARCH64 (FID 0xc4000003) when both pwr_domain_on and pwr_domain_on_finish are non-null; this matched table contains both.",
             "This proves BL31 contains and exposes a CPU_ON-capable platform callback; it does not prove that the callback executes during initial BL31-to-BL33 handoff.",
             "The audit does not establish live CPU1-CPU3 reset state before Linux or Linkslot requests PSCI CPU_ON.",
             "The exact vendor callback ABI/source revision is not recovered; this is a pinned binary plus standard ABI-position correlation, not exact vendor source identity.",
