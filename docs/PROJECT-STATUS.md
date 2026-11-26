@@ -2,7 +2,7 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-26。当前已验证的运行时代码基线为 `3ce6bb3456f0c3f0f70dcdce92e827c8fac6cc4f`：完整 Linkslot/LK feasibility [#45765776904](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45765776904) **75/75 steps 成功**，同一基线 H700 boot-audit [#45765776867](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45765776867) Linux/Windows 双平台通过。之后的 `7877f65` 与 `5cbaaed` 是文档归档/状态更正提交，不包含运行时代码改动；对应的完整 feasibility 重跑 #45768685318 在最后检查时为 26/74 steps、无失败，文档状态更新后的重跑 #45769051705 已触发。文档提交 `7877f65` 的 H700 boot-audit #45768685345 双平台通过；`5cbaaed` 的 boot-audit #45769051707 已排队。上述均为 host/cross-build，不是完整 LK 镜像或实机启动。reports 分支 `a67f12aa0809ed71bbbbbae685fc0fb77022aae9` 的 RG34XX gpiolib debugfs 只读采样已完成：1200 个快照/126.0 秒中，17 个游戏按键线各仅出现一次 `hi→lo→hi`，合计 34 个状态边沿；无同时变化、重复变化或其他 GPIO 线状态变化。Linux GPIO driver readback 已闭合，但不能替代 LK 直接 PA_DAT/PE_DAT MMIO 验证；`/dev/mem` EFAULT 路径保持停止。
+**最后核对时间：** 2026-11-26。当前运行时代码基线为 `3ce6bb3456f0c3f0f70dcdce92e827c8fac6cc4f`；之后的 `7877f65`、`5cbaaed`、`0bd2451` 均为文档归档/状态更新，没有运行时代码改动。完整 Linkslot/LK feasibility [#45769051705](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45769051705) 已在 `5cbaaed` 上完成，**75/75 steps 成功**，artifact [15092559763](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45769051705/artifacts/15092559763)；同一提交 H700 boot-audit [#45769051707](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45769051707) Linux/Windows 双平台通过。当前分支 HEAD 为 `0bd245137d6026f8252e5b676876cb463ffaad47`，该 HEAD 的 H700 boot-audit [#45769162369](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45769162369) Linux/Windows 双平台通过；文档提交后的完整 feasibility 尚未重跑，但代码基线未改变。被后续提交 supersede 的 #45768685318 为 cancelled，不计作成功。以上均为 host/cross-build 与 host-tools 验证，不是完整 LK 镜像或实机启动。reports 分支 `a67f12aa0809ed71bbbbbae685fc0fb77022aae9` 的 RG34XX gpiolib debugfs 只读采样已完成：1200 个快照/126.0 秒中，17 个游戏按键线各仅出现一次 `hi→lo→hi`，合计 34 个状态边沿；无同时变化、重复变化或其他 GPIO 线状态变化。Linux GPIO driver readback 已闭合，但不能替代 LK 直接 PA_DAT/PE_DAT MMIO 验证；`/dev/mem` EFAULT 路径保持停止。
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
@@ -773,3 +773,19 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 当前结论：**runtime bootstrap 的 C/Rust ABI、验证顺序和失败边界已通过 host/cross-build；它仍是 generic coordinator，不是完整 LK 启动实现。** 还没有实际 H700 monotonic timer、GPIO/ADC scanner、LK heap provider、display/scanout、PCM provider 或可运行 slot::App 的 LK main-loop binding；没有执行游戏 ROM、没有真实 SD/MMC 访问、没有存档写回，也没有 Boot0/TOC1/SD 写卡。
 
 下一步先从 pinned GammaOS LK 源码确认真实 monotonic timer、GPIO/ADC 输入与 heap 生命周期 API，再逐项建立 C-owned platform providers 和 target host-independent tests；只有服务证据、内存 arena/stack/BSS 预算和 secondary-core fail-closed gate 齐备后，才把 coordinator 接到 LK main。持续保持 VFS read-only。
+
+
+## 27. Pinned GammaOS LK kernel timer contract audit（2026-11-26）
+
+固定源码：[`TheGammaSqueeze/lk-mt6785`](https://github.com/TheGammaSqueeze/lk-mt6785/tree/9bf1419a49e0af6dba8b05916df382c9c9c6d0a8)，commit `9bf1419a49e0af6dba8b05916df382c9c9c6d0a8`。
+
+- `kernel/main.c` 的正常启动顺序为 `arch_early_init()` → `platform_early_init()` → `target_early_init()` → `heap_init()` → `thread_init()` → `dpc_init()` → `timer_init()`。随后 bootstrap thread 才调用 `platform_init()` → `target_init()` → `apps_init()`。因此 LK scheduler timer 是 Linkslot coordinator 之前的内核基础设施。
+- `kernel/timer.c::timer_init()` 无条件注册 `platform_set_periodic_timer(timer_tick, NULL, 10)`（特定 Konkr 配置为 1 ms）。`timer_set()` 还通过 `current_time()` 计算到期时刻。没有可工作的 H700 platform timer 时，不能把该阶段视为可启动。
+- pinned `include/platform/timer.h` 声明 `platform_set_periodic_timer()`、`mdelay()`、`udelay()` 和 `platform_tick_rate()`；`include/platform.h` 声明 `current_time()` / `current_time_hires()`。H700 当前 `h700_arch_timer.c` 只提供独立 ABI v1 的只读 `CNTVCT/CNTFRQ` monotonic service，不是这些 LK platform hooks 的实现，也不触发 scheduler tick。
+- pinned `platform/mt6785/timer.c` 的周期计时器使用 GPT5、MTK GPT 寄存器、MTK IRQ/GIC helper；H700 overlay 排除 MTK platform/PAL。禁止将该源文件或 GPT5/MMIO 常量移植进 H700。
+- `target_init()` 在 `timer_init()` 之后执行；现有 heap readiness marker 只能在 `target_init()` 后检查 heap，不能用于初始化 LK 首轮 scheduler timer。
+- 当前 H700 object list 没有实现 LK periodic timer hooks；完整 LK target link 仍被 memory-layout approval gate 阻止。因此不能声称 LK scheduler timer 已链接或可运行，不能增加返回成功的空 stub 来绕过 `timer_init()`。
+
+**下一步门槛：** 在任何 H700 timer writer/IRQ 实现前，先核实 RG34XX BL31→BL33 时的 EL2/Generic Timer counter access controls、`CNTFRQ/CNTVCT` 可读性与持续增长、GICv2 distributor/CPU-interface 初始状态及适用的 architected timer PPI ownership。Linux 中 IRQ 27 的运行计数只证明 Linux arch_timer 工作，不证明 BL33 可直接启用同一 PPI。只有这些证据闭合后，才实现 `current_time()` 与 LK `platform_set_periodic_timer()`/delay API 的 H700 provider，并通过静态链接与受控实机诊断验证。不得猜 PPI/IRQ、改写 EL2 控制寄存器或开启未知 timer IRQ。
+
+当前保持：`h700_arch_timer_init()` 不进入 `target_init()`；不连接 `timer_init()`；不启用 timer compare、GIC/PPI 或周期 IRQ；输入 PIO sampler 仍不接 normal runtime。
