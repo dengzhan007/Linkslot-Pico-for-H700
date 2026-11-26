@@ -872,3 +872,22 @@ Hard size boundary: this first integration path is only for a small diagnostic p
   keep PI12 MMIO default-off.
 - [ ] Close BL31/Boot0 RAM ownership and secondary A53 hold-off/SMP gates.
 - Hardware unchanged: hardware_applied=0.
+
+
+## 2026-11-26 — PSCI operations table and CCU helper correlation
+
+- [x] Verify the matched BL31 platform-ops table identity, registration call
+  path, global `psci_plat_pm_ops` dispatch and slot-1 CPU_ON branch.
+- [x] Verify direct AArch64 BL targets from `0x48002998` to CCU save helper
+  `0x48001790`, and from `0x48002858` to restore helper `0x480018d8`.
+- [x] Keep platform-ops slots 3 (`0x48002878`) and 7 (`0x48002574`)
+  unclassified. The exact shipping TF-A ABI is not pinned; public TF-A
+  versions add/reorder callback members. Do not infer callback names from
+  slot numbers alone.
+- [ ] Pin the exact vendor TF-A ABI/source matching the 107,216-byte BL31.
+- [ ] Recover function boundaries and CFG for both CCU helper call sites;
+  prove which registered callback owns each path and whether resume/restore
+  is a separate callback.
+- [ ] Establish whether any such path executes during cold boot or only after
+  later PSCI/power-management requests. Binary presence is not runtime proof.
+- Hardware unchanged: `hardware_applied=0`.

@@ -157,10 +157,46 @@ finds a coherent non-primary-entry save/restore sequence: code around
 selected bits, and saves context; the paired 0x480018d8 path restores the
 saved values. It is called from a path containing power-state checks and
 AON/PRCM accesses (including 0x07000200). This is consistent with vendor
-low-power clock/context preservation, but the exact register names, callback
-registration, and runtime invocation have not yet been proven. These rows
-are not evidence that BL31 exposes CPU DVFS or that Linkslot's CPU-frequency
-service can be enabled. No clock or voltage write is approved.
+power-management clock/context preservation. The follow-up PSCI audit
+verified platform-ops table registration and direct BL branches at PC
+0x48002998 -> 0x48001790 (save helper) and PC 0x48002858 -> 0x480018d8
+(restore helper). However, the exact vendor TF-A ABI is not pinned, so table
+slots 3/7 remain unclassified; the callsites have not been proven to belong
+to the same callback or to be reachable from one another. These rows are not
+evidence that BL31 exposes CPU DVFS or that Linkslot's CPU-frequency service
+can be enabled. No clock or voltage write is approved.
 
 The PI12 production gate, APB1/PIO handoff gate, memory-ownership gate, and
 secondary-A53 gate remain closed. No hardware was touched.
+
+
+## PSCI table correlation: direct branch targets are not callback ownership (2026-11-26)
+
+BL31 static audit [#45856177699](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45856177699)
+passed 20/20 steps on branch HEAD `7c65f60a416f4e80c5d6290ceee37ccc072b9f8d`.
+
+The matched monitor has a platform-ops table at `0x480165f8`, registered
+through `0x48009dec → 0x480029bc`. PSCI dispatcher code loads the
+`psci_plat_pm_ops` pointer and indirect-calls the selected table member.
+Slot 1 points to `0x4800254c`; its validated path reaches CPU_ON helper
+`0x48002d78`.
+
+The table values at slot 3 (`0x48002878`) and slot 7 (`0x48002574`)
+are recorded but intentionally **unclassified**. The shipping monitor's
+exact TF-A ABI/version has not been pinned. Public TF-A header revisions
+change the callback layout; for example, the pinned public header at
+[commit `9839bceb...`](https://github.com/ARM-software/arm-trusted-firmware/blob/9839bceb8b720ba09f3bd3d5f95188ea9d75837b/include/lib/psci/psci.h#L335-L372)
+contains additional operations before the suspend callback. This is a
+version-drift warning, not evidence that the shipping monitor uses that
+specific layout.
+
+The verifier confirms two separate direct branch targets:
+- `0x48002998 → 0x48001790`: CCU/AON save helper;
+- `0x48002858 → 0x480018d8`: CCU/AON restore helper.
+
+It does **not** yet establish that both call sites belong to the same
+callback, that either is reachable from slot 3/7, or that these paths run
+during initial BL31→BL33 handoff. The current conclusion is limited to
+verified table registration, slot-1 CPU_ON control flow, and the presence
+of two BL31 power-management helper edges. Do not infer CPU DVFS, PLL
+startup sequencing, or runtime suspend/resume behavior from this audit.

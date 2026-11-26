@@ -2,7 +2,7 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-26。当前工作分支 HEAD 为 `96e171bd9c298c6f735393670b086270ef2dfc08`。最近一次完整 Linkslot/LK feasibility [#45850518021](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45850518021) 在 HEAD `ae0722f89bbd94fa17fa84ff89de1eef95d3ffbe` 上 **81/81 steps 成功（0 failures / 0 skipped）**；之后提交仅扩展 host-only BL31 PIO/CCU 静态扫描、回归和文档。当前 HEAD 的 BL31 静态审计 [#45852546186](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45852546186) 全部步骤成功；扫描匹配 BL31 全镜像得到 605 个重叠反汇编候选行（CPUX_CCU 152、PIO 6、SID_SYS 275、AON_CPUCFG_PRCM 148、C0_CPUX_CFG 20、CPU_SUBSYSTEM 4）。H700 boot-audit [#45852315408](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45852315408) 成功；H700 三 ABI 编译/host 回归 [#45847406072](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847406072) 成功。**重要新结论：** BL31 六条 PIO 候选位于 PH10 mux/drive/pull 寄存器，匹配 sun50iw9p1 family 的 S_CIR 红外输入配置，并非 PI12 电源灯寄存器；执行入口仍未证明。**PI12 production MMIO 继续默认关闭**，BL31→BL33 PIO/clock/权限、BL31/Boot0 内存所有权与 secondary A53 hold-off/SMP 仍未关闭。当前结果仍不是完整 LK 或可刷写镜像，无实机 MMIO、存储写入、刷写或 payload execution，`hardware_applied=0`.
+**最后核对时间：** 2026-11-26。当前工作分支 HEAD 为 `7c65f60a416f4e80c5d6290ceee37ccc072b9f8d`。最近一次完整 Linkslot/LK feasibility [#45854374894](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45854374894) 在 HEAD `51882e9ec0966cd42f9dfa9094552a1a130cb3fd` 上 **81/81 steps 成功（0 failures / 0 skipped）**；之后提交仅修改 BL31 host-only 审计脚本/测试和文档，未修改 H700 启动、MMIO、输入、显示或存储运行时代码。当前 HEAD 的 BL31 静态审计 [#45856177699](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45856177699) **20/20 steps 成功**，产物 [15135467944](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45856177699/artifacts/15135467944)。匹配 BL31 全镜像仍有 605 条重叠反汇编候选（CPUX_CCU 152、PIO 6、SID_SYS 275、AON_CPUCFG_PRCM 148、C0_CPUX_CFG 20、CPU_SUBSYSTEM 4）。H700 boot-audit [#45854375018](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45854375018) 成功；H700 AArch64/AArch32 ARM/Thumb-2 编译与 host 回归 [#45847406072](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847406072) 成功。**重要安全边界：** BL31 的六条 PIO 候选是 PH10/S_CIR 红外输入而非 PI12 电源灯；PI12 production MMIO 继续默认关闭。PSCI 操作表 slot 1 的 CPU_ON 分支已验证，但 slot 3/7 的回调语义及 CCU helper 的回调归属尚未由匹配固件 ABI/完整 CFG 证实。BL31→BL33 PIO/clock/权限、BL31/Boot0 内存所有权与 secondary A53 hold-off/SMP 仍未关闭。当前不是完整 LK 或可刷写镜像；无实机 MMIO、存储写入、刷写或 payload execution，`hardware_applied=0`.
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
@@ -1289,3 +1289,33 @@ feasibility [#45834208280](https://github.com/dengzhan007/Linkslot-Pico-for-H700
 2. 从 pinctrl/clock 的确切 vendor 4.9.170 源码或其他可验证资料完成 PH10/CCU 寄存器语义交叉核对；不要把 family reference 当作已锁定的设备 kernel source commit。
 3. 继续关闭 BL31/Boot0 内存所有权和 secondary A53 reset/hold-off/SMP 门槛。
 4. 门槛关闭后再考虑完整 LK platform init（GIC/timer/console/heap/storage/scheduler）及 firmware/SPL builder；目前不生成可刷写镜像。
+
+
+## 2026-11-26 续接：BL31 PSCI 表与 CCU helper 关联审计
+
+**当前代码 HEAD：** `7c65f60a416f4e80c5d6290ceee37ccc072b9f8d`。  
+**reports HEAD：** `2963c8c479486a98c5202dad86e14dbe6e0f466f`。
+
+### 已完成的 CI
+- 完整 Linkslot/LK feasibility [#45854374894](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45854374894)：81/81 steps 成功，0 failures / 0 skipped；这是当前最近的完整集成检查，运行 HEAD 为 `51882e9...`。其后的代码变更仅是 BL31 只读审计和 host tests，不改变产品运行时代码。
+- 当前代码 HEAD 的 BL31 静态审计 [#45856177699](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45856177699)：20/20 steps 成功；PSCI dispatch/table、CPU_ON 指令目标、CCU save/restore helper 分支目标测试全部通过。
+- H700 boot-audit Linux/Windows [#45854375018](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45854375018) 成功；三 ABI H700 AArch64/AArch32 ARM/Thumb-2 编译与 host 回归 [#45847406072](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847406072) 成功。
+
+### PSCI / CCU 证据边界
+- 匹配 BL31 的 platform-ops 表位于 `0x480165f8`；注册路径在 `0x48009dec → 0x480029bc`。PSCI dispatcher 读取 `psci_plat_pm_ops` 全局指针并通过间接分支调用表项。slot 1 指向 `0x4800254c`，其调用路径到达低层 CPU_ON 序列 `0x48002d78`，包括 per-core RVBAR 与 power/reset 操作。
+- 表项原始值：slot 3=`0x48002878`，slot 7=`0x48002574`。**这两个 slot 当前保持未分类**，不把它们直接命名为 `pwr_domain_suspend` 或 `pwr_domain_on_finish`。
+- 两条直接 BL 目标已验证：PC `0x48002998 → 0x48001790`（CCU/AON save helper），PC `0x48002858 → 0x480018d8`（restore helper）。这证明两条分支目标存在，不证明它们属于同一个回调、从 slot 3 可达，或会在 initial BL31→BL33 handoff 执行。
+- 当前无法为出厂 BL31 匹配确切 TF-A callback ABI。作为版本差异示例，公开 TF-A header commit [`9839bceb...`](https://github.com/ARM-software/arm-trusted-firmware/blob/9839bceb8b720ba09f3bd3d5f95188ea9d75837b/include/lib/psci/psci.h#L335-L372) 已在常见回调之前加入额外成员；不能将该版本的 slot 排列直接套用到设备固件。
+- 因此 CCU helper 仍属于 BL31 power-management 候选代码，不是 CPU DVFS 可用证据，也不是开机阶段 PLL/clock 初始化证据。具体 callback ownership、CFG 可达性和运行时调用时机仍待闭合。
+
+### 不变的硬件门槛
+- PH10/S_CIR 的 PIO 候选不触及 PI12 电源灯寄存器；PI12 production MMIO default-off。
+- `/dev/mem` 全地址 EFAULT、无匹配 4.9.170 module build tree/headers/Module.symvers；不重试 devmem/mmap/模块猜测路径。
+- `H700_MEMORY_LAYOUT_APPROVED` 未设置；secondary A53 初始 reset/hold 状态、BL33 内存生命周期和 timer handoff continuity 未证明。
+- 未执行 MMIO、模块加载、SD/Boot0/TOC1 写入、刷写或 payload execution；`hardware_applied=0`。
+
+### 下一步
+1. 获取与出厂 BL31 同版本的 TF-A/Allwinner 源码或可验证 ABI 证据，精确恢复 platform-ops 结构布局。
+2. 对 slot 3/7 及 helper call sites 建立完整函数边界和 CFG，分别确认 CPU suspend / resume / off 回调归属。
+3. 区分 cold-boot handoff 与后续 PSCI power-management 路径；在没有运行时 trace/readback 前不认定 helper 已执行。
+4. 继续关闭 BL31/Boot0 内存所有权、secondary A53 hold-off、PIO/clock permissions 门槛后，再考虑完整 LK target integration。
