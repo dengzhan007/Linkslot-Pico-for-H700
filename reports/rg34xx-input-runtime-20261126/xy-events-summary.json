@@ -1,0 +1,31 @@
+{
+  "captured_utc_start": "2026-11-26T05:05:02.299003Z",
+  "captured_utc_end": "2026-11-26T05:05:13.018930Z",
+  "records": 24,
+  "raw_bytes": 576,
+  "presses": 6,
+  "instructed": [
+    "X",
+    "X",
+    "X",
+    "Y",
+    "Y",
+    "Y"
+  ],
+  "observed_codes": [
+    307,
+    307,
+    307,
+    306,
+    306,
+    306
+  ],
+  "first_block_codes": [
+    307
+  ],
+  "second_block_codes": [
+    306
+  ],
+  "verdict": "physical X key emits 307 (DT keyY/PA2); physical Y key emits 306 (DT keyX/PA3); labels are swapped relative to DT node names",
+  "consistency": "6/6 presses agree with the block assignment"
+}

@@ -34,5 +34,26 @@
     }
   ],
   "power_key_excluded": true,
-  "method": "adb shell cat /dev/input/event1 > local binary; decoded offline with struct input_event"
+  "method": "adb shell cat /dev/input/event1 > local binary; decoded offline with struct input_event",
+  "xy_repeat": {
+    "file": "XY-REPEAT.md",
+    "instructed": [
+      "X",
+      "X",
+      "X",
+      "Y",
+      "Y",
+      "Y"
+    ],
+    "observed_codes": [
+      307,
+      307,
+      307,
+      306,
+      306,
+      306
+    ],
+    "verdict": "physical X emits 307 (DT keyY/PA2); physical Y emits 306 (DT keyX/PA3); labels swapped vs DT node names",
+    "supersedes": "section 4 item 1 of KEY-EVENT-TEST.md interpreted this as an operator ordering deviation"
+  }
 }

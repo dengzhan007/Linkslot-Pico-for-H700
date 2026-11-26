@@ -18,6 +18,8 @@ Two artifacts from the same powered-on session on the connected RG34XX, both rea
 | `key-events.csv` | One row per record: index, epoch seconds, ISO-8601 UTC, relative seconds, type, code, value with names. |
 | `key-events-summary.json` | Machine-readable roll-up: window, counts, observed codes, the one extra press group. |
 | `KEY-EVENT-TEST.md` | The test itself: method, full press sequence with pins and hold times, DT-vs-runtime coverage table, deviations, and the three static/runtime inconsistencies. |
+| `XY-REPEAT.md` | Dedicated X/Y re-test (X,X,X then Y,Y,Y). Records that the **physical X key emits `307` and the physical Y key emits `306`**, i.e. the two labels are swapped relative to the DT node names. This supersedes the "pressed in the wrong order" note in the first round. |
+| `xy-events.bin` / `.csv` / `-summary.json` | Raw 576-byte capture of that re-test and its decoded forms. |
 | `SHA256SUMS.txt` | SHA-256 of the files above, excluding itself. |
 
 ## Why `getevent` was not used
@@ -36,6 +38,11 @@ Decoding is done offline on the host with `struct.unpack('<qqHHi')`. Nothing was
 All 17 device-tree keys produced real evdev events, in the expected order except that X and Y were
 pressed in the opposite order and one extra R1 press was recorded between START and MENU (operator
 confirmed it as an accidental press while reaching for MENU). See `KEY-EVENT-TEST.md` §3–§4.
+
+The X/Y anomaly turned out to be a genuine label swap, not an operator ordering mistake: the dedicated
+re-test in `XY-REPEAT.md` shows the key silkscreened **X** reporting `307` (DT `keyY`/`PA2`) and **Y**
+reporting `306` (DT `keyX`/`PA3`), 6 presses out of 6. Any keymap that assumes `306`=X, `307`=Y will be
+inverted on this unit.
 
 ## Sensitive data
 
