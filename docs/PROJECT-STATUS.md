@@ -1139,3 +1139,14 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
    deterministic proof-of-life signal, then rebuild the matching native
    firmware/SPL pair. The existing 5,148-byte layout probe is not that
    diagnostic and no image has been flashed or run on hardware.
+
+
+**2026-11-26 LK Data Abort safety finding:** pinned GammaOS LK
+`9bf1419a49e0af6dba8b05916df382c9c9c6d0a8` routes `arm_data_abort` to
+`arm_data_abort_handler()`, which calls `exception_die(..., -8, ...)` and
+halts permanently. The generic vector has no recoverable exception-return
+trampoline. See [h700-lk-data-abort-recovery-audit.md](h700-lk-data-abort-recovery-audit.md).
+Do not add bare volatile reads to LK startup or the input scanner. A narrowly
+matched assembly recovery path, correct saved-context restoration and safe
+result channel must be designed and CI-tested first; unrelated Data Aborts must
+retain the fatal fallback.

@@ -361,3 +361,24 @@ between the pinned SPL and BL31 remains unresolved; no code change is
 authorized by a guessed value.
 
 `hardware_applied=0`; no MMIO read/write was performed by this report.
+
+
+## Data Abort recovery constraint (2026-11-26)
+
+The exact GammaOS LK pin `9bf1419a49e0af6dba8b05916df382c9c9c6d0a8`
+uses `arch/arm/exceptions.S::arm_data_abort` to save an AArch32 fault frame
+and branch to `arm_data_abort_handler`. The handler in
+`arch/arm/faults.c` calls `exception_die(frame, -8, ...)`, whose terminal
+path calls `halt()` and loops. The current path is **fatal**, not recoverable.
+
+Therefore the new LK-side MMU coverage assertions do not authorize a read of
+SYS_CFG or PIO. A contained diagnostic needs a separately reviewed assembly
+exception-return path that restores the complete saved context and returns
+only when the fault PC matches the one probe load. Unrelated Data Aborts must
+still halt. The saved frame includes SPSR, user/system SP and LR, r0-r12 and
+the abort LR/PC field; PC adjustment must follow the pinned ARM exception
+semantics and the probe instruction's execution state/width.
+
+The detailed source inventory and requirements are in
+[h700-lk-data-abort-recovery-audit.md](h700-lk-data-abort-recovery-audit.md).
+No register read or write was made; `hardware_applied=0`.

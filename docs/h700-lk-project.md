@@ -450,3 +450,13 @@ both SYS_CFG VER_REG `0x03000024` and RG34XX PIO `0x0300b000`. Source
 to the same descriptor. This is only address-translation coverage: it does not
 prove BL31 security/firewall permissions, bus access, or a safe exception
 recovery path. No diagnostic register read has been wired into LK startup.
+
+
+### Data Abort safety boundary
+
+The pinned generic `arm_data_abort_handler()` is terminal: it calls
+`exception_die()`, which halts and loops. The MMU descriptor does not
+guarantee SYS_CFG or PIO bus access, so no direct register probe may be added
+to the early lifecycle hooks until a narrowly matched, context-restoring
+AArch32 abort-return path and safe result channel are implemented and tested.
+See `docs/h700-lk-data-abort-recovery-audit.md`.

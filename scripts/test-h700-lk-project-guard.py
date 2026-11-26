@@ -279,7 +279,10 @@ def main() -> None:
             "H700_DRAM_BASE 0x40000000u",
             "H700_DRAM_SIZE 0x40000000u",
             "MMU_MEMORY_TYPE_NORMAL_WRITE_BACK_ALLOCATE",
-            "H700_PIO_WINDOW_BASE 0x03000000u",
+            "H700_SOC_MMIO_WINDOW_BASE 0x03000000u",
+            "H700_SYS_CFG_VER_REG 0x03000024u",
+            "H700_RG34XX_PIO_BASE 0x0300b000u",
+            "_Static_assert",
             "MMU_MEMORY_TYPE_DEVICE_SHARED",
             "arch_enable_mmu()",
         ):
@@ -287,7 +290,7 @@ def main() -> None:
                 raise RuntimeError("RG34XX early MMU mapping is missing: " + required)
         if "DRAM_PHY_ADDR=0x40000000" not in platform_rules:
             raise RuntimeError("H700 build does not set the verified RG34XX DRAM physical base")
-        summary.append("PASS rg34xx-pio-mmu-map: LK section table, DRAM attributes, PIO Device mapping and MMU enable are ordered")
+        summary.append("PASS rg34xx-soc-mmu-map: LK section table, DRAM attributes, SYS_CFG/PIO Device section and MMU enable are ordered")
 
         target_rules = (worktree / "target/rg34xx_h700/rules.mk").read_text(encoding="utf-8")
         target_init = root / "target/rg34xx_h700/init.c"

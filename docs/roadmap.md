@@ -781,3 +781,12 @@ Hard size boundary: this first integration path is only for a small diagnostic p
 - [ ] Design a single-word, read-only VER_REG probe with an explicit Data Abort recovery path and a minimal result channel. Do not issue a bare volatile read from a boot hook before the abort behavior is contained and reviewed.
 - [ ] Keep the separate pre-BL33 CPU reset/RVBAR snapshot gate open. A later LK read of VER_REG cannot establish CPU state at the earlier BL31→BL33 handoff.
 - Hardware state remains unchanged: no module load, MMIO write, boot-argument or boot-media modification; `hardware_applied=0`.
+
+
+### Data Abort recovery gate (pinned GammaOS LK source audit)
+
+- [x] Review the exact GammaOS LK pin: `arm_data_abort` saves the fault frame and branches to `arm_data_abort_handler`; the generic handler calls `exception_die(..., -8, ...)`, reaches `halt()`, and loops. It does not return from the exception.
+- [x] Record that the current H700 Device MMU mapping does not make an MMIO read safe from Data Abort or prove BL31/firewall access permission.
+- [ ] Design a probe-scoped AArch32 exception-return trampoline that matches only the exact diagnostic load PC, restores the saved frame/SPSR, and resumes at a known recovery label; retain fatal handling for all other aborts.
+- [ ] Choose a result channel that does not assume UART, panel, heap, Linux, or filesystem readiness.
+- [ ] Add host/source/disassembly guards for the exception frame, PC semantics, return path and fatal fallback before wiring any SYS_CFG or PIO read.
