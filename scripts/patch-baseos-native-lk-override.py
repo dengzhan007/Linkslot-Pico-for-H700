@@ -88,10 +88,14 @@ def patch_source(source: str) -> str:
         "\n"
     )
     helper_source = (
-        inspect.getsource(_a32_branch_target)
-        + "\n\n"
+        "IMAGE_BASE = 0x4a000000\\n"
+        "HEADER_END = 0x640\\n"
+        "VECTOR_OFFSET = 0x1000\\n"
+        "LOADER_EXTENT_BYTES = 0x8000\\n\\n"
+        + inspect.getsource(_a32_branch_target)
+        + "\\n\\n"
         + inspect.getsource(_validate_h700_lk_raw)
-        + "\n\n"
+        + "\\n\\n"
     )
     replace_once(fnv_block, fnv_block + helper_source, "FNV helper")
 
