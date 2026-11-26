@@ -579,6 +579,17 @@ SECTIONS
         "-DARM_ISA_ARMV7=1",
         "-DARCH_ARM=1",
     ]
+    # LK arch.c contains CP10/VFP MRC/MCR instructions, which are A32-only.
+    # Compile this architecture object in ARM state; keep H700 services and
+    # the generic MMU mapping objects in the normal Thumb-2 mode.
+    early_arch_flags = flags + [
+        "-ffunction-sections",
+        "-fdata-sections",
+        "-DARM_CPU_CORTEX_A53=1",
+        "-DARM_ISA_ARMV7=1",
+        "-DARCH_ARM=1",
+        "-D_SIZE_T_DEFINED_=1",
+    ]
     early_common_includes = [
         "-I", str(early_include),
         "-I", str(repo_root / "platform/h700/arch"),
@@ -596,7 +607,18 @@ SECTIONS
         )
         return obj
 
-    early_arch_obj = compile_early_thumb("h700-real-lk-arch", overlay_arch_c)
+    def compile_early_arm(name: str, source: Path) -> Path:
+        obj = out / (name + ".o")
+        run(
+            [
+                "clang", *early_arch_flags, *early_common_includes,
+                "-std=c11", "-c", str(source), "-o", str(obj),
+            ],
+            out / (name + ".log"),
+        )
+        return obj
+
+    early_arch_obj = compile_early_arm("h700-real-lk-arch", overlay_arch_c)
     early_mmu_obj = compile_early_thumb("h700-real-lk-mmu", lk / "arch/arm/mmu.c")
     early_pio_map_obj = compile_early_thumb(
         "h700-real-pio-mmu-map",
@@ -720,7 +742,7 @@ SECTIONS
         f"- target_early_init: 0x{early_symbols['target_early_init']:08x}; PI12 service: 0x{early_symbols['h700_rg34xx_power_led_early_init']:08x}.\n",
         f"- PI12 service-ready status word: 0x{early_symbols['h700_led_diag_status']:08x}.\n",
         "- Diagnostic kmain calls the real LK arch_early_init() first, then the real H700 target_early_init() hook; the latter calls the real PI12 service.\n",
-        "- The actual LK 4096-entry section table, arm_mmu_init(), H700 DRAM/SoC-MMIO section mapping and arch_enable_mmu() are linked; no mock MMU functions are used.\n",
+        "- The actual LK 4096-entry section table, arm_mmu_init(), H700 DRAM/SoC-MMIO section mapping and arch_enable_mmu() are linked; no mock MMU functions are used.\n",        "- Pinned LK arch.c is compiled in A32 state for its CP10/VFP register instructions; the H700 MMU/PIO/LED service C objects use Thumb-2 and are linked with interworking.\n",
         "- The H700 platform-header shim supplies only DRAM_PHY_ADDR=0x40000000 required by the generic pinned LK mmu.c; no MTK platform register implementation is linked.\n",
         "\n### Explicit limits\n\n",
         "- This is a minimal layout regression, not a bootable image or a full LK target. It deliberately omits thread_init_early(), the vendor-specific platform_early_init(), GIC/timer/console, heap, storage and the rest of kmain().\n",
