@@ -224,6 +224,8 @@ void thread_preempt(void) { }
     argument = symbol_address(nm, "BOOT_ARGUMENT_LOCATION")
     entry = symbol_address(nm, "lk_bl33_entry")
     end = symbol_address(nm, "_end")
+    abort_stack = symbol_address(nm, "abort_stack")
+    abort_stack_top = symbol_address(nm, "abort_stack_top")
     snapshot = symbol_address(nm, "h700_bl33_entry_snapshot")
     if start != IMAGE_BASE or vectors != IMAGE_BASE + VECTOR_BASE:
         raise RuntimeError(f"unexpected image/vector placement: start={start:#x}, vectors={vectors:#x}")
@@ -231,8 +233,19 @@ void thread_preempt(void) { }
         raise RuntimeError("LK vector/argument/entry placement overlaps the vendor header window")
     if end >= IMAGE_LIMIT:
         raise RuntimeError(f"LK layout exceeds BaseOS loader arena: end={end:#x}")
-    if snapshot < IMAGE_BASE or snapshot + 20 > end:
-        raise RuntimeError(f"entry snapshot is outside the linked image/BSS: {snapshot:#x}..{snapshot + 20:#x}")
+    if abort_stack_top - abort_stack != 8192:
+        raise RuntimeError(
+            f"CRT0 early abort/SVC stack must be 8 KiB: {abort_stack:#x}..{abort_stack_top:#x}"
+        )
+    if abort_stack < vectors or abort_stack_top > end:
+        raise RuntimeError(
+            f"CRT0 early stack is outside the linked post-vector BSS: {abort_stack:#x}..{abort_stack_top:#x}"
+        )
+    if snapshot < abort_stack_top or snapshot + 20 > end:
+        raise RuntimeError(
+            f"entry snapshot must follow the downward-growing early stack: "
+            f"stack_top={abort_stack_top:#x}, snapshot={snapshot:#x}..{snapshot + 20:#x}"
+        )
 
     binary = out / "lk-a32-bl33-layout.bin"
     run(["llvm-objcopy", "-O", "binary", str(elf), str(binary)])
@@ -297,7 +310,8 @@ void thread_preempt(void) { }
         f"- Entry branch at +0: target 0x{target:08x}.\n",
         f"- Relocated exception vector table: 0x{vectors:08x} (+0x{vectors-IMAGE_BASE:x}).\n",
         f"- Boot argument scratch: 0x{argument:08x}.\n",
-        f"- Entry snapshot BSS object: 0x{snapshot:08x} (five words, including publish-last magic).\n",
+        f"- Early CRT0 abort/SVC stack: 0x{abort_stack:08x}..0x{abort_stack_top:08x} (8 KiB; downward-growing).\\n",
+        f"- Entry snapshot BSS object: 0x{snapshot:08x} (five words; at/above stack top, magic publish-last).\\n",
         "- Entry capture records incoming SP/LR/r4/CPSR before VBAR setup; CRT0 publishes it after BSS clear and before kmain.\n",
         f"- Linked _end: 0x{end:08x}; flat image bytes: {len(data)}.\n",
         "- Synthetic overlay verified: bytes +4..+0x63f can be replaced by opaque header bytes while preserving the first branch and keeping vectors/entry outside the header area. The synthetic header is NOT the vendor header.\n",
