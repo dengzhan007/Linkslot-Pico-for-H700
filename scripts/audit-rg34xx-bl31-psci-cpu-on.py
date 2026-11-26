@@ -54,6 +54,13 @@ WORDS = {
     0x48008e70: 0xf8767b60, 0x48008e74: 0xb4000100,
     0x48008e78: 0xf861dae4, 0x48008e88: 0xd63f0080,
     0x48008e94: 0x910006d6, 0x48008e98: 0x17fffff3,
+    # SYSTEM_SUSPEND special entry prepares context and branches to SRAM.
+    0x48001b5c: 0x94005173, 0x48001b64: 0xd2803700,
+    0x48001b68: 0xa8c27bfd, 0x48001b6c: 0xf2a00040,
+    0x48001b70: 0xd61f0000,
+    # Ordinary power-down helper executes DSB; WFI; retry WFI.
+    0x48015d70: 0xd5033f9f, 0x48015d74: 0xd503207f,
+    0x48015d78: 0x17ffffff,
     # Slot 7 system-reset and slot 6 system-off helper calls.
     0x48002588: 0x97fffe50, 0x480025a8: 0x97fffe4c,
     0x48002858: 0x97fffc20, 0x48002874: 0x17ffff83,
@@ -127,6 +134,7 @@ DISASSEMBLY_WINDOWS = (
     ("suspend_afflvl2_wrapper", 0x48008a00, 0x100),
     ("system_suspend_power_entry", 0x48001a04, 0x300),
     ("normal_suspend_powerdown_helper", 0x48015d70, 0x80),
+    ("system_suspend_trampoline_prepare_helper", 0x48016128, 0x100),
     ("system_suspend_caller_full", 0x480096f8, 0xa0),
 
     ("ccu_save_helper", 0x48001790, 0x100),
@@ -257,6 +265,25 @@ def main() -> int:
             )
     if decode_bl_target(0x48009774, read_word(raw, 0x48009774)) != 0x48001a04:
         raise RuntimeError("SYSTEM_SUSPEND -4 power-entry target changed")
+    if decode_bl_target(0x48001b5c, read_word(raw, 0x48001b5c)) != 0x48016128:
+        raise RuntimeError("SYSTEM_SUSPEND trampoline preparation helper changed")
+    if read_word(raw, 0x48001b64) != 0xd2803700:
+        raise RuntimeError("SYSTEM_SUSPEND SRAM target MOV changed")
+    if read_word(raw, 0x48001b6c) != 0xf2a00040:
+        raise RuntimeError("SYSTEM_SUSPEND SRAM target MOVK changed")
+    if read_word(raw, 0x48001b70) != 0xd61f0000:
+        raise RuntimeError("SYSTEM_SUSPEND indirect SRAM branch changed")
+    sram_target = 0x1b8 | (0x2 << 16)
+    if sram_target != 0x000201b8:
+        raise RuntimeError("SYSTEM_SUSPEND SRAM target arithmetic changed")
+    normal_powerdown_words = {
+        0x48015d70: 0xd5033f9f,  # dsb sy
+        0x48015d74: 0xd503207f,  # wfi
+        0x48015d78: 0x17ffffff,  # b 0x48015d74
+    }
+    for address, expected in normal_powerdown_words.items():
+        if read_word(raw, address) != expected:
+            raise RuntimeError("ordinary suspend DSB/WFI loop changed at 0x%08x" % address)
     dispatch_words = {
         0x48009684: 0xf947e021,  # global ops pointer load
         0x48009688: 0xf9400021,  # slot 0 (+0x00)
@@ -452,6 +479,19 @@ def main() -> int:
                 "special_return_handler_call_pc": "0x48009774",
                 "special_return_handler_target": "0x48001a04",
                 "power_handler_disassembly": "included as system_suspend_power_entry",
+                "final_helper_call_pc": "0x48001b5c",
+                "final_helper_target": "0x48016128",
+                "final_indirect_branch_pc": "0x48001b70",
+                "final_indirect_branch_register": "x0",
+                "final_indirect_branch_target": "0x00000000000201b8",
+                "final_target_region": "outside the 0x48000000 BL31 payload; SRAM/ROM code identity is unverified",
+                "ordinary_powerdown_path": {
+                    "helper": "0x48015d70",
+                    "dsb_pc": "0x48015d70",
+                    "wfi_pc": "0x48015d74",
+                    "wfi_loop_branch_pc": "0x48015d78",
+                    "sequence": "DSB SY; WFI; branch back to WFI",
+                },
             },
             "interpretation": "eight legacy affinst/system power callbacks followed by a vendor get_sys_suspend_power_state extension; dispatch offsets and the exact embedded getter string identify slot 8",
         },
@@ -527,6 +567,8 @@ def main() -> int:
         "- SYSTEM_SUSPEND loads slot 8 at byte offset +0x40 (PC `0x4800971c`), calls it indirectly (PC `0x48009744`), receives `0x02010000`, then enters transition `0x48008d98`.",
         "- Transition `0x48008d98` iterates affinity levels from start to end through callback map `0x48017d70`; the three wrappers `0x48008b84/0x48008ab8/0x48008a00` dispatch platform slot 3 `affinst_suspend`.",
         "- For system state `0x02010000`, slot 3's CCU-save branch returns `-4`; caller checks that sentinel and invokes power-entry target `0x48001a04` at `0x48009774`.",
+        "- Ordinary suspend uses `0x48015d70`: `DSB SY` → `WFI` → branch back to WFI.",
+        "- The special handler `0x48001a04` prepares context, calls `0x48016128`, then computes target `0x201b8` and executes `br x0`; the target is outside the matched BL31 payload and is not yet identified as SRAM code, ROM code or a copied trampoline.",
         "- The effective ABI is the legacy Allwinner `plat_pm_ops_t` order with a vendor getter extension; the exact source commit is not identified.",
 
         "- Slot 1 affinst_on calls CPU_ON helper `0x48002d78` at `0x4800255c` when `W3 == 0`.",
@@ -547,7 +589,7 @@ def main() -> int:
         "- No hardware MMIO, flash, boot-media write or payload execution occurred.", "",
     ]
     (args.out.parent / "PSCI-CPU-ON.md").write_text("\n".join(markdown), encoding="utf-8")
-    print("PASS: legacy PSCI ABI, affinity-level suspend callbacks and -4 power-entry path")
+    print("PASS: legacy PSCI suspend dispatch, ordinary WFI loop and special SRAM branch")
     print("  table[1] = 0x%08x -> low-level 0x48002d78" % table[1])
     print("  callback disassembly = %s" % disassembly_path)
     print("  monitor SHA-256 = %s" % digest)

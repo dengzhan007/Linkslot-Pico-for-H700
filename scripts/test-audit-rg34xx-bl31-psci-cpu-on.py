@@ -60,6 +60,15 @@ def main() -> int:
     assert module.WORDS[0x48009770] == 0x54000081
     assert module.WORDS[0x48009774] == 0x97FFE0A4
     assert module.decode_bl_target(0x48009774, 0x97FFE0A4) == 0x48001A04
+    assert module.WORDS[0x48001B5C] == 0x94005173
+    assert module.WORDS[0x48001B64] == 0xD2803700
+    assert module.WORDS[0x48001B6C] == 0xF2A00040
+    assert module.WORDS[0x48001B70] == 0xD61F0000
+    assert module.decode_bl_target(0x48001B5C, 0x94005173) == 0x48016128
+    assert (0x1B8 | (0x2 << 16)) == 0x201B8
+    assert module.WORDS[0x48015D70] == 0xD5033F9F
+    assert module.WORDS[0x48015D74] == 0xD503207F
+    assert module.WORDS[0x48015D78] == 0x17FFFFFF
     assert module.WORDS[0x48002588] == 0x97FFFE50
     assert module.WORDS[0x480025A8] == 0x97FFFE4C
     assert module.WORDS[0x48009688] == 0xF9400021
@@ -97,6 +106,7 @@ def main() -> int:
     assert window_map["system_suspend_power_entry"][0] == 0x48001A04
     assert window_map["system_suspend_power_entry"][1] >= 0x300
     assert window_map["normal_suspend_powerdown_helper"][0] == 0x48015D70
+    assert window_map["system_suspend_trampoline_prepare_helper"][0] == 0x48016128
     assert window_map["system_suspend_caller_full"][0] == 0x480096F8
     assert "ops_slot_3_raw" in window_map
     assert window_map["ops_slot_3_raw"][0] <= 0x48002998 < window_map["ops_slot_3_raw"][0] + window_map["ops_slot_3_raw"][1]
@@ -114,7 +124,7 @@ def main() -> int:
         pass
     else:
         raise AssertionError("B instruction was incorrectly accepted as BL")
-    print("PASS: legacy PSCI ABI, affinity-level suspend callbacks and -4 power-entry path")
+    print("PASS: legacy PSCI suspend dispatch, ordinary WFI loop and special SRAM branch")
     return 0
 
 if __name__ == "__main__":
