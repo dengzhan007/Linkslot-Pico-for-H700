@@ -11,8 +11,8 @@ usage() {
 }
 
 [ "$#" -le 2 ] || usage
-OUTDIR="\${1:-}"
-SAMPLES="\${2:-600}"
+OUTDIR="${1:-}"
+SAMPLES="${2:-600}"
 
 case "$SAMPLES" in
     ''|*[!0-9]*) echo "error: SAMPLES must be an integer" >&2; exit 2 ;;

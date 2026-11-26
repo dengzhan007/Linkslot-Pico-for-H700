@@ -19,6 +19,9 @@ class GpioDebugfsReadOnlySafetyTests(unittest.TestCase):
         cls.lines = cls.source.splitlines()
 
     def test_reads_only_the_existing_debugfs_gpio_view(self):
+        self.assertIn('OUTDIR="${1:-}"', self.source)
+        self.assertIn('SAMPLES="${2:-600}"', self.source)
+        self.assertNotIn(r"\\${", self.source)
         self.assertIn('GPIO_DEBUG="/sys/kernel/debug/gpio"', self.source)
         self.assertIn('cat "$GPIO_DEBUG" > "$OUTDIR/preflight-gpio.txt"', self.source)
         self.assertIn('cat "$GPIO_DEBUG" >> "$SAMPLE_FILE"', self.source)
