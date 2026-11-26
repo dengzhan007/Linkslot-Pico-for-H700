@@ -142,8 +142,13 @@ direct branches from BL31's first entry.
   `0x48008640`. A second path repeats the slot selection at
   `0x480086a0..0x480086dc`.
 - In the standard TF-A `plat_psci_ops_t` layout, the second member is
-  `pwr_domain_on`. The selected callback is `0x4800254c); its BL at
+  `pwr_domain_on`. The selected callback is `0x4800254c`; its BL at
   `0x4800255c` reaches `0x48002d78`.
+- Table slot +56, the standard `pwr_domain_on_finish` member, is also
+  non-null at `0x48002574`. Standard TF-A PSCI setup advertises
+  `PSCI_CPU_ON_AARCH64`, FID `0xc4000003`, when both power-on callbacks
+  are non-null. The matched table satisfies that condition, subject to
+  the exact vendor implementation retaining the standard TF-A setup rule.
 - The low-level routine receives a target core index in `W0` and a
   non-secure entry address in `X1`. It programs a per-core RVBAR, then
   executes a SoC-selected power/reset sequence. One branch accesses
