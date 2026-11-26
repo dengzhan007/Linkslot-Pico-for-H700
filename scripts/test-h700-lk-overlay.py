@@ -167,7 +167,7 @@ def main() -> None:
     crt0_text = overlay_crt0.read_text(encoding="utf-8")
     if "ARM_CPU_CORTEX_A53" in crt0_text:
         raise RuntimeError("overlay unexpectedly guesses Cortex-A53 ACTLR.SMP setup")
-    entry_match = re.search(r"lk_bl33_entry:\\n(?P<body>.*?)\\nreset:", crt0_text, re.S)
+    entry_match = re.search(r"lk_bl33_entry:\n(?P<body>.*?)\nreset:", crt0_text, re.S)
     if entry_match is None:
         raise RuntimeError("BL33 entry wrapper is missing")
     entry_body = entry_match.group("body")
@@ -180,9 +180,9 @@ def main() -> None:
         raise RuntimeError("entry register capture must precede the VBAR write")
     if "stmia r0, {r8-r11}" not in crt0_text or "str r1, [r0, #16]" not in crt0_text:
         raise RuntimeError("CRT0 does not publish the four entry registers and publish-last magic")
-    clear_loop = re.search(r"blt\\s+\\.L__bss_loop", crt0_text)
+    clear_loop = re.search(r"blt\s+\.L__bss_loop", crt0_text)
     publish_pos = crt0_text.find("ldr r0, =h700_bl33_entry_snapshot")
-    kmain_pos = crt0_text.find("\\tbl\\t\\tkmain")
+    kmain_pos = crt0_text.search(/\bbl\s+kmain\b/)
     if clear_loop is None or publish_pos <= clear_loop.end():
         raise RuntimeError("entry snapshot must be published after the CRT0 BSS clear")
     if kmain_pos < 0 or publish_pos > kmain_pos:
