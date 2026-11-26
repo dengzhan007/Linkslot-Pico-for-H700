@@ -26,7 +26,7 @@
 - 瞬时 fps 56.378–65.836 的抖动符合单次采样差分只有 15/16 帧、±1 帧量化误差的特征；应以总帧差 / 总时间作为主要结果，不能将瞬时最小/最大解释成真实速度突变。
 - 每轮内存读取 8-byte 主指针 + 4-byte frameCounter，共 12 B；79 轮合计 **948 B**，低于 4096 B 预算。
 
-主指针全程恒定 `0x7f1c0ea4d0`，PID 22514、load bias `0x7f55ae0000`、map signature `8f7db48f8bb8ea5f` 均稳定。此处应注意：本次上传包只有 bias 与 map signature，没有附上游戏态首尾原始 `/proc/PID/maps` 行。因此 CSV 统计和指针采样可复算，bias 与 PT_LOAD 的三行交叉验证则目前仍是报告摘要级证据；建议后续补交 maps 首尾快照及三行地址，不需要重新读取进程内存。
+主指针全程恒定 `0x7f1c0ea4d0`，PID 22514、load bias `0x7f55ae0000`、map signature `8f7db48f8bb8ea5f` 均稳定。**原采样 PID 22514 的原始 maps 首尾快照仍未找回**，因此该 PID 的 bias 仍是原报告摘要级证据；不能把后续 PID 8064 的新 maps 当成 PID 22514 的回溯证明。2026-11-26 的独立 maps-only 补采使用新 PID 8064，两份 425 行快照中的 armGBA 四条映射逐字节一致，RX/R/RW 三行独立计算均得到新 bias `0x7f339a0000`，验证了同一 ELF 的 PT_LOAD 对齐与 bias 解算方法。详见 [MAPS-SUPPLEMENT.md](MAPS-SUPPLEMENT.md)。该补采没有读取 PID 8064 的进程内存，也没有重采 FPS。
 
 ## 3. Slot presents 日志复核
 
@@ -50,11 +50,25 @@
 - 后续清理时删除本轮创建的 `System/trace-latency.on`，再结束 Slot 和阻塞的 diagnostics helper；init respawn 得到 PID 8064。
 - 清理后 marker ABSENT、`SLOT_TRACE_LATENCY` 未设置、新 Slot 的 `presents/s` 行数为 0、`armgba` 映射为 0，报告记录 UI 正常。
 - 未重启整机；未修改 ROM、存档、用户配置和刷新率参数；未读写 PLL/TCON/CCU/PMIC；`hardware_applied=0`。
-- `SHA256SUMS.txt` 中 9 个文件已按原始 base64 字节逐一复核，全部匹配。
+- `SHA256SUMS.txt` 中列出的 **13 个文件**已独立复算 SHA-256，全部与清单逐字节匹配；包含新增两份 maps 快照和 `MAPS-SUPPLEMENT.md`。
 
 ## 6. 与项目决策的关系
 
 1. 不再把 UI FPS、core FPS、LCD IRQ 合并成一个 FPS。三项结果现在都有真实运行时测量。
 2. 这台 RG34XX 本次仍表现为 UI/GAME 约 60 Hz / 60 fps；120 Hz 不仅未启用，也没有任何数据支持已进入 120-Hz 模式。
 3. 后续 120-Hz 工作应继续先闭合 panel allowlist 与 kernel/TCON/PLL 兼容性；不得因为 FPS 采样结果接近 60 就放宽面板 gate 或试写寄存器。
-4. 数据补全只需追加原始 maps 首尾行和设备 DT/CPU 身份输出，不需要重跑内存 sampler 或提高采样频率。
+4. 原始 PID 22514 的 maps 快照无法回溯；新 PID 8064 的 maps-only 补采已独立验证 ELF 映射行与 bias 算法，但不替代旧 PID 的原始证据。无需重跑内存 sampler 或提高采样频率。
+
+
+## 7. maps-only 独立补采（2026-11-26）
+
+原始 PID 22514 的两份完整 `/proc/PID/maps` 快照未在本地采集缓存中找回，故继续将旧 PID 的 `0x7f55ae0000` bias 保留为摘要级证据，不将新采集混作旧采集。
+
+本次独立补采使用同一 RG34XX 的新 Slot PID **8064**，同一 ROM `CT特种部队1.gba` 与同一官方 armGBA core。首尾各保存一份完整 maps（均 425 行）；两份快照的 armGBA 四条映射逐字节相同，SHA-256 分别为：
+
+- `armgba-maps-supplement-first.txt`: `5b2ff0a9cf21350ef314f7c1d07fddffdcdaedbf42b98a27b6a6095a97ff2e75`
+- `armgba-maps-supplement-last.txt`: `401362c79fe7dcbf3e37cc2502280741155105a5378e8f74317f09e6e593682d`
+
+三行 PT_LOAD 映射交叉计算：RX `0x7f339a0000 - 0x0`、R `0x7f33b25000 - 0x185000`、RW `0x7f33b28000 - 0x188000`，均为 **`0x7f339a0000`**。这是新进程 ASLR 下的独立验证，不应与旧 PID bias 相等，也不能反推旧 bias 的原始 maps。
+
+采集后长按 Menu 退出游戏；PID 8064 仍存活并回到 UI，armGBA 映射归零，marker ABSENT，`SLOT_TRACE_LATENCY` 未设置。未重采 FPS、未读取 `/proc/PID/mem`、未重启或杀死 Slot、未改用户数据；无任何 PLL/TCON/CCU/PMIC 写入，`hardware_applied=0`。设备身份与完整安全边界见 [MAPS-SUPPLEMENT.md](MAPS-SUPPLEMENT.md)。
