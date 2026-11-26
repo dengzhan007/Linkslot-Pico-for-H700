@@ -59,6 +59,7 @@ STRINGS = (
 )
 
 DISASSEMBLY_WINDOWS = (
+    ("ops_slot_0_raw", 0x48002510, 0x3c),
     ("ops_slot_1_cpu_on", 0x4800254c, 0x100),
     ("ops_slot_2_raw", 0x4800264c, 0x100),
     ("ops_slot_3_raw", 0x48002878, 0x180),
@@ -71,6 +72,12 @@ DISASSEMBLY_WINDOWS = (
     ("ccu_restore_helper", 0x480018d8, 0x100),
     ("restore_callsite_context", 0x48002838, 0x80),
     ("save_callsite_context", 0x48002978, 0x80),
+    ("psci_dispatch_cpu_on_primary", 0x480085e0, 0x90),
+    ("psci_dispatch_cpu_on_secondary", 0x48008690, 0x80),
+    ("psci_dispatch_smc_range", 0x48007f00, 0x900),
+    ("psci_platform_registration", 0x48009dc0, 0x80),
+    ("power_system_off_helper", 0x48001ec8, 0x60),
+    ("power_cpu_off_helper", 0x48001ed8, 0x60),
 )
 
 def read_word(raw: bytes, address: int) -> int:

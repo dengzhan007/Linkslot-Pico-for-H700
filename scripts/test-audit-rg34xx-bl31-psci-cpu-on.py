@@ -25,6 +25,13 @@ def main() -> int:
     # remain unclassified until the exact vendor TF-A ABI is identified.
     assert module.EXPECTED_TABLE[7] == 0x48002574
     window_map = {name: (start, size) for name, start, size in module.DISASSEMBLY_WINDOWS}
+    assert "ops_slot_0_raw" in window_map
+    assert window_map["ops_slot_0_raw"][0] == 0x48002510
+    assert window_map["psci_dispatch_cpu_on_primary"][0] <= 0x48008608
+    assert window_map["psci_dispatch_cpu_on_secondary"][0] <= 0x480086a0
+    assert window_map["psci_platform_registration"][0] <= 0x48009dec
+    assert window_map["power_system_off_helper"][0] == 0x48001ec8
+    assert window_map["power_cpu_off_helper"][0] == 0x48001ed8
     assert "ops_slot_3_raw" in window_map
     assert window_map["ops_slot_3_raw"][0] <= 0x48002998 < window_map["ops_slot_3_raw"][0] + window_map["ops_slot_3_raw"][1]
     assert window_map["ops_slot_5_raw"][0] <= 0x48002858 < window_map["ops_slot_5_raw"][0] + window_map["ops_slot_5_raw"][1]
