@@ -1,0 +1,751 @@
+{
+  "_note": "Sanitised extract of the expanded H700 FDT inspector output. Only input_devices is retained.",
+  "source_live_fdt_sha256": "c17f896f60e2f50eada76c3db6005ea05e149238bf225379a9dc517212088449",
+  "source_live_fdt_bytes": 143936,
+  "fdt_totalsize": 143936,
+  "fdt_node_count": 573,
+  "model": [
+    "sun50iw9"
+  ],
+  "compatible": [
+    "allwinner,h616",
+    "arm,sun50iw9p1"
+  ],
+  "collected_utc": "2026-11-26T04:34:21Z",
+  "redaction": {
+    "removed_top_level_keys": [
+      "chosen_bootargs",
+      "file"
+    ],
+    "reason": "chosen_bootargs contained snum= and androidboot.serialno= device serial numbers; file contained the local Windows build path with the workstation user name. All mac_addr/wifi_mac/bt_mac entries were empty in this capture and are not reproduced."
+  },
+  "input_devices": {
+    "analog_key_controllers": [
+      {
+        "channel_count": 1,
+        "channel_select": 1,
+        "clock_cells": [
+          213
+        ],
+        "compatible": [
+          "allwinner,sunxi-gpadc"
+        ],
+        "interrupt_cells": [
+          0,
+          18,
+          0
+        ],
+        "key_count": 5,
+        "node": "/soc@03000000/gpadc",
+        "reg_cells": [
+          0,
+          84344832,
+          0,
+          1024
+        ],
+        "status": "disabled"
+      },
+      {
+        "channel_count": null,
+        "channel_select": null,
+        "clock_cells": [
+          214
+        ],
+        "compatible": [
+          "allwinner,keyboard_1350mv"
+        ],
+        "interrupt_cells": [
+          0,
+          20,
+          0
+        ],
+        "key_count": 5,
+        "node": "/soc@03000000/keyboard",
+        "reg_cells": [
+          0,
+          84346880,
+          0,
+          1024
+        ],
+        "status": "disable"
+      }
+    ],
+    "gpio_controllers": [
+      {
+        "compatible": [
+          "allwinner,sun50iw9p1-pinctrl"
+        ],
+        "gpio_cells": 6,
+        "interrupt_cells": 3,
+        "node": "/soc@03000000/pinctrl@0300b000",
+        "reg_cells": [
+          0,
+          50376704,
+          0,
+          1024
+        ],
+        "status": "okay"
+      },
+      {
+        "compatible": [
+          "allwinner,sun50iw9p1-r-pinctrl"
+        ],
+        "gpio_cells": 6,
+        "interrupt_cells": 3,
+        "node": "/soc@03000000/pinctrl@07022000",
+        "reg_cells": [
+          0,
+          117579776,
+          0,
+          1024
+        ],
+        "status": "okay"
+      },
+      {
+        "compatible": [],
+        "gpio_cells": 6,
+        "interrupt_cells": null,
+        "node": "/soc@03000000/twi@0x07081400/pmu/axp_gpio@0",
+        "reg_cells": [],
+        "status": "okay"
+      }
+    ],
+    "gpio_key_devices": [
+      {
+        "compatible": [
+          "gpio-keys-polled"
+        ],
+        "keys": [
+          {
+            "gpios": [
+              {
+                "active_low": true,
+                "argument_count": 6,
+                "arguments": [
+                  0,
+                  0,
+                  0,
+                  1,
+                  2,
+                  1
+                ],
+                "bank_index": 0,
+                "bank_letter": "A",
+                "controller_compatible": [
+                  "allwinner,sun50iw9p1-pinctrl"
+                ],
+                "controller_node": "/soc@03000000/pinctrl@0300b000",
+                "drive_level": 2,
+                "gpio_flags": 1,
+                "mux_select": 0,
+                "phandle": "0x4b",
+                "pin_index": 0,
+                "pin_name": "PA0",
+                "pull_config": 1
+              }
+            ],
+            "input_type": 1,
+            "input_type_name": "EV_KEY",
+            "input_value": 1,
+            "label": "GPIO Key a",
+            "linux_code": 304,
+            "node": "/soc@03000000/gpio_keys/keyA",
+            "status": "okay"
+          },
+          {
+            "gpios": [
+              {
+                "active_low": true,
+                "argument_count": 6,
+                "arguments": [
+                  0,
+                  1,
+                  0,
+                  1,
+                  2,
+                  1
+                ],
+                "bank_index": 0,
+                "bank_letter": "A",
+                "controller_compatible": [
+                  "allwinner,sun50iw9p1-pinctrl"
+                ],
+                "controller_node": "/soc@03000000/pinctrl@0300b000",
+                "drive_level": 2,
+                "gpio_flags": 1,
+                "mux_select": 0,
+                "phandle": "0x4b",
+                "pin_index": 1,
+                "pin_name": "PA1",
+                "pull_config": 1
+              }
+            ],
+            "input_type": 1,
+            "input_type_name": "EV_KEY",
+            "input_value": 1,
+            "label": "GPIO Key b",
+            "linux_code": 305,
+            "node": "/soc@03000000/gpio_keys/keyB",
+            "status": "okay"
+          },
+          {
+            "gpios": [
+              {
+                "active_low": true,
+                "argument_count": 6,
+                "arguments": [
+                  4,
+                  0,
+                  0,
+                  1,
+                  2,
+                  1
+                ],
+                "bank_index": 4,
+                "bank_letter": "E",
+                "controller_compatible": [
+                  "allwinner,sun50iw9p1-pinctrl"
+                ],
+                "controller_node": "/soc@03000000/pinctrl@0300b000",
+                "drive_level": 2,
+                "gpio_flags": 1,
+                "mux_select": 0,
+                "phandle": "0x4b",
+                "pin_index": 0,
+                "pin_name": "PE0",
+                "pull_config": 1
+              }
+            ],
+            "input_type": 3,
+            "input_type_name": "EV_ABS",
+            "input_value": 1,
+            "label": "GPIO Key Down",
+            "linux_code": 17,
+            "node": "/soc@03000000/gpio_keys/keyDOWN",
+            "status": "okay"
+          },
+          {
+            "gpios": [
+              {
+                "active_low": true,
+                "argument_count": 6,
+                "arguments": [
+                  0,
+                  10,
+                  0,
+                  1,
+                  2,
+                  1
+                ],
+                "bank_index": 0,
+                "bank_letter": "A",
+                "controller_compatible": [
+                  "allwinner,sun50iw9p1-pinctrl"
+                ],
+                "controller_node": "/soc@03000000/pinctrl@0300b000",
+                "drive_level": 2,
+                "gpio_flags": 1,
+                "mux_select": 0,
+                "phandle": "0x4b",
+                "pin_index": 10,
+                "pin_name": "PA10",
+                "pull_config": 1
+              }
+            ],
+            "input_type": 1,
+            "input_type_name": "EV_KEY",
+            "input_value": 1,
+            "label": "GPIO Key L1",
+            "linux_code": 308,
+            "node": "/soc@03000000/gpio_keys/keyL1",
+            "status": "okay"
+          },
+          {
+            "gpios": [
+              {
+                "active_low": true,
+                "argument_count": 6,
+                "arguments": [
+                  0,
+                  11,
+                  0,
+                  1,
+                  2,
+                  1
+                ],
+                "bank_index": 0,
+                "bank_letter": "A",
+                "controller_compatible": [
+                  "allwinner,sun50iw9p1-pinctrl"
+                ],
+                "controller_node": "/soc@03000000/pinctrl@0300b000",
+                "drive_level": 2,
+                "gpio_flags": 1,
+                "mux_select": 0,
+                "phandle": "0x4b",
+                "pin_index": 11,
+                "pin_name": "PA11",
+                "pull_config": 1
+              }
+            ],
+            "input_type": 1,
+            "input_type_name": "EV_KEY",
+            "input_value": 1,
+            "label": "GPIO Key L2",
+            "linux_code": 314,
+            "node": "/soc@03000000/gpio_keys/keyL2",
+            "status": "okay"
+          },
+          {
+            "gpios": [
+              {
+                "active_low": true,
+                "argument_count": 6,
+                "arguments": [
+                  0,
+                  8,
+                  0,
+                  1,
+                  2,
+                  1
+                ],
+                "bank_index": 0,
+                "bank_letter": "A",
+                "controller_compatible": [
+                  "allwinner,sun50iw9p1-pinctrl"
+                ],
+                "controller_node": "/soc@03000000/pinctrl@0300b000",
+                "drive_level": 2,
+                "gpio_flags": 1,
+                "mux_select": 0,
+                "phandle": "0x4b",
+                "pin_index": 8,
+                "pin_name": "PA8",
+                "pull_config": 1
+              }
+            ],
+            "input_type": 3,
+            "input_type_name": "EV_ABS",
+            "input_value": -1,
+            "label": "GPIO Key left",
+            "linux_code": 16,
+            "node": "/soc@03000000/gpio_keys/keyLeft",
+            "status": "okay"
+          },
+          {
+            "gpios": [
+              {
+                "active_low": true,
+                "argument_count": 6,
+                "arguments": [
+                  4,
+                  3,
+                  0,
+                  1,
+                  2,
+                  1
+                ],
+                "bank_index": 4,
+                "bank_letter": "E",
+                "controller_compatible": [
+                  "allwinner,sun50iw9p1-pinctrl"
+                ],
+                "controller_node": "/soc@03000000/pinctrl@0300b000",
+                "drive_level": 2,
+                "gpio_flags": 1,
+                "mux_select": 0,
+                "phandle": "0x4b",
+                "pin_index": 3,
+                "pin_name": "PE3",
+                "pull_config": 1
+              }
+            ],
+            "input_type": 1,
+            "input_type_name": "EV_KEY",
+            "input_value": 1,
+            "label": "GPIO Key Menu",
+            "linux_code": 312,
+            "node": "/soc@03000000/gpio_keys/keyMenu",
+            "status": "okay"
+          },
+          {
+            "gpios": [
+              {
+                "active_low": true,
+                "argument_count": 6,
+                "arguments": [
+                  0,
+                  12,
+                  0,
+                  1,
+                  2,
+                  1
+                ],
+                "bank_index": 0,
+                "bank_letter": "A",
+                "controller_compatible": [
+                  "allwinner,sun50iw9p1-pinctrl"
+                ],
+                "controller_node": "/soc@03000000/pinctrl@0300b000",
+                "drive_level": 2,
+                "gpio_flags": 1,
+                "mux_select": 0,
+                "phandle": "0x4b",
+                "pin_index": 12,
+                "pin_name": "PA12",
+                "pull_config": 1
+              }
+            ],
+            "input_type": 1,
+            "input_type_name": "EV_KEY",
+            "input_value": 1,
+            "label": "GPIO Key R1",
+            "linux_code": 309,
+            "node": "/soc@03000000/gpio_keys/keyR1",
+            "status": "okay"
+          },
+          {
+            "gpios": [
+              {
+                "active_low": true,
+                "argument_count": 6,
+                "arguments": [
+                  0,
+                  7,
+                  0,
+                  1,
+                  2,
+                  1
+                ],
+                "bank_index": 0,
+                "bank_letter": "A",
+                "controller_compatible": [
+                  "allwinner,sun50iw9p1-pinctrl"
+                ],
+                "controller_node": "/soc@03000000/pinctrl@0300b000",
+                "drive_level": 2,
+                "gpio_flags": 1,
+                "mux_select": 0,
+                "phandle": "0x4b",
+                "pin_index": 7,
+                "pin_name": "PA7",
+                "pull_config": 1
+              }
+            ],
+            "input_type": 1,
+            "input_type_name": "EV_KEY",
+            "input_value": 1,
+            "label": "GPIO Key R2",
+            "linux_code": 315,
+            "node": "/soc@03000000/gpio_keys/keyR2",
+            "status": "okay"
+          },
+          {
+            "gpios": [
+              {
+                "active_low": true,
+                "argument_count": 6,
+                "arguments": [
+                  0,
+                  9,
+                  0,
+                  1,
+                  2,
+                  1
+                ],
+                "bank_index": 0,
+                "bank_letter": "A",
+                "controller_compatible": [
+                  "allwinner,sun50iw9p1-pinctrl"
+                ],
+                "controller_node": "/soc@03000000/pinctrl@0300b000",
+                "drive_level": 2,
+                "gpio_flags": 1,
+                "mux_select": 0,
+                "phandle": "0x4b",
+                "pin_index": 9,
+                "pin_name": "PA9",
+                "pull_config": 1
+              }
+            ],
+            "input_type": 3,
+            "input_type_name": "EV_ABS",
+            "input_value": 1,
+            "label": "GPIO Key right",
+            "linux_code": 16,
+            "node": "/soc@03000000/gpio_keys/keyRight",
+            "status": "okay"
+          },
+          {
+            "gpios": [
+              {
+                "active_low": true,
+                "argument_count": 6,
+                "arguments": [
+                  0,
+                  5,
+                  0,
+                  1,
+                  2,
+                  1
+                ],
+                "bank_index": 0,
+                "bank_letter": "A",
+                "controller_compatible": [
+                  "allwinner,sun50iw9p1-pinctrl"
+                ],
+                "controller_node": "/soc@03000000/pinctrl@0300b000",
+                "drive_level": 2,
+                "gpio_flags": 1,
+                "mux_select": 0,
+                "phandle": "0x4b",
+                "pin_index": 5,
+                "pin_name": "PA5",
+                "pull_config": 1
+              }
+            ],
+            "input_type": 1,
+            "input_type_name": "EV_KEY",
+            "input_value": 1,
+            "label": "GPIO Key select",
+            "linux_code": 310,
+            "node": "/soc@03000000/gpio_keys/keySEl",
+            "status": "okay"
+          },
+          {
+            "gpios": [
+              {
+                "active_low": true,
+                "argument_count": 6,
+                "arguments": [
+                  0,
+                  4,
+                  0,
+                  1,
+                  2,
+                  1
+                ],
+                "bank_index": 0,
+                "bank_letter": "A",
+                "controller_compatible": [
+                  "allwinner,sun50iw9p1-pinctrl"
+                ],
+                "controller_node": "/soc@03000000/pinctrl@0300b000",
+                "drive_level": 2,
+                "gpio_flags": 1,
+                "mux_select": 0,
+                "phandle": "0x4b",
+                "pin_index": 4,
+                "pin_name": "PA4",
+                "pull_config": 1
+              }
+            ],
+            "input_type": 1,
+            "input_type_name": "EV_KEY",
+            "input_value": 1,
+            "label": "GPIO Key start",
+            "linux_code": 311,
+            "node": "/soc@03000000/gpio_keys/keyStart",
+            "status": "okay"
+          },
+          {
+            "gpios": [
+              {
+                "active_low": true,
+                "argument_count": 6,
+                "arguments": [
+                  0,
+                  6,
+                  0,
+                  1,
+                  2,
+                  1
+                ],
+                "bank_index": 0,
+                "bank_letter": "A",
+                "controller_compatible": [
+                  "allwinner,sun50iw9p1-pinctrl"
+                ],
+                "controller_node": "/soc@03000000/pinctrl@0300b000",
+                "drive_level": 2,
+                "gpio_flags": 1,
+                "mux_select": 0,
+                "phandle": "0x4b",
+                "pin_index": 6,
+                "pin_name": "PA6",
+                "pull_config": 1
+              }
+            ],
+            "input_type": 3,
+            "input_type_name": "EV_ABS",
+            "input_value": -1,
+            "label": "GPIO Key Up",
+            "linux_code": 17,
+            "node": "/soc@03000000/gpio_keys/keyUP",
+            "status": "okay"
+          },
+          {
+            "gpios": [
+              {
+                "active_low": true,
+                "argument_count": 6,
+                "arguments": [
+                  4,
+                  1,
+                  0,
+                  1,
+                  2,
+                  1
+                ],
+                "bank_index": 4,
+                "bank_letter": "E",
+                "controller_compatible": [
+                  "allwinner,sun50iw9p1-pinctrl"
+                ],
+                "controller_node": "/soc@03000000/pinctrl@0300b000",
+                "drive_level": 2,
+                "gpio_flags": 1,
+                "mux_select": 0,
+                "phandle": "0x4b",
+                "pin_index": 1,
+                "pin_name": "PE1",
+                "pull_config": 1
+              }
+            ],
+            "input_type": 1,
+            "input_type_name": "EV_KEY",
+            "input_value": 1,
+            "label": "GPIO Key Vol up",
+            "linux_code": 115,
+            "node": "/soc@03000000/gpio_keys/keyVol+",
+            "status": "okay"
+          },
+          {
+            "gpios": [
+              {
+                "active_low": true,
+                "argument_count": 6,
+                "arguments": [
+                  0,
+                  3,
+                  0,
+                  1,
+                  2,
+                  1
+                ],
+                "bank_index": 0,
+                "bank_letter": "A",
+                "controller_compatible": [
+                  "allwinner,sun50iw9p1-pinctrl"
+                ],
+                "controller_node": "/soc@03000000/pinctrl@0300b000",
+                "drive_level": 2,
+                "gpio_flags": 1,
+                "mux_select": 0,
+                "phandle": "0x4b",
+                "pin_index": 3,
+                "pin_name": "PA3",
+                "pull_config": 1
+              }
+            ],
+            "input_type": 1,
+            "input_type_name": "EV_KEY",
+            "input_value": 1,
+            "label": "GPIO Key x",
+            "linux_code": 306,
+            "node": "/soc@03000000/gpio_keys/keyX",
+            "status": "okay"
+          },
+          {
+            "gpios": [
+              {
+                "active_low": true,
+                "argument_count": 6,
+                "arguments": [
+                  0,
+                  2,
+                  0,
+                  1,
+                  2,
+                  1
+                ],
+                "bank_index": 0,
+                "bank_letter": "A",
+                "controller_compatible": [
+                  "allwinner,sun50iw9p1-pinctrl"
+                ],
+                "controller_node": "/soc@03000000/pinctrl@0300b000",
+                "drive_level": 2,
+                "gpio_flags": 1,
+                "mux_select": 0,
+                "phandle": "0x4b",
+                "pin_index": 2,
+                "pin_name": "PA2",
+                "pull_config": 1
+              }
+            ],
+            "input_type": 1,
+            "input_type_name": "EV_KEY",
+            "input_value": 1,
+            "label": "GPIO Key y",
+            "linux_code": 307,
+            "node": "/soc@03000000/gpio_keys/keyY",
+            "status": "okay"
+          },
+          {
+            "gpios": [
+              {
+                "active_low": true,
+                "argument_count": 6,
+                "arguments": [
+                  4,
+                  2,
+                  0,
+                  1,
+                  2,
+                  1
+                ],
+                "bank_index": 4,
+                "bank_letter": "E",
+                "controller_compatible": [
+                  "allwinner,sun50iw9p1-pinctrl"
+                ],
+                "controller_node": "/soc@03000000/pinctrl@0300b000",
+                "drive_level": 2,
+                "gpio_flags": 1,
+                "mux_select": 0,
+                "phandle": "0x4b",
+                "pin_index": 2,
+                "pin_name": "PE2",
+                "pull_config": 1
+              }
+            ],
+            "input_type": 1,
+            "input_type_name": "EV_KEY",
+            "input_value": 1,
+            "label": "GPIO Key vol down",
+            "linux_code": 114,
+            "node": "/soc@03000000/gpio_keys/keyvol-",
+            "status": "okay"
+          }
+        ],
+        "label": "ANBERNIC-keys",
+        "node": "/soc@03000000/gpio_keys",
+        "poll_interval_ms": 20,
+        "status": "okay"
+      }
+    ],
+    "note": "Static device-tree declarations only. These fields do not prove live pin mux/pull readback, electrical polarity, runtime driver binding, physical key operation, or ADC calibration.",
+    "pmic_power_keys": [
+      {
+        "compatible": [
+          "x-powers,axp2101-pek"
+        ],
+        "interrupt_cells": [],
+        "node": "/soc@03000000/twi@0x07081400/pmu/powerkey@0",
+        "reg_cells": [],
+        "status": "okay"
+      }
+    ]
+  }
+}

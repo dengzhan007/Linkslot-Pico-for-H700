@@ -1,0 +1,41 @@
+# Sensitivity scan - rg34xx-input-fdt-20261126
+# generated: 2026-11-26T04:35:09Z
+# source: local inventory capture, live-fdt.json (path omitted; not published)
+# the device serial is never echoed in this file; it is identified only by length (19 chars)
+# and is matched by exact value against the files below
+
+## 1. Raw live-fdt.json (reference, NOT published)
+pattern [device-serial, 19 chars]        hits=2   # snum= and androidboot.serialno=
+pattern [colon-hex MAC]                     hits=0
+pattern [snum=]                             hits=1
+pattern [androidboot.serialno=]             hits=1
+pattern [mac_addr=]                         hits=1
+pattern [wifi_mac=]                         hits=1
+pattern [bt_mac=]                           hits=1
+pattern [workstation-user]                  hits=0
+
+## 2. Published files in this directory
+-- INPUT-DEVICES.md
+   device-serial          hits=0
+   colon-hex MAC          hits=0
+   workstation-user       hits=0
+   repo/workstation path  hits=0
+-- live-fdt-input-devices.json
+   device-serial          hits=0
+   colon-hex MAC          hits=0
+   workstation-user       hits=0
+   repo/workstation path  hits=0
+-- README.md
+   device-serial          hits=0
+   colon-hex MAC          hits=0
+   workstation-user       hits=0
+   repo/workstation path  hits=0
+
+## 3. This file
+sensitivity-scan.txt contains only pattern names, counts and the serial length.
+It does not embed the serial, any MAC value, or any absolute local path.
+
+Result: 0 hits for the device serial, colon-hex MAC strings and workstation identifiers in
+every published content file. The only occurrences of 'snum=', 'androidboot.serialno=' and
+'mac_addr=' are field names inside the redaction note in INPUT-DEVICES.md and the JSON
+provenance block, with no value following the '='.
