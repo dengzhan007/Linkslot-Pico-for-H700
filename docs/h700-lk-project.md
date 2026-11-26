@@ -500,3 +500,18 @@ passed 81/81, artifact [15123653120](https://github.com/dengzhan007/Linkslot-Pic
 H700 three-ABI compile and host checks [#45834208274](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208274)
 and Linux/Windows audit [#45834060935](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834060935)
 passed. This is still not an actual packaged diagnostic or device boot.
+
+
+## 2026-11-26 real early-MMU + PI12 layout link validation
+
+The latest full feasibility [#45843270056](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45843270056) passed 81/81 with no failures or skipped steps; artifact [15131735148](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45843270056/artifacts/15131735148). H700 AArch64/AArch32 ARM/Thumb-2 compile + host regression [#45843270266](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45843270266) passed.
+
+A second minimal ELF now links the pinned LK's actual `arch_early_init()`, ARM section-table MMU/cache/CP15 implementations, H700 DRAM size provider and Device-section MMU mapping, and the real RG34XX target early-init / PI12 power LED service. It verifies the real call order (LK architecture/MMU initialization before the target PI12 hook), not a mock MMU call.
+
+- Raw file: 7,912 bytes; 24,856 bytes of headroom in the active 32 KiB native loader extent.
+- Real LK 4096-entry section table address: `0x4a008000`, 16 KiB aligned.
+- Linked `_end`: `0x4a00c024`, runtime span `0xc024` bytes.
+- MMU ordering: map sections/TLBI → DSB → enable MMU → ISB.
+- LK early architecture and H700 C services compile as Thumb-2; FPEXC VMRS/VMSR instructions are used. Exception vectors and SYS_CFG probe assembly remain A32.
+
+Still not a bootable target: no thread/scheduler, vendor platform_early_init, GIC, timer, console, heap or storage. The 32 KiB loader extent is a file limit only; the `0x4a000000..0x4a0e0000` link bound is not an allocation grant. Do not set `H700_MEMORY_LAYOUT_APPROVED`, produce an installable image or execute until early APB1/PIO access, BL31/Boot0 memory ownership and secondary-core hold-off/SMP are independently resolved.

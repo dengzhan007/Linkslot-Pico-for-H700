@@ -2,7 +2,7 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-26。最新完整 Linkslot/LK feasibility [#45834208280](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280) 在提交 `625e9181d493445fcbff77a140830cad428aa44f` 上 **81/81 steps 成功（0 failures / 0 skipped）**，产物 [15123653120](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280/artifacts/15123653120)（387,946,289 bytes）；H700 AArch32/AArch64 compile check [#45834208274](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208274) 成功；H700 boot-audit Linux/Windows [#45834060935](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834060935) 成功。以上为 host/cross-build、A32 ELF overlay/link、静态审计和工具回归，不代表完整 LK target image 已刷写或设备已启动。reports 分支已有脱敏 live FDT、GICv2/VGIC 与 architected timer PPI 映射；真实 BL31→LK 权限/中断归属、SYS_CFG 总线/安全访问权限仍未由实机 LK 探测证明。当前 A32 BL33 入口仍以 SVC / SPSR 0x1d3 作为待实机验证模型，Linux 后续 A64 handoff 的 0x3c5 不适用。
+**最后核对时间：** 2026-11-26。当前验证基线 `1396930d314ceb09d0736d1b6cbb5a5dca66e789` 的完整 Linkslot/LK feasibility [#45843270056](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45843270056) **81/81 steps 成功（0 failures / 0 skipped）**，产物 [15131735148](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45843270056/artifacts/15131735148)（387,985,474 bytes）；H700 AArch64/AArch32 ARM/Thumb-2 compile + host regressions [#45843270266](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45843270266) 成功。新增真实 LK early-MMU + RG34XX PI12 target-hook layout test：raw ELF 7,912 bytes（32 KiB loader extent 余量 24,856 bytes），真实 LK section table `tt=0x4a008000`（16 KiB aligned），`_end=0x4a00c024`。这仍是 minimal source/layout ELF，不是完整 LK、可刷写 firmware 或设备启动。APB1/PIO BL33 handoff 时钟、BL31/Boot0 内存所有权、次级 A53 核状态与 SMP 仍未关闭；`hardware_applied=0`。
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
@@ -1191,3 +1191,36 @@ feasibility [#45834208280](https://github.com/dengzhan007/Linkslot-Pico-for-H700
 `0x4a0e0000` 运行时链接内存上界分开报告。H700 compile #45834208274
 及 boot-audit #45834060935 均成功。没有执行诊断函数或实机寄存器读取；
 `hardware_applied=0`。
+
+
+## 2026-11-26 真实 LK early-MMU + RG34XX PI12 layout 验收（当前续接点）
+
+**当前代码/验证基线：** `1396930d314ceb09d0736d1b6cbb5a5dca66e789`。
+
+### 已完成
+
+- 完整 Linkslot/LK feasibility [#45843270056](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45843270056)：**81/81 steps completed，0 failures，0 skipped**；artifact [15131735148](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45843270056/artifacts/15131735148)（387,985,474 bytes）。
+- H700 AArch64、AArch32 ARM-state、AArch32 Thumb-2 freestanding compile 与 storage/board host regressions [#45843270266](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45843270266)：success。
+- 新增第二个真实 early-init layout ELF：链接 pinned GammaOS LK 的真实 `arch_early_init()`、`arm_mmu_init()`、`arm_mmu_map_section()`、cache/CP15 汇编对象，以及 H700 的 `platform_init_mmu_mappings()`、`physical_memory_size()`、RG34XX `target_early_init()` 和 PI12 LED service。此测试没有 mock MMU 函数。
+- 反汇编/符号检查确认 diagnostic `kmain()` 先调用 LK `arch_early_init()`（完成真实 section-table setup、DRAM/SoC MMIO identity mappings、DSB → MMU enable → ISB），再调用 H700 `target_early_init()` 和 PI12 服务。
+- raw flat ELF **7,912 bytes**，当前 loader raw-file extent 32,768 bytes，剩余 **24,856 bytes**。真实 LK section table `tt=0x4a008000`，16 KiB 对齐；链接 `_end=0x4a00c024`，image-base 到 `_end` 的内存跨度为 `0xc024` bytes。raw 文件长度与 BSS/page-table runtime footprint 是不同指标。
+- LK `arch.c` 与 H700 early-MMU/PIO/LED C 对象按 Thumb-2 编译；FPEXC 访问用 VMRS/VMSR；原始 exception vectors 和固定 SYS_CFG probe assembly 仍为 A32。
+- MMU 更新顺序已补齐：写完页表 descriptor/TLBI 后 DSB，调用 `arch_enable_mmu()` 后 ISB。H700 ARM/AArch64 编译与 host regression 通过。
+
+### 当前阻塞 / 未批准事项
+
+- 该 ELF 是**最小 source/layout regression**，省略 `thread_init_early()`、vendor `platform_early_init()`、GIC/timer/console、heap、storage、scheduler 和完整 `kmain()`；不是完整 LK target、不是 vendor-header 镜像、不是可刷写固件，也没有设备启动证据。
+- PI12 需要的 APB1/PIO 时钟和访问状态在 BL31→BL33 handoff 时尚未证明；LED 服务不擅自改 CCU/APB1。
+- `0x4a000000..0x4a0e0000` 是历史 loader link bound，不构成 BL31/Boot0 对 BL33 text/BSS/page-table/stack 的物理内存所有权批准。真实页表地址 `0x4a008000` 和 `_end=0x4a00c024` 目前只证明链接位置。
+- BL31→BL33 时其他 Cortex-A53 核的 reset/hold-off 状态仍未知；pinned LK scheduler/critical-section 是单核设计。未证明 secondary cores held off 或完成 SMP 设计前，不允许多核进入 LK。
+- 尚未生成配对 vendor header 的 native firmware/SPL；没有写 SD/Boot0/TOC1、没有 MMIO 读写、没有模块加载、没有刷写或运行 payload，`hardware_applied=0`。
+
+### 下一步（按顺序）
+
+1. 审查 reports 中的 live FDT、BL31 与 Boot0 证据，关闭 BL33 handoff 时 APB1/PIO 的 clock/reset/访问门槛；不能以 Linux 后期时钟状态替代 BL33 入口状态。
+2. 完成 BL31/Boot0 对 `0x4a000000` 候选运行区、16 KiB section table、BSS、Abort stack 的冲突与生命周期审计；在证据闭合前保持 `H700_MEMORY_LAYOUT_APPROVED` unset。
+3. 确认 secondary A53 cores 的 BL31→BL33 状态；若不能证明 hold-off，先设计并验证 SMP/coherency，而不是直接启动现有单核 LK。
+4. 上述门槛全部通过后，才将诊断 raw ELF 接入 BaseOS native builder，复核真实 vendor header / firmware/SPL 配对、32 KiB padding、rollback 与 proof-of-life 路径。
+5. 最后才考虑一次明确授权的只读 PI12 LED proof-of-life；SYS_CFG probe 仍保持 dormant，不与 LED 首启诊断捆绑。
+
+本节为后续对话的真实续接点；新的 CI 结果必须以新的 HEAD/run ID 更新本文件，不能沿用历史 81/81 记录。

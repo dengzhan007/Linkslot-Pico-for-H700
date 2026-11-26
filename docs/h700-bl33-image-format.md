@@ -210,3 +210,19 @@ full feasibility [#45834208280](https://github.com/dengzhan007/Linkslot-Pico-for
 The 5,804-byte stub-linked raw file and its 14,032-byte in-memory footprint
 remain different measurements. No vendor-header/firmware pair was generated
 from this test ELF and no device ran it.
+
+
+### Real LK early-MMU + PI12 raw layout result (2026-11-26)
+
+The latest full feasibility [#45843270056](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45843270056) passed 81/81, zero failures and zero skipped (artifact [15131735148](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45843270056/artifacts/15131735148)). Its additional minimal source/layout ELF links the pinned LK's real `arch_early_init()`, `arm_mmu_init()`, `arm_mmu_map_section()`, cache/CP15 objects, H700 physical DRAM provider and SoC Device map, and the real RG34XX `target_early_init()`/PI12 LED service.
+
+| Measurement | Result |
+|---|---:|
+| Raw flat ELF | 7,912 bytes |
+| Active native loader raw extent | 32,768 bytes |
+| Raw file headroom | 24,856 bytes |
+| LK section table `tt` | `0x4a008000` (16 KiB aligned) |
+| Linked `_end` | `0x4a00c024` |
+| Runtime span from image base | `0xc024` bytes |
+
+The raw extent and runtime footprint are distinct. This minimal layout links real MMU and PI12 code but omits `thread_init_early()`, vendor `platform_early_init()`, GIC/timer/console, heap, storage and scheduler. It is not a complete LK target or a bootable image. APB1/PIO early handoff state and runtime RAM ownership remain unproven; no vendor header/firmware/SPL package was generated, no media was written and no device executed the payload.

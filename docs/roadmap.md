@@ -814,3 +814,18 @@ Hard size boundary: this first integration path is only for a small diagnostic p
 - [x] Full Linkslot/LK feasibility [#45834208280](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280) passed **81/81, zero failures, zero skipped**, artifact [15123653120](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280/artifacts/15123653120) (387,946,289 bytes).
 - [x] H700 three-ABI compile/host check [#45834208274](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208274) passed; boot-audit Linux/Windows [#45834060935](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834060935) passed.
 - [ ] Build and package an actual visible proof-of-life diagnostic in the 32 KiB extent using the matching vendor header and a newly regenerated native firmware/SPL pair; review BSS/stack ownership and rollback before any device execution.
+
+
+## 2026-11-26 — 真实 LK early-MMU + PI12 layout 里程碑
+
+- [x] pinned GammaOS LK 真实 `arch_early_init()` / `arm_mmu_init()` / `arm_mmu_map_section()` 与 H700 DRAM/SoC Device mapping 链接。
+- [x] 链接真实 RG34XX `target_early_init()` 和 PI12 work LED C service；测试入口顺序为 real LK arch early init → real H700 target early init。
+- [x] 页表/TLBI 更新后 DSB、`arch_enable_mmu()` 后 ISB；AArch32/AArch64 编译与 host regression 通过。
+- [x] real early-MMU/PI12 raw ELF 7,912 bytes，低于 32 KiB loader file extent 24,856 bytes；真实 16 KiB section table `tt=0x4a008000`，linked `_end=0x4a00c024`。
+- [x] Full feasibility [#45843270056](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45843270056) 81/81、0 failures、0 skipped；artifact [15131735148](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45843270056/artifacts/15131735148)；H700 three-ABI compile [#45843270266](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45843270266) 成功。
+- [ ] 关闭 BL33 handoff 时 APB1/PIO 时钟与访问权限证据。
+- [ ] 关闭 BL31/Boot0 对候选 BL33 runtime、BSS、page-table、stack 的物理内存所有权审查。
+- [ ] 确认其他 Cortex-A53 核在 BL31→BL33 handoff 的 reset/hold-off 状态，或先实现并验证真正 SMP 安全的 LK。
+- [ ] 在上述门槛通过后，才构建匹配 vendor header 的 32 KiB native firmware/SPL pair；再审查回滚路径和实机 proof-of-life。
+- [ ] RG34XX 实机冷启动验证 PI12 极性、点亮时机、游戏熄灯/退出复灯；当前仍未执行。
+- Hardware unchanged: `hardware_applied=0`；无 MMIO、无存储写入、无刷写、无 payload execution。

@@ -372,3 +372,10 @@ are three distinct quantities. Full feasibility
 81/81 (artifact [15123653120](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280/artifacts/15123653120)).
 This does not approve any physical memory range or establish deployed
 firmware pairing.
+
+
+### 2026-11-26 real LK early-MMU / page-table layout measurement (host link only)
+
+The successful full feasibility run [#45843270056](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45843270056) now links the pinned LK's actual `arm_mmu_init()` and H700's real `platform_init_mmu_mappings()` into a minimal A32 layout ELF. It reports the actual LK 4096-entry section table at `tt=0x4a008000` (16 KiB aligned), with linked `_end=0x4a00c024` and an image-base-to-`_end` span of `0xc024` bytes. Raw flat ELF size is 7,912 bytes and fits the existing 32 KiB loader file extent; this is not evidence that the runtime BSS/table range is physically safe or available.
+
+The linker address is still inside the historically copied `0x4a000000..0x4a0e0000` loader bound. No independent BL31/Boot0 ownership approval is inferred from the successful link. Keep `H700_MEMORY_LAYOUT_APPROVED` unset; do not build an installable package, flash or execute the ELF. Secondary A53 hold-off/SMP and early APB1/PIO handoff access are separate unresolved gates.

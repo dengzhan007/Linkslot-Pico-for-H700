@@ -109,3 +109,16 @@ section descriptors and TLB invalidations have been written, calls LK's
 `arch_early_init()`. Host regression checks the barrier mnemonics are present;
 AArch32/AArch64 cross-compile validates the architecture guards. This is a
 source-level ordering check, not hardware MMU enable evidence.
+
+
+### 2026-11-26 — real LK early-MMU + PI12 host layout result
+
+Full feasibility [#45843270056](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45843270056) passed 81/81 (0 failed, 0 skipped); artifact [15131735148](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45843270056/artifacts/15131735148). The added minimal layout ELF links the pinned LK's actual `arch_early_init()` / AArch32 section-table MMU implementation and H700's real `platform_init_mmu_mappings()`, DRAM provider, RG34XX `target_early_init()`, and PI12 LED service. The diagnostic entry calls real LK architecture early init before the real target hook.
+
+- Raw image: 7,912 bytes; 32 KiB loader raw-file headroom: 24,856 bytes.
+- Real LK translation table: `tt=0x4a008000`, 16 KiB aligned.
+- Linked `_end=0x4a00c024`; runtime footprint is separate from raw file length.
+- MMU barrier ordering: descriptor/TLBI writes → DSB → `arch_enable_mmu()` → ISB.
+- LK arch.c and H700 C services use Thumb-2; FPEXC is accessed with VMRS/VMSR; exception vectors and the fixed SYS_CFG probe remain A32.
+
+This is **not** a bootable image: scheduler/bootstrap thread, vendor `platform_early_init()`, GIC/timer/console, heap and storage are omitted. Early APB1/PIO clock state at BL33 handoff remains unverified; physical runtime memory ownership and secondary A53 hold-off also remain unresolved. No real firmware/SPL pair was generated and no device MMIO, flash or payload execution occurred. Keep PI12 cold-boot and game lifecycle behavior marked unverified.
