@@ -41,10 +41,17 @@ Boot0 is loaded at `0x20000`. The relevant routine and caller are:
 
 - Reset helper: PC `0x231e0`, file offset `0x31e0`
 - Caller / feature gate: PC `0x23224`
-- Gate register: `0x03006248`
-- Gate instruction sequence: load word, `LSLS r3, r3, #2`, then `BPL`
+- Gate register: `0x03006248`, inside the H616 SID peripheral address window
+  `[0x03006000,0x03007000)` at offset `0x248`.
+- Gate instruction sequence: load word, `LSLS r3, r3, #2`, then `BPL`.
 
-The shift moves original bit 29 into N. If bit 29 is clear, the branch skips the two helper calls. If bit 29 is set, the caller invokes the helper with `r0=2` and `r0=3`. The helper is not called with `r0=1`.
+The shift moves original bit 29 into N. If bit 29 is clear, the branch skips
+the two helper calls. If bit 29 is set, the caller invokes the helper with
+`r0=2` and `r0=3`. The helper is not called with `r0=1`. The public H616
+manual register tables do not define the word at SID offset `0x248`, so its
+bit29 meaning is unknown. The audit does not dump or interpret the full SID
+block; a future pre-BL33 device snapshot should expose only this single masked
+bit (`(readl(0x03006248) >> 29) & 1`) to avoid collecting unrelated chip data.
 
 The helper computes the one-hot mask `1 << r0` and performs these operations:
 
@@ -87,7 +94,8 @@ The same H616 reference gives `C0_RST_CTRL` reset default
 deasserts reset. This is useful family-level evidence, not proof that the H700
 register default or the device's live value is identical.
 
-Reference: H616 User Manual v1.0, §3.2.4–3.2.5.17, pp.35–41:
+Reference: H616 User Manual v1.0, §3.1 (SID window) and
+§3.2.4–3.2.5.17, pp.30, 35–41:
 https://linux-sunxi.org/images/1/1d/H616_User_Manual_V1.0.pdf
 
 ## 4. Native SPL and BL31 cross-check
