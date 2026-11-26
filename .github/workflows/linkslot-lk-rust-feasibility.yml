@@ -24,6 +24,7 @@ on:
       - "scripts/audit-h700-lk-timer-prerequisites.py"
       - "scripts/apply-h700-lk-overlay.py"
       - "scripts/test-h700-lk-overlay.py"
+      - "scripts/test-h700-bl33-entry-snapshot.sh"
       - "scripts/test-h700-lk-project-guard.py"
       - "scripts/audit-slot-i18n-nostd.py"
       - "scripts/audit-libretro-static-abi.py"
