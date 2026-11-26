@@ -72,3 +72,11 @@ whole `input_devices` object.
 Verified afterwards with `sensitivity-scan.txt`: 0 hits for the device serial, 0 hits for
 MAC-shaped strings, 0 hits for the workstation user name or repo path, in both published
 files.
+
+## Runtime counterpart
+
+The static declarations above were later confirmed on the wire:
+[`../rg34xx-input-runtime-20261126/`](../rg34xx-input-runtime-20261126/) contains the raw
+`/dev/input/event1` stream from pressing all 17 keys. Every code here appeared with the
+declared polarity, including `EV_ABS` 16/17 for the d-pad.
+

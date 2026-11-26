@@ -1,0 +1,38 @@
+{
+  "captured_utc_start": "2026-11-26T04:57:35.938971Z",
+  "captured_utc_end": "2026-11-26T04:58:18.328933Z",
+  "raw_bytes": 1728,
+  "records": 72,
+  "press_groups": 18,
+  "ev_key_codes_observed": [
+    114,
+    115,
+    304,
+    305,
+    306,
+    307,
+    308,
+    309,
+    310,
+    311,
+    312,
+    314,
+    315
+  ],
+  "ev_abs_axes_observed": [
+    16,
+    17
+  ],
+  "device_node": "/dev/input/event1 (ANBERNIC-keys, gpio-keys-polled, handlers kbd js0 event1)",
+  "getevent_on_device": false,
+  "expected_groups": 17,
+  "extra_groups": [
+    {
+      "reason": "operator reported an accidental R1 press while reaching for MENU",
+      "code": 309,
+      "t_rel_s": 16.44
+    }
+  ],
+  "power_key_excluded": true,
+  "method": "adb shell cat /dev/input/event1 > local binary; decoded offline with struct input_event"
+}
