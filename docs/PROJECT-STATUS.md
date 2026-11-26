@@ -7,7 +7,7 @@
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
 
-**2026-11-26 实机输入验证推进：** Linux evdev 已确认 17 个按键；X/Y 依实测物理丝印修正。只读 PIO single-shot sampler 已新增，等待 host/交叉编译 CI；尚未在实机执行或接入 LK main loop。
+**2026-11-26 实机输入验证推进：** Linux evdev 已确认 17 个按键；X/Y 依实测物理丝印修正。只读 PIO single-shot sampler 已新增，H700 host regression 与 AArch64/AArch32 ARM/Thumb-2 编译通过（#45761004754）；boot-audit Linux/Windows 检查通过（#45761004741）。sampler 尚未在实机执行或接入 LK main loop。完整 Linkslot feasibility #45761214619（文档提交触发）仍待完成。
 
 **2026-11-26 RG34XX live-FDT 输入映射与逻辑边沿层：**
 
