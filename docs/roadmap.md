@@ -671,6 +671,33 @@ Hard size boundary: this first integration path is only for a small diagnostic p
 
 
 
+
+## 2026-11-26 Matched BL31 PSCI CPU_ON callback
+
+- [x] Audit the exact matched 107,216-byte monitor platform operation table
+  at 0x480165f8. The standard TF-A plat_psci_ops_t second slot (+8) is
+  pwr_domain_on and points to 0x4800254c.
+- [x] Verify registration, global pointer load, slot +8 selection, indirect
+  branch, callback call at 0x4800255c, and low-level CPU power-on routine
+  0x48002d78. The routine programs a per-core RVBAR and has SoC-specific
+  core power/reset sequencing. Exact binary verifier and regression are
+  scripts/audit-rg34xx-bl31-psci-cpu-on.py and
+  scripts/test-audit-rg34xx-bl31-psci-cpu-on.py.
+- [x] Combined CI [#45816600012](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45816600012)
+  passed. The matched monitor exposes a PSCI CPU_ON-capable callback.
+- [ ] Do not equate the presence of a PSCI CPU_ON callback with automatic
+  secondary startup during the initial BL31-to-BL33 handoff. The live
+  CPU1-CPU3 state before the first BL33 instruction is still unknown.
+- [ ] Read the target SoC variant selector (only the masked value of
+  0x03000024 & 7) and pre-BL33 CPU reset/status/RVBAR state using a trusted,
+  read-only early environment. The active CPU_ON register bank cannot be
+  assumed from H616 documentation alone.
+- [ ] Keep diagnostic LK single-core: do not issue PSCI CPU_ON, start a
+  secondary, or enable SMP until A53 coherency, per-core GIC/timer setup,
+  scheduler state, and cross-core locks are deliberately implemented and
+  validated. The current full feasibility work remains host-only.
+
+
 ## 2026-11-26 Full Linkslot 1.0.49 H700 feasibility pass
 
 - [x] Latest full host-only feasibility workflow [#45795119939](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45795119939): 74/74 main steps passed; artifact uploaded (387,922,330 bytes).
@@ -689,9 +716,10 @@ Hard size boundary: this first integration path is only for a small diagnostic p
   caller gates helper calls to core2/core3 on bit29 of `0x03006248`.
 - [x] Confirm helper writes `C0_RST_CTRL &= ~(1 << core)`; under H616
   reference semantics, bit zero asserts reset. Core1 is not passed to helper.
-  The native SPL sets the primary RVBAR pair only. Matched BL31 has reachable
-  CPU-related MMIO at `0x09010010` and `0x08100020`, with no direct tracked
-  C0_RST_CTRL / DBG_REG1 / CPU1-CPU3 RVBAR references.
+  The native SPL sets the primary RVBAR pair only. The original first-entry
+  reachable BL31 scan recovered CPU0-mode/subsystem accesses only; a separate
+  full-image/function-table audit below subsequently found the indirect PSCI
+  CPU_ON path.
 - [x] Add reproducible CI and report:
   [#45808401081](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45808401081),
   all audit steps passed. Details:
