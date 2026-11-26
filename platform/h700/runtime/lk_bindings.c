@@ -6,10 +6,10 @@
  * This file contains no MMIO addresses and does not start/park any CPU.
  */
 #include "newlib_syscalls.h"
+#include "lk_heap_service.h"
 
 #include <lib/heap.h>
 
-extern bool h700_platform_heap_ready(void);
 extern bool h700_platform_single_cpu_active(void);
 extern int h700_platform_console_read(char *buffer, size_t length);
 extern int h700_platform_console_write(const char *buffer, size_t length);

@@ -1,4 +1,5 @@
 #include "../../platform/h700/power/h700_rg34xx_power_led.h"
+#include "../../platform/h700/runtime/lk_heap_service.h"
 
 /*
  * RG34XX H700 target lifecycle hooks.
@@ -23,4 +24,7 @@ void target_init(void)
     /* Retry if PIO was not accessible during the early hook. */
     if (!h700_rg34xx_power_led_is_ready())
         (void)h700_rg34xx_power_led_early_init();
+
+    /* Pinned LK calls target_init() after heap_init() and timer_init(). */
+    h700_lk_heap_service_mark_target_init_complete();
 }
