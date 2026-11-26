@@ -216,15 +216,24 @@ The binary passes the following parameters to helper `0x4800bcb4`:
 | `0x480033a0` | `0x48000000 / 0x48000000` | `0x41000` | `3` | unconditional |
 | `0x480033b4` | `0x48000000 / 0x48000000` | `0x1a000` | `1` | unconditional |
 | `0x480033c8` | `0x48040000 / 0x48040000` | `0x1000` | `2` | unconditional |
-| `0x480033f4` | `0x48200000 / 0x48200000` | `0x1e00000` | `3` | word at `0x48000018` nonzero |
-| `0x48003408` | `0x48200000 / 0x48200000` | `0x400000` | `7` | same condition |
+| `0x480033f4` | `0x48200000 / 0x48200000` | `0x1e00000` | `3` | skipped: matched `+0x18 = 0` |
+| `0x48003408` | `0x48200000 / 0x48200000` | `0x400000` | `7` | skipped with same zero flag |
 
 Thus the code unconditionally configures mapping requests inside
-`[0x48000000,0x48041000)`; it also has a conditional request spanning
-`[0x48200000,0x4a000000)`. The conditional word at `0x48000018` has not
-been qualified from a live device state. Raw attribute values are preserved
-as evidence but have not been interpreted as memory type, shareability or
-security permissions.
+`[0x48000000,0x48041000)`. The exact matched monitor payload has the
+little-endian word `0x00000000` at file offset `+0x18` (runtime
+`0x48000018`). The pinned native SPL source copies the extent and only
+patches monitor offsets `+0x24`, `+0x30` and `+0xb0`; no write to
+`+0x18` is present in that handoff source. Therefore the CBZ at
+`0x480033e0` skips both conditional calls for this exact monitor/SPL pair,
+subject to the limitation that earlier BootROM/Boot0 stages have not been
+fully traced for an indirect mutation.
+
+The conditional `[0x48200000,0x4a000000)` identity-map request is inactive
+for the matched pair and should not be counted as an active mapping solely
+because its callsite exists. Raw attributes are preserved as evidence but
+have not been interpreted as memory type, shareability or security
+permissions.
 
 The page-table construction path references pool base `0x4803e000`,
 4 KiB page indexing and cursor/counter `0x4803cb80`. Its local counter guard
@@ -234,12 +243,15 @@ a complete allocation map or proof of the overall table-pool size.
 ### Memory-ownership conclusion
 
 The 107,216-byte monitor file length is **not** the BL31 runtime footprint.
-The conservative BL31-associated envelope `[0x48000000,0x4a000000)` must
-remain excluded from the proposed application arena pending further review.
-The endpoint `0x4a000000` is the current native BL33 loader-slot start; the
-decoded mapping request is not proof that the entire interval is physically
-allocated. The unknown reservation `[0x7ec00000,0x7fc00000)` also remains
-excluded.
+For the exact matched monitor/SPL pair, retain the unconditional
+BL31-associated mapping range `[0x48000000,0x48041000)` as excluded from
+application allocation. The 30 MiB conditional identity-map request
+`[0x48200000,0x4a000000)` is skipped because the matched monitor's
+`+0x18` flag is zero and the pinned SPL does not overwrite it. This does not
+prove the broader gap is free from every indirect or vendor runtime access;
+it only means those skipped mapping calls should not be treated as active
+reservations. The endpoint `0x4a000000` is the native BL33 loader-slot start.
+The unknown reservation `[0x7ec00000,0x7fc00000)` also remains excluded.
 
 No direct reference into proposed application candidate
 `[0x40080000,0x42000000)` was recovered. **This does not prove the candidate
@@ -259,3 +271,40 @@ The reproducible audit is implemented by
 passed and uploaded report/disassembly artifact
 [15104447110](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45795120056/artifacts/15104447110).
 No hardware I/O, MMIO write, flash or payload execution was performed.
+
+
+### Boot0 / BL31 single-core startup evidence (static; not device verified)
+
+The read-only primary Boot0 capture (`131072` bytes, SHA-256
+`bf886995745a0eb9b5030296f9f6163035e164b3a82183716e67ff876319289f`,
+eGON checksum valid) was decoded and cross-checked against the pinned
+BaseOS native SPL and the matched BL31 address-reference report.
+
+- Boot0 reset helper at `0x231e0`, called from `0x23224`, is gated by bit 29
+  of `0x03006248`. When the gate is set it is called with `r0=2` and
+  `r0=3`; it is not called with core 1.
+- The helper ends by writing `C0_RST_CTRL & ~(1 << core)` to
+  `0x09010000`. Under H616 reference semantics, clearing the bit asserts
+  core reset (0=assert, 1=deassert). If the target register begins with the
+  H616 POR low nibble `0x1`, CPU1-3 remain reset and CPU0 is released.
+  The gate value and live register state at BL33 handoff have not been
+  measured.
+- Pinned SPL at BaseOS commit
+  `cbe253a43f46cf551cc9a6c79a84015bde3686cf` programs the primary RVBAR
+  low/high pair only; it does not directly write `C0_RST_CTRL` or
+  CPU1-CPU3 RVBAR registers.
+- The matched BL31 reachable scan reports CPU-related accesses only at
+  `0x09010010` (`C0_CTRL_REG0`, CPU0 AArch64 mode path) and
+  `0x08100020` (CPU subsystem control). No direct reachable access was
+  recovered to `C0_RST_CTRL`, `DBG_REG1` or CPU1-CPU3 RVBAR registers.
+- H616 documentation calls `0x09010044` `RVBARADDR0_H` (CPU0 high word),
+  while the Boot0 helper ORs core2/core3 one-hot bits into it. H616
+  documentation also marks `DBG_REG1.C_DBGPWRUPREQ[3:0]` read-only while
+  Boot0 performs a read-modify-write. These are unresolved H700-vs-H616
+  semantic discrepancies; do not infer the purpose or modify those fields.
+
+The result supports a CPU0-only handoff hypothesis, but CPU1-CPU3 hold-off
+is **probable, not device-verified**. See
+[docs/h700-a53-single-core-startup-audit.md](h700-a53-single-core-startup-audit.md)
+and CI
+[#45808401081](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45808401081).
