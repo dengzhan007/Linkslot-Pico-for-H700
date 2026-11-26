@@ -831,3 +831,14 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 - 完整 feasibility #45775116287 在 03fbc6c 上 76/76 成功；它仍是 host/cross-build 和 source-contract 验证，不是完整 LK target link 或实机启动。
 
 规范参考：Linux ARM GIC v1/v2 binding https://github.com/torvalds/linux/blob/master/Documentation/devicetree/bindings/interrupt-controller/arm,gic.yaml；Linux architected timer binding https://github.com/torvalds/linux/blob/master/Documentation/devicetree/bindings/timer/arm,arch_timer.yaml；Arm CNTHCTL_EL2 https://documentation-service.arm.com/static/60df1943677cf7536a55ddef。
+
+
+## 2026-11-26 A32 BL33 first-instruction snapshot（FIQ-safe）
+
+- 新增 h700_bl33_entry_snapshot 五字 BSS 记录和 C-only 只读 getter，保存 BL31→LK 第一条 wrapper 指令时的 SP、LR、r4、CPSR；magic 0x48374553 最后写入，getter 对空指针与未发布状态 fail-closed。
+- 入口采集寄存器采用共享的 AArch32 r4-r7：CPSR→r5、SP→r6、LR→r7，r4 保持原始 loader 参数。原因是 FIQ 模式下 r8-r14 为 banked registers；此前 r8-r11 的初稿可能在 CRT0 切换到 SVC 后无法读取。overlay 同时把原 CRT0 的 BOOT_ARGUMENT_LOCATION 临时地址寄存器 r6 改成 r0，把可选 TrustZone linker-retention load 的 r7 改成 r0，避免覆盖入口快照，原 r4 参数保存行为不变。
+- 原始值先留在 r4-r7，经过 CRT0 relocation 与异常模式栈配置；.L__bss_loop 完成后、调用 kmain() 前，写入 BSS 五字结构，magic 最后写入。若启动在此之前 fault，BSS 快照不会生成；它不是 pre-BSS crash logger。
+- 已接入 H700 平台真实 OBJS 表、AArch64/AArch32 ARM-state/Thumb-2 freestanding compile 列表；新增 C ABI host regression、BL33 overlay capture/ordering/FIQ-safe assertions、linker BSS bounds 检查及 project guard。A32 layout audit probe 同步采用相同寄存器分配与 CRT0 scratch relocation。
+- H700 compile/host regression 曾在 r8-r11 初版提交 fd02b78 的 [#45778387106](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45778387106) 通过（storage-host-regression、AArch64/AArch32 ARM/Thumb-2 compile 两 job success）；这不覆盖随后 FIQ-safe overlay 调整。FIQ-safe 版本的完整 feasibility [#45779184333](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45779184333) 在后续文档更新时被取消；最新分支触发的 [#45779298146](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45779298146) 当时排队中。不得把取消/排队中的运行记为通过。
+- 该变更不读取 GIC/Timer/EL2 控制寄存器，不写 MMIO，也未执行设备 payload。CPSR mode bits 不能证明 Secure/Non-secure world、EL2 traps、CNTVOFF 或 GIC Group ownership。当前仍未完整 link/boot LK；H700 memory-ownership gate 保持关闭。
+- **下一门槛：** 当前 FIQ-safe overlay、A32 layout、H700 compile 与 boot-audit 工作流必须对最新 HEAD 通过。之后只有在 BL33 memory/firmware pairing 与可逆诊断流程获批后，才在 RG34XX 执行目标态只读采集；不能用本次 host CI 替代实机寄存器证据。
