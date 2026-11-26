@@ -482,4 +482,27 @@ App::apply integration is complete as a CI source overlay, not a persistent chan
 
 The C/Rust ABI v1 aggregate (runtime_services.h, vfs_service.h) and no_std H700RuntimeSession::bootstrap() are now committed. The coordinator guarantees validation and event-loop construction before VFS install, and VFS install before the generic static-core opener. It rejects invalid ABI/version/size or missing callbacks, fails closed on VFS install failure, and leaves process-lifetime VFS installed when core open fails. Five startup/lifecycle tests and AArch32/AArch64 ABI assertions passed in runtime-slices #45748496564; full feasibility #45748496582 passed 75/75 steps.
 
-Next: verify the new read-only CNTVCT/CNTFRQ provider on the RG34XX in LK and record actual CNTFRQ/counter deltas; do not enable timer IRQ yet. Then source H700 GPIO/ADC pin and IRQ evidence before implementing the scanner. Do not reuse MTK GPT/GPIO/AUXADC code or guess MMIO. The heap readiness bridge is linked and guarded. Keep VFS read-only. The coordinator is still not called from LK main; no bootable image or device runtime exists.
+Next: run the read-only RG34XX inventory again and compare the active live-FDT input_devices block, /proc/bus/input/devices and pinmux/pinconf readback against the two reference DTS maps. The Generic Timer provider is host/cross-build validated but still needs actual CNTFRQ/counter-delta execution in LK; do not enable timer IRQ. Implement the GPIO scanner only after active pin ownership is confirmed. Do not reuse MTK GPT/GPIO/AUXADC code or guess MMIO. The heap readiness bridge is linked and guarded. Keep VFS read-only. The coordinator is still not called from LK main; no bootable image or device runtime exists.
+
+
+## 2026-11-26 RG34XX input-controller source audit and live-FDT parser
+
+Two independent RG34XX non-SP device-tree sources (KNULLI boot-package and
+MustardOS RG34XX-H) agree on a 17-button GPIO matrix. The six GPIO cells are
+decoded using the pinned sun50iw9p1 vendor provider contract; all entries are
+active-low in those references. Reference polling differs (20 ms vs 4 ms), so
+the LK polling interval remains undecided. Both references mark GPADC and
+`keyboard_1350mv` disabled; the PMIC power key is separate.
+
+The read-only FDT inspector now reports PIO controllers, gpio-keys children,
+GPIO phandle arguments, analog keypad nodes and PMIC power-key nodes under
+`input_devices`. Synthetic parser regression covers the GPIO cell decoder,
+active-low flag, EV_ABS directional event, disabled ADC nodes and PMIC key.
+This is source/host validation only: the actual RG34XX live FDT has not yet
+been re-collected with the extended parser, and the LK GPIO scanner remains
+unimplemented.
+
+Required next evidence: re-run the existing read-only inventory on the target,
+then compare active `input_devices`, `/proc/bus/input/devices`, and any
+already-exported pinmux/pinconf state. Do not write PIO mux/pull registers,
+request GPIO lines, or add EINT/IRQ handling before that comparison closes.

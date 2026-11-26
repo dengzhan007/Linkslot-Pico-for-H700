@@ -36,6 +36,9 @@ def make_fdt():
         "opp-shared", "nvmem-cells", "nvmem-cell-names", "opp-microvolt-a1", "opp-microvolt-b0",
         "opp-microvolt-c1", "thermal-sensors",
         "clock-frequency", "turbo-mode", "#thermal-sensor-cells",
+        "#gpio-cells", "#interrupt-cells", "gpio-controller", "gpios",
+        "label", "linux,code", "linux,input-type", "linux,input-value",
+        "poll-interval", "key_cnt", "channel_num", "channel_select", "interrupts", "clocks",
     )
     strings = bytearray()
     name_offsets = {}
@@ -139,6 +142,51 @@ def make_fdt():
     prop("lcd_vt", be32(536))
     prop("lcd_vbp", be32(20))
     prop("lcd_vspw", be32(5))
+    prop("status", b"okay\0")
+    end()
+
+    begin("pinctrl@0300b000")
+    prop("compatible", b"allwinner,sun50iw9p1-pinctrl\0")
+    prop("reg", cells(0, 0x0300b000, 0, 0x400))
+    prop("#gpio-cells", be32(6))
+    prop("gpio-controller", b"")
+    prop("phandle", be32(0x60))
+    end()
+
+    begin("gpio_keys")
+    prop("compatible", b"gpio-keys-polled\0")
+    prop("label", b"RG34XX Controller\0")
+    prop("poll-interval", be32(20))
+    begin("keyA")
+    prop("label", b"A\0")
+    prop("gpios", cells(0x60, 0, 0, 0, 1, 2, 1))
+    prop("linux,code", be32(0x130))
+    end()
+    begin("keyUP")
+    prop("label", b"Up\0")
+    prop("gpios", cells(0x60, 0, 6, 0, 1, 2, 1))
+    prop("linux,code", be32(0x11))
+    prop("linux,input-type", be32(3))
+    prop("linux,input-value", be32(0xffffffff))
+    end()
+    end()
+
+    begin("gpadc")
+    prop("compatible", b"allwinner,sunxi-gpadc\0")
+    prop("reg", cells(0, 0x05070000, 0, 0x400))
+    prop("interrupts", cells(0, 0x12, 0))
+    prop("status", b"disabled\0")
+    prop("key_cnt", be32(5))
+    end()
+
+    begin("keyboard")
+    prop("compatible", b"allwinner,keyboard_1350mv\0")
+    prop("reg", cells(0, 0x05070800, 0, 0x400))
+    prop("status", b"disable\0")
+    end()
+
+    begin("powerkey@0")
+    prop("compatible", b"x-powers,axp2202-pek\0")
     prop("status", b"okay\0")
     end()
 
@@ -344,6 +392,48 @@ class FdtInspectorTests(unittest.TestCase):
         self.assertEqual(framebuffer["end_exclusive"], "0x7c076000")
         self.assertTrue(framebuffer["matches_disp_reserve"])
         self.assertEqual(len(report["sha256"]), 64)
+
+    def test_extracts_gpio_input_map_and_disabled_analog_key_nodes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "synthetic.dtb"
+            path.write_bytes(make_fdt())
+            report = MODULE.inspect_fdt(path)
+
+        inputs = report["input_devices"]
+        pio = next(
+            item for item in inputs["gpio_controllers"]
+            if item["compatible"] == ["allwinner,sun50iw9p1-pinctrl"]
+        )
+        self.assertEqual(pio["gpio_cells"], 6)
+        self.assertEqual(pio["reg_cells"], [0, 0x0300b000, 0, 0x400])
+
+        gpio_keys = inputs["gpio_key_devices"][0]
+        self.assertEqual(gpio_keys["compatible"], ["gpio-keys-polled"])
+        self.assertEqual(gpio_keys["status"], "okay")
+        self.assertEqual(gpio_keys["poll_interval_ms"], 20)
+
+        key_a = next(item for item in gpio_keys["keys"] if item["label"] == "A")
+        self.assertEqual(key_a["linux_code"], 0x130)
+        self.assertEqual(key_a["input_type_name"], "EV_KEY")
+        gpio_a = key_a["gpios"][0]
+        self.assertEqual(gpio_a["controller_node"], "/soc@03000000/pinctrl@0300b000")
+        self.assertEqual(gpio_a["pin_name"], "PA0")
+        self.assertEqual(gpio_a["mux_select"], 0)
+        self.assertEqual(gpio_a["pull_config"], 1)
+        self.assertEqual(gpio_a["drive_level"], 2)
+        self.assertTrue(gpio_a["active_low"])
+
+        key_up = next(item for item in gpio_keys["keys"] if item["label"] == "Up")
+        self.assertEqual(key_up["input_type_name"], "EV_ABS")
+        self.assertEqual(key_up["input_value"], -1)
+        self.assertEqual(key_up["gpios"][0]["pin_name"], "PA6")
+
+        analog = {item["compatible"][0]: item for item in inputs["analog_key_controllers"]}
+        self.assertEqual(analog["allwinner,sunxi-gpadc"]["status"], "disabled")
+        self.assertEqual(analog["allwinner,sunxi-gpadc"]["key_count"], 5)
+        self.assertEqual(analog["allwinner,keyboard_1350mv"]["status"], "disable")
+        self.assertEqual(inputs["pmic_power_keys"][0]["compatible"], ["x-powers,axp2202-pek"])
+        self.assertIn("do not prove", inputs["note"])
 
     def test_rejects_bad_magic(self):
         data = bytearray(make_fdt())

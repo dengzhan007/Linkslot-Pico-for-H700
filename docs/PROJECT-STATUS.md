@@ -2,7 +2,7 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-26（只读 Generic Timer provider 已实现并纳入 AArch32/AArch64/Thumb-2 编译及 host tests；新提交 CI 待验证。前一代码集 `aca39f29c560` 的完整 feasibility #45752237141 **75/75 steps 成功**，H700 编译及 Linux/Windows boot-audit 均成功。CI artifact `15086477117` 已上传。以上均非实机启动证明。UI/GAME 约 59.6 Hz；120-Hz writer/boot-package 写入保持关闭。）
+**最后核对时间：** 2026-11-26（只读 Generic Timer provider commit `88d7c06b0212` 的 host tests、AArch64/AArch32 ARM/Thumb-2 编译、H700 project guard 均通过；完整 Linkslot LK feasibility #45753607700 **75/75 steps 成功**，artifact `15087286408`；H700 compile #45753607756 与 boot-audit #45753607721 成功。新增长期设备输入 FDT parser 回归正在提交，CI 待验证。上述均非实机 LK 运行证明。UI/GAME 约 59.6 Hz；120-Hz writer/boot-package 写入保持关闭。）
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
@@ -23,6 +23,14 @@
 - 新增 `platform/h700/runtime/h700_arch_timer.c`：AArch32 使用 `MRRC p15,1` / `MRC p15,0`，AArch64 使用 `CNTVCT_EL0/CNTFRQ_EL0`；service 以初始化时计数值为 epoch，提供相对毫秒单调时间，零频率 fail-closed，并处理 64-bit counter wrap 与转换饱和。
 - 该 provider 只读寄存器，不设置 timer compare、timer control、GIC/PPI，也不实现 `platform_set_periodic_timer()`。host tests 验证换算、ABI 生命周期和边界；AArch32/Thumb-2/AArch64 CI 验证指令编译。尚未在 RG34XX LK 中执行读取，所以真实 `CNTFRQ`、计数增长、BL31 handoff 后连续性仍待后续设备验证；先维持单核。
 - 不复用 pinned MTK `platform/mt6785/timer.c` 的 GPT5。下一步是先完成只读 provider 的 CI，再从真实 LK/设备验证计数器读回；只有有明确 PPI/IRQ 依据后，才另行实现周期 timer。
+
+**2026-11-26 RG34XX GPIO input source audit / live-FDT parser（新代码与文档，CI 待验证）：**
+
+- KNULLI RG34XX boot-package DTS（commit `57afa662009641d181f57241bcc480119b131530`）与 MustardOS RG34XX-H DTS（commit `8b7787a178548d51bc5376d52583dd2a91f5091f`）的 `gpio-keys-polled` 都声明同一组 17 个 GPIO 按键；方向键以 EV_ABS 上报，其余按键以 EV_KEY 上报。两个参考 DTS 的 polling 分别为 20 ms 与 4 ms，不能据此提前决定 LK 扫描周期。
+- 对照 sun50iw9p1 pinctrl/GPIO provider，确认 6-cell tuple 为 port / pin / mux / pull / drive / flags；最后一格 bit0 是 `OF_GPIO_ACTIVE_LOW`。这只是 DTS 声明，尚未与本机 active live FDT、pinmux/pinconf readback 或实测按键事件核对。
+- 两份参考 DTS 的 GPADC 与 `keyboard_1350mv` 节点均 disabled；PMIC power key 另属一条路径，不并入 17-pin GPIO map。
+- 扩展 `tools/inspect_h700_fdt.py` 输出 `input_devices`，解析 GPIO controllers、gpio-keys 子节点/六 cell 参数、GPADC/ADC keyboard 节点及 PMIC power-key 节点；`tools/test_inspect_h700_fdt.py` 增加合成 FDT 回归。本次没有实现硬件 GPIO scanner，也没有 GPIO/PMIC MMIO 读写。
+- 下一步用现有只读 inventory 重新采集目标机 live FDT，比较活动节点和输入驱动；只有 active FDT 与 pin ownership 证据闭合后才实现扫描器。
 
 **2026-11-26 最新续接更新：**
 

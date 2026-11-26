@@ -448,6 +448,169 @@ def _cpu_power_inventory(nodes: dict[str, dict[str, bytes]]) -> dict[str, Any]:
     }
 
 
+
+def _gpio_references(
+    value: bytes | None,
+    nodes: dict[str, dict[str, bytes]],
+    phandles: dict[int, str],
+) -> list[dict[str, Any]]:
+    """Decode GPIO phandles while preserving provider-specific raw cells."""
+    values = _cells(value)
+    refs: list[dict[str, Any]] = []
+    offset = 0
+
+    while offset < len(values):
+        handle = values[offset]
+        offset += 1
+        controller_path = phandles.get(handle)
+        controller_props = nodes.get(controller_path or "", {})
+        compatible = _strings(controller_props.get("compatible"))
+        argument_count = _number(controller_props.get("#gpio-cells"))
+        ref: dict[str, Any] = {
+            "phandle": f"0x{handle:x}",
+            "controller_node": controller_path,
+            "controller_compatible": compatible,
+        }
+
+        if argument_count is None or argument_count > 16:
+            ref["decode_error"] = "GPIO provider is missing a supported #gpio-cells value"
+            refs.append(ref)
+            break
+        if offset + argument_count > len(values):
+            ref["arguments"] = values[offset:]
+            ref["arguments_truncated"] = True
+            refs.append(ref)
+            break
+
+        arguments = values[offset:offset + argument_count]
+        offset += argument_count
+        ref["argument_count"] = argument_count
+        ref["arguments"] = arguments
+
+        # sun50iw9p1 vendor binding: port, pin, mux, pull, drive, GPIO flags.
+        # The matching GPIO driver interprets GPIO flag bit 0 as ACTIVE_LOW.
+        if argument_count == 6 and "allwinner,sun50iw9p1-pinctrl" in compatible:
+            bank, pin, mux, pull, drive, gpio_flags = arguments
+            bank_letter = chr(ord("A") + bank) if 0 <= bank <= 8 else None
+            ref.update({
+                "bank_index": bank,
+                "pin_index": pin,
+                "bank_letter": bank_letter,
+                "pin_name": f"P{bank_letter}{pin}" if bank_letter is not None else None,
+                "mux_select": mux,
+                "pull_config": pull,
+                "drive_level": drive,
+                "gpio_flags": gpio_flags,
+                "active_low": bool(gpio_flags & 0x1),
+            })
+
+    return refs
+
+
+def _input_inventory(nodes: dict[str, dict[str, bytes]]) -> dict[str, Any]:
+    """Summarize GPIO-key, PMIC power-key and analog-key declarations."""
+    phandles = _phandle_index(nodes)
+    gpio_controllers = []
+    gpio_key_devices = []
+    analog_key_controllers = []
+    pmic_power_keys = []
+
+    for node_path, props in nodes.items():
+        compatible = _strings(props.get("compatible"))
+        status = (_strings(props.get("status")) or ["okay"])[0]
+        leaf = node_path.rsplit("/", 1)[-1].lower()
+        compatible_lower = [item.lower() for item in compatible]
+
+        if "gpio-controller" in props:
+            gpio_controllers.append({
+                "node": node_path,
+                "compatible": compatible,
+                "status": status,
+                "reg_cells": _cells(props.get("reg")),
+                "gpio_cells": _number(props.get("#gpio-cells")),
+                "interrupt_cells": _number(props.get("#interrupt-cells")),
+            })
+
+        if any("gpio-keys" in item for item in compatible_lower):
+            keys = []
+            prefix = node_path.rstrip("/") + "/"
+            for child_path, child_props in nodes.items():
+                if not child_path.startswith(prefix):
+                    continue
+                relative = child_path[len(prefix):]
+                if "/" in relative:
+                    continue
+                if not any(name in child_props for name in ("gpios", "linux,code")):
+                    continue
+
+                event_type = _number(child_props.get("linux,input-type"))
+                if event_type is None:
+                    event_type = 1
+                input_value = _number(child_props.get("linux,input-value"))
+                if input_value is None:
+                    input_value = 1
+                elif input_value >= 0x80000000:
+                    input_value -= 0x100000000
+
+                keys.append({
+                    "node": child_path,
+                    "label": (_strings(child_props.get("label")) or [None])[0],
+                    "status": (_strings(child_props.get("status")) or ["okay"])[0],
+                    "linux_code": _number(child_props.get("linux,code")),
+                    "input_type": event_type,
+                    "input_type_name": {1: "EV_KEY", 2: "EV_REL", 3: "EV_ABS"}.get(
+                        event_type, f"EV_{event_type}"
+                    ),
+                    "input_value": input_value,
+                    "gpios": _gpio_references(child_props.get("gpios"), nodes, phandles),
+                })
+
+            gpio_key_devices.append({
+                "node": node_path,
+                "compatible": compatible,
+                "status": status,
+                "label": (_strings(props.get("label")) or [None])[0],
+                "poll_interval_ms": _number(props.get("poll-interval")),
+                "keys": sorted(keys, key=lambda item: item["node"]),
+            })
+
+        if any(token in item for item in compatible_lower
+               for token in ("gpadc", "keyboard", "adc-keys", "adc_keys")):
+            analog_key_controllers.append({
+                "node": node_path,
+                "compatible": compatible,
+                "status": status,
+                "reg_cells": _cells(props.get("reg")),
+                "interrupt_cells": _cells(props.get("interrupts")),
+                "clock_cells": _cells(props.get("clocks")),
+                "key_count": _number(props.get("key_cnt")),
+                "channel_count": _number(props.get("channel_num")),
+                "channel_select": _number(props.get("channel_select")),
+            })
+
+        if any(token in item for item in compatible_lower
+               for token in ("-pek", "powerkey", "power-key")):
+            pmic_power_keys.append({
+                "node": node_path,
+                "compatible": compatible,
+                "status": status,
+                "reg_cells": _cells(props.get("reg")),
+                "interrupt_cells": _cells(props.get("interrupts")),
+            })
+
+    return {
+        "gpio_controllers": sorted(gpio_controllers, key=lambda item: item["node"]),
+        "gpio_key_devices": sorted(gpio_key_devices, key=lambda item: item["node"]),
+        "analog_key_controllers": sorted(analog_key_controllers, key=lambda item: item["node"]),
+        "pmic_power_keys": sorted(pmic_power_keys, key=lambda item: item["node"]),
+        "note": (
+            "Static device-tree declarations only. These fields do not prove live "
+            "pin mux/pull readback, electrical polarity, runtime driver binding, "
+            "physical key operation, or ADC calibration."
+        ),
+    }
+
+
 def inspect_fdt(path: Path) -> dict[str, Any]:
     blob = path.read_bytes()
     nodes = parse_fdt(blob)
@@ -628,6 +791,7 @@ def inspect_fdt(path: Path) -> dict[str, Any]:
         "debug_modes": debug_modes,
         "boot_framebuffers": boot_framebuffers,
         "cpu_power": _cpu_power_inventory(nodes),
+        "input_devices": _input_inventory(nodes),
         "node_count": len(nodes),
     }
 
