@@ -2,7 +2,7 @@
 
 Date: 2026-11-26
 
-Status: **RECOVERY NOT IMPLEMENTED — MMIO PROBES MUST REMAIN DISABLED.**
+Status: **PROBE-SCOPED SOURCE RECOVERY IMPLEMENTED; CI VALIDATION IN PROGRESS; NOT DEVICE-EXECUTED.**
 
 This review is pinned to GammaOS LK
 `TheGammaSqueeze/lk-mt6785@9bf1419a49e0af6dba8b05916df382c9c9c6d0a8`.
@@ -55,29 +55,94 @@ The current generic handler would halt LK on such a fault. Therefore:
 - Do not weaken exception handling globally or silently swallow unrelated
   Data Aborts.
 
-## 3. Requirements before a contained one-word probe
+## 3. Implemented probe-scoped source path (2026-11-26)
 
-A future diagnostic may proceed only after all of the following are designed
-and independently reviewed:
+The H700 overlay now modifies only the pinned LK Data Abort vector and its
+handler. The default handler remains fatal; the one explicit SYS_CFG
+diagnostic can recover only when every match condition below holds.
 
-1. **Narrow match:** only the exact probe load PC is recoverable; every other
-   Data Abort retains the existing fatal path.
-2. **Correct exception return:** provide an AArch32 assembly return path that
-   restores the saved general registers and SPSR, and resumes at a known
-   recovery label. Account explicitly for the abort LR offset and the
-   execution state/instruction width; do not blindly add 4 or 8 to the PC.
-3. **No hidden side effects:** the probe performs one aligned 32-bit read,
-   has no retry loop, and emits only a status plus `VER_REG & 7`; it does not
-   dump the full register or touch adjacent addresses.
-4. **Safe result channel:** select a result channel that does not assume UART,
-   framebuffer, heap, Linux, or a working filesystem before those services
-   have been independently initialized.
-5. **Regression coverage:** host tests exercise success/fault status semantics,
-   while disassembly/source guards verify the exact load address, handler
-   match window, exception-return instructions, and unchanged fatal fallback.
-6. **Execution gate:** only after the source contract passes CI should a
-   separate diagnostic BL33 execution be reviewed against the existing
-   recovery/rollback plan.
+### 3.1 Exception-frame and call-stack contract
+
+The LK frame remains the pinned 68-byte layout:
+
+| Offset | Field |
+|---:|---|
+| 0 | SPSR_abt |
+| 4 | User/System SP |
+| 8 | User/System LR |
+| 12–60 | r0–r12 |
+| 64 | LR_abt |
+
+The patched vector keeps that frame untouched, records its base in
+callee-saved r4, rounds the Abort-mode C-call stack down to an 8-byte
+boundary, then passes the original frame pointer in r0. The modified C
+handler preserves r4 by the AAPCS callee-saved rule. On a positive match,
+the assembly trampoline restores the original frame SP from r4, restores
+SPSR_abt, skips the three-word prefix, and performs
+LDMIA sp!, {r0-r12, pc}^ . Because PC is in the list and the S bit is set,
+this is the AArch32 exception return that restores the saved CPSR from SPSR.
+
+This avoids assuming that the original abort stack top was 8-byte aligned:
+the vector aligns only the temporary C-call SP, while r4 retains the exact
+frame address to be restored.
+
+### 3.2 Exact recovery predicate
+
+The helper returns recoverable only when all fields match:
+
+1. Probe-active cookie is exactly 0x48375031.
+2. Saved origin is SVC mode and ARM state (SPSR.T=0).
+3. Saved LR_abt equals the address of the single probe LDR plus 8.
+4. DFAR equals exactly 0x03000024.
+5. DFSR is a whitelisted short-descriptor synchronous fault with WnR=0
+   (read access) and LPAE=0.
+6. The recovery label is nonzero.
+
+The short-descriptor fault-status whitelist contains alignment, access-flag,
+translation, synchronous external abort, domain, permission, and synchronous
+parity-error classes for which DFAR is defined. It deliberately excludes
+debug events, asynchronous external aborts, asynchronous parity errors,
+write-side faults, unknown/reserved fault-status values, and long-descriptor
+syndrome format. The field extraction is
+FS[4:0] = {DFSR[10], DFSR[3:0]}.
+
+The exact diagnostic is a separate ARM-state assembly function. It writes
+the active cookie, executes one aligned 32-bit LDR from 0x03000024,
+masks the result to VER_REG[2:0], writes only that value to the caller's
+ordinary RAM result pointer, clears the cookie, and returns. On a matched
+Data Abort, the handler rewrites only the saved PC to a recovery label that
+returns status H700_DATA_ABORT_RECOVERY_ABORTED. It does not retry the
+faulting load.
+
+### 3.3 Fatal fallback and call-site policy
+
+The modified arm_data_abort_handler() calls the H700 matcher first. Only
+a positive result returns 1 to the vector trampoline. Every non-match calls
+the original exception_die(frame, -8, "data abort, halting") and halts.
+The vector has no generic "skip abort" behavior.
+
+h700_syscfg_ver_reg_low3() is a dormant diagnostic API. No call site was
+added to target_early_init(), target_init(), input polling, timer
+initialization, scheduler setup, or default runtime startup. The ordinary
+result channel is the caller-provided RAM word plus the function's return
+status; no UART, panel, heap, Linux, or filesystem is assumed.
+
+### 3.4 Tests and current limits
+
+- Host matcher tests cover an accepted synchronous external read and reject
+  wrong cookie, DFAR, saved PC, origin mode, Thumb state, write-side fault,
+  asynchronous external/parity fault, debug event, long-descriptor format,
+  null frame, and zero recovery PC.
+- H700 AArch32 ARM-state and Thumb-2 builds compile the C recovery code;
+  the probe assembly is forced to ARM state and its object format is checked.
+- The pinned-LK overlay test compiles/links the patched exception vector,
+  verifies the fatal fallback remains present, and checks ARM-to-Thumb
+  interworking for the C handler.
+
+These are host/source/assembler/link checks only. They do not emulate the
+Cortex-A53 exception hardware, prove BL31 security attribution or peripheral
+firewall access, establish the target's selector value, or authorize executing
+the diagnostic on the RG34XX. The probe has not been called.
 
 A Linux-runtime VER_REG sample can settle the selector's later runtime value;
 it cannot establish CPU reset/RVBAR state at the earlier BL31→BL33 handoff.
@@ -85,14 +150,11 @@ The pre-BL33 snapshot remains a separate requirement.
 
 ## 4. Current disposition
 
-- No recoverable Data Abort path exists in the pinned generic LK handler.
-- No probe is wired to startup or input scanning.
-- The latest device-side `/dev/mem` attempt remains `EFAULT`; userspace
+- Source-level probe-scoped AArch32 recovery is implemented in the H700
+  overlay generator; all non-matching Data Aborts retain the fatal path.
+- The diagnostic remains dormant and is not wired into startup/input/timer.
+- The latest device-side /dev/mem attempt remains EFAULT; userspace
   retries are stopped.
-- `hardware_applied=0`: no MMIO read/write, module load, boot-argument change,
+- CI for the current recovery implementation is pending.
+- hardware_applied=0: no MMIO read/write, module load, boot-argument change,
   SD write, firmware flash, or diagnostic payload execution.
-
-**Next source task:** implement and test a *probe-scoped* AArch32 Data Abort
-recovery path without changing the fatal handling of unrelated exceptions.
-Do not implement the register read until that recovery primitive and result
-channel have been reviewed.

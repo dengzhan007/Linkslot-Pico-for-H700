@@ -1150,3 +1150,14 @@ Do not add bare volatile reads to LK startup or the input scanner. A narrowly
 matched assembly recovery path, correct saved-context restoration and safe
 result channel must be designed and CI-tested first; unrelated Data Aborts must
 retain the fatal fallback.
+
+
+**2026-11-26 probe-scoped Data Abort source implementation:** 已新增
+h700_data_abort_recovery.c/.h 与固定地址的 h700_syscfg_probe.S。恢复条件包含
+active cookie、精确 A32 fault-load LR_abt、DFAR、短描述符 DFSR 同步读白名单、
+SVC 模式和 ARM 状态；排除异步 abort、写侧 fault、debug event 和未知 syndrome。
+A32 vector 使用 r4 保存原始 fault frame、对齐 Abort C-call stack，再由
+LDM^ trampoline 恢复 SPSR/GPR/PC；非匹配 fault 仍走原 fatal exception_die()。
+诊断函数仅显式调用，不在任何启动路径中调用。当前只完成 source/host/assembler/link
+验证目标，CI 正在运行；未执行实机寄存器读取，hardware_applied=0。专项细节见
+[h700-lk-data-abort-recovery-audit.md](h700-lk-data-abort-recovery-audit.md)。
