@@ -96,6 +96,46 @@ capture_proc "partitions.txt" "/proc/partitions"
 capture_proc "mounts.txt" "/proc/mounts"
 capture_proc "interrupts.txt" "/proc/interrupts"
 
+# Capture the active kernel input declarations and any already-exported
+# pinctrl diagnostics. This block is read-only: it does not start event
+# streaming, mount debugfs, request GPIOs, or alter pin configuration.
+{
+    echo "== /proc/bus/input/devices (read-only) =="
+    if [ -r /proc/bus/input/devices ]; then
+        cat /proc/bus/input/devices
+    else
+        echo "NOT_PRESENT: /proc/bus/input/devices"
+    fi
+
+    echo
+    echo "== getevent -lp device capabilities (read-only; no event stream) =="
+    if command -v getevent >/dev/null 2>&1; then
+        getevent -lp 2>&1 || echo "GETEVENT_LIST_FAILED"
+    else
+        echo "NOT_PRESENT: getevent"
+    fi
+
+    echo
+    echo "== existing pinctrl pinmux/pinconf readback (read-only; no debugfs mount) =="
+    PINCTRL_DEBUG="/sys/kernel/debug/pinctrl"
+    if [ -d "$PINCTRL_DEBUG" ] && [ -r "$PINCTRL_DEBUG" ]; then
+        PINCTRL_FILES=0
+        for file in "$PINCTRL_DEBUG"/*/pinmux-pins "$PINCTRL_DEBUG"/*/pinconf-pins; do
+            [ -r "$file" ] || continue
+            PINCTRL_FILES=$((PINCTRL_FILES + 1))
+            echo "-- $file"
+            if grep -E '(^|[^[:alnum:]_])P(A([0-9]|1[0-2])|E[0-3])([^[:alnum:]_]|$)' "$file"; then
+                :
+            else
+                echo "NO_MATCHING_RG34XX_INPUT_PINS"
+            fi
+        done
+        [ "$PINCTRL_FILES" -gt 0 ] || echo "NOT_PRESENT: pinmux-pins/pinconf-pins files"
+    else
+        echo "NOT_PRESENT: $PINCTRL_DEBUG (not mounted/readable; collector did not mount it)"
+    fi
+} > "$OUTDIR/input-runtime.txt"
+
 # Capture the kernel page size so CMA PFNs can be converted to byte ranges.
 # getconf is preferred; older Android userspaces may omit it, so fall back to
 # the KernelPageSize reported for this process in /proc/self/smaps.

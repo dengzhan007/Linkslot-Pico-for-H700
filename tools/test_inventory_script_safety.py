@@ -226,6 +226,20 @@ class InventoryScriptSafetyTests(unittest.TestCase):
         self.assertNotIn('ION_IOC_', self.source)
         self.assertNotIn('GET_DRM_INFO', self.source)
 
+    def test_input_runtime_capture_is_read_only_and_does_not_mount_debugfs(self):
+        self.assertIn('capture_proc "interrupts.txt" "/proc/interrupts"', self.source)
+        self.assertIn('== /proc/bus/input/devices (read-only) ==', self.source)
+        self.assertIn('getevent -lp 2>&1', self.source)
+        self.assertIn('PINCTRL_DEBUG="/sys/kernel/debug/pinctrl"', self.source)
+        self.assertIn('pinmux-pins', self.source)
+        self.assertIn('pinconf-pins', self.source)
+        self.assertIn('collector did not mount it', self.source)
+        self.assertIn('> "$OUTDIR/input-runtime.txt"', self.source)
+        self.assertNotIn('mount -t debugfs', self.source)
+        self.assertNotRegex(self.source, r'>\\s*/sys/kernel/debug/pinctrl/')
+        self.assertNotRegex(self.source, r'(?m)^\\s*(?:gpio_request|gpiod_get|devm_gpio_request)')
+        self.assertNotIn('getevent -lt', self.source)
+
     def test_root_argument_is_recorded_even_when_disk_is_explicit(self):
         root_parse = self.source.index('for arg in $(cat /proc/cmdline')
         disk_guard = self.source.index('if [ -z "$DISK" ]; then')
