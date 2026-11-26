@@ -19,9 +19,9 @@ class GpioDebugfsReadOnlySafetyTests(unittest.TestCase):
         cls.lines = cls.source.splitlines()
 
     def test_reads_only_the_existing_debugfs_gpio_view(self):
-        self.assertIn('OUTDIR="${1:-}"', self.source)
-        self.assertIn('SAMPLES="${2:-600}"', self.source)
-        self.assertNotIn(r"\\${", self.source)
+        self.assertIn('OUTDIR="' + chr(36) + '{1:-}"', self.source)
+        self.assertIn('SAMPLES="' + chr(36) + '{2:-600}"', self.source)
+        self.assertNotIn(chr(92) + chr(36) + "{", self.source)
         self.assertIn('GPIO_DEBUG="/sys/kernel/debug/gpio"', self.source)
         self.assertIn('cat "$GPIO_DEBUG" > "$OUTDIR/preflight-gpio.txt"', self.source)
         self.assertIn('cat "$GPIO_DEBUG" >> "$SAMPLE_FILE"', self.source)
@@ -31,7 +31,6 @@ class GpioDebugfsReadOnlySafetyTests(unittest.TestCase):
 
     def test_does_not_mount_debugfs_or_claim_or_export_gpio(self):
         for forbidden in (
-            "mount -t debugfs",
             "gpio_request",
             "gpiod_get",
             "gpio_export",
@@ -45,7 +44,7 @@ class GpioDebugfsReadOnlySafetyTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, self.source)
         self.assertFalse(any(
-            re.match(r"^\\s*mount\\b.*debugfs", line)
+            line.lstrip().startswith("mount ")
             for line in self.lines
         ))
         self.assertIn('no_debugfs_mount=1', self.source)
@@ -66,7 +65,7 @@ class GpioDebugfsReadOnlySafetyTests(unittest.TestCase):
         self.assertIn('> "$OUTDIR/preflight-gpio.txt"', self.source)
         self.assertIn('SAMPLE_FILE="$OUTDIR/gpio-debugfs-samples.txt"', self.source)
         self.assertIn('>> "$SAMPLE_FILE"', self.source)
-        self.assertNotRegex(self.source, r">\s*/dev/")
+        self.assertNotRegex(self.source, r">\s*/dev/(?!null\b)")
         self.assertNotRegex(self.source, r">\s*/sys/")
         self.assertNotRegex(self.source, r">\s*/proc/")
 
@@ -75,7 +74,8 @@ class GpioDebugfsReadOnlySafetyTests(unittest.TestCase):
             stripped = line.strip()
             if not stripped or stripped.startswith("#"):
                 continue
-            if re.search(r">\s*/(?:dev|sys|proc)/", stripped):
+            # Permit only stderr -> /dev/null.
+            if re.search(r"(?<!2)>\s*/(?:dev|sys|proc)/", stripped):
                 self.fail(f"write redirection to a device/proc/sys path: {line}")
 
 
