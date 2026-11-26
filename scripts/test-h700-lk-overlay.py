@@ -242,9 +242,9 @@ void thread_preempt(void) { }
 
     # The modified LK C handler follows the normal H700 Thumb-2 C policy.
     # Linking it with the A32 exception vector must therefore interwork safely.
-    thumb_fault_stub = "int arm_data_abort_handler(void *frame) { return frame != 0; }\\n"
+    thumb_fault_stub = "int arm_data_abort_handler(void *frame) { return frame != 0; }"
     thumb_fault_path = out / "data-abort-handler-thumb.c"
-    thumb_fault_path.write_text(thumb_fault_stub, encoding="utf-8")
+    thumb_fault_path.write_text(thumb_fault_stub + chr(10), encoding="utf-8")
 
     flags = [
         "--target=armv7a-none-eabi",
