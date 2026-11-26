@@ -69,6 +69,83 @@ def main() -> int:
     assert module.WORDS[0x48015D70] == 0xD5033F9F
     assert module.WORDS[0x48015D74] == 0xD503207F
     assert module.WORDS[0x48015D78] == 0x17FFFFFF
+    assert module.SRAM_SUSPEND_COPY_SOURCE == 0x4800C220
+    assert module.SRAM_SUSPEND_COPY_END == 0x48015630
+    assert module.SRAM_SUSPEND_COPY_DEST == 0x20000
+    assert module.SRAM_SUSPEND_ENTRY_SOURCE == 0x4800C3D8
+    assert module.SRAM_SUSPEND_ENTRY == 0x201B8
+    assert module.SRAM_SUSPEND_STACK_SETUP_SOURCE == 0x480140A0
+    assert module.SRAM_SUSPEND_STACK_TOP == 0x57FF0
+    assert module.SRAM_SUSPEND_COPY_END - module.SRAM_SUSPEND_COPY_SOURCE == 0x9410
+    assert module.SRAM_SUSPEND_COPY_DEST + (
+        module.SRAM_SUSPEND_ENTRY_SOURCE - module.SRAM_SUSPEND_COPY_SOURCE
+    ) == module.SRAM_SUSPEND_ENTRY
+    assert module.SRAM_SUSPEND_COPY_DEST + (
+        module.SRAM_SUSPEND_STACK_SETUP_SOURCE - module.SRAM_SUSPEND_COPY_SOURCE
+    ) == 0x27E80
+    assert module.SRAM_SUSPEND_COPY_DEST + (
+        module.SRAM_SUSPEND_SCRATCH_SOURCE_START - module.SRAM_SUSPEND_COPY_SOURCE
+    ) == 0x291F0
+    assert module.SRAM_SUSPEND_COPY_DEST + (
+        module.SRAM_SUSPEND_SCRATCH_SOURCE_LAST - module.SRAM_SUSPEND_COPY_SOURCE
+    ) + 1 == 0x29349
+    assert module.WORDS[0x48001A08] == 0xF0000041
+    assert module.WORDS[0x48001A0C] == 0x900000A2
+    assert module.WORDS[0x48001A10] == 0x91088021
+    assert module.WORDS[0x48001A14] == 0x9118C042
+    assert module.WORDS[0x48001A1C] == 0xCB010042
+    assert module.WORDS[0x48001A20] == 0xD2A00040
+    assert module.WORDS[0x48001A28] == 0xD2A00053
+    assert module.WORDS[0x48001A2C] == 0x94002415
+    assert module.WORDS[0x48001A34] == 0xF00001C1
+    assert module.WORDS[0x48001A3C] == 0x912E4021
+    assert module.WORDS[0x48001A40] == 0xD2800602
+    assert module.WORDS[0x48001A44] == 0xF2A00040
+    assert module.WORDS[0x48001A48] == 0x9400240E
+    assert module.WORDS[0x48001A90] == 0xD2800601
+    assert module.WORDS[0x48001A94] == 0xD2801002
+    assert module.WORDS[0x48001A9C] == 0xF2A90001
+    assert module.WORDS[0x48001AA8] == 0x940023F6
+    assert module.WORDS[0x48001B00] == 0xD2802680
+    assert module.WORDS[0x48001B04] == 0x910E0021
+    assert module.WORDS[0x48001B08] == 0xD2801002
+    assert module.WORDS[0x48001B10] == 0x940023DC
+    assert module.WORDS[0x48001B1C] == 0x910C2021
+    assert module.WORDS[0x48001B20] == 0xD2800C02
+    assert module.WORDS[0x48001B28] == 0xD2801A80
+    assert module.WORDS[0x48001B30] == 0x940023D4
+    assert module.WORDS[0x48001A54] == 0xB900C660
+    for pc in (0x48001A2C,0x48001A48,0x48001AA8,0x48001B10,0x48001B30):
+        assert module.decode_bl_target(pc,module.WORDS[pc]) == 0x4800AA80
+    assert module.WORDS[0x4800AA8C] == 0x38636824
+    assert module.WORDS[0x4800AA90] == 0x38236804
+    assert module.WORDS[0x4800AA94] == 0x91000463
+    assert module.WORDS[0x4800C3D8] == 0xB0000040
+    assert module.WORDS[0x4800C3DC] == 0xB0000041
+    assert module.WORDS[0x4800C3E0] == 0x91104000
+    assert module.WORDS[0x4800C3E4] == 0x9115A021
+    assert module.WORDS[0x4800C3E8] == 0x3800141F
+    assert module.WORDS[0x4800C3EC] == 0xEB01001F
+    assert module.WORDS[0x4800C3F0] == 0x54FFFFC9
+    assert module.decode_bl_target(0x4800C3FC,0x94001F29) == 0x480140A0
+    assert module.decode_bl_target(0x4800C400,0x94000006) == 0x4800C418
+    assert module.decode_bl_target(0x4800C404,0x94000033) == 0x4800C4D0
+    assert module.decode_bl_target(0x4800C408,0x94000084) == 0x4800C618
+    assert module.WORDS[0x480140A0] == 0x58000081
+    assert module.WORDS[0x480140A4] == 0x9100003F
+    assert module.WORDS[0x480140A8] == 0xD65F03C0
+    assert module.WORDS[0x4800C580] == 0xD2803F00
+    assert module.WORDS[0x4800C584] == 0x52A00023
+    assert module.WORDS[0x4800C588] == 0xF2A0E000
+    assert module.WORDS[0x4800C598] == 0xB9000003
+    assert module.WORDS[0x4800C594] == 0xD2803F84
+    assert module.WORDS[0x4800C59C] == 0xF2A0E004
+    assert module.WORDS[0x4800C5A8] == 0xB940C426
+    assert module.WORDS[0x4800C5B8] == 0xB9000086
+    assert module.WORDS[0x4800C50C] == 0xD503207F
+    assert module.WORDS[0x4800C550] == 0xD503207F
+    assert module.decode_bl_target(0x4800C53C,0x94001E2D) == 0x48013DF0
+    assert module.decode_bl_target(0x4800C568,0x94001E60) == 0x48013EE8
     assert module.WORDS[0x4801612C] == 0xD53E1000
     assert module.WORDS[0x48016130] == 0x8A210000
     assert module.WORDS[0x48016134] == 0xD51E1000
@@ -117,6 +194,11 @@ def main() -> int:
     assert window_map["suspend_afflvl2_wrapper"][0] == 0x48008A00
     assert window_map["system_suspend_power_entry"][0] == 0x48001A04
     assert window_map["system_suspend_power_entry"][1] >= 0x300
+    assert window_map["system_suspend_sram_memcpy"][0] == 0x4800AA80
+    assert window_map["sram_resume_entry_source"][0] == 0x4800C3D8
+    assert window_map["sram_resume_power_and_rtc_source"][0] == 0x4800C418
+    assert window_map["sram_resume_stack_setup_source"][0] == 0x480140A0
+    assert window_map["sram_resume_return_target"][0] == 0x48015D14
     assert window_map["normal_suspend_powerdown_helper"][0] == 0x48015D70
     assert window_map["system_suspend_cache_teardown_and_trampoline"][0] == 0x48015FB8
     assert window_map["system_suspend_cache_teardown_and_trampoline"][1] >= 0x270
@@ -137,7 +219,7 @@ def main() -> int:
         pass
     else:
         raise AssertionError("B instruction was incorrectly accepted as BL")
-    print("PASS: PSCI suspend dispatch, DSB/WFI and EL3 cache teardown before SRAM branch")
+    print("PASS: PSCI suspend, full SRAM image/context copies, relocated WFI and RTC wake path")
     return 0
 
 if __name__ == "__main__":

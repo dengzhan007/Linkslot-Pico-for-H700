@@ -17,6 +17,15 @@ EXPECTED_TABLE = [
 ]
 SUSPEND_LEVEL_TABLE = 0x48017d70
 SUSPEND_LEVEL_CALLBACKS = (0x48008b84, 0x48008ab8, 0x48008a00)
+SRAM_SUSPEND_COPY_SOURCE = 0x4800c220
+SRAM_SUSPEND_COPY_END = 0x48015630
+SRAM_SUSPEND_COPY_DEST = 0x00020000
+SRAM_SUSPEND_ENTRY_SOURCE = 0x4800c3d8
+SRAM_SUSPEND_ENTRY = 0x000201b8
+SRAM_SUSPEND_STACK_SETUP_SOURCE = 0x480140a0
+SRAM_SUSPEND_STACK_TOP = 0x00057ff0
+SRAM_SUSPEND_SCRATCH_SOURCE_START = 0x48015410
+SRAM_SUSPEND_SCRATCH_SOURCE_LAST = 0x48015568
 WORDS = {
     0x480029bc: 0xa9bf7bfd, 0x480029c0: 0x900000a1,
     0x480029c4: 0x9117e021, 0x480029cc: 0xf9000001,
@@ -61,6 +70,66 @@ WORDS = {
     # Ordinary power-down helper executes DSB; WFI; retry WFI.
     0x48015d70: 0xd5033f9f, 0x48015d74: 0xd503207f,
     0x48015d78: 0x17ffffff,
+    # SYSTEM_SUSPEND copies its standby image and auxiliary context to SRAM.
+    0x48001a08: 0xf0000041, 0x48001a0c: 0x900000a2,
+    0x48001a10: 0x91088021, 0x48001a14: 0x9118c042,
+    0x48001a1c: 0xcb010042, 0x48001a20: 0xd2a00040,
+    0x48001a28: 0xd2a00053, 0x48001a2c: 0x94002415,
+    0x48001a34: 0xf00001c1, 0x48001a38: 0xd2801000,
+    0x48001a3c: 0x912e4021, 0x48001a40: 0xd2800602,
+    0x48001a44: 0xf2a00040, 0x48001a48: 0x9400240e,
+    0x48001a4c: 0x900000a0, 0x48001a50: 0x91345000,
+    0x48001a54: 0xb900c660,
+    0x48001a58: 0xb00000c0, 0x48001a5c: 0x39402000,
+    0x48001a60: 0xb900c260, 0x48001a64: 0xb00000c0,
+    0x48001a68: 0xb9400000, 0x48001a6c: 0xb900b260,
+    0x48001a70: 0xb00000c0, 0x48001a74: 0xb9400400,
+    0x48001a78: 0xb900b660, 0x48001a7c: 0xd00000c0,
+    0x48001a80: 0xb9474800, 0x48001a84: 0xb900ca60,
+    0x48001a88: 0x94000225, 0x48001a8c: 0xb900ce60,
+    0x48001a90: 0xd2800601, 0x48001a94: 0xd2801002,
+    0x48001a98: 0xb9436a80, 0x48001a9c: 0xf2a90001,
+    0x48001aa0: 0xb900d260, 0x48001aa4: 0xaa1303e0,
+    0x48001aa8: 0x940023f6,
+    0x48001aac: 0xd2802081, 0x48001ab0: 0xd00000c0,
+    0x48001ab4: 0xf2a0e001, 0x48001ab8: 0x91100000,
+    0x48001abc: 0xb9000020,
+    0x48001ac0: 0xb9436a80, 0x48001ac4: 0x3100041f,
+    0x48001ac8: 0x540003c0, 0x48001acc: 0x7100081f,
+    0x48001ad0: 0x540000a1, 0x48001ad4: 0xb940ce60,
+    0x48001ad8: 0x121f7800, 0x48001adc: 0x321f0000,
+    0x48001ae0: 0x14000017, 0x48001ae4: 0xd00000d4,
+    0x48001ae8: 0xb9437a80, 0x48001aec: 0x35000080,
+    0x48001af0: 0xb940ce60, 0x48001af4: 0x32000000,
+    0x48001af8: 0x14000011, 0x48001afc: 0xd00000c1,
+    0x48001b00: 0xd2802680, 0x48001b04: 0x910e0021,
+    0x48001b08: 0xd2801002, 0x48001b0c: 0xf2a00040,
+    0x48001b10: 0x940023dc,
+    0x48001b14: 0xb9437a80, 0x48001b18: 0xd00000c1,
+    0x48001b1c: 0x910c2021, 0x48001b20: 0xd2800c02,
+    0x48001b24: 0xb901b660, 0x48001b28: 0xd2801a80,
+    0x48001b2c: 0xf2a00040, 0x48001b30: 0x940023d4,
+    0x48001b34: 0xb940ce60, 0x48001b38: 0x121e7400,
+    0x48001b3c: 0xb900ce60, 0x48001b40: 0xd00000c0,
+    0x48001b44: 0x394db000, 0x48001b48: 0x340000a0,
+    0x48001b4c: 0xd2a00041, 0x48001b50: 0xb940cc20,
+    0x48001b54: 0x321e0000, 0x48001b58: 0xb900cc20,
+    # Relocated standby entry, in-image scratch/BSS and copied helper calls.
+    0x4800c3d8: 0xb0000040, 0x4800c3dc: 0xb0000041,
+    0x4800c3e0: 0x91104000, 0x4800c3e4: 0x9115a021,
+    0x4800c3e8: 0x3800141f, 0x4800c3ec: 0xeb01001f,
+    0x4800c3f0: 0x54ffffc9, 0x4800c3fc: 0x94001f29,
+    0x4800c400: 0x94000006, 0x4800c404: 0x94000033,
+    0x4800c408: 0x94000084,
+    0x4800c50c: 0xd503207f, 0x4800c550: 0xd503207f,
+    0x4800c53c: 0x94001e2d, 0x4800c568: 0x94001e60,
+    0x4800c580: 0xd2803f00, 0x4800c584: 0x52a00023,
+    0x4800c588: 0xf2a0e000, 0x4800c594: 0xd2803f84,
+    0x4800c598: 0xb9000003, 0x4800c59c: 0xf2a0e004,
+    0x4800c5a8: 0xb940c426, 0x4800c5b8: 0xb9000086,
+    # Copied code installs its SRAM-C stack.
+    0x480140a0: 0x58000081, 0x480140a4: 0x9100003f,
+    0x480140a8: 0xd65f03c0,
     # EL3 special path disables MMU/D-cache then walks cache hierarchy by set/way.
     0x48015fb8: 0xb40003e3, 0x48015fe4: 0xd51a000a,
     0x48015fec: 0xd5390001, 0x48016040: 0xd508764b,
@@ -140,6 +209,11 @@ DISASSEMBLY_WINDOWS = (
     ("suspend_afflvl1_wrapper", 0x48008ab8, 0x100),
     ("suspend_afflvl2_wrapper", 0x48008a00, 0x100),
     ("system_suspend_power_entry", 0x48001a04, 0x300),
+    ("system_suspend_sram_memcpy", 0x4800aa80, 0x20),
+    ("sram_resume_entry_source", 0x4800c3d8, 0x40),
+    ("sram_resume_power_and_rtc_source", 0x4800c418, 0x2f0),
+    ("sram_resume_stack_setup_source", 0x480140a0, 0x18),
+    ("sram_resume_return_target", 0x48015d14, 0x90),
     ("normal_suspend_powerdown_helper", 0x48015d70, 0x80),
     ("system_suspend_cache_teardown_and_trampoline", 0x48015fb8, 0x270),
     ("system_suspend_caller_full", 0x480096f8, 0xa0),
@@ -272,6 +346,102 @@ def main() -> int:
             )
     if decode_bl_target(0x48009774, read_word(raw, 0x48009774)) != 0x48001a04:
         raise RuntimeError("SYSTEM_SUSPEND -4 power-entry target changed")
+    copy_length = SRAM_SUSPEND_COPY_END - SRAM_SUSPEND_COPY_SOURCE
+    mapped_entry = SRAM_SUSPEND_COPY_DEST + (
+        SRAM_SUSPEND_ENTRY_SOURCE - SRAM_SUSPEND_COPY_SOURCE
+    )
+    mapped_stack_setup = SRAM_SUSPEND_COPY_DEST + (
+        SRAM_SUSPEND_STACK_SETUP_SOURCE - SRAM_SUSPEND_COPY_SOURCE
+    )
+    scratch_start = SRAM_SUSPEND_COPY_DEST + (
+        SRAM_SUSPEND_SCRATCH_SOURCE_START - SRAM_SUSPEND_COPY_SOURCE
+    )
+    scratch_end_exclusive = SRAM_SUSPEND_COPY_DEST + (
+        SRAM_SUSPEND_SCRATCH_SOURCE_LAST - SRAM_SUSPEND_COPY_SOURCE
+    ) + 1
+    if copy_length != 0x9410:
+        raise RuntimeError("SRAM standby image copy length changed")
+    if mapped_entry != SRAM_SUSPEND_ENTRY:
+        raise RuntimeError("SRAM standby entry/source mapping changed")
+    if mapped_stack_setup != 0x27e80:
+        raise RuntimeError("SRAM standby stack-setup mapping changed")
+    if (scratch_start, scratch_end_exclusive) != (0x291f0, 0x29349):
+        raise RuntimeError("relocated SRAM scratch/BSS range changed")
+    copy_calls = (
+        (0x48001a2c, 0x4800aa80),
+        (0x48001a48, 0x4800aa80),
+        (0x48001aa8, 0x4800aa80),
+        (0x48001b10, 0x4800aa80),
+        (0x48001b30, 0x4800aa80),
+    )
+    for call_pc, target in copy_calls:
+        if decode_bl_target(call_pc, read_word(raw, call_pc)) != target:
+            raise RuntimeError("SRAM image/context memcpy target changed at 0x%08x" % call_pc)
+    copy_instruction_words = {
+        0x48001a08: 0xf0000041,  # ADRP source page
+        0x48001a0c: 0x900000a2,  # ADRP source end page
+        0x48001a10: 0x91088021,  # source +0x220
+        0x48001a14: 0x9118c042,  # end +0x630
+        0x48001a1c: 0xcb010042,  # end - source
+        0x48001a20: 0xd2a00040,  # destination 0x20000
+        0x48001a28: 0xd2a00053,  # retained SRAM base
+        0x48001a34: 0xf00001c1,  # auxiliary source page 0x4803c000
+        0x48001a38: 0xd2801000,  # copy size 0x80 low bits
+        0x48001a3c: 0x912e4021,  # source +0xb90
+        0x48001a40: 0xd2800602,  # copy length 0x30
+        0x48001a44: 0xf2a00040,  # destination 0x20080
+        0x48001a90: 0xd2800601,  # header source offset 0x30
+        0x48001a94: 0xd2801002,  # copy length 0x80
+        0x48001a98: 0xb9436a80,  # context global
+        0x48001a9c: 0xf2a90001,  # source base 0x48000000
+        0x48001aa4: 0xaa1303e0,  # destination retained x19=0x20000
+        0x48001aac: 0xd2802081,  # RTC/entry address offset setup
+        0x48001ab4: 0xf2a0e001,  # 0x07000104
+        0x48001b00: 0xd2802680,  # conditional destination 0x20134
+        0x48001b04: 0x910e0021,  # conditional source +0x380
+        0x48001b08: 0xd2801002,  # conditional copy length 0x80
+        0x48001b0c: 0xf2a00040,  # destination high half
+        0x48001b18: 0xd00000c1,  # second conditional data source
+        0x48001b1c: 0x910c2021,  # source +0x308
+        0x48001b20: 0xd2800c02,  # second conditional copy length 0x60
+        0x48001b28: 0xd2801a80,  # destination low 0xd4
+        0x48001b2c: 0xf2a00040,  # destination high half
+    }
+    for address, expected in copy_instruction_words.items():
+        if read_word(raw, address) != expected:
+            raise RuntimeError("SRAM copy/context instruction changed at 0x%08x" % address)
+    if read_word(raw, 0x48001a54) != 0xb900c660:
+        raise RuntimeError("saved BL31 wake-return address store changed")
+    if decode_bl_target(0x4800c3fc, read_word(raw, 0x4800c3fc)) != 0x480140a0:
+        raise RuntimeError("relocated SRAM stack-setup call changed")
+    if decode_bl_target(0x4800c400, read_word(raw, 0x4800c400)) != 0x4800c418:
+        raise RuntimeError("relocated SRAM RTC/context setup call changed")
+    if decode_bl_target(0x4800c404, read_word(raw, 0x4800c404)) != 0x4800c4d0:
+        raise RuntimeError("relocated SRAM powerdown helper call changed")
+    if decode_bl_target(0x4800c408, read_word(raw, 0x4800c408)) != 0x4800c618:
+        raise RuntimeError("relocated SRAM final standby helper call changed")
+    stack_literal = struct.unpack_from("<Q", raw, SRAM_SUSPEND_STACK_SETUP_SOURCE - BASE + 0x10)[0]
+    if stack_literal != SRAM_SUSPEND_STACK_TOP:
+        raise RuntimeError("relocated SRAM stack-top literal changed")
+    if decode_bl_target(0x4800c53c, read_word(raw, 0x4800c53c)) != 0x48013df0:
+        raise RuntimeError("SRAM secondary WFI path helper changed")
+    if decode_bl_target(0x4800c568, read_word(raw, 0x4800c568)) != 0x48013ee8:
+        raise RuntimeError("SRAM WFI return-check helper changed")
+    rtc_instruction_words = {
+        0x4800c580: 0xd2803f00,  # 0x1f8
+        0x4800c584: 0x52a00023,  # standby flag 0x10000
+        0x4800c588: 0xf2a0e000,  # 0x07000000 high half
+        0x4800c598: 0xb9000003,  # write standby flag
+        0x4800c594: 0xd2803f84,  # 0x1fc
+        0x4800c59c: 0xf2a0e004,  # 0x07000000 high half
+        0x4800c5a8: 0xb940c426,  # saved return address from context +0xc4
+        0x4800c5b8: 0xb9000086,  # write return address
+    }
+    for address, expected in rtc_instruction_words.items():
+        if read_word(raw, address) != expected:
+            raise RuntimeError("SRAM RTC standby instruction changed at 0x%08x" % address)
+    if read_word(raw, 0x4800c50c) != 0xd503207f or read_word(raw, 0x4800c550) != 0xd503207f:
+        raise RuntimeError("relocated SRAM WFI path changed")
     if decode_bl_target(0x48001b5c, read_word(raw, 0x48001b5c)) != 0x48016128:
         raise RuntimeError("SYSTEM_SUSPEND trampoline preparation helper changed")
     cache_control_words = {
@@ -535,6 +705,34 @@ def main() -> int:
                     "wfi_loop_branch_pc": "0x48015d78",
                     "sequence": "DSB SY; WFI; branch back to WFI",
                 },
+                "copied_sram_standby_image": {
+                    "copy_regions": [
+                        {"source": "[0x4800c220, 0x48015630)", "destination": "[0x20000, 0x29410)", "length": "0x9410", "condition": "always", "kind": "standby code/data image"},
+                        {"source": "[0x4803cb90, 0x4803cbc0)", "destination": "[0x20080, 0x200b0)", "length": "0x30", "condition": "always", "kind": "auxiliary runtime context; source lies outside the monitor file payload"},
+                        {"source": "[0x48000030, 0x480000b0)", "destination": "[0x20000, 0x20080)", "length": "0x80", "condition": "always", "kind": "BL31 header/boot-context prefix"},
+                        {"source": "[0x4801b380, 0x4801b400)", "destination": "[0x20134, 0x201b4)", "length": "0x80", "condition": "conditional on saved power-mode/global state"},
+                        {"source": "[0x4801b308, 0x4801b368)", "destination": "[0x200d4, 0x20134)", "length": "0x60", "condition": "conditional on saved power-mode/global state"}
+                    ],
+                    "memcpy_target": "0x4800aa80",
+                    "memcpy_call_pcs": ["0x48001a2c", "0x48001a48", "0x48001aa8", "0x48001b10", "0x48001b30"],
+                    "runtime_entry": "0x000201b8",
+                    "source_entry": "0x4800c3d8",
+                    "entry_source_offset": "0x1b8",
+                    "scratch_source_range": "[0x48015410, 0x48015569)",
+                    "scratch_runtime_range": "[0x291f0, 0x29349)",
+                    "stack_setup_source": "0x480140a0",
+                    "mapped_stack_setup": "0x00027e80",
+                    "stack_top_literal": "0x00057ff0",
+                    "saved_wakeup_return_address": "0x48015d14",
+                    "saved_wakeup_return_context_offset": "0xc4",
+                    "rtc_standby_flag_register": "0x070001f8",
+                    "rtc_standby_flag_value": "0x00010000",
+                    "rtc_soft_entry_register": "0x070001fc",
+                    "rtc_soft_entry_value_source": "context + 0xc4",
+                    "wfi_in_source_blob": ["0x4800c50c", "0x4800c550"],
+                    "sram_map_note": "main image spans SRAM A1 and the start of SRAM C; the mapped stack top is in SRAM C",
+                    "runtime_caveat": "copy destinations and relocated entry are statically reconstructed; live SRAM_C ownership, conditional context source values, RTC behavior and successful suspend/wakeup are not measured"
+                },
             },
             "interpretation": "eight legacy affinst/system power callbacks followed by a vendor get_sys_suspend_power_state extension; dispatch offsets and the exact embedded getter string identify slot 8",
         },
@@ -611,8 +809,10 @@ def main() -> int:
         "- Transition `0x48008d98` iterates affinity levels from start to end through callback map `0x48017d70`; the three wrappers `0x48008b84/0x48008ab8/0x48008a00` dispatch platform slot 3 `affinst_suspend`.",
         "- For system state `0x02010000`, slot 3's CCU-save branch returns `-4`; caller checks that sentinel and invokes power-entry target `0x48001a04` at `0x48009774`.",
         "- Ordinary suspend uses `0x48015d70`: `DSB SY` → `WFI` → branch back to WFI.",
-        "- The special handler `0x48001a04` prepares context at `0x20000`, clears SCTLR_EL3 M/C via `0x48016128`, runs CLIDR/CCSIDR cache set/way maintenance, then computes target `0x201b8` and executes `br x0`.",
-        "- The target `0x201b8` lies in the `sun50iw9p1` SRAM A1 map `[0x20000,0x28000)`; the actual live SRAM contents and resume-code copy/installation path are not captured, so the branch target's code identity remains unverified.",
+        "- The special handler `0x48001a04` copies the 0x9410-byte standby image from `[0x4800c220,0x48015630)` to SRAM `[0x20000,0x29410)`, plus auxiliary/context blocks at SRAM offsets `0x80`, `0xd4`, and `0x134` (the latter two are conditional).",
+        "- The copied image entry at source `0x4800c3d8` maps exactly to branch target `0x201b8`; copied helper `0x480140a0` maps to `0x27e80` and loads SP `0x57ff0`.",
+        "- The relocated entry zeros its in-image scratch range `[0x291f0,0x29349)`, records wake-return address `0x48015d14` at context offset `0xc4`, and the copied RTC path writes flag `0x10000` to `0x070001f8` plus the saved return address to `0x070001fc`.",
+        "- The main copy spans the SRAM A1 range and extends into SRAM C; the SP is also in SRAM C. This is a static copy/map reconstruction, not a live SRAM ownership or wakeup measurement.",
         "- The effective ABI is the legacy Allwinner `plat_pm_ops_t` order with a vendor getter extension; the exact source commit is not identified.",
 
         "- Slot 1 affinst_on calls CPU_ON helper `0x48002d78` at `0x4800255c` when `W3 == 0`.",
@@ -633,7 +833,7 @@ def main() -> int:
         "- No hardware MMIO, flash, boot-media write or payload execution occurred.", "",
     ]
     (args.out.parent / "PSCI-CPU-ON.md").write_text("\n".join(markdown), encoding="utf-8")
-    print("PASS: PSCI suspend dispatch, DSB/WFI and EL3 cache teardown before SRAM branch")
+    print("PASS: PSCI suspend, full SRAM image/context copies, relocated WFI and RTC wake path")
     print("  table[1] = 0x%08x -> low-level 0x48002d78" % table[1])
     print("  callback disassembly = %s" % disassembly_path)
     print("  monitor SHA-256 = %s" % digest)
