@@ -257,8 +257,8 @@ def patch_arch_c(original: str) -> str:
     if original.count(old) != 1:
         raise RuntimeError("expected exactly one arch_early_init VBAR assignment")
     new = (
-        "extern char __lk_vectors_start[];\\n"
-        "\\tset_vector_base((addr_t)__lk_vectors_start);"
+        "extern char __lk_vectors_start[];\n"
+        "\tset_vector_base((addr_t)__lk_vectors_start);"
     )
     return original.replace(old, new, 1)
 

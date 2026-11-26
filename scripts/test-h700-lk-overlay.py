@@ -159,6 +159,11 @@ def main() -> None:
     arch_text = overlay_arch_c.read_text(encoding="utf-8")
     if "set_vector_base((addr_t)__lk_vectors_start);" not in arch_text:
         raise RuntimeError("arch.c does not preserve the relocated H700 vector base")
+    if "extern char __lk_vectors_start[];\\n\\tset_vector_base" in arch_text:
+        raise RuntimeError("arch.c VBAR declaration was emitted with literal escape characters")
+    if "\n\\tset_vector_base((addr_t)__lk_vectors_start);" not in arch_text:
+        raise RuntimeError("arch.c VBAR declaration and assignment must be split by a real newline and tab")
+        raise RuntimeError("arch.c does not preserve the relocated H700 vector base")
     if "set_vector_base(MEMBASE);" in arch_text:
         raise RuntimeError("arch.c still resets VBAR to MEMBASE")
 
