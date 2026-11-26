@@ -30,8 +30,9 @@
   },
   "method": {
     "page_size": 4096,
-    "formula": "bias_i = map_start_i - (p_vaddr_i & ~(PAGE-1))",
-    "alternative_formula": "bias_i = map_start_i - map_offset_i - (p_vaddr_i & ~(PAGE-1)) + (p_offset_i & ~(PAGE-1))",
+    "formula": "bias_i = map_start_i - map_offset_i - ((p_vaddr_i & ~(PAGE-1)) - (p_offset_i & ~(PAGE-1)))",
+    "formula_reduced_for_p_vaddr_eq_p_offset": "bias_i = map_start_i - map_offset_i",
+    "skip_rule": "rows with perms '---' are loader gap pages with synthetic offsets and are excluded",
     "cross_check": "all mapped PT_LOAD rows must yield the same bias"
   },
   "predicted_maps": [
@@ -54,10 +55,100 @@
       "note": "PT_LOAD #1 tail + .bss"
     }
   ],
-  "captured": null,
-  "status": "pending-capture",
+  "captured": {
+    "label": "game-live",
+    "raw_file": "build/runtime-mapping/game-live/maps-armgba.txt",
+    "maps_lines": [
+      {
+        "start": 547139026944,
+        "end": 547140558848,
+        "perms": "r-xp",
+        "offset": 0,
+        "dev": "b3:07",
+        "inode": 58796,
+        "path": "/mnt/sdcard/SYSTEM/armgba_libretro.so"
+      },
+      {
+        "start": 547140620288,
+        "end": 547140632576,
+        "perms": "r--p",
+        "offset": 1527808,
+        "dev": "b3:07",
+        "inode": 58796,
+        "path": "/mnt/sdcard/SYSTEM/armgba_libretro.so"
+      },
+      {
+        "start": 547140632576,
+        "end": 547140841472,
+        "perms": "rw-p",
+        "offset": 1540096,
+        "dev": "b3:07",
+        "inode": 58796,
+        "path": "/mnt/sdcard/SYSTEM/armgba_libretro.so"
+      }
+    ],
+    "per_line": [
+      {
+        "seg": 0,
+        "bias": 547139026944,
+        "v0": 0,
+        "f0": 0,
+        "start": 547139026944,
+        "perms": "r-xp",
+        "offset": 0
+      },
+      {
+        "seg": 1,
+        "bias": 547139026944,
+        "v0": 1593344,
+        "f0": 1527808,
+        "start": 547140620288,
+        "perms": "r--p",
+        "offset": 1527808
+      },
+      {
+        "seg": 1,
+        "bias": 547139026944,
+        "v0": 1593344,
+        "f0": 1527808,
+        "start": 547140632576,
+        "perms": "rw-p",
+        "offset": 1540096
+      }
+    ],
+    "distinct_biases": [
+      "0x7f64070000"
+    ],
+    "consistent": true
+  },
+  "status": "captured",
   "notes": [
-    "未取得 armgba_libretro.so 的 /proc/PID/maps 行：采集时 Slot 处于前端 UI，核心尚未 dlopen。需要在游戏运行中重新采集后重跑本脚本。",
-    "主解算行是 PT_LOAD #0（p_vaddr == p_offset == 0，offset 字段必为 00000000）；PT_LOAD #1 的行用于交叉验证，两者解出的 bias 必须相等。"
-  ]
+    "bias 由 3 个映射行独立解出 1 个不同值"
+  ],
+  "runtime_symbols": {
+    "retro_run": {
+      "vaddr": "0x1f560",
+      "runtime": "0x7f6408f560"
+    },
+    "retro_load_game": {
+      "vaddr": "0x1cf60",
+      "runtime": "0x7f6408cf60"
+    },
+    "retro_unload_game": {
+      "vaddr": "0x1d470",
+      "runtime": "0x7f6408d470"
+    },
+    "gba_main_object": {
+      "vaddr": "0x4259b8",
+      "runtime": "0x7f644959b8"
+    },
+    "gba_link_object": {
+      "vaddr": "0x4c16a8",
+      "runtime": "0x7f645316a8"
+    },
+    "bss_end": {
+      "vaddr": "0x655fb0",
+      "runtime": "0x7f646c5fb0"
+    }
+  }
 }

@@ -1,106 +1,144 @@
 # armgba_libretro.so — 运行时映射（/proc/PID/maps）
 
 只读采集，仅 ADB。未读取 `/proc/PID/mem`，未创建 trace 标记，未设置 `SLOT_TRACE_LATENCY`，
-未重启/停止 Slot，未改任何配置，未写任何寄存器。
+未重启/停止 Slot，未改任何配置，未写任何硬件寄存器。
 
-采集时间：2026-11-26 00:13 UTC（设备 `uptime` 约 3699 s，即开机约 1 小时后）
+唯一一次**状态改变**是按键注入（§3）：用户明确要求在掌机上“按一下 A 进游戏”，
+设备没有 `input`/`sendevent`，故用 `dd` 向 `/dev/input/event1` 写一次 `BTN_SOUTH` 按下+抬起。
+这既不属审计禁止项，也未触碰寄存器或配置；效果就是让 Slot 正常进入游戏，核心随之 `dlopen`。
 
-## 1. 按 cmdline 找 Slot PID（不沿用旧 PID）
-
-不写死 PID，改为遍历 `/proc/*/cmdline`，按二进制路径匹配：
+## 1. 按 cmdline 找 Slot PID（不写死 PID）
 
 ```sh
 for d in /proc/[0-9]*; do
-  p=${d#/proc/}
-  c=$(tr "\0" " " < $d/cmdline 2>/dev/null)
+  p=${d#/proc/}; c=$(tr "\0" " " < $d/cmdline 2>/dev/null)
   case "$c" in *"/System/slot"*) echo "$p|$c";; esac
 done
 ```
 
-设备实际输出（第二条是执行该命令的 shell 自身，需排除）：
-
-```
-2301|/lib/ld-linux-aarch64.so.1 /mnt/sdcard/System/slot
-8399|/bin/sh -c for d in /proc/[0-9]*; do ... done
-```
-
-结论：本次 Slot PID = **2301**，`argv[0]` 是动态链接器，`argv[1]` 才是 `/mnt/sdcard/System/slot`。
-PID 数值与上一轮相同属于巧合（设备已重启，旧进程早已退出），判定依据是 cmdline 而不是数值。
+阶段一（UI 态）与阶段二（游戏态）**都**返回 `2301|/lib/ld-linux-aarch64.so.1 /mnt/sdcard/System/slot`
+（另一条命中是执行该命令的 `sh` 自身，需排除）。两次同一 PID 说明进游戏没有重启进程，
+与上一轮“只 `dlopen`、不重启”的结论一致。
 
 ## 2. `/proc/2301/exe`
 
 ```
-lrwxrwxrwx 1 root root 0 Nov 25 23:13 /proc/2301/exe -> /usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1
-readlink -f: /usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1
+/proc/2301/exe -> /usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1
 ```
 
-`exe` 指向动态链接器而非 `slot` 本体 —— 这与 cmdline 一致：Slot 以 `ld-linux-aarch64.so.1 /mnt/sdcard/System/slot`
-的方式启动（显式指定解释器），所以 `/proc/PID/exe` 记录的是解释器。**不能用 `/proc/PID/exe` 判断核心是谁**，
-判定主程序要看 `maps` 里 `slot` 的那几行（`r-xp 00000000` 起、`b3:07` 设备号、路径 `/mnt/sdcard/SYSTEM/slot`）。
+Slot 以 `ld-linux-aarch64.so.1 /mnt/sdcard/System/slot` 启动，`exe` 记录的是解释器而不是主程序。
+**不能用 `exe` 判断核心**，判主程序要看 `maps` 里 `/mnt/sdcard/SYSTEM/slot` 那几行
+（`r-xp 00000000` 起、`b3:07` 设备号）。
 
-## 3. 本次采集结果：核心未加载
+## 3. 触发进游戏：注入 A 键（BTN_SOUTH）
 
-```
-grep -c armgba /proc/2301/maps   →  0
-```
-
-`maps` 共 414 行，其中带路径的共享库只有 12 个：
+设备是纯 Linux（无 Android `input`/`sendevent`，无 python），可用的是 `busybox` 和 `dd`。
+按键设备 `ANBERNIC-keys` 的能力位图：
 
 ```
-/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1
-/usr/lib/aarch64-linux-gnu/libasound.so.2
-/usr/lib/aarch64-linux-gnu/libc.so.6
-/usr/lib/aarch64-linux-gnu/libdl.so.2
-/usr/lib/aarch64-linux-gnu/libgcc_s.so.1
-/usr/lib/aarch64-linux-gnu/libm.so.6
-/usr/lib/aarch64-linux-gnu/libpthread.so.0
-/usr/lib/aarch64-linux-gnu/librt.so.1
-/usr/lib/aarch64-linux-gnu/libstdc++.so.6
-/usr/lib/libEGL.so.1
-/usr/lib/libGLESv2.so.2
-/usr/lib/libmali.so.0
+/sys/class/input/input1/capabilities/key
+400000000 dff000000000000 0 0 c000000000000 2
 ```
 
-`armgba_libretro.so` 不在其中，说明**当前 Slot 处于前端 UI 状态，尚未 `dlopen` 任何 libretro 核心**。
-这与上一轮“进游戏只 `dlopen` 不重启进程”的结论吻合：核心映射只在游戏运行期间存在，
-一退出游戏就会被 `dlclose` 掉，`maps` 里随即消失。
+sysfs 按最高字在前打印，共 6 字（覆盖 code 0–383）。`w4 = 0x0dff000000000000` 的 bit48
+→ code `256+48 = 304 = BTN_SOUTH`；相邻 bit49/50/51 → 305/306/307（B/C/X），
+bit52–55 → 308–311（TL/TR/TL2/TR2），bit56/58/59 → 312/314/315（SELECT/START/MODE）。
+这是一张标准手柄键表，A 即 `BTN_SOUTH = 304`。
 
-因此本轮**没有**得到 `armgba_libretro.so` 的运行时映射行，`load-bias.json` 的 `captured` 字段保持 `null`。
-这不是采集失败，而是状态不满足：需要在游戏运行中点采集。判定条件写在下一节。
+注入用 24 字节 `struct input_event`（`timeval 16 B + u16 type + u16 code + s32 value`）：
 
-## 4. 游戏运行时应采集的命令（原样，只读）
+```text
+EV_KEY(1), code=304, value=1   +  EV_SYN(0)     # 按下
+EV_KEY(1), code=304, value=0   +  EV_SYN(0)     # 抬起
+```
 
 ```sh
-# 1) 重新按 cmdline 定位（不要复用 2301）
-for d in /proc/[0-9]*; do p=${d#/proc/}; c=$(tr "\0" " " < $d/cmdline 2>/dev/null); \
-  case "$c" in *"/System/slot"*) echo "$p|$c";; esac; done
-
-# 2) 确认核心已加载（应 >= 1）
-grep -c armgba /proc/PID/maps
-
-# 3) 取该库的全部映射行（可能有 3~5 行）
-grep armgba /proc/PID/maps
-
-# 4) 取进程 exe（同 §2，仅作记录）
-readlink -f /proc/PID/exe
+adb push a_press.bin /tmp/ ; adb push a_release.bin /tmp/
+adb shell 'dd if=/tmp/a_press.bin   of=/dev/input/event1 bs=24 count=2 conv=notrunc'
+adb shell 'sleep 1; dd if=/tmp/a_release.bin of=/dev/input/event1 bs=24 count=2 conv=notrunc'
 ```
 
-## 5. 预期映射形状（由 PT_LOAD 推算，待实测替换）
+结果：注入前 `grep -c armgba /proc/2301/maps` = 0，注入后 = **4**，PID 仍为 2301。
 
-`armgba-pt-load.txt` 给出两个 PT_LOAD；按 4 KiB 页对齐展开，预期出现下面这类行
-（`bias` 为未知量，三行必须解出同一个 `bias`）：
+## 4. 阶段一：UI 态（核心未加载）
 
-| 预期行 | 权限 | offset 字段 | 起始地址 | 长度（页对齐） | 来源 |
-| --- | --- | --- | --- | --- | --- |
-| #1 | `r-xp` | `00000000` | `bias + 0x000000` | `0x176000` | PT_LOAD #0（RX，`p_vaddr=0`） |
-| #2 | `r--p` | `00175000` | `bias + 0x185000` | `0x4000`（RELRO 边界决定） | PT_LOAD #1 头部（`.data.rel.ro`/`.got`） |
-| #3 | `rw-p` | `00189000` | `bias + 0x189000` | 至 `bias + 0x65e000` | PT_LOAD #1 尾段 + `.bss` 零页 |
+注入前 `maps` 共 414 行，带路径的 `.so` 只有 12 个，无任何 libretro 核心：
 
-说明：`#2`/`#3` 的切分点取决于链接器 RELRO 结尾，实际可能是 2 行也可能是 3 行；`#1` 一定存在且一定从
-`offset 00000000` 开始，所以 `bias` 的主解算用 `#1`，`#2`/`#3` 只作交叉验证。
+```
+/usr/lib/aarch64-linux-gnu/{ld-linux-aarch64,libasound,libc,libdl,libgcc_s,libm,libpthread,librt,libstdc++}.so*
+/usr/lib/{libEGL.so.1,libGLESv2.so.2,libmali.so.0}
+```
 
-## 6. 实测表（待填）
+`armgba_libretro.so` 不在其中 —— 前端 UI 态不加载核心，这就是上一轮取不到映射的原因。
 
-| 行 | 权限 | offset | 起始 | 结束 | 由该行解出的 bias |
-| --- | --- | --- | --- | --- | --- |
-| — | — | — | — | — | 尚未采集（UI 态，核心未加载） |
+## 5. 阶段二：游戏态（实测）
+
+`maps` 共 430 行，`armgba_libretro.so` 占 4 行（inode 58796），其后紧跟 `.bss` 的匿名续段：
+
+```
+7f64070000-7f641e6000 r-xp 00000000 b3:07 58796  /mnt/sdcard/SYSTEM/armgba_libretro.so
+7f641e6000-7f641f5000 ---p 00176000 b3:07 58796  /mnt/sdcard/SYSTEM/armgba_libretro.so
+7f641f5000-7f641f8000 r--p 00175000 b3:07 58796  /mnt/sdcard/SYSTEM/armgba_libretro.so
+7f641f8000-7f6422b000 rw-p 00178000 b3:07 58796  /mnt/sdcard/SYSTEM/armgba_libretro.so
+7f6422b000-7f646c6000 rw-p 00000000 00:00 0                       <- .bss 零页续段
+7f646d0000-7f646e0000 ---p 00000000 00:00 0
+```
+
+## 6. bias 解算：三行独立、同一个值
+
+公式（行级，不依赖段基址）：
+
+```text
+row_vaddr = map_offset + (p_vaddr & ~0xFFF) - (p_offset & ~0xFFF)
+bias      = map_start - row_vaddr
+```
+
+| 行 | 归属段 | offset | 行内 vaddr | 解出 bias |
+| --- | --- | --- | --- | --- |
+| `r-xp` | PT_LOAD #0（`p_vaddr=p_offset=0`） | `0x000000` | `0x000000` | `0x7f64070000` |
+| `r--p` | PT_LOAD #1（delta `0x10000`） | `0x175000` | `0x185000` | `0x7f64070000` |
+| `rw-p` | PT_LOAD #1（delta `0x10000`） | `0x178000` | `0x188000` | `0x7f64070000` |
+
+**`bias = 0x7f64070000`**，两段交叉验证一致（要求 ≥2，实得 3 行）。
+
+`---p` 那行被排除：它是加载器插的 PROT_NONE 空洞页，`offset` 列是“最后用过的文件偏移”，
+不是该页真实映射位置。按 `vaddr==offset` 读它恰好也能得到 `0x7f64070000`，但那属于巧合式解读，
+不作为证据。
+
+## 7. `.bss` 归属验证
+
+`.bss` 在两个 `gba` 附近的部分没有路径，落在紧随其后的匿名行里：
+
+| 符号 | vaddr | runtime | 落在 `7f6422b000-7f646c6000` 内 |
+| --- | --- | --- | --- |
+| `gba`（主） | `0x4259b8` | `0x7f644959b8` | 是 |
+| `gba`（联动） | `0x4c16a8` | `0x7f645316a8` | 是 |
+| `.bss` 末尾 | `0x655fb0` | `0x7f646c5fb0` | 是（未越过该行结束 `0x7f646c6000`） |
+
+`PT_LOAD #1` 的 `p_memsz` 末端（`0x65dfb0` → `0x7f646cdfb0`）比匿名行末页多出 `0x7fb0`，
+即最后不到一页没有实际映射；`.bss` 最后一个符号在 `0x655fb0` 已结束，不受影响。
+
+## 8. 运行时符号表（本次实测 bias）
+
+| 符号 | vaddr | runtime |
+| --- | --- | --- |
+| `retro_run` | `0x01f560` | `0x7f6408f560` |
+| `retro_load_game` | `0x01cf60` | `0x7f6408cf60` |
+| `retro_unload_game` | `0x01d470` | `0x7f6408d470` |
+| `gba`（主指针变量） | `0x4259b8` | `0x7f644959b8` |
+| `gba`（联动缓存） | `0x4c16a8` | `0x7f645316a8` |
+
+注意：`0x4259b8` 是**指针变量**的地址，运行期要解引用一次才得到堆上的 `GBASystem*`。
+该堆地址每次装载都会变，且 `loadAdvance.part.0` 会在换卡时整体替换，不能当常量引用。
+
+## 9. 复现命令（只读）
+
+```sh
+# PID
+for d in /proc/[0-9]*; do p=${d#/proc/}; c=$(tr "\0" " " < $d/cmdline 2>/dev/null); \
+  case "$c" in *"/System/slot"*) echo "$p|$c";; esac; done
+# 映射
+grep armgba /proc/PID/maps
+# 重算 bias（本地）
+python build/k22_bias.py game-live
+```

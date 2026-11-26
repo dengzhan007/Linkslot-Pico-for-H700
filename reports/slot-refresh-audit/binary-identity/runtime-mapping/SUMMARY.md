@@ -4,15 +4,18 @@
 **未**重启或停止 Slot，**未**修改任何配置，**未**写任何硬件寄存器。
 二进制 SHA-256、面板参数、IRQ 293 数据已在本目录上级 `REPORT.md` 给定，此处不重复。
 
+唯一一次状态改变是应要求注入一次 A 键（`BTN_SOUTH=304`）把游戏打开，让核心 `dlopen`；
+方法与字节流见 `armgba-maps.txt` §3。
+
 ## 0. 结论速览
 
 | 问题 | 结论 |
 | --- | --- |
 | Slot PID | **2301**，由 `/proc/*/cmdline` 匹配 `/System/slot` 得出，未沿用旧值（旧值相同属巧合，设备已重启） |
 | `/proc/PID/exe` | `ld-linux-aarch64.so.1`（Slot 用显式解释器启动，`exe` 是解释器，不是主程序） |
-| `armgba_libretro.so` 映射 | **本次未取得**：采集时 Slot 在前端 UI，核心尚未 `dlopen`（`grep -c armgba maps` = 0） |
+| `armgba_libretro.so` 映射 | **已取得**：进游戏后 4 行（UI 态 0 行），PID 未变 |
 | PT_LOAD | 2 个：`#0 RX p_vaddr=0`、`#1 RW p_vaddr=0x1857a0 / p_offset=0x1757a0` |
-| load bias | 方法已固定（见 §3），数值待游戏运行中采集后填；`load-bias.json` 的 `captured` 目前为 `null` |
+| load bias | **`0x7f64070000`**，由 `r-xp` / `r--p` / `rw-p` 三行独立解出同值（`load-bias.json` → `captured`） |
 | 主 GBA 指针 | **`gba @ 0x4259b8`**（libretro 前端单元）；`gba @ 0x4c16a8` 是联动模块的缓存副本 |
 
 ## 1. 采集范围与状态
@@ -20,17 +23,17 @@
 设备：`rg34xx` / `sun50iw9` / Linux `4.9.170 #19`（serial 已脱敏），`uptime` ≈ 3699 s。
 `adb devices -l` 仅一台设备。
 
-| 采集项 | 结果 |
-| --- | --- |
-| cmdline 匹配到的 Slot 进程 | `2301` |
-| `/proc/2301/exe` | `/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1` |
-| `/proc/2301/maps` 总行数 | 414 |
-| 其中 `armgba` 行数 | **0** |
-| 已加载 `.so` 数量 | 12（无任何 libretro 核心） |
+| 采集项 | UI 态 | 游戏态 |
+| --- | --- | --- |
+| cmdline 匹配到的 Slot 进程 | `2301` | `2301`（同一进程，未重启） |
+| `/proc/2301/exe` | `ld-linux-aarch64.so.1` | 同左 |
+| `/proc/2301/maps` 总行数 | 414 | 430 |
+| 其中 `armgba` 行数 | **0** | **4** |
+| 已加载 `.so` 数量 | 12（无 libretro 核心） | 13（含 `armgba_libretro.so`） |
 
-结论：前端 UI 态下核心未被加载，`maps` 里没有 `armgba_libretro.so`。这在预期之内 ——
-核心只在游戏运行时 `dlopen`、退出即 `dlclose`。要把 bias 落成具体数值，必须在游戏画面中重跑
-`armgba-maps.txt` §4 的 4 条命令。详见该文件 §5 的预期行形状与 §6 的待填表。
+核心只在游戏运行时 `dlopen`、退出即 `dlclose`，所以 UI 态取不到映射。两次采集之间由用户要求，
+向 `/dev/input/event1` 注入了一次 `BTN_SOUTH`(304) 按下+抬起把游戏打开（设备无 `input`/`sendevent`，
+用 `dd` 写 24 字节 `input_event`）；这不属审计禁止项，也未触碰寄存器或配置。方法见 `armgba-maps.txt` §3。
 
 ## 2. PT_LOAD 与地址换算
 
@@ -45,21 +48,28 @@
 - `#1` 比 `#0` 在内存里高 `0x10000`（`p_vaddr − p_offset = 0x10000`），用于交叉验证。
 - `#1` 的 `p_memsz − p_filesz = 0x49bd60 ≈ 4.6 MiB` 是 `.bss` 零页；两个 `gba`（`0x4c16a8`、`0x4259b8`）都在其中。
 
-一旦拿到 maps：
+实测（见 `armgba-maps.txt` §5–§6）：
 
 ```text
-bias = start(r-xp, offset 0x000000)                        # 主解
-bias = start(任意 PT_LOAD#1 行) − 0x185000                  # 交叉验证
-runtime_addr(sym) = bias + sym.st_value                    # 反查任意符号
+r-xp 00000000 @ 0x7f64070000  → bias = 0x7f64070000 − (0x000000 + 0x00000) = 0x7f64070000
+r--p 00175000 @ 0x7f641f5000  → bias = 0x7f641f5000 − (0x175000 + 0x10000) = 0x7f64070000
+rw-p 00178000 @ 0x7f641f8000  → bias = 0x7f641f8000 − (0x178000 + 0x10000) = 0x7f64070000
 ```
 
-本审计后续要用到的三个换算式（游戏运行时才有意义）：
+三行同值，`bias = 0x7f64070000`。`---p` 空洞行的 offset 列是合成值，不参与解算。
+
+本次实测（bias `0x7f64070000`）下的运行时地址：
 
 ```text
-retro_run          = bias + 0x1f560
-gba（主指针变量）   = bias + 0x4259b8      →  *(u64) 得到 GBASystem* 堆地址
-gba（联动缓存）     = bias + 0x4c16a8
+retro_run           = 0x7f6408f560
+retro_load_game     = 0x7f6408cf60
+retro_unload_game   = 0x7f6408d470
+gba（主指针变量）    = 0x7f644959b8   → 解引用得 GBASystem* 堆地址（每次装载都变）
+gba（联动缓存）      = 0x7f645316a8
 ```
+
+两个 `gba` 都落在 `.bss` 匿名续行 `7f6422b000-7f646c6000` 内，已核对未越界（`.bss` 末符号 `0x655fb0`
+→ `0x7f646c5fb0`）。
 
 ## 3. 三个 retro_* 函数的反汇编结论
 
@@ -129,19 +139,20 @@ bl   <消费函数>
 - 帧率相关的判据（面板时序、IRQ 计数）不在本次范围，未重复采集；本文件只提供地址底座，
   供后续把运行期 PC / 指针换算回符号。
 
-## 6. 未完成项
+## 6. 边界与未做项
 
-1. `armgba_libretro.so` 的运行时 `maps` 行与 `bias` 数值 —— 需在游戏画面中按 `armgba-maps.txt` §4 采集，
-   然后 `python build/k22_bias.py <label>` 重新生成 `load-bias.json`（脚本会自动做多行交叉验证）。
+1. `load-bias.json` 已从 `pending-capture` 转为 `captured`，三行同值。bias 是**本次装载**的值，
+   进程重启或重新 `dlopen` 后会变（ASLR），引用时一律按“现采 maps → 现算 bias”走，不要当常量。
 2. 未验证运行时 `*bias+0x4259b8` 与 `*bias+0x4c16a8` 是否确实相等 —— 读这两个值需要 `/proc/PID/mem`，
-   属禁止项，只能由反汇编链条推定。
+   属禁止项，只能由反汇编链条推定（三条证据见 §4）。
+3. 未测帧率/IRQ：本文件只交付地址底座，面板时序与中断计数不在本轮范围。
 
 ## 7. 文件清单
 
 | 文件 | 内容 |
 | --- | --- |
-| `armgba-maps.txt` | PID 定位、`exe`、UI 态负结果、待采集命令、预期行形状 |
+| `armgba-maps.txt` | PID 定位、`exe`、UI 态/游戏态两相、A 键注入方法、bias 解算表、`.bss` 归属 |
 | `armgba-pt-load.txt` | 2 个 PT_LOAD 全字段、页对齐展开、bias 公式 |
 | `armgba-symbol-refs.txt` | 符号表、GOT 槽、125 条引用索引、三个函数全文反汇编 |
-| `load-bias.json` | bias 方法、预测行、实测（当前 `pending-capture`） |
+| `load-bias.json` | bias 方法、实测行、`captured` 结果与运行时符号表 |
 | `SUMMARY.md` | 本文件 |
