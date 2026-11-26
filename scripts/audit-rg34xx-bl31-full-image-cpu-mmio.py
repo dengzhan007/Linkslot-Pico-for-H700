@@ -29,11 +29,30 @@ RANGES = (
     (0x09010000, 0x09010200, "C0_CPUX_CFG"),
 )
 
+PIO_BASE = 0x0300B000
+# Source-family labels from the sun50iw9p1 pinctrl bank layout.
+# PH is bank 7 (7 * 0x24 = 0xfc); PI is bank 8 (8 * 0x24 = 0x120).
+PIO_REGISTERS = {
+    0x100: ("PH_CFG1", "PH10 mux field"),
+    0x110: ("PH_DRV0", "PH10 drive field"),
+    0x118: ("PH_PUL0", "PH10 pull field"),
+    0x124: ("PI_CFG1", "PI12 mux field"),
+    0x130: ("PI_DAT0", "PI12 data bit"),
+    0x134: ("PI_DRV0", "PI12 drive field"),
+    0x13C: ("PI_PUL0", "PI12 pull field"),
+}
+
 def label(address: int) -> str | None:
     for low, high, name in RANGES:
         if low <= address < high:
             return name
     return None
+
+def pio_register(address: int) -> tuple[str, str] | None:
+    """Return family-reference register and pin-field names for known PIO offsets."""
+    if not (PIO_BASE <= address < PIO_BASE + 0x400):
+        return None
+    return PIO_REGISTERS.get(address - PIO_BASE)
 
 def canon(name: str) -> str:
     if name.startswith("w") and name[1:].isdigit():
@@ -122,7 +141,7 @@ def instruction_hits(raw: bytes) -> list[dict]:
                     name = label(address)
                     if name:
                         key = (ins.address, address, ins.mnemonic)
-                        hits[key] = {
+                        row = {
                             "pc": "0x%08x" % ins.address,
                             "address": "0x%08x" % address,
                             "mnemonic": ins.mnemonic,
@@ -131,6 +150,11 @@ def instruction_hits(raw: bytes) -> list[dict]:
                             "decode_window_start": "0x%08x" % start,
                             "context": listing[-WINDOW:],
                         }
+                        pio_info = pio_register(address)
+                        if pio_info:
+                            row["pio_register"] = pio_info[0]
+                            row["pio_pin_field"] = pio_info[1]
+                        hits[key] = row
             if ins.mnemonic in ("b", "br", "ret", "eret", "drps") or ins.mnemonic.startswith("b."):
                 break
             if ins.mnemonic in ("bl", "blr"):

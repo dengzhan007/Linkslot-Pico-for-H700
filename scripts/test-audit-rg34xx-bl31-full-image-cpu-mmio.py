@@ -40,6 +40,14 @@ def main() -> int:
     assert module.label(0x09010000) == "C0_CPUX_CFG"
     assert module.label(0x090100C4) == "C0_CPUX_CFG"
     assert module.label(0x09020000) is None
+    assert module.pio_register(0x0300B100) == ("PH_CFG1", "PH10 mux field")
+    assert module.pio_register(0x0300B110) == ("PH_DRV0", "PH10 drive field")
+    assert module.pio_register(0x0300B118) == ("PH_PUL0", "PH10 pull field")
+    assert module.pio_register(0x0300B124) == ("PI_CFG1", "PI12 mux field")
+    assert module.pio_register(0x0300B130) == ("PI_DAT0", "PI12 data bit")
+    assert module.pio_register(0x0300B134) == ("PI_DRV0", "PI12 drive field")
+    assert module.pio_register(0x0300B13C) == ("PI_PUL0", "PI12 pull field")
+    assert module.pio_register(0x0300B400) is None
 
     # The address seed and high half may be separated by more than the old
     # 16-instruction window. Keep this regression to prevent missing such
