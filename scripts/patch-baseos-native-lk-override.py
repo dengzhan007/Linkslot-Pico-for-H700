@@ -190,6 +190,7 @@ def main() -> int:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--apply", action="store_true", help="patch native/build.py in place")
     mode.add_argument("--check", action="store_true", help="verify an already patched build.py")
+    mode.add_argument("--restore", action="store_true", help="restore the exact pre-patch build.py backup")
     args = parser.parse_args()
 
     root = args.baseos_root.resolve()
@@ -214,7 +215,18 @@ def main() -> int:
         print(f"PASS: BaseOS native builder patch is present at {head}")
         return 0
 
-    dirty = git_output(root, "status", "--porcelain", "--", str(NATIVE_BUILD_REL))
+    if args.restore:
+        if not backup_path.is_file():
+            parser.error(f"missing original-source backup: {backup_path}")
+        original = backup_path.read_text(encoding="utf-8")
+        if source != patch_source(original):
+            parser.error("native/build.py changed after patching; refusing to overwrite later edits")
+        source_path.write_text(original, encoding="utf-8", newline="\\n")
+        backup_path.unlink()
+        print(f"Restored: {source_path}")
+        return 0
+
+    dirty = git_output(root, "status", "--porcelain", "--", NATIVE_BUILD_REL.as_posix())
     if dirty:
         parser.error("native/build.py is already modified; use a clean pinned BaseOS checkout")
     if backup_path.exists():
