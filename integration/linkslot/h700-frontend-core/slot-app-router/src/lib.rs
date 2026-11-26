@@ -288,6 +288,63 @@ pub fn route_search_keyboard(
         _ => SearchKeyboardCommand::Ignore,
     }
 }
+/// The input owner already selected by the caller using Linkslot App priority.
+///
+/// Overlay/modal owners are intentionally represented as Other: App::apply
+/// must continue to give power, sync, keyboard, popup and utility overlays
+/// their existing precedence before asking this adapter to route a phase.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AppInputOwner {
+    Shelf,
+    Playing,
+    QuickMenu { row: QuickRow },
+    SearchResults { hit_count: usize, selected: usize, offset: usize },
+    SearchKeyboard { state: SearchKeyboardSnapshot },
+    Other,
+}
+
+/// Result of dispatching one action to the already-resolved App input owner.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AppInputCommand {
+    OpenQuickMenu,
+    OpenGameSearch,
+    OpenInGameMenu,
+    QuickMenu(QuickMenuCommand),
+    SearchResults(SearchResultsCommand),
+    SearchKeyboard(SearchKeyboardCommand),
+    DelegateToApp,
+}
+
+/// Phase-aware adapter matching the relevant Linkslot 1.0.49 App::apply path.
+///
+/// The caller must first resolve and honor higher-priority overlays/modals
+/// (power menu, upgrade, sync, search results, keyboard, popups and utilities)
+/// and pass the actual owner here. This function does not scan App state or
+/// bypass those higher-priority handlers.
+pub fn route_app_input(owner: AppInputOwner, action: Action) -> AppInputCommand {
+    match owner {
+        AppInputOwner::SearchResults { hit_count, selected, offset } => {
+            let mut router = SearchResultsRouter::at(hit_count, selected, offset);
+            AppInputCommand::SearchResults(router.route(action))
+        }
+        AppInputOwner::SearchKeyboard { state } => {
+            AppInputCommand::SearchKeyboard(route_search_keyboard(action, state))
+        }
+        AppInputOwner::QuickMenu { row } => {
+            let mut router = QuickMenuRouter::at(row);
+            AppInputCommand::QuickMenu(router.route(action))
+        }
+        AppInputOwner::Shelf => match action {
+            Action::QuickMenu => AppInputCommand::OpenQuickMenu,
+            Action::GbaDown(Btn::X) => AppInputCommand::OpenGameSearch,
+            _ => AppInputCommand::DelegateToApp,
+        },
+        AppInputOwner::Playing if action == Action::QuickMenu => {
+            AppInputCommand::OpenInGameMenu
+        }
+        AppInputOwner::Playing | AppInputOwner::Other => AppInputCommand::DelegateToApp,
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -473,6 +530,43 @@ mod tests {
         assert_eq!(route_search_keyboard(Action::GbaDown(Btn::Up), state), SearchKeyboardCommand::CandidatePageChanged { page: 0 });
         assert_eq!(route_search_keyboard(Action::GbaDown(Btn::Left), state), SearchKeyboardCommand::CandidateSelectionChanged { selected: 1 });
         assert_eq!(route_search_keyboard(Action::GbaDown(Btn::Down), state), SearchKeyboardCommand::CandidatePageChanged { page: 0 });
+    }
+    #[test]
+    fn app_input_adapter_keeps_menu_meaning_specific_to_shelf_and_playing() {
+        assert_eq!(route_app_input(AppInputOwner::Shelf, Action::QuickMenu), AppInputCommand::OpenQuickMenu);
+        assert_eq!(route_app_input(AppInputOwner::Playing, Action::QuickMenu), AppInputCommand::OpenInGameMenu);
+        assert_eq!(route_app_input(AppInputOwner::Shelf, Action::GbaDown(Btn::X)), AppInputCommand::OpenGameSearch);
+    }
+
+    #[test]
+    fn app_input_adapter_dispatches_only_the_resolved_quick_menu_phase() {
+        assert_eq!(
+            route_app_input(AppInputOwner::QuickMenu { row: QuickRow::Wifi }, Action::GbaDown(Btn::B)),
+            AppInputCommand::QuickMenu(QuickMenuCommand::Parent { row: QuickRow::Network })
+        );
+        assert_eq!(
+            route_app_input(AppInputOwner::QuickMenu { row: QuickRow::Network }, Action::GbaDown(Btn::A)),
+            AppInputCommand::QuickMenu(QuickMenuCommand::OpenRow { row: QuickRow::Network })
+        );
+    }
+
+    #[test]
+    fn app_input_adapter_routes_search_overlays_before_the_base_app_phase() {
+        assert_eq!(
+            route_app_input(AppInputOwner::SearchResults { hit_count: 12, selected: 0, offset: 0 }, Action::GbaDown(Btn::B)),
+            AppInputCommand::SearchResults(SearchResultsCommand::ReturnToKeyboard)
+        );
+        let state = SearchKeyboardSnapshot { composition_nonempty: true, candidate_count: 2, ..SearchKeyboardSnapshot::default() };
+        assert_eq!(
+            route_app_input(AppInputOwner::SearchKeyboard { state }, Action::GbaDown(Btn::Select)),
+            AppInputCommand::SearchKeyboard(SearchKeyboardCommand::CandidateFocusChanged { focused: true })
+        );
+    }
+
+    #[test]
+    fn app_input_adapter_leaves_other_overlay_owners_with_the_app() {
+        assert_eq!(route_app_input(AppInputOwner::Other, Action::QuickMenu), AppInputCommand::DelegateToApp);
+        assert_eq!(route_app_input(AppInputOwner::Playing, Action::GbaDown(Btn::A)), AppInputCommand::DelegateToApp);
     }
     #[test]
     fn all_quick_rows_keep_navigation_inside_their_page() {
