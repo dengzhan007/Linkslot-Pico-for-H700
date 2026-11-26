@@ -152,17 +152,19 @@ SPL/firmware pairing review; do not increase the extent silently.
 
 ## 5. Scope and remaining gates
 
-The packaging regression uses synthetic input only to test the code's
-byte-preservation, branch and vector checks. It is not evidence that a
-synthetic header is valid for hardware. The CLI accepts only the real
-SHA-pinned reference loader.
+The \`scripts/package-h700-bl33.py\` regression uses synthetic input
+only to test byte-preservation, branch and vector checks. It is not evidence
+that a synthetic header is valid for hardware. That standalone CLI accepts
+only the real SHA-pinned reference loader.
 
-This wrapper does not build GammaOS LK, choose \`MEMBASE\`/\`MEMSIZE\`, create
-a matching native SPL/monitor firmware package, install the result, write
-SD/Boot0/TOC1, or validate monitor handoff on hardware. A produced image is
-not installable until a complete LK target ELF/map/raw image, reviewed
-memory map, native firmware pairing, live BL31-to-LK handoff and recovery
-path are separately validated.
+The standalone BL33 wrapper does not build GammaOS LK, choose
+\`MEMBASE\`/\`MEMSIZE\`, or rebuild the native SPL. Section 4 describes the
+separate opt-in BaseOS native-builder patch that can pair a small raw LK
+payload with rebuilt firmware/SPL outputs. Neither route installs the result,
+writes SD/Boot0/TOC1, or validates monitor handoff on hardware. Any produced
+capsule or image remains non-installable until a complete LK target
+ELF/map/raw image, reviewed memory map, native firmware pairing, live
+BL31-to-LK handoff and recovery path are separately validated.
 
 ## References
 
