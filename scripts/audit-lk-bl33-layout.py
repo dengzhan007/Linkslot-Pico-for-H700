@@ -95,6 +95,10 @@ BOOT_ARGUMENT_LOCATION:
 
 .global lk_bl33_entry
 lk_bl33_entry:
+    mrs r11, cpsr
+    mov r8, sp
+    mov r9, lr
+    mov r10, r4
     ldr r0, =__lk_vectors_start
     mcr p15, 0, r0, c12, c0, 0
     isb
@@ -109,9 +113,20 @@ lk_bl33_entry:
         relocation,
         "ldr\t\tr1, =(.Laddr - _start)\n\tsub\t\tr0, r0, r1"
     )
+    kmain_call = "\tbl\t\tkmain"
+    if patched_crt0.count(kmain_call) != 1:
+        raise RuntimeError("unexpected pinned crt0.S kmain call; refusing unsafe entry-state publication")
+    publish = (
+        "    ldr r0, =h700_bl33_entry_snapshot\n"
+        "    stmia r0, {r8-r11}\n"
+        "    ldr r1, =0x48374553\n"
+        "    str r1, [r0, #16]\n"
+    )
+    patched_crt0 = patched_crt0.replace(kmain_call, publish + kmain_call, 1)
     (out / "crt0-bl33.S").write_text(patched_crt0, encoding="utf-8")
 
     c_stubs = r'''volatile int critical_section_count = 1;
+volatile unsigned int h700_bl33_entry_snapshot[5];
 void kmain(void) { for (;;) { __asm__ volatile("wfi"); } }
 void arm_undefined_handler(void *frame) { (void)frame; for (;;) { __asm__ volatile("wfi"); } }
 void arm_syscall_handler(void *frame) { (void)frame; for (;;) { __asm__ volatile("wfi"); } }
@@ -189,12 +204,15 @@ void thread_preempt(void) { }
     argument = symbol_address(nm, "BOOT_ARGUMENT_LOCATION")
     entry = symbol_address(nm, "lk_bl33_entry")
     end = symbol_address(nm, "_end")
+    snapshot = symbol_address(nm, "h700_bl33_entry_snapshot")
     if start != IMAGE_BASE or vectors != IMAGE_BASE + VECTOR_BASE:
         raise RuntimeError(f"unexpected image/vector placement: start={start:#x}, vectors={vectors:#x}")
     if argument < IMAGE_BASE + HEADER_END or entry < argument + 4:
         raise RuntimeError("LK vector/argument/entry placement overlaps the vendor header window")
     if end >= IMAGE_LIMIT:
         raise RuntimeError(f"LK layout exceeds BaseOS loader arena: end={end:#x}")
+    if snapshot < IMAGE_BASE or snapshot + 20 > end:
+        raise RuntimeError(f"entry snapshot is outside the linked image/BSS: {snapshot:#x}..{snapshot + 20:#x}")
 
     binary = out / "lk-a32-bl33-layout.bin"
     run(["llvm-objcopy", "-O", "binary", str(elf), str(binary)])
@@ -259,6 +277,8 @@ void thread_preempt(void) { }
         f"- Entry branch at +0: target 0x{target:08x}.\n",
         f"- Relocated exception vector table: 0x{vectors:08x} (+0x{vectors-IMAGE_BASE:x}).\n",
         f"- Boot argument scratch: 0x{argument:08x}.\n",
+        f"- Entry snapshot BSS object: 0x{snapshot:08x} (five words, including publish-last magic).\n",
+        "- Entry capture records incoming SP/LR/r4/CPSR before VBAR setup; CRT0 publishes it after BSS clear and before kmain.\n",
         f"- Linked _end: 0x{end:08x}; flat image bytes: {len(data)}.\n",
         "- Synthetic overlay verified: bytes +4..+0x63f can be replaced by opaque header bytes while preserving the first branch and keeping vectors/entry outside the header area. The synthetic header is NOT the vendor header.\n",
         "- ELF32/ARM; no unresolved symbols; linker map and disassembly generated.\n\n",
