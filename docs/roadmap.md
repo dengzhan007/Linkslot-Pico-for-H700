@@ -654,3 +654,15 @@ The snapshot only becomes available after CRT0 reaches the post-BSS publication 
 - [ ] Build a complete reviewed memory map for LK image/BSS/stack/heap/page tables, firmware handoff records, framebuffer/PIO, and the separate Linkslot+mGBA application footprint; verify secondary-core and cache/MMU behavior before any MEMBASE/MEMSIZE assignment.
 
 Safety boundary: 0x40080000..0x42000000 remains candidate-only. Do not set H700_MEMORY_LAYOUT_APPROVED, reuse the unknown 0x7ec00000..0x7fc00000 reservation, execute a payload, or write Boot0/TOC1/SD as part of this source trace.
+
+
+## 2026-11-26 Small LK BL33 payload into matched native SPL package
+
+- [x] Confirm active native firmware loader extent from uploaded firmware manifest: p4+40 MiB package; loader offset 0x3e200; exact extent 0x8000 bytes (32 KiB), destination 0x4a000000.
+- [x] Add a pinned-source patcher for BaseOS native/build.py, limited to a clean BaseOS-MultiFrontend checkout at cbe253a43f46cf551cc9a6c79a84015bde3686cf. The raw LK binary is constrained to the active 32 KiB extent and A32 entry/vector/header contract.
+- [x] Keep native loader extent, offsets and extent table fixed; the patched builder adds the raw payload to generation and persistent source hashes, inserts the paired header, pads exactly to 32 KiB, regenerates firmware FNV/header and then builds the matching native SPL.
+- [x] Add host regression for raw image validation, builder patch shape, hash-input ordering and idempotence.
+- [ ] Pass the new patcher regression in current full feasibility CI before recommending it for local use.
+- [ ] Produce a compact diagnostic payload with a deterministic proof-of-life signal, then build the matched native SPL/firmware/capsule locally. Keep the artifacts non-installable until the BL31 and memory/recovery gates are reviewed.
+
+Hard size boundary: this first integration path is only for a small diagnostic payload <= 32 KiB. The 5,148-byte CRT0/exception layout probe is not yet such a diagnostic because it has no approved visible signal and uses stubs. It does not make the complete LK or Linkslot/mGBA fit the loader extent.
