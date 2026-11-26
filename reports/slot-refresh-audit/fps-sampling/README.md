@@ -74,3 +74,14 @@
 ## 独立复核
 
 补充计算与证据边界见 [ANALYSIS.md](ANALYSIS.md)：从完整 launch log 分别复算游戏前 25 个 presents 窗口和 armGBA 运行中的 31 个 presents 窗口，核对 79 个 counter samples 的总帧差；同时标注原始 maps 行尚未随本次采样包一并上传这一证据完整性缺口。该文件 SHA-256 已加入本目录清单。
+
+
+
+## 7. maps-only 证据补充（2026-11-26）
+
+原始 PID 22514 的首尾 `/proc/PID/maps` 快照在本地未找回，因此没有伪造旧证据；本次做了独立
+maps-only 补采，使用**新 PID 8064 / 新 bias `0x7f339a0000`**，并明确标注不能替代旧采样。
+详见 [MAPS-SUPPLEMENT.md](MAPS-SUPPLEMENT.md) 与两份完整快照
+`armgba-maps-supplement-first.txt` / `armgba-maps-supplement-last.txt`。
+原有 CSV、FPS 结果与所有原始日志保持不变；未重采 FPS，未读进程内存，
+`hardware_applied=0`。

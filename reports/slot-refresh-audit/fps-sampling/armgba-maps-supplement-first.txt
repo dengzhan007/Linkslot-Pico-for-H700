@@ -1,0 +1,425 @@
+1eb369000-1eb3a9000 rw-s 1eb369000 00:06 2183                            /dev/mali0
+1eb3a9000-1eb3b1000 rw-s 1eb3a9000 00:06 2183                            /dev/mali0
+1eb3b1000-1eb3b9000 rw-s 1eb3b1000 00:06 2183                            /dev/mali0
+1eb3b9000-1eb439000 rw-s 1eb3b9000 00:06 2183                            /dev/mali0
+1eb439000-1eb539000 rw-s 1eb439000 00:06 2183                            /dev/mali0
+1eb539000-1eb559000 rw-s 1eb539000 00:06 2183                            /dev/mali0
+1eb559000-1eb561000 rw-s 1eb559000 00:06 2183                            /dev/mali0
+1eb561000-1eb5e1000 rw-s 1eb561000 00:06 2183                            /dev/mali0
+1eb5e1000-1eb6e1000 rw-s 1eb5e1000 00:06 2183                            /dev/mali0
+1eb6e1000-1eb701000 rw-s 1eb6e1000 00:06 2183                            /dev/mali0
+1eb701000-1eb709000 rw-s 1eb701000 00:06 2183                            /dev/mali0
+1eb709000-1eb789000 rw-s 1eb709000 00:06 2183                            /dev/mali0
+1eb789000-1eb889000 rw-s 1eb789000 00:06 2183                            /dev/mali0
+1eb889000-1eb8a9000 rw-s 1eb889000 00:06 2183                            /dev/mali0
+1eb8a9000-1eb8b1000 rw-s 1eb8a9000 00:06 2183                            /dev/mali0
+1eb8b1000-1eb931000 rw-s 1eb8b1000 00:06 2183                            /dev/mali0
+1eb931000-1eba31000 rw-s 1eb931000 00:06 2183                            /dev/mali0
+1eba31000-1eba51000 rw-s 1eba31000 00:06 2183                            /dev/mali0
+1eba51000-1eba59000 rw-s 1eba51000 00:06 2183                            /dev/mali0
+1eba59000-1ebbac000 rw-s 1eba59000 00:06 2183                            /dev/mali0
+1ebbac000-1ebcff000 rw-s 1ebbac000 00:06 2183                            /dev/mali0
+1ebcff000-1ebe52000 rw-s 1ebcff000 00:06 2183                            /dev/mali0
+1ebe52000-1ebe54000 rw-s 1f0007000 00:06 2183                            /dev/mali0
+1ebe54000-1ebe55000 rw-s 1f0006000 00:06 2183                            /dev/mali0
+1ebe55000-1ebea7000 rw-s 1ebe55000 00:06 2183                            /dev/mali0
+1ebea7000-1ebef9000 rw-s 1ebea7000 00:06 2183                            /dev/mali0
+1ebef9000-1ebf4b000 rw-s 1ebef9000 00:06 2183                            /dev/mali0
+1ebf4b000-1ebf53000 rw-s 1ebf4b000 00:06 2183                            /dev/mali0
+1ebf53000-1ebfd3000 rw-s 1ebf53000 00:06 2183                            /dev/mali0
+1ebfd3000-1ec0d3000 rw-s 1ebfd3000 00:06 2183                            /dev/mali0
+1ec0d3000-1ec0f3000 rw-s 1ec0d3000 00:06 2183                            /dev/mali0
+1ec0f3000-1ec0fb000 rw-s 1ec0f3000 00:06 2183                            /dev/mali0
+1ec0fb000-1ec103000 rw-s 1ec0fb000 00:06 2183                            /dev/mali0
+1ec103000-1ec183000 rw-s 1ec103000 00:06 2183                            /dev/mali0
+1ec183000-1ec283000 rw-s 1ec183000 00:06 2183                            /dev/mali0
+1ec283000-1ec2a3000 rw-s 1ec283000 00:06 2183                            /dev/mali0
+1ec2a3000-1ec2ab000 rw-s 1ec2a3000 00:06 2183                            /dev/mali0
+1ec2ab000-1ec2eb000 rw-s 1ec2ab000 00:06 2183                            /dev/mali0
+1ec2eb000-1ec32b000 rw-s 1ec2eb000 00:06 2183                            /dev/mali0
+1ec32b000-1ec36b000 rw-s 1ec32b000 00:06 2183                            /dev/mali0
+1ec36b000-1ec3ab000 rw-s 1ec36b000 00:06 2183                            /dev/mali0
+1ec3ab000-1ec3eb000 rw-s 1ec3ab000 00:06 2183                            /dev/mali0
+1ec3eb000-1ec53e000 rw-s 1ec3eb000 00:06 2183                            /dev/mali0
+1ec53e000-1ec57e000 rw-s 1ec53e000 00:06 2183                            /dev/mali0
+1ec57e000-1ec5be000 rw-s 1ec57e000 00:06 2183                            /dev/mali0
+1ec5be000-1ec5fe000 rw-s 1ec5be000 00:06 2183                            /dev/mali0
+1ec5fe000-1ec63e000 rw-s 1ec5fe000 00:06 2183                            /dev/mali0
+1ec63e000-1ec67e000 rw-s 1ec63e000 00:06 2183                            /dev/mali0
+1ec67e000-1ec6be000 rw-s 1ec67e000 00:06 2183                            /dev/mali0
+1ec6be000-1ec6fe000 rw-s 1ec6be000 00:06 2183                            /dev/mali0
+1ec6fe000-1ec76d000 rw-s 1ec6fe000 00:06 2183                            /dev/mali0
+1ec76d000-1ec7dc000 rw-s 1ec76d000 00:06 2183                            /dev/mali0
+1ec7dc000-1ec84b000 rw-s 1ec7dc000 00:06 2183                            /dev/mali0
+1ec84b000-1ec8ba000 rw-s 1ec84b000 00:06 2183                            /dev/mali0
+1ec8ba000-1ec929000 rw-s 1ec8ba000 00:06 2183                            /dev/mali0
+1ec929000-1ec998000 rw-s 1ec929000 00:06 2183                            /dev/mali0
+1ec998000-1eca07000 rw-s 1ec998000 00:06 2183                            /dev/mali0
+1eca07000-1eca47000 rw-s 1eca07000 00:06 2183                            /dev/mali0
+1eca47000-1eca87000 rw-s 1eca47000 00:06 2183                            /dev/mali0
+1eca87000-1ecac7000 rw-s 1eca87000 00:06 2183                            /dev/mali0
+1ecac7000-1ecb07000 rw-s 1ecac7000 00:06 2183                            /dev/mali0
+1ecb07000-1ecb47000 rw-s 1ecb07000 00:06 2183                            /dev/mali0
+1ecb47000-1ecb87000 rw-s 1ecb47000 00:06 2183                            /dev/mali0
+1ecb87000-1ecbc7000 rw-s 1ecb87000 00:06 2183                            /dev/mali0
+1ecbc7000-1ecc07000 rw-s 1ecbc7000 00:06 2183                            /dev/mali0
+1ecc07000-1ecc47000 rw-s 1ecc07000 00:06 2183                            /dev/mali0
+1ecc47000-1ecc87000 rw-s 1ecc47000 00:06 2183                            /dev/mali0
+1ecc87000-1eccc7000 rw-s 1ecc87000 00:06 2183                            /dev/mali0
+1eccc7000-1ecd07000 rw-s 1eccc7000 00:06 2183                            /dev/mali0
+1ecd07000-1ecd47000 rw-s 1ecd07000 00:06 2183                            /dev/mali0
+1ecd47000-1ecd87000 rw-s 1ecd47000 00:06 2183                            /dev/mali0
+1ecd87000-1ecdc7000 rw-s 1ecd87000 00:06 2183                            /dev/mali0
+1ecdc7000-1ece07000 rw-s 1ecdc7000 00:06 2183                            /dev/mali0
+1ece07000-1ece47000 rw-s 1ece07000 00:06 2183                            /dev/mali0
+1ece47000-1ece87000 rw-s 1ece47000 00:06 2183                            /dev/mali0
+1ece87000-1ecec7000 rw-s 1ece87000 00:06 2183                            /dev/mali0
+1ecec7000-1ecf07000 rw-s 1ecec7000 00:06 2183                            /dev/mali0
+1ecf07000-1ecf47000 rw-s 1ecf07000 00:06 2183                            /dev/mali0
+1ecf47000-1ecf87000 rw-s 1ecf47000 00:06 2183                            /dev/mali0
+1ecf87000-1ecfc7000 rw-s 1ecf87000 00:06 2183                            /dev/mali0
+1ecfc7000-1ed007000 rw-s 1ecfc7000 00:06 2183                            /dev/mali0
+1ed007000-1ed047000 rw-s 1ed007000 00:06 2183                            /dev/mali0
+1ed047000-1ed087000 rw-s 1ed047000 00:06 2183                            /dev/mali0
+1ed087000-1ed0c7000 rw-s 1ed087000 00:06 2183                            /dev/mali0
+1ed0c7000-1ed107000 rw-s 1ed0c7000 00:06 2183                            /dev/mali0
+1ed107000-1ed147000 rw-s 1ed107000 00:06 2183                            /dev/mali0
+1ed147000-1ed187000 rw-s 1ed147000 00:06 2183                            /dev/mali0
+1ed187000-1ed1c7000 rw-s 1ed187000 00:06 2183                            /dev/mali0
+1ed1c7000-1ed207000 rw-s 1ed1c7000 00:06 2183                            /dev/mali0
+1ed207000-1ed247000 rw-s 1ed207000 00:06 2183                            /dev/mali0
+1ed247000-1ed287000 rw-s 1ed247000 00:06 2183                            /dev/mali0
+1ed287000-1ed2c7000 rw-s 1ed287000 00:06 2183                            /dev/mali0
+1ed2c7000-1ed307000 rw-s 1ed2c7000 00:06 2183                            /dev/mali0
+1ed307000-1ed347000 rw-s 1ed307000 00:06 2183                            /dev/mali0
+1ed347000-1ed387000 rw-s 1ed347000 00:06 2183                            /dev/mali0
+1ed387000-1ed3c7000 rw-s 1ed387000 00:06 2183                            /dev/mali0
+1ed3c7000-1ed407000 rw-s 1ed3c7000 00:06 2183                            /dev/mali0
+1ed407000-1ed447000 rw-s 1ed407000 00:06 2183                            /dev/mali0
+1ed447000-1ed487000 rw-s 1ed447000 00:06 2183                            /dev/mali0
+1ed487000-1ed4c7000 rw-s 1ed487000 00:06 2183                            /dev/mali0
+1ed4c7000-1ed507000 rw-s 1ed4c7000 00:06 2183                            /dev/mali0
+1ed507000-1ed547000 rw-s 1ed507000 00:06 2183                            /dev/mali0
+1ed547000-1ed587000 rw-s 1ed547000 00:06 2183                            /dev/mali0
+1ed587000-1ed5c7000 rw-s 1ed587000 00:06 2183                            /dev/mali0
+1ed5c7000-1ed607000 rw-s 1ed5c7000 00:06 2183                            /dev/mali0
+1ed607000-1ed647000 rw-s 1ed607000 00:06 2183                            /dev/mali0
+1ed647000-1ed687000 rw-s 1ed647000 00:06 2183                            /dev/mali0
+1ed687000-1ed6c7000 rw-s 1ed687000 00:06 2183                            /dev/mali0
+1ed6c7000-1ed707000 rw-s 1ed6c7000 00:06 2183                            /dev/mali0
+1ed707000-1ed747000 rw-s 1ed707000 00:06 2183                            /dev/mali0
+1ed747000-1ed787000 rw-s 1ed747000 00:06 2183                            /dev/mali0
+1ed787000-1ed7c7000 rw-s 1ed787000 00:06 2183                            /dev/mali0
+1ed7c7000-1ed807000 rw-s 1ed7c7000 00:06 2183                            /dev/mali0
+1ed807000-1ed847000 rw-s 1ed807000 00:06 2183                            /dev/mali0
+1ed847000-1ed887000 rw-s 1ed847000 00:06 2183                            /dev/mali0
+1ed887000-1ed8c7000 rw-s 1ed887000 00:06 2183                            /dev/mali0
+1ed8c7000-1ed907000 rw-s 1ed8c7000 00:06 2183                            /dev/mali0
+1ed907000-1ed947000 rw-s 1ed907000 00:06 2183                            /dev/mali0
+1ed947000-1ed987000 rw-s 1ed947000 00:06 2183                            /dev/mali0
+1ed987000-1ed9c7000 rw-s 1ed987000 00:06 2183                            /dev/mali0
+1ed9c7000-1eda07000 rw-s 1ed9c7000 00:06 2183                            /dev/mali0
+1eda07000-1eda47000 rw-s 1eda07000 00:06 2183                            /dev/mali0
+1eda47000-1eda87000 rw-s 1eda47000 00:06 2183                            /dev/mali0
+1eda87000-1edac7000 rw-s 1eda87000 00:06 2183                            /dev/mali0
+1edac7000-1edb07000 rw-s 1edac7000 00:06 2183                            /dev/mali0
+1edb07000-1edb47000 rw-s 1edb07000 00:06 2183                            /dev/mali0
+1edb47000-1edb87000 rw-s 1edb47000 00:06 2183                            /dev/mali0
+1edb87000-1edbc7000 rw-s 1edb87000 00:06 2183                            /dev/mali0
+1edbc7000-1edc07000 rw-s 1edbc7000 00:06 2183                            /dev/mali0
+1edc07000-1edc47000 rw-s 1edc07000 00:06 2183                            /dev/mali0
+1edc47000-1edc87000 rw-s 1edc47000 00:06 2183                            /dev/mali0
+1edc87000-1edcc7000 rw-s 1edc87000 00:06 2183                            /dev/mali0
+1edcc7000-1edd07000 rw-s 1edcc7000 00:06 2183                            /dev/mali0
+1edd07000-1edd47000 rw-s 1edd07000 00:06 2183                            /dev/mali0
+1edd47000-1edd87000 rw-s 1edd47000 00:06 2183                            /dev/mali0
+1edd87000-1eddc7000 rw-s 1edd87000 00:06 2183                            /dev/mali0
+1eddc7000-1ede07000 rw-s 1eddc7000 00:06 2183                            /dev/mali0
+1ede07000-1ede47000 rw-s 1ede07000 00:06 2183                            /dev/mali0
+1ede47000-1ede87000 rw-s 1ede47000 00:06 2183                            /dev/mali0
+1ede87000-1edec7000 rw-s 1ede87000 00:06 2183                            /dev/mali0
+1edec7000-1edf07000 rw-s 1edec7000 00:06 2183                            /dev/mali0
+1edf07000-1edf47000 rw-s 1edf07000 00:06 2183                            /dev/mali0
+1edf47000-1edf87000 rw-s 1edf47000 00:06 2183                            /dev/mali0
+1edf87000-1edfc7000 rw-s 1edf87000 00:06 2183                            /dev/mali0
+1edfc7000-1ee007000 rw-s 1edfc7000 00:06 2183                            /dev/mali0
+1ee007000-1ee047000 rw-s 1ee007000 00:06 2183                            /dev/mali0
+1ee047000-1ee087000 rw-s 1ee047000 00:06 2183                            /dev/mali0
+1ee087000-1ee0c7000 rw-s 1ee087000 00:06 2183                            /dev/mali0
+1ee0c7000-1ee107000 rw-s 1ee0c7000 00:06 2183                            /dev/mali0
+1ee107000-1ee147000 rw-s 1ee107000 00:06 2183                            /dev/mali0
+1ee147000-1ee187000 rw-s 1ee147000 00:06 2183                            /dev/mali0
+1ee187000-1ee1c7000 rw-s 1ee187000 00:06 2183                            /dev/mali0
+1ee1c7000-1ee207000 rw-s 1ee1c7000 00:06 2183                            /dev/mali0
+1ee207000-1ee247000 rw-s 1ee207000 00:06 2183                            /dev/mali0
+1ee247000-1ee287000 rw-s 1ee247000 00:06 2183                            /dev/mali0
+1ee287000-1ee2c7000 rw-s 1ee287000 00:06 2183                            /dev/mali0
+1ee2c7000-1ee307000 rw-s 1ee2c7000 00:06 2183                            /dev/mali0
+1ee307000-1ee347000 rw-s 1ee307000 00:06 2183                            /dev/mali0
+1ee347000-1ee387000 rw-s 1ee347000 00:06 2183                            /dev/mali0
+1ee387000-1ee3c7000 rw-s 1ee387000 00:06 2183                            /dev/mali0
+1ee3c7000-1ee407000 rw-s 1ee3c7000 00:06 2183                            /dev/mali0
+1ee407000-1ee55a000 rw-s 1ee407000 00:06 2183                            /dev/mali0
+1ee55a000-1ee6ad000 rw-s 1ee55a000 00:06 2183                            /dev/mali0
+1ee6ad000-1ee6ed000 rw-s 1ee6ad000 00:06 2183                            /dev/mali0
+1ee6ed000-1ee72d000 rw-s 1ee6ed000 00:06 2183                            /dev/mali0
+1ee72d000-1ee76d000 rw-s 1ee72d000 00:06 2183                            /dev/mali0
+1ee76d000-1ee7ad000 rw-s 1ee76d000 00:06 2183                            /dev/mali0
+1ee7ad000-1ee7ed000 rw-s 1ee7ad000 00:06 2183                            /dev/mali0
+1ee7ed000-1ee85c000 rw-s 1ee7ed000 00:06 2183                            /dev/mali0
+1ee85c000-1ee8cb000 rw-s 1ee85c000 00:06 2183                            /dev/mali0
+1ee8cb000-1ee91d000 rw-s 1ee8cb000 00:06 2183                            /dev/mali0
+1ee91d000-1ee98c000 rw-s 1ee91d000 00:06 2183                            /dev/mali0
+1ee98c000-1ee9fb000 rw-s 1ee98c000 00:06 2183                            /dev/mali0
+1ee9fb000-1eea4d000 rw-s 1ee9fb000 00:06 2183                            /dev/mali0
+1eea4d000-1eea8d000 rw-s 1eea4d000 00:06 2183                            /dev/mali0
+1eea8d000-1eeacd000 rw-s 1eea8d000 00:06 2183                            /dev/mali0
+1eeacd000-1eeb0d000 rw-s 1eeacd000 00:06 2183                            /dev/mali0
+1eeb0d000-1eeb4d000 rw-s 1eeb0d000 00:06 2183                            /dev/mali0
+1eeb4d000-1eeb8d000 rw-s 1eeb4d000 00:06 2183                            /dev/mali0
+1eeb8d000-1eebe3000 rw-s 1eeb8d000 00:06 2183                            /dev/mali0
+1eebe3000-1eec35000 rw-s 1eebe3000 00:06 2183                            /dev/mali0
+1eec35000-1eec87000 rw-s 1eec35000 00:06 2183                            /dev/mali0
+1eec87000-1eecd9000 rw-s 1eec87000 00:06 2183                            /dev/mali0
+1eecd9000-1eed2b000 rw-s 1eecd9000 00:06 2183                            /dev/mali0
+1eed2b000-1eed7d000 rw-s 1eed2b000 00:06 2183                            /dev/mali0
+1eed7d000-1eedcf000 rw-s 1eed7d000 00:06 2183                            /dev/mali0
+1eedcf000-1eee21000 rw-s 1eedcf000 00:06 2183                            /dev/mali0
+1eee21000-1eef22000 rw-s 1eee21000 00:06 2183                            /dev/mali0
+1eef22000-1eef62000 rw-s 1eef22000 00:06 2183                            /dev/mali0
+1eef62000-1eefa2000 rw-s 1eef62000 00:06 2183                            /dev/mali0
+1eefa2000-1eefa3000 rw-s 1f0005000 00:06 2183                            /dev/mali0
+1eefa3000-1eefe3000 rw-s 1eefa3000 00:06 2183                            /dev/mali0
+1eefe3000-1ef023000 rw-s 1eefe3000 00:06 2183                            /dev/mali0
+1ef023000-1ef025000 rw-s 1ef023000 00:06 2183                            /dev/mali0
+1ef025000-1ef027000 rw-s 1f0003000 00:06 2183                            /dev/mali0
+1ef027000-1ef067000 rw-s 1ef027000 00:06 2183                            /dev/mali0
+1ef067000-1ef1ba000 rw-s 1ef067000 00:06 2183                            /dev/mali0
+1ef1ba000-1ef1bb000 rw-s 1f0002000 00:06 2183                            /dev/mali0
+1ef1bb000-1ef1bc000 rw-s 1ef1bb000 00:06 2183                            /dev/mali0
+1ef1bc000-1ef1bd000 rw-s 1f0001000 00:06 2183                            /dev/mali0
+1ef1bd000-1ef1be000 rw-s 1f0000000 00:06 2183                            /dev/mali0
+1ef1be000-1ef1c1000 rw-s 1ef1be000 00:06 2183                            /dev/mali0
+1ef1c1000-1ef8c9000 rw-s 1ef1c1000 00:06 2183                            /dev/mali0
+1ef8c9000-1ef8cc000 rw-s 1ef8c9000 00:06 2183                            /dev/mali0
+1ef8cc000-1effd4000 rw-s 1ef8cc000 00:06 2183                            /dev/mali0
+1effd4000-1effdc000 ---s 1effd4000 00:06 2183                            /dev/mali0
+1effdc000-1effdd000 -w-s 1effdc000 00:06 2183                            /dev/mali0
+1effdd000-1effde000 rw-s 1effdd000 00:06 2183                            /dev/mali0
+1effde000-1effdf000 rw-s 1effde000 00:06 2183                            /dev/mali0
+1effdf000-1effe0000 rw-s 1effdf000 00:06 2183                            /dev/mali0
+1effe0000-1f0000000 rw-s 1effe0000 00:06 2183                            /dev/mali0
+1fffff000-200000000 ---s 00003000 00:06 2183                             /dev/mali0
+7f24000000-7f24021000 rw-p 00000000 00:00 0 
+7f24021000-7f28000000 ---p 00000000 00:00 0 
+7f2994a000-7f2995a000 ---p 00000000 00:00 0 
+7f2995a000-7f2bb5b000 rw-p 00000000 00:00 0 
+7f2bb5b000-7f3345b000 rwxp 00000000 00:00 0 
+7f3345b000-7f339a0000 rw-p 00000000 00:00 0 
+7f339a0000-7f33b16000 r-xp 00000000 b3:07 58796                          /mnt/sdcard/SYSTEM/armgba_libretro.so
+7f33b16000-7f33b25000 ---p 00176000 b3:07 58796                          /mnt/sdcard/SYSTEM/armgba_libretro.so
+7f33b25000-7f33b28000 r--p 00175000 b3:07 58796                          /mnt/sdcard/SYSTEM/armgba_libretro.so
+7f33b28000-7f33b5b000 rw-p 00178000 b3:07 58796                          /mnt/sdcard/SYSTEM/armgba_libretro.so
+7f33b5b000-7f33ff6000 rw-p 00000000 00:00 0 
+7f34000000-7f34021000 rw-p 00000000 00:00 0 
+7f34021000-7f38000000 ---p 00000000 00:00 0 
+7f38000000-7f3856b000 rw-p 00000000 00:00 0 
+7f3856b000-7f3c000000 ---p 00000000 00:00 0 
+7f3c000000-7f3c021000 rw-p 00000000 00:00 0 
+7f3c021000-7f40000000 ---p 00000000 00:00 0 
+7f40000000-7f40818000 rw-p 00000000 00:00 0 
+7f40818000-7f44000000 ---p 00000000 00:00 0 
+7f44000000-7f44021000 rw-p 00000000 00:00 0 
+7f44021000-7f48000000 ---p 00000000 00:00 0 
+7f48000000-7f49712000 rw-p 00000000 00:00 0 
+7f49712000-7f4c000000 ---p 00000000 00:00 0 
+7f4c000000-7f4c021000 rw-p 00000000 00:00 0 
+7f4c021000-7f50000000 ---p 00000000 00:00 0 
+7f50000000-7f50135000 rw-p 00000000 00:00 0 
+7f50135000-7f54000000 ---p 00000000 00:00 0 
+7f54000000-7f54021000 rw-p 00000000 00:00 0 
+7f54021000-7f58000000 ---p 00000000 00:00 0 
+7f58000000-7f58021000 rw-p 00000000 00:00 0 
+7f58021000-7f5c000000 ---p 00000000 00:00 0 
+7f5c000000-7f5c021000 rw-p 00000000 00:00 0 
+7f5c021000-7f60000000 ---p 00000000 00:00 0 
+7f60000000-7f60021000 rw-p 00000000 00:00 0 
+7f60021000-7f64000000 ---p 00000000 00:00 0 
+7f64000000-7f64021000 rw-p 00000000 00:00 0 
+7f64021000-7f68000000 ---p 00000000 00:00 0 
+7f68000000-7f68021000 rw-p 00000000 00:00 0 
+7f68021000-7f6c000000 ---p 00000000 00:00 0 
+7f6c000000-7f6c021000 rw-p 00000000 00:00 0 
+7f6c021000-7f70000000 ---p 00000000 00:00 0 
+7f70000000-7f70021000 rw-p 00000000 00:00 0 
+7f70021000-7f74000000 ---p 00000000 00:00 0 
+7f74000000-7f74021000 rw-p 00000000 00:00 0 
+7f74021000-7f78000000 ---p 00000000 00:00 0 
+7f78000000-7f78021000 rw-p 00000000 00:00 0 
+7f78021000-7f7c000000 ---p 00000000 00:00 0 
+7f7c0d0000-7f7c0e0000 ---p 00000000 00:00 0 
+7f7c0e0000-7f7c8e0000 rw-p 00000000 00:00 0 
+7f7c8e0000-7f7c8f0000 ---p 00000000 00:00 0 
+7f7c8f0000-7f7caf0000 rw-p 00000000 00:00 0 
+7f7caf0000-7f7cb00000 ---p 00000000 00:00 0 
+7f7cb00000-7f7cd00000 rw-p 00000000 00:00 0 
+7f7cd00000-7f7cd10000 ---p 00000000 00:00 0 
+7f7cd10000-7f7cf10000 rw-p 00000000 00:00 0 
+7f7cf10000-7f7cf20000 ---p 00000000 00:00 0 
+7f7cf20000-7f7d120000 rw-p 00000000 00:00 0 
+7f7d120000-7f7d130000 ---p 00000000 00:00 0 
+7f7d130000-7f7d330000 rw-p 00000000 00:00 0 
+7f7d330000-7f7d340000 ---p 00000000 00:00 0 
+7f7d340000-7f7d540000 rw-p 00000000 00:00 0 
+7f7d540000-7f7d550000 ---p 00000000 00:00 0 
+7f7d550000-7f7d750000 rw-p 00000000 00:00 0 
+7f7d750000-7f7d760000 ---p 00000000 00:00 0 
+7f7d760000-7f7d960000 rw-p 00000000 00:00 0 
+7f7d960000-7f7d970000 ---p 00000000 00:00 0 
+7f7d970000-7f7db70000 rw-p 00000000 00:00 0 
+7f7db70000-7f7db80000 ---p 00000000 00:00 0 
+7f7db80000-7f7dd80000 rw-p 00000000 00:00 0 
+7f7dd80000-7f7dd90000 ---p 00000000 00:00 0 
+7f7dd90000-7f7df90000 rw-p 00000000 00:00 0 
+7f7df90000-7f7dfa0000 ---p 00000000 00:00 0 
+7f7dfa0000-7f7e1a0000 rw-p 00000000 00:00 0 
+7f7e1a0000-7f7e1b0000 ---p 00000000 00:00 0 
+7f7e1b0000-7f7e3b0000 rw-p 00000000 00:00 0 
+7f7e3b0000-7f7e3c0000 ---p 00000000 00:00 0 
+7f7e3c0000-7f7e5c0000 rw-p 00000000 00:00 0 
+7f7e5c0000-7f7e5d0000 ---p 00000000 00:00 0 
+7f7e5d0000-7f7e7d0000 rw-p 00000000 00:00 0 
+7f7e7d0000-7f7e7e0000 ---p 00000000 00:00 0 
+7f7e7e0000-7f7efe0000 rw-p 00000000 00:00 0 
+7f7efe0000-7f7eff0000 ---p 00000000 00:00 0 
+7f7eff0000-7f7f7f0000 rw-p 00000000 00:00 0 
+7f7f7f0000-7f7f800000 ---p 00000000 00:00 0 
+7f7f800000-7f80000000 rw-p 00000000 00:00 0 
+7f80000000-7f833be000 rw-p 00000000 00:00 0 
+7f833be000-7f84000000 ---p 00000000 00:00 0 
+7f84000000-7f84027000 rw-p 00000000 00:00 0 
+7f84027000-7f88000000 ---p 00000000 00:00 0 
+7f88000000-7f88714000 rw-p 00000000 00:00 0 
+7f88714000-7f8c000000 ---p 00000000 00:00 0 
+7f8c050000-7f8c068000 r-xp 00000000 07:00 56                             /usr/lib/aarch64-linux-gnu/libz.so.1
+7f8c068000-7f8c078000 ---p 00018000 07:00 56                             /usr/lib/aarch64-linux-gnu/libz.so.1
+7f8c078000-7f8c079000 r--p 00018000 07:00 56                             /usr/lib/aarch64-linux-gnu/libz.so.1
+7f8c079000-7f8c07a000 rw-p 00019000 07:00 56                             /usr/lib/aarch64-linux-gnu/libz.so.1
+7f8c088000-7f8c098000 ---p 00000000 00:00 0 
+7f8c098000-7f8c298000 rw-p 00000000 00:00 0 
+7f8c298000-7f8c2a8000 ---p 00000000 00:00 0 
+7f8c2a8000-7f8c660000 rw-p 00000000 00:00 0 
+7f8c660000-7f8c670000 ---p 00000000 00:00 0 
+7f8c670000-7f8ce70000 rw-p 00000000 00:00 0 
+7f8ce70000-7f8ce80000 ---p 00000000 00:00 0 
+7f8ce80000-7f8d680000 rw-p 00000000 00:00 0 
+7f8d680000-7f8d690000 ---p 00000000 00:00 0 
+7f8d690000-7f8de90000 rw-p 00000000 00:00 0 
+7f8de90000-7f8dea0000 ---p 00000000 00:00 0 
+7f8dea0000-7f8e6a0000 rw-p 00000000 00:00 0 
+7f8e6a0000-7f8e799000 r-xp 00000000 07:00 7                              /usr/lib/aarch64-linux-gnu/libasound.so.2
+7f8e799000-7f8e7a9000 ---p 000f9000 07:00 7                              /usr/lib/aarch64-linux-gnu/libasound.so.2
+7f8e7a9000-7f8e7af000 r--p 000f9000 07:00 7                              /usr/lib/aarch64-linux-gnu/libasound.so.2
+7f8e7af000-7f8e7b0000 rw-p 000ff000 07:00 7                              /usr/lib/aarch64-linux-gnu/libasound.so.2
+7f8e7b5000-7f8e7b6000 ---p 00000000 00:00 0 
+7f8e7b6000-7f8e850000 rw-p 00000000 00:00 0 
+7f8e850000-7f8e851000 r-xp 00000000 07:00 89                             /usr/lib/libGLESv2.so.2
+7f8e851000-7f8e860000 ---p 00001000 07:00 89                             /usr/lib/libGLESv2.so.2
+7f8e860000-7f8e861000 rw-p 00000000 07:00 89                             /usr/lib/libGLESv2.so.2
+7f8e861000-7f8e862000 ---p 00000000 00:00 0 
+7f8e862000-7f8e866000 rw-p 00000000 00:00 0 
+7f8e866000-7f8e867000 ---p 00000000 00:00 0 
+7f8e867000-7f8e86b000 rw-p 00000000 00:00 0 
+7f8e86b000-7f8e86c000 ---p 00000000 00:00 0 
+7f8e86c000-7f8e870000 rw-p 00000000 00:00 0 
+7f8e870000-7f8ea7a000 r-xp 00000000 07:00 51                             /usr/lib/aarch64-linux-gnu/libstdc++.so.6
+7f8ea7a000-7f8ea89000 ---p 0020a000 07:00 51                             /usr/lib/aarch64-linux-gnu/libstdc++.so.6
+7f8ea89000-7f8ea94000 r--p 00209000 07:00 51                             /usr/lib/aarch64-linux-gnu/libstdc++.so.6
+7f8ea94000-7f8ea97000 rw-p 00214000 07:00 51                             /usr/lib/aarch64-linux-gnu/libstdc++.so.6
+7f8ea97000-7f8ea9a000 rw-p 00000000 00:00 0 
+7f8ea9b000-7f8ea9c000 ---p 00000000 00:00 0 
+7f8ea9c000-7f8eaa0000 rw-p 00000000 00:00 0 
+7f8eaa0000-7f8eaa1000 r-xp 00000000 07:00 46                             /usr/lib/aarch64-linux-gnu/librt.so.1
+7f8eaa1000-7f8eab0000 ---p 00001000 07:00 46                             /usr/lib/aarch64-linux-gnu/librt.so.1
+7f8eab0000-7f8eab1000 r--p 00000000 07:00 46                             /usr/lib/aarch64-linux-gnu/librt.so.1
+7f8eab1000-7f8eab2000 rw-p 00001000 07:00 46                             /usr/lib/aarch64-linux-gnu/librt.so.1
+7f8eab6000-7f8eab7000 ---p 00000000 00:00 0 
+7f8eab7000-7f8eabb000 rw-p 00000000 00:00 0 
+7f8eabb000-7f8eabc000 ---p 00000000 00:00 0 
+7f8eabc000-7f8eac0000 rw-p 00000000 00:00 0 
+7f8eac0000-7f8fc86000 r-xp 00000000 07:00 91                             /usr/lib/libmali.so.0
+7f8fc86000-7f8fc95000 ---p 011c6000 07:00 91                             /usr/lib/libmali.so.0
+7f8fc95000-7f8fd07000 rw-p 011c5000 07:00 91                             /usr/lib/libmali.so.0
+7f8fd07000-7f8fd45000 rw-p 00000000 00:00 0 
+7f8fd46000-7f8fd47000 ---p 00000000 00:00 0 
+7f8fd47000-7f8fd4b000 rw-p 00000000 00:00 0 
+7f8fd4b000-7f8fd4c000 ---p 00000000 00:00 0 
+7f8fd4c000-7f8fd50000 rw-p 00000000 00:00 0 
+7f8fd50000-7f8fd51000 r-xp 00000000 07:00 86                             /usr/lib/libEGL.so.1
+7f8fd51000-7f8fd60000 ---p 00001000 07:00 86                             /usr/lib/libEGL.so.1
+7f8fd60000-7f8fd61000 rw-p 00000000 07:00 86                             /usr/lib/libEGL.so.1
+7f8fd61000-7f8fd62000 ---p 00000000 00:00 0 
+7f8fd62000-7f8fd66000 rw-p 00000000 00:00 0 
+7f8fd66000-7f8fd67000 ---p 00000000 00:00 0 
+7f8fd67000-7f8fd6b000 rw-p 00000000 00:00 0 
+7f8fd6b000-7f8fd6c000 ---p 00000000 00:00 0 
+7f8fd6c000-7f8fd70000 rw-p 00000000 00:00 0 
+7f8fd70000-7f8fd80000 ---p 00000000 00:00 0 
+7f8fd80000-7f8ff80000 rw-p 00000000 00:00 0 
+7f8ff80000-7f8ff90000 ---p 00000000 00:00 0 
+7f8ff90000-7f90190000 rw-p 00000000 00:00 0 
+7f90190000-7f901a0000 ---p 00000000 00:00 0 
+7f901a0000-7f903a0000 rw-p 00000000 00:00 0 
+7f903a0000-7f90529000 r-xp 00000000 07:00 13                             /usr/lib/aarch64-linux-gnu/libc.so.6
+7f90529000-7f90538000 ---p 00189000 07:00 13                             /usr/lib/aarch64-linux-gnu/libc.so.6
+7f90538000-7f9053c000 r--p 00188000 07:00 13                             /usr/lib/aarch64-linux-gnu/libc.so.6
+7f9053c000-7f9053e000 rw-p 0018c000 07:00 13                             /usr/lib/aarch64-linux-gnu/libc.so.6
+7f9053e000-7f9054a000 rw-p 00000000 00:00 0 
+7f9054b000-7f9054c000 ---p 00000000 00:00 0 
+7f9054c000-7f90550000 rw-p 00000000 00:00 0 
+7f90550000-7f905d6000 r-xp 00000000 07:00 32                             /usr/lib/aarch64-linux-gnu/libm.so.6
+7f905d6000-7f905e5000 ---p 00086000 07:00 32                             /usr/lib/aarch64-linux-gnu/libm.so.6
+7f905e5000-7f905e6000 r--p 00085000 07:00 32                             /usr/lib/aarch64-linux-gnu/libm.so.6
+7f905e6000-7f905e7000 rw-p 00086000 07:00 32                             /usr/lib/aarch64-linux-gnu/libm.so.6
+7f905eb000-7f905ec000 ---p 00000000 00:00 0 
+7f905ec000-7f905f0000 rw-p 00000000 00:00 0 
+7f905f0000-7f905f1000 r-xp 00000000 07:00 43                             /usr/lib/aarch64-linux-gnu/libpthread.so.0
+7f905f1000-7f90600000 ---p 00001000 07:00 43                             /usr/lib/aarch64-linux-gnu/libpthread.so.0
+7f90600000-7f90601000 r--p 00000000 07:00 43                             /usr/lib/aarch64-linux-gnu/libpthread.so.0
+7f90601000-7f90602000 rw-p 00001000 07:00 43                             /usr/lib/aarch64-linux-gnu/libpthread.so.0
+7f90606000-7f90607000 ---p 00000000 00:00 0 
+7f90607000-7f9060b000 rw-p 00000000 00:00 0 
+7f9060b000-7f9060c000 ---p 00000000 00:00 0 
+7f9060c000-7f90610000 rw-p 00000000 00:00 0 
+7f90610000-7f90624000 r-xp 00000000 07:00 23                             /usr/lib/aarch64-linux-gnu/libgcc_s.so.1
+7f90624000-7f90633000 ---p 00014000 07:00 23                             /usr/lib/aarch64-linux-gnu/libgcc_s.so.1
+7f90633000-7f90634000 r--p 00013000 07:00 23                             /usr/lib/aarch64-linux-gnu/libgcc_s.so.1
+7f90634000-7f90635000 rw-p 00014000 07:00 23                             /usr/lib/aarch64-linux-gnu/libgcc_s.so.1
+7f90636000-7f90637000 ---p 00000000 00:00 0 
+7f90637000-7f9063b000 rw-p 00000000 00:00 0 
+7f9063b000-7f9063c000 ---p 00000000 00:00 0 
+7f9063c000-7f90640000 rw-p 00000000 00:00 0 
+7f90640000-7f90641000 r-xp 00000000 07:00 19                             /usr/lib/aarch64-linux-gnu/libdl.so.2
+7f90641000-7f90650000 ---p 00001000 07:00 19                             /usr/lib/aarch64-linux-gnu/libdl.so.2
+7f90650000-7f90651000 r--p 00000000 07:00 19                             /usr/lib/aarch64-linux-gnu/libdl.so.2
+7f90651000-7f90652000 rw-p 00001000 07:00 19                             /usr/lib/aarch64-linux-gnu/libdl.so.2
+7f90656000-7f90657000 ---p 00000000 00:00 0 
+7f90657000-7f9065b000 rw-p 00000000 00:00 0 
+7f9065b000-7f9065c000 ---p 00000000 00:00 0 
+7f9065c000-7f90660000 rw-p 00000000 00:00 0 
+7f90660000-7f91653000 r-xp 00000000 b3:07 532                            /mnt/sdcard/SYSTEM/slot
+7f91653000-7f91663000 ---p 00ff3000 b3:07 532                            /mnt/sdcard/SYSTEM/slot
+7f91663000-7f91697000 r--p 00ff3000 b3:07 532                            /mnt/sdcard/SYSTEM/slot
+7f91697000-7f9169c000 rw-p 01027000 b3:07 532                            /mnt/sdcard/SYSTEM/slot
+7f9169c000-7f9169d000 ---p 00000000 00:00 0 
+7f9169d000-7f916a1000 rw-p 00000000 00:00 0 
+7f916a1000-7f916cc000 r-xp 00000000 07:00 5                              /usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1
+7f916ce000-7f916cf000 ---p 00000000 00:00 0 
+7f916cf000-7f916d5000 rw-p 00000000 00:00 0 
+7f916d7000-7f916d9000 rw-p 00000000 00:00 0 
+7f916d9000-7f916da000 r--p 00000000 00:00 0                              [vvar]
+7f916da000-7f916db000 r-xp 00000000 00:00 0                              [vdso]
+7f916db000-7f916dd000 r--p 0002a000 07:00 5                              /usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1
+7f916dd000-7f916df000 rw-p 0002c000 07:00 5                              /usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1
+7fa563a000-7fa6576000 rw-p 00000000 00:00 0                              [heap]
+7fd7da1000-7fd7dc2000 rw-p 00000000 00:00 0                              [stack]
