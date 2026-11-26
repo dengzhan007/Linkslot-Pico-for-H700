@@ -63,6 +63,23 @@ void platform_init_mmu_mappings(void)
             MMU_MEMORY_AP_READ_WRITE |
             MMU_MEMORY_XN);
 
+    /*
+     * Make all translation-table writes and TLBI operations visible before
+     * setting SCTLR.M. Synchronize instruction execution immediately after
+     * the MMU enable write. Host tests retain compiler barriers only.
+     */
+#if defined(__arm__) || defined(__aarch64__)
+    __asm__ volatile("dsb sy" ::: "memory");
+#else
+    __asm__ volatile("" ::: "memory");
+#endif
+
     /* Match GammaOS LK's platform contract: do not enable MMU before maps. */
     arch_enable_mmu();
+
+#if defined(__arm__) || defined(__aarch64__)
+    __asm__ volatile("isb sy" ::: "memory");
+#else
+    __asm__ volatile("" ::: "memory");
+#endif
 }

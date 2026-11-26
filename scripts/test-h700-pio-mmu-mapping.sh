@@ -9,4 +9,8 @@ cc -std=c11 -Wall -Wextra -Werror \
   "$ROOT/platform/h700/arch/h700_pio_mmu_mapping.c" \
   "$ROOT/platform/h700/arch/tests/h700_pio_mmu_mapping_test.c" \
   -o "$OUT/test-h700-pio-mmu"
+
+# Keep the real ARM MMU-enable barrier contract visible in the host regression.
+grep -q 'dsb sy' "$ROOT/platform/h700/arch/h700_pio_mmu_mapping.c"
+grep -q 'isb sy' "$ROOT/platform/h700/arch/h700_pio_mmu_mapping.c"
 "$OUT/test-h700-pio-mmu"

@@ -47,7 +47,7 @@ H700 PIO 字段：
 2. H700 hook 调用 `arm_mmu_init()` 初始化 LK 4096-entry AArch32 section table / TTBR。
 3. 将现场确认的 DRAM `[0x40000000, 0x80000000)` 以 normal write-back / read-write 属性建立 1024 个 1 MiB identity sections。
 4. 将 `[0x03000000, 0x03100000)` 以 shared Device / read-write / XN 属性映射，覆盖 CCU 与 PIO@0x0300b000。
-5. 调用 `arch_enable_mmu()`；之后 LK 完成 cache setup，才进入 `target_early_init()`。
+5. 所有页表描述符和 TLBI 操作完成后执行 `DSB SY`，再调用 `arch_enable_mmu()` 设置 `SCTLR.M`，随后执行 `ISB SY`；之后 LK 完成 cache setup，才进入 `target_early_init()`。
 6. `target_early_init()` 调用 `h700_rg34xx_power_led_early_init()`。GPIO data latch 先置高，再切 PI12 mux 为 GPIO output，最后读回验证。
 7. 若早期访问失败，`target_init()` 在 `platform_init()` 后重试；Linkslot C ABI 首次请求时也会在必要时尝试初始化。
 
@@ -99,3 +99,13 @@ Rust no_std state tests 覆盖初始前端态、开始/退出游戏各一次请�
 - 实机验证游戏时熄灭、退出后点亮，并确认 PI11 低电量灯不受影响；
 - 验证休眠唤醒是否会重置 pinmux，必要时在 resume hook 恢复；
 - 后续前端设置开关规划。
+
+
+### MMU enable ordering hardening
+
+The H700 mapping hook now performs an architectural DSB after all identity
+section descriptors and TLB invalidations have been written, calls LK's
+`arch_enable_mmu()`, then executes ISB before returning to the remainder of
+`arch_early_init()`. Host regression checks the barrier mnemonics are present;
+AArch32/AArch64 cross-compile validates the architecture guards. This is a
+source-level ordering check, not hardware MMU enable evidence.
