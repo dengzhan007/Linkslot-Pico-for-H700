@@ -149,6 +149,46 @@ handling, LK time/delay APIs and scheduler timer. Keep single-core bring-up;
 do not reassign security groups or clear/disable unrelated interrupts. Until
 then, do not program timer compare/control, GIC/PPI, or IRQ state.
 
+## BL33 initial-entry snapshot
+
+The generated pinned-LK overlay now captures the values visible at the first
+instruction of lk_bl33_entry, before the VBAR write and before upstream CRT0
+changes exception mode or stack:
+
+- CPSR → r11
+- incoming SP → r8
+- incoming LR → r9
+- incoming r4 → r10 (retained separately because upstream CRT0 stores r4 in
+  BOOT_ARGUMENT_LOCATION as its loader argument)
+
+The values remain in AAPCS callee-saved registers while the original CRT0
+performs relocation and its IRQ/FIQ/ABT/UND/SYS/SVC stack setup. Once the
+.L__bss_loop has completed, but before kmain(), the overlay writes the four
+words into h700_bl33_entry_snapshot and writes magic 0x48374553 last.
+h700_bl33_entry_snapshot_read() is a C-only reader; it accesses no CP15,
+GIC, timer or MMIO register. The reader rejects null output and an unpublished
+snapshot.
+
+Validation is host-only at this stage:
+
+- scripts/test-h700-lk-overlay.py checks that all four captures precede the
+  VBAR write, that BSS publication follows the clear loop and precedes
+  kmain(), and that the snapshot object fits in the probe's linked BSS.
+- scripts/audit-lk-bl33-layout.py includes the five-word BSS object in its
+  ELF32/A32 layout probe.
+- scripts/test-h700-bl33-entry-snapshot.sh checks the C ABI, offsets,
+  publish-last magic and reader error paths.
+- The object is part of the real H700 OBJS list and the AArch64,
+  AArch32 ARM-state and Thumb-2 compile matrix.
+
+This does not yet provide values from RG34XX. The snapshot is materialized only
+if startup reaches the post-BSS publication point; it is not a persistent
+crash record for a fault before that point. CPSR mode bits do not prove
+Secure/Non-secure state, EL2 configuration or GIC group ownership. The next
+device-side step remains a separately authorized LK diagnostic, after the
+memory and boot safety gates are resolved. No GIC/timer writes or device
+payload execution are included in this change.
+
 ## Live FDT interrupt-controller and timer inventory
 
 The read-only FDT inspector now emits `interrupt_controllers` and
