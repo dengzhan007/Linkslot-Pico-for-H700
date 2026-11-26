@@ -625,3 +625,21 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 验证：[H700 Linkslot 1.0.49 runtime slices #45741616363](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45741616363) **success**。workspace 双 host test 模式、AArch32/AArch64 no-default checks、upstream input/model regression、完整 Linkslot 1.0.49 Frontend overlay、CPU Performance QuickRow fail-closed、C input queue + ABI 两架构交叉编译均通过；因此新 SearchKeyboard 路由在 default 和 no-default host tests 中均已执行通过。
 
 下一步不再继续拆单个按键动作，而是实现薄的 application adapter：仅在对应 App Phase 调用三种 router，把 typed commands 映射回现有 QuickRow/Keyboard/SearchResults 状态与 App 方法；所有持久化/VFS/设备副作用留在原有 handler。Adapter 通过后再推进 VFS v3 + 静态 core lifecycle 的只读/内存边界。
+
+
+## 22. Phase-aware Linkslot App input dispatcher（2026-11-26）
+
+在完成 QuickMenu、SearchResults、SearchKeyboard 三个纯路由后，新增 `route_app_input(owner, action)` 作为组合式 phase-aware dispatcher：
+
+- `Shelf + Action::QuickMenu` => `OpenQuickMenu`；`Shelf + X` => `OpenGameSearch`。
+- `Playing + Action::QuickMenu` => `OpenInGameMenu`；保持与 Shelf MENU 语义不同。
+- App 已将输入 owner 判定为 QuickMenu / SearchResults / SearchKeyboard 时，dispatcher 调用相应 typed router。
+- 其他 owner 返回 `DelegateToApp`，不截断 power、upgrade、sync、popup、wifi、utility、guide 等旧 handler。
+- `AppInputOwner` 是调用方提供的当前 owner snapshot；dispatcher 不扫描 App 字段、不决定 overlay 优先级、不重写 phase、不执行任何 side effect。
+
+特别说明：这一步提供了**可集成的 dispatcher seam**，但尚未修改 immutable upstream 的 `App::apply()` 调用点，也不能声称真实 Frontend 输入已经全部通过该 dispatcher。下一步应在隔离的 Linkslot 1.0.49 source overlay 中，按现有 priority order 在正确位置接入 dispatcher，同时保留其他 modal/overlay handlers 原样运行。
+
+实现提交：`8c4efd5de6250d421067e14f7b96df648ad1aaeb`。增加 4 项测试，总 app-router 23 项测试。
+验证：[H700 Linkslot 1.0.49 runtime slices #45742086671](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45742086671) **success**：15-member workspace default/no-default host tests、AArch32/AArch64 no-default checks、upstream input/model regressions、完整 Linkslot Frontend overlay 编译、CPU Performance QuickRow fail-closed 及 C input ABI/queue host 与 cross-compile 全部通过。该结果仍是 host/cross-build，不是实机 boot。
+
+下一步：在 CI 的临时 Linkslot checkout 中增加 priority-safe App integration patch 与 regression tests；不能把源 patch 的成功应用等同于真实 LK runtime 已可启动。此后再推进 VFS v3/static-core 的 App wiring。
