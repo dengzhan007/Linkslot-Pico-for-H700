@@ -155,25 +155,32 @@ The generated pinned-LK overlay now captures the values visible at the first
 instruction of lk_bl33_entry, before the VBAR write and before upstream CRT0
 changes exception mode or stack:
 
-- CPSR → r11
-- incoming SP → r8
-- incoming LR → r9
-- incoming r4 → r10 (retained separately because upstream CRT0 stores r4 in
-  BOOT_ARGUMENT_LOCATION as its loader argument)
+- CPSR → r5
+- incoming SP → r6
+- incoming LR → r7
+- incoming r4 remains in r4
 
-The values remain in AAPCS callee-saved registers while the original CRT0
-performs relocation and its IRQ/FIQ/ABT/UND/SYS/SVC stack setup. Once the
-.L__bss_loop has completed, but before kmain(), the overlay writes the four
-words into h700_bl33_entry_snapshot and writes magic 0x48374553 last.
+This intentionally uses r4-r7: AArch32 FIQ banks r8-r14, so the earlier r8-r11
+approach would lose access to the captured values when CRT0 switched from FIQ
+to SVC. r4-r7 are shared across those modes and are AAPCS callee-saved. The
+overlay changes CRT0's boot-argument scratch store from r6 to r0 and its
+optional TrustZone linker-retention load from r7 to r0, preserving the captured
+r6/r7 values without changing the original r4 loader argument or linker
+retention effect.
+
+The values remain in these shared registers while the original CRT0 performs
+relocation and its IRQ/FIQ/ABT/UND/SYS/SVC stack setup. Once the .L__bss_loop
+has completed, but before kmain(), the overlay writes SP/LR/r4/CPSR into
+h700_bl33_entry_snapshot and writes magic 0x48374553 last.
 h700_bl33_entry_snapshot_read() is a C-only reader; it accesses no CP15,
 GIC, timer or MMIO register. The reader rejects null output and an unpublished
 snapshot.
 
 Validation is host-only at this stage:
 
-- scripts/test-h700-lk-overlay.py checks that all four captures precede the
-  VBAR write, that BSS publication follows the clear loop and precedes
-  kmain(), and that the snapshot object fits in the probe's linked BSS.
+- scripts/test-h700-lk-overlay.py checks the unbanked r4-r7 capture,
+  preservation of the boot-argument and TrustZone references, capture before
+  VBAR, publication after BSS clear and before kmain(), and BSS bounds.
 - scripts/audit-lk-bl33-layout.py includes the five-word BSS object in its
   ELF32/A32 layout probe.
 - scripts/test-h700-bl33-entry-snapshot.sh checks the C ABI, offsets,
