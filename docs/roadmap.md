@@ -631,3 +631,15 @@ These live-DT/Linux-runtime mappings close the hardware identity and PPI declara
 **Next gate:** run a non-invasive LK-target probe to record exception/security mode, CNTFRQ, two CNTVCT samples, GICD/GICC/GICH/GICV identification and control state, Group0/Group1NS ownership, EL2 counter/timer trap state, CNTVOFF, and whether PPI27 is accessible to BL33. Do not write GIC/timer registers or start an interrupt before readback establishes the handoff. Only then implement H700 early GICv2 setup, platform_irq() IAR/EOI, LK time/delay hooks and scheduler tick. Initial IRQ bring-up stays single-core and must not reassign security groups or clear unrelated pending interrupts.
 
 The full feasibility CI at 8e7f8db completed 76/76; it tests host/cross-build contracts and does not constitute a full LK target link or device boot.
+
+
+## 2026-11-26 A32 BL33 first-entry state snapshot
+
+- [x] Add an A32 CRT0 capture at the first instruction of lk_bl33_entry: incoming CPSR, SP, LR and r4 are copied into callee-saved r8-r11 before VBAR setup or startup mode/stack changes.
+- [x] Preserve the existing r4 loader-argument path; publish the four captured words to a dedicated five-word BSS object only after the CRT0 BSS clear, with a magic word written last.
+- [x] Add a C-only snapshot reader with null/unpublished failure results; no CP15, timer, GIC, or MMIO accesses are made by the reader.
+- [x] Extend the A32 BL33 overlay linker/layout probe and project guard, add C ABI host regression, and compile the new object in AArch64 / AArch32 ARM-state / Thumb-2 variants.
+- [ ] Require green host and cross-compile CI for the new branch head before treating the source change as validated.
+- [ ] After memory ownership, firmware pairing, and a reversible boot diagnostic are approved, execute the LK entry path on RG34XX and read the captured registers. Do not infer Security state from CPSR alone, and do not start GIC/timer programming from this snapshot.
+
+The snapshot only becomes available after CRT0 reaches the post-BSS publication point; it is not a crash logger for earlier faults. Until an authorized device run exists, all entry values remain unknown and the existing SPSR=0x1d3 remains a loader/monitor model, not a measurement of this replacement LK.
