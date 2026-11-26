@@ -668,3 +668,20 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 当前结论：**App phase routing 已实际接入 1.0.49 App 源码，并通过专项完整 Frontend 编译；完整 LK feasibility 验证仍以 workflow 最终结论为准。** 所有证据仍是 host/cross-build，不是 RG34XX 实机启动或运行；没有执行 payload、没有写 SD/Boot0/TOC1，也没有开放 VFS 写回。H700 memory gate、单核 fail-closed、显示/PCM/GPIO/电源硬件门槛保持不变。
 
 下一步按 runtime architecture §6 继续验证只读 VFS v3 与静态核心生命周期的 App-owned service descriptor / startup 顺序；先补多文件/目录句柄的独立位置、容量上限和失效句柄 host 回归，再研究持久化写入。不要将现有 FAT32 writer 的 8.3 限制或 exFAT 尚未闭合的 flush/rename 语义暴露给 Linkslot 存档路径。
+
+## 24. H700 read-only Libretro VFS 多句柄生命周期回归（2026-11-26）
+
+在第 23 节 App phase routing 接入后，继续补强 C-owned H700 FAT/CMD17 VFS provider 的固定句柄表回归；本轮只增强 host test，不开放写入，也不改硬件 backend：
+
+- 在 platform/h700/storage/mmc/tests/h700_fat_vfs_backend_test.c 增加同一 ROM 的两个同时打开句柄，交错读取并验证各自 position/tell 与 get_path 独立。
+- 穷举 H700_FAT_VFS_MAX_FILES（16）个文件槽位：全部可同时分配、地址互异；第 17 个 open fail-closed；单独 close 后 stale handle 在 slot reuse 前被拒绝；释放槽位可重新打开。
+- 穷举 H700_FAT_VFS_MAX_DIRS（8）个目录槽位：全部可同时分配、地址互异；第 9 个 opendir fail-closed；两个目录迭代器分别保有当前 entry/EOF 状态；close 后 stale handle 被拒绝，释放槽位可复用。
+- 保持只读检查：volume.wr 仍为 0，write/flush/remove/rename/truncate/mkdir 拒绝，拒绝的 mutation 不发出 SD command。
+
+实现提交：3fafc29488b2bfa01ac6785ae6534c0f443e117b。
+
+验证：
+- [H700 AArch32/AArch64 compile check #45745912462](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45745912462) **success**。storage-host-regression job（包含 h700_fat_vfs_backend_test.c 与 ASan/UBSan 可用时的 sanitizer run）及 freestanding AArch64 objects job 均通过。
+- [Linkslot LK Rust feasibility #45745912439](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45745912439) 在此节写入时仍在运行；该 run 将对同一更新后的分支重复执行完整 Linkslot/LK feasibility 链，须等其最终 conclusion 后再更新聚合状态。
+
+本节只证明 host 模拟 CMD17/FAT media 上多句柄状态和边界；不证明并发 SMP 安全、真实 SD/MMC 读性能、target LK callback threading，也不实现持久化写入。当前 provider 继续要求 serialized callbacks；FAT32 8.3 writer 与 exFAT flush/rename 差距仍不允许向 Linkslot 开放存档写回。
