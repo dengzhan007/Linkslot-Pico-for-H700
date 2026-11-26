@@ -864,10 +864,11 @@ Hard size boundary: this first integration path is only for a small diagnostic p
   0x48001790 / 0x480018d8 accesses 0x03001000, 0x03001a78, and 0x03001a8c;
   likely power-state context handling, exact register semantics and callback
   reachability remain unresolved.
-- [ ] Establish PM callback registration/dispatch path and determine which
-  conditional routines can execute before BL33 handoff versus only after a
-  later PSCI/low-power request. Do not treat full-image scan rows as executed
-  boot traces.
+- [x] Establish PM callback registration/dispatch path: map the nine-member
+  legacy platform-ops table, slots 0–8, member byte offsets, indirect
+  dispatches, system_off/system_reset helpers and SYSTEM_SUSPEND getter.
+  BL31 audit #39 passed 20/20. This remains static call-path evidence only;
+  runtime reachability/timing is unresolved.
 - [ ] Confirm APB1/PIO access permission and clock/reset state at BL33 entry;
   keep PI12 MMIO default-off.
 - [ ] Close BL31/Boot0 RAM ownership and secondary A53 hold-off/SMP gates.
@@ -880,12 +881,16 @@ Hard size boundary: this first integration path is only for a small diagnostic p
   path, global `psci_plat_pm_ops` dispatch and slot-1 CPU_ON branch.
 - [x] Verify direct AArch64 BL targets from `0x48002998` to CCU save helper
   `0x48001790`, and from `0x48002858` to restore helper `0x480018d8`.
-- [x] Keep platform-ops slots 3 (`0x48002878`) and 7 (`0x48002574`)
-  unclassified. The exact shipping TF-A ABI is not pinned; public TF-A
-  versions add/reorder callback members. Do not infer callback names from
-  slot numbers alone.
-- [ ] Pin the exact vendor TF-A ABI/source matching the 107,216-byte BL31.
-- [ ] Recover function boundaries and CFG for both CCU helper call sites;
+- [x] Map the nine-member effective legacy ABI: eight `affinst_*/system_*`
+  members plus vendor `get_sys_suspend_power_state`; prove the dispatch
+  offsets and SYSTEM_SUSPEND getter call path. CI #39 passed 20/20.
+- [x] Associate slot 3/5 save/restore branches with `affinst_suspend` and
+  `affinst_suspend_finish`; confirm slot 5 tail-branches to slot 4.
+- [ ] Recover exact vendor TF-A source commit/build provenance for the
+  107,216-byte BL31; the effective ABI is binary-derived, not a recovered
+  vendor source revision.
+- [ ] Recover the full CFG/semantics of SYSTEM_SUSPEND transition function
+  `0x48008d98`, including affinity-level callback iteration and ordering.
   prove which registered callback owns each path and whether resume/restore
   is a separate callback.
 - [ ] Establish whether any such path executes during cold boot or only after
@@ -913,3 +918,19 @@ Hard size boundary: this first integration path is only for a small diagnostic p
 - [ ] Close BL31→BL33 PIO/clock/permission, memory ownership, secondary A53
   reset/hold-off and timer continuity gates.
 - Hardware unchanged: `hardware_applied=0`.
+
+## 2026-11-27 — Legacy PSCI table and SYSTEM_SUSPEND dispatch verified
+
+- [x] Pin all nine 64-bit platform-ops pointers at `0x480165f8`.
+- [x] Assert legacy callback names/offsets and slot 0–5 dispatch load/call
+  instructions; assert system_off and system_reset helper targets.
+- [x] Assert slot 8 getter `0x48002544` returns `0x02010000`, its
+  `+0x40` load/indirect call, and the transition call to `0x48008d98`.
+- [x] BL31 audit #39 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45906188892)
+  passed 20/20; artifact
+  [15157244797](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45906188892/artifacts/15157244797).
+- [ ] Disassemble and reconstruct `0x48008d98` affinity-level transition
+  loops; map the PSCI callback lists/tables and prove slot 3/5 invocation
+  ordering. Do not call this live suspend/resume validation.
+- Hardware unchanged: `hardware_applied=0`; no MMIO, storage writes, flashing
+  or payload execution.

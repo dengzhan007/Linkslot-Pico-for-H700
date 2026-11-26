@@ -234,3 +234,55 @@ exact shipping TF-A ABI/source version is unknown. Do not label them as
 suspend/off/finish/resume from slot numbers alone. The static code does not
 prove runtime execution or cold-boot reachability; it does not establish a
 CPU DVFS API or startup PLL change. Hardware remains untouched.
+
+## Legacy PSCI table and SYSTEM_SUSPEND getter (2026-11-27)
+
+BL31 static audit [#39](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45906188892)
+passed 20/20 on code HEAD `4afe6788d2af69434aa9f1c36aa7cb1b75e14032`.
+Artifact [15157244797](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45906188892/artifacts/15157244797)
+contains the generated JSON report and callback disassembly. The matched monitor
+remains 107,216 bytes with SHA-256
+`676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31`.
+
+### Effective platform-ops layout
+
+The nine 64-bit pointers at `0x480165f8` resolve as:
+
+| Slot | Member | Pointer | Dispatch evidence |
+|---:|---|---:|---|
+| 0 | `affinst_standby` | `0x48002510` | load `+0x00` at `0x48009688`; indirect call `0x48009690` |
+| 1 | `affinst_on` | `0x4800254c` | load `+0x08` at `0x48008608`; indirect branch `0x48008640` |
+| 2 | `affinst_off` | `0x4800264c` | load `+0x10` at `0x480080f8`; indirect call `0x48008118` |
+| 3 | `affinst_suspend` | `0x48002878` | load `+0x18` at `0x48008a84`; indirect call `0x48008a90` |
+| 4 | `affinst_on_finish` | `0x48002680` | load `+0x20` at `0x4800854c`; indirect call `0x48008560` |
+| 5 | `affinst_suspend_finish` | `0x480026c4` | load `+0x28` at `0x48008918`; indirect call `0x4800893c` |
+| 6 | `system_off` | `0x480025a0` | helper call `0x480025a8 → 0x48001ed8` |
+| 7 | `system_reset` | `0x48002574` | reset helper call `0x48002588 → 0x48001ec8`; reset-specific strings |
+| 8 | `get_sys_suspend_power_state` | `0x48002544` | getter returns `0x02010000`; caller loads `+0x40` and calls indirectly |
+
+The first eight members follow the legacy Allwinner TF-A `plat_pm_ops_t`
+callback family/order; slot 8 is a vendor extension. This layout is not the
+modern `plat_psci_ops_t` layout. The exact shipping vendor TF-A source commit
+has not been recovered; member naming is based on table order, per-member
+dispatch byte offsets, function behavior and embedded PSCI strings.
+
+### SYSTEM_SUSPEND call chain
+
+- Getter address: `0x48002544`; instructions: `mov w0, #0x02010000; ret`.
+- Caller region starts at `0x480096f8`; the global ops pointer is loaded at
+  `0x48009718`, slot 8 at byte offset `+0x40` is loaded at `0x4800971c`,
+  and the function pointer is invoked indirectly at `0x48009744`.
+- At `0x4800975c`, the returned state is passed to transition function
+  `0x48008d98`.
+
+### Current limits and next work
+
+These checks pin a static binary's callback registration and dispatch, not a
+live suspend/resume operation. No PSCI SMC, MMIO read/write, flash, boot-media
+write or payload execution was performed. The next analysis target is
+`0x48008d98`: reconstruct the affinity-level transition loop, its callback
+tables, and the order/conditions for suspend and finish callbacks. The function
+pointer-looking data near `0x48017b20` and `0x48017d70` is only a lead until
+its consumers and callsites are recovered.
+
+`hardware_applied=0` remains unchanged.
