@@ -90,3 +90,10 @@ The round-16 live capture now resolves which slot holds the currently booted/gam
 Linkslot save/state naming is not limited to 8.3 names. `slot-store::StateRing` creates paths such as `States/<platform>/<core>/<game-stem>/<timestamp>.state`, `resume.state`, and matching PNG thumbnails. `slot::persist::write_sav` writes `Saves/<platform>/<game-stem>.sav`; `slot-store::atomic_write` writes a temporary sibling, calls file sync, renames it over the destination, then syncs the parent directory.
 
 The imported FAT16/32 writer explicitly supports only 8.3 file and directory names. It is therefore **not compatible as-is** with Linkslot save/state paths. The exFAT writer supports UTF-8/UTF-16 long names, but its current callback contract has no explicit durable flush/barrier operation and its rename semantics do not yet provide the full `atomic_write` contract. Do not expose FAT32/exFAT writes to Linkslot until long-name support, temporary-file rename, flush ordering and power-cut recovery are designed and tested. Read-only FAT/exFAT support can be evaluated separately.
+
+
+### Multi-handle lifetime and fixed-capacity regression (2026-11-26)
+
+The C backend host regression now opens the same ROM twice and interleaves reads to prove that file positions and stored paths are per-handle. It fills all 16 fixed file slots and all 8 directory slots, verifies that the next allocation fails closed, checks independent directory iteration/EOF state, rejects closed handles before slot reuse, and confirms that released slots can be reused. This remains a serialized, single-core host test; it does not establish SMP callback safety or target-LK thread safety.
+
+The expanded test passed in [H700 AArch32/AArch64 compile check #45745912462](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45745912462). The provider remains read-only: mutation callbacks still fail without SD write commands, and persistent save/state writes remain blocked on long-name, flush/barrier, rename and power-cut guarantees.
