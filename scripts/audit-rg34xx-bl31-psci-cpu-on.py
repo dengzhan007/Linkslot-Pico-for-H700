@@ -25,7 +25,8 @@ WORDS = {
     0x4800869c: 0x900001a1, 0x480086a0: 0xf947e021,
     0x480086a4: 0xf9400433, 0x480086c4: 0xaa1303e5,
     0x480086dc: 0xd61f00a0,
-    0x48002858: 0x97fffc20, 0x48002998: 0x97fffb7e,
+    0x48002858: 0x97fffc20, 0x48002874: 0x17ffff83,
+    0x48002998: 0x97fffb7e,
     0x4800254c: 0x35000103, 0x4800255c: 0x94000207,
     0x48002d18: 0xd2800480, 0x48002d1c: 0xf2a06000,
     0x48002d20: 0xb9400000, 0x48002d24: 0xf240081f,
@@ -62,7 +63,7 @@ DISASSEMBLY_WINDOWS = (
     ("ops_slot_2_raw", 0x4800264c, 0x100),
     ("ops_slot_3_raw", 0x48002878, 0x180),
     ("ops_slot_4_raw", 0x48002680, 0x100),
-    ("ops_slot_5_raw", 0x480026c4, 0x100),
+    ("ops_slot_5_raw", 0x480026c4, 0x1b4),
     ("ops_slot_6_raw", 0x480025a0, 0x100),
     ("ops_slot_7_raw", 0x48002574, 0x100),
     ("ops_slot_8_raw", 0x48002544, 0x100),
@@ -81,6 +82,14 @@ def read_word(raw: bytes, address: int) -> int:
 def decode_bl_target(pc: int, instruction: int) -> int:
     if (instruction & 0xfc000000) != 0x94000000:
         raise RuntimeError("expected AArch64 BL at 0x%08x" % pc)
+    immediate = instruction & 0x03ffffff
+    if immediate & (1 << 25):
+        immediate -= 1 << 26
+    return pc + (immediate << 2)
+
+def decode_b_target(pc: int, instruction: int) -> int:
+    if (instruction & 0xfc000000) != 0x14000000:
+        raise RuntimeError("expected AArch64 B at 0x%08x" % pc)
     immediate = instruction & 0x03ffffff
     if immediate & (1 << 25):
         immediate -= 1 << 26
@@ -140,10 +149,16 @@ def main() -> int:
         raise RuntimeError("CPU_ON callback target changed")
     if table[3] != 0x48002878:
         raise RuntimeError("platform-ops slot 3 pointer changed")
+    if table[4] != 0x48002680:
+        raise RuntimeError("platform-ops slot 4 pointer changed")
+    if table[5] != 0x480026c4:
+        raise RuntimeError("platform-ops slot 5 pointer changed")
     if decode_bl_target(0x48002998, read_word(raw, 0x48002998)) != 0x48001790:
-        raise RuntimeError("suspend CCU context-save call changed")
+        raise RuntimeError("slot-3 CCU context-save call changed")
     if decode_bl_target(0x48002858, read_word(raw, 0x48002858)) != 0x480018d8:
-        raise RuntimeError("suspend CCU context-restore call changed")
+        raise RuntimeError("slot-5 CCU context-restore call changed")
+    if decode_b_target(0x48002874, read_word(raw, 0x48002874)) != table[4]:
+        raise RuntimeError("slot-5 tail branch to slot-4 target changed")
     if decode_bl_target(0x48002d8c, read_word(raw, 0x48002d8c)) != 0x48002d30:
         raise RuntimeError("per-core RVBAR helper call changed")
     if decode_bl_target(0x48002d90, read_word(raw, 0x48002d90)) != 0x48002d18:
@@ -183,6 +198,10 @@ def main() -> int:
                        "address": "0x%08x" % table[2]},
             "slot_3": {"name": "unclassified (exact vendor plat_psci_ops_t ABI not pinned)",
                        "address": "0x%08x" % table[3]},
+            "slot_4": {"name": "unclassified (exact vendor plat_psci_ops_t ABI not pinned)",
+                       "address": "0x%08x" % table[4]},
+            "slot_5": {"name": "unclassified (exact vendor plat_psci_ops_t ABI not pinned)",
+                       "address": "0x%08x" % table[5]},
             "slot_7": {"name": "unclassified (exact vendor plat_psci_ops_t ABI not pinned)",
                        "address": "0x%08x" % table[7]},
             "registration_function": "0x480029bc",
@@ -202,17 +221,22 @@ def main() -> int:
         },
         "disassembly_file": "PSCI-CALLBACK-DISASSEMBLY.txt",
         "power_management_path_candidates": {
-            "address": "0x%08x" % table[3],
-            "save_context": {
-                "callsite": "0x48002998",
-                "target": "0x48001790",
+            "slot_3_function": {
+                "entry": "0x%08x" % table[3],
+                "save_context_callsite": "0x48002998",
+                "save_context_target": "0x48001790",
                 "ccu_candidates": ["0x03001000", "0x03001a78", "0x03001a8c"],
+                "save_call_within_slot3_function": table[3] <= 0x48002998 < 0x480029b8,
             },
-            "restore_context": {
-                "callsite": "0x48002858",
-                "target": "0x480018d8",
+            "slot_5_function": {
+                "entry": "0x%08x" % table[5],
+                "restore_context_callsite": "0x48002858",
+                "restore_context_target": "0x480018d8",
+                "tail_branch_callsite": "0x48002874",
+                "tail_branch_target": "0x%08x" % decode_b_target(0x48002874, read_word(raw, 0x48002874)),
+                "restore_call_within_slot5_function": table[5] <= 0x48002858 < 0x48002878,
             },
-            "interpretation": "table slot 3 contains 0x48002878; direct BL edges to the CCU save and restore helpers are verified separately, but the exact vendor callback ABI, slot semantics, and CFG relationship between the call sites are not established",
+            "interpretation": "the function entered through raw slot 3 contains the conditional CCU save call; the separate function entered through raw slot 5 contains the conditional CCU restore call and tail-branches to raw slot 4. Slots 3/4/5 remain semantically unclassified because the exact vendor ABI is not pinned",
         },
         "callback": {
             "address": "0x4800254c",
@@ -261,8 +285,8 @@ def main() -> int:
             "The table's slot 1 callback reaches the CPU_ON low-level routine, but PSCI feature advertisement is not inferred because the exact vendor plat_psci_ops_t ABI and pwr_domain_on_finish slot are not pinned.",
             "This proves BL31 contains and exposes a CPU_ON-capable platform callback; it does not prove that the callback executes during initial BL31-to-BL33 handoff.",
             "The audit does not establish live CPU1-CPU3 reset state before Linux or Linkslot requests PSCI CPU_ON.",
-            "The ops table contains 0x48002878 in slot 3. Separately, PC 0x48002998 branches to CCU save helper 0x48001790 and PC 0x48002858 branches to restore helper 0x480018d8; exact callback ownership/reachability is not yet proven.",
-            "These CCU helpers are present in BL31 power-management code; their runtime invocation and callback ownership are unresolved. They do not establish a BL33 startup clock transition or an exposed CPU DVFS API.",
+            "The function entered through raw slot 3 at 0x48002878 contains the CCU save call at 0x48002998; the separate function entered through raw slot 5 at 0x480026c4 contains the CCU restore call at 0x48002858 and tail-branches at 0x48002874 to raw slot 4 at 0x48002680.",
+            "The two helper calls are in separate registered raw platform-ops entry regions. Exact semantic callback names, runtime invocation, and cold-boot reachability remain unresolved; they do not establish a BL33 startup clock transition or CPU DVFS API.",
             "BL31 and pinned BaseOS SPL select the same RVBAR bank only when VER_REG low3 is 0 or 2; values 1 or 3-7 would make their selector rules diverge. The live value is unknown.",
             "The exact vendor callback ABI/source revision is not recovered; this is a pinned binary plus standard ABI-position correlation, not exact vendor source identity.",
             "No hardware MMIO, flash, boot-media write or payload execution was performed.",
@@ -280,9 +304,9 @@ def main() -> int:
         "- Platform ops table: `0x480165f8`; slot +8 points to callback `0x4800254c`.",
         "- PSCI dispatch loads the global `psci_plat_pm_ops` pointer, reads its +8 slot, moves that function pointer to `x5`, then branches through `x5`.",
         "- Callback `0x4800254c` calls low-level CPU_ON routine `0x48002d78` at `0x4800255c` when `W3 == 0`.",
-        "- Platform-ops slot 3 contains 0x48002878. Direct BL targets confirm PC 0x48002998 -> 0x48001790 (CCU save helper) and PC 0x48002858 -> 0x480018d8 (restore helper); their exact callback ownership and CFG relationship remain unresolved.",
+        "- Raw slot 3 entry 0x48002878 contains the conditional CCU save call at 0x48002998 -> 0x48001790. Separate raw slot 5 entry 0x480026c4 contains the conditional CCU restore call at 0x48002858 -> 0x480018d8; its epilogue at 0x48002874 branches to raw slot 4 entry 0x48002680.",
         "- Full disassembly windows for all table entries and both CCU helpers are saved in PSCI-CALLBACK-DISASSEMBLY.txt for function-boundary/CFG review.",
-        "- The CCU save/restore helper branch targets are present, but their callback ownership and runtime execution are unresolved; they do not establish a BL33 startup clock transition or CPU DVFS support.",
+        "- Slot 3/5 helper-call ownership by raw table-entry code regions is established; semantic callback names, runtime execution and cold-boot reachability remain unresolved. No BL33 startup clock transition or CPU DVFS support is established.",
         "- Low-level routine writes a per-core RVBAR and contains a CPU power/reset sequence; one SoC-selected variant uses `0x09010000`, `0x09010010`, `0x07000440`, `0x07000444` and `0x090100c0`.",
         "- RVBAR selector cross-check: BL31 uses VER_REG low3==0 for base 0x09010040, otherwise 0x08100040; pinned native SPL uses low3==2 for the alternate bank. Both agree only for selector values 0 and 2; the target value must be read.",
         "",
