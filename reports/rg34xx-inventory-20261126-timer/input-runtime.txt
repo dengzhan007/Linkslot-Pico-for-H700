@@ -1,0 +1,120 @@
+== /proc/bus/input/devices (read-only) ==
+I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+N: Name="axp2202-pek"
+P: Phys=m1kbd/input2
+S: Sysfs=/devices/platform/soc/twi5/i2c-5/5-0034/axp2101-pek.0/input/input0
+U: Uniq=
+H: Handlers=kbd event0 
+B: PROP=0
+B: EV=100003
+B: KEY=10000000000000 0
+
+I: Bus=0019 Vendor=0001 Product=0001 Version=0100
+N: Name="ANBERNIC-keys"
+P: Phys=gpio-keys-polled/input0
+S: Sysfs=/devices/platform/soc/soc@03000000:gpio_keys/input/input1
+U: Uniq=
+H: Handlers=kbd js0 event1 
+B: PROP=0
+B: EV=20000b
+B: KEY=400000000 dff000000000000 0 0 c000000000000 2
+B: ABS=30038
+B: FF=107030000 0
+
+I: Bus=0019 Vendor=0001 Product=0001 Version=0100
+N: Name="dierct-keys-polled"
+P: Phys=dierct-keys-polled/input0
+S: Sysfs=/devices/platform/dierct-keys-polled/input/input2
+U: Uniq=
+H: Handlers=kbd event2 
+B: PROP=0
+B: EV=3
+B: KEY=c378000000000 c042e2100000
+
+
+== getevent -lp device capabilities (read-only; no event stream) ==
+NOT_PRESENT: getevent
+
+== existing pinctrl pinmux/pinconf readback (read-only; no debugfs mount) ==
+-- /sys/kernel/debug/pinctrl/pio/pinmux-pins
+pin 0 (PA0): (MUX UNCLAIMED) pio:0
+pin 1 (PA1): (MUX UNCLAIMED) pio:1
+pin 2 (PA2): (MUX UNCLAIMED) pio:2
+pin 3 (PA3): (MUX UNCLAIMED) pio:3
+pin 4 (PA4): (MUX UNCLAIMED) pio:4
+pin 5 (PA5): (MUX UNCLAIMED) pio:5
+pin 6 (PA6): (MUX UNCLAIMED) pio:6
+pin 7 (PA7): (MUX UNCLAIMED) pio:7
+pin 8 (PA8): (MUX UNCLAIMED) pio:8
+pin 9 (PA9): (MUX UNCLAIMED) pio:9
+pin 10 (PA10): (MUX UNCLAIMED) pio:10
+pin 11 (PA11): (MUX UNCLAIMED) pio:11
+pin 12 (PA12): (MUX UNCLAIMED) pio:12
+pin 128 (PE0): csi1 pio:128 function csi1 group PE0
+pin 129 (PE1): (MUX UNCLAIMED) pio:129
+pin 130 (PE2): csi1 pio:130 function csi1 group PE2
+pin 131 (PE3): csi1 pio:131 function csi1 group PE3
+-- /sys/kernel/debug/pinctrl/r_pio/pinmux-pins
+NO_MATCHING_RG34XX_INPUT_PINS
+-- /sys/kernel/debug/pinctrl/pio/pinconf-pins
+pin 0 (PA0):input bias disabled, output drive strength (20 mA)
+pin 1 (PA1):input bias disabled, output drive strength (20 mA)
+pin 2 (PA2):input bias disabled, output drive strength (20 mA)
+pin 3 (PA3):input bias disabled, output drive strength (20 mA)
+pin 4 (PA4):input bias disabled, output drive strength (20 mA)
+pin 5 (PA5):input bias disabled, output drive strength (20 mA)
+pin 6 (PA6):input bias disabled, output drive strength (20 mA)
+pin 7 (PA7):input bias disabled, output drive strength (20 mA)
+pin 8 (PA8):input bias disabled, output drive strength (20 mA)
+pin 9 (PA9):input bias disabled, output drive strength (20 mA)
+pin 10 (PA10):input bias disabled, output drive strength (20 mA)
+pin 11 (PA11):input bias disabled, output drive strength (20 mA)
+pin 12 (PA12):input bias disabled, output drive strength (20 mA)
+pin 128 (PE0):input bias disabled, output drive strength (20 mA)
+pin 129 (PE1):input bias disabled, output drive strength (20 mA)
+pin 130 (PE2):input bias disabled, output drive strength (20 mA)
+pin 131 (PE3):input bias disabled, output drive strength (20 mA)
+-- /sys/kernel/debug/pinctrl/r_pio/pinconf-pins
+NO_MATCHING_RG34XX_INPUT_PINS
+
+== existing gpiolib requested-line state (read-only; no debugfs mount) ==
+-- /sys/kernel/debug/gpio --
+gpiochip1: GPIOs 0-287, parent: platform/pio, pio:
+ gpio-0   (                    |GPIO Key a          ) in  hi    
+ gpio-1   (                    |GPIO Key b          ) in  hi    
+ gpio-2   (                    |GPIO Key y          ) in  hi    
+ gpio-3   (                    |GPIO Key x          ) in  hi    
+ gpio-4   (                    |GPIO Key start      ) in  hi    
+ gpio-5   (                    |GPIO Key select     ) in  hi    
+ gpio-6   (                    |GPIO Key Up         ) in  hi    
+ gpio-7   (                    |GPIO Key R2         ) in  hi    
+ gpio-8   (                    |GPIO Key left       ) in  hi    
+ gpio-9   (                    |GPIO Key right      ) in  hi    
+ gpio-10  (                    |GPIO Key L1         ) in  hi    
+ gpio-11  (                    |GPIO Key L2         ) in  hi    
+ gpio-12  (                    |GPIO Key R1         ) in  hi    
+ gpio-128 (                    |GPIO Key Down       ) in  hi    
+ gpio-129 (                    |GPIO Key Vol up     ) in  hi    
+ gpio-130 (                    |GPIO Key vol down   ) in  hi    
+ gpio-131 (                    |GPIO Key Menu       ) in  hi    
+ gpio-132 (                    |sdc2 power enable   ) out hi    
+ gpio-147 (                    |?                   ) out hi    
+ gpio-150 (                    |cd                  ) in  hi    
+ gpio-207 (                    |wlan_hostwake       ) in  lo    
+ gpio-208 (                    |bt_hostwake         ) in  hi    
+ gpio-209 (                    |bt_wake             ) out hi    
+ gpio-210 (                    |wlan_regon          ) out hi    
+ gpio-211 (                    |bt_rst              ) out hi    
+ gpio-259 (                    |Headphone detection ) in  lo    
+ gpio-260 (                    |usb_id_det          ) in  lo    
+ gpio-261 (                    |                    ) out lo    
+ gpio-264 (                    |?                   ) in  hi    
+ gpio-265 (                    |?                   ) in  hi    
+ gpio-266 (                    |?                   ) in  hi    
+ gpio-267 (                    |low_pwr_led_ctl     ) out lo    
+ gpio-268 (                    |work_led_ctl        ) out hi    
+ gpio-270 (                    |?                   ) in  hi    
+ gpio-271 (                    |?                   ) in  hi    
+ gpio-272 (                    |?                   ) out lo    
+
+gpiochip0: GPIOs 352-383, parent: platform/r_pio, r_pio:
