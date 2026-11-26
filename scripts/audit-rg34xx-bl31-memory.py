@@ -24,8 +24,10 @@ RANGES = (
     (0x44000000, 0x44100000, "Linux FDT buffer"),
     (0x45000000, 0x46000000, "BOL4 staging buffer"),
     (0x48000000, 0x4801A2D0, "BL31 loaded monitor payload bytes"),
-    (0x4801A2D0, 0x48200000, "BL31 adjacent runtime/page-table references outside payload"),
-    (0x48200000, 0x4A000000, "conditional BL31 identity-map range (raw attributes not interpreted)"),
+    (0x4801A2D0, 0x48041000, "BL31 adjacent BSS/runtime/page-table bytes in unconditional map"),
+    (0x48041000, 0x48041001, "BL31 unconditional-map end pointer (not mapped data)"),
+    (0x48041001, 0x48200000, "adjacent DRAM gap with no recovered direct reference"),
+    (0x48200000, 0x4A000000, "conditional BL31 identity-map range (inactive when header flag is zero)"),
     (0x4A000000, 0x4A100000, "BL33 loader slot"),
     (0x77C00000, 0x7BC00000, "CMA reservation"),
     (0x7BF24800, 0x7C076000, "framebuffer reservation"),
@@ -70,6 +72,10 @@ def verify_monitor_identity(reports_root: Path, monitor_path: Path) -> dict:
         "firmware_package_sha256": fw.get("firmware_sha256"),
         "toc1_package_sha256": toc.get("package_sha256"),
         "matched_firmware_and_toc1_monitor": True,
+        "conditional_mapping_flag_file_offset": "0x18",
+        "conditional_mapping_flag_runtime_address": "0x48000018",
+        "conditional_mapping_flag_value": "0x%08x" % struct.unpack_from("<I", raw, 0x18)[0],
+        "conditional_mapping_enabled": bool(struct.unpack_from("<I", raw, 0x18)[0]),
     }
 
 def canonical_register(name: str) -> str:
@@ -264,8 +270,11 @@ def build_report(identity: dict, entry: int, refs: list[dict], count: int) -> tu
     ttbr = find_ref("system-register-value", "0x4803cb40")
     tcr_source = find_ref("memory-effective-address", "0x4803c8e0")
     per_core = find_ref("indexed-address-base", "0x4803cd40")
-    outside_payload = counts.get("BL31 adjacent runtime/page-table references outside payload", 0)
+    active_mapped_refs = counts.get("BL31 adjacent BSS/runtime/page-table bytes in unconditional map", 0)
+    map_end_pointer_refs = counts.get("BL31 unconditional-map end pointer (not mapped data)", 0)
+    outside_payload = active_mapped_refs + map_end_pointer_refs
     inside_payload = counts.get("BL31 loaded monitor payload bytes", 0)
+    conditional_map_enabled = bool(identity["conditional_mapping_enabled"])
     observed = {
         "ttbr0_el3": None if ttbr is None else {
             "value": ttbr["address"],
@@ -294,6 +303,20 @@ def build_report(identity: dict, entry: int, refs: list[dict], count: int) -> tu
         "reference_counts_by_range": counts,
         "loaded_payload_reference_count": inside_payload,
         "adjacent_runtime_window_reference_count": outside_payload,
+        "active_unconditional_map_reference_count": active_mapped_refs,
+        "unconditional_map_end_pointer_reference_count": map_end_pointer_refs,
+        "unconditional_bl31_map_range": {
+            "start": "0x48000000", "end_exclusive": "0x48041000", "bytes": "0x41000"
+        },
+        "conditional_bl31_map": {
+            "flag_file_offset": identity["conditional_mapping_flag_file_offset"],
+            "flag_runtime_address": identity["conditional_mapping_flag_runtime_address"],
+            "flag_value": identity["conditional_mapping_flag_value"],
+            "enabled": conditional_map_enabled,
+            "conditional_range": "[0x48200000,0x4a000000)",
+            "branch_pc": "0x480033e0",
+            "skip_target": "0x4800340c"
+        },
         "observed_el3_memory_setup": observed,
         "observed_translation_map_requests": BL31_TRANSLATION_MAP_REQUESTS,
         "observed_page_table_allocator": BL31_PAGE_TABLE_ALLOCATOR,
@@ -305,7 +328,8 @@ def build_report(identity: dict, entry: int, refs: list[dict], count: int) -> tu
             "No references found in a range would not prove that BL31 never accesses it.",
             "This does not prove Secure/Non-secure ownership, DMA reachability, cache aliases, runtime scratch, or per-boot behavior.",
             "The adjacent runtime window label describes statically referenced addresses outside the file payload, not a complete allocation map.",
-            "Translation-map call arguments do not by themselves prove allocation, security ownership, or the runtime value of the conditional header flag.",
+            "The 0x48000018 word is read from the exact matched payload; runtime mutation before BL31 consumes it is checked separately against the pinned BaseOS SPL source.",
+            "Static mapping requests and source-level mutation checks do not prove every possible Boot0/ROM or indirect runtime memory access.",
             "No hardware registers were read or written; no image was flashed or executed.",
         ],
     }
@@ -320,7 +344,8 @@ def build_report(identity: dict, entry: int, refs: list[dict], count: int) -> tu
         "- Reachable decoded instructions: %d" % count,
         "- Recoverable address references: %d" % len(refs),
         "- References into actual payload bytes: %d" % inside_payload,
-        "- References outside payload in the adjacent page-table/runtime range [0x4801a2d0,0x48200000): %d" % outside_payload,
+        "- References outside payload but inside the unconditional BL31 map: %d" % active_mapped_refs,
+        "- References to the one-past-end map boundary (not dereferenced data): %d" % map_end_pointer_refs,
         "",
         "## References grouped by mapped range", "",
     ]
@@ -337,7 +362,12 @@ def build_report(identity: dict, entry: int, refs: list[dict], count: int) -> tu
             request["callsite"], request["arg0_base"], request["arg1_base"],
             request["arg2_length"], request["arg3_raw_attribute"], request["condition"]
         ))
-    lines.append("- Conditional requests are guarded by a nonzero 32-bit value loaded from 0x48000018; the current report does not infer that branch's runtime value.")
+    lines.append("- Matched payload word at file offset 0x18 / runtime address 0x48000018: %s." % identity["conditional_mapping_flag_value"])
+    if conditional_map_enabled:
+        lines.append("- The matched word is nonzero, so BL31 takes the conditional path and issues the 30 MiB and nested 4 MiB mapping requests.")
+    else:
+        lines.append("- The matched word is zero, so the CBZ at 0x480033e0 branches to 0x4800340c; the 30 MiB and nested 4 MiB calls at 0x480033f4 and 0x48003408 are skipped for this exact payload.")
+    lines.append("- The pinned BaseOS SPL source is checked separately to confirm its explicit monitor patches do not overwrite offset 0x18 before BL31 handoff.")
     lines.append("- The page-table construction path uses pool base %s, 4 KiB page indexing, and a cursor at %s; its local counter check permits at most two page indices on this path." % (
         BL31_PAGE_TABLE_ALLOCATOR["pool_base"], BL31_PAGE_TABLE_ALLOCATOR["counter_address"]
     ))
@@ -379,7 +409,8 @@ def build_report(identity: dict, entry: int, refs: list[dict], count: int) -> tu
         "- The BL31 code references runtime/page-table/context addresses beyond the 107,216-byte file payload; file length is not the monitor's total runtime memory footprint.",
         "- Only instructions reachable via direct control-flow edges are decoded; indirect branches/calls and exception-return paths may be incomplete.",
         "- Dynamic address construction, indirect calls, secure-world services, DMA, runtime scratch, cache aliases and secondary-core activity are not fully modeled.",
-        "- Keep the conservative BL31-associated envelope [0x48000000,0x4a000000) excluded pending review: the binary configures mappings inside [0x48000000,0x48041000) and conditionally requests [0x48200000,0x4a000000). The 0x4a000000 endpoint is the separate BL33 loader-slot start.",
+        "- The exact matched monitor unconditionally requests mappings only inside [0x48000000,0x48041000). Its 0x48000018 flag is zero, so the [0x48200000,0x4a000000) request path is skipped when the pinned SPL leaves that word unchanged. Keep [0x48000000,0x48041000) excluded; do not reserve the inactive 30 MiB range solely from its skipped callsites.",
+        "- The one reference to 0x48041000 is an end pointer for the unconditional map, not a dereferenced byte. The endpoint 0x4a000000 is the separate BL33 loader-slot start.",
         "- The candidate [0x40080000,0x42000000) remains UNAPPROVED. Keep H700_MEMORY_LAYOUT_APPROVED unset; do not assign MEMBASE/MEMSIZE or execute a payload.",
         "- No hardware MMIO access, boot-media write, flash, or device payload execution was performed.", "",
     ]

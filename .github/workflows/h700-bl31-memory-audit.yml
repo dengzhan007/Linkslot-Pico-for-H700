@@ -6,6 +6,7 @@ on:
     paths:
       - "scripts/audit-rg34xx-bl31-memory.py"
       - "scripts/test-audit-rg34xx-bl31-memory.py"
+      - "scripts/test-rg34xx-bl31-startup-contract.py"
       - ".github/workflows/h700-bl31-memory-audit.yml"
   workflow_dispatch:
 
@@ -26,6 +27,13 @@ jobs:
           ref: reports
           path: .ci/reports
 
+      - name: Checkout pinned BaseOS native SPL source
+        uses: actions/checkout@v4
+        with:
+          repository: dengzhan007/BaseOS-MultiFrontend
+          ref: cbe253a43f46cf551cc9a6c79a84015bde3686cf
+          path: .ci/baseos-native
+
       - name: Install pinned Capstone disassembler
         run: |
           python3 -m pip install --disable-pip-version-check capstone==5.0.6
@@ -33,6 +41,13 @@ jobs:
       - name: Test BL31 audit primitives
         run: |
           python3 scripts/test-audit-rg34xx-bl31-memory.py
+
+      - name: Verify matched BL31 flag and pinned native SPL preservation
+        run: |
+          python3 scripts/test-rg34xx-bl31-startup-contract.py \
+            --reports-root .ci/reports/reports \
+            --baseos-root .ci/baseos-native \
+            --out build/rg34xx-bl31-static-audit
 
       - name: Verify matched monitor identity and scan BL31 references
         run: |
@@ -45,6 +60,9 @@ jobs:
         run: |
           if [ -f build/rg34xx-bl31-static-audit/REPORT.md ]; then
             cat build/rg34xx-bl31-static-audit/REPORT.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f build/rg34xx-bl31-static-audit/STARTUP-CONTRACT.md ]; then
+            cat build/rg34xx-bl31-static-audit/STARTUP-CONTRACT.md >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Upload BL31 disassembly and audit report
