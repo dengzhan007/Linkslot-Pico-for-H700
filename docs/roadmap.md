@@ -651,11 +651,11 @@ The snapshot only becomes available after CRT0 reaches the post-BSS publication 
 - [x] Cross-check the later A32 Linux-loader writes: entry stack 0x4a0f0000, translation table 0x4a0f8000..0x4a0fc000, kernel output 0x40080000..0x42000000 (max 0x01f80000), initrd 0x42000000, final FDT 0x44000000.
 - [x] Record that the audited pinned native SPL handoff path has no explicit destination in the proposed 0x40080000..0x42000000 application candidate; its subsequent A32 Linux-loader stage does use that candidate region, so a direct replacement BL33 must bypass that loader path.
 - [x] Match and statically triage the exact paired BL31 monitor payload. SHA-256 matches both the native firmware extent and TOC1 inventory; a control-flow-aware AArch64 scan decoded 1,849 reachable instructions and 268 address references (188 in the 107,216-byte payload, 80 beyond its file end in the adjacent runtime/page-table window). It recovered TTBR0_EL3=0x4803cb40, TCR_EL3 config source=0x4803c8e0 and per-core TPIDR_EL3 base=0x4803cd40. See [audit #45795120056](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45795120056) and the updated [memory ownership report](h700-bl33-memory-ownership.md).
-- [x] Decode BL31 EL3 translation-map calls: unconditional requests cover [0x48000000,0x48041000); a conditional request covers [0x48200000,0x4a000000) when the word at 0x48000018 is nonzero. Raw mapping attributes are not yet interpreted; the conditional value is not known from live runtime.
+- [x] Decode BL31 EL3 translation-map calls and verify the exact matched monitor/SPL pair: unconditional requests cover [0x48000000,0x48041000); matched monitor word at file +0x18 is 0x00000000; pinned native SPL patches only +0x24, +0x30 and +0xb0, so the conditional [0x48200000,0x4a000000) and nested 4 MiB calls are skipped for this pair. Raw mapping attributes remain uninterpreted and BootROM/earlier indirect mutation is not fully proved.
 - [ ] Complete BL31 runtime lifetime/ownership proof beyond static direct-control-flow references: conditional flag provenance, indirect calls/branches, exception returns, secure-world services, DMA, cache aliases, runtime scratch and secondary-core state. The static scan does not prove the candidate is free.
 - [ ] Build a complete reviewed memory map for LK image/BSS/stack/heap/page tables, firmware handoff records, framebuffer/PIO, SD/DMA reservations and the separate Linkslot+mGBA application footprint; verify secondary-core and cache/MMU behavior before any MEMBASE/MEMSIZE assignment.
 
-Safety boundary: 0x40080000..0x42000000 remains candidate-only. Keep the conservative BL31-associated envelope 0x48000000..0x4a000000 excluded pending ownership review; the 0x4a000000 endpoint is the native BL33 loader slot. Do not set H700_MEMORY_LAYOUT_APPROVED, reuse the unknown 0x7ec00000..0x7fc00000 reservation, execute a payload, or write Boot0/TOC1/SD as part of this source trace.
+Safety boundary: 0x40080000..0x42000000 remains candidate-only. Keep the unconditional BL31-associated mapping [0x48000000,0x48041000) excluded; do not count the zero-flag skipped [0x48200000,0x4a000000) request as an active map. The 0x4a000000 endpoint is the native BL33 loader slot. Do not set H700_MEMORY_LAYOUT_APPROVED, reuse the unknown 0x7ec00000..0x7fc00000 reservation, execute a payload, or write Boot0/TOC1/SD as part of this source trace.
 
 
 ## 2026-11-26 Small LK BL33 payload into matched native SPL package
@@ -679,3 +679,32 @@ Hard size boundary: this first integration path is only for a small diagnostic p
 - [x] Pinned mGBA AArch32 namespaced static archive, VFS v3 and bare-metal newlib builds; actual VDir adapter test; H700 newlib adapter; real mGBA exports bound to Rust static API and linked in the probe; final AArch32 LK-as-BL33 entry/vector layout probe passed.
 - [ ] This is still host/cross-compile/static-link feasibility, not a complete installable native firmware image, not a proof of SMP heap safety, and not a device boot. The 32 KiB diagnostic payload and deterministic visible proof-of-life signal remain unimplemented.
 - Build report: `linkslot-lk-rust-feasibility-45795119939`; preserve the linked report/artifact with the CI run. No device, SD, boot media or payload was accessed.
+
+
+## 2026-11-26 Boot0 / BL31 CPU0-only startup static audit
+
+- [x] Decode the exact 128 KiB primary Boot0 binary (SHA-256
+  `bf886995745a0eb9b5030296f9f6163035e164b3a82183716e67ff876319289f`,
+  eGON checksum valid). Helper at `0x231e0`, caller at `0x23224`;
+  caller gates helper calls to core2/core3 on bit29 of `0x03006248`.
+- [x] Confirm helper writes `C0_RST_CTRL &= ~(1 << core)`; under H616
+  reference semantics, bit zero asserts reset. Core1 is not passed to helper.
+  The native SPL sets the primary RVBAR pair only. Matched BL31 has reachable
+  CPU-related MMIO at `0x09010010` and `0x08100020`, with no direct tracked
+  C0_RST_CTRL / DBG_REG1 / CPU1-CPU3 RVBAR references.
+- [x] Add reproducible CI and report:
+  [#45808401081](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45808401081),
+  all audit steps passed. Details:
+  [h700-a53-single-core-startup-audit.md](h700-a53-single-core-startup-audit.md).
+- [ ] Device-verify pre-BL33 CPU state. H616 reference POR default
+  `C0_RST_CTRL=0x13ff0101` implies CPU0 released and CPU1-3 reset, but H700
+  live state and bit29 gate value have not been read. A Linux register read
+  after SMP bring-up is not proof of the pre-BL33 state.
+- [ ] Resolve Boot0's unusual OR of core2/core3 one-hot bits into
+  `0x09010044` (H616 manual calls this CPU0 `RVBARADDR0_H`) and its write
+  to `DBG_REG1.C_DBGPWRUPREQ` (H616 manual marks these bits read-only).
+  Do not alter either register until the H700 semantics are identified.
+- [ ] Keep SMP disabled and the single-core LK gate open until a trusted
+  pre-BL33 read-only register snapshot or equivalent reviewed reset-hold proof
+  demonstrates CPU1-3 remain held off throughout LK execution.
+
