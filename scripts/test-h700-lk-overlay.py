@@ -470,8 +470,6 @@ SECTIONS
         [
             "llvm-objdump",
             "-d",
-            "--start-address=0x4a000000",
-            "--stop-address=0x4a001080",
             str(elf),
         ]
     )
