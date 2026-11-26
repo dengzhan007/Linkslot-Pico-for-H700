@@ -589,6 +589,23 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 验证：专用 15-member H700 runtime-slices [#45740732818](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45740732818) **success**。两个 host workspace test 模式（default / no-default）、AArch32 `armv7a-none-eabi` 与 AArch64 `aarch64-unknown-none` no-default checks、upstream input/model regression、完整 Linkslot 1.0.49 Frontend overlay build、CPU Performance QuickRow fail-closed test、C input ABI/queue 与两架构 cross-compile 全部通过；新 `slot-app-router` 的 6 项测试在两个 host test 模式均通过。更广的 H700/LK feasibility run [#45740749359](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45740749359) 仍在执行交叉链接编译。当前新 router 只处理 Quick Menu phase；游戏搜索键盘/候选/结果选择是下一切片。仍不是可启动 LK App，无设备写入或实机执行。
 
 下一步：
-1. 搜索键盘/候选页/搜索结果的纯按键状态转换，依照 1.0.49 上游逻辑抽取为 typed router，保留 pinyin provider 与当前 shelf/folder hit index 归属。
-2. 将 `slot-app-router` commands 接入上层 Linkslot App adapter，调用既有状态变化逻辑，不在 router 中写 VFS/config。
+1. 搜索结果列表已经抽取；剩余搜索 UI 切片为 keyboard cursor intent 与 Pinyin candidate focus/page/commit 的纯状态路由，保留原 UI Cursor 和注入式 pinyin provider。
+2. 将 `slot-app-router` QuickMenu/SearchResults commands 接入上层 Linkslot App adapter，调用既有状态变化逻辑，不在 router 中写 VFS/config。
 3. 再推进 VFS v3 provider 与静态 Libretro core lifecycle；display/PCM/GPIO 仍独立 gated。
+
+
+## 20. SearchResults 列表路由抽取与 CI（2026-11-26）
+
+在 Quick Menu 路由后继续对照 immutable upstream Linkslot 1.0.49 `crates/slot/src/app.rs::search_results_input()`，抽取 SearchResults 状态路由至 `slot-app-router`：
+
+- `SEARCH_ROWS=7` 与上游保持一致。
+- Up/Down 在 hits 列表内循环选择；Left/Right 按 7 项跳转并 clamp 首尾。
+- 选中项越出 viewport 时，`offset` 按上游 `keep_search_result_visible()` 规则更新。
+- A/Insert 发出 `SelectHit { index }`；B 发出 `ReturnToKeyboard`（App 保留 query 并重新打开原键盘）；X/MENU 发出 `Close`。
+- Router 只保存 hit_count / selected / offset，不复制 query、pinyin composition/candidates 或 SearchHit 数据；真实 shelf/folder 选择仍由 App 完成。
+- 新增 6 项测试，覆盖垂直回绕、按 7 项水平跳页及 clamp、viewport 保持、A/Insert、B/X/MENU 和空列表边界。Quick Menu 原 6 项测试保留，因此当前 router 总计 12 项测试。
+
+实现提交：`db325358da13f33a8e4c8661804c41bc248f4191`。
+验证：[H700 Linkslot 1.0.49 runtime slices #45741150698](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45741150698) **success**。15-member workspace default/no-default host tests、AArch32/AArch64 freestanding checks、upstream input/model regression、完整 Frontend overlay build、CPU QuickRow fail-closed、C input ABI/queue host + cross compile 全部通过。新 SearchResults 路由代码包含在两个 workspace test 模式中。
+
+下一切片为搜索键盘 cursor intent 与 Pinyin candidate focus / page / commit；渲染 Cursor、拼音表、候选字符串和查询文本仍归 UI/App，不复制资源或索引。随后才接入上层 App adapter 与 VFS/core lifecycle。当前不代表 bootable LK App，也没有设备端执行或硬件写入。
