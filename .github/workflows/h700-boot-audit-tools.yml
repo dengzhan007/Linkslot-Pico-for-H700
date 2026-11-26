@@ -5,7 +5,6 @@ on:
     paths:
       - "scripts/collect-rg34xx-readonly-inventory.sh"
       - "scripts/collect-rg34xx-pio-input-readonly.sh"
-      - "scripts/collect-rg34xx-pio-input-readonly.sh"
       - "scripts/run-rg34xx-inventory.ps1"
       - "tools/**"
       - "docs/**"

@@ -36,7 +36,11 @@ class PioReadOnlyCaptureSafetyTests(unittest.TestCase):
         self.assertIn("refusing MMIO read", self.source)
 
     def test_dev_mem_is_input_only_and_reads_exactly_four_bytes(self):
-        dd_lines = [line.strip() for line in self.lines if "dd if=/dev/mem" in line]
+        dd_lines = [
+            line.strip()
+            for line in self.lines
+            if re.match(r"^\\s*dd\\s+", line)
+        ]
         self.assertEqual(len(dd_lines), 1)
         self.assertIn('of="$tmp"', dd_lines[0])
         self.assertIn('bs=4 skip="$word_index" count=1', dd_lines[0])
