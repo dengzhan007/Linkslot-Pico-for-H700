@@ -304,3 +304,16 @@ The official release metadata pins the device core to armGBA commit `df6b2631291
 AArch32 ARM, AArch32 Thumb-2 and AArch64 static assertions all passed, and the host probe returned the same values. The full workflow was cancelled after this step by a superseding documentation push; only the dedicated layout step is marked pass. The earlier 11948 result from a different commit was not used as evidence; this new result is tied to the official release source. Full note: [armgba-frame-counter-layout-v1.16.0.md](armgba-frame-counter-layout-v1.16.0.md).
 
 This still does not provide a runtime pointer. The ELF .symtab lists two LOCAL OBJECT symbols both named `gba` at `0x4c16a8` and `0x4259b8`; the source has the main machine pointer in `libretro/libretro.c` and a file-local link pointer in `libretro/link.c`. Next inspection must disassemble the core's `retro_run` / active GBA path and prove which symbol it dereferences, while separately obtaining the process maps and PT_LOAD-derived load bias. Do not read `/proc/PID/mem` yet.
+
+
+## 13. armGBA exact-release runtime mapping (2026-11-26)
+
+The official-release core is source-pinned to `MagnominusGit/armGBA@df6b2631291f249d54a00dd14f49bc893e438feb`. New read-only runtime evidence is under [reports/slot-refresh-audit/binary-identity/runtime-mapping](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/slot-refresh-audit/binary-identity/runtime-mapping); the analysis is in [armgba-runtime-mapping-v1.16.0.md](armgba-runtime-mapping-v1.16.0.md).
+
+- The core is dlopen'd in GBA gameplay and dlclose'd on exit without restarting Slot.
+- Three file-backed mappings (RX, R, RW) independently yield the same ASLR load bias, `0x7f64070000`.
+- The primary `libretro.c` GBA pointer is the local ELF object at `0x4259b8` (runtime address `0x7f644959b8` in this capture). The second same-name object at `0x4c16a8` is the `libretro/link.c` link-cable cache. The main pointer is written from `startAdvance()`, consumed 21 times in `retro_run`, and cleared after the link cache is detached.
+- Exact-source `video.c` increments `gba->video.frameCounter` at VBlank frame end. The verified field offset is 11948 bytes from `GBASystem*`; this is the core committed-frame counter, not UI presents or LCD IRQ.
+- No process memory was read. No trace marker was created, no trace environment variable was set, Slot was not restarted, no config was changed, and no hardware register was written. The report used reversible input events to enter/exit a game and observe dlopen/dlclose.
+
+Dynamic rate measurement remains pending explicit authorization for (a) creating the pre-start trace marker and restarting Slot to measure UI presents, and (b) bounded read-only process-memory sampling of the primary GBA pointer and frame counter. Each sample must recalculate PID and load bias from current maps; no address is hardcoded across restarts. Keep `hardware_applied=0`.
