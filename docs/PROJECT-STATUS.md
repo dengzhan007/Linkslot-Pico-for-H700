@@ -643,3 +643,28 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 验证：[H700 Linkslot 1.0.49 runtime slices #45742086671](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45742086671) **success**：15-member workspace default/no-default host tests、AArch32/AArch64 no-default checks、upstream input/model regressions、完整 Linkslot Frontend overlay 编译、CPU Performance QuickRow fail-closed 及 C input ABI/queue host 与 cross-compile 全部通过。该结果仍是 host/cross-build，不是实机 boot。
 
 下一步：在 CI 的临时 Linkslot checkout 中增加 priority-safe App integration patch 与 regression tests；不能把源 patch 的成功应用等同于真实 LK runtime 已可启动。此后再推进 VFS v3/static-core 的 App wiring。
+
+## 23. Linkslot App phase dispatcher 接入真实 App::apply()（2026-11-26）
+
+第 22 节的 route_app_input(owner, action) 已从接口 seam 前进一步，接入隔离 CI checkout 中的 immutable Linkslot 1.0.49 App::apply()：
+
+- 新增 scripts/apply-linkslot-app-router.py，只接受固定上游快照 241e7c1974926fa22552b200852914ceaccbfd42；将持久化 slot-app-router crate 复制到临时 checkout，添加 path dependency，并应用 App adapter，不修改 upstream/linkslot 分支。
+- App adapter 将 QuickMenu typed commands 映射回原有 change_setting()、open_quick_row() 和 Phase 更新；SearchResults 命令保留原 Query/SearchHit 与 shelf 选择流程；SearchKeyboard 命令继续使用 UI Cursor、Pinyin candidate refresh/commit 和原有 search confirm/close handler。
+- App::apply() 继续按原顺序先处理 power menu、upgrade、game intro、sync、search overlays、键盘、popup、transfer/Wi-Fi/sync/utility、adjust 和 game menu，再路由基础 App phase；SearchResults 和 GameSearch keyboard 在原有 owner 优先级位置路由，普通虚拟键盘仍走原 handler。
+- Shelf dispatcher 受 core_picker.is_none() 限制，避免覆盖 CorePicker；Playing MENU 仍进入原 in-game utility menu；Shelf MENU/X 的语义保持独立。游戏搜索键盘 UI 的 Cancel key 继续只清键盘和 search index，不错误触发 shelf reset。
+- 新增 scripts/test-linkslot-app-router-integration.py，检查 dispatcher 命令映射、App 既有 side-effect handler、overlay 顺序、CorePicker gate 与三类 phase 的接线。
+- 两个 H700 Linkslot workflow 都已增加 overlay patch 和静态检查步骤；完整 Frontend build 发生在 router 接线之后。
+
+实现提交：
+- App integration patcher：1580e309e599c51e84dd19d79a03a3861acca790
+- App integration static regression：9ae79a938af1dd90f40bfcffcc81ba4fc705d4d4
+- runtime-slices workflow：9806b7aaa4086e0bd3350fe16f1005f994631063
+- full feasibility workflow：cf534e5fe5e2f13d97958a7a822fa2cb64eb13b9
+
+验证：
+- [H700 Linkslot 1.0.49 runtime slices #45745328247](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45745328247) **success**。两个 job 均成功：15-member workspace default/no-default tests、AArch32/AArch64 no-default checks、upstream input/model regression、router integration static guard、完整 Linkslot Frontend H700 overlay 编译、CPU Performance QuickRow fail-closed、C input ABI/queue host + cross compile 均通过。
+- [Linkslot LK Rust feasibility #45745332208](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45745332208) 截至本节写入时仍在运行；BL33 CRT0/vector、H700 renderer、15-member workspace、App router integration、完整 Frontend 编译、CPU QuickRow、CMD17/GPT/FAT/VFS host bootstrap、FAT32/exFAT real-image regressions，以及 mGBA AArch32 archive 构建步骤均已 success；Generic CMake 对照构建和后续静态 core/VFS ABI link 等步骤尚未全部结束，不能记为 full workflow success。
+
+当前结论：**App phase routing 已实际接入 1.0.49 App 源码，并通过专项完整 Frontend 编译；完整 LK feasibility 验证仍以 workflow 最终结论为准。** 所有证据仍是 host/cross-build，不是 RG34XX 实机启动或运行；没有执行 payload、没有写 SD/Boot0/TOC1，也没有开放 VFS 写回。H700 memory gate、单核 fail-closed、显示/PCM/GPIO/电源硬件门槛保持不变。
+
+下一步按 runtime architecture §6 继续验证只读 VFS v3 与静态核心生命周期的 App-owned service descriptor / startup 顺序；先补多文件/目录句柄的独立位置、容量上限和失效句柄 host 回归，再研究持久化写入。不要将现有 FAT32 writer 的 8.3 限制或 exFAT 尚未闭合的 flush/rename 语义暴露给 Linkslot 存档路径。
