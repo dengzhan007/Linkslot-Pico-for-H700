@@ -241,12 +241,24 @@ lk_bl33_entry:
 
 
 def patch_arch_c(original: str) -> str:
+    # Upstream spells FPEXC accesses as raw MRC/MCR p10 encodings. Clang
+    # rejects that spelling for Cortex-A53; VMRS/VMSR are the architectural
+    # mnemonics for accesses to the same FPEXC system register.
+    old_mrc = '__asm__ volatile("mrc  p10, 7, %0, c8, c0, 0" : "=r" (val));'
+    old_mcr = '__asm__ volatile("mcr  p10, 7, %0, c8, c0, 0" :: "r" (val));'
+    if original.count(old_mrc) != 2 or original.count(old_mcr) != 2:
+        raise RuntimeError("pinned arch.c FPEXC access count changed; refusing unreviewed rewrite")
+    original = original.replace(old_mrc, '__asm__ volatile("vmrs %0, fpexc" : "=r" (val));')
+    original = original.replace(old_mcr, '__asm__ volatile("vmsr fpexc, %0" :: "r" (val));')
+    if "p10, 7" in original or original.count("vmrs %0, fpexc") != 2 or original.count("vmsr fpexc, %0") != 2:
+        raise RuntimeError("FPEXC VMRS/VMSR compatibility rewrite did not fully apply")
+
     old = "set_vector_base(MEMBASE);"
     if original.count(old) != 1:
         raise RuntimeError("expected exactly one arch_early_init VBAR assignment")
     new = (
-        "extern char __lk_vectors_start[];\n"
-        "\tset_vector_base((addr_t)__lk_vectors_start);"
+        "extern char __lk_vectors_start[];\\n"
+        "\\tset_vector_base((addr_t)__lk_vectors_start);"
     )
     return original.replace(old, new, 1)
 
