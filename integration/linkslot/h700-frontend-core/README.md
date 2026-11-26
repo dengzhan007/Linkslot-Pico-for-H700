@@ -30,7 +30,7 @@ The H700 input service is a versioned C ABI with a 64-entry C FIFO. The queue cu
 
 The Rust business crates do not perform MMIO, read physical clocks, mount storage, own framebuffer memory or drive display/audio hardware. PI12 writes remain in the target-owned C LED service; Rust carries only the transition state and calls the service ABI. `slot-lk-runtime` is now part of the persistent workspace and supplies a tested cooperative time/input/action/tick loop, but it is only the runtime floor: the full `slot::App` graph, Linkslot VFS/backend lifecycle, display/scanout, audio and static-core run loop are not yet connected into a bootable LK application. Filesystem workers, network/WebDAV, SQLite, dynamic loading and the full artwork/font stack remain later work.
 
-The temporary integration overlay keeps `upstream/linkslot` immutable and injects the extracted crates back into the original Linkslot main 1.0.49 workspace. The focused CI workflow [H700 Linkslot runtime slices](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/workflows/h700-linkslot-runtime.yml) runs host tests and AArch32/AArch64 `no_std` checks for every persistent workspace member (now including `slot-lk-runtime` and `slot-app-router`), upstream input/model regression, and complete `slot` Frontend compilation with renderer and business overlays. The 1.0.49 focused runtime-slices run [#45741616363](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45741616363) **passed** with the 15-member workspace, including `slot-lk-runtime` and `slot-app-router`'s Quick Menu, SearchResults and SearchKeyboard routes. It validates host tests (default and no-default features), `armv7a-none-eabi` and `aarch64-unknown-none` checks, upstream input/model regressions, complete Linkslot 1.0.49 Frontend overlay compilation, CPU Performance QuickRow fail-closed tests, and the C input ABI/queue host + AArch32/AArch64 checks. All 19 app-router tests and the three event-step tests are included in both workspace host test modes. These are host/cross-build results, not a bootable LK image. The broader feasibility run remains a separate check.
+The temporary integration overlay keeps `upstream/linkslot` immutable and injects the extracted crates back into the original Linkslot main 1.0.49 workspace. The focused CI workflow [H700 Linkslot runtime slices](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/workflows/h700-linkslot-runtime.yml) runs host tests and AArch32/AArch64 `no_std` checks for every persistent workspace member (now including `slot-lk-runtime` and `slot-app-router`), upstream input/model regression, and complete `slot` Frontend compilation with renderer and business overlays. The 1.0.49 focused runtime-slices run [#45742086671](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45742086671) **passed** with the 15-member workspace, including `slot-lk-runtime` and `slot-app-router`'s three phase routes plus the phase-aware dispatcher. It validates host tests (default and no-default features), `armv7a-none-eabi` and `aarch64-unknown-none` checks, upstream input/model regressions, complete Linkslot 1.0.49 Frontend overlay compilation, CPU Performance QuickRow fail-closed tests, and the C input ABI/queue host + AArch32/AArch64 checks. All 23 app-router tests and the three event-step tests run in both workspace host test modes. These are host/cross-build results, not a bootable LK image or proof that App::apply has been patched. The broader feasibility run remains a separate check.
 
 ## Upstream provenance
 
@@ -114,3 +114,17 @@ The app-router now has **19 host tests**: six Quick Menu tests, six SearchResult
 - The snapshot carries only candidate focus/count/page/pages/selected and whether composition exists. It carries no query, strings, dictionary, rendered key geometry or SearchHit. The caller refreshes candidates and applies the typed command using the existing injected PinyinProvider and App helpers.
 
 The keyboard router contributes seven tests for focus entry/exit, candidate page wrap, candidate selection wrap, empty/invalid candidate boundaries, cursor/key intents, and Backspace/Confirm/Close dispatch.
+
+
+### Phase-aware App input dispatcher
+
+`route_app_input(owner, action)` composes the pure routes without changing the upstream input-priority tree:
+
+- `Shelf + QuickMenu` => `OpenQuickMenu`; `Shelf + X` => `OpenGameSearch`.
+- `Playing + QuickMenu` => `OpenInGameMenu`, preserving the different in-game meaning.
+- `QuickMenu`, `SearchResults` and `SearchKeyboard` owners dispatch to their respective typed routers.
+- `Other` delegates the action back to the existing App handler.
+
+The caller must resolve App::apply overlay/modal priority first (power menu, upgrade, intro, sync, search/keyboard/popup/utility and other modal owners) and supply the already-active input owner. The dispatcher does not scan App state, reorder overlays, mutate the upstream App, or execute any returned side effect. It is the adapter seam for the next source-integration step, not yet a patched App::apply implementation.
+
+Four tests cover Shelf-vs-Playing MENU, Shelf search open, active QuickMenu row dispatch, SearchResults/Keyboard ownership and delegation to other overlays. The app-router now has **23 tests** across its three pure routers and phase-aware dispatcher.
