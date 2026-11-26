@@ -964,6 +964,11 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
   `0x23224`. Caller checks bit29 of `0x03006248`; if set it invokes the
   helper for core2 and core3, not core1. Helper clears the selected
   `C0_RST_CTRL` bit, which is reset-assert under H616 reference semantics.
+- The gate address `0x03006248` lies inside the documented H616 SID window
+  `[0x03006000,0x03007000)`, offset `0x248`; the public manual does not
+  define this word or bit29. Treat it as an undocumented SID-window gate,
+  not a known feature register. Do not collect a full SID dump; a future
+  approved pre-BL33 probe should expose only the masked bit value.
 - The pinned native SPL writes the primary RVBAR pair only. The matched BL31
   reachable scan recovered CPU-related MMIO at `0x09010010` (CPU0 mode path)
   and `0x08100020` (CPU subsystem control), but no direct reset or
