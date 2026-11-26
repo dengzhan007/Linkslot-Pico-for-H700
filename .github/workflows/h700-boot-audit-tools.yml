@@ -7,6 +7,8 @@ on:
       - "scripts/collect-rg34xx-pio-input-readonly.sh"
       - "scripts/collect-rg34xx-gpio-debugfs-readonly.sh"
       - "scripts/run-rg34xx-inventory.ps1"
+      - "scripts/read-h700-rvbar-selector-readonly.py"
+      - "scripts/test-read-h700-rvbar-selector-readonly.py"
       - "tools/**"
       - "docs/**"
       - ".github/workflows/h700-boot-audit-tools.yml"
@@ -39,6 +41,9 @@ jobs:
 
       - name: Run TOC1 parser tests
         run: python3 -m unittest discover -s tools -p "test_*.py" -v
+
+      - name: Test read-only H700 RVBAR selector classification
+        run: python3 scripts/test-read-h700-rvbar-selector-readonly.py
 
   windows-powershell:
     runs-on: windows-latest
