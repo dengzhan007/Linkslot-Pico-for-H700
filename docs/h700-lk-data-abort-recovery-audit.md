@@ -155,7 +155,7 @@ The pre-BL33 snapshot remains a separate requirement.
 - The diagnostic remains dormant and is not wired into startup/input/timer.
 - The latest device-side /dev/mem attempt remains EFAULT; userspace
   retries are stopped.
-- CI for the current recovery implementation passed: Linkslot feasibility #45830394587 (81/81, no skipped steps), H700 compile #45830394622, and boot audit #45830394592.
+- CI for the current recovery implementation passed: Linkslot feasibility #45834208280 (81/81, no skipped steps), H700 compile #45834208274, and boot audit #45834060935.
 - hardware_applied=0: no MMIO read/write, module load, boot-argument change,
   SD write, firmware flash, or diagnostic payload execution.
 
@@ -180,16 +180,16 @@ the first stack-save instruction in the Data Abort vector.
 ### 3.6 Final CI and linked ELF disassembly (2026-11-26)
 
 The final code commit is
-`545f944936549044dcb36d57d8b86b77f812b700`.
+`625e9181d493445fcbff77a140830cad428aa44f`.
 
-- Full Linkslot/LK feasibility: [#45830394587](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394587),
+- Full Linkslot/LK feasibility: [#45834208280](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280),
   **81/81 steps successful, zero failures, zero skipped**.
 - H700 AArch64 / AArch32 ARM / AArch32 Thumb-2 compile and host tests:
-  [#45830394622](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394622), success.
+  [#45834208274](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208274), success.
 - H700 boot audit tools (Linux and Windows):
-  [#45830394592](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394592), success.
+  [#45834060935](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834060935), success.
 - Feasibility artifact:
-  [15121023960](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394587/artifacts/15121023960),
+  [15123653120](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280/artifacts/15123653120),
   387,940,045 bytes.
 
 The linked A32 layout-test ELF disassembly confirms the following actual
@@ -221,3 +221,24 @@ exception recovery behavior therefore remain unproven on hardware.
 
 `hardware_applied=0`; no boot-media change, module load, MMIO access, flash,
 or diagnostic payload execution occurred.
+
+
+### 3.7 Active 32 KiB native loader extent regression
+
+The final host regression now checks the two independent limits separately:
+
+- The linked minimal A32 overlay test rejects a flat raw image larger than
+  `0x8000` bytes, the active native loader's 32 KiB file extent. The current
+  stub-linked raw image is 5,804 bytes (26,964 bytes of file headroom).
+- The BaseOS native override validator accepts an exactly-32,768-byte raw
+  input and rejects 32,769 bytes; the native builder pads an accepted image
+  to exactly 32 KiB before regenerating the paired firmware/SPL metadata.
+- The in-memory linker bound `[0x4a000000, 0x4a0e0000)` remains a separate
+  conservative runtime address-space bound. It is not the loader file size
+  and it does not approve stack/heap/BSS ownership.
+
+These new tests passed in the latest full feasibility run
+[#45834208280](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280),
+81/81, artifact [15123653120](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280/artifacts/15123653120).
+This remains host evidence only; no native firmware package was built from
+the test ELF and no device payload was executed.

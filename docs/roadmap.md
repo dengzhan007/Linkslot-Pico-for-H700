@@ -798,10 +798,19 @@ Hard size boundary: this first integration path is only for a small diagnostic p
 - [x] Enforce exact matcher: active cookie, SVC/ARM origin, LR_abt = probe load + 8, DFAR = 0x03000024, short-descriptor synchronous read-side DFSR allowlist, and nonzero recovery label.
 - [x] Mask IRQ/FIQ before abort-frame save; preserve the original frame pointer in r4; align the temporary Abort C-call stack; restore SPSR/GPR/PC through the positive-match-only `LDM^` trampoline.
 - [x] Keep the single-register probe dormant: no startup, input, timer, scheduler, or default runtime call sites.
-- [x] H700 AArch64/AArch32 ARM/Thumb-2 compile + host regressions passed: [#45830394622](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394622).
-- [x] H700 boot-audit Linux + Windows checks passed: [#45830394592](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394592).
-- [x] Full Linkslot/LK feasibility passed **81/81, 0 skipped**: [#45830394587](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394587), artifact [15121023960](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394587/artifacts/15121023960).
+- [x] H700 AArch64/AArch32 ARM/Thumb-2 compile + host regressions passed: [#45834208274](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208274).
+- [x] H700 boot-audit Linux + Windows checks passed: [#45834060935](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834060935).
+- [x] Full Linkslot/LK feasibility passed **81/81, 0 skipped**: [#45834208280](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280), artifact [15123653120](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280/artifacts/15123653120).
 - [x] Review actual linked A32 test ELF disassembly: A32→Thumb C `BLX`, Thumb→ARM probe `BLX`, probe LDR label/literal address, masked IRQ/FIQ vector entry and positive-only exception return are all visible and linked.
 - [ ] Review/build a separately packaged diagnostic within the actual vendor 32 KiB loader extent; prove header/package pairing, memory ownership, installation rollback and proof-of-life before considering device execution.
 - [ ] Obtain a trustworthy pre-BL33 CPU reset/RVBAR snapshot. A later Linux/LK VER_REG sample cannot substitute for the pre-BL33 CPU state.
 - Hardware remains unchanged: `hardware_applied=0`; no device MMIO read/write, module load, boot-argument or boot-media change, flash, or payload execution.
+
+
+### 32 KiB native loader raw-file extent regression
+
+- [x] `scripts/test-h700-lk-overlay.py` rejects a minimal A32 overlay raw flat image above `0x8000`; it reports raw-file headroom separately from the `_end` runtime-memory footprint.
+- [x] `scripts/test-baseos-native-lk-override.py` accepts exactly 32,768 bytes and rejects 32,769 bytes; the opt-in native builder pads an accepted payload to exactly 32 KiB and regenerates the matched firmware/SPL metadata.
+- [x] Full Linkslot/LK feasibility [#45834208280](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280) passed **81/81, zero failures, zero skipped**, artifact [15123653120](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280/artifacts/15123653120) (387,946,289 bytes).
+- [x] H700 three-ABI compile/host check [#45834208274](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208274) passed; boot-audit Linux/Windows [#45834060935](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834060935) passed.
+- [ ] Build and package an actual visible proof-of-life diagnostic in the 32 KiB extent using the matching vendor header and a newly regenerated native firmware/SPL pair; review BSS/stack ownership and rollback before any device execution.

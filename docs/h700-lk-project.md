@@ -466,10 +466,10 @@ See `docs/h700-lk-data-abort-recovery-audit.md`.
 
 The H700 overlay's one-word SYS_CFG diagnostic and restricted exception path
 are now source- and link-tested. The full feasibility workflow
-[#45830394587](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394587)
-passed 81/81 with artifact [15121023960](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394587/artifacts/15121023960).
-The H700 three-ABI compile/host checks [#45830394622](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394622)
-and Linux/Windows boot-audit checks [#45830394592](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394592)
+[#45834208280](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280)
+passed 81/81 with artifact [15123653120](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280/artifacts/15123653120).
+The H700 three-ABI compile/host checks [#45834208274](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208274)
+and Linux/Windows boot-audit checks [#45834060935](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834060935)
 also passed.
 
 The A32 test ELF disassembly verifies IRQ/FIQ masking before the abort frame,
@@ -484,3 +484,19 @@ Before any device run, separately validate the actual vendor loader's 32 KiB
 extent, vendor header/FNV/package pairing, BL33 BSS/stack ownership, rollback
 and proof-of-life path. The pre-BL33 CPU reset/RVBAR state gate also remains
 open. `hardware_applied=0`.
+
+
+### 32 KiB raw loader extent — final host acceptance
+
+The active native firmware loader extent is 32 KiB. The latest regression now
+checks the minimal overlay's raw file size against `0x8000` separately from
+its linked BSS/`_end` memory footprint, and validates the BaseOS override
+boundary (32,768 bytes accepted; 32,769 rejected). The opt-in native builder
+pads accepted raw input to exactly 32 KiB and regenerates the matched
+firmware/SPL metadata.
+
+Full feasibility [#45834208280](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280)
+passed 81/81, artifact [15123653120](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280/artifacts/15123653120);
+H700 three-ABI compile and host checks [#45834208274](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208274)
+and Linux/Windows audit [#45834060935](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834060935)
+passed. This is still not an actual packaged diagnostic or device boot.

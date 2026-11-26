@@ -157,7 +157,7 @@ kernel, Linkslot or mGBA.
 
 The latest source/link regression (final code commit
 `545f944936549044dcb36d57d8b86b77f812b700`, feasibility artifact
-[15121023960](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394587/artifacts/15121023960))
+[15123653120](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280/artifacts/15123653120))
 links the patched A32 CRT0/exception vectors, real H700 matcher C object and
 fixed-address probe assembly with minimal stubs. Its raw flat image is
 5,804 bytes, leaving 26,964 bytes in the 32 KiB native loader file extent.
@@ -198,3 +198,15 @@ BL31-to-LK handoff and recovery path are separately validated.
 - BaseOS \`experiments/h700-boot-speed/native/build.py\`
 - BaseOS \`experiments/h700-boot-speed/spl/native-boot.c\`
 - Reports \`reports/rg34xx-native-firmware/README.md\` and manifest
+
+
+### 32 KiB boundary test status (2026-11-26)
+
+The overlay layout regression now rejects a raw flat image larger than the
+active 32 KiB loader file extent. The BaseOS override regression separately
+accepts exactly 32,768 bytes and rejects 32,769 bytes. Both passed within
+full feasibility [#45834208280](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280)
+(81/81; artifact [15123653120](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280/artifacts/15123653120)).
+The 5,804-byte stub-linked raw file and its 14,032-byte in-memory footprint
+remain different measurements. No vendor-header/firmware pair was generated
+from this test ELF and no device ran it.

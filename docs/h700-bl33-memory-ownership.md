@@ -132,8 +132,8 @@ Source references:
 
 The latest pinned GammaOS LK overlay test (code commit
 `545f944936549044dcb36d57d8b86b77f812b700`; feasibility
-[#45830394587](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394587),
-artifact [15121023960](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45830394587/artifacts/15121023960))
+[#45834208280](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280),
+artifact [15123653120](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280/artifacts/15123653120))
 links the modified CRT0, original exception assembly, probe-scoped Data Abort
 return trampoline, Thumb matcher C, and ARM-state SYS_CFG probe with minimal
 LK stubs.
@@ -358,3 +358,17 @@ and PSCI callback CI
 [#45816600012](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45816600012)
 and RVBAR selector parity CI
 [#45817598323](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45817598323).
+
+
+### 32 KiB file extent and runtime memory are tested separately
+
+The final host checks reject an overlay raw file above 32 KiB and verify
+that the native override validator accepts exactly 32,768 bytes but rejects
+32,769 bytes. The opt-in builder pads the accepted raw payload to exactly
+32 KiB. The minimal overlay's 5,804-byte raw binary, 14,032-byte linked
+footprint through `_end`, and conservative `0x4a0e0000` runtime link bound
+are three distinct quantities. Full feasibility
+[#45834208280](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280) passed
+81/81 (artifact [15123653120](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280/artifacts/15123653120)).
+This does not approve any physical memory range or establish deployed
+firmware pairing.
