@@ -39,7 +39,7 @@ def main() -> int:
     assert module.classify_address(0x48041001) == "adjacent DRAM gap with no recovered direct reference"
     assert module.classify_address(0x4803CB40) == "BL31 adjacent BSS/runtime/page-table bytes in unconditional map"
     assert module.classify_address(0x48200000) == "conditional BL31 identity-map range (inactive when header flag is zero)"
-    assert module.classify_address(0x49FFFFFF) == "conditional BL31 identity-map range (raw attributes not interpreted)"
+    assert module.classify_address(0x49FFFFFF) == "conditional BL31 identity-map range (inactive when header flag is zero)"
     assert module.classify_address(0x4A000000) == "BL33 loader slot"
     assert module.BL31_TRANSLATION_MAP_REQUESTS[3]["arg2_length"] == "0x1e00000"
     assert module.BL31_PAGE_TABLE_ALLOCATOR["page_size"] == "0x1000"
