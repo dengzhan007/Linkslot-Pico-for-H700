@@ -28,6 +28,12 @@ WORDS = {
     0x4800254c: 0x35000103, 0x4800255c: 0x94000207,
     0x48002d18: 0xd2800480, 0x48002d1c: 0xf2a06000,
     0x48002d20: 0xb9400000, 0x48002d24: 0xf240081f,
+    0x48002d28: 0x1a9f17e0, 0x48002d40: 0x34000080,
+    0x48002d44: 0x52840100, 0x48002d48: 0x72a02400,
+    0x48002d4c: 0x14000003, 0x48002d50: 0x52800100,
+    0x48002d54: 0x72a02040, 0x48002d58: 0x0b000021,
+    0x48002d5c: 0x531d7020, 0x48002d60: 0x11001001,
+    0x48002d64: 0xb9000002, 0x48002d68: 0xb900003f,
     0x48002d30: 0xa9bf7bfd, 0x48002d3c: 0x97fffff7,
     0x48002d64: 0xb9000002, 0x48002d68: 0xb900003f,
     0x48002d78: 0xa9bf7bfd, 0x48002d7c: 0x2a0003e4,
@@ -67,6 +73,7 @@ def decode_bl_target(pc: int, instruction: int) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--monitor", type=Path, required=True)
+    parser.add_argument("--baseos-root", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
 
@@ -101,6 +108,21 @@ def main() -> int:
     missing = [value.decode() for value in STRINGS if value not in raw]
     if missing:
         raise RuntimeError("expected embedded TF-A PSCI strings missing: %s" % missing)
+
+    # Compare the BL31 die selector against the exact pinned native SPL rule.
+    spl_path = args.baseos_root.resolve() / "experiments/h700-boot-speed/spl/native-boot.c"
+    spl_source = spl_path.read_text(encoding="utf-8")
+    spl_selector = "ulong rvbar = (readl((void *)0x03000024) & 7) == 2 ? 0x08100040 : 0x09010040;"
+    if spl_selector not in spl_source:
+        raise RuntimeError("pinned BaseOS native SPL RVBAR selector changed")
+    primary_bank = (0x01202008 << 3) & 0xffffffff
+    alternate_bank = (0x01020008 << 3) & 0xffffffff
+    if primary_bank != 0x09010040 or alternate_bank != 0x08100040:
+        raise RuntimeError("decoded BL31 per-core RVBAR bank arithmetic changed")
+    bl31_bank = {value: (primary_bank if value == 0 else alternate_bank) for value in range(8)}
+    spl_bank = {value: (alternate_bank if value == 2 else primary_bank) for value in range(8)}
+    matching_selector_values = [value for value in range(8) if bl31_bank[value] == spl_bank[value]]
+    mismatching_selector_values = [value for value in range(8) if bl31_bank[value] != spl_bank[value]]
 
     report = {
         "schema": "rg34xx-bl31-psci-cpu-on-static-audit-v1",
@@ -141,6 +163,16 @@ def main() -> int:
             "argument_use": "W0 target core index; X1 non-secure entry address",
             "rvbar_helper": "0x48002d30",
             "soc_selector": "0x48002d18",
+            "rvbar_selection": {
+                "selector_register": "0x03000024 (SYS_CFG VER_REG; H616 family reference)",
+                "selector_mask": "0x7",
+                "bl31_rule": "low3 == 0 -> 0x09010040 + core*8; low3 != 0 -> 0x08100040 + core*8",
+                "native_spl_rule": "low3 == 2 -> 0x08100040; otherwise -> 0x09010040",
+                "matching_low3_values": matching_selector_values,
+                "mismatching_low3_values": mismatching_selector_values,
+                "device_low3_value": "UNKNOWN; requires read-only target sampling",
+                "native_spl_source_commit": "cbe253a43f46cf551cc9a6c79a84015bde3686cf",
+            },
             "registers": {
                 "C0_RST_CTRL": "0x09010000",
                 "C0_CTRL_REG0": "0x09010010",
@@ -167,6 +199,7 @@ def main() -> int:
             "The standard TF-A PSCI setup advertises PSCI_CPU_ON_AARCH64 (FID 0xc4000003) when both pwr_domain_on and pwr_domain_on_finish are non-null; this matched table contains both.",
             "This proves BL31 contains and exposes a CPU_ON-capable platform callback; it does not prove that the callback executes during initial BL31-to-BL33 handoff.",
             "The audit does not establish live CPU1-CPU3 reset state before Linux or Linkslot requests PSCI CPU_ON.",
+            "BL31 and pinned BaseOS SPL select the same RVBAR bank only when VER_REG low3 is 0 or 2; values 1 or 3-7 would make their selector rules diverge. The live value is unknown.",
             "The exact vendor callback ABI/source revision is not recovered; this is a pinned binary plus standard ABI-position correlation, not exact vendor source identity.",
             "No hardware MMIO, flash, boot-media write or payload execution was performed.",
         ],
@@ -182,6 +215,7 @@ def main() -> int:
         "- PSCI dispatch loads the global `psci_plat_pm_ops` pointer, reads its +8 slot, moves that function pointer to `x5`, then branches through `x5`.",
         "- Callback `0x4800254c` calls low-level CPU_ON routine `0x48002d78` at `0x4800255c` when `W3 == 0`.",
         "- Low-level routine writes a per-core RVBAR and contains a CPU power/reset sequence; one SoC-selected variant uses `0x09010000`, `0x09010010`, `0x07000440`, `0x07000444` and `0x090100c0`.",
+        "- RVBAR selector cross-check: BL31 uses VER_REG low3==0 for base 0x09010040, otherwise 0x08100040; pinned native SPL uses low3==2 for the alternate bank. Both agree only for selector values 0 and 2; the target value must be read.",
         "",
         "## Interpretation", "",
         "- In the standard TF-A `plat_psci_ops_t` layout, the second function pointer is `pwr_domain_on`; embedded PSCI source strings and dispatcher references support the platform-ops interpretation.",
