@@ -69,6 +69,18 @@ def main() -> int:
     assert module.WORDS[0x48015D70] == 0xD5033F9F
     assert module.WORDS[0x48015D74] == 0xD503207F
     assert module.WORDS[0x48015D78] == 0x17FFFFFF
+    assert module.WORDS[0x4801612C] == 0xD53E1000
+    assert module.WORDS[0x48016130] == 0x8A210000
+    assert module.WORDS[0x48016134] == 0xD51E1000
+    assert module.WORDS[0x48016138] == 0xD5033FDF
+    assert module.WORDS[0x48016140] == 0x17FFFFDA
+    assert module.WORDS[0x480160A8] == 0xD5390029
+    assert module.WORDS[0x48015FB8] == 0xB40003E3
+    assert module.WORDS[0x48015FE4] == 0xD51A000A
+    assert module.WORDS[0x48015FEC] == 0xD5390001
+    assert module.WORDS[0x48016040] == 0xD508764B
+    assert module.WORDS[0x48016060] == 0xD5087E4B
+    assert module.WORDS[0x48016080] == 0xD5087A4B
     assert module.WORDS[0x48002588] == 0x97FFFE50
     assert module.WORDS[0x480025A8] == 0x97FFFE4C
     assert module.WORDS[0x48009688] == 0xF9400021
@@ -106,7 +118,8 @@ def main() -> int:
     assert window_map["system_suspend_power_entry"][0] == 0x48001A04
     assert window_map["system_suspend_power_entry"][1] >= 0x300
     assert window_map["normal_suspend_powerdown_helper"][0] == 0x48015D70
-    assert window_map["system_suspend_trampoline_prepare_helper"][0] == 0x48016128
+    assert window_map["system_suspend_cache_teardown_and_trampoline"][0] == 0x48015FB8
+    assert window_map["system_suspend_cache_teardown_and_trampoline"][1] >= 0x270
     assert window_map["system_suspend_caller_full"][0] == 0x480096F8
     assert "ops_slot_3_raw" in window_map
     assert window_map["ops_slot_3_raw"][0] <= 0x48002998 < window_map["ops_slot_3_raw"][0] + window_map["ops_slot_3_raw"][1]
@@ -124,7 +137,7 @@ def main() -> int:
         pass
     else:
         raise AssertionError("B instruction was incorrectly accepted as BL")
-    print("PASS: legacy PSCI suspend dispatch, ordinary WFI loop and special SRAM branch")
+    print("PASS: PSCI suspend dispatch, DSB/WFI and EL3 cache teardown before SRAM branch")
     return 0
 
 if __name__ == "__main__":

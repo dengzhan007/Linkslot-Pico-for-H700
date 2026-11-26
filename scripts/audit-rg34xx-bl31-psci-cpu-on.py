@@ -61,6 +61,13 @@ WORDS = {
     # Ordinary power-down helper executes DSB; WFI; retry WFI.
     0x48015d70: 0xd5033f9f, 0x48015d74: 0xd503207f,
     0x48015d78: 0x17ffffff,
+    # EL3 special path disables MMU/D-cache then walks cache hierarchy by set/way.
+    0x48015fb8: 0xb40003e3, 0x48015fe4: 0xd51a000a,
+    0x48015fec: 0xd5390001, 0x48016040: 0xd508764b,
+    0x48016060: 0xd5087e4b, 0x48016080: 0xd5087a4b,
+    0x480160a8: 0xd5390029, 0x4801612c: 0xd53e1000,
+    0x48016130: 0x8a210000, 0x48016134: 0xd51e1000,
+    0x48016138: 0xd5033fdf, 0x48016140: 0x17ffffda,
     # Slot 7 system-reset and slot 6 system-off helper calls.
     0x48002588: 0x97fffe50, 0x480025a8: 0x97fffe4c,
     0x48002858: 0x97fffc20, 0x48002874: 0x17ffff83,
@@ -134,7 +141,7 @@ DISASSEMBLY_WINDOWS = (
     ("suspend_afflvl2_wrapper", 0x48008a00, 0x100),
     ("system_suspend_power_entry", 0x48001a04, 0x300),
     ("normal_suspend_powerdown_helper", 0x48015d70, 0x80),
-    ("system_suspend_trampoline_prepare_helper", 0x48016128, 0x100),
+    ("system_suspend_cache_teardown_and_trampoline", 0x48015fb8, 0x270),
     ("system_suspend_caller_full", 0x480096f8, 0xa0),
 
     ("ccu_save_helper", 0x48001790, 0x100),
@@ -267,6 +274,23 @@ def main() -> int:
         raise RuntimeError("SYSTEM_SUSPEND -4 power-entry target changed")
     if decode_bl_target(0x48001b5c, read_word(raw, 0x48001b5c)) != 0x48016128:
         raise RuntimeError("SYSTEM_SUSPEND trampoline preparation helper changed")
+    cache_control_words = {
+        0x4801612c: 0xd53e1000,  # mrs x0, SCTLR_EL3
+        0x48016130: 0x8a210000,  # bic x0, x0, #5 (clear M and C)
+        0x48016134: 0xd51e1000,  # msr SCTLR_EL3, x0
+        0x48016138: 0xd5033fdf,  # isb
+        0x48016140: 0x17ffffda,  # enter CLIDR-based cache-level maintenance
+        0x480160a8: 0xd5390029,  # mrs x9, CLIDR_EL1
+        0x48015fb8: 0xb40003e3,  # cache-level loop
+        0x48015fe4: 0xd51a000a,  # msr CSSELR_EL1, x10
+        0x48015fec: 0xd5390001,  # mrs x1, CCSIDR_EL1
+        0x48016040: 0xd508764b,  # dc isw, x11
+        0x48016060: 0xd5087e4b,  # dc cisw, x11
+        0x48016080: 0xd5087a4b,  # dc csw, x11
+    }
+    for address, expected in cache_control_words.items():
+        if read_word(raw, address) != expected:
+            raise RuntimeError("SCTLR/cache maintenance instruction changed at 0x%08x" % address)
     if read_word(raw, 0x48001b64) != 0xd2803700:
         raise RuntimeError("SYSTEM_SUSPEND SRAM target MOV changed")
     if read_word(raw, 0x48001b6c) != 0xf2a00040:
@@ -484,7 +508,26 @@ def main() -> int:
                 "final_indirect_branch_pc": "0x48001b70",
                 "final_indirect_branch_register": "x0",
                 "final_indirect_branch_target": "0x00000000000201b8",
-                "final_target_region": "outside the 0x48000000 BL31 payload; SRAM/ROM code identity is unverified",
+                "final_target_region": "within the sun50iw9p1 SRAM A1 candidate region [0x20000,0x28000); live contents and code identity remain unverified",
+                "el3_control_before_branch": {
+                    "sctlr_el3_read_pc": "0x4801612c",
+                    "sctlr_el3_clear_mask": "0x5",
+                    "sctlr_el3_write_pc": "0x48016134",
+                    "isb_pc": "0x48016138",
+                    "mmu_enable_bit_cleared": True,
+                    "data_cache_enable_bit_cleared": True,
+                    "cache_maintenance_entry": "0x480160a8",
+                },
+                "cache_maintenance": {
+                    "clidr_read_pc": "0x480160a8",
+                    "cache_level_loop_pc": "0x48015fb8",
+                    "csselr_write_pc": "0x48015fe4",
+                    "ccsidr_read_pc": "0x48015fec",
+                    "dc_isw_pc": "0x48016040",
+                    "dc_cisw_pc": "0x48016060",
+                    "dc_csw_pc": "0x48016080",
+                    "interpretation": "EL3 cache-level and set/way maintenance code; exact runtime cache-level/operation path is not dynamically observed",
+                },
                 "ordinary_powerdown_path": {
                     "helper": "0x48015d70",
                     "dsb_pc": "0x48015d70",
@@ -568,7 +611,8 @@ def main() -> int:
         "- Transition `0x48008d98` iterates affinity levels from start to end through callback map `0x48017d70`; the three wrappers `0x48008b84/0x48008ab8/0x48008a00` dispatch platform slot 3 `affinst_suspend`.",
         "- For system state `0x02010000`, slot 3's CCU-save branch returns `-4`; caller checks that sentinel and invokes power-entry target `0x48001a04` at `0x48009774`.",
         "- Ordinary suspend uses `0x48015d70`: `DSB SY` → `WFI` → branch back to WFI.",
-        "- The special handler `0x48001a04` prepares context, calls `0x48016128`, then computes target `0x201b8` and executes `br x0`; the target is outside the matched BL31 payload and is not yet identified as SRAM code, ROM code or a copied trampoline.",
+        "- The special handler `0x48001a04` prepares context at `0x20000`, clears SCTLR_EL3 M/C via `0x48016128`, runs CLIDR/CCSIDR cache set/way maintenance, then computes target `0x201b8` and executes `br x0`.",
+        "- The target `0x201b8` lies in the `sun50iw9p1` SRAM A1 map `[0x20000,0x28000)`; the actual live SRAM contents and resume-code copy/installation path are not captured, so the branch target's code identity remains unverified.",
         "- The effective ABI is the legacy Allwinner `plat_pm_ops_t` order with a vendor getter extension; the exact source commit is not identified.",
 
         "- Slot 1 affinst_on calls CPU_ON helper `0x48002d78` at `0x4800255c` when `W3 == 0`.",
@@ -589,7 +633,7 @@ def main() -> int:
         "- No hardware MMIO, flash, boot-media write or payload execution occurred.", "",
     ]
     (args.out.parent / "PSCI-CPU-ON.md").write_text("\n".join(markdown), encoding="utf-8")
-    print("PASS: legacy PSCI suspend dispatch, ordinary WFI loop and special SRAM branch")
+    print("PASS: PSCI suspend dispatch, DSB/WFI and EL3 cache teardown before SRAM branch")
     print("  table[1] = 0x%08x -> low-level 0x48002d78" % table[1])
     print("  callback disassembly = %s" % disassembly_path)
     print("  monitor SHA-256 = %s" % digest)
