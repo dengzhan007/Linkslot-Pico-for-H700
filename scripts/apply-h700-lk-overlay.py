@@ -179,6 +179,11 @@ BOOT_ARGUMENT_LOCATION:
 
 .global lk_bl33_entry
 lk_bl33_entry:
+    /* Capture BL31 entry state before touching VBAR or changing mode/stack. */
+    mrs r11, cpsr
+    mov r8, sp
+    mov r9, lr
+    mov r10, r4
     ldr r0, =__lk_vectors_start
     mcr p15, 0, r0, c12, c0, 0
     isb
@@ -194,6 +199,20 @@ lk_bl33_entry:
         "ldr\t\tr1, =(.Laddr - _start)\n\tsub\t\tr0, r0, r1",
         1,
     )
+
+    # Preserve the incoming register values across the startup mode/stack
+    # setup, then publish them only after the CRT0 BSS clear has completed.
+    kmain_call = "\tbl\t\tkmain"
+    if patched.count(kmain_call) != 1:
+        raise RuntimeError("unexpected pinned crt0.S kmain call; refusing unsafe entry-state publication")
+    publish = (
+        "    /* BSS is now clear; publish the entry snapshot before entering C. */\n"
+        "    ldr r0, =h700_bl33_entry_snapshot\n"
+        "    stmia r0, {r8-r11}\n"
+        "    ldr r1, =0x48374553\n"
+        "    str r1, [r0, #16]\n"
+    )
+    patched = patched.replace(kmain_call, publish + kmain_call, 1)
     return patched
 
 
@@ -289,6 +308,13 @@ def main() -> None:
         "source_tree_modified": False,
         "git_apply_check": "pass",
         "files": records,
+        "entry_snapshot": {
+            "register_order": ["SP", "LR", "r4", "CPSR"],
+            "captured_at": "first_instruction_of_lk_bl33_entry",
+            "published_at": "after_bss_clear_before_kmain",
+            "magic": "0x48374553",
+            "hardware_access": "none",
+        },
         "patch_sha256": sha256(patch_path.read_bytes()),
         "explicitly_not_changed": [
             "ACTLR.SMP / Cortex-A53 coherency setup",
@@ -313,8 +339,10 @@ build; it is not a firmware image.
 
 - arch/arm/crt0.S: branch from image offset +0 into a BL33 wrapper, reserve
   the opaque vendor header window [+4,+0x640), put the A32 vector table at
-  +0x1000, preserve the r4 boot-argument scratch word, and enter the original
-  reset path after setting VBAR.
+  +0x1000, and capture the first-entry SP/LR/r4/CPSR before VBAR or stack/mode
+  changes. The four values are held in AAPCS callee-saved registers and written
+  to the H700 BSS snapshot only after LK clears BSS and before kmain; r4 remains
+  untouched for the existing boot-argument handoff.
 - Packaging: the normal GammaOS lk.img includes an MTK image header. Use
   the raw lk-no-mtk-header.bin intermediate and run
   scripts/package-h700-bl33.py with the SHA-pinned active RG34XX loader.bin
