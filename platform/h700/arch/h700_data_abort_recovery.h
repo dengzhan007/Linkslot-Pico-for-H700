@@ -10,19 +10,24 @@
 #define H700_A32_MODE_MASK UINT32_C(0x1f)
 #define H700_A32_MODE_SVC UINT32_C(0x13)
 #define H700_A32_CPSR_T UINT32_C(0x20)
+#define H700_DFSR_WNR UINT32_C(1u << 11)
+#define H700_DFSR_LPAE UINT32_C(1u << 9)
 
 #define H700_DATA_ABORT_RECOVERY_OK 0
 #define H700_DATA_ABORT_RECOVERY_ABORTED 1
 #define H700_DATA_ABORT_RECOVERY_EINVAL (-1)
 #define H700_DATA_ABORT_RECOVERY_ENOTSUP (-2)
 
-/* Layout-compatible mirror of the pinned GammaOS LK arm_fault_frame. */
+/*
+ * Layout-compatible mirror of the pinned GammaOS LK arm_fault_frame.
+ * The saved pc word is LR_abt, not the faulting instruction address.
+ */
 typedef struct h700_arm_fault_frame_v1 {
     uint32_t spsr;
     uint32_t user_sp;
     uint32_t user_lr;
     uint32_t r[13];
-    uint32_t pc; /* saved LR_abt, not the faulting instruction address */
+    uint32_t pc;
 } h700_arm_fault_frame_v1_t;
 
 _Static_assert(offsetof(h700_arm_fault_frame_v1_t, spsr) == 0u, "LK SPSR offset changed");
@@ -34,9 +39,13 @@ _Static_assert(sizeof(h700_arm_fault_frame_v1_t) == 68u, "LK fault-frame size ch
 
 extern volatile uint32_t h700_syscfg_probe_active;
 
+/* Only short-descriptor, synchronous, DFAR-valid, read-side fault statuses. */
+int h700_data_abort_dfsr_is_recoverable_read(uint32_t dfsr);
+
 int h700_data_abort_frame_match(
     h700_arm_fault_frame_v1_t *frame,
     uint32_t active_magic,
+    uint32_t observed_dfsr,
     uint32_t observed_dfar,
     uint32_t expected_fault_lr,
     uint32_t expected_dfar,
