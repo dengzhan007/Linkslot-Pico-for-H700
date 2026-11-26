@@ -123,6 +123,8 @@ def main() -> int:
     spl_bank = {value: (alternate_bank if value == 2 else primary_bank) for value in range(8)}
     matching_selector_values = [value for value in range(8) if bl31_bank[value] == spl_bank[value]]
     mismatching_selector_values = [value for value in range(8) if bl31_bank[value] != spl_bank[value]]
+    if matching_selector_values != [0, 2] or mismatching_selector_values != [1, 3, 4, 5, 6, 7]:
+        raise RuntimeError("BL31/SPL RVBAR selector parity classification changed unexpectedly")
 
     report = {
         "schema": "rg34xx-bl31-psci-cpu-on-static-audit-v1",
