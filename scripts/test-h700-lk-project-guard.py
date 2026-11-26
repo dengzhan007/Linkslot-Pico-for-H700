@@ -134,7 +134,7 @@ def main() -> None:
 
         pi12_enable = "H700_RG34XX_PI12_EARLY_ACCESS_ENABLE"
         platform_rules_active = re.sub(r"(?m)#.*$", "", platform_rules)
-        if re.search(r"(?m)^\\s*(?:DEFINES|GLOBAL_DEFINES|CFLAGS|GLOBAL_CFLAGS)\\s*[:+?]?=.*" + pi12_enable, platform_rules_active):
+        if re.search(r"(?m)^\s*(?:DEFINES|GLOBAL_DEFINES|CFLAGS|GLOBAL_CFLAGS)\s*[:+?]?=.*" + pi12_enable, platform_rules_active):
             raise RuntimeError("production H700 rules must not enable PI12 MMIO before BL33 PIO qualification")
         led_source = (root / "platform/h700/power/h700_rg34xx_power_led.c").read_text(encoding="utf-8")
         if "#define H700_RG34XX_PI12_EARLY_ACCESS_ENABLE 0" not in led_source:
