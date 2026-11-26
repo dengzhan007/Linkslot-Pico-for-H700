@@ -23,7 +23,8 @@ RANGES = (
     (0x42E00000, 0x42E46200, "native SPL firmware package buffer"),
     (0x44000000, 0x44100000, "Linux FDT buffer"),
     (0x45000000, 0x46000000, "BOL4 staging buffer"),
-    (0x48000000, 0x49000000, "BL31 monitor window"),
+    (0x48000000, 0x4801A2D0, "BL31 loaded monitor payload bytes"),
+    (0x4801A2D0, 0x49000000, "BL31 adjacent runtime window outside payload file"),
     (0x4A000000, 0x4A100000, "BL33 loader slot"),
     (0x77C00000, 0x7BC00000, "CMA reservation"),
     (0x7BF24800, 0x7C076000, "framebuffer reservation"),
@@ -176,6 +177,16 @@ def scan_addresses(raw: bytes, entry: int) -> tuple[list[dict], str, int]:
                         if dest_name.startswith("w"):
                             value &= 0xFFFFFFFF
                         regs[dest] = value & 0xFFFFFFFFFFFFFFFF
+                        record(insn.address, "derived-register-address", regs[dest], insn.op_str)
+                elif ops[0].type == ARM64_OP_REG and ops[1].type == ARM64_OP_REG and ops[2].type == ARM64_OP_REG:
+                    source = canonical_register(insn.reg_name(ops[1].reg))
+                    if source in regs:
+                        record(insn.address, "indexed-address-base", regs[source], insn.op_str)
+
+            if insn.mnemonic == "msr" and len(ops) >= 2 and ops[-1].type == ARM64_OP_REG:
+                source = canonical_register(insn.reg_name(ops[-1].reg))
+                if source in regs:
+                    record(insn.address, "system-register-value", regs[source], insn.op_str)
 
             for op in ops:
                 if op.type == ARM64_OP_IMM and insn.mnemonic in ("ldr", "ldrsw", "prfm"):
@@ -218,20 +229,51 @@ def build_report(identity: dict, entry: int, refs: list[dict], count: int) -> tu
     counts: dict[str, int] = {}
     for item in refs:
         counts[item["range"]] = counts.get(item["range"], 0) + 1
+
+    def find_ref(kind: str, address: str) -> dict | None:
+        return next((item for item in refs if item["kind"] == kind and item["address"] == address), None)
+
+    ttbr = find_ref("system-register-value", "0x4803cb40")
+    tcr_source = find_ref("memory-effective-address", "0x4803c8e0")
+    per_core = find_ref("indexed-address-base", "0x4803cd40")
+    outside_payload = counts.get("BL31 adjacent runtime window outside payload file", 0)
+    inside_payload = counts.get("BL31 loaded monitor payload bytes", 0)
+    observed = {
+        "ttbr0_el3": None if ttbr is None else {
+            "value": ttbr["address"],
+            "write_instruction_pc": ttbr["pc"],
+            "decoded_instruction": ttbr["expression"],
+        },
+        "tcr_el3_configuration_source": None if tcr_source is None else {
+            "address": tcr_source["address"],
+            "load_instruction_pc": tcr_source["pc"],
+            "decoded_instruction": tcr_source["expression"],
+        },
+        "tpidr_el3_per_core_context_base": None if per_core is None else {
+            "address": per_core["address"],
+            "instruction_pc": per_core["pc"],
+            "decoded_instruction": per_core["expression"],
+        },
+    }
     report = {
         "schema": "rg34xx-bl31-static-memory-triage-v1",
         "monitor": identity,
         "image_base": "0x%08x" % IMAGE_BASE,
+        "payload_end": "0x%08x" % (IMAGE_BASE + identity["size_bytes"]),
         "entry": "0x%08x" % entry,
         "reachable_decoded_instruction_count": count,
         "recoverable_address_reference_count": len(refs),
         "reference_counts_by_range": counts,
+        "loaded_payload_reference_count": inside_payload,
+        "adjacent_runtime_window_reference_count": outside_payload,
+        "observed_el3_memory_setup": observed,
         "references": refs,
         "limits": [
-            "Linear disassembly can include literal/data bytes that happen to decode as instructions.",
+            "Only instructions reachable via direct control-flow edges are decoded; indirect branches/calls and exception-return paths may be incomplete.",
             "Register tracking is block-local and conservative; computed and indirect pointers may be missed.",
             "No references found in a range would not prove that BL31 never accesses it.",
             "This does not prove Secure/Non-secure ownership, DMA reachability, cache aliases, runtime scratch, or per-boot behavior.",
+            "The adjacent runtime window label describes statically referenced addresses outside the file payload, not a complete allocation map.",
             "No hardware registers were read or written; no image was flashed or executed.",
         ],
     }
@@ -241,9 +283,13 @@ def build_report(identity: dict, entry: int, refs: list[dict], count: int) -> tu
         "- SHA-256: %s" % identity["sha256"],
         "- Matched native firmware / TOC1 component: yes",
         "- BL31 image base: 0x%08x" % IMAGE_BASE,
+        "- Payload end (exclusive): 0x%08x" % (IMAGE_BASE + identity["size_bytes"]),
         "- First-entry branch target: 0x%08x" % entry,
         "- Reachable decoded instructions: %d" % count,
-        "- Recoverable address references: %d" % len(refs), "",
+        "- Recoverable address references: %d" % len(refs),
+        "- References into actual payload bytes: %d" % inside_payload,
+        "- References outside payload but inside the 16 MiB BL31 window: %d" % outside_payload,
+        "",
         "## References grouped by mapped range", "",
     ]
     if counts:
@@ -251,6 +297,27 @@ def build_report(identity: dict, entry: int, refs: list[dict], count: int) -> tu
             lines.append("- %s: %d" % (name, counts[name]))
     else:
         lines.append("- No references into audited DRAM ranges were recovered by this limited scan.")
+
+    lines += ["", "## EL3 memory-setup references", ""]
+    if ttbr:
+        lines.append("- TTBR0_EL3 is written with %s at %s (%s)." % (
+            ttbr["address"], ttbr["pc"], ttbr["expression"]
+        ))
+    else:
+        lines.append("- No statically tracked TTBR0_EL3 value was recovered.")
+    if tcr_source:
+        lines.append("- TCR_EL3 setup loads its configuration from %s at %s (%s)." % (
+            tcr_source["address"], tcr_source["pc"], tcr_source["expression"]
+        ))
+    else:
+        lines.append("- No statically tracked TCR_EL3 configuration source was recovered.")
+    if per_core:
+        lines.append("- Per-core TPIDR_EL3 context addressing uses base %s at %s (%s)." % (
+            per_core["address"], per_core["pc"], per_core["expression"]
+        ))
+    else:
+        lines.append("- No per-core TPIDR_EL3 context base was recovered.")
+
     candidate = [item for item in refs if item["range"] == RANGES[0][2]]
     lines += ["", "## Proposed application candidate references", ""]
     if candidate:
@@ -260,11 +327,14 @@ def build_report(identity: dict, entry: int, refs: list[dict], count: int) -> tu
             ))
     else:
         lines.append("- No direct candidate-range references were recovered by this scan.")
+
     lines += [
         "", "## Interpretation limits", "",
         "- This is static triage of a matched BL31 binary, not memory-ownership approval.",
+        "- The BL31 code references runtime/page-table/context addresses beyond the 107,216-byte file payload; file length is not the monitor's total runtime memory footprint.",
         "- Only instructions reachable via direct control-flow edges are decoded; indirect branches/calls and exception-return paths may be incomplete.",
         "- Dynamic address construction, indirect calls, secure-world services, DMA, runtime scratch, cache aliases and secondary-core activity are not fully modeled.",
+        "- Keep the full [0x48000000,0x49000000) BL31 window excluded until its complete runtime ownership is proven.",
         "- The candidate [0x40080000,0x42000000) remains UNAPPROVED. Keep H700_MEMORY_LAYOUT_APPROVED unset; do not assign MEMBASE/MEMSIZE or execute a payload.",
         "- No hardware MMIO access, boot-media write, flash, or device payload execution was performed.", "",
     ]
