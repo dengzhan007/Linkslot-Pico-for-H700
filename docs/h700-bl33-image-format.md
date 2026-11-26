@@ -79,7 +79,78 @@ binaries or unverified headers. If Boot0, BL31, native SPL or the p4+40 MiB
 firmware package changes, re-extract and re-qualify the header before
 changing the pin.
 
-## 4. Scope and remaining gates
+## 4. Matched native SPL / firmware rebuild for a small LK diagnostic
+
+The deployed p4+40 MiB native firmware manifest on the reports branch records
+the loader extent as offset `0x3e200`, length `0x8000` (32 KiB), destination
+`0x4a000000`. This is a stricter limit than the current BL33 image packager's
+`0xe0000` host policy: a payload may pass the BL33 wrapper and still be too
+large for the *current native firmware extent*.
+
+The Linkslot repository now provides
+`scripts/patch-baseos-native-lk-override.py`. It patches only
+`experiments/h700-boot-speed/native/build.py` in a clean BaseOS-MultiFrontend
+checkout pinned at `cbe253a43f46cf551cc9a6c79a84015bde3686cf`. The patch is
+explicitly opt-in through `BASEOS_LK_BL33_RAW` and:
+
+- accepts only a raw, header-free A32 LK image no larger than 32 KiB;
+- verifies the first A32 branch, all eight A32 vector branches, and that
+  reserved header bytes `[+4,+0x640)` are zero;
+- lets the existing native builder copy the matching prepared TOC header
+  bytes into that reserved window;
+- pads the result to exactly 32 KiB, preserving loader extent length, all
+  following firmware offsets and the native SPL extent table;
+- appends the raw input to the native build input list, so the generation
+  digest and `persistent_source_hashes` bind the exact LK payload;
+- rebuilds `firmware.bin` and lets the native builder regenerate
+  `BASEOS_FIRMWARE_BYTES`, `BASEOS_FIRMWARE_FNV`, the generated header hash
+  and manifest. The paired `build-early-mmc.py` step then compiles the native
+  SPL against those new constants.
+
+Apply the patch from the Linkslot checkout (this edits a *local* BaseOS
+checkout, not the GitHub BaseOS repository):
+
+```sh
+python3 scripts/patch-baseos-native-lk-override.py \
+  --baseos-root /path/to/BaseOS-MultiFrontend --apply
+python3 scripts/patch-baseos-native-lk-override.py \
+  --baseos-root /path/to/BaseOS-MultiFrontend --check
+```
+
+Put the raw LK image in a path inside the BaseOS checkout (it is included in
+the generation/source hashes), then run from the BaseOS repository root:
+
+```sh
+mkdir -p build/rg34xx-lk-bl33-input
+cp /path/to/lk-no-mtk-header.bin build/rg34xx-lk-bl33-input/lk-no-mtk-header.bin
+BASEOS_LK_BL33_RAW=build/rg34xx-lk-bl33-input/lk-no-mtk-header.bin \
+  python3 experiments/h700-boot-speed/native/build-release.py rg34xx \
+  build/rg34xx-lk-bl33-release
+```
+
+The output directory must not already exist. The command performs a host build
+only; it does not install or write Boot0/TOC1/SD. Check the resulting
+`native/manifest.json` for `lk_bl33_override.loader_extent_bytes == 32768`,
+`loader_extent_preserved == true`, and the expected raw payload SHA-256. The
+native SPL manifest, firmware FNV, generation and capsule must all identify
+the same build. If any check fails, discard the output.
+
+The patch creates a byte-exact backup beside `native/build.py`. Restore only
+when no subsequent edits were made:
+
+```sh
+python3 scripts/patch-baseos-native-lk-override.py \
+  --baseos-root /path/to/BaseOS-MultiFrontend --restore
+```
+
+**Limit:** this is a route for a compact proof-of-life diagnostic that fits in
+the existing 32 KiB extent. It is not yet a route for the full LK kernel,
+Linkslot or mGBA. The current 5,148-byte CRT0/exception layout probe is only a
+minimal stub-linked prototype, not a diagnostic payload with a visible signal.
+A larger LK requires a separately qualified loader-extent redesign and a new
+SPL/firmware pairing review; do not increase the extent silently.
+
+## 5. Scope and remaining gates
 
 The packaging regression uses synthetic input only to test the code's
 byte-preservation, branch and vector checks. It is not evidence that a
