@@ -2,16 +2,16 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-26（代码变更集 `aca39f29c560`；H700 AArch32/AArch64 #45752237207 与 boot-audit #45752237144 均成功；完整 Linkslot LK feasibility #45752237141 检查时为 58/74 steps、无失败，mGBA generic build 仍在执行。UI/GAME 显示复测仍约 59.6 Hz；120-Hz writer/boot-package 写入保持关闭。）
+**最后核对时间：** 2026-11-26（代码变更集 `aca39f29c560`；完整 Linkslot LK feasibility #45752237141 **75/75 steps 成功**；H700 AArch32/AArch64 #45752237207 成功；boot-audit #45752237144 Linux/Windows 两 job 成功。CI artifact `15086477117` 已上传。以上均非完整可刷写固件或实机启动证明。UI/GAME 显示复测仍约 59.6 Hz；120-Hz writer/boot-package 写入保持关闭。）
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
 
-**2026-11-26 LK heap readiness 衔接更新（代码提交 `aca39f29c560`；H700/boot-audit CI 通过，全量 feasibility 进行中）：**
+**2026-11-26 LK heap readiness 衔接更新（代码提交 `aca39f29c560`；三条关联 CI 工作流全部通过）：**
 
 - 固定 GammaOS LK 9bf1419a49e0af6dba8b05916df382c9c9c6d0a8 的正常启动顺序为 target_early_init → heap_init → thread/DPC/timer → platform_init → target_init → apps_init；heap_get_info() 的 free-list 遍历受 LK critical section 保护。
 - 发现 target_init() 已调用 h700_lk_heap_service_mark_target_init_complete()，但 platform/h700/rules.mk 尚未把 runtime/lk_heap_service.o 加入真实 LK OBJS。现补齐对象图，并在 project guard 中检查固定 LK 源码顺序、heap API/临界区和对象清单。
-- 特殊路径：pinned LK 的 ENABLE_NANDWRITE bootstrap 会在未调用 heap_init() 时调用 target_init()。H700 marker 现对此路径 fail-closed；normal 与 ENABLE_NANDWRITE=1 两种 host 回归均已通过。H700 编译 CI 也确认 heap service object 在 AArch64、AArch32 ARM-state、AArch32 Thumb-2 三种变体均可编译。
+- 特殊路径：pinned LK 的 ENABLE_NANDWRITE bootstrap 会在未调用 heap_init() 时调用 target_init()。H700 marker 现对此路径 fail-closed；normal 与 ENABLE_NANDWRITE=1 两种 host 回归均已通过。H700 编译 CI 确认 heap service object 在 AArch64、AArch32 ARM-state、AArch32 Thumb-2 三种变体均可编译；full feasibility project/memory guard、BL33 CRT0/vector、Linkslot Frontend、no_std crates、VFS/mGBA 静态链均在 #45752237141 通过。artifact: [linkslot-lk-rust-feasibility-45752237141](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45752237141)。
 - heap readiness 只表示 LK free-list 当前有非零可用空间，不是内存布局批准、heap 容量保证或完整 newlib/runtime 接入。完整 LK target link、物理内存 ownership 和设备启动仍未完成。
 
 
