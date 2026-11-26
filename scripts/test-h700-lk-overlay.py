@@ -737,7 +737,7 @@ SECTIONS
         "- Diagnostic kmain calls the real LK arch_early_init() first, then the real H700 target_early_init() hook; the latter calls the real PI12 service.\n",
         "- Pinned LK arch.c and H700 early-MMU/PIO/LED C services use Thumb-2; FPEXC uses VMRS/VMSR, while the exception vector and fixed SYS_CFG probe remain A32.\\n",
         "- The H700 platform-header shim supplies only DRAM_PHY_ADDR=0x40000000 required by the generic pinned LK mmu.c; no MTK platform register implementation is linked.\n",
-        "- This disposable layout ELF explicitly opts into PI12 MMIO for link validation; production H700 rules keep the physical access macro undefined/disabled.\\n",
+        "- This disposable layout ELF explicitly opts into PI12 MMIO for link validation; production H700 rules keep the physical access macro undefined/disabled.\n",
         "\n### Explicit limits\n\n",
         "- This is a minimal layout regression, not a bootable image or a full LK target. It deliberately omits thread_init_early(), the vendor-specific platform_early_init(), GIC/timer/console, heap, storage and the rest of kmain().\n",
         "- APB1/PIO clock state at the BL33 handoff is not proven by this link test. The LED service does not alter CCU/APB1; do not execute this payload until the early PIO bus-clock and physical memory ownership gates are separately closed.\n",

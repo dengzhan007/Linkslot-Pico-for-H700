@@ -7,7 +7,7 @@ TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' 0
 
 # Normal LK bootstrap: heap_init() precedes target_init().
-"$CC" -std=c11 -Wall -Wextra -Werror \
+"$CC" -std=c11 -Wall -Wextra -Werror -DH700_RG34XX_PI12_EARLY_ACCESS_ENABLE=1 \
     -I"$ROOT/platform/h700/runtime" \
     -I"$ROOT/platform/h700/runtime/tests/freestanding_include" \
     "$ROOT/platform/h700/runtime/lk_heap_service.c" \
@@ -17,7 +17,7 @@ trap 'rm -rf "$TMP_DIR"' 0
 "$TMP_DIR/lk_heap_service_test"
 
 # Alternate NAND-write bootstrap calls target_init() without heap_init().
-"$CC" -std=c11 -Wall -Wextra -Werror -DENABLE_NANDWRITE=1 \
+"$CC" -std=c11 -Wall -Wextra -Werror -DH700_RG34XX_PI12_EARLY_ACCESS_ENABLE=1 -DENABLE_NANDWRITE=1 \
     -I"$ROOT/platform/h700/runtime" \
     -I"$ROOT/platform/h700/runtime/tests/freestanding_include" \
     "$ROOT/platform/h700/runtime/lk_heap_service.c" \
