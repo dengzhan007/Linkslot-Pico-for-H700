@@ -28,7 +28,7 @@ OBJS += \
 	$(LOCAL_DIR)/runtime/h700_rg34xx_input_map.o \
 	$(LOCAL_DIR)/runtime/h700_rg34xx_input_scan.o \
 	$(LOCAL_DIR)/display/h700_display_refresh_policy.o \
-	$(LOCAL_DIR)/arch/h700_physical_memory.o \\
+	$(LOCAL_DIR)/arch/h700_physical_memory.o \
 	$(LOCAL_DIR)/arch/h700_pio_mmu_mapping.o
 
 # RG34XX PI12 power LED is the first board MMIO service. It only changes the

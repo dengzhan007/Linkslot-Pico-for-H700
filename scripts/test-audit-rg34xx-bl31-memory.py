@@ -33,7 +33,6 @@ def main() -> int:
     assert module.classify_address(0x41FFFFFF) == "Linux kernel destination / proposed app candidate"
     assert module.classify_address(0x42000000) == "Linux initrd reservation"
     assert module.classify_address(0x4801A2CF) == "BL31 loaded monitor payload bytes"
-    assert module.classify_address(0x4801A2D0) == "BL31 adjacent runtime window outside payload file"
     assert module.classify_address(0x4801A2D0) == "BL31 adjacent runtime/page-table references outside payload"
     assert module.classify_address(0x48041000) == "BL31 adjacent runtime/page-table references outside payload"
     assert module.classify_address(0x4803CB40) == "BL31 adjacent runtime/page-table references outside payload"
