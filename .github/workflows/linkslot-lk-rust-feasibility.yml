@@ -177,6 +177,14 @@ jobs:
           path: .ci/lk-reference
           persist-credentials: false
 
+      - name: Checkout pinned BaseOS native builder reference
+        uses: actions/checkout@v4
+        with:
+          repository: dengzhan007/BaseOS-MultiFrontend
+          ref: cbe253a43f46cf551cc9a6c79a84015bde3686cf
+          path: .ci/baseos-native
+          persist-credentials: false
+
       - name: Audit pinned LK early GIC and scheduler timer prerequisites
         run: python3 scripts/audit-h700-lk-timer-prerequisites.py --lk-source .ci/lk-reference
 
@@ -223,6 +231,15 @@ jobs:
 
       - name: Test matched BaseOS native BL33 firmware override
         run: python3 scripts/test-baseos-native-lk-override.py
+
+      - name: Apply and restore override patch on pinned BaseOS source
+        run: |
+          python3 scripts/patch-baseos-native-lk-override.py --baseos-root .ci/baseos-native --apply
+          python3 scripts/patch-baseos-native-lk-override.py --baseos-root .ci/baseos-native --check
+          python3 -c "import ast; from pathlib import Path; ast.parse(Path('.ci/baseos-native/experiments/h700-boot-speed/native/build.py').read_text())"
+          python3 scripts/patch-baseos-native-lk-override.py --baseos-root .ci/baseos-native --restore
+          git -C .ci/baseos-native diff --exit-code
+          test -z "$(git -C .ci/baseos-native status --porcelain)"
 
       - name: Test RG34XX native BL33 header packaging contract
         run: python3 scripts/test-package-h700-bl33.py
