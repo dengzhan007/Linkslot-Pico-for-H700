@@ -33,6 +33,8 @@ OBJS += \
 	$(LOCAL_DIR)/arch/h700_data_abort_recovery.o \
 	$(LOCAL_DIR)/arch/h700_syscfg_probe.o
 
-# RG34XX PI12 power LED is the first board MMIO service. It only changes the
-# GPIO mux/data fields; it does not reprogram CCU/APB1 or touch the PMIC.
-# Other H700 MMIO drivers remain disabled pending their own evidence.
+# RG34XX PI12 service code is linked, but physical MMIO is compile-time
+# disabled by default. A separately qualified build may add
+# H700_RG34XX_PI12_EARLY_ACCESS_ENABLE=1 only after BL33 APB1/PIO access,
+# memory ownership and CPU handoff gates are closed. The layout test opts in
+# locally; production rules deliberately do not. Other MMIO drivers stay off.

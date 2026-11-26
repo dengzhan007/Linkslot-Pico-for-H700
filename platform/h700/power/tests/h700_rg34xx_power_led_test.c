@@ -49,6 +49,13 @@ static void test_invalid_inputs_and_mux(void) {
     f.regs[H700_RG34XX_POWER_LED_PIO_MUX1_OFFSET/4u]=0x77777777u;
     assert(h700_rg34xx_power_led_set_game_active_v1(&svc,1)==H700_RG34XX_POWER_LED_ERR_PINMUX);
 }
+static void test_physical_access_default_disabled(void) {
+    assert(h700_rg34xx_power_led_early_init() == H700_RG34XX_POWER_LED_ERR_NOT_READY);
+    assert(h700_rg34xx_power_led_is_ready() == 0);
+    assert(h700_rg34xx_power_led_set_game_active(0u) == H700_RG34XX_POWER_LED_ERR_NOT_READY);
+    assert(h700_rg34xx_power_led_set_game_active(1u) == H700_RG34XX_POWER_LED_ERR_NOT_READY);
+    assert(h700_rg34xx_power_led_is_ready() == 0);
+}
 static void test_readback_failure(void) {
     struct fake f={0}; h700_rg34xx_power_led_service_v1_t svc={0}; h700_rg34xx_power_led_io_v1_t io=io_for(&f);
     f.drop=1; f.regs[H700_RG34XX_POWER_LED_PIO_MUX1_OFFSET/4u]=0x77777777u;
@@ -56,6 +63,6 @@ static void test_readback_failure(void) {
     assert(svc.initialized==0);
 }
 int main(void) {
-    test_preload_and_bit_preservation(); test_game_lifecycle(); test_invalid_inputs_and_mux(); test_readback_failure();
+    test_preload_and_bit_preservation(); test_game_lifecycle(); test_invalid_inputs_and_mux(); test_readback_failure(); test_physical_access_default_disabled();
     puts("RG34XX PI12 power LED lifecycle: PASS"); return 0;
 }

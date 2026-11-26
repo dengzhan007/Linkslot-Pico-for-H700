@@ -10,20 +10,23 @@
  *
  * The generic MTK target/init.c is excluded. The H700 arch MMU hook maps
  * the PIO peripheral window as device memory before target_early_init().
- * target_early_init() then turns on PI12; target_init() retries if needed.
+ * Physical PI12 MMIO stays disabled by default until BL33 APB1/PIO access is
+ * qualified; a separate build may explicitly opt in after that review.
  * No MTK fastboot/eMMC services are imported or enabled.
  */
 void target_early_init(void)
 {
-    /* Turn the RG34XX work LED on before LK heap/thread startup. */
+#if defined(H700_RG34XX_PI12_EARLY_ACCESS_ENABLE) && H700_RG34XX_PI12_EARLY_ACCESS_ENABLE
     (void)h700_rg34xx_power_led_early_init();
+#endif
 }
 
 void target_init(void)
 {
-    /* Retry if PIO was not accessible during the early hook. */
+#if defined(H700_RG34XX_PI12_EARLY_ACCESS_ENABLE) && H700_RG34XX_PI12_EARLY_ACCESS_ENABLE
     if (!h700_rg34xx_power_led_is_ready())
         (void)h700_rg34xx_power_led_early_init();
+#endif
 
     /* The NAND-write bootstrap bypasses heap_init(); never qualify that path. */
 #if !defined(ENABLE_NANDWRITE) || !(ENABLE_NANDWRITE)

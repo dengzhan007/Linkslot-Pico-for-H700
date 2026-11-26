@@ -2,6 +2,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* Physical PIO access is opt-in until the BL33 bus/handoff gates are qualified. */
+#ifndef H700_RG34XX_PI12_EARLY_ACCESS_ENABLE
+#define H700_RG34XX_PI12_EARLY_ACCESS_ENABLE 0
+#endif
+
 /*
  * RG34XX (non-SP): PIO@0x0300b000, Bank I index 8, stride 0x24.
  * PI12: MUX1 +0x124, nibble bits 19:16, mux 1 = GPIO output.
@@ -89,6 +94,7 @@ int h700_rg34xx_power_led_set_game_active_v1(h700_rg34xx_power_led_service_v1_t 
     return H700_RG34XX_POWER_LED_OK;
 }
 
+#if H700_RG34XX_PI12_EARLY_ACCESS_ENABLE
 static uint32_t mmio_read32(void *context, uint32_t offset)
 {
     (void)context;
@@ -102,8 +108,11 @@ static void mmio_write32(void *context, uint32_t offset, uint32_t value)
 
 static h700_rg34xx_power_led_service_v1_t g_power_led_service;
 
+#endif
+
 int h700_rg34xx_power_led_early_init(void)
 {
+#if H700_RG34XX_PI12_EARLY_ACCESS_ENABLE
     const h700_rg34xx_power_led_io_v1_t io = {
         H700_RG34XX_POWER_LED_ABI_VERSION,
         (uint32_t)sizeof(h700_rg34xx_power_led_io_v1_t),
@@ -113,13 +122,21 @@ int h700_rg34xx_power_led_early_init(void)
         return h700_rg34xx_power_led_set_game_active_v1(&g_power_led_service, 0u);
     return h700_rg34xx_power_led_init_v1(&g_power_led_service,
                                           (uint32_t)sizeof(g_power_led_service), &io);
+#else
+    return H700_RG34XX_POWER_LED_ERR_NOT_READY;
+#endif
 }
 int h700_rg34xx_power_led_is_ready(void)
 {
+#if H700_RG34XX_PI12_EARLY_ACCESS_ENABLE
     return g_power_led_service.initialized == SERVICE_MAGIC;
+#else
+    return 0;
+#endif
 }
 int h700_rg34xx_power_led_set_game_active(uint32_t game_active)
 {
+#if H700_RG34XX_PI12_EARLY_ACCESS_ENABLE
     int result;
     if (!h700_rg34xx_power_led_is_ready()) {
         result = h700_rg34xx_power_led_early_init();
@@ -127,4 +144,8 @@ int h700_rg34xx_power_led_set_game_active(uint32_t game_active)
             return result;
     }
     return h700_rg34xx_power_led_set_game_active_v1(&g_power_led_service, game_active);
+#else
+    (void)game_active;
+    return H700_RG34XX_POWER_LED_ERR_NOT_READY;
+#endif
 }

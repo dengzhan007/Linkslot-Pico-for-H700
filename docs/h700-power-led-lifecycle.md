@@ -48,8 +48,8 @@ H700 PIO 字段：
 3. 将现场确认的 DRAM `[0x40000000, 0x80000000)` 以 normal write-back / read-write 属性建立 1024 个 1 MiB identity sections。
 4. 将 `[0x03000000, 0x03100000)` 以 shared Device / read-write / XN 属性映射，覆盖 CCU 与 PIO@0x0300b000。
 5. 所有页表描述符和 TLBI 操作完成后执行 `DSB SY`，再调用 `arch_enable_mmu()` 设置 `SCTLR.M`，随后执行 `ISB SY`；之后 LK 完成 cache setup，才进入 `target_early_init()`。
-6. `target_early_init()` 调用 `h700_rg34xx_power_led_early_init()`。GPIO data latch 先置高，再切 PI12 mux 为 GPIO output，最后读回验证。
-7. 若早期访问失败，`target_init()` 在 `platform_init()` 后重试；Linkslot C ABI 首次请求时也会在必要时尝试初始化。
+6. `target_early_init()` 只有在显式定义 `H700_RG34XX_PI12_EARLY_ACCESS_ENABLE=1` 时才调用物理 PI12 服务；默认 production build 未定义此宏，不触发 PIO MMIO。
+7. opt-in build 中，GPIO data latch 先置高，再切 PI12 mux 为 GPIO output，最后读回验证；`target_init()` 仅在同一 opt-in build 中重试。Linkslot C ABI 在默认 build 中返回 `ERR_NOT_READY`，不会自行探测 PIO。
 
 PIO MMU 映射只更新已有 ARM section translation table 的一个外设条目，不分配 DRAM，不改变 LK heap/stack/BSS/BL31 保留区，也不写 CCU/APB1、PMIC 或 CPU PLL。v2 Linux 运行态报告中 PIO/APB1 时钟为 100 MHz；LED driver 不改变这个时钟树。
 
@@ -122,3 +122,24 @@ Full feasibility [#45843270056](https://github.com/dengzhan007/Linkslot-Pico-for
 - LK arch.c and H700 C services use Thumb-2; FPEXC is accessed with VMRS/VMSR; exception vectors and the fixed SYS_CFG probe remain A32.
 
 This is **not** a bootable image: scheduler/bootstrap thread, vendor `platform_early_init()`, GIC/timer/console, heap and storage are omitted. Early APB1/PIO clock state at BL33 handoff remains unverified; physical runtime memory ownership and secondary A53 hold-off also remain unresolved. No real firmware/SPL pair was generated and no device MMIO, flash or payload execution occurred. Keep PI12 cold-boot and game lifecycle behavior marked unverified.
+
+
+## PIO fault-safety gate — default hardware access disabled
+
+The Linux inventory's clock summary reports APB1/PIO enabled during normal
+Linux operation (APB1 100 MHz; one PIO consumer). This does not establish the
+clock/reset/access state at the earlier BL31→A32 BL33 handoff.
+
+A failed register readback is not the same as an external Data Abort. The
+current scoped Data Abort recovery intentionally accepts only the single
+SYS_CFG `VER_REG` diagnostic load at `0x03000024`; a fault on PIO
+`0x0300b124` or `0x0300b130` remains fatal. Therefore the physical PI12
+MMIO wrapper is now disabled unless the build explicitly defines
+`H700_RG34XX_PI12_EARLY_ACCESS_ENABLE=1`.
+
+The normal H700 platform rules do not define this macro. The real early-MMU /
+PI12 layout test sets it only in its disposable compile command to verify
+that the actual LK MMU and PI12 objects link together and fit the 32 KiB raw
+extent. The generic injected-IO C service remains fully host-testable.
+Do not enable the macro in a target firmware until APB1/PIO access at BL33
+handoff, physical memory ownership and secondary-core behavior are qualified.

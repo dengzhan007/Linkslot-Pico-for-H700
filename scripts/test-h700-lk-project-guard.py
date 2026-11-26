@@ -132,6 +132,19 @@ def main() -> None:
         if "LINKER_SCRIPT += $(BUILDDIR)/system-onesegment.ld" not in platform_rules:
             raise RuntimeError("H700 platform does not assign the generated one-segment linker script")
 
+        pi12_enable = "H700_RG34XX_PI12_EARLY_ACCESS_ENABLE"
+        if pi12_enable in platform_rules:
+            raise RuntimeError("production H700 rules must not enable PI12 MMIO before BL33 PIO qualification")
+        led_source = (root / "platform/h700/power/h700_rg34xx_power_led.c").read_text(encoding="utf-8")
+        if "#define H700_RG34XX_PI12_EARLY_ACCESS_ENABLE 0" not in led_source:
+            raise RuntimeError("physical PI12 MMIO wrapper must default to disabled")
+        if "return H700_RG34XX_POWER_LED_ERR_NOT_READY;" not in led_source:
+            raise RuntimeError("disabled PI12 wrapper must return NOT_READY without MMIO")
+        target_source = (worktree / "target/rg34xx_h700/init.c").read_text(encoding="utf-8")
+        if target_source.count("#if defined(H700_RG34XX_PI12_EARLY_ACCESS_ENABLE) && H700_RG34XX_PI12_EARLY_ACCESS_ENABLE") != 2:
+            raise RuntimeError("both target lifecycle hooks must gate PI12 hardware access")
+        summary.append("PASS pi12-mmio-default-disabled: production startup and frontend wrappers cannot touch PIO without opt-in")
+
         # target_init() calls this marker, so the provider must be in the LK object graph.
         heap_object = "runtime/lk_heap_service.o"
         if f"$(LOCAL_DIR)/{heap_object}" not in platform_rules:
