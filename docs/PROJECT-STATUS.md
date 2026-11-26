@@ -1008,8 +1008,17 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
   routine 0x48002d78.
 - The low-level routine writes a per-core RVBAR and contains SoC-specific
   CPU power/reset paths. One branch uses C0_RST_CTRL, C0_CTRL_REG0,
-  AON power-on reset/clamp and DBG_REG0. The SoC variant selected by
-  0x03000024 & 7 has not been read on the target.
+  AON power-on reset/clamp and DBG_REG0. The selector is SYS_CFG VER_REG
+  at 0x03000024 (not SID); its target low3 value has not been read.
+- Important selector mismatch: matched BL31 selects RVBAR bank 0x09010040
+  when VER_REG[2:0]==0, otherwise 0x08100040. Pinned BaseOS native SPL
+  selects 0x08100040 only when VER_REG[2:0]==2, otherwise 0x09010040.
+  These rules agree only for values 0 and 2; they diverge for 1 and 3-7.
+  The H616 manual documents VER_REG at SYS_CFG +0x24 but leaves [7:0]
+  undefined; upstream H616 tools use the low byte as a die selector, but
+  that does not establish the H700 value. Read only VER_REG & 7 in a trusted
+  early environment and unify the SPL/BL31 rule after confirming target
+  semantics.
 - Workflow
   [#45816600012](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45816600012)
   passed all steps, including the exact-word/table/branch regression.
@@ -1022,6 +1031,10 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 - Exact vendor source revision/callback ABI remains unconfirmed; the
   pwr_domain_on mapping is correlated using the standard TF-A
   plat_psci_ops_t slot order and binary registration/dispatch.
+- Selector parity CI
+  [#45817598323](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45817598323)
+  verifies the differing SPL/BL31 rules and reports matching low3 values
+  [0, 2] versus mismatching [1, 3, 4, 5, 6, 7]. It does not read the target.
 - Updated detailed report:
   [h700-a53-single-core-startup-audit.md](h700-a53-single-core-startup-audit.md).
   CI artifact 15114838248 contains the exact PSCI CPU_ON report and
