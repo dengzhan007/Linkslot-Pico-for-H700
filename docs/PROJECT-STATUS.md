@@ -564,4 +564,4 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 - 同一修复提交的完整 feasibility run [#45739871348](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45739871348) 仍在运行，当前处于 LLVM cross-link tools 安装阶段；不将其记为完成。
 - [H700 Linkslot runtime slices workflow](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/workflows/h700-linkslot-runtime.yml) 的 `integration/linkslot/h700-frontend-core/**` path filter 会因本轮 workspace/manifest 变化触发；须以对应最新 run 的结论为准。
 
-当前进展是 **runtime floor 有持久化代码且 CI 将覆盖它**，不是可启动 LK App。下一项为 application-owned action router，把 Quick Menu 与 game-library/search 逻辑接到 handler；之后再依次设计 VFS v3/static-core lifecycle、renderer/display service descriptors。不得提前接通未经批准的 framebuffer/scanout、GPIO、PCM 或存储硬件路径；heap/BL33 memory gate与单 active core约束保持 fail-closed。
+当前进展是 **runtime floor 已持久化并通过专用 host/AArch32/AArch64 CI**，不是可启动 LK App。下一项为 application-owned action router，把 Quick Menu 与 game-library/search 逻辑接到 handler；之后再依次设计 VFS v3/static-core lifecycle、renderer/display service descriptors。不得提前接通未经批准的 framebuffer/scanout、GPIO、PCM 或存储硬件路径；heap/BL33 memory gate与单 active core约束保持 fail-closed。
