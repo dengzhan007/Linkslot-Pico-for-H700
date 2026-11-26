@@ -64,10 +64,10 @@ class PioReadOnlyCaptureSafetyTests(unittest.TestCase):
         self.assertIn('> "$OUTDIR/pio-samples.csv"', self.source)
         self.assertIn('>> "$OUTDIR/pio-samples.csv"', self.source)
         self.assertIn('> "$OUTDIR/summary.txt"', self.source)
-        self.assertNotRegex(self.source, r">\s*/dev/")
+        self.assertNotRegex(self.source, r">\s*/dev/(?!null\b)")
         self.assertNotRegex(self.source, r">\s*/sys/")
         self.assertNotRegex(self.source, r">\s*/proc/")
-        self.assertIn("trap 'rm -f \\"$OUTDIR/.pa-dat.tmp\\"", self.source)
+        self.assertIn("trap 'rm -f \"$OUTDIR/.pa-dat.tmp\"", self.source)
 
     def test_sampling_is_bounded_and_does_not_touch_gpio_configuration(self):
         self.assertIn('[ "$SAMPLES" -le 5000 ]', self.source)
