@@ -124,6 +124,8 @@ fn open_static_mgba(
         fn linkslot_mgba_stub_reset_counters();
         fn linkslot_mgba_stub_init_calls() -> u32;
         fn linkslot_mgba_stub_deinit_calls() -> u32;
+        fn linkslot_mgba_stub_install_vfs() -> bool;
+        fn linkslot_mgba_stub_vfs_request_ok() -> bool;
     }
 
     #[cfg(feature = "static-mgba")]
@@ -131,7 +133,13 @@ fn open_static_mgba(
     fn open_core_selects_builtin_static_mgba_without_a_path_override() {
         let _g = lock();
         std::env::remove_var(CORE_ENV);
-        unsafe { linkslot_mgba_stub_reset_counters() };
+        unsafe {
+            linkslot_mgba_stub_reset_counters();
+            assert!(
+                linkslot_mgba_stub_install_vfs(),
+                "the H700 VFS backend must be installed before opening the static core"
+            );
+        }
 
         let root = tempfile::tempdir().unwrap();
         let opened = open_core(
@@ -146,6 +154,10 @@ fn open_static_mgba(
 
         assert!(opened.named, "the built-in static core must count as a named core");
         assert_eq!(unsafe { linkslot_mgba_stub_init_calls() }, 1);
+        assert!(
+            unsafe { linkslot_mgba_stub_vfs_request_ok() },
+            "retro_init must receive Libretro VFS v3 from the preinstalled H700 backend"
+        );
         assert_eq!(unsafe { linkslot_mgba_stub_deinit_calls() }, 0);
         drop(opened);
         assert_eq!(unsafe { linkslot_mgba_stub_deinit_calls() }, 1);
@@ -249,7 +261,8 @@ def main() -> None:
         "- Explicit SLOT_CORE continues to select only the requested dynamic path; a missing override does not silently fall back to the built-in core.\n"
         "- Dynamic candidate search and open_core_for() remain unchanged.\n"
         "- PASS: focused slot core tests with no default host features and static-mgba enabled.\n"
-        "- The tests validate built-in init/deinit lifecycle selection and explicit override precedence using host C stubs.\n\n"
+        "- The tests validate built-in init/deinit lifecycle selection and explicit override precedence using host C stubs.\n"
+        "- The C core stub requests GET_VFS_INTERFACE during retro_init(); a complete fake H700 backend is installed first, and the test requires successful VFS v3 negotiation before core initialization completes.\n\n"
         "This checks the frontend core-selection seam only. It is not a complete Linkslot application or LK build, and does not access SD/FAT or execute a game.\n\n"
         "Cargo output:\n\n~~~text\n" + output.strip() + "\n~~~\n"
     )
