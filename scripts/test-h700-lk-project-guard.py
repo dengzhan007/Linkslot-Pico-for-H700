@@ -17,6 +17,8 @@ SCAFFOLD = (
     Path("platform/h700/rules.mk"),
     Path("platform/h700/runtime/lk_heap_service.c"),
     Path("platform/h700/runtime/lk_heap_service.h"),
+    Path("platform/h700/runtime/h700_arch_timer.c"),
+    Path("platform/h700/runtime/h700_arch_timer.h"),
 )
 
 
@@ -175,6 +177,26 @@ def main() -> None:
         if "#if !defined(ENABLE_NANDWRITE) || !(ENABLE_NANDWRITE)" not in target_lifecycle:
             raise RuntimeError("H700 heap readiness marker must stay disabled for the no-heap NAND-write bootstrap")
         summary.append("PASS lk-heap-bootstrap-gate: NAND-write path cannot mark the LK heap ready")
+
+        # Read-only Generic Timer provider: no timer comparator/control or IRQ setup.
+        timer_object = "runtime/h700_arch_timer.o"
+        if f"$(LOCAL_DIR)/{timer_object}" not in platform_rules:
+            raise RuntimeError("H700 platform does not link the Generic Timer provider")
+        timer_source_path = root / "platform/h700/runtime/h700_arch_timer.c"
+        timer_header_path = root / "platform/h700/runtime/h700_arch_timer.h"
+        timer_source = timer_source_path.read_text(encoding="utf-8")
+        if not timer_header_path.is_file():
+            raise RuntimeError("H700 Generic Timer header missing")
+        for instruction in ("mrrc p15, 1", "mrc p15, 0", "cntvct_el0", "cntfrq_el0"):
+            if instruction not in timer_source:
+                raise RuntimeError("H700 Generic Timer source is missing read path: " + instruction)
+        for forbidden in ("mcr p15", "mcrr p15", "msr cntvct", "msr cntfrq",
+                          "CNTP_CTL", "CNTP_CVAL", "CNTV_CTL", "CNTV_CVAL",
+                          "platform_set_periodic_timer", "register_int_handler"):
+            if forbidden.lower() in timer_source.lower():
+                raise RuntimeError("H700 Generic Timer provider contains a write/IRQ path: " + forbidden)
+        summary.append("PASS h700-arch-timer-object: CNTVCT/CNTFRQ read-only provider linked; no comparator or IRQ setup")
+
 
 
         cpu_objects = (

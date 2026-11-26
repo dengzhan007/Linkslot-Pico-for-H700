@@ -59,6 +59,22 @@ This bridge does not initialize the heap, select its address/size, install the
 newlib adapter, or authorize the Linkslot runtime coordinator. The full LK
 target link and memory-layout gate remain closed.
 
+## Read-only Generic Timer time service
+
+`platform/h700/runtime/h700_arch_timer.c` supplies ABI v1 monotonic time from
+the ARM Generic Timer virtual counter and firmware-programmed frequency. It
+uses AArch32 `MRRC p15,1` / `MRC p15,0` or AArch64
+`CNTVCT_EL0` / `CNTFRQ_EL0`, reads only, and starts a relative epoch when
+the service is initialized. A zero `CNTFRQ` rejects initialization.
+
+The implementation does not configure counter access controls, CNTVOFF,
+timer compare/control registers, GIC/PPI, or periodic interrupts. It does not
+implement LK `platform_set_periodic_timer()` and is not called from
+`target_init()` or the Linkslot coordinator. Host tests cover conversion,
+counter wrap, zero-frequency refusal and descriptor lifetime; AArch32,
+Thumb-2 and AArch64 compile checks cover instruction syntax only. Actual
+CNTFRQ and counter growth still require device execution.
+
 ## AArch32 early MMU mapping contract
 
 The H700 target uses the pinned GammaOS LK AArch32 section-table implementation

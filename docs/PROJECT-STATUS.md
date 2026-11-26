@@ -2,7 +2,7 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-26（代码变更集 `aca39f29c560`；完整 Linkslot LK feasibility #45752237141 **75/75 steps 成功**；H700 AArch32/AArch64 #45752237207 成功；boot-audit #45752237144 Linux/Windows 两 job 成功。CI artifact `15086477117` 已上传。以上均非完整可刷写固件或实机启动证明。UI/GAME 显示复测仍约 59.6 Hz；120-Hz writer/boot-package 写入保持关闭。）
+**最后核对时间：** 2026-11-26（只读 Generic Timer provider 已实现并纳入 AArch32/AArch64/Thumb-2 编译及 host tests；新提交 CI 待验证。前一代码集 `aca39f29c560` 的完整 feasibility #45752237141 **75/75 steps 成功**，H700 编译及 Linux/Windows boot-audit 均成功。CI artifact `15086477117` 已上传。以上均非实机启动证明。UI/GAME 约 59.6 Hz；120-Hz writer/boot-package 写入保持关闭。）
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
@@ -16,11 +16,13 @@
 
 
 
-**2026-11-26 H700 timer source audit：**
+**2026-11-26 H700 Generic Timer 只读 provider：**
 
-- `reports/rg34xx-inventory-20261125-163152/interrupts.txt` 中 Linux live snapshot 显示 GIC-0 IRQ 27 `arch_timer` 在四个 CPU 列均有计数；另有 wakeupgen IRQ 3 `sun4i_timer0`。这证明 Linux 运行态有架构计时器活动，但不能直接证明 BL31→AArch32 SVC LK 的寄存器访问控制、`CNTFRQ` 值或计时器 IRQ 配置。
-- 当前 H700 `time_service.h` 只有 ABI 描述符，没有 C provider。候选应优先审计 AArch32 Generic Timer 的 `CNTVCT`/`CNTFRQ`（`MRRC p15,1` 读取 virtual counter）；必须确认 Non-secure PL1/EL2 trap 配置和 BL31 handoff 后频率/连续性，再决定是否启用。禁止复用 pinned MTK `platform/mt6785/timer.c` 的 GPT5。
-- `platform/h700/runtime` 仍无 monotonic provider，也未实现 H700 `platform_set_periodic_timer()`；本次没有接入或启动 timer IRQ，没有任何计时器寄存器写入。
+- Linux live snapshot `reports/rg34xx-inventory-20261125-163152/interrupts.txt` 显示 GIC-0 IRQ 27 `arch_timer` 在四个 CPU 列均有计数，另有 wakeupgen IRQ 3 `sun4i_timer0`。这证明 Linux 运行态架构计时器在工作；它不单独证明 BL31→LK 的计数器频率、virtual offset 或中断交接状态。
+- 按 Arm ARMv7-A/R Generic Timer 访问规则，`CNTVCT` 对 Secure PL1、Non-secure PL1/PL2 可读；`CNTFRQ` 在 Non-secure PL1 为只读。与之相反，Non-secure PL1 读取 `CNTPCT` 在实现 virtualization extensions 时受 `CNTHCTL.PL1PCTEN` 控制。因此 H700 选择 `CNTVCT + CNTFRQ`，不读取物理计数器，也不碰 `CNTKCTL/CNTHCTL`。本项目当前 BL33 入口证据是 AArch32 SVC（PL1）。
+- 新增 `platform/h700/runtime/h700_arch_timer.c`：AArch32 使用 `MRRC p15,1` / `MRC p15,0`，AArch64 使用 `CNTVCT_EL0/CNTFRQ_EL0`；service 以初始化时计数值为 epoch，提供相对毫秒单调时间，零频率 fail-closed，并处理 64-bit counter wrap 与转换饱和。
+- 该 provider 只读寄存器，不设置 timer compare、timer control、GIC/PPI，也不实现 `platform_set_periodic_timer()`。host tests 验证换算、ABI 生命周期和边界；AArch32/Thumb-2/AArch64 CI 验证指令编译。尚未在 RG34XX LK 中执行读取，所以真实 `CNTFRQ`、计数增长、BL31 handoff 后连续性仍待后续设备验证；先维持单核。
+- 不复用 pinned MTK `platform/mt6785/timer.c` 的 GPT5。下一步是先完成只读 provider 的 CI，再从真实 LK/设备验证计数器读回；只有有明确 PPI/IRQ 依据后，才另行实现周期 timer。
 
 **2026-11-26 最新续接更新：**
 
