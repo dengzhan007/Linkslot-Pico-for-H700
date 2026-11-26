@@ -106,6 +106,14 @@ explicitly opt-in through `BASEOS_LK_BL33_RAW` and:
   `BASEOS_FIRMWARE_BYTES`, `BASEOS_FIRMWARE_FNV`, the generated header hash
   and manifest. The paired `build-early-mmc.py` step then compiles the native
   SPL against those new constants.
+- after the builder has consumed the original `loader.map` trampoline check,
+  the discarded native loader's `loader.elf` and `loader.map` are renamed to
+  `native-loader-template.elf/.map`; the raw replacement is separately saved
+  as `lk-bl33-override.raw`. The manifest explicitly records that this ELF
+  does not correspond to the final `loader.bin`. Do not use the template map
+  as the LK memory map; a separate LK target ELF/map is still required.
+- `--restore` writes the saved source backup as raw bytes, preserving original
+  line endings, and refuses to overwrite a builder file changed after apply.
 
 Apply the patch from the Linkslot checkout (this edits a *local* BaseOS
 checkout, not the GitHub BaseOS repository):
