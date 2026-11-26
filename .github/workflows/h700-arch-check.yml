@@ -12,6 +12,7 @@ on:
       - "scripts/test-h700-rg34xx-power-led.sh"
       - "scripts/test-h700-lk-heap-service.sh"
       - "scripts/test-h700-arch-timer.sh"
+      - "scripts/test-h700-bl33-entry-snapshot.sh"
       - "scripts/test-h700-rg34xx-input-map.sh"
       - "scripts/test-h700-rg34xx-input-scan.sh"
       - "scripts/test-h700-pio-mmu-mapping.sh"
@@ -89,6 +90,7 @@ jobs:
           sh scripts/test-h700-rg34xx-power-led.sh
           sh scripts/test-h700-lk-heap-service.sh
           sh scripts/test-h700-arch-timer.sh
+          sh scripts/test-h700-bl33-entry-snapshot.sh
           sh scripts/test-h700-rg34xx-input-map.sh
           sh scripts/test-h700-rg34xx-input-scan.sh
           sh scripts/test-h700-pio-mmu-mapping.sh
