@@ -217,3 +217,68 @@ The helper and its static safety regression passed Linux/Windows host CI
 [#45762940878](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45762940878)
 (89 Python tests on each platform plus shell syntax validation). **No device MMIO read has yet been performed,
 and the LK sampler remains disconnected from all runtime entry points.**
+
+
+## 9. Device /dev/mem read failure — no GPIO sample obtained
+
+The device report
+[reports/rg34xx-pio-input-capture-20261126/PIO-CAPTURE-FAILURE.md](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-pio-input-capture-20261126/PIO-CAPTURE-FAILURE.md)
+records a root ADB run of the collector. The device passed the collector's
+preconditions: /dev/mem was a readable character node and /proc/iomem exposed
+the expected 0300b000-0300b3ff : /soc@03000000/pinctrl@0300b000 resource.
+The first 4-byte PA_DAT read nevertheless returned EFAULT (Bad address) at
+sample 0. The CSV contains only its header; no GPIO key presses were made and
+no PA_DAT/PE_DAT value was read.
+
+The read-only probe matrix returned the same EFAULT for offset 0, offset 4,
+the 0x03000000 page, the PIO base, PA_DAT, PE_DAT, a one-byte read and
+streaming cat /dev/mem. The supplied device config has CONFIG_DEVMEM=y,
+CONFIG_STRICT_DEVMEM unset, and the command line includes selinux=0.
+The report interprets this as the vendor kernel's /dev/mem translation path
+returning no mapping; the exact vendor-kernel reason is not proven without
+the matching kernel source or a debug build. Generic Linux v4.9
+drivers/char/mem.c returns -EFAULT when xlate_dev_mem_ptr() returns NULL
+([source](https://github.com/torvalds/linux/blob/v4.9/drivers/char/mem.c)).
+This is consistent with the observed errno, but is not a claim that the vendor
+file is byte-for-byte identical to upstream.
+
+No workaround was attempted. Do not retry with alternate offsets, /dev/kmem,
+sunxi_dump, a custom kernel module, or writes to pinctrl/GPIO/EINT/GIC. The
+userspace PIO collector remains generic for kernels where /dev/mem reads work,
+but it is not a viable read path on this RG34XX image.
+
+## 10. Read-only gpiolib debugfs level sampler
+
+The already-used /sys/kernel/debug/pinctrl view demonstrates that debugfs
+is mounted on this image. Linux v4.9 gpiolib provides /sys/kernel/debug/gpio;
+its default debug helper iterates requested GPIO lines and calls the
+controller's chip->get() callback, displaying the level as hi or lo next to
+direction and consumer label
+([upstream v4.9 gpiolib.c](https://github.com/torvalds/linux/blob/v4.9/drivers/gpio/gpiolib.c)).
+A controller can supply a custom dbg_show callback instead, so the device
+output is not assumed to use this exact format.
+
+The inventory now captures the existing file when readable. A separate
+scripts/collect-rg34xx-gpio-debugfs-readonly.sh performs bounded snapshots of
+that one file, recording /proc/uptime per sample. It does not mount debugfs,
+export/request GPIOs, access /dev/mem, alter mux/pull/drive, or touch EINT/GIC.
+Expected artifacts are:
+
+- preflight-gpio.txt: one initial snapshot, useful to see chip ranges, line
+  labels, consumers and whether current input states are displayed;
+- gpio-debugfs-samples.txt: timestamped full snapshots for edge analysis;
+- summary.txt: capture parameters and output names.
+
+Default capture is 600 samples with a nominal 100-ms delay. Per-snapshot cat
+overhead makes the observed cadence slower; use the recorded uptime
+timestamps. Press/release one physical gamepad key at a time and do not press
+Power. If the 17 lines or hi/lo state are not exposed, stop here and use a
+separately gated LK diagnostic build; do not try another userspace MMIO
+interface.
+
+The H700 LK scanner already performs volatile reads through the existing
+0x03000000..0x03100000 shared Device mapping, but it is not invoked from
+target_init(), apps_init() or LK main. The Linux debugfs result is a readback
+of the Linux GPIO driver path, not proof that the LK-side direct PIO mapping
+or electrical initialization works. No LK runtime or ROM execution has
+occurred.

@@ -5,6 +5,7 @@ on:
     paths:
       - "scripts/collect-rg34xx-readonly-inventory.sh"
       - "scripts/collect-rg34xx-pio-input-readonly.sh"
+      - "scripts/collect-rg34xx-gpio-debugfs-readonly.sh"
       - "scripts/run-rg34xx-inventory.ps1"
       - "tools/**"
       - "docs/**"
@@ -13,6 +14,7 @@ on:
     paths:
       - "scripts/collect-rg34xx-readonly-inventory.sh"
       - "scripts/collect-rg34xx-pio-input-readonly.sh"
+      - "scripts/collect-rg34xx-gpio-debugfs-readonly.sh"
       - "scripts/run-rg34xx-inventory.ps1"
       - "tools/**"
       - "docs/**"
@@ -33,6 +35,7 @@ jobs:
         run: |
           sh -n scripts/collect-rg34xx-readonly-inventory.sh
           sh -n scripts/collect-rg34xx-pio-input-readonly.sh
+          sh -n scripts/collect-rg34xx-gpio-debugfs-readonly.sh
 
       - name: Run TOC1 parser tests
         run: python3 -m unittest discover -s tools -p "test_*.py" -v

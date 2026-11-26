@@ -134,6 +134,16 @@ capture_proc "interrupts.txt" "/proc/interrupts"
     else
         echo "NOT_PRESENT: $PINCTRL_DEBUG (not mounted/readable; collector did not mount it)"
     fi
+
+    echo
+    echo "== existing gpiolib requested-line state (read-only; no debugfs mount) =="
+    GPIO_DEBUG="/sys/kernel/debug/gpio"
+    if [ -r "$GPIO_DEBUG" ]; then
+        echo "-- $GPIO_DEBUG --"
+        cat "$GPIO_DEBUG"
+    else
+        echo "NOT_PRESENT_OR_READABLE: $GPIO_DEBUG (collector did not mount debugfs)"
+    fi
 } > "$OUTDIR/input-runtime.txt"
 
 # Capture the kernel page size so CMA PFNs can be converted to byte ranges.
