@@ -95,15 +95,32 @@ BOOT_ARGUMENT_LOCATION:
 
 .global lk_bl33_entry
 lk_bl33_entry:
-    mrs r11, cpsr
-    mov r8, sp
-    mov r9, lr
-    mov r10, r4
+    mrs r5, cpsr
+    mov r6, sp
+    mov r7, lr
     ldr r0, =__lk_vectors_start
     mcr p15, 0, r0, c12, c0, 0
     isb
 """
     patched_crt0 = original_crt0[:i] + prefix + original_crt0[j:]
+
+    boot_argument_save = "  ldr     r6, =BOOT_ARGUMENT_LOCATION \n  str     r4, [r6] \n"
+    if patched_crt0.count(boot_argument_save) != 1:
+        raise RuntimeError("unexpected pinned boot-argument save; refusing to clobber the entry snapshot")
+    patched_crt0 = patched_crt0.replace(
+        boot_argument_save,
+        "  ldr     r0, =BOOT_ARGUMENT_LOCATION \n  str     r4, [r0] \n",
+        1,
+    )
+    trustzone_ref = "\tldr r7, =_binary_tzbsp_tzbsp_bin_start\n"
+    if patched_crt0.count(trustzone_ref) != 1:
+        raise RuntimeError("unexpected pinned TrustZone symbol reference; refusing to clobber the entry snapshot")
+    patched_crt0 = patched_crt0.replace(
+        trustzone_ref,
+        "\tldr r0, =_binary_tzbsp_tzbsp_bin_start\n",
+        1,
+    )
+
     relocation = "sub\t\tr0, r0, #(.Laddr - _start)"
     if patched_crt0.count(relocation) != 1:
         raise RuntimeError("LK crt0 self-relocation instruction changed; re-audit before adapting")
@@ -118,7 +135,10 @@ lk_bl33_entry:
         raise RuntimeError("unexpected pinned crt0.S kmain call; refusing unsafe entry-state publication")
     publish = (
         "    ldr r0, =h700_bl33_entry_snapshot\n"
-        "    stmia r0, {r8-r11}\n"
+        "    str r6, [r0, #0]\n"
+        "    str r7, [r0, #4]\n"
+        "    str r4, [r0, #8]\n"
+        "    str r5, [r0, #12]\n"
         "    ldr r1, =0x48374553\n"
         "    str r1, [r0, #16]\n"
     )
