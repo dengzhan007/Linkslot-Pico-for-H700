@@ -133,7 +133,8 @@ def main() -> None:
             raise RuntimeError("H700 platform does not assign the generated one-segment linker script")
 
         pi12_enable = "H700_RG34XX_PI12_EARLY_ACCESS_ENABLE"
-        if pi12_enable in platform_rules:
+        platform_rules_active = re.sub(r"(?m)#.*$", "", platform_rules)
+        if re.search(r"(?m)^\\s*(?:DEFINES|GLOBAL_DEFINES|CFLAGS|GLOBAL_CFLAGS)\\s*[:+?]?=.*" + pi12_enable, platform_rules_active):
             raise RuntimeError("production H700 rules must not enable PI12 MMIO before BL33 PIO qualification")
         led_source = (root / "platform/h700/power/h700_rg34xx_power_led.c").read_text(encoding="utf-8")
         if "#define H700_RG34XX_PI12_EARLY_ACCESS_ENABLE 0" not in led_source:
