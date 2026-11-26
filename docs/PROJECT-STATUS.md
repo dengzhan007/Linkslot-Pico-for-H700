@@ -586,7 +586,7 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 - crate implementation/tests：`0887806f3c10305e63d23db7b7e929672ab131cf`
 - 15th workspace member：`4865ee52153abe5834ed21d9dd60e209d97d97bc`
 
-验证：workspace member 更新触发 H700 runtime-slices CI；在相应 15-crate workspace host/default+no-default tests 与 AArch32/AArch64 no-default checks 完成前，不声称新 router 已过 CI。上一个 14-crate 版本的专用 runtime-slices [#45739871351](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45739871351) 已完整通过，含 full Linkslot Frontend overlay build 与 CPU QuickRow fail-closed test。当前新 router 只处理 Quick Menu phase；游戏搜索键盘/候选/结果选择是下一切片。仍不是可启动 LK App，无设备写入或实机执行。
+验证：专用 15-member H700 runtime-slices [#45740732818](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45740732818) **success**。两个 host workspace test 模式（default / no-default）、AArch32 `armv7a-none-eabi` 与 AArch64 `aarch64-unknown-none` no-default checks、upstream input/model regression、完整 Linkslot 1.0.49 Frontend overlay build、CPU Performance QuickRow fail-closed test、C input ABI/queue 与两架构 cross-compile 全部通过；新 `slot-app-router` 的 6 项测试在两个 host test 模式均通过。更广的 H700/LK feasibility run [#45740749359](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45740749359) 仍在执行交叉链接编译。当前新 router 只处理 Quick Menu phase；游戏搜索键盘/候选/结果选择是下一切片。仍不是可启动 LK App，无设备写入或实机执行。
 
 下一步：
 1. 搜索键盘/候选页/搜索结果的纯按键状态转换，依照 1.0.49 上游逻辑抽取为 typed router，保留 pinyin provider 与当前 shelf/folder hit index 归属。
