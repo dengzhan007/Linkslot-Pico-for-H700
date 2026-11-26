@@ -408,3 +408,8 @@ The official H700 release's armGBA core now has a read-only runtime mapping repo
 cross-check, the primary GBA pointer versus the link-cable cache, and the exact-source
 `frameCounter` offset. No process memory was read and no frame-rate sampling is claimed.
 Start with [SUMMARY.md](slot-refresh-audit/binary-identity/runtime-mapping/SUMMARY.md).
+
+
+## 2026-11-26 RG34XX FPS sampling
+
+The first full Slot/armGBA runtime rate capture is under [slot-refresh-audit/fps-sampling](slot-refresh-audit/fps-sampling/README.md). Independent arithmetic and evidence-boundary review: [ANALYSIS.md](slot-refresh-audit/fps-sampling/ANALYSIS.md).
