@@ -44,15 +44,27 @@ def main() -> int:
     # The address seed and high half may be separated by more than the old
     # 16-instruction window. Keep this regression to prevent missing such
     # PIO/CCU accesses in long register-setup sequences.
-    long_sequence = [0xD2962004] + [0xD503201F] * 24 + [
-        0xF2A06004, 0xB9400080, 0xD65F03C0
+    long_sequence = [
+        0xD2962004, 0xD2962203, 0xD2962302,  # x4/x3/x2 low address seeds
+        *([0xD503201F] * 24),                 # force >16-instruction tracking
+        0xF2A06004, 0xF2A06003, 0xF2A06002,  # add 0x0300 high halves
+        0xB9400080, 0xB9000080,              # load/store [x4] -> PIO+0x100
+        0xB9400060, 0xB9000060,              # load/store [x3] -> PIO+0x110
+        0xB9400040, 0xB9000040,              # load/store [x2] -> PIO+0x118
+        0xD65F03C0
     ]
     long_raw = b"".join(struct.pack("<I", word) for word in long_sequence)
     long_hits = module.instruction_hits(long_raw)
-    assert any(
-        item["mnemonic"] == "ldr" and item["address"] == "0x0300b100"
-        for item in long_hits
-    ), long_hits
+    expected_pio_ops = {
+        ("ldr", "0x0300b100"), ("str", "0x0300b100"),
+        ("ldr", "0x0300b110"), ("str", "0x0300b110"),
+        ("ldr", "0x0300b118"), ("str", "0x0300b118"),
+    }
+    actual_pio_ops = {
+        (item["mnemonic"], item["address"]) for item in long_hits
+        if item["window"] == "PIO"
+    }
+    assert expected_pio_ops <= actual_pio_ops, (expected_pio_ops, actual_pio_ops, long_hits)
     long_context = next(
         item["context"] for item in long_hits
         if item["mnemonic"] == "ldr" and item["address"] == "0x0300b100"
