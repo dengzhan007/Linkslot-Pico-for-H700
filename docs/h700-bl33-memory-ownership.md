@@ -181,3 +181,58 @@ Required evidence before a memory-layout approval:
 - [RG34XX active loader provenance report](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-active-loader-provenance.md)
 - [RG34XX boot partition and memory audit](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-boot-partition-deep-audit.md)
 - [Current H700 BL33 image packaging contract](h700-bl33-image-format.md)
+
+
+### 2026-11-26 Matched BL31 binary: control-flow-aware memory-reference triage
+
+The read-only monitor payload extracted from the 2026-11-26 TOC1 inventory was
+verified byte-for-byte by SHA-256 against both the TOC1 manifest and the native
+firmware extent manifest:
+
+- payload length: **107,216 bytes**;
+- SHA-256: `676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31`;
+- load base: `0x48000000`;
+- first-entry branch target: `0x480000f8`;
+- payload end (exclusive): `0x4801a2d0`.
+
+A Capstone-based control-flow traversal from the entry branch decoded 1,849
+reachable instructions and recorded 268 recoverable address references:
+188 within the actual payload file range and 80 outside the payload but inside
+the broader 16 MiB BL31 audit window `[0x48000000,0x49000000)`. The report
+separates those two address ranges rather than treating the binary file size
+as the monitor's runtime footprint.
+
+Three particularly important references were recovered:
+
+- At `0x4800bf60`, BL31 writes `TTBR0_EL3 = 0x4803cb40`. This is direct
+  evidence that its EL3 translation-table base is outside the 107,216-byte
+  file payload.
+- At `0x4800bf4c`, BL31 loads the `TCR_EL3` configuration from
+  `0x4803c8e0`.
+- At `0x4801582c`, per-core `TPIDR_EL3` context addressing uses base
+  `0x4803cd40`, with an MPIDR-derived index shifted by seven bits.
+
+The scan did not recover a direct reference into the proposed application
+candidate `[0x40080000,0x42000000)`. **This is not evidence that the range is
+free.** The traversal follows direct control-flow edges; indirect calls and
+branches, exception-return paths, runtime-computed pointers, secure-world
+services, DMA, cache aliases, secondary-core activity and all vendor BL31
+runtime behavior are not fully modeled. Recovered references are static leads,
+not a complete call graph or memory map.
+
+The correct consequence is stricter: the 107,216-byte monitor file length
+cannot be used as the BL31 reservation size. Keep the full 16 MiB audit window
+`[0x48000000,0x49000000)` excluded until its runtime ownership and any
+out-of-window accesses are fully qualified. The unknown
+`[0x7ec00000,0x7fc00000)` reservation remains excluded. Keep
+`H700_MEMORY_LAYOUT_APPROVED` unset; do not assign `MEMBASE/MEMSIZE`, run a
+payload, or write Boot0/TOC1/SD.
+
+The reproducible audit is implemented by
+`scripts/audit-rg34xx-bl31-memory.py` with host regression coverage in
+`scripts/test-audit-rg34xx-bl31-memory.py`. The matched-monitor audit
+workflow [#45793968827](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45793968827)
+passed, including manifest identity checks, control-flow traversal, and
+artifact upload. Its report and disassembly are available from the workflow
+artifact. This remains host-only static analysis; no device I/O, MMIO write,
+flash, or payload execution was performed.
