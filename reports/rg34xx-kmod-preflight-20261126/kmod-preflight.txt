@@ -1,0 +1,64 @@
+=== kernel ===
+Linux rg34xx 4.9.170 #19 SMP PREEMPT Tue May 26 13:58:08 CST 2026 aarch64 Linux
+=== module config ===
+CONFIG_KALLSYMS=y
+CONFIG_MODULES=y
+CONFIG_MODULE_UNLOAD=y
+CONFIG_DEVMEM=y
+# CONFIG_STRICT_DEVMEM is not set
+=== kernel build files ===
+drwxr-xr-x    3 root     root            29 Nov 20 00:25 [1;34m/lib/modules/4.9.170[m
+MISSING /lib/modules/4.9.170/build
+MISSING /lib/modules/4.9.170/build/Makefile
+MISSING /lib/modules/4.9.170/build/Module.symvers
+MISSING /usr/src/linux
+MISSING /usr/src/linux-4.9.170
+MISSING /usr/src/linux-headers-4.9.170
+=== relevant kernel symbols (names only) ===
+__ioremap
+devm_ioremap_resource
+=== existing platform drivers ===
+allwinner,sunxi-hdmi
+eeprom-sunxi-sid
+ion-sunxi
+sunxi-addr-mgt
+sunxi-bt
+sunxi-btlpm
+sunxi-cedar
+sunxi-ehci
+sunxi-init-gpio
+sunxi-iommu
+sunxi-mmc
+sunxi-ohci
+sunxi-reset
+sunxi-rtc
+sunxi-snd-codec
+sunxi-snd-codec-hdmi
+sunxi-snd-mach
+sunxi-snd-plat-aaudio
+sunxi-snd-plat-ahub
+sunxi-snd-plat-ahub_dam
+sunxi-thermal
+sunxi-twi
+sunxi-vin-core
+sunxi-vin-media
+sunxi-wlan
+sunxi_dmac
+sunxi_pwm
+sunxi_usb_udc
+syscon
+=== existing debugfs regmap ===
+[1;34m5-0034[m
+[1;34m5070400.thermal_sensor[m
+[1;34m5096000.codec[m
+[1;34m5097000.ahub_dam_plat[m
+=== relevant iomem entries ===
+0300b000-0300b3ff : /soc@03000000/pinctrl@0300b000
+04020000-04020fff : /soc@03000000/sdmmc@04020000
+04021000-04021fff : /soc@03000000/sdmmc@04021000
+04022000-04022fff : /soc@03000000/sdmmc@04022000
+05002c00-05002fff : /soc@03000000/twi@0x05002c00
+05070400-050707ff : /soc@03000000/thermal_sensor
+07000000-070001ff : /soc@03000000/rtc@07000000
+07022000-070223ff : /soc@03000000/pinctrl@07022000
+07081400-070817ff : /soc@03000000/twi@0x07081400
