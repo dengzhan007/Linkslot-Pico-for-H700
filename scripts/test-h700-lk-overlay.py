@@ -242,7 +242,10 @@ void thread_preempt(void) { }
 
     # The modified LK C handler follows the normal H700 Thumb-2 C policy.
     # Linking it with the A32 exception vector must therefore interwork safely.
-    thumb_fault_stub = "int arm_data_abort_handler(void *frame) { return frame != 0; }"
+    thumb_fault_stub = (
+        "extern int h700_data_abort_try_recover(void *frame);\n"
+        "int arm_data_abort_handler(void *frame) { return h700_data_abort_try_recover(frame); }\n"
+    )
     thumb_fault_path = out / "data-abort-handler-thumb.c"
     thumb_fault_path.write_text(thumb_fault_stub + chr(10), encoding="utf-8")
 
@@ -296,6 +299,25 @@ void thread_preempt(void) { }
         ["clang", *thumb_flags, "-std=c11", "-c", str(thumb_fault_path), "-o", str(thumb_fault_obj)],
         out / "thumb-data-abort-handler-compile.log",
     )
+
+    repo_root = Path(__file__).resolve().parents[1]
+    h700_abort_c = repo_root / "platform/h700/arch/h700_data_abort_recovery.c"
+    h700_probe_asm = repo_root / "platform/h700/arch/h700_syscfg_probe.S"
+    if not h700_abort_c.is_file() or not h700_probe_asm.is_file():
+        raise RuntimeError("H700 Data Abort recovery C/ASM sources are missing")
+
+    h700_abort_obj = out / "h700-data-abort-recovery-thumb.o"
+    h700_probe_obj = out / "h700-syscfg-probe-arm.o"
+    run(
+        ["clang", *thumb_flags, "-I", str(repo_root / "platform/h700/arch"),
+         "-std=c11", "-c", str(h700_abort_c), "-o", str(h700_abort_obj)],
+        out / "h700-data-abort-recovery-compile.log",
+    )
+    run(
+        ["clang", *flags, "-c", str(h700_probe_asm), "-o", str(h700_probe_obj)],
+        out / "h700-syscfg-probe-compile.log",
+    )
+
 
     crt_symbols = run(["llvm-nm", "-g", "--defined-only", str(crt_obj)])
     for required in ("_start", "lk_bl33_entry", "__lk_vectors_start", "BOOT_ARGUMENT_LOCATION"):
@@ -359,6 +381,8 @@ SECTIONS
             str(exc_obj),
             str(stubs_obj),
             str(thumb_fault_obj),
+            str(h700_abort_obj),
+            str(h700_probe_obj),
         ],
         out / "link.log",
     )
@@ -370,6 +394,18 @@ SECTIONS
     undefined = run(["llvm-nm", "-u", str(elf)])
     if undefined.strip():
         raise RuntimeError("overlay probe has unresolved symbols:\n" + undefined)
+
+    for required in (
+        "h700_data_abort_try_recover",
+        "h700_syscfg_ver_reg_low3",
+        "h700_syscfg_ver_reg_low3_asm",
+        "h700_syscfg_probe_active",
+        "h700_syscfg_probe_fault_load",
+        "h700_syscfg_probe_recovery",
+    ):
+        if not any(line.split() and line.split()[-1] == required for line in nm.splitlines()):
+            raise RuntimeError("linked H700 abort recovery/probe symbol is missing: " + required)
+
 
     start = symbol_address(nm, "_start")
     entry = symbol_address(nm, "lk_bl33_entry")
@@ -457,6 +493,7 @@ SECTIONS
         "- All eight vector instructions decode as A32 branch instructions; all required exception symbols resolve.\\n",
         "- The H700-only Data Abort trampoline is compiled and linked; unrelated aborts still use the original fatal C fallback.\\n",
         "- The A32 exception vector links to the Thumb-2 C handler through an interworking BLX.\\n",
+        "- The real H700 matcher C object and fixed-address ARM probe assembly link into the same ELF; the Thumb helper-to-ARM probe call is resolved.\\n",
         "- The generated LK make rules exclude MTK platform/common, platform/pal, MTK dev modules and MTK target/init.c when H700_BUILD=yes; H700 must provide its own platform/target module lists.\n",
         "- Synthetic bytes +4..+0x63f replace cleanly without changing the first BL33 branch; the synthetic bytes are not a vendor header.\n\n",
         "## Explicit limits\n\n",
