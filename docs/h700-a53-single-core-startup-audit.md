@@ -124,20 +124,66 @@ AArch64 mode bit when its board-selection branch is taken. This is bounded
 static evidence only; indirect address calculation, secure firmware services,
 other exception paths and runtime CPU-control behavior are not fully modeled.
 
-## 5. Current assessment
+
+## 5. BL31 PSCI CPU_ON callback (confirmed in the matched binary)
+
+A separate exact-binary audit now follows the platform operation table and its
+indirect dispatch, rather than relying only on the instructions reachable by
+direct branches from BL31's first entry.
+
+- The platform ops table is at `0x480165f8`. Its nine 64-bit entries are:
+  `0x48002510, 0x4800254c, 0x4800264c, 0x48002878, 0x48002680,
+  0x480026c4, 0x480025a0, 0x48002574, 0x48002544`.
+- Setup code at `0x480029bc` stores this table pointer through its output
+  pointer; the registration callsite is `0x48009dec`.
+- The global string `psci_plat_pm_ops` is present. Dispatch code loads the
+  global pointer at `0x4801bfc0`, loads offset `+8` (the second function
+  pointer), moves it to `x5`, and branches through `x5` at
+  `0x48008640`. A second path repeats the slot selection at
+  `0x480086a0..0x480086dc`.
+- In the standard TF-A `plat_psci_ops_t` layout, the second member is
+  `pwr_domain_on`. The selected callback is `0x4800254c); its BL at
+  `0x4800255c` reaches `0x48002d78`.
+- The low-level routine receives a target core index in `W0` and a
+  non-secure entry address in `X1`. It programs a per-core RVBAR, then
+  executes a SoC-selected power/reset sequence. One branch accesses
+  `C0_RST_CTRL=0x09010000`, `C0_CTRL_REG0=0x09010010`,
+  `AON_POWERON_RESET=0x07000440`, `AON_CLAMP=0x07000444` and
+  `DBG_REG0=0x090100c0`.
+- The SoC variant is selected by `0x03000024 & 7`; its live value was not
+  read. Do not assume the H616-named branch is necessarily the H700 device's
+  active branch.
+
+This is strong static evidence that the matched vendor BL31 **can start
+secondary CPUs on a PSCI power-on request**. It is not evidence that BL31
+automatically starts them during its initial handoff to BL33. The current
+diagnostic BL33 must not call PSCI CPU_ON unless SMP/coherency and per-core
+initialization are deliberately implemented and reviewed.
+
+Reproducible CI:
+[#45816600012](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45816600012)
+passed. The exact vendor source revision and callback ABI have not been
+recovered; the mapping to `pwr_domain_on` uses the standard TF-A operation
+table layout plus the matched binary's registration/dispatch structure.
+Reference interface:
+https://github.com/ARM-software/arm-trusted-firmware/blob/master/include/lib/psci/psci.h
+
+## 6. Current assessment
 
 | Core | Static source evidence | Confidence |
 |---|---|---|
 | CPU0 | Native SPL programs the primary RVBAR; BL31 has a CPU0 mode setup path | High for primary handoff |
-| CPU1 | Not passed to Boot0 reset helper; H616 reset default holds it in reset | Probable, not target-verified |
-| CPU2 | Boot0 may execute a helper that clears its reset bit; with H616 POR default that bit is already zero | Probable, gate bit and live register not measured |
-| CPU3 | Same as CPU2 | Probable, gate bit and live register not measured |
+| CPU1 | Boot0 helper does not target it; BL31's PSCI callback can power it on on request | Initial hold-off probable; live state unknown |
+| CPU2 | Boot0 may assert reset when the undocumented gate is set; BL31 PSCI callback can release it on request | Initial hold-off probable; gate/live state unknown |
+| CPU3 | Same as CPU2 | Initial hold-off probable; gate/live state unknown |
 
-This supports a CPU0-only boot hypothesis but does **not** close the single-core
-startup gate. The exact target H700 register semantics, bit29 feature-gate
-value, pre-BL31 mutations, and state at BL33 entry remain unmeasured.
+The combined evidence supports a CPU0-only **initial handoff** hypothesis,
+but BL31 contains a callable PSCI CPU_ON path that can later release a
+secondary core. This does **not** close the single-core startup gate. The
+exact target H700 register semantics, bit29 feature-gate value, pre-BL31
+mutations, and state at BL33 entry remain unmeasured.
 
-## 6. Required proof before executing diagnostic BL33
+## 7. Required proof before executing diagnostic BL33
 
 Collect a read-only snapshot from a trusted **pre-BL33** environment (not from
 normal Linux after the kernel has brought CPUs online):
