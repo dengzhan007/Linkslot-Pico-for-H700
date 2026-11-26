@@ -650,10 +650,12 @@ The snapshot only becomes available after CRT0 reaches the post-BSS publication 
 - [x] Cross-check pinned BaseOS native SPL writes: firmware package at 0x42e00000; firmware extents include BL31 at 0x48000000, DTBO/DTB at 0x4a100000/0x4a200000 and A32 loader at 0x4a000000; BOL4 staging at 0x45000000; native record at 0x4a300000; final EL3 reset uses RVBAR=0x48000000.
 - [x] Cross-check the later A32 Linux-loader writes: entry stack 0x4a0f0000, translation table 0x4a0f8000..0x4a0fc000, kernel output 0x40080000..0x42000000 (max 0x01f80000), initrd 0x42000000, final FDT 0x44000000.
 - [x] Record that the audited pinned native SPL handoff path has no explicit destination in the proposed 0x40080000..0x42000000 application candidate; its subsequent A32 Linux-loader stage does use that candidate region, so a direct replacement BL33 must bypass that loader path.
-- [ ] Audit the exact paired vendor BL31 binary for its own scratch, secure-world, DMA and low-DRAM accesses. SPL source review alone does not prove BL31 leaves the candidate free.
-- [ ] Build a complete reviewed memory map for LK image/BSS/stack/heap/page tables, firmware handoff records, framebuffer/PIO, and the separate Linkslot+mGBA application footprint; verify secondary-core and cache/MMU behavior before any MEMBASE/MEMSIZE assignment.
+- [x] Match and statically triage the exact paired BL31 monitor payload. SHA-256 matches both the native firmware extent and TOC1 inventory; a control-flow-aware AArch64 scan decoded 1,849 reachable instructions and 268 address references (188 in the 107,216-byte payload, 80 beyond its file end in the adjacent runtime/page-table window). It recovered TTBR0_EL3=0x4803cb40, TCR_EL3 config source=0x4803c8e0 and per-core TPIDR_EL3 base=0x4803cd40. See [audit #45795120056](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45795120056) and the updated [memory ownership report](h700-bl33-memory-ownership.md).
+- [x] Decode BL31 EL3 translation-map calls: unconditional requests cover [0x48000000,0x48041000); a conditional request covers [0x48200000,0x4a000000) when the word at 0x48000018 is nonzero. Raw mapping attributes are not yet interpreted; the conditional value is not known from live runtime.
+- [ ] Complete BL31 runtime lifetime/ownership proof beyond static direct-control-flow references: conditional flag provenance, indirect calls/branches, exception returns, secure-world services, DMA, cache aliases, runtime scratch and secondary-core state. The static scan does not prove the candidate is free.
+- [ ] Build a complete reviewed memory map for LK image/BSS/stack/heap/page tables, firmware handoff records, framebuffer/PIO, SD/DMA reservations and the separate Linkslot+mGBA application footprint; verify secondary-core and cache/MMU behavior before any MEMBASE/MEMSIZE assignment.
 
-Safety boundary: 0x40080000..0x42000000 remains candidate-only. Do not set H700_MEMORY_LAYOUT_APPROVED, reuse the unknown 0x7ec00000..0x7fc00000 reservation, execute a payload, or write Boot0/TOC1/SD as part of this source trace.
+Safety boundary: 0x40080000..0x42000000 remains candidate-only. Keep the conservative BL31-associated envelope 0x48000000..0x4a000000 excluded pending ownership review; the 0x4a000000 endpoint is the native BL33 loader slot. Do not set H700_MEMORY_LAYOUT_APPROVED, reuse the unknown 0x7ec00000..0x7fc00000 reservation, execute a payload, or write Boot0/TOC1/SD as part of this source trace.
 
 
 ## 2026-11-26 Small LK BL33 payload into matched native SPL package
@@ -666,3 +668,14 @@ Safety boundary: 0x40080000..0x42000000 remains candidate-only. Do not set H700_
 - [ ] Produce a compact diagnostic payload with a deterministic proof-of-life signal, then build the matched native SPL/firmware/capsule locally. Keep the artifacts non-installable until the BL31 and memory/recovery gates are reviewed.
 
 Hard size boundary: this first integration path is only for a small diagnostic payload <= 32 KiB. The 5,148-byte CRT0/exception layout probe is not yet such a diagnostic because it has no approved visible signal and uses stubs. It does not make the complete LK or Linkslot/mGBA fit the loader extent.
+
+
+
+## 2026-11-26 Full Linkslot 1.0.49 H700 feasibility pass
+
+- [x] Latest full host-only feasibility workflow [#45795119939](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45795119939): 74/74 main steps passed; artifact uploaded (387,922,330 bytes).
+- [x] H700 physical DRAM provider is part of the actual H700 `OBJS` list; the full Make project guard parses the corrected rules; AArch64, AArch32 ARM-state and Thumb-2 object checks passed in [#45795119838](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45795119838). Host test reports 1 GiB capacity only; it does not approve use of all memory.
+- [x] GammaOS LK H700 CRT0/exception-vector overlay link; BaseOS native builder override apply/restore and header package regressions; no_std renderer/Linkslot frontend and input integrations; read-only sdc0 -> CMD17 -> GPT -> FAT32 -> Libretro VFS path and FAT/exFAT host regressions passed.
+- [x] Pinned mGBA AArch32 namespaced static archive, VFS v3 and bare-metal newlib builds; actual VDir adapter test; H700 newlib adapter; real mGBA exports bound to Rust static API and linked in the probe; final AArch32 LK-as-BL33 entry/vector layout probe passed.
+- [ ] This is still host/cross-compile/static-link feasibility, not a complete installable native firmware image, not a proof of SMP heap safety, and not a device boot. The 32 KiB diagnostic payload and deterministic visible proof-of-life signal remain unimplemented.
+- Build report: `linkslot-lk-rust-feasibility-45795119939`; preserve the linked report/artifact with the CI run. No device, SD, boot media or payload was accessed.
