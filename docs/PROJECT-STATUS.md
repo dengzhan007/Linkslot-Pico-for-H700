@@ -534,7 +534,7 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 
 - Anbernic [官方 RG34XX 产品规格](https://win.anbernic.com/product/517.html)仅公布 3.4-inch IPS OCA、720×480，没有 LCD 模组 part number、revision、native refresh 或 maximum pixel clock。
 - [Slot 上游 issue #147](https://github.com/BrandonKowalski/slot/issues/147) 中维护者解释，相关面板略低于 60 Hz，120-Hz tweak 是把 display driver 运行到 120 Hz；同一讨论后来因 stutter reports 和实现复杂度决定跳过该 hack。此为维护者/社区背景，不是针对本机模组的 datasheet 或电气验证。
-- 本机 live identity 为 `rg34xx_v1 + lcd_type=old`，与 pvaibhav writer 精确 gate 的 `fog_fj035fhd05_v1` 不同。不得改名、放宽 allowlist 或移植其 writer。
+- 本机 live identity 为 `rg34xx_v1 + lcd_type=old`，与 pvaibhav writer 精确 gate 的 `fog_fj035fhd05_v1` 不同。公开的 FOG FJ035FHD05 硬件实测资料对应的是 RG34XX-SP（compatible `anbernic,rg34xx-sp-panel`），不是本项目的非 SP RG34XX；不能把 SP 面板型号迁移到本机。不得改名、放宽 allowlist 或移植其 writer。
 
 **当前唯一有意义的下一步：**查明测试机实际 LCD 模组供应商、完整料号及 revision，并取得同一 revision 的 datasheet 或厂商确认，确认 pixel-clock、HT/VT、porches、refresh/overclock 限值。若无法获得可追溯的模组身份与规格，则保持 60 Hz 作为唯一已资格化的模式。之后才可能定义 120-Hz profile 与 VBlank/TE、buffer/cache、clock/TCON、readback、timeout、rollback 的硬件验证计划。
 
