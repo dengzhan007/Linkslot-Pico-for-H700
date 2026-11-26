@@ -109,6 +109,9 @@ def main() -> int:
     assert "LOADER_EXTENT_BYTES = 0x8000" in patched
     assert "blob.extend(bytes(0x8000 - len(blob)))" in patched
     assert "'loader_extent_preserved': len(blob) == 0x8000" in patched
+    assert patched.index("assert bool(match) == kernel_probes") < patched.index(
+        'native-loader-template.elf'
+    )
     assert patched.index("inputs.append(lk_bl33_override_path)") < patched.index(
         'source_boot0 = (inventory / "boot0.bin").read_bytes()'
     )
