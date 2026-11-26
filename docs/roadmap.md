@@ -565,3 +565,34 @@ Linux GPIO driver readback is now device-executed and repeatable for this one-at
 - [x] Independently parse the complete 2,982,090-byte sample file: 1,200 sample blocks, 34 single-line transition points, no sample with multiple GPIO changes, and no unexpected non-key GPIO transitions.
 - [ ] Once a target LK image exists and the memory/boot safety gates are approved, create a separately gated and reversible LK diagnostic using the existing PIO Device mapping and `h700_rg34xx_input_scan_once()`; keep it outside normal boot/runtime. This is required to verify direct LK MMIO, not to re-prove Linux GPIO behavior.
 - [ ] Do not retry `/dev/mem` with other offsets, use `/dev/kmem`, `sunxi_dump`, GPIO sysfs export, a custom kernel module or pinctrl debug write. No pinmux/pull/drive/EINT/GIC changes are authorized by this readback task.
+
+
+## 2026-11-26 Pinned LK scheduler timer source audit
+
+A direct audit of the immutable GammaOS LK pin
+`9bf1419a49e0af6dba8b05916df382c9c9c6d0a8` found a prerequisite earlier
+than the Linkslot runtime bootstrap:
+
+- `kernel/main.c` initializes heap, threads and DPC, then calls
+  `timer_init()`; only afterward does its bootstrap thread call
+  `platform_init()`, `target_init()` and `apps_init()`.
+- `kernel/timer.c::timer_init()` unconditionally registers a periodic
+  `platform_set_periodic_timer()` callback (10 ms on the ordinary build).
+  Software timer scheduling reads `current_time()`.
+- The existing H700 Generic Timer component is a read-only ABI service only.
+  It is not wired to LK's platform timer contract and does not provide the
+  scheduler tick. The MT6785 GPT5 timer implementation is explicitly not
+  portable to H700.
+- The heap readiness bridge is later in the lifecycle (`target_init()`),
+  so it cannot gate the timer initialization point.
+- This is not a successful LK target link: the memory ownership approval
+  gate remains closed and no boot image/device execution has occurred.
+
+**Next required work:** qualify the BL31→BL33 architected-counter access and
+GICv2/timer-PPI handoff from actual RG34XX evidence. Only then implement
+the H700 LK `current_time()`, periodic-timer and delay platform hooks. Do
+not add a no-op timer, guess a PPI, or configure timer/GIC registers before
+the handoff is understood. In parallel, the RG34XX PA_DAT/PE_DAT scanner
+remains a separately gated, read-only LK diagnostic and is not part of the
+normal input loop yet.
+
