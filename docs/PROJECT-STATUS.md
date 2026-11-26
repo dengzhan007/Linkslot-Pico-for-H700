@@ -7,6 +7,14 @@
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
 
+**2026-11-26 RG34XX live-FDT 输入映射与逻辑边沿层：**
+
+- reports 分支提交 `3de7f40d2d9f` 上传脱敏实机 live-FDT `input_devices`。该 FDT 为 143,936 B / 573 nodes；`/soc@03000000/gpio_keys`（`gpio-keys-polled`）状态 `okay`，17 个子节点全部 `okay`，声明 `poll-interval=20 ms`。17 个按键均解析到 `allwinner,sun50iw9p1-pinctrl` phandle `0x4b`、PIO base `0x0300b000`；声明 mux=0、pull=1、drive=2、active-low。
+- 固定版本 sunxi 内核头文件确认 pull=1 是弱上拉；上传报告文字中的“unpulled”需要更正。GPADC 与 `keyboard_1350mv` 节点禁用；AXP2101-PEK powerkey 为 `okay`，且独立于 17 个游戏按键。FDT 不证明 Linux driver binding、实际电平或物理按键事件。
+- 新增 `h700_rg34xx_input_map.c/.h`：用 17 键实机映射把调用者提供的 PIO bank A/E 电平快照转换成逻辑 press/release edges，送入既有 bounded input queue。纯软件，不含 MMIO、GPIO claim、pinmux/pull 写入、debounce、timer 或 EINT/GIC。
+- Host regression 本地通过；AArch64、AArch32 ARM-state、Thumb-2 freestanding 编译通过。CI 待本次提交触发后记录。尚未接通硬件采样；下一门槛仍是 `/proc/bus/input/devices` / `getevent -lp`、已存在 pinmux/pinconf readback 和物理逐键测试。
+
+
 **2026-11-26 LK heap readiness 衔接更新（代码提交 `aca39f29c560`；三条关联 CI 工作流全部通过）：**
 
 - 固定 GammaOS LK 9bf1419a49e0af6dba8b05916df382c9c9c6d0a8 的正常启动顺序为 target_early_init → heap_init → thread/DPC/timer → platform_init → target_init → apps_init；heap_get_info() 的 free-list 遍历受 LK critical section 保护。

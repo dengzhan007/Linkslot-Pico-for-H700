@@ -506,3 +506,15 @@ Required next evidence: re-run the existing read-only inventory on the target,
 then compare active `input_devices`, `/proc/bus/input/devices`, and any
 already-exported pinmux/pinconf state. Do not write PIO mux/pull registers,
 request GPIO lines, or add EINT/IRQ handling before that comparison closes.
+
+
+## 2026-11-26 RG34XX 输入设备 live-FDT 闭合与软件边沿转换层
+
+- [x] 从目标机活动 live FDT 确认 `gpio-keys-polled` 父节点及 17 个按键子节点均为 `okay`，声明轮询周期 20 ms；所有键映射到主 PIO A/E bank，六 cell GPIO tuple 的 mux/pull/drive/active-low 已按 pinned Allwinner provider 解码。
+- [x] 核对 pull enum：`pull=1` 是弱上拉，不是无上下拉；GPADC 和 ADC keyboard 禁用；AXP2101-PEK power key 独立。
+- [x] 建立只接收 PIO A/E 电平快照的纯软件 map/edge 转换器，向既有 bounded input queue 产生逻辑 press/release edges，不实现 GPIO 寄存器读写或硬件扫描。
+- [x] Host regression 通过；AArch64、AArch32 ARM-state、Thumb-2 编译通过。
+- [ ] 实机捕获 `/proc/bus/input/devices`、`getevent -lp` 和已经导出的 pinmux/pinconf 状态；逐键验证输入事件与硬件电平。不可为此挂载 debugfs 或改变 pin 配置。
+- [ ] 上述证据闭合后，另行实现只读 PIO bank sampling + 明确 debounce/20ms scheduling；暂不增加 EINT/GIC。
+
+当前安全边界：FDT 已确认映射；逻辑边沿层已实现；**硬件采样仍未实现**。禁止把静态 FDT 的 pull/mux 声明当作已完成的 pin ownership/readback 验证。

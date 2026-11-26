@@ -139,7 +139,7 @@ Runtime services must be explicit interfaces, not hidden std assumptions:
 | Time | Monotonic tick counter and bounded delay; no `Instant` or wall-clock dependency in the frame loop. |
 | Work scheduling | Single-core cooperative jobs/steps initially; no `std::thread`, mpsc or condvar emulation. |
 | Storage | H700 SD/FAT VFS for ROM/core reads. Add save/state writes only after flush, atomic replace, directory update and power-loss consistency are proven. |
-| Input | C H700 Input Service v1 provides ordered logical edges from the bounded C queue; Rust `H700InputSource::drain_into()` maps them into Linkslot `RawEvent`, and `H700GestureInput` invokes upstream `Gestures` through `feed_into()`/`tick_into()` with a one-time preallocated 72-action buffer. No per-poll temporary action Vec is created; the GPIO/ADC scanner and hardware producer remain pending. |
+| Input | The 17-key RG34XX active-live-FDT map and pure Port A/E snapshot-to-edge adapter feed the bounded C Input Service queue. Rust `H700InputSource` / `H700GestureInput` retain logical event mapping and gesture ownership. The adapter performs no MMIO, GPIO request, pin configuration, debounce, timing or IRQ setup; actual PIO sampling remains blocked on runtime driver-binding and pin-state evidence. |
 | Display | Renderer-independent framebuffer descriptor and cache/scanout handoff; no `/dev/fb0`, EGL or dynamic loading. |
 | Audio | PCM producer interface with measured rate, format and bounded buffering; no ALSA/CPAL. |
 | Power | Explicit battery/charger/backlight/LED/poweroff service; no sysfs or shell execution. |

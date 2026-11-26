@@ -23,6 +23,7 @@ OBJS += \
 	$(LOCAL_DIR)/power/h700_rg34xx_power_led.o \
 	$(LOCAL_DIR)/runtime/lk_heap_service.o \
 	$(LOCAL_DIR)/runtime/h700_arch_timer.o \
+	$(LOCAL_DIR)/runtime/h700_rg34xx_input_map.o \
 	$(LOCAL_DIR)/display/h700_display_refresh_policy.o \
 	$(LOCAL_DIR)/arch/h700_pio_mmu_mapping.o
 
