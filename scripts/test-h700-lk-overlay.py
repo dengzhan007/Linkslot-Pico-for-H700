@@ -171,15 +171,28 @@ def main() -> None:
     if entry_match is None:
         raise RuntimeError("BL33 entry wrapper is missing")
     entry_body = entry_match.group("body")
-    capture_ops = ("mrs r11, cpsr", "mov r8, sp", "mov r9, lr", "mov r10, r4")
+    capture_ops = ("mrs r5, cpsr", "mov r6, sp", "mov r7, lr")
     capture_positions = [entry_body.find(op) for op in capture_ops]
     vbar_position = entry_body.find("mcr p15, 0, r0, c12, c0, 0")
     if min(capture_positions) < 0 or capture_positions != sorted(capture_positions):
         raise RuntimeError("entry SP/LR/r4/CPSR must be captured in order at BL33 entry")
     if vbar_position < 0 or capture_positions[-1] > vbar_position:
         raise RuntimeError("entry register capture must precede the VBAR write")
-    if "stmia r0, {r8-r11}" not in crt0_text or "str r1, [r0, #16]" not in crt0_text:
-        raise RuntimeError("CRT0 does not publish the four entry registers and publish-last magic")
+    publish_ops = (
+        "str r6, [r0, #0]",
+        "str r7, [r0, #4]",
+        "str r4, [r0, #8]",
+        "str r5, [r0, #12]",
+        "str r1, [r0, #16]",
+    )
+    if not all(op in crt0_text for op in publish_ops):
+        raise RuntimeError("CRT0 must publish the four unbanked entry values and write magic last")
+    if "ldr     r0, =BOOT_ARGUMENT_LOCATION" not in crt0_text or "str     r4, [r0]" not in crt0_text:
+        raise RuntimeError("CRT0 must preserve the original r4 boot-argument handoff without clobbering snapshot r6")
+    if "ldr r0, =_binary_tzbsp_tzbsp_bin_start" not in crt0_text:
+        raise RuntimeError("optional TrustZone reference must not clobber snapshot r7")
+    if re.search(r"\\b(?:r8|r9|r10|r11)\\b", entry_body):
+        raise RuntimeError("entry snapshot must use unbanked r4-r7, not FIQ-banked r8-r11")
     clear_loop = re.search(r"blt\s+\.L__bss_loop", crt0_text)
     publish_pos = crt0_text.find("ldr r0, =h700_bl33_entry_snapshot")
     kmain_match = re.search(r"\bbl\s+kmain\b", crt0_text)
