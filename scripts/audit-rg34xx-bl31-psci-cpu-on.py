@@ -76,6 +76,7 @@ DISASSEMBLY_WINDOWS = (
     ("psci_dispatch_cpu_on_secondary", 0x48008690, 0x80),
     ("psci_dispatch_smc_range", 0x48007f00, 0x900),
     ("psci_suspend_dispatch_tail", 0x480087f4, 0x500),
+    ("psci_post_suspend_dispatch_and_helpers", 0x48008cf0, 0x10d0),
     ("psci_platform_registration", 0x48009dc0, 0x80),
     ("power_system_off_helper", 0x48001ec8, 0x60),
     ("power_cpu_off_helper", 0x48001ed8, 0x60),
