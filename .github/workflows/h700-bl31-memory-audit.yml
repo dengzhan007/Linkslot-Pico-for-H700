@@ -86,6 +86,7 @@ jobs:
         run: |
           python3 scripts/audit-rg34xx-bl31-psci-cpu-on.py \
             --monitor .ci/reports/reports/rg34xx-inventory-20261126-timer/toc1-extracted/items/monitor.bin \
+            --baseos-root .ci/baseos-native \
             --out build/rg34xx-bl31-static-audit/psci-cpu-on-report.json
 
       - name: Publish audit report
