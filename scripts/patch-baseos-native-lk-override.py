@@ -129,8 +129,11 @@ def patch_source(source: str) -> str:
     blob_patch = (
         blob_anchor
         + '    if lk_bl33_override_data is not None:\n'
-        '        # The replacement is a raw, header-free LK image; the existing\n'
-        '        # verified native header is copied below from the paired TOC item.\n'
+        '        # The ELF/map above describe the discarded native loader template, not this LK raw image.\n'
+        '        (output / "loader.elf").replace(output / "native-loader-template.elf")\n'
+        '        (output / "loader.map").replace(output / "native-loader-template.map")\n'
+        '        (output / "lk-bl33-override.raw").write_bytes(lk_bl33_override_data)\n'
+        '        # The existing verified native header is copied below from the paired TOC item.\n'
         '        blob = bytearray(lk_bl33_override_data)\n'
     )
     replace_once(blob_anchor, blob_patch, "loader blob selection")
@@ -166,6 +169,9 @@ def patch_source(source: str) -> str:
         "            'raw_sha256': sha(lk_bl33_override_data),\n"
         "            'loader_extent_bytes': len(blob),\n"
         "            'loader_extent_preserved': len(blob) == 0x8000,\n"
+        "            'native_loader_template_elf': 'native-loader-template.elf',\n"
+        "            'native_loader_template_map': 'native-loader-template.map',\n"
+        "            'loader_elf_matches_loader_bin': False,\n"
         "            'device_execution_verified': False,\n"
         "        }\n"
         "    if persistent or raw_capsule:\n"
