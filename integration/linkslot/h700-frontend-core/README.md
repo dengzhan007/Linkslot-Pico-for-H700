@@ -125,9 +125,14 @@ The keyboard router contributes seven tests for focus entry/exit, candidate page
 - `QuickMenu`, `SearchResults` and `SearchKeyboard` owners dispatch to their respective typed routers.
 - `Other` delegates the action back to the existing App handler.
 
-The caller must resolve App::apply overlay/modal priority first (power menu, upgrade, intro, sync, search/keyboard/popup/utility and other modal owners) and supply the already-active input owner. The dispatcher does not scan App state, reorder overlays, mutate the upstream App, or execute any returned side effect. It is the adapter seam for the next source-integration step, not yet a patched App::apply implementation.
+The pure dispatcher expects App to resolve its owner and modal priority. The isolated source overlay now wires it into the actual Linkslot 1.0.49 App::apply() at priority-safe points: power/upgrade/intro/sync and search/keyboard/popup/utility/game-menu handlers remain first; Shelf CorePicker remains a hard gate. The adapter maps typed commands back to existing App methods and preserves App ownership of query, Pinyin state, SearchHit, settings and side effects. This patch is applied only to the snapshot-pinned CI checkout; upstream/linkslot remains immutable. The integration static guard and complete Frontend build passed in runtime-slices #45745328247 and full feasibility #45746788491.
 
-Four tests cover Shelf-vs-Playing MENU, Shelf search open, active QuickMenu row dispatch, SearchResults/Keyboard ownership and delegation to other overlays. The app-router now has **23 tests** across its three pure routers and phase-aware dispatcher.
+Four tests cover Shelf-vs-Playing MENU, Shelf search open, active QuickMenu row dispatch, SearchResults/Keyboard ownership and delegation to other overlays. The app-router has **23 tests** across its three pure routers and phase-aware dispatcher. The source overlay is guarded by scripts/test-linkslot-app-router-integration.py.
 
 
 The C-owned H700 read-only VFS provider is host-tested for 16 independent file handles and 8 directory handles, including exhaustion and stale-handle rejection. The static-core lifecycle test installs a complete fake VFS backend before opening built-in mGBA and asserts that mGBA successfully negotiates VFS v3 from retro_init(). Neither test is device-side execution; ROM/save writes remain disabled.
+
+
+### H700 runtime service bootstrap
+
+H700RuntimeServicesV1 (ABI v1) groups the C-owned monotonic time, input-drain and VFS-install service tables. H700RuntimeSession::bootstrap() validates descriptor versions/sizes and callback presence, constructs the bounded event loop, installs VFS, and only then calls the supplied static-core opener. The generic session owns a core RAII handle; an open error leaves the process-lifetime VFS backend installed, so the VFS installer must be idempotent. The heap must already be initialized and qualified before bootstrap. Five new lifecycle/error tests plus the workspace tests passed; C _Static_assert probes validate aggregate descriptor offsets/sizes on AArch32 and AArch64. Runtime-slices #45748496564 and full feasibility #45748496582 succeeded. The concrete LK timer, GPIO/ADC scanner, heap provider and live main-loop/core binding are not implemented yet; this is not a device runtime.

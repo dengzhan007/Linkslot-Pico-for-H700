@@ -708,3 +708,29 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 
 
 产物：[Linkslot LK feasibility artifacts #45746788491](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45746788491/artifacts/15083782750)（约 387.9 MB，SHA-256 `fe734e1cd1e04ab993b73efa6c96cdeccba5d3b861d7f9b2689dfdcafc089c88`，保留至 2026-12-26）。
+
+## 26. H700 runtime service descriptor 与有序启动协调器（2026-11-26）
+
+在第23–25节的 App phase routing、只读 VFS 多句柄和 mGBA VFS-before-retro_init() 验证基础上，新增 slot-lk-runtime 的第一阶段 startup coordinator：
+
+- 新增 C ABI h700_vfs_service_v1_t 与聚合 h700_runtime_services_v1_t（ABI version 1），分别描述 VFS installer 与 time/input/VFS 三张 service table；Rust 对应 H700VfsServiceV1 / H700RuntimeServicesV1。
+- 新增 H700RuntimeSession::bootstrap()，顺序固定为：验证聚合 descriptor 与 VFS 版本/size/callback → 构造并验证 time/input event loop → 调用 VFS install callback → 最后调用 open_static_core closure。VFS install 失败时绝不调用 core opener；time/input validation 失败时不会产生 VFS install 副作用。
+- H700RuntimeSession 持有 event loop 与 core handle；实际 core handle 必须提供 RAII deinit/drop 语义。测试覆盖 VFS install 顺序、install fail-closed、time/input invalid、aggregate/VFS ABI version/size invalid、missing installer、core open error，以及 session drop 触发 core handle teardown。
+- VFS installer callback 契约要求幂等：如果同一进程级 backend 已经安装，应返回 true；底层 VFS registry 是 process-lifetime、不可随单个 core teardown 卸载。Core open 失败后 VFS 仍保持安装，opener 必须清理任何部分初始化的 core。
+- 新增 platform/h700/runtime/vfs_service.h 与 runtime_services.h；扩展 scripts/test-h700-input-service-abi.py，用 C _Static_assert 在 AArch32/AArch64 交叉目标核对 time/input/VFS/aggregate descriptor 的大小和字段偏移。
+- H700EventLoop::new() 会分配有界 gesture action buffer，因此 caller 必须先完成 LK heap 初始化和资格化；本 coordinator 不初始化 heap，不实现 timer/GPIO/input scanner，也不执行 MMIO。
+- 当前 time_service.h、input_service.h 是注入接口；input_queue.c 仍明确是 single-context、非 ISR-safe。lk_bindings.c 所需 platform heap/secondary CPU/console/RTC/fatal callbacks 仍为外部实现，不得用猜测的 LK symbol/MMIO 填充。
+
+提交：
+- Runtime descriptor/bootstrap、C headers、ABI probes、workflow path filters：9c771f6f84d972b8d3c93f3c3997404c2c559779
+- 修正 Rust 泛型测试推断和 C -Werror unused helper：ae3b1f4183159f497f0844e2541cbdb614c1b333
+
+验证：
+- [H700 Linkslot 1.0.49 runtime slices #45748496564](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45748496564) **success**。C input/runtime service ABI + queue job 与 15-member no_std workspace、default/no-default 测试、AArch32/AArch64 no-default checks、完整 H700 SoftwareCompositor Frontend build、QuickRow fail-closed regression 全部通过。
+- [Linkslot LK Rust feasibility #45748496582](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45748496582) **success**，完整 job 75/75 steps 成功、零失败。包括 H700 BL33/renderer/frontend、15-member workspace、CMD17/GPT/FAT32/只读 VFS、VFS-before-mGBA retro_init() host test、mGBA VFS v3/newlib 构建、真实 AArch32 static archive 经 Linkslot Rust static API 表链接、AArch32 LK-as-BL33 layout probe 与 artifact upload。
+
+产物：[Linkslot LK feasibility artifacts #45748496582](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45748496582/artifacts/15084841735)（约 387.9 MB，SHA-256 2f1e9a94e1e291df1d5a162e7afcc8af6080ed9583f7521ba9c45aa89cf88816，保留至 2026-12-26）。
+
+当前结论：**runtime bootstrap 的 C/Rust ABI、验证顺序和失败边界已通过 host/cross-build；它仍是 generic coordinator，不是完整 LK 启动实现。** 还没有实际 H700 monotonic timer、GPIO/ADC scanner、LK heap provider、display/scanout、PCM provider 或可运行 slot::App 的 LK main-loop binding；没有执行游戏 ROM、没有真实 SD/MMC 访问、没有存档写回，也没有 Boot0/TOC1/SD 写卡。
+
+下一步先从 pinned GammaOS LK 源码确认真实 monotonic timer、GPIO/ADC 输入与 heap 生命周期 API，再逐项建立 C-owned platform providers 和 target host-independent tests；只有服务证据、内存 arena/stack/BSS 预算和 secondary-core fail-closed gate 齐备后，才把 coordinator 接到 LK main。持续保持 VFS read-only。
