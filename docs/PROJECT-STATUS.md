@@ -2,7 +2,7 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-26。最新完整 Linkslot/LK feasibility [#45779682226](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45779682226) 在 FIQ-safe 代码快照 aa05e7b 上 **76/76 steps 成功**，产物 [15098435220](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45779682226/artifacts/15098435220)（387,919,929 bytes）；H700 AArch64/AArch32 ARM-state/Thumb-2 编译及 host 回归 [#45779682341](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45779682341) 成功。最新 boot-audit [#45784227502](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45784227502) 在文档 HEAD e11d2a3 上 Linux 6/6、Windows 8/8 成功。当前完整 feasibility 重跑 [#45781737955](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45781737955) 已完成 **76/76 steps 成功**，产物 [15098903958](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45781737955/artifacts/15098903958)（387,914,128 bytes）。上述均为 host/cross-build 与 source-contract 验证，不是完整 LK target link 或设备启动。reports 分支包含脱敏 live FDT、GICv2/VGIC 与 architected timer PPI 映射；真实 BL31→LK 权限/中断归属尚未证明。当前 A32 BL33 入口状态仍以 SVC / SPSR 0x1d3 作为待实机验证模型，Linux 后续 A64 handoff 的 0x3c5 不适用。
+**最后核对时间：** 2026-11-26。最新完整 Linkslot/LK feasibility [#45818800407](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45818800407) 在提交 07e8d311db968f8d5f21a905ea95019e3cdae36d 上 **81/81 steps 成功**，产物 [15117007215](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45818800407/artifacts/15117007215)（387,928,432 bytes）；H700 boot-audit tools [#45818897361](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45818897361) 在提交 fbab663dc305015a0de981491de677c228f63a05 上通过。以上是 host/cross-build、静态审计和工具回归，不代表完整可刷写 LK 镜像或设备启动。reports 分支已有脱敏 live FDT、GICv2/VGIC 与 architected timer PPI 映射；真实 BL31→LK 权限/中断归属仍未证明。当前 A32 BL33 入口仍以 SVC / SPSR 0x1d3 作为待实机验证模型，Linux 后续 A64 handoff 的 0x3c5 不适用。
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
@@ -1035,19 +1035,43 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
   [#45817598323](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45817598323)
   verifies the differing SPL/BL31 rules and reports matching low3 values
   [0, 2] versus mismatching [1, 3, 4, 5, 6, 7]. It does not read the target.
-- Added a single-register device collector
-  `scripts/read-h700-rvbar-selector-readonly.py`, with host regression.
-  It reads only `0x03000024` via `/dev/mem O_RDONLY`, prints only
-  `VER_REG & 7`, and reports whether the two code paths agree. No raw word
-  is emitted and no MMIO write is performed. The physical device sample
-  remains outstanding.
+- Added the single-register read-only collector
+  `scripts/read-h700-rvbar-selector-readonly.py` and host regression. It
+  reads only `0x03000024` using `/dev/mem O_RDONLY`, emits only
+  `VER_REG & 7`, and performs no MMIO writes. Host tests cover all eight
+  selector values; [#45818695832](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45818695832)
+  passed.
+- **Device attempt completed but produced no selector value** (reports
+  commit `8c084fc21ca29b9afa341adca944c7d553417e29`):
+  [raw report](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-rvbar-selector-20261126).
+  On Linux `4.9.170 #19`, the shell was root. The system had no
+  `python3` on PATH, so the bundled CPython 3.12.16 was used; the script
+  reached its read path and `os.pread(/dev/mem, 4, 0x03000024)` returned
+  `EFAULT` (exit 2, stdout 0 bytes). Independent `dd` at the same offset
+  returned the same error. The earlier PIO probe shows the same
+  offset-independent failure at offset 0, one byte, and a full page.
+  `CONFIG_DEVMEM=y`, `CONFIG_STRICT_DEVMEM` unset: the usual strict-devmem
+  permission rejection is not the cause.
+- The probe therefore establishes **no selector value**; it is not evidence
+  for low3=0, nor any other value. Do not retry `/dev/mem` with alternate
+  userspace tools. No module was loaded, no debugfs mount or boot-argument
+  change was made, and no register/boot-media write occurred
+  (`hardware_applied=0`). Debugfs had no SYS_CFG register-dump node and
+  `debugfs/regmap` exposed only four unrelated devices.
+- Next path: inspect a supported kernel-side mapping/read interface for
+  SYS_CFG, or add a narrowly scoped read-only early-boot/BL33 diagnostic
+  capture after reviewing its source and recovery path. A Linux-runtime
+  VER_REG read may settle the static bank selector; only a pre-BL33 capture
+  can establish CPU reset/RVBAR state at handoff. Do not change the SPL or
+  BL31 selector rule until a valid target value and H700 semantics are
+  established.
 - Updated detailed report:
   [h700-a53-single-core-startup-audit.md](h700-a53-single-core-startup-audit.md).
   CI artifact 15114838248 contains the exact PSCI CPU_ON report and
   disassembly/audit output.
 
 
-### Latest full feasibility result
+### Historical full feasibility result (74-step baseline)
 
 <badge color="success">74/74 steps passed</badge>
 

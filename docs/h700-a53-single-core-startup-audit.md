@@ -262,3 +262,44 @@ Do not enable SMP, assign `MEMBASE/MEMSIZE`, set
 payload until the live handoff state and recovery path have been reviewed.
 No hardware MMIO read/write, boot-media write, flash, or payload execution
 was performed during this audit.
+
+
+## Runtime selector probe result — /dev/mem is unusable on this kernel (2026-11-26)
+
+The read-only collector was run on the connected RG34XX and reached the
+actual register-read operation, but **no selector value was obtained**.
+
+- Report commit:
+  `8c084fc21ca29b9afa341adca944c7d553417e29`; report folder:
+  [reports/rg34xx-rvbar-selector-20261126](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-rvbar-selector-20261126).
+- Target: Linux `4.9.170 #19`, shell identity `uid=0(root)`. The image has
+  no system `python3` in PATH, so the portable CPython 3.12.16 bundled with
+  the LEI-V4 frontend was used. The script copy matched the host MD5
+  `2739be359c087d9bae318dc461bf2d73`.
+- One read was attempted: `os.pread(fd, 4, 0x03000024)` on an
+  `O_RDONLY` `/dev/mem` descriptor. It returned `[Errno 14] Bad address`,
+  exit 2, and zero stdout bytes. A separate `dd` of the same address
+  returned the same EFAULT.
+- The earlier PIO capture probe independently found the same
+  offset-independent failure at offset 0, a single byte, and a full page
+  of low RAM. `CONFIG_DEVMEM=y`; `CONFIG_STRICT_DEVMEM` is not set.
+  Therefore this is not a selector-address-specific failure or a Python
+  `pread` incompatibility, and the common strict-devmem `EPERM` gate is
+  not the explanation.
+- The device report found no SYS_CFG register node in the available
+  debugfs register views: no sunxi register-dump node, and
+  `debugfs/regmap` lists only four unrelated devices. No debugfs mount,
+  module load, boot-argument modification, kernel-protection weakening,
+  MMIO write or boot-media write was attempted.
+
+**Interpretation:** the target's `VER_REG[2:0]` remains unknown. The failure
+must not be converted into a guessed value or inferred from H616-family
+references. Stop all userspace `/dev/mem` retries on this kernel. A future
+runtime sample requires a reviewed kernel-side mapping/read interface for
+SYS_CFG; a pre-BL33 instrumented capture is additionally required to prove
+the CPU reset/RVBAR state at initial handoff. Neither path has been built or
+run. The SPL/BL31 selector mismatch is still open, and no selector code
+change is justified.
+
+`hardware_applied=0`; the matched diagnostic BL33 has not been executed or
+flashed, and SMP remains disabled.

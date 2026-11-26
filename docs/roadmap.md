@@ -754,3 +754,21 @@ Hard size boundary: this first integration path is only for a small diagnostic p
   pre-BL33 read-only register snapshot or equivalent reviewed reset-hold proof
   demonstrates CPU1-3 remain held off throughout LK execution.
 
+
+
+### 2026-11-26 — RVBAR selector device-probe result
+
+- [x] Attempt the bounded read-only VER_REG[2:0] collector on the RG34XX.
+  It ran as root under the bundled CPython 3.12.16, but /dev/mem read
+  0x03000024 returned EFAULT; independent dd reproduced it. The earlier PIO
+  probe confirms this kernel's userspace /dev/mem read path fails at
+  unrelated offsets too. No JSON or selector value was produced. Raw report:
+  [reports/rg34xx-rvbar-selector-20261126](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-rvbar-selector-20261126).
+- [x] Mark userspace /dev/mem as a blocked method for this kernel; do not
+  retry with devmem, dd, mmap or another wrapper. No register write, module
+  load, debugfs mount or boot-argument change was made.
+- [ ] Establish a supported kernel-side read path for SYS_CFG, or prepare a
+  reviewed read-only early-boot capture. A runtime VER_REG sample can settle
+  the selector choice; a pre-BL33 capture is separately required for CPU
+  reset/RVBAR handoff state. Keep the selector mismatch unresolved and keep
+  the single-core/SMP gate closed until evidence is valid.
