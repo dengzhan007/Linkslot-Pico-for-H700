@@ -2,7 +2,7 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-26。运行时代码基线仍为 `3ce6bb3456f0c3f0f70dcdce92e827c8fac6cc4f`；`afbf940` 修复了 pinned LK timer audit 的函数原型识别，`da9e4b3` 扩展 FDT 中断控制器/计时器提取与回归测试，均未改动 H700 硬件运行时代码。完整 feasibility [#45770536064](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45770536064) 在 `dc9e6ca` 上 75/75 成功，artifact [15093872709](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45770536064/artifacts/15093872709)。最新 pinned LK early GIC/timer audit 步骤已在 #45771633645 的修复版复跑中通过；完整流程当时仍在运行，未计作通过。最新 FDT host-tools [#45772025184](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45772025184) Linux 6/6、Windows 8/8 通过；freestanding compile/storage regression [#45772025265](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45772025265) AArch64/AArch32 ARM/Thumb-2 8/8、storage 5/5 通过。以上均为 host/cross-build 验证，不是完整 LK target link 或实机启动。
+**最后核对时间：** 2026-11-26。最新完整 Linkslot/LK feasibility [#45772318214](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45772318214) 在 8e7f8db14eb7e4ef9fe68a50d9c96448c1ffc903 上 **76/76 steps 成功**，产物 [15094443997](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45772318214/artifacts/15094443997)（387,918,081 bytes）；同一 HEAD 的 H700 boot-audit [#45772318217](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45772318217) Linux 6/6、Windows 8/8 通过。新增 LK early GIC/timer source audit 包含在 76/76 中。此轮仍是 host/cross-build 与源码契约验证，不是完整 LK target link 或实机启动。reports 分支已上传 reports/rg34xx-inventory-20261126-timer/ 原始 live FDT（脱敏后 SHA-256 620b36d84fb7e714dcb56891f50802048d83c64ca924222a4a566f340ac7242e）及解析 JSON；主 GICv2/VGIC 和 architected timer PPI 已完成静态映射，运行态 BL31→LK 权限/中断归属仍未验证。
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
@@ -803,3 +803,27 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 - reports 分支的 `reports/rg34xx-inventory-20261125-163152/` 只保留旧 `live-fdt.json` 摘要，没有原始 `live-fdt.dtb`；旧 JSON 无法补回未导出的 interrupt-controller 节点。本次 parser 尚未在新的设备原始 FDT 上运行。
 - **下一步：** 用更新后的 `scripts/run-rg34xx-inventory.ps1` 对 RG34XX 做一次完整只读采集（从 `/sys/firmware/fdt` 捕获 raw DTB），将新的 `live-fdt.dtb` 和 `live-fdt.json` 上传 reports 分支；随后基于真实 compatible/reg/#interrupt-cells/timer declarations 核对 GIC 类型与资源窗口。仍需独立证明 BL31→BL33 counter access 与 timer PPI ownership；Linux IRQ 27 不能代替该证据。
 
+
+## 2026-11-26 RG34XX live GICv2 / architected timer mapping
+
+报告目录：reports/rg34xx-inventory-20261126-timer/。本轮完整只读采集包含 live-fdt.dtb（143,936 bytes）与 live-fdt.json（573 nodes）。SoC compatible 为 allwinner,h616 + arm,sun50iw9p1。原始 DTB 在发布前只对 chosen bootargs 的两处设备序列号作等长 19-byte 替换；解析结构与所有其他属性保持不变。发布 DTB SHA-256：620b36d84fb7e714dcb56891f50802048d83c64ca924222a4a566f340ac7242e。详见 REDACTION.md 和 SHA256SUMS.txt。
+
+**主中断控制器（设备树静态事实）**
+- /interrupt-controller@03020000：compatible arm,cortex-a15-gic + arm,cortex-a9-gic，status okay，phandle 0x8e，#interrupt-cells=3。
+- 四个 reg 区域按 ARM GIC v1/v2 binding 顺序为 GICD 0x03021000/0x1000、GICC 0x03022000/0x2000、GICH 0x03024000/0x2000、GICV 0x03026000/0x2000。它们全部位于现有 H700 Device-memory mapping [0x03000000,0x03100000) 内；页表覆盖不等于安全访问权或中断 group ownership。
+- GIC 节点 interrupts=<1 9 0xf04> 指向 PPI relative 9 / GIC INTID 25，为 VGIC maintenance interrupt 声明，不是 scheduler tick。
+
+**Architected Timer PPI 映射**
+- /timer_arch compatible arm,armv8-timer，interrupt-parent 指向主 GIC。四个原始 specifier 为 <1 13 0xf08>、<1 14 0xf08>、<1 11 0xf08>、<1 10 0xf08>。
+- 按 Linux architected-timer binding 顺序分别为 EL1 Secure physical / EL1 Non-secure physical / EL1 Virtual / EL2 physical；GIC INTID 分别 29 / 30 / 27 / 26。0xf08 的 CPU mask 是 0xF（CPU0–CPU3），flags 0x8 表示 active-low level-sensitive。
+- Linux /proc/interrupts 的 GIC-0 27 Level arch_timer 在四个 CPU 均有计数（65554 / 21050 / 28197 / 8522），与 EL1 Virtual Timer PPI 11 → GIC INTID 27 对应。这证明 Linux 运行态路径，不证明未来 LK BL33 的 PPI ownership。
+- 独立 Allwinner timer 节点 /soc@03000000/timer@03009000：compatible allwinner,sun4i-a10-timer，reg 0x03009000/0x400，父中断控制器 allwinner,sunxi-wakeupgen，specifier <0 48 4>；Linux /proc/interrupts 对应 wakeupgen 48 Level sun4i_timer0。不要与 architected GIC timer 混淆。
+
+**被替代的旧结论与下一道门槛**
+- 本节替代前文“原始 live DTB 未上传、GIC compatible/reg/PPI 尚无法确认”的旧结论。现在硬件身份、寄存器窗口、PPI 声明已由 live FDT 闭合；BL31→LK 的权限与中断交接仍未闭合。
+- pinned LK arch/arm/exceptions.S 的 arm_irq 会调用 platform_irq()，非零返回后 thread_preempt()；H700 目前没有 platform_irq()/platform_fiq() 或 GICv2 provider。pinned dev/gic/mt_gic_v2.c 是 MTK 专用实现，依赖 MTK IRQ helpers / 寄存器，不可复用。
+- 下一步只做 LK 目标态只读诊断：记录实际 CPSR/异常模式与安全态；读取 CNTFRQ 并两次读取 CNTVCT 验证单调增长；读取 GICD/GICC/GICH/GICV ID/control 状态；确认 Group0/Group1NS ownership、PPI 27 是否交给 BL33、EL2 counter/virtual timer traps 与 CNTVOFF 状态。CNTHCTL_EL2 的 EL1TVCT/EL1TVT 访问控制受处理器特性约束，不能根据 FDT 或 Linux IRQ 计数假定访问放行。
+- 这些状态闭合后，才实现 H700 strong platform_early_init()、GICv2 platform_irq() IAR/EOI、LK current_time()/delay/platform_set_periodic_timer()；初始仍限制单核，不更改安全组、不清空无关中断、不提前写 timer/GIC/PPI。
+- 完整 feasibility #45772318214 为 76/76 成功，但它仍是 host/cross-build 和 source-contract 验证，不是完整 LK target link 或实机启动。
+
+规范参考：Linux ARM GIC v1/v2 binding https://github.com/torvalds/linux/blob/master/Documentation/devicetree/bindings/interrupt-controller/arm,gic.yaml；Linux architected timer binding https://github.com/torvalds/linux/blob/master/Documentation/devicetree/bindings/timer/arm,arch_timer.yaml；Arm CNTHCTL_EL2 https://documentation-service.arm.com/static/60df1943677cf7536a55ddef。

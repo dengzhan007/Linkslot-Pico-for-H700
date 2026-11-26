@@ -379,3 +379,13 @@ project defaults or treated as device addresses.
 
 Passing this test does not mean the complete LK target links, boots, or is
 safe to run on hardware.
+
+## RG34XX live GICv2 mapping — 2026-11-26
+
+The older statement above that the raw live DTB had not been uploaded is superseded by reports/rg34xx-inventory-20261126-timer/. The redacted live DTB is 143,936 bytes / 573 nodes, SoC compatible allwinner,h616 + arm,sun50iw9p1, SHA-256 620b36d84fb7e714dcb56891f50802048d83c64ca924222a4a566f340ac7242e.
+
+The primary controller at /interrupt-controller@03020000 is ARM Cortex-A15/A9 GICv2-compatible. Its register windows, decoded by the Linux GIC v1/v2 binding, are GICD 0x03021000/0x1000, GICC 0x03022000/0x2000, GICH 0x03024000/0x2000 and GICV 0x03026000/0x2000. The existing H700 Device mapping [0x03000000,0x03100000) covers all four windows, but this does not prove BL33 access rights or group ownership. The GIC node interrupt <1 9 0xf04> is PPI relative 9 / INTID 25 (VGIC maintenance).
+
+The /timer_arch node declares architected timers in standard order: secure physical PPI13 / INTID29; non-secure physical PPI14 / INTID30; virtual PPI11 / INTID27; EL2 physical PPI10 / INTID26. The 0xf08 flags encode CPU mask 0xF (CPU0–CPU3) and active-low level-sensitive. Linux GIC-0 27 Level arch_timer activity matches the virtual timer INTID27 across all four CPUs. A distinct allwinner,sun4i-a10-timer at 0x03009000/0x400 uses sunxi-wakeupgen input48, matching Linux wakeupgen 48 sun4i_timer0.
+
+This closes the static GIC identity/register and timer-PPI mapping question. It does not close firmware handoff. The next target diagnostic must read actual CPSR/security state, CNTFRQ, monotonic CNTVCT samples, GICD/GICC/GICH/GICV identification/control state, Group0/Group1NS ownership, PPI27 ownership and EL2 trap/CNTVOFF state without modifying hardware. The pinned LK IRQ vector calls platform_irq() and reschedules via thread_preempt() when requested; H700 still lacks a GIC provider and platform_irq()/platform_fiq(). Do not transplant the MTK GIC driver or write any GIC/timer register before ownership is proven.

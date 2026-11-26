@@ -619,3 +619,15 @@ the handoff is understood. In parallel, the RG34XX PA_DAT/PE_DAT scanner
 remains a separately gated, read-only LK diagnostic and is not part of the
 normal input loop yet.
 
+
+## 2026-11-26 Fresh RG34XX live FDT: GICv2 and timer mapping closed
+
+The new read-only inventory is uploaded at reports/rg34xx-inventory-20261126-timer/. The redacted live DTB is 143,936 bytes / 573 nodes, compatible allwinner,h616 + arm,sun50iw9p1, SHA-256 620b36d84fb7e714dcb56891f50802048d83c64ca924222a4a566f340ac7242e.
+
+The main controller /interrupt-controller@03020000 is ARM Cortex-A15/A9 GICv2-compatible, with GICD 0x03021000/0x1000, GICC 0x03022000/0x2000, GICH 0x03024000/0x2000 and GICV 0x03026000/0x2000. /timer_arch maps secure physical PPI13 → INTID29, non-secure physical PPI14 → INTID30, virtual PPI11 → INTID27, and EL2 physical PPI10 → INTID26. Flags 0xf08 encode CPU mask 0xF and active-low level-sensitive. Linux GIC-0 27 Level arch_timer is the virtual-timer INTID27 and is active on all four CPUs. A distinct Allwinner sun4i-a10-timer at 0x03009000/0x400 uses sunxi-wakeupgen input48, matching Linux wakeupgen 48 sun4i_timer0.
+
+These live-DT/Linux-runtime mappings close the hardware identity and PPI declaration question, not BL31→LK ownership. Pinned LK's ARM IRQ vector calls platform_irq() and schedules when it returns nonzero. H700 still lacks platform_irq() and a GICv2 provider; the pinned GIC implementation is MTK-specific and excluded.
+
+**Next gate:** run a non-invasive LK-target probe to record exception/security mode, CNTFRQ, two CNTVCT samples, GICD/GICC/GICH/GICV identification and control state, Group0/Group1NS ownership, EL2 counter/timer trap state, CNTVOFF, and whether PPI27 is accessible to BL33. Do not write GIC/timer registers or start an interrupt before readback establishes the handoff. Only then implement H700 early GICv2 setup, platform_irq() IAR/EOI, LK time/delay hooks and scheduler tick. Initial IRQ bring-up stays single-core and must not reassign security groups or clear unrelated pending interrupts.
+
+The full feasibility CI at 8e7f8db completed 76/76; it tests host/cross-build contracts and does not constitute a full LK target link or device boot.
