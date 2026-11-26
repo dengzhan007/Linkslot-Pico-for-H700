@@ -465,3 +465,16 @@ pinned Slot 源码 `pvaibhav/slot@5206e3fa39aa4a9b702cd9048a07dab3b5ab95da`：
 4. armGBA committed-frame counter：精确源码偏移、正确 `gba` 指针、load bias 三项完全闭合后，再单独决定是否进行有界只读进程内存采样。此前用户给 Agent 的采集约束禁止 `/proc/PID/mem`，本轮仍保持不读。
 
 UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率指标。所有硬件 writer 保持关闭，`hardware_applied=0`。
+
+
+## 13. armGBA 运行时映射与主指针裁决（2026-11-26）
+
+最新只读运行时证据已上传至 [reports/slot-refresh-audit/binary-identity/runtime-mapping](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/slot-refresh-audit/binary-identity/runtime-mapping)，完整分析见 [armGBA v1.16.0 runtime mapping](armgba-runtime-mapping-v1.16.0.md)。
+
+- Slot PID 本轮仍为 2301；游戏态核心 4 条 maps 映射，退出后 0 条，PID 未变，确认核心使用 dlopen/dlclose。
+- ELF PT_LOAD #0/#1 对应三条文件映射（r-xp/r--p/rw-p）独立解出的 load bias 全部为 `0x7f64070000`，交叉验证通过。
+- 主指针已裁决为 `gba@0x4259b8`（runtime `0x7f644959b8`）；`gba@0x4c16a8`（runtime `0x7f645316a8`）是 link cable 模块缓存。证据是主指针赋值源、retro_run 21 处 GOT 读取、linkSetGba 的缓存写入路径、retro_unload_game 先清缓存再清主指针。
+- 官方精确源码 `df6b2631291f249d54a00dd14f49bc893e438feb` 中 `video.c` 在 VBlank 帧结束递增 `frameCounter`，`retro_run` 等待该计数器推进。此前精确布局 `gba->video.frameCounter` 偏移 11948 bytes 已与本轮 ELF 来源闭环。
+- **尚未读取**主指针的内容或 frameCounter；未使用 `/proc/PID/mem`，未启用 UI tracing、未创建 marker、未重启 Slot、未写硬件。偏移 + 映射地址闭合只代表可以设计有界读取，不等于已经获得帧率实测。
+
+下一步需要明确授权后才执行设备操作：启用 UI trace marker 并重启 Slot；以及在游戏态做有界只读的主指针/计数器采样。在此之前继续保持无进程内存读取、无配置更改、无硬件写入。UI presents、armGBA committed frames、LCD IRQ 三项独立统计，`hardware_applied=0`。
