@@ -854,3 +854,24 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 - 同一 pinned source 的 native/entry32.S 将 A32 loader SP 设为 0x4a0f0000，页表为 [0x4a0f8000,0x4a0fc000)。后续 native/loader.c 把 Linux kernel 解压到 [0x40080000,0x42000000)，最大输出 0x01f80000；initrd 从 0x42000000 开始，FDT 位于 0x44000000。故该候选只可能在替换 BL33、完全绕过后续 Linux loader 时被重新审议。
 - **证据边界：** “pinned native SPL 没有显式写入该候选区”不等于“BL31 未使用该区域”。精确 monitor 内部 scratch、secure-world、DMA 与 cache alias ownership 仍未审计；Linux memblock map 也不能完整描述 pre-Linux BL31 生命周期。详情见 [h700-bl33-memory-ownership.md](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/porting/linkslot-1.0.45-feasibility/docs/h700-bl33-memory-ownership.md)。
 - 该区仍是 candidate only；native SPL、BL31、BL33、Linux loader 各阶段 ownership 不可混为一谈。当前不填入 MEMBASE/MEMSIZE、不打开 H700_MEMORY_LAYOUT_APPROVED，不推断 16 MiB 0x7ec00000 reservation 属于 DRM/TEE，也不对该区域进行硬件探测。
+
+
+## 2026-11-26 距离首次实机启动的分级评估
+
+这里把“首次实机启动”拆为三个可验收里程碑，避免把 A32 host linker probe 误当成设备已可启动：
+
+### A. BL33 入口诊断（只证明控制权进入新 payload，不等于完整 LK）
+
+当前 p4+40 MiB native firmware package 中的 loader extent 是 32,768 bytes（来自 reports/rg34xx-native-firmware/firmware-manifest.json）。Pinned BaseOS native/build.py 会把 loader blob 按 512-byte 对齐后作为 firmware extent 写入 package，重新计算 firmware 长度/FNV，并生成 native-generated.h 中的 BASEOS_FIRMWARE_BYTES / BASEOS_FIRMWARE_FNV 与 extent table；总 package 有 1 MiB 上限。当前 scripts/package-h700-bl33.py 只负责将 raw A32 LK 与 SHA-pinned header 组合，**尚未把新 LK payload 接入 BaseOS native SPL/package 构建链**。即使入口诊断 payload 保持在现有 32 KiB extent 内，内容改变也会改变 package FNV，必须生成匹配的 native firmware package/SPL；若 payload 超过 32 KiB，还需同步扩大 loader extent 并重新核对 package 上限与 BL33 区域布局。
+
+因此最短的实机入口证明不是“直接烧录当前 host 产物”，而是：先制作尺寸受控的 A32 diagnostic payload（或最小 LK image），接入配对构建流程，保留真实 vendor header，完成 BL33/stack/BSS 不重叠审查、可恢复安装方案，再在设备上验证入口快照/明确的 proof-of-life 信号。该里程碑尚未开始实机执行。
+
+### B. 首次完整 LK kernel 启动（进入 kernel lifecycle / idle）
+
+除 A 外，还必须具备经过审查的 MEMBASE/MEMSIZE、LK image/BSS/stack/heap/page-table 的完整布局，以及 H700 platform early init。pinned LK 的正常启动路径会注册 scheduler periodic tick；H700 目前仍缺少可用于正常 kernel lifecycle 的 GICv2 provider / platform_irq()、architected-timer 驱动和 LK current_time()/platform_set_periodic_timer()。GICv2 地址/PPI 已由 live FDT 识别，但 BL31 handoff 后的 Secure/Non-secure、Group0/Group1NS、EL2 trap 与 PPI ownership 未证明。第一轮应保持单核，不能用 Linux 中断计数代替 LK 权限证明。
+
+### C. 首次进入 Linkslot / mGBA 前端
+
+这还需要单独批准 Linkslot app/payload 的 DRAM arena，并验证 payload loader、cache/MMU 属性、独立 heap/stack、read-only SD → GPT/FAT/exFAT → Libretro VFS、framebuffer/display/input/audio 等真实板级路径。mGBA AArch32 archive 约 1.78 MiB，大于当前 896 KiB BL33 packaging policy，因此 Linkslot+mGBA 必须作为 BL33 之外的独立 payload，不应塞进 LK BL33 image。当前候选 [0x40080000,0x42000000) 仍未获 BL31 scratch/secure/DMA 生命周期审查，不得分配。
+
+**当前判定：** A32 BL33 host 原型与 76/76 feasibility 已完成；实机入口诊断仍被“匹配 SPL/firmware 集成 + BL33 运行内存布局 + 可恢复部署流程”阻塞。完整 LK kernel 还需 GIC/Timer early platform；Linkslot 前端则再增加独立应用内存与设备驱动验证。H700_MEMORY_LAYOUT_APPROVED 保持 unset。不要以当前阶段的 CI 通过率折算实机启动完成度。
