@@ -241,7 +241,7 @@ def main() -> int:
         "- PSCI dispatch loads the global `psci_plat_pm_ops` pointer, reads its +8 slot, moves that function pointer to `x5`, then branches through `x5`.",
         "- Callback `0x4800254c` calls low-level CPU_ON routine `0x48002d78` at `0x4800255c` when `W3 == 0`.",
         "- Platform-ops slot 3 contains 0x48002878. Direct BL targets confirm PC 0x48002998 -> 0x48001790 (CCU save helper) and PC 0x48002858 -> 0x480018d8 (restore helper); their exact callback ownership and CFG relationship remain unresolved.",
-        "- The CCU save/restore sequence is scoped to the PSCI suspend callback, not proven to run during initial BL31-to-BL33 handoff; do not treat it as CPU DVFS support.",
+        "- The CCU save/restore helper branch targets are present, but their callback ownership and runtime execution are unresolved; they do not establish a BL33 startup clock transition or CPU DVFS support.",
         "- Low-level routine writes a per-core RVBAR and contains a CPU power/reset sequence; one SoC-selected variant uses `0x09010000`, `0x09010010`, `0x07000440`, `0x07000444` and `0x090100c0`.",
         "- RVBAR selector cross-check: BL31 uses VER_REG low3==0 for base 0x09010040, otherwise 0x08100040; pinned native SPL uses low3==2 for the alternate bank. Both agree only for selector values 0 and 2; the target value must be read.",
         "",
