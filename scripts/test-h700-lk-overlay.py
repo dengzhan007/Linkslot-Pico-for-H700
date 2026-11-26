@@ -172,7 +172,11 @@ def main() -> None:
     exception_text = overlay_exceptions.read_text(encoding="utf-8")
     faults_text = overlay_faults.read_text(encoding="utf-8")
     for token in (
+        "mov\tr4, sp",
+        "bic\tsp, sp, #7",
+        "mov\tr0, r4",
         "bl\t\tarm_data_abort_handler",
+        "mov\tsp, r4",
         "cmp\tr0, #0",
         "bne\th700_arm_data_abort_exception_return",
         "ldmia\tsp!, { r0-r12, pc }^",
@@ -182,7 +186,7 @@ def main() -> None:
             raise RuntimeError("patched exception vector missing scoped recovery operation: " + repr(token))
     if "h700_data_abort_try_recover((void *)frame)" not in faults_text:
         raise RuntimeError("patched LK Data Abort handler does not call the H700 exact matcher")
-    if 'exception_die(frame, -8, "data abort, halting\\\\n");' not in faults_text:
+    if "exception_die(frame, -8," not in faults_text or "data abort, halting" not in faults_text:
         raise RuntimeError("patched LK fatal Data Abort fallback was not preserved")
 
     crt0_text = overlay_crt0.read_text(encoding="utf-8")
@@ -228,13 +232,19 @@ void kmain(void) { for (;;) { __asm__ volatile("wfi"); } }
 void arm_undefined_handler(void *frame) { (void)frame; for (;;) { __asm__ volatile("wfi"); } }
 void arm_syscall_handler(void *frame) { (void)frame; for (;;) { __asm__ volatile("wfi"); } }
 void arm_prefetch_abort_handler(void *frame) { (void)frame; for (;;) { __asm__ volatile("wfi"); } }
-int arm_data_abort_handler(void *frame) { (void)frame; return 0; }
+
 int platform_irq(void *frame) { (void)frame; return 0; }
 void platform_fiq(void *frame) { (void)frame; }
 void thread_preempt(void) { }
 '''
     stubs_path = out / "lk-bl33-stubs.c"
     stubs_path.write_text(stubs, encoding="utf-8")
+
+    # The modified LK C handler follows the normal H700 Thumb-2 C policy.
+    # Linking it with the A32 exception vector must therefore interwork safely.
+    thumb_fault_stub = "int arm_data_abort_handler(void *frame) { return frame != 0; }\\n"
+    thumb_fault_path = out / "data-abort-handler-thumb.c"
+    thumb_fault_path.write_text(thumb_fault_stub, encoding="utf-8")
 
     flags = [
         "--target=armv7a-none-eabi",
@@ -278,6 +288,13 @@ void thread_preempt(void) { }
     run(
         ["clang", *flags, "-std=c11", "-c", str(stubs_path), "-o", str(stubs_obj)],
         out / "stubs-compile.log",
+    )
+
+    thumb_fault_obj = out / "data-abort-handler-thumb.o"
+    thumb_flags = [flag for flag in flags if flag != "-marm"] + ["-mthumb"]
+    run(
+        ["clang", *thumb_flags, "-std=c11", "-c", str(thumb_fault_path), "-o", str(thumb_fault_obj)],
+        out / "thumb-data-abort-handler-compile.log",
     )
 
     crt_symbols = run(["llvm-nm", "-g", "--defined-only", str(crt_obj)])
@@ -341,6 +358,7 @@ SECTIONS
             str(crt_obj),
             str(exc_obj),
             str(stubs_obj),
+            str(thumb_fault_obj),
         ],
         out / "link.log",
     )
@@ -422,6 +440,8 @@ SECTIONS
         ]
     )
     (out / "lk-bl33-overlay-layout.disasm.txt").write_text(disassembly, encoding="utf-8")
+    if not re.search(r"\bblx\b", disassembly):
+        raise RuntimeError("A32 exception vector did not link an interworking BLX to the Thumb Data Abort C handler")
 
     report = [
         "# GammaOS LK H700 BL33 overlay assembly/link validation\n\n",
@@ -434,7 +454,9 @@ SECTIONS
         f"- Boot-argument scratch: 0x{boot_argument:08x}.\n",
         f"- BL33 entry wrapper: 0x{entry:08x}.\n",
         f"- Linked _end: 0x{end:08x}; upper probe bound 0x{IMAGE_END:08x}.\n",
-        "- All eight vector instructions decode as A32 branch instructions; all required exception symbols resolve.\n",        "- The H700-only Data Abort trampoline is compiled and linked; unrelated aborts still use the original fatal C fallback.\n",
+        "- All eight vector instructions decode as A32 branch instructions; all required exception symbols resolve.\\n",
+        "- The H700-only Data Abort trampoline is compiled and linked; unrelated aborts still use the original fatal C fallback.\\n",
+        "- The A32 exception vector links to the Thumb-2 C handler through an interworking BLX.\\n",
         "- The generated LK make rules exclude MTK platform/common, platform/pal, MTK dev modules and MTK target/init.c when H700_BUILD=yes; H700 must provide its own platform/target module lists.\n",
         "- Synthetic bytes +4..+0x63f replace cleanly without changing the first BL33 branch; the synthetic bytes are not a vendor header.\n\n",
         "## Explicit limits\n\n",

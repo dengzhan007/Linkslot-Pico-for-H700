@@ -255,12 +255,16 @@ def patch_arch_c(original: str) -> str:
 def patch_exceptions(original: str) -> str:
     old = "\tb\t\tarm_data_abort_handler\n\tb\t\t.\n\nFUNCTION(arm_reserved)"
     new = (
+        "\tmov\tr4, sp\n"
+        "\tbic\tsp, sp, #7\n"
+        "\tmov\tr0, r4\n"
         "\tbl\t\tarm_data_abort_handler\n"
         "\tcmp\tr0, #0\n"
         "\tbne\th700_arm_data_abort_exception_return\n"
         "\tb\t\t.\n\n"
-        "/* H700-only return path, reached only after the exact probe match. */\n"
+        "/* H700-only return path; r4 preserves the frame across the C call. */\n"
         "FUNCTION(h700_arm_data_abort_exception_return)\n"
+        "\tmov\tsp, r4\n"
         "\tldr\tr1, [sp, #0]\n"
         "\tmsr\tspsr_cxsf, r1\n"
         "\tadd\tsp, sp, #12\n"
@@ -276,29 +280,27 @@ def patch_exceptions(original: str) -> str:
 
 
 def patch_faults(original: str) -> str:
-    old = (
-        "void arm_data_abort_handler(struct arm_fault_frame *frame)\n"
-        "{\n"
-        "\texception_die(frame, -8, \"data abort, halting\\\\n\");\n"
-        "}\n"
-    )
-    new = (
-        "/* H700 recovers one explicitly armed SYS_CFG probe; all other faults halt. */\n"
+    marker = "void arm_data_abort_handler(struct arm_fault_frame *frame)"
+    if original.count(marker) != 1:
+        raise RuntimeError("unexpected pinned arm_data_abort_handler; refusing to weaken fatal handling")
+    start = original.index(marker)
+    open_brace = original.index("{", start)
+    close_brace = original.index("}", open_brace) + 1
+    old_body = original[start:close_brace]
+    if "exception_die(frame, -8," not in old_body or "data abort, halting" not in old_body:
+        raise RuntimeError("pinned Data Abort handler is not the audited fatal implementation")
+    new_body = (
+        "/* H700 recovers only the exact, armed SYS_CFG read; all other faults halt. */\n"
         "extern int h700_data_abort_try_recover(void *frame);\n\n"
         "int arm_data_abort_handler(struct arm_fault_frame *frame)\n"
         "{\n"
         "\tif (h700_data_abort_try_recover((void *)frame))\n"
         "\t\treturn 1;\n\n"
-        "\texception_die(frame, -8, \"data abort, halting\\\\n\");\n"
+        "\texception_die(frame, -8, \"data abort, halting\\n\");\n"
         "\treturn 0;\n"
-        "}\n"
+        "}"
     )
-    if original.count(old) != 1:
-        raise RuntimeError("unexpected pinned arm_data_abort_handler; refusing to weaken fatal handling")
-    patched = original.replace(old, new, 1)
-    if 'exception_die(frame, -8, "data abort, halting\\\\n");' not in patched:
-        raise RuntimeError("generic Data Abort fatal fallback was not preserved")
-    return patched
+    return original[:start] + new_body + original[close_brace:]
 
 
 def patch_arm_rules(original: str) -> str:
@@ -386,8 +388,8 @@ def main() -> None:
         "files": records,
         "data_abort_recovery": {
             "scope": "one exact A32 LDR at SYS_CFG VER_REG 0x03000024",
-            "match": ["active cookie", "saved LR_abt equals fault-load label plus 8", "DFAR equals 0x03000024", "SVC origin mode", "ARM state"],
-            "exception_return": "restore saved SPSR and r0-r12; LDM^ loads only the validated recovery label",
+            "match": ["active cookie", "exact A32 LR_abt", "DFAR equals 0x03000024", "short-descriptor synchronous DFSR with WnR=0", "SVC origin mode", "ARM state"],
+            "exception_return": "align Abort stack for AAPCS C call, preserve frame in callee-saved r4, restore SPSR and r0-r12, then LDM^ to validated recovery label",
             "fallback": "all non-matching Data Aborts retain exception_die() -> halt()",
             "probe_call_site": "none; startup, timer and input hooks do not invoke the diagnostic",
             "hardware_execution": "not performed",
