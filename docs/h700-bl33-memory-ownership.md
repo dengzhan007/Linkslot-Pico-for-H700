@@ -293,18 +293,32 @@ BaseOS native SPL and the matched BL31 address-reference report.
   `cbe253a43f46cf551cc9a6c79a84015bde3686cf` programs the primary RVBAR
   low/high pair only; it does not directly write `C0_RST_CTRL` or
   CPU1-CPU3 RVBAR registers.
-- The matched BL31 reachable scan reports CPU-related accesses only at
-  `0x09010010` (`C0_CTRL_REG0`, CPU0 AArch64 mode path) and
-  `0x08100020` (CPU subsystem control). No direct reachable access was
-  recovered to `C0_RST_CTRL`, `DBG_REG1` or CPU1-CPU3 RVBAR registers.
+- The original direct-entry reachable scan reports CPU-related accesses
+  at `0x09010010` (`C0_CTRL_REG0`, CPU0 AArch64 mode path) and
+  `0x08100020` (CPU subsystem control). That scan does not follow indirect
+  platform callback dispatch.
+- A later exact full-image/function-table audit found a registered PSCI
+  platform CPU_ON callback: table `0x480165f8`, slot `+8` ->
+  `0x4800254c` -> `0x48002d78`. This low-level path programs a per-core
+  RVBAR and performs SoC-specific power/reset operations. Therefore it is
+  incorrect to conclude that BL31 has no secondary-core start mechanism.
+  The callback is on-demand and its presence does not prove it runs during
+  the initial BL31-to-BL33 handoff.
+- The active SoC variant chosen by `0x03000024 & 7` and the live target
+  CPU reset state remain unknown. H616 register names must not be assumed to
+  identify the active RG34XX H700 CPU_ON branch.
 - H616 documentation calls `0x09010044` `RVBARADDR0_H` (CPU0 high word),
   while the Boot0 helper ORs core2/core3 one-hot bits into it. H616
   documentation also marks `DBG_REG1.C_DBGPWRUPREQ[3:0]` read-only while
   Boot0 performs a read-modify-write. These are unresolved H700-vs-H616
   semantic discrepancies; do not infer the purpose or modify those fields.
 
-The result supports a CPU0-only handoff hypothesis, but CPU1-CPU3 hold-off
-is **probable, not device-verified**. See
-[docs/h700-a53-single-core-startup-audit.md](h700-a53-single-core-startup-audit.md)
-and CI
-[#45808401081](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45808401081).
+The combined evidence supports a CPU0-only **initial handoff** hypothesis,
+but CPU1-CPU3 hold-off remains **probable, not device-verified**. BL31 can
+start a core later on a PSCI CPU_ON request; this is not evidence of automatic
+startup during the initial handoff. See
+[docs/h700-a53-single-core-startup-audit.md](h700-a53-single-core-startup-audit.md),
+Boot0/BL31 CI
+[#45808401081](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45808401081),
+and PSCI callback CI
+[#45816600012](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45816600012).
