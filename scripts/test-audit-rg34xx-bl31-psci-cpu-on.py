@@ -33,6 +33,33 @@ def main() -> int:
         "system_reset", "get_sys_suspend_power_state"
     )
     assert module.WORDS[0x48002544] == 0x52A04020
+    assert module.SUSPEND_LEVEL_TABLE == 0x48017D70
+    assert module.SUSPEND_LEVEL_CALLBACKS == (
+        0x48008B84, 0x48008AB8, 0x48008A00
+    )
+    assert module.WORDS[0x48008E4C] == 0xF0000077
+    assert module.WORDS[0x48008E54] == 0x9135C2F7
+    assert module.WORDS[0x48008E64] == 0x0B160281
+    assert module.WORDS[0x48008E68] == 0x6B0102BF
+    assert module.WORDS[0x48008E70] == 0xF8767B60
+    assert module.WORDS[0x48008E74] == 0xB4000100
+    assert module.WORDS[0x48008E78] == 0xF861DAE4
+    assert module.WORDS[0x48008E88] == 0xD63F0080
+    assert module.WORDS[0x48008E94] == 0x910006D6
+    assert module.WORDS[0x48008E98] == 0x17FFFFF3
+    assert module.WORDS[0x48008A18] == 0x71000A9F
+    assert module.WORDS[0x48008AD0] == 0x7100069F
+    assert module.WORDS[0x48008A84] == 0xF9400C26
+    assert module.WORDS[0x48008A90] == 0xD63F00C0
+    assert module.WORDS[0x48008B34] == 0xF9400C26
+    assert module.WORDS[0x48008B40] == 0xD63F00C0
+    assert module.WORDS[0x48008C20] == 0xF9400C36
+    assert module.WORDS[0x48008C54] == 0xD63F02C0
+    assert module.WORDS[0x4800299C] == 0x12800060
+    assert module.WORDS[0x48009768] == 0x3100101F
+    assert module.WORDS[0x48009770] == 0x54000081
+    assert module.WORDS[0x48009774] == 0x97FFE0A4
+    assert module.decode_bl_target(0x48009774, 0x97FFE0A4) == 0x48001A04
     assert module.WORDS[0x48002588] == 0x97FFFE50
     assert module.WORDS[0x480025A8] == 0x97FFFE4C
     assert module.WORDS[0x48009688] == 0xF9400021
@@ -63,6 +90,11 @@ def main() -> int:
     assert window_map["legacy_slot4_on_finish_dispatch"][0] <= 0x48008560
     assert window_map["legacy_slot5_suspend_finish_dispatch"][0] <= 0x4800893c
     assert window_map["legacy_slot8_system_suspend_getter_dispatch"][0] <= 0x4800975c
+    assert window_map["system_suspend_transition_dispatch"][0] == 0x48008D98
+    assert window_map["suspend_afflvl0_wrapper"][0] == 0x48008B84
+    assert window_map["suspend_afflvl1_wrapper"][0] == 0x48008AB8
+    assert window_map["suspend_afflvl2_wrapper"][0] == 0x48008A00
+    assert window_map["system_suspend_power_entry"][0] == 0x48001A04
     assert "ops_slot_3_raw" in window_map
     assert window_map["ops_slot_3_raw"][0] <= 0x48002998 < window_map["ops_slot_3_raw"][0] + window_map["ops_slot_3_raw"][1]
     assert window_map["ops_slot_5_raw"][0] <= 0x48002858 < window_map["ops_slot_5_raw"][0] + window_map["ops_slot_5_raw"][1]
@@ -79,7 +111,7 @@ def main() -> int:
         pass
     else:
         raise AssertionError("B instruction was incorrectly accepted as BL")
-    print("PASS: legacy PSCI nine-member ABI, callback dispatch and SYSTEM_SUSPEND getter")
+    print("PASS: legacy PSCI ABI, affinity-level suspend callbacks and -4 power-entry path")
     return 0
 
 if __name__ == "__main__":

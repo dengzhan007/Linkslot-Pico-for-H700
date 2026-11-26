@@ -15,6 +15,8 @@ EXPECTED_TABLE = [
     0x48002510, 0x4800254c, 0x4800264c, 0x48002878, 0x48002680,
     0x480026c4, 0x480025a0, 0x48002574, 0x48002544,
 ]
+SUSPEND_LEVEL_TABLE = 0x48017d70
+SUSPEND_LEVEL_CALLBACKS = (0x48008b84, 0x48008ab8, 0x48008a00)
 WORDS = {
     0x480029bc: 0xa9bf7bfd, 0x480029c0: 0x900000a1,
     0x480029c4: 0x9117e021, 0x480029cc: 0xf9000001,
@@ -37,6 +39,21 @@ WORDS = {
     0x48009718: 0xf947e000, 0x4800971c: 0xf9402000,
     0x48009720: 0xb5000120, 0x48009744: 0xd63f0000,
     0x4800975c: 0x97fffd8f,
+    # SYSTEM_SUSPEND special return handling and power-state entry.
+    0x4800299c: 0x12800060, 0x48009768: 0x3100101f,
+    0x48009770: 0x54000081, 0x48009774: 0x97ffe0a4,
+    # Affinity-level suspend wrappers dispatch legacy affinst_suspend.
+    0x48008a18: 0x71000a9f, 0x48008a84: 0xf9400c26,
+    0x48008a90: 0xd63f00c0, 0x48008ad0: 0x7100069f,
+    0x48008b34: 0xf9400c26, 0x48008b40: 0xd63f00c0,
+    0x48008ba4: 0x39402c00, 0x48008c20: 0xf9400c36,
+    0x48008c54: 0xd63f02c0,
+    # Generic transition dispatcher: per-affinity callback table and loop.
+    0x48008e4c: 0xf0000077, 0x48008e54: 0x9135c2f7,
+    0x48008e64: 0x0b160281, 0x48008e68: 0x6b0102bf,
+    0x48008e70: 0xf8767b60, 0x48008e74: 0xb4000100,
+    0x48008e78: 0xf861dae4, 0x48008e88: 0xd63f0080,
+    0x48008e94: 0x910006d6, 0x48008e98: 0x17fffff3,
     # Slot 7 system-reset and slot 6 system-off helper calls.
     0x48002588: 0x97fffe50, 0x480025a8: 0x97fffe4c,
     0x48002858: 0x97fffc20, 0x48002874: 0x17ffff83,
@@ -104,6 +121,11 @@ DISASSEMBLY_WINDOWS = (
     ("legacy_slot4_on_finish_dispatch", 0x48008544, 0x20),
     ("legacy_slot5_suspend_finish_dispatch", 0x48008910, 0x34),
     ("legacy_slot8_system_suspend_getter_dispatch", 0x48009714, 0x50),
+    ("system_suspend_transition_dispatch", 0x48008d98, 0x140),
+    ("suspend_afflvl0_wrapper", 0x48008b84, 0x100),
+    ("suspend_afflvl1_wrapper", 0x48008ab8, 0x100),
+    ("suspend_afflvl2_wrapper", 0x48008a00, 0x100),
+    ("system_suspend_power_entry", 0x48001a04, 0x100),
 
     ("ccu_save_helper", 0x48001790, 0x100),
     ("ccu_restore_helper", 0x480018d8, 0x100),
@@ -192,9 +214,47 @@ def main() -> int:
         raise RuntimeError("legacy PSCI platform-ops member count changed")
     if table[8] != 0x48002544:
         raise RuntimeError("get_sys_suspend_power_state slot 8 pointer changed")
+    suspend_level_table = list(struct.unpack_from(
+        "<3Q", raw, SUSPEND_LEVEL_TABLE - BASE
+    ))
+    if suspend_level_table != list(SUSPEND_LEVEL_CALLBACKS):
+        raise RuntimeError("PSCI suspend affinity-level callback map changed")
 
     if decode_bl_target(0x48009dec, read_word(raw, 0x48009dec)) != 0x480029bc:
         raise RuntimeError("platform ops registration call changed")
+    suspend_dispatch_words = {
+        0x48008a18: 0x71000a9f,  # afflvl2 wrapper checks affinity level 2
+        0x48008a84: 0xf9400c26,  # platform ops +0x18
+        0x48008a90: 0xd63f00c0,  # call affinst_suspend
+        0x48008ad0: 0x7100069f,  # afflvl1 wrapper checks affinity level 1
+        0x48008b34: 0xf9400c26,
+        0x48008b40: 0xd63f00c0,
+        0x48008c20: 0xf9400c36,  # afflvl0 wrapper platform ops +0x18
+        0x48008c54: 0xd63f02c0,
+        0x48008e4c: 0xf0000077,  # callback table base page
+        0x48008e54: 0x9135c2f7,  # callback table +0xd70
+        0x48008e64: 0x0b160281,  # current level = start + index
+        0x48008e68: 0x6b0102bf,  # compare current level with end
+        0x48008e70: 0xf8767b60,  # state record for current level
+        0x48008e74: 0xb4000100,  # skip null state record
+        0x48008e78: 0xf861dae4,  # callback_table[current_affinity]
+        0x48008e88: 0xd63f0080,  # indirect wrapper call
+        0x48008e94: 0x910006d6,  # increment index
+        0x48008e98: 0x17fffff3,  # loop
+        0x4800299c: 0x12800060,  # affinst_suspend returns -4 after save path
+        0x48009768: 0x3100101f,  # compare return against -4
+        0x48009770: 0x54000081,  # branch if not equal
+        0x48009774: 0x97ffe0a4,  # -4 path -> 0x48001a04
+    }
+    for address, expected in suspend_dispatch_words.items():
+        actual = read_word(raw, address)
+        if actual != expected:
+            raise RuntimeError(
+                "SYSTEM_SUSPEND transition mismatch at 0x%08x: got 0x%08x expected 0x%08x"
+                % (address, actual, expected)
+            )
+    if decode_bl_target(0x48009774, read_word(raw, 0x48009774)) != 0x48001a04:
+        raise RuntimeError("SYSTEM_SUSPEND -4 power-entry target changed")
     dispatch_words = {
         0x48009684: 0xf947e021,  # global ops pointer load
         0x48009688: 0xf9400021,  # slot 0 (+0x00)
@@ -367,6 +427,30 @@ def main() -> int:
                 "next_suspend_dispatch_pc": "0x4800975c",
                 "next_suspend_dispatch_target": "0x48008d98",
             },
+            "system_suspend_transition": {
+                "entry": "0x48008d98",
+                "start_affinity_level_register": "w3",
+                "end_affinity_level_register": "w4",
+                "system_suspend_start_affinity_level": 0,
+                "system_suspend_end_affinity_level": 2,
+                "callback_table_address": "0x48017d70",
+                "callback_table": [
+                    {"affinity_level": 0, "wrapper": "0x48008b84",
+                     "platform_member": "affinst_suspend", "platform_slot": 3,
+                     "platform_dispatch_call_pc": "0x48008c54"},
+                    {"affinity_level": 1, "wrapper": "0x48008ab8",
+                     "platform_member": "affinst_suspend", "platform_slot": 3,
+                     "platform_dispatch_call_pc": "0x48008b40"},
+                    {"affinity_level": 2, "wrapper": "0x48008a00",
+                     "platform_member": "affinst_suspend", "platform_slot": 3,
+                     "platform_dispatch_call_pc": "0x48008a90"},
+                ],
+                "loop": "ascending from start level to end level; skip null state records; indirect-call callback_table[current_level]; stop on nonzero callback result",
+                "special_return": -4,
+                "special_return_handler_call_pc": "0x48009774",
+                "special_return_handler_target": "0x48001a04",
+                "power_handler_disassembly": "included as system_suspend_power_entry",
+            },
             "interpretation": "eight legacy affinst/system power callbacks followed by a vendor get_sys_suspend_power_state extension; dispatch offsets and the exact embedded getter string identify slot 8",
         },
         "callback": {
@@ -439,6 +523,8 @@ def main() -> int:
         "- Slot 1 affinst_on reaches CPU_ON helper `0x48002d78`; slot 3 affinst_suspend saves CCU state through `0x48001790`; slot 5 affinst_suspend_finish restores via `0x480018d8` and tail-branches to slot 4 affinst_on_finish.",
         "- Slot 7 system_reset references `Sunxi System Reset` messages and calls helper `0x48001ec8`; slot 6 system_off calls helper `0x48001ed8`.",
         "- SYSTEM_SUSPEND loads slot 8 at byte offset +0x40 (PC `0x4800971c`), calls it indirectly (PC `0x48009744`), receives `0x02010000`, then enters transition `0x48008d98`.",
+        "- Transition `0x48008d98` iterates affinity levels from start to end through callback map `0x48017d70`; the three wrappers `0x48008b84/0x48008ab8/0x48008a00` dispatch platform slot 3 `affinst_suspend`.",
+        "- For system state `0x02010000`, slot 3's CCU-save branch returns `-4`; caller checks that sentinel and invokes power-entry target `0x48001a04` at `0x48009774`.",
         "- The effective ABI is the legacy Allwinner `plat_pm_ops_t` order with a vendor getter extension; the exact source commit is not identified.",
 
         "- Slot 1 affinst_on calls CPU_ON helper `0x48002d78` at `0x4800255c` when `W3 == 0`.",
@@ -459,7 +545,7 @@ def main() -> int:
         "- No hardware MMIO, flash, boot-media write or payload execution occurred.", "",
     ]
     (args.out.parent / "PSCI-CPU-ON.md").write_text("\n".join(markdown), encoding="utf-8")
-    print("PASS: matched BL31 legacy nine-member PSCI table, callback dispatch and SYSTEM_SUSPEND getter")
+    print("PASS: legacy PSCI ABI, affinity-level suspend callbacks and -4 power-entry path")
     print("  table[1] = 0x%08x -> low-level 0x48002d78" % table[1])
     print("  callback disassembly = %s" % disassembly_path)
     print("  monitor SHA-256 = %s" % digest)
