@@ -171,6 +171,23 @@ def main() -> int:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n",
                         encoding="utf-8")
+    markdown = [
+        "# Matched BL31 PSCI CPU_ON callback audit", "",
+        "- Monitor: 107,216 bytes; SHA-256 `%s`." % digest,
+        "- Platform ops table: `0x480165f8`; slot +8 points to callback `0x4800254c`.",
+        "- PSCI dispatch loads the global `psci_plat_pm_ops` pointer, reads its +8 slot, moves that function pointer to `x5`, then branches through `x5`.",
+        "- Callback `0x4800254c` calls low-level CPU_ON routine `0x48002d78` at `0x4800255c` when `W3 == 0`.",
+        "- Low-level routine writes a per-core RVBAR and contains a CPU power/reset sequence; one SoC-selected variant uses `0x09010000`, `0x09010010`, `0x07000440`, `0x07000444` and `0x090100c0`.",
+        "",
+        "## Interpretation", "",
+        "- In the standard TF-A `plat_psci_ops_t` layout, the second function pointer is `pwr_domain_on`; embedded PSCI source strings and dispatcher references support the platform-ops interpretation.",
+        "- This proves the matched BL31 exposes a CPU_ON-capable callback. It does **not** prove the path runs automatically at initial BL31-to-BL33 handoff.",
+        "- The exact SoC variant selected by `0x03000024 & 7` was not read on-device. Do not assume the H616-named register branch is the RG34XX H700 active branch.",
+        "- The exact vendor callback ABI/source revision is not recovered; this is a binary and standard ABI-position correlation, not exact source identity.",
+        "- Initial CPU1-CPU3 reset state and the moment Linux/Linkslot requests CPU_ON remain runtime questions.",
+        "- No hardware MMIO, flash, boot-media write or payload execution occurred.", "",
+    ]
+    (args.out.parent / "PSCI-CPU-ON.md").write_text("\n".join(markdown), encoding="utf-8")
     print("PASS: matched BL31 PSCI ops table, dispatch, CPU_ON callback and reset sequence")
     print("  table[1] = 0x%08x -> low-level 0x48002d78" % table[1])
     print("  monitor SHA-256 = %s" % digest)
