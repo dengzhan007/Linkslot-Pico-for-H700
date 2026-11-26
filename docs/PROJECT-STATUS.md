@@ -685,3 +685,23 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 - [Linkslot LK Rust feasibility #45745912439](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45745912439) 在此节写入时仍在运行；该 run 将对同一更新后的分支重复执行完整 Linkslot/LK feasibility 链，须等其最终 conclusion 后再更新聚合状态。
 
 本节只证明 host 模拟 CMD17/FAT media 上多句柄状态和边界；不证明并发 SMP 安全、真实 SD/MMC 读性能、target LK callback threading，也不实现持久化写入。当前 provider 继续要求 serialized callbacks；FAT32 8.3 writer 与 exFAT flush/rename 差距仍不允许向 Linkslot 开放存档写回。
+
+## 25. 静态 mGBA retro_init() 前安装 VFS v3 的生命周期验证（2026-11-26）
+
+继续沿 VFS v3 → static Libretro API → mGBA 的启动顺序推进，新增真实跨 C/Rust callback 的 host lifecycle probe：
+
+- platform/h700/runtime/tests/mgba_static_stub.c 现在提供完整、静态存活的 fake linkslot_vfs_backend，通过 Rust 导出的 linkslot_vfs_install() 安装；C stub 保存 Linkslot environment callback。
+- 当测试版 mGBA retro_init() 执行时，主动调用 GET_VFS_INTERFACE，请求 VFS version 3，并记录是否成功取得非空 interface table。
+- scripts/test-linkslot-static-mgba-selection.py 在 open_core() 前安装 backend，并要求 static mGBA 初始化后 vfs_request_ok() 为 true；同时继续检查 init/deinit 次数与显式 SLOT_CORE override 不发生意外 static fallback。
+- 该测试将真实验证顺序：C-owned VFS backend install → Linkslot static core API 设置 environment callback → retro_init() → Libretro VFS v3 negotiation。它仍使用 fake backend，不接触真实 SD 卡。
+
+代码：
+- C static mGBA lifecycle/VFS stub 与安装顺序断言：f438598a1940e571f9102cb70f16453c6372bbd0
+- 修正 static selection test harness：dd4c6898f9db16249547d49023b60a11d3a40eff
+
+验证状态：
+- H700 AArch32/AArch64 compile check [#45746324107](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45746324107) **success**；storage host regression 与 freestanding AArch64 objects 均通过。
+- 首轮完整 feasibility [#45746324138](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45746324138) 的 VFS v3 slot-retro host suite **63/63 passed**。随后 static mGBA selection test harness 因旧逻辑试图重复注入 linkslot_mgba_stub_reset_counters() 而失败；这是测试脚本与新 C stub 的重复注入冲突，不是 Cargo/C ABI/VFS negotiation 失败。该首轮 run 不记为 success。
+- 已将脚本改为验证 reset/install/request 三个 stub helper 必须存在，不再注入或改写 stub；新全量 run [#45746788491](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45746788491) 已启动。写入本节时仍在 LLVM cross-link tool installation 阶段，尚未执行 lifecycle step，必须等待该 run 的最终 conclusion 后再判定。
+
+本阶段目标是验证软件层 VFS/core 初始化顺序；即使该步骤通过，也不代表可启动 Linkslot LK App。mGBA C stub 没有执行 ROM，VFS provider 仍只读；无实机 SD 访问、无写卡、无 Boot0/TOC1 操作。完整 App 仍未接入可启动 LK main loop，display/scanout、GPIO/ADC、PCM、真实定时器、内存/heap 资格化及 core payload handoff 仍是独立门槛。
