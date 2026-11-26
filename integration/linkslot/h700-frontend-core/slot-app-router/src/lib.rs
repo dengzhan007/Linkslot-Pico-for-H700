@@ -183,6 +183,111 @@ impl SearchResultsRouter {
         }
     }
 }
+/// Direction intent for the existing UI-owned on-screen keyboard cursor.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KeyboardDirection {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+/// Read-only snapshot of the app-owned search keyboard/IME state.
+///
+/// Cursor geometry, query text, pinyin dictionary, candidate strings and
+/// refresh work stay in the UI/App layers. The router receives only the
+/// values needed to reproduce the upstream input transition.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SearchKeyboardSnapshot {
+    pub candidate_focus: bool,
+    pub composition_nonempty: bool,
+    pub candidate_count: usize,
+    pub candidate_page: usize,
+    pub candidate_pages: usize,
+    pub candidate_selected: usize,
+}
+
+/// Typed result of routing one GameSearch keyboard action.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SearchKeyboardCommand {
+    CandidateFocusChanged { focused: bool },
+    CandidatePageChanged { page: usize },
+    CandidateSelectionChanged { selected: usize },
+    CommitCandidate { index: usize },
+    MoveCursor { direction: KeyboardDirection },
+    CycleLayout,
+    ActivateCurrentKey,
+    Backspace,
+    ConfirmSearch,
+    CloseSearch,
+    Ignore,
+}
+
+/// Route one action from the upstream GameSearch keyboard phase.
+///
+/// This mirrors Linkslot 1.0.49 App::game_search_input() but does not mutate
+/// the UI Cursor, Pinyin index, candidate list, composition or query. Apply
+/// the returned command in the App, then pass a fresh snapshot next time.
+pub fn route_search_keyboard(
+    action: Action,
+    state: SearchKeyboardSnapshot,
+) -> SearchKeyboardCommand {
+    match action {
+        Action::GbaDown(Btn::Select) if state.candidate_focus => {
+            SearchKeyboardCommand::CandidateFocusChanged { focused: false }
+        }
+        Action::GbaDown(Btn::Select)
+            if state.candidate_count > 0 && state.composition_nonempty =>
+        {
+            SearchKeyboardCommand::CandidateFocusChanged { focused: true }
+        }
+        Action::GbaDown(Btn::Select) => SearchKeyboardCommand::Ignore,
+        Action::GbaDown(Btn::Up) if state.candidate_focus => {
+            let pages = state.candidate_pages.max(1);
+            let page = state.candidate_page % pages;
+            let previous = if page == 0 { pages - 1 } else { page - 1 };
+            SearchKeyboardCommand::CandidatePageChanged { page: previous }
+        }
+        Action::GbaDown(Btn::Down) if state.candidate_focus => {
+            let pages = state.candidate_pages.max(1);
+            let page = state.candidate_page % pages;
+            let next = if page + 1 == pages { 0 } else { page + 1 };
+            SearchKeyboardCommand::CandidatePageChanged { page: next }
+        }
+        Action::GbaDown(Btn::Left) if state.candidate_focus && state.candidate_count > 0 => {
+            let selected = state.candidate_selected % state.candidate_count;
+            let previous = if selected == 0 { state.candidate_count - 1 } else { selected - 1 };
+            SearchKeyboardCommand::CandidateSelectionChanged { selected: previous }
+        }
+        Action::GbaDown(Btn::Right) if state.candidate_focus && state.candidate_count > 0 => {
+            let selected = state.candidate_selected % state.candidate_count;
+            let next = if selected + 1 == state.candidate_count { 0 } else { selected + 1 };
+            SearchKeyboardCommand::CandidateSelectionChanged { selected: next }
+        }
+        Action::GbaDown(Btn::Left) | Action::GbaDown(Btn::Right)
+            if state.candidate_focus => SearchKeyboardCommand::Ignore,
+        Action::GbaDown(Btn::A) if state.candidate_focus => {
+            if state.candidate_selected < state.candidate_count {
+                SearchKeyboardCommand::CommitCandidate { index: state.candidate_selected }
+            } else {
+                SearchKeyboardCommand::Ignore
+            }
+        }
+        Action::GbaDown(Btn::B) if state.candidate_focus => {
+            SearchKeyboardCommand::CandidateFocusChanged { focused: false }
+        }
+        Action::GbaDown(Btn::Up) => SearchKeyboardCommand::MoveCursor { direction: KeyboardDirection::Up },
+        Action::GbaDown(Btn::Down) => SearchKeyboardCommand::MoveCursor { direction: KeyboardDirection::Down },
+        Action::GbaDown(Btn::Left) => SearchKeyboardCommand::MoveCursor { direction: KeyboardDirection::Left },
+        Action::GbaDown(Btn::Right) => SearchKeyboardCommand::MoveCursor { direction: KeyboardDirection::Right },
+        Action::GbaDown(Btn::Y) => SearchKeyboardCommand::CycleLayout,
+        Action::GbaDown(Btn::A) => SearchKeyboardCommand::ActivateCurrentKey,
+        Action::GbaDown(Btn::B) => SearchKeyboardCommand::Backspace,
+        Action::GbaDown(Btn::Start) => SearchKeyboardCommand::ConfirmSearch,
+        Action::GbaDown(Btn::X) | Action::QuickMenu => SearchKeyboardCommand::CloseSearch,
+        _ => SearchKeyboardCommand::Ignore,
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -304,6 +409,70 @@ mod tests {
         assert_eq!(router.selected(), 7);
         assert_eq!(router.offset(), 1);
         assert_eq!(router.hit_count(), 8);
+    }
+    #[test]
+    fn search_keyboard_focus_select_toggles_only_when_candidates_are_available() {
+        let empty = SearchKeyboardSnapshot { composition_nonempty: true, ..SearchKeyboardSnapshot::default() };
+        assert_eq!(route_search_keyboard(Action::GbaDown(Btn::Select), empty), SearchKeyboardCommand::Ignore);
+        let available = SearchKeyboardSnapshot { composition_nonempty: true, candidate_count: 2, ..SearchKeyboardSnapshot::default() };
+        assert_eq!(route_search_keyboard(Action::GbaDown(Btn::Select), available), SearchKeyboardCommand::CandidateFocusChanged { focused: true });
+        let focused = SearchKeyboardSnapshot { candidate_focus: true, ..available };
+        assert_eq!(route_search_keyboard(Action::GbaDown(Btn::Select), focused), SearchKeyboardCommand::CandidateFocusChanged { focused: false });
+    }
+
+    #[test]
+    fn search_keyboard_candidate_pages_wrap_using_snapshot_page_count() {
+        let state = SearchKeyboardSnapshot { candidate_focus: true, candidate_pages: 4, candidate_page: 0, ..SearchKeyboardSnapshot::default() };
+        assert_eq!(route_search_keyboard(Action::GbaDown(Btn::Up), state), SearchKeyboardCommand::CandidatePageChanged { page: 3 });
+        assert_eq!(route_search_keyboard(Action::GbaDown(Btn::Down), state), SearchKeyboardCommand::CandidatePageChanged { page: 1 });
+        let single = SearchKeyboardSnapshot { candidate_focus: true, candidate_pages: 0, ..SearchKeyboardSnapshot::default() };
+        assert_eq!(route_search_keyboard(Action::GbaDown(Btn::Up), single), SearchKeyboardCommand::CandidatePageChanged { page: 0 });
+    }
+
+    #[test]
+    fn search_keyboard_candidate_selection_wraps_and_empty_candidates_ignore_lr() {
+        let first = SearchKeyboardSnapshot { candidate_focus: true, candidate_count: 3, candidate_selected: 0, ..SearchKeyboardSnapshot::default() };
+        assert_eq!(route_search_keyboard(Action::GbaDown(Btn::Left), first), SearchKeyboardCommand::CandidateSelectionChanged { selected: 2 });
+        assert_eq!(route_search_keyboard(Action::GbaDown(Btn::Right), first), SearchKeyboardCommand::CandidateSelectionChanged { selected: 1 });
+        let empty = SearchKeyboardSnapshot { candidate_focus: true, candidate_count: 0, ..SearchKeyboardSnapshot::default() };
+        assert_eq!(route_search_keyboard(Action::GbaDown(Btn::Left), empty), SearchKeyboardCommand::Ignore);
+        assert_eq!(route_search_keyboard(Action::GbaDown(Btn::Right), empty), SearchKeyboardCommand::Ignore);
+    }
+
+    #[test]
+    fn search_keyboard_commit_requires_a_valid_selected_candidate() {
+        let valid = SearchKeyboardSnapshot { candidate_focus: true, candidate_count: 3, candidate_selected: 2, ..SearchKeyboardSnapshot::default() };
+        assert_eq!(route_search_keyboard(Action::GbaDown(Btn::A), valid), SearchKeyboardCommand::CommitCandidate { index: 2 });
+        let invalid = SearchKeyboardSnapshot { candidate_focus: true, candidate_count: 2, candidate_selected: 2, ..SearchKeyboardSnapshot::default() };
+        assert_eq!(route_search_keyboard(Action::GbaDown(Btn::A), invalid), SearchKeyboardCommand::Ignore);
+    }
+
+    #[test]
+    fn search_keyboard_cursor_and_key_intents_stay_with_the_existing_ui_cursor() {
+        let state = SearchKeyboardSnapshot::default();
+        assert_eq!(route_search_keyboard(Action::GbaDown(Btn::Up), state), SearchKeyboardCommand::MoveCursor { direction: KeyboardDirection::Up });
+        assert_eq!(route_search_keyboard(Action::GbaDown(Btn::Right), state), SearchKeyboardCommand::MoveCursor { direction: KeyboardDirection::Right });
+        assert_eq!(route_search_keyboard(Action::GbaDown(Btn::Y), state), SearchKeyboardCommand::CycleLayout);
+        assert_eq!(route_search_keyboard(Action::GbaDown(Btn::A), state), SearchKeyboardCommand::ActivateCurrentKey);
+    }
+
+    #[test]
+    fn search_keyboard_backspace_confirm_and_close_follow_upstream_actions() {
+        let state = SearchKeyboardSnapshot::default();
+        assert_eq!(route_search_keyboard(Action::GbaDown(Btn::B), state), SearchKeyboardCommand::Backspace);
+        assert_eq!(route_search_keyboard(Action::GbaDown(Btn::Start), state), SearchKeyboardCommand::ConfirmSearch);
+        assert_eq!(route_search_keyboard(Action::GbaDown(Btn::X), state), SearchKeyboardCommand::CloseSearch);
+        assert_eq!(route_search_keyboard(Action::QuickMenu, state), SearchKeyboardCommand::CloseSearch);
+        let focused = SearchKeyboardSnapshot { candidate_focus: true, ..state };
+        assert_eq!(route_search_keyboard(Action::GbaDown(Btn::B), focused), SearchKeyboardCommand::CandidateFocusChanged { focused: false });
+    }
+
+    #[test]
+    fn search_keyboard_focus_blocks_key_cursor_directions_until_focus_exits() {
+        let state = SearchKeyboardSnapshot { candidate_focus: true, candidate_count: 2, candidate_pages: 1, ..SearchKeyboardSnapshot::default() };
+        assert_eq!(route_search_keyboard(Action::GbaDown(Btn::Up), state), SearchKeyboardCommand::CandidatePageChanged { page: 0 });
+        assert_eq!(route_search_keyboard(Action::GbaDown(Btn::Left), state), SearchKeyboardCommand::CandidateSelectionChanged { selected: 1 });
+        assert_eq!(route_search_keyboard(Action::GbaDown(Btn::Down), state), SearchKeyboardCommand::CandidatePageChanged { page: 0 });
     }
     #[test]
     fn all_quick_rows_keep_navigation_inside_their_page() {
