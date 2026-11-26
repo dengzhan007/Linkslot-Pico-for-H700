@@ -142,6 +142,40 @@ def main() -> int:
     assert module.WORDS[0x4800C59C] == 0xF2A0E004
     assert module.WORDS[0x4800C5A8] == 0xB940C426
     assert module.WORDS[0x4800C5B8] == 0xB9000086
+    assert module.WORDS[0x4800C460] == 0xD282A002
+    assert module.WORDS[0x4800C468] == 0xF2A06002
+    assert module.WORDS[0x4800C470] == 0xB9400041
+    assert module.WORDS[0x4800C474] == 0x12067421
+    assert module.WORDS[0x4800C478] == 0xB9000041
+    assert module.WORDS[0x4800C47C] == 0x940016DF
+    assert module.WORDS[0x4800C680] == 0xD282A002
+    assert module.WORDS[0x4800C684] == 0xF2A06002
+    assert module.WORDS[0x4800C690] == 0xB9400041
+    assert module.WORDS[0x4800C694] == 0x32080421
+    assert module.WORDS[0x4800C698] == 0xB9000041
+    assert module.WORDS[0x4800C69C] == 0x94001657
+    assert module.WORDS[0x4800C6A8] == 0xD63F02C0
+    assert module.decode_bl_target(0x4800C47C,0x940016DF) == 0x48011FF8
+    assert module.decode_bl_target(0x4800C69C,0x94001657) == 0x48011FF8
+    assert ((0x300 << 16) | 0x1500) == 0x03001500
+    assert (0xFCFFFFFF & 0x03000000) == 0
+    assert (0x03000000 & 0x04000000) == 0
+    assert (0x03000000 & 0x03000000) == 0x03000000
+    assert module.WORDS[0x48015D14] == 0x1000FB77
+    assert module.WORDS[0x48015D18] == 0xD2820141
+    assert module.WORDS[0x48015D1C] == 0xD53E1000
+    assert module.WORDS[0x48015D20] == 0xAA010000
+    assert module.WORDS[0x48015D24] == 0xD51E1000
+    assert module.WORDS[0x48015D28] == 0xD5033FDF
+    assert module.WORDS[0x48015D30] == 0x10019680
+    assert module.WORDS[0x48015D34] == 0xD51EC000
+    assert module.WORDS[0x48015D38] == 0xD5033FDF
+    assert module.WORDS[0x48015D3C] == 0xD50344FF
+    assert module.WORDS[0x48015D40] == 0xD50040BF
+    assert module.WORDS[0x48015D44] == 0xD53800A0
+    assert module.WORDS[0x48015D48] == 0x97FFD930
+    assert module.WORDS[0x48015D68] == 0x97FFCDD9
+    assert module.WORDS[0x48015D6C] == 0x17FFFED7
     assert module.WORDS[0x4800C50C] == 0xD503207F
     assert module.WORDS[0x4800C550] == 0xD503207F
     assert module.decode_bl_target(0x4800C53C,0x94001E2D) == 0x48013DF0
@@ -199,6 +233,7 @@ def main() -> int:
     assert window_map["sram_resume_power_and_rtc_source"][0] == 0x4800C418
     assert window_map["sram_resume_stack_setup_source"][0] == 0x480140A0
     assert window_map["sram_resume_return_target"][0] == 0x48015D14
+    assert window_map["cpux_axi_clock_transition_helper"][0] == 0x48011FF8
     assert window_map["normal_suspend_powerdown_helper"][0] == 0x48015D70
     assert window_map["system_suspend_cache_teardown_and_trampoline"][0] == 0x48015FB8
     assert window_map["system_suspend_cache_teardown_and_trampoline"][1] >= 0x270
@@ -219,7 +254,7 @@ def main() -> int:
         pass
     else:
         raise AssertionError("B instruction was incorrectly accepted as BL")
-    print("PASS: PSCI suspend, full SRAM image/context copies, relocated WFI and RTC wake path")
+    print("PASS: PSCI standby staging, CPUX_AXI transition and RTC wake-return path")
     return 0
 
 if __name__ == "__main__":

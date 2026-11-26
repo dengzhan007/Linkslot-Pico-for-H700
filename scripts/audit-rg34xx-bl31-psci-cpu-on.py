@@ -127,10 +127,30 @@ WORDS = {
     0x4800c408: 0x94000084,
     0x4800c50c: 0xd503207f, 0x4800c550: 0xd503207f,
     0x4800c53c: 0x94001e2d, 0x4800c568: 0x94001e60,
+    0x4800c460: 0xd282a002, 0x4800c468: 0xf2a06002,
+    0x4800c470: 0xb9400041, 0x4800c474: 0x12067421,
+    0x4800c478: 0xb9000041, 0x4800c47c: 0x940016df,
     0x4800c580: 0xd2803f00, 0x4800c584: 0x52a00023,
     0x4800c588: 0xf2a0e000, 0x4800c594: 0xd2803f84,
     0x4800c598: 0xb9000003, 0x4800c59c: 0xf2a0e004,
     0x4800c5a8: 0xb940c426, 0x4800c5b8: 0xb9000086,
+    0x4800c680: 0xd282a002, 0x4800c684: 0xf2a06002,
+    0x4800c690: 0xb9400041, 0x4800c694: 0x32080421,
+    0x4800c698: 0xb9000041, 0x4800c69c: 0x94001657,
+    0x4800c6a8: 0xd63f02c0,
+    # BL31 wake-return continuation stored into RTC soft-entry context.
+    0x48015d14: 0x1000fb77, 0x48015d18: 0xd2820141,
+    0x48015d1c: 0xd53e1000, 0x48015d20: 0xaa010000,
+    0x48015d24: 0xd51e1000, 0x48015d28: 0xd5033fdf,
+    0x48015d2c: 0x97fffeb6, 0x48015d30: 0x10019680,
+    0x48015d34: 0xd51ec000, 0x48015d38: 0xd5033fdf,
+    0x48015d3c: 0xd50344ff, 0x48015d40: 0xd50040bf,
+    0x48015d44: 0xd53800a0, 0x48015d48: 0x97ffd930,
+    0x48015d4c: 0xd2800020, 0x48015d50: 0x97ffd894,
+    0x48015d54: 0x97ffd20f, 0x48015d58: 0x97ffcd60,
+    0x48015d5c: 0xaa1703e2, 0x48015d60: 0xaa0003e1,
+    0x48015d64: 0xd2800000, 0x48015d68: 0x97ffcdd9,
+    0x48015d6c: 0x17fffed7,
     # Copied code installs its SRAM-C stack.
     0x480140a0: 0x58000081, 0x480140a4: 0x9100003f,
     0x480140a8: 0xd65f03c0,
@@ -218,6 +238,7 @@ DISASSEMBLY_WINDOWS = (
     ("sram_resume_power_and_rtc_source", 0x4800c418, 0x2f0),
     ("sram_resume_stack_setup_source", 0x480140a0, 0x18),
     ("sram_resume_return_target", 0x48015d14, 0x90),
+    ("cpux_axi_clock_transition_helper", 0x48011ff8, 0x100),
     ("normal_suspend_powerdown_helper", 0x48015d70, 0x80),
     ("system_suspend_cache_teardown_and_trampoline", 0x48015fb8, 0x270),
     ("system_suspend_caller_full", 0x480096f8, 0xa0),
@@ -431,6 +452,59 @@ def main() -> int:
         raise RuntimeError("SRAM secondary WFI path helper changed")
     if decode_bl_target(0x4800c568, read_word(raw, 0x4800c568)) != 0x48013ee8:
         raise RuntimeError("SRAM WFI return-check helper changed")
+    # The H616 reference manual names 0x03001500 CPUX_AXI_CFG_REG,
+    # with CLK_SRC_SEL at bits 26:24. This image modifies only bits 25:24.
+    cpux_axi_reg = (0x300 << 16) | 0x1500
+    if cpux_axi_reg != 0x03001500:
+        raise RuntimeError("CPUX_AXI_CFG_REG address construction changed")
+    cpux_clock_words = {
+        0x4800c460: 0xd282a002,  # mov x2, #0x1500
+        0x4800c468: 0xf2a06002,  # movk x2, #0x300, lsl #16
+        0x4800c470: 0xb9400041,  # ldr w1, [x2]
+        0x4800c474: 0x12067421,  # and w1, w1, #0xfcffffff
+        0x4800c478: 0xb9000041,  # str w1, [x2]
+        0x4800c47c: 0x940016df,  # bl 0x48011ff8
+        0x4800c680: 0xd282a002,  # mov x2, #0x1500
+        0x4800c684: 0xf2a06002,  # movk x2, #0x300, lsl #16
+        0x4800c690: 0xb9400041,  # ldr w1, [x2]
+        0x4800c694: 0x32080421,  # orr w1, w1, #0x03000000
+        0x4800c698: 0xb9000041,  # str w1, [x2]
+        0x4800c69c: 0x94001657,  # bl 0x48011ff8
+        0x4800c6a8: 0xd63f02c0,  # blr x22, RTC-saved resume PC
+    }
+    for address, expected in cpux_clock_words.items():
+        if read_word(raw, address) != expected:
+            raise RuntimeError("CPUX_AXI clock switch instruction changed at 0x%08x" % address)
+    if decode_bl_target(0x4800c47c, read_word(raw, 0x4800c47c)) != 0x48011ff8:
+        raise RuntimeError("CPUX_AXI standby transition helper changed")
+    if decode_bl_target(0x4800c69c, read_word(raw, 0x4800c69c)) != 0x48011ff8:
+        raise RuntimeError("CPUX_AXI resume transition helper changed")
+    if (0xfcffffff & 0x03000000) != 0:
+        raise RuntimeError("CPUX_AXI clear-mask bit range changed")
+    if (0x03000000 & 0x04000000) != 0:
+        raise RuntimeError("CPUX_AXI transition mask unexpectedly changes bit 26")
+    if (0x03000000 & 0x03000000) != 0x03000000:
+        raise RuntimeError("CPUX_AXI transition mask no longer sets bits 25:24")
+    wake_return_words = {
+        0x48015d14: 0x1000fb77,  # adr x23, #0x48017c80
+        0x48015d18: 0xd2820141,  # mov x1, #0x100a
+        0x48015d1c: 0xd53e1000,  # mrs x0, SCTLR_EL3
+        0x48015d20: 0xaa010000,  # orr x0, x0, x1
+        0x48015d24: 0xd51e1000,  # msr SCTLR_EL3, x0
+        0x48015d28: 0xd5033fdf,  # isb
+        0x48015d30: 0x10019680,  # adr x0, #0x48019000
+        0x48015d34: 0xd51ec000,  # msr VBAR_EL3, x0
+        0x48015d38: 0xd5033fdf,  # isb
+        0x48015d3c: 0xd50344ff,  # msr DAIFClr, #4
+        0x48015d40: 0xd50040bf,  # msr SPSel, #0
+        0x48015d44: 0xd53800a0,  # mrs x0, MPIDR_EL1
+        0x48015d48: 0x97ffd930,  # restore context helper
+        0x48015d68: 0x97ffcdd9,  # restore scheduler/PSCI continuation
+        0x48015d6c: 0x17fffed7,  # b to BL31 handoff continuation
+    }
+    for address, expected in wake_return_words.items():
+        if read_word(raw, address) != expected:
+            raise RuntimeError("BL31 wake-return continuation changed at 0x%08x" % address)
     rtc_instruction_words = {
         0x4800c580: 0xd2803f00,  # 0x1f8
         0x4800c584: 0x52a00023,  # standby flag 0x10000
@@ -734,6 +808,34 @@ def main() -> int:
                     "rtc_soft_entry_register": "0x070001fc",
                     "rtc_soft_entry_value_source": "context + 0xc4",
                     "wfi_in_source_blob": ["0x4800c50c", "0x4800c550"],
+                    "cpux_axi_clock_source_transition": {
+                        "register_candidate": "0x03001500",
+                        "register_name_reference": "CPUX_AXI_CFG_REG (H616 reference manual / Linux CCU description)",
+                        "standby_callsite": "0x4800c47c",
+                        "resume_callsite": "0x4800c69c",
+                        "helper_target": "0x48011ff8",
+                        "standby_read_pc": "0x4800c470",
+                        "standby_clear_pc": "0x4800c474",
+                        "standby_write_pc": "0x4800c478",
+                        "standby_mask": "0xfcffffff",
+                        "resume_read_pc": "0x4800c690",
+                        "resume_set_pc": "0x4800c694",
+                        "resume_write_pc": "0x4800c698",
+                        "resume_mask": "0x03000000",
+                        "field_reference": "H616 manual lists CLK_SRC_SEL bits 26:24",
+                        "bit26": "preserved by both standby and resume masks",
+                        "interpretation_limit": "bits 25:24 are cleared on standby and set on resume; exact mux value/source cannot be inferred without live bit26 and register readback; this does not prove CPU DVFS",
+                    },
+                    "wakeup_return": {
+                        "saved_context_offset": "0xc4",
+                        "saved_return_pc": "0x48015d14",
+                        "rtc_soft_entry_register": "0x070001fc",
+                        "rtc_store_pc": "0x4800c5b8",
+                        "restore_load_pc": "0x4800c5a8",
+                        "resume_blr_pc": "0x4800c6a8",
+                        "resume_blr_register": "x22",
+                        "continuation": "restore SCTLR_EL3, VBAR_EL3, DAIF and stack selection, then branch back into BL31 PSCI continuation",
+                    },
                     "sram_map_note": "main image spans SRAM A1 and the start of SRAM C; the mapped stack top is in SRAM C",
                     "runtime_caveat": "copy destinations and relocated entry are statically reconstructed; live SRAM_C ownership, conditional context source values, RTC behavior and successful suspend/wakeup are not measured"
                 },
@@ -817,6 +919,8 @@ def main() -> int:
         "- The copied image entry at source `0x4800c3d8` maps exactly to branch target `0x201b8`; copied helper `0x480140a0` maps to `0x27e80` and loads SP `0x57ff0`.",
         "- The relocated entry zeros its in-image scratch range `[0x291f0,0x29349)`, records wake-return address `0x48015d14` at context offset `0xc4`, and the copied RTC path writes flag `0x10000` to `0x070001f8` plus the saved return address to `0x070001fc`.",
         "- The main copy spans the SRAM A1 range and extends into SRAM C; the SP is also in SRAM C. This is a static copy/map reconstruction, not a live SRAM ownership or wakeup measurement.",
+        "- The copied code changes `0x03001500` around standby/resume: it clears bits 25:24 with `0xfcffffff` before standby and sets `0x03000000` on resume, calling helper `0x48011ff8` on both paths. The H616 reference map describes offset `0x500` as CPUX_AXI_CFG_REG and CLK_SRC_SEL bits 26:24; bit 26 is preserved here, so the actual mux source remains unknown without live readback.",
+        "- The RTC soft-entry stores saved return PC `0x48015d14`; resume code loads it from context `+0xc4` and indirect-branches through x22 at `0x4800c6a8`. The return continuation restores SCTLR_EL3, VBAR_EL3, DAIF and stack selection before returning into BL31.",
         "- The effective ABI is the legacy Allwinner `plat_pm_ops_t` order with a vendor getter extension; the exact source commit is not identified.",
 
         "- Slot 1 affinst_on calls CPU_ON helper `0x48002d78` at `0x4800255c` when `W3 == 0`.",
@@ -837,7 +941,7 @@ def main() -> int:
         "- No hardware MMIO, flash, boot-media write or payload execution occurred.", "",
     ]
     (args.out.parent / "PSCI-CPU-ON.md").write_text("\n".join(markdown), encoding="utf-8")
-    print("PASS: PSCI suspend, full SRAM image/context copies, relocated WFI and RTC wake path")
+    print("PASS: PSCI standby staging, CPUX_AXI transition and RTC wake-return path")
     print("  table[1] = 0x%08x -> low-level 0x48002d78" % table[1])
     print("  callback disassembly = %s" % disassembly_path)
     print("  monitor SHA-256 = %s" % digest)
