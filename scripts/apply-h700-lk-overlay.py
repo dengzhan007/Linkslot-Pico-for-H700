@@ -180,16 +180,35 @@ BOOT_ARGUMENT_LOCATION:
 .global lk_bl33_entry
 lk_bl33_entry:
     /* Capture BL31 entry state before touching VBAR or changing mode/stack. */
-    mrs r11, cpsr
-    mov r8, sp
-    mov r9, lr
-    mov r10, r4
+    mrs r5, cpsr
+    mov r6, sp
+    mov r7, lr
     ldr r0, =__lk_vectors_start
     mcr p15, 0, r0, c12, c0, 0
     isb
 """
     prefix = prefix.lstrip()
     patched = original[:start] + prefix + original[reset:]
+
+    # r4-r7 are shared between FIQ and the other AArch32 modes. Preserve the
+    # original r4 loader argument, and keep CRT0's optional scratch references
+    # from overwriting the captured r6/r7 stack and link registers.
+    boot_argument_save = "  ldr     r6, =BOOT_ARGUMENT_LOCATION \n  str     r4, [r6] \n"
+    if patched.count(boot_argument_save) != 1:
+        raise RuntimeError("unexpected pinned boot-argument save; refusing to clobber the entry snapshot")
+    patched = patched.replace(
+        boot_argument_save,
+        "  ldr     r0, =BOOT_ARGUMENT_LOCATION \n  str     r4, [r0] \n",
+        1,
+    )
+    trustzone_ref = "\tldr r7, =_binary_tzbsp_tzbsp_bin_start\n"
+    if patched.count(trustzone_ref) != 1:
+        raise RuntimeError("unexpected pinned TrustZone symbol reference; refusing to clobber the entry snapshot")
+    patched = patched.replace(
+        trustzone_ref,
+        "\tldr r0, =_binary_tzbsp_tzbsp_bin_start\n",
+        1,
+    )
 
     relocation = "sub\t\tr0, r0, #(.Laddr - _start)"
     if patched.count(relocation) != 1:
@@ -208,7 +227,10 @@ lk_bl33_entry:
     publish = (
         "    /* BSS is now clear; publish the entry snapshot before entering C. */\n"
         "    ldr r0, =h700_bl33_entry_snapshot\n"
-        "    stmia r0, {r8-r11}\n"
+        "    str r6, [r0, #0]\n"
+        "    str r7, [r0, #4]\n"
+        "    str r4, [r0, #8]\n"
+        "    str r5, [r0, #12]\n"
         "    ldr r1, =0x48374553\n"
         "    str r1, [r0, #16]\n"
     )
@@ -310,6 +332,8 @@ def main() -> None:
         "files": records,
         "entry_snapshot": {
             "register_order": ["SP", "LR", "r4", "CPSR"],
+            "capture_registers": {"CPSR": "r5", "SP": "r6", "LR": "r7", "r4": "r4"},
+            "preserved_across_fiq_bank_switch": True,
             "captured_at": "first_instruction_of_lk_bl33_entry",
             "published_at": "after_bss_clear_before_kmain",
             "magic": "0x48374553",
@@ -340,9 +364,10 @@ build; it is not a firmware image.
 - arch/arm/crt0.S: branch from image offset +0 into a BL33 wrapper, reserve
   the opaque vendor header window [+4,+0x640), put the A32 vector table at
   +0x1000, and capture the first-entry SP/LR/r4/CPSR before VBAR or stack/mode
-  changes. The four values are held in AAPCS callee-saved registers and written
-  to the H700 BSS snapshot only after LK clears BSS and before kmain; r4 remains
-  untouched for the existing boot-argument handoff.
+  changes. CPSR/SP/LR are held in shared AAPCS callee-saved r5/r6/r7 registers;
+  r4 remains untouched for the existing boot-argument handoff. These registers
+  are not banked in FIQ mode. The values are written to the H700 BSS snapshot
+  only after LK clears BSS and before kmain.
 - Packaging: the normal GammaOS lk.img includes an MTK image header. Use
   the raw lk-no-mtk-header.bin intermediate and run
   scripts/package-h700-bl33.py with the SHA-pinned active RG34XX loader.bin
