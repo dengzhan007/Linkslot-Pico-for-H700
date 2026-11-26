@@ -37,6 +37,7 @@ def make_fdt():
         "opp-microvolt-c1", "thermal-sensors",
         "clock-frequency", "turbo-mode", "#thermal-sensor-cells",
         "#gpio-cells", "#interrupt-cells", "gpio-controller", "gpios",
+        "interrupt-controller", "interrupt-parent", "interrupts-extended", "always-on",
         "label", "linux,code", "linux,input-type", "linux,input-value",
         "poll-interval", "key_cnt", "channel_num", "channel_select", "interrupts", "clocks",
     )
@@ -151,6 +152,29 @@ def make_fdt():
     prop("#gpio-cells", be32(6))
     prop("gpio-controller", b"")
     prop("phandle", be32(0x60))
+    end()
+
+    prop("interrupt-parent", be32(0x70))
+
+    begin("interrupt-controller@03021000")
+    prop("compatible", b"arm,gic-400\0")
+    prop("reg", cells(0, 0x03021000, 0, 0x1000, 0, 0x03022000, 0, 0x2000))
+    prop("interrupt-controller", b"")
+    prop("#interrupt-cells", be32(3))
+    prop("#address-cells", be32(0))
+    prop("phandle", be32(0x70))
+    prop("status", b"okay\0")
+    end()
+
+    begin("timer@03000000")
+    prop("compatible", b"arm,armv8-timer\0")
+    prop("interrupts", cells(1, 13, 0xf08, 1, 14, 0xf08, 1, 11, 0xf08, 1, 10, 0xf08))
+    prop("always-on", b"")
+    end()
+
+    begin("vendor-timer-aux@03001000")
+    prop("compatible", b"vendor,timer-aux\0")
+    prop("interrupts-extended", cells(0x70, 1, 15, 0xf08))
     end()
 
     begin("gpio_keys")
@@ -312,6 +336,42 @@ class FdtInspectorTests(unittest.TestCase):
         self.assertEqual(panel["timing"]["v_sync_pulse"], 5)
         self.assertEqual(panel["timing"]["v_front_porch"], 31)
         self.assertEqual(panel["timing"]["nominal_refresh_hz"], 60.004)
+        gic = next(
+            item for item in report["interrupt_controllers"]
+            if item["compatible"] == ["arm,gic-400"]
+        )
+        self.assertEqual(gic["status"], "okay")
+        self.assertTrue(gic["interrupt_controller_property"])
+        self.assertEqual(gic["interrupt_cells"], 3)
+        self.assertEqual(gic["phandle"], "0x70")
+        self.assertEqual(gic["reg"], [
+            {"start": "0x3021000", "size": "0x1000", "end_exclusive": "0x3022000"},
+            {"start": "0x3022000", "size": "0x2000", "end_exclusive": "0x3024000"},
+        ])
+
+        arch_timer = next(
+            item for item in report["timer_nodes"]
+            if item["compatible"] == ["arm,armv8-timer"]
+        )
+        self.assertEqual(arch_timer["interrupt_parent"]["node"],
+                         "/soc@03000000/interrupt-controller@03021000")
+        self.assertEqual(arch_timer["interrupts"]["specifier_cell_count"], 3)
+        self.assertEqual(arch_timer["interrupts"]["specifiers"], [
+            [1, 13, 0xf08], [1, 14, 0xf08], [1, 11, 0xf08], [1, 10, 0xf08],
+        ])
+        self.assertIn("cell meanings not interpreted",
+                      arch_timer["interrupts"]["decode_status"])
+
+        aux_timer = next(
+            item for item in report["timer_nodes"]
+            if item["compatible"] == ["vendor,timer-aux"]
+        )
+        self.assertEqual(aux_timer["interrupts_extended"][0]["node"],
+                         "/soc@03000000/interrupt-controller@03021000")
+        self.assertEqual(aux_timer["interrupts_extended"][0]["arguments"],
+                         [1, 15, 0xf08])
+        self.assertIn("does not translate", report["interrupt_inventory_note"])
+
         self.assertEqual(report["pmic_nodes"][0]["compatible"], ["x-powers,axp2202"])
         cpu_power = report["cpu_power"]
         self.assertEqual(len(cpu_power["cpu_nodes"]), 1)

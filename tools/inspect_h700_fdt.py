@@ -613,6 +613,188 @@ def _input_inventory(nodes: dict[str, dict[str, bytes]]) -> dict[str, Any]:
     }
 
 
+def _parent_path(node_path: str) -> str | None:
+    if node_path == "/":
+        return None
+    parent = node_path.rsplit("/", 1)[0]
+    return parent or "/"
+
+
+def _ancestor_cell_count(
+    nodes: dict[str, dict[str, bytes]],
+    node_path: str,
+    property_name: str,
+    default: int,
+) -> int:
+    """Read the bus cell count from the nearest ancestor of a node."""
+    parent = _parent_path(node_path)
+    while parent is not None:
+        props = nodes.get(parent, {})
+        if property_name in props:
+            values = _cells(props[property_name])
+            if len(values) == 1:
+                return values[0]
+            return default
+        parent = _parent_path(parent)
+    return default
+
+
+def _inherited_interrupt_parent(
+    node_path: str,
+    nodes: dict[str, dict[str, bytes]],
+    phandles: dict[int, str],
+) -> dict[str, Any] | None:
+    """Resolve the closest interrupt-parent property, including inheritance."""
+    current: str | None = node_path
+    while current is not None:
+        props = nodes.get(current, {})
+        if "interrupt-parent" in props:
+            handle = _number(props["interrupt-parent"])
+            if handle is None:
+                return {
+                    "declared_at": current,
+                    "phandle": None,
+                    "node": None,
+                    "decode_error": "interrupt-parent is not a single cell",
+                }
+            provider_path = phandles.get(handle)
+            provider = nodes.get(provider_path or "", {})
+            return {
+                "declared_at": current,
+                "phandle": f"0x{handle:x}",
+                "node": provider_path,
+                "compatible": _strings(provider.get("compatible")),
+                "interrupt_cells": _number(provider.get("#interrupt-cells")),
+            }
+        current = _parent_path(current)
+    return None
+
+
+def _interrupt_specifiers(
+    value: bytes | None,
+    interrupt_cells: int | None,
+) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    raw = _cells(value)
+    result: dict[str, Any] = {"raw_cells": raw}
+    if interrupt_cells is None or interrupt_cells < 1 or interrupt_cells > 32:
+        result["decode_status"] = "raw-only: interrupt-parent/#interrupt-cells unavailable"
+        return result
+    result["specifier_cell_count"] = interrupt_cells
+    if len(raw) % interrupt_cells:
+        result["decode_status"] = "raw-only: cell count is not a whole number of specifiers"
+        return result
+    result["specifiers"] = [
+        raw[offset:offset + interrupt_cells]
+        for offset in range(0, len(raw), interrupt_cells)
+    ]
+    result["decode_status"] = "grouped by provider #interrupt-cells; cell meanings not interpreted"
+    return result
+
+
+def _interrupt_inventory(nodes: dict[str, dict[str, bytes]]) -> dict[str, Any]:
+    """Preserve interrupt-controller and timer declarations without IRQ inference."""
+    phandles = _phandle_index(nodes)
+    root = nodes.get("/", {})
+    root_address_cells = _number(root.get("#address-cells"))
+    root_size_cells = _number(root.get("#size-cells"))
+    root_address_cells = root_address_cells if root_address_cells is not None else 2
+    root_size_cells = root_size_cells if root_size_cells is not None else 1
+
+    controllers: list[dict[str, Any]] = []
+    timer_nodes: list[dict[str, Any]] = []
+
+    for node_path, props in nodes.items():
+        compatible = _strings(props.get("compatible"))
+        status = (_strings(props.get("status")) or ["okay"])[0]
+        parent = _parent_path(node_path)
+        address_cells = _ancestor_cell_count(
+            nodes, node_path, "#address-cells", root_address_cells
+        )
+        size_cells = _ancestor_cell_count(
+            nodes, node_path, "#size-cells", root_size_cells
+        )
+        reg_ranges = []
+        reg_decode_error = None
+        if "reg" in props:
+            try:
+                reg_ranges = _reg_ranges(props["reg"], address_cells, size_cells)
+            except FdtError as exc:
+                reg_decode_error = str(exc)
+
+        interrupt_cells = _number(props.get("#interrupt-cells"))
+        phandle = _number(props.get("phandle"))
+        if phandle is None:
+            phandle = _number(props.get("linux,phandle"))
+
+        parent_ref = _inherited_interrupt_parent(node_path, nodes, phandles)
+        effective_interrupt_cells = (
+            parent_ref.get("interrupt_cells") if parent_ref else None
+        )
+        own_interrupts = _interrupt_specifiers(
+            props.get("interrupts"), effective_interrupt_cells
+        )
+        extended_interrupts = (
+            _phandle_refs(
+                props.get("interrupts-extended"),
+                phandles,
+                nodes,
+                "#interrupt-cells",
+            )
+            if "interrupts-extended" in props else None
+        )
+
+        if "interrupt-controller" in props:
+            controllers.append({
+                "node": node_path,
+                "parent_node": parent,
+                "compatible": compatible,
+                "status": status,
+                "interrupt_controller_property": True,
+                "interrupt_cells": interrupt_cells,
+                "address_cells": _number(props.get("#address-cells")),
+                "size_cells": _number(props.get("#size-cells")),
+                "phandle": f"0x{phandle:x}" if phandle is not None else None,
+                "reg": reg_ranges,
+                "reg_decode_error": reg_decode_error,
+                "interrupt_parent": parent_ref,
+                "interrupts": own_interrupts,
+                "interrupts_extended": extended_interrupts,
+            })
+
+        leaf = node_path.rsplit("/", 1)[-1].lower()
+        is_timer = (
+            any("timer" in item.lower() for item in compatible)
+            or leaf == "timer"
+            or leaf.startswith("timer@")
+        )
+        if is_timer:
+            timer_nodes.append({
+                "node": node_path,
+                "parent_node": parent,
+                "compatible": compatible,
+                "status": status,
+                "reg": reg_ranges,
+                "reg_decode_error": reg_decode_error,
+                "interrupt_parent": parent_ref,
+                "interrupts": own_interrupts,
+                "interrupts_extended": extended_interrupts,
+                "always_on": "always-on" in props,
+            })
+
+    return {
+        "controllers": sorted(controllers, key=lambda item: item["node"]),
+        "timer_nodes": sorted(timer_nodes, key=lambda item: item["node"]),
+        "note": (
+            "Static device-tree declarations only. Interrupt specifiers are kept "
+            "as raw provider-defined cells; the parser does not translate them "
+            "to Linux virqs, infer architected timer PPI ownership, or prove the "
+            "BL31-to-BL33 interrupt-controller handoff."
+        ),
+    }
+
+
 def inspect_fdt(path: Path) -> dict[str, Any]:
     blob = path.read_bytes()
     nodes = parse_fdt(blob)
@@ -794,6 +976,9 @@ def inspect_fdt(path: Path) -> dict[str, Any]:
         "boot_framebuffers": boot_framebuffers,
         "cpu_power": _cpu_power_inventory(nodes),
         "input_devices": _input_inventory(nodes),
+        "interrupt_controllers": _interrupt_inventory(nodes)["controllers"],
+        "timer_nodes": _interrupt_inventory(nodes)["timer_nodes"],
+        "interrupt_inventory_note": _interrupt_inventory(nodes)["note"],
         "node_count": len(nodes),
     }
 
