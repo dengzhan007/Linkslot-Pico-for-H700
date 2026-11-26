@@ -23,6 +23,10 @@ SCAFFOLD = (
     Path("platform/h700/runtime/h700_bl33_entry_snapshot.h"),
     Path("platform/h700/arch/h700_physical_memory.c"),
     Path("platform/h700/arch/h700_physical_memory.h"),
+    Path("platform/h700/arch/h700_data_abort_recovery.c"),
+    Path("platform/h700/arch/h700_data_abort_recovery.h"),
+    Path("platform/h700/arch/h700_syscfg_probe.S"),
+    Path("platform/h700/arch/tests/h700_data_abort_recovery_test.c"),
 )
 
 
@@ -291,6 +295,20 @@ def main() -> None:
         if "DRAM_PHY_ADDR=0x40000000" not in platform_rules:
             raise RuntimeError("H700 build does not set the verified RG34XX DRAM physical base")
         summary.append("PASS rg34xx-soc-mmu-map: LK section table, DRAM attributes, SYS_CFG/PIO Device section and MMU enable are ordered")
+
+        abort_objects = ("arch/h700_data_abort_recovery.o", "arch/h700_syscfg_probe.o")
+        for obj in abort_objects:
+            if f"$(LOCAL_DIR)/{obj}" not in platform_rules:
+                raise RuntimeError("H700 probe-scoped Data Abort object is missing: " + obj)
+        abort_src = root / "platform/h700/arch/h700_data_abort_recovery.c"
+        abort_asm = root / "platform/h700/arch/h700_syscfg_probe.S"
+        abort_header = root / "platform/h700/arch/h700_data_abort_recovery.h"
+        if not abort_src.is_file() or not abort_asm.is_file() or not abort_header.is_file():
+            raise RuntimeError("H700 probe-scoped Data Abort source set is incomplete")
+        target_text = (root / "target/rg34xx_h700/init.c").read_text(encoding="utf-8")
+        if "h700_syscfg_ver_reg_low3" in target_text:
+            raise RuntimeError("SYS_CFG diagnostic must not be invoked from startup hooks")
+        summary.append("PASS probe-scoped-data-abort: dormant one-register probe is linked; target startup does not invoke it")
 
         target_rules = (worktree / "target/rg34xx_h700/rules.mk").read_text(encoding="utf-8")
         target_init = root / "target/rg34xx_h700/init.c"
