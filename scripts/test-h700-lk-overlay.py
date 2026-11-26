@@ -588,6 +588,7 @@ SECTIONS
         "-DARM_CPU_CORTEX_A53=1",
         "-DARM_ISA_ARMV7=1",
         "-DARCH_ARM=1",
+        "-DASSEMBLY=1",
     ]
     # LK arch.c contains CP10/VFP MRC/MCR instructions, which are A32-only.
     # Compile this architecture object in ARM state; keep H700 services and
