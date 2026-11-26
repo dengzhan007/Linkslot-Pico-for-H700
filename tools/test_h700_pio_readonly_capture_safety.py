@@ -22,8 +22,7 @@ class PioReadOnlyCaptureSafetyTests(unittest.TestCase):
         return [
             (index, line.strip())
             for index, line in enumerate(self.lines)
-            if not line.lstrip().startswith("#")
-            and re.search(r"\bdd\s+if=/dev/mem\b", line)
+            if re.match(r"^\s*if\s+!\s+dd\s+if=/dev/mem\b", line)
         ]
 
     def test_only_the_two_known_dat_registers_are_whitelisted(self):
