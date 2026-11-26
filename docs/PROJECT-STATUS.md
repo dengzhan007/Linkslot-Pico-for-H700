@@ -2,7 +2,7 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-26。运行时代码基线仍为 `3ce6bb3456f0c3f0f70dcdce92e827c8fac6cc4f`；后续 `7877f65`、`5cbaaed`、`0bd2451` 和 `dc9e6ca` 均为文档审计提交，没有改动运行时代码。完整 feasibility [#45770536064](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45770536064) 在 `dc9e6caba97c99cf5f710c3694f1d2addf143e38` 上 **75/75 steps 成功**，artifact [15093872709](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45770536064/artifacts/15093872709)（387,924,158 bytes）；同一提交 H700 boot-audit [#45770536066](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45770536066) Linux/Windows 双平台通过。该次验证是 host/cross-build 和工具审计，不是完整 LK target link 或实机启动。
+**最后核对时间：** 2026-11-26。运行时代码基线仍为 `3ce6bb3456f0c3f0f70dcdce92e827c8fac6cc4f`；`afbf940` 修复了 pinned LK timer audit 的函数原型识别，`da9e4b3` 扩展 FDT 中断控制器/计时器提取与回归测试，均未改动 H700 硬件运行时代码。完整 feasibility [#45770536064](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45770536064) 在 `dc9e6ca` 上 75/75 成功，artifact [15093872709](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45770536064/artifacts/15093872709)。最新 pinned LK early GIC/timer audit 步骤已在 #45771633645 的修复版复跑中通过；完整流程当时仍在运行，未计作通过。最新 FDT host-tools [#45772025184](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45772025184) Linux 6/6、Windows 8/8 通过；freestanding compile/storage regression [#45772025265](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45772025265) AArch64/AArch32 ARM/Thumb-2 8/8、storage 5/5 通过。以上均为 host/cross-build 验证，不是完整 LK target link 或实机启动。
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
@@ -794,3 +794,12 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 **下一步门槛：** 在任何 H700 timer writer/IRQ 实现前，先取得 RG34XX 原始 live FDT / `/proc/device-tree` 的 interrupt-controller compatible、reg、interrupt-cells 与 timer 描述，再通过独立 LK 只读诊断核实 BL31→BL33 时的 EL2/Generic Timer counter access controls、`CNTFRQ/CNTVCT` 可读性与持续增长，以及 GIC distributor/CPU-interface handoff 和 architected timer PPI ownership；GIC 版本与地址仍不得推测。Linux 中 IRQ 27 的运行计数只证明 Linux arch_timer 工作，不证明 BL33 可直接启用同一 PPI。只有这些证据闭合后，才实现 `current_time()` 与 LK `platform_set_periodic_timer()`/delay API 的 H700 provider，并通过静态链接与受控实机诊断验证。不得猜 PPI/IRQ、改写 EL2 控制寄存器或开启未知 timer IRQ。
 
 当前保持：`h700_arch_timer_init()` 不进入 `target_init()`；不连接 `timer_init()`；不启用 timer compare、GIC/PPI 或周期 IRQ；输入 PIO sampler 仍不接 normal runtime。
+
+## 28. RG34XX live FDT interrupt-controller / timer extraction（2026-11-26）
+
+- `tools/inspect_h700_fdt.py` 新增 `interrupt_controllers` 与 `timer_nodes` 输出：保留 compatible/status、phandle、父总线地址/size cell 解码后的 `reg` ranges、`#interrupt-cells`、继承的 `interrupt-parent`、原始 `interrupts` cells 分组及 `interrupts-extended` phandle 引用。
+- specifier 仅依 provider 的 `#interrupt-cells` 分组；不把 cell 含义解释为 Linux virq、GIC SPI/PPI 编号，也不推断 BL33 IRQ ownership。输出明确标注静态 DT 声明不证明运行态 handoff。
+- 合成 FDT 回归覆盖 GIC compatible/reg/#interrupt-cells/phandle、祖先继承的 interrupt-parent、timer interrupts 与 interrupts-extended。H700 boot-audit #45772025184 Linux host-tools 6/6、Windows 8/8 成功；H700 freestanding compile #45772025265 AArch64/AArch32 ARM/Thumb-2 8/8，storage host regression 5/5。
+- reports 分支的 `reports/rg34xx-inventory-20261125-163152/` 只保留旧 `live-fdt.json` 摘要，没有原始 `live-fdt.dtb`；旧 JSON 无法补回未导出的 interrupt-controller 节点。本次 parser 尚未在新的设备原始 FDT 上运行。
+- **下一步：** 用更新后的 `scripts/run-rg34xx-inventory.ps1` 对 RG34XX 做一次完整只读采集（从 `/sys/firmware/fdt` 捕获 raw DTB），将新的 `live-fdt.dtb` 和 `live-fdt.json` 上传 reports 分支；随后基于真实 compatible/reg/#interrupt-cells/timer declarations 核对 GIC 类型与资源窗口。仍需独立证明 BL31→BL33 counter access 与 timer PPI ownership；Linux IRQ 27 不能代替该证据。
+

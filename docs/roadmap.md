@@ -600,6 +600,17 @@ nodes and the original live DTB is not in the repository. A CI source guard,
 `scripts/audit-h700-lk-timer-prerequisites.py`, now checks this upstream
 contract without reading or writing hardware registers.
 
+The device-tree audit tooling has also been extended: the FDT inspector
+now preserves interrupt-controller compatible/register ranges, phandles,
+interrupt-cell counts, inherited interrupt parents, and raw timer interrupt
+specifiers (including `interrupts-extended`). Linux and Windows parser tests
+pass. The previously uploaded inventory contains only `live-fdt.json`, not
+the original `live-fdt.dtb`, so the newly exposed fields still require one
+fresh read-only device inventory. Re-run the Windows ADB inventory wrapper,
+upload both raw DTB and parsed JSON to reports, then review the actual GIC
+and timer declarations. Do not interpret Linux IRQ numbers as BL33 PPI
+numbers or configure any interrupt registers from the DT alone.
+
 **Next required work:** qualify the BL31→BL33 architected-counter access and
 actual RG34XX interrupt-controller identity/register layout, timer-counter access and timer-PPI handoff. Only then implement
 the H700 LK `current_time()`, periodic-timer and delay platform hooks. Do

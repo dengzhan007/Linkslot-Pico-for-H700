@@ -145,6 +145,30 @@ periodic timer, and delay contracts as a coherent provider. Until then, keep
 the read-only Generic Timer service unregistered and do not program timer
 compare/control, GIC/PPI, or IRQ state.
 
+## Live FDT interrupt-controller and timer inventory
+
+The read-only FDT inspector now emits `interrupt_controllers` and
+`timer_nodes`. It preserves compatible/status, phandle, register ranges
+decoded using the parent bus cell counts, `#interrupt-cells`, inherited
+`interrupt-parent`, raw `interrupts` specifiers grouped by the provider's
+cell count, and `interrupts-extended` references.
+
+The parser deliberately does not translate these cells into Linux virtual
+IRQ numbers or assert SPI/PPI meaning. This is static active-DTB declaration
+evidence only, not proof that a firmware stage enabled or handed an interrupt
+to BL33. The synthetic FDT tests cover GIC register ranges and phandle
+resolution, inherited interrupt-parent, timer specifiers and extended
+references. Linux/Windows host-tool tests passed in H700 boot-audit
+`#45772025184`; AArch64/AArch32 compile and storage regressions passed in
+`#45772025265`.
+
+The previous archived inventory contains `live-fdt.json` only; it did not
+retain `live-fdt.dtb`. Consequently, the new fields still need to be
+generated from a fresh RG34XX read-only inventory. The collector already
+copies `/sys/firmware/fdt` when the kernel exports it. Re-run the inventory,
+retain the raw DTB and JSON side by side, and inspect the actual controller
+compatible/reg/cell declarations before designing the H700 GIC provider.
+
 ## AArch32 early MMU mapping contract
 
 The H700 target uses the pinned GammaOS LK AArch32 section-table implementation
