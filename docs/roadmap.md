@@ -891,3 +891,25 @@ Hard size boundary: this first integration path is only for a small diagnostic p
 - [ ] Establish whether any such path executes during cold boot or only after
   later PSCI/power-management requests. Binary presence is not runtime proof.
 - Hardware unchanged: `hardware_applied=0`.
+
+
+## 2026-11-26 — PSCI raw slot 3/5 CCU helper control-flow correlation
+
+- [x] Export disassembly windows for all platform-ops entries and the CCU
+  helper callsite neighborhoods from the exact matched BL31 payload.
+- [x] Verify raw slot 3 entry `0x48002878` contains conditional CCU save
+  call `0x48002998 → 0x48001790`.
+- [x] Verify raw slot 5 entry `0x480026c4` contains conditional CCU restore
+  call `0x48002858 → 0x480018d8`, followed by tail branch
+  `0x48002874 → 0x48002680` (raw slot 4).
+- [x] Add CI assertions for slot 3/4/5 pointers, both helper BL targets,
+  the AArch64 tail-B target, and non-overlapping slot 5 disassembly bounds.
+  Current BL31 audit #33 [#45857603997](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45857603997)
+  passed 20/20.
+- [ ] Pin the exact vendor TF-A ABI/source version for this 107,216-byte BL31;
+  keep slot 3/4/5 semantic callback names unclassified until then.
+- [ ] Establish which PSCI conditions make either helper path execute at
+  runtime; static function presence is not a cold-boot/suspend/resume trace.
+- [ ] Close BL31→BL33 PIO/clock/permission, memory ownership, secondary A53
+  reset/hold-off and timer continuity gates.
+- Hardware unchanged: `hardware_applied=0`.

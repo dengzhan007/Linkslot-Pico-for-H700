@@ -172,3 +172,20 @@ These observations reduce uncertainty about the running Linux configuration, but
 3. Extend the BL31→BL33 audit to prove CPU1–CPU3 state, the single-core invariant and timer/monotonic-clock continuity.
 4. Reconcile the PLL lock-status bit with the exact shipping kernel/U-Boot configuration and authoritative H700 register documentation; distinguish Linux framework clock data from direct register readback.
 5. Resolve AVCC/thermal calibration or establish an independently verified sensor path. Only after all evidence is complete, design the transition state machine and host failure-injection tests; keep the runtime unavailable until board OPP approval.
+
+
+## Matched BL31 CCU helpers: separate raw PSCI ops-table code regions
+
+BL31 audit #33 confirms a conditional CCU save helper call from the function
+entered through raw ops-table slot 3 (`0x48002878 → 0x48001790`, callsite
+`0x48002998`) and a conditional CCU restore helper call from the separate
+function entered through raw slot 5 (`0x480026c4 → 0x480018d8`, callsite
+`0x48002858`). The latter tail-branches at `0x48002874` to raw slot 4
+(`0x48002680`).
+
+This is stronger static ownership evidence than isolated BL target hits, but
+the exact shipping TF-A callback ABI remains unpinned, so slots 3/4/5 are not
+assigned semantic names. These helper paths are not a CPU DVFS interface,
+not evidence of a BL33 startup clock transition, and not proof of runtime
+suspend/resume execution. Do not enable the Linkslot CPU-frequency service
+or write CCU/PLL/PMIC registers based on these findings.

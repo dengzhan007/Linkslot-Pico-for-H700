@@ -2,7 +2,7 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-26。当前工作分支 HEAD 为 `7c65f60a416f4e80c5d6290ceee37ccc072b9f8d`。最近一次完整 Linkslot/LK feasibility [#45854374894](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45854374894) 在 HEAD `51882e9ec0966cd42f9dfa9094552a1a130cb3fd` 上 **81/81 steps 成功（0 failures / 0 skipped）**；之后提交仅修改 BL31 host-only 审计脚本/测试和文档，未修改 H700 启动、MMIO、输入、显示或存储运行时代码。当前 HEAD 的 BL31 静态审计 [#45856177699](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45856177699) **20/20 steps 成功**，产物 [15135467944](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45856177699/artifacts/15135467944)。匹配 BL31 全镜像仍有 605 条重叠反汇编候选（CPUX_CCU 152、PIO 6、SID_SYS 275、AON_CPUCFG_PRCM 148、C0_CPUX_CFG 20、CPU_SUBSYSTEM 4）。H700 boot-audit [#45854375018](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45854375018) 成功；H700 AArch64/AArch32 ARM/Thumb-2 编译与 host 回归 [#45847406072](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847406072) 成功。**重要安全边界：** BL31 的六条 PIO 候选是 PH10/S_CIR 红外输入而非 PI12 电源灯；PI12 production MMIO 继续默认关闭。PSCI 操作表 slot 1 的 CPU_ON 分支已验证，但 slot 3/7 的回调语义及 CCU helper 的回调归属尚未由匹配固件 ABI/完整 CFG 证实。BL31→BL33 PIO/clock/权限、BL31/Boot0 内存所有权与 secondary A53 hold-off/SMP 仍未关闭。当前不是完整 LK 或可刷写镜像；无实机 MMIO、存储写入、刷写或 payload execution，`hardware_applied=0`.
+**最后核对时间：** 2026-11-26。当前 BL31 静态审计代码 HEAD 为 `73679e227f520f05e729dcbb03f5f80f05187491`。匹配 BL31 全镜像静态审计 [#45857603997](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45857603997) **20/20 steps 成功**，产物 [15136726031](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45857603997/artifacts/15136726031)。605 条重叠反汇编候选仍为 CPUX_CCU 152、PIO 6、SID_SYS 275、AON_CPUCFG_PRCM 148、C0_CPUX_CFG 20、CPU_SUBSYSTEM 4。新增 PSCI 反汇编确认：raw slot 3 函数区间包含 CCU save helper；raw slot 5 函数区间包含条件 CCU restore helper，并尾跳至 raw slot 4。slot 3/4/5 的 PSCI 语义名称仍未确认，不能推断 suspend/resume 回调或实际运行。完整 Linkslot/LK feasibility [#45854374894](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45854374894) 之前通过 81/81；更新文档后触发的 #880（HEAD `2bc0545...`）在最近检查时仍处于交叉编译工具安装步骤，10/80、无失败记录，尚未完成。H700 boot-audit [#45856568821](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45856568821) 的 Linux/Windows job 均成功。H700 AArch64/AArch32 ARM/Thumb-2 编译与 host 回归 [#45847406072](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847406072) 成功。**硬件状态不变：** PH10/S_CIR 红外配置不是 PI12 电源灯；PI12 production MMIO 继续默认关闭。BL31→BL33 PIO/clock/权限、BL31/Boot0 内存所有权与 secondary A53 hold-off/SMP 仍未关闭。当前不是完整 LK 或可刷写镜像；无实机 MMIO、存储写入、刷写或 payload execution，`hardware_applied=0`.
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
@@ -1319,3 +1319,45 @@ feasibility [#45834208280](https://github.com/dengzhan007/Linkslot-Pico-for-H700
 2. 对 slot 3/7 及 helper call sites 建立完整函数边界和 CFG，分别确认 CPU suspend / resume / off 回调归属。
 3. 区分 cold-boot handoff 与后续 PSCI power-management 路径；在没有运行时 trace/readback 前不认定 helper 已执行。
 4. 继续关闭 BL31/Boot0 内存所有权、secondary A53 hold-off、PIO/clock permissions 门槛后，再考虑完整 LK target integration。
+
+
+## 2026-11-26 续接：PSCI 操作表中 CCU helper 的分项归属
+
+**静态审计代码 HEAD：** `73679e227f520f05e729dcbb03f5f80f05187491`。  
+**reports HEAD：** `2963c8c479486a98c5202dad86e14dbe6e0f466f`。
+
+### CI
+- 当前 HEAD 的 BL31 静态审计 [#45857603997](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45857603997)：20/20 steps 成功，产物 [15136726031](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45857603997/artifacts/15136726031)。
+- 当前文档提交触发的完整 feasibility #880 [#45856568955](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45856568955) 最近一次检查仍在 `Install LLVM cross-link tools`，10/80 steps，未报告失败；不能记为通过。
+- H700 boot-audit #1424 [#45856568821](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45856568821)：Linux 与 Windows job 均成功。
+- 最近一次已完成的全量 Linkslot/LK feasibility #879 [#45854374894](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45854374894)：81/81 steps 成功；其后变化主要是 BL31 host-only 审计和文档。
+
+### PSCI raw ops table：新增的静态控制流证据
+匹配的 BL31 platform-ops 表位于 `0x480165f8`，注册路径为
+`0x48009dec → 0x480029bc`。PSCI dispatcher 从
+`psci_plat_pm_ops` 全局指针取表项并间接调用。CI #33 的
+`PSCI-CALLBACK-DISASSEMBLY.txt` 对所有表项及两个 CCU helper 输出了
+AArch64 反汇编窗口，验证：
+
+- **raw slot 3** 指向函数入口 `0x48002878`。该函数在条件路径中于
+  `0x48002998` 调用 CCU/AON 保存 helper `0x48001790`；其 epilogue
+  在 `0x480029b4` 返回。
+- **raw slot 5** 指向函数入口 `0x480026c4`。该函数的一条条件路径在
+  `0x48002858` 调用 CCU/AON 恢复 helper `0x480018d8`；之后在
+  `0x48002874` 尾跳到 **raw slot 4** 的入口 `0x48002680`。
+- CI 同时校验了 slot 3/4/5 原始指针值、两条 BL helper 目标和
+  `0x48002874` 的 AArch64 B 目标。反汇编窗口对 slot 5 精确覆盖
+  `[0x480026c4,0x48002878)`，不把相邻 slot 3 的入口包含进来。
+- 因此可以确认两个 helper 调用分别位于不同 raw ops-table entry 的
+  函数代码区间中。**不能**仅据此命名 slot 3/4/5 为 suspend/off/finish
+  或 resume：出厂 BL31 对应的 TF-A ABI/源码版本仍未锁定。
+- 两个调用都是条件路径。二进制静态存在不证明设备启动、休眠或唤醒时
+  实际执行；也不证明 BL33 启动时进行 PLL/CPU 频率切换。
+
+### 仍然关闭的门槛
+- CCU helper 的 PSCI 回调语义、实际触发条件和运行时调用尚未全部确认；
+  CPU DVFS 不可用，禁止写 PLL/CCU/PMIC。
+- PH10/S_CIR 是红外输入路径，不是 PI12 LED；PI12 MMIO 仍 default-off。
+- BL31→BL33 PIO/clock/permission、BL31/Boot0 RAM 生命周期、secondary
+  A53 初始 reset/hold-off 和 timer continuity 尚未闭合。
+- `H700_MEMORY_LAYOUT_APPROVED` 未设置；`hardware_applied=0`。

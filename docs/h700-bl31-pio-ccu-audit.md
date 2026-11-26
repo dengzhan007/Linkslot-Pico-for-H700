@@ -200,3 +200,37 @@ during initial BL31→BL33 handoff. The current conclusion is limited to
 verified table registration, slot-1 CPU_ON control flow, and the presence
 of two BL31 power-management helper edges. Do not infer CPU DVFS, PLL
 startup sequencing, or runtime suspend/resume behavior from this audit.
+
+
+## PSCI CCU helper calls mapped to separate raw ops-table functions (2026-11-26)
+
+BL31 audit #33 [#45857603997](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45857603997)
+passed 20/20 steps. Artifact [15136726031](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45857603997/artifacts/15136726031)
+contains the expanded `PSCI-CALLBACK-DISASSEMBLY.txt` plus the JSON assertions.
+
+The verified platform-ops raw pointer values are:
+- slot 3: `0x48002878`;
+- slot 4: `0x48002680`;
+- slot 5: `0x480026c4`.
+
+Disassembly from raw slot 3's entry at `0x48002878` shows a conditional
+call at `0x48002998` to the CCU/AON save helper `0x48001790`. The same
+function restores its frame and returns at `0x480029b4`.
+
+The separate function beginning at raw slot 5's entry `0x480026c4`
+contains a conditional call at `0x48002858` to the CCU/AON restore helper
+`0x480018d8`. Its epilogue then tail-branches at `0x48002874` to
+`0x48002680`, which is the raw slot 4 pointer. The branches at
+`0x480026e4` and `0x480026ec` can bypass the restore call, so this is a
+conditional path, not an unconditional operation.
+
+The CI now asserts the slot 3/4/5 pointer values, both BL targets, the
+AArch64 B target at `0x48002874`, and the exact slot 5 disassembly window
+`[0x480026c4, 0x48002878)`. Thus the save and restore helper callsites are
+associated with distinct raw ops-table function regions.
+
+**Interpretation limit:** slot 3/4/5 names remain unclassified because the
+exact shipping TF-A ABI/source version is unknown. Do not label them as
+suspend/off/finish/resume from slot numbers alone. The static code does not
+prove runtime execution or cold-boot reachability; it does not establish a
+CPU DVFS API or startup PLL change. Hardware remains untouched.
