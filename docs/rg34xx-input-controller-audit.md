@@ -213,6 +213,7 @@ from FDT alone: compare stable idle samples with the bit changes observed
 while each physical key is held. The sample interval may be longer than
 100 ms due to per-register `dd` process overhead.
 
-The helper and its static safety regression have host CI coverage only until
-a device report is uploaded. **No device MMIO read has yet been performed,
+The helper and its static safety regression passed Linux/Windows host CI
+[#45762940878](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45762940878)
+(89 Python tests on each platform plus shell syntax validation). **No device MMIO read has yet been performed,
 and the LK sampler remains disconnected from all runtime entry points.**

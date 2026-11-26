@@ -537,7 +537,7 @@ request GPIO lines, or add EINT/IRQ handling before that comparison closes.
 
 - [x] Linux runtime evidence confirms all 17 GPIO gamepad keys on `ANBERNIC-keys/event1`; physical X/Y labels are independently confirmed and the H700 logical map is corrected.
 - [x] Reports-side `/proc/iomem` confirms the PIO resource range `0300b000-0300b3ff` at `/soc@03000000/pinctrl@0300b000`.
-- [x] Add a separate bounded `/dev/mem` **read-only** collector for exactly PA_DAT `0x0300b010` and PE_DAT `0x0300b0a0`; gate it on root, readable `/dev/mem`, and exact `/proc/iomem` resource identity. Add static safety tests and shell syntax CI.
+- [x] Add a separate bounded `/dev/mem` **read-only** collector for exactly PA_DAT `0x0300b010` and PE_DAT `0x0300b0a0`; gate it on root, readable `/dev/mem`, and exact `/proc/iomem` resource identity. Static safety tests and shell syntax passed on Linux + Windows [#45762940878](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45762940878), 89 tests per platform.
 - [ ] Run the collector on RG34XX while pressing each gamepad key and upload `pio-samples.csv`; establish physical pin bit positions, active-low behavior and sample cadence from readback rather than assumptions.
 - [ ] Compare raw PIO edge timing with the already-recorded Linux evdev events; only then select an LK polling cadence/debounce policy.
 - [ ] Do not connect the scanner to LK main loop until the hardware readback is complete and repeatable. No pinmux/pull/drive writes, EINT/GIC setup or changes to the GPIO kernel owner are in scope.
