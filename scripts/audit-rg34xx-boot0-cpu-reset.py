@@ -16,6 +16,8 @@ BOOT0_LOAD_BASE = 0x20000
 PRIMARY_BYTES = 131072
 PRIMARY_SHA256 = "bf886995745a0eb9b5030296f9f6163035e164b3a82183716e67ff876319289f"
 RESET_DEFAULT = 0x13FF0101
+SID_BASE = 0x03006000
+SID_SIZE = 0x1000
 
 
 def u32(raw: bytes, offset: int) -> int:
@@ -141,6 +143,8 @@ def main() -> int:
     gate_value = u32(raw, gate_literal_address - BOOT0_LOAD_BASE)
     if gate_value != 0x03006248:
         raise RuntimeError("Boot0 CPU-reset gate literal changed: 0x%08x" % gate_value)
+    if not (SID_BASE <= gate_value < SID_BASE + SID_SIZE):
+        raise RuntimeError("Boot0 CPU-reset gate address no longer falls in the documented H616 SID window")
 
     require(caller, 0x2322C, "ldr", "r3, [r3]")
     shift = require(caller, 0x2322E, "lsls", "r3, r3")
@@ -208,6 +212,11 @@ def main() -> int:
             "reset_action": "write C0_RST_CTRL & ~(1 << core), asserting reset for selected CPU[3:0] bit",
             "invoked_for": [2, 3],
             "condition_register": "0x03006248",
+            "condition_register_block": "SID peripheral window (H616 family reference)",
+            "condition_register_block_base": "0x03006000",
+            "condition_register_offset": "0x248",
+            "condition_register_block_size": "0x1000",
+            "condition_register_field_definition": "not present in the H616 public register tables; do not assign a fuse/strap meaning",
             "condition": "bit 29 set; LSLS #2 moves original bit29 to N, BPL skips when clear",
         },
         "h616_register_reference": {
@@ -237,6 +246,8 @@ def main() -> int:
             "The file named boot0-secondary.bin is a second Boot0 image copy/slot, not CPU1 firmware.",
             "The reset default is a hardware reset value, not live readback at BL31->BL33 handoff.",
             "The 0x03006248 feature-bit runtime value is not captured; CPU2/CPU3 helper runs only when bit29 is set.",
+            "0x03006248 falls inside the H616 SID address window at offset 0x248, but the public H616 register list does not define this word or bit29. Its exact H700 meaning is unknown; only a masked single-bit read should be considered, never a full SID dump.",
+
             "The write to 0x09010044 is unusual: H616 documentation calls it CPU0 RVBARADDR0_H, but this helper ORs a CPU2/CPU3 one-hot mask into it. Its purpose is unresolved.",
             "The scan follows direct statically decoded instructions and direct MMIO references; indirect/secure/ROM behavior is not fully modeled.",
             "No hardware MMIO, CPU state, reset bits, or RVBAR values were read. No firmware, Boot0, TOC1, SD or payload was written or executed.",
@@ -252,6 +263,8 @@ def main() -> int:
         "- CPU reset helper: 0x231e0 (file offset 0x31e0); caller 0x23224.",
         "- Helper clears DBG_REG1.C_DBGPWRUPREQ[core], ORs one-hot bit into 0x09010044, then writes C0_RST_CTRL & ~(1 << core).",
         "- Caller reads 0x03006248; bit 29 selects helper calls for core 2 and core 3. Core 1 is not passed to this helper.",
+        "- Gate address 0x03006248 is in the H616 SID window [0x03006000,0x03007000), offset 0x248; the public register tables do not define this word/bit29.",
+
         "- H616 C0_RST_CTRL reset default 0x13ff0101: CPU0 reset bit=1 (deasserted); CPU1-3 bits=0 (asserted).",
         "- The helper reset write keeps selected CPU2/CPU3 reset bits asserted; it never sets/deasserts C0_RST_CTRL bits.",
         "- Native SPL programs the primary RVBAR pair only; BL31 statically references CPU0 mode register 0x09010010, with no direct reset/secondary RVBAR access recovered.",
