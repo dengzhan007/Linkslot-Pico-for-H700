@@ -69,7 +69,7 @@ Both analog key controllers (`gpadc` as `disabled`, `keyboard` as `disable`) are
 | `/soc@03000000/pinctrl@07022000` | `allwinner,sun50iw9p1-r-pinctrl` | okay | 6 | 3 |
 | `/soc@03000000/twi@0x07081400/pmu/axp_gpio@0` | `-` | okay | 6 | None |
 
-All 17 keys resolve through `&pio` (`allwinner,sun50iw9p1-pinctrl`, phandle `0x4b`, `#gpio-cells = 6`) with unpulled, active-low inputs at drive level 2 and mux 0 (GPIO input). Bank letters used are `PA` (A/B/X/Y/L1/L2/R1/R2/select/start/dpad) and `PE` (Menu, vol+/vol-, dpad up/down).
+All 17 keys resolve through `&pio` (`allwinner,sun50iw9p1-pinctrl`, phandle `0x4b`, `#gpio-cells = 6`) with **weak pull-up** (`pull_config = 1`), active-low inputs, drive level 2 and mux 0 (GPIO input). The pinned Allwinner kernel header defines `SUNXI_PINCTRL_PULL_UP = 1` and `SUNXI_PINCTRL_NO_PULL = 0`; therefore `pull_config = 1` is not an unpulled input. Bank letters used are `PA` (A/B/X/Y/L1/L2/R1/R2/select/start/dpad) and `PE` (Menu, vol+/vol-, dpad up/down).
 
 ## 5. PMIC power key
 
