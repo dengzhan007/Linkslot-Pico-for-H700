@@ -231,12 +231,17 @@ static int test_readonly_libretro_vfs_backend(void)
     struct h700_gpt_partition partition;
     struct fake_card fake;
     retro_vfs_file_handle *file;
+    retro_vfs_file_handle *second_file;
+    retro_vfs_file_handle *files[H700_FAT_VFS_MAX_FILES];
     retro_vfs_dir_handle *directory;
+    retro_vfs_dir_handle *directories[H700_FAT_VFS_MAX_DIRS];
     char bytes[8] = {0};
     int32_t file_size = -1;
     int flags;
     int64_t result;
     uint32_t before_commands;
+    size_t i;
+    size_t j;
 
     memset(&fake, 0, sizeof(fake));
     make_fat32_media();
@@ -370,6 +375,110 @@ static int test_readonly_libretro_vfs_backend(void)
 
     result = g_installed_backend->seek(0, 0, 99);
     CHECK(result < 0, "invalid seek whence is rejected");
+
+    /* Two live file handles must keep independent positions and path state. */
+    file = g_installed_backend->open(
+        "/mnt/sdcard/Games/GBA/TITLE.GBA",
+        LINKSLOT_RETRO_VFS_FILE_ACCESS_READ, 0u);
+    second_file = g_installed_backend->open(
+        "/mnt/sdcard/Games/GBA/TITLE.GBA",
+        LINKSLOT_RETRO_VFS_FILE_ACCESS_READ, 0u);
+    CHECK(file != 0 && second_file != 0 && file != second_file,
+          "same ROM can be opened through two distinct live handles");
+    CHECK(g_installed_backend->read(file, bytes, 1u) == 1 &&
+          bytes[0] == 'G',
+          "first live handle reads its first byte");
+    CHECK(g_installed_backend->tell(file) == 1 &&
+          g_installed_backend->tell(second_file) == 0,
+          "second file handle retains its independent zero position");
+    CHECK(g_installed_backend->read(second_file, bytes, 2u) == 2 &&
+          memcmp(bytes, "GA", 2u) == 0,
+          "second live handle reads independently from offset zero");
+    CHECK(g_installed_backend->tell(file) == 1 &&
+          g_installed_backend->tell(second_file) == 2,
+          "interleaved reads preserve per-handle positions");
+    CHECK(strcmp(g_installed_backend->get_path(file),
+                 "/mnt/sdcard/Games/GBA/TITLE.GBA") == 0 &&
+          strcmp(g_installed_backend->get_path(second_file),
+                 "/mnt/sdcard/Games/GBA/TITLE.GBA") == 0,
+          "each live file handle retains its original path");
+    CHECK(g_installed_backend->close(file) == 0 &&
+          g_installed_backend->close(second_file) == 0,
+          "both independent file handles close");
+
+    /* Exercise the entire fixed file table, overflow, stale-handle rejection,
+       and slot reuse without allocating any target-side heap memory. */
+    for (i = 0u; i < H700_FAT_VFS_MAX_FILES; ++i) {
+        files[i] = g_installed_backend->open(
+            "/mnt/sdcard/Games/GBA/TITLE.GBA",
+            LINKSLOT_RETRO_VFS_FILE_ACCESS_READ, 0u);
+        CHECK(files[i] != 0, "every configured file-handle slot can be allocated");
+        for (j = 0u; j < i; ++j)
+            CHECK(files[i] != files[j], "simultaneous file handles use distinct slots");
+    }
+    CHECK(g_installed_backend->open(
+              "/mnt/sdcard/Games/GBA/TITLE.GBA",
+              LINKSLOT_RETRO_VFS_FILE_ACCESS_READ, 0u) == 0,
+          "file-handle table exhaustion fails closed");
+    CHECK(g_installed_backend->tell(files[0]) == 0 &&
+          g_installed_backend->tell(files[H700_FAT_VFS_MAX_FILES - 1u]) == 0,
+          "new file-handle slots begin with independent positions");
+    CHECK(g_installed_backend->read(files[0], bytes, 1u) == 1 &&
+          bytes[0] == 'G' && g_installed_backend->tell(files[0]) == 1 &&
+          g_installed_backend->tell(files[1]) == 0,
+          "one file handle can advance without moving another");
+    CHECK(g_installed_backend->close(files[1]) == 0,
+          "a file slot can be released while other handles remain open");
+    CHECK(g_installed_backend->size(files[1]) < 0 &&
+          g_installed_backend->get_path(files[1]) == 0,
+          "closed file handles are rejected before slot reuse");
+    files[1] = g_installed_backend->open(
+        "/mnt/sdcard/Games/GBA/TITLE.GBA",
+        LINKSLOT_RETRO_VFS_FILE_ACCESS_READ, 0u);
+    CHECK(files[1] != 0,
+          "released file-handle capacity can be reused");
+    for (i = 0u; i < H700_FAT_VFS_MAX_FILES; ++i)
+        CHECK(g_installed_backend->close(files[i]) == 0,
+              "all file-handle slots close cleanly");
+
+    /* Directory handles have independent enumeration cursors and limits. */
+    for (i = 0u; i < H700_FAT_VFS_MAX_DIRS; ++i) {
+        directories[i] = g_installed_backend->opendir(
+            "/mnt/sdcard/Games/GBA", false);
+        CHECK(directories[i] != 0,
+              "every configured directory-handle slot can be allocated");
+        for (j = 0u; j < i; ++j)
+            CHECK(directories[i] != directories[j],
+                  "simultaneous directory handles use distinct slots");
+    }
+    CHECK(g_installed_backend->opendir(
+              "/mnt/sdcard/Games/GBA", false) == 0,
+          "directory-handle table exhaustion fails closed");
+    CHECK(g_installed_backend->readdir(directories[0]) &&
+          g_installed_backend->readdir(directories[1]),
+          "two open directory handles enumerate independently");
+    CHECK(strcmp(g_installed_backend->dirent_get_name(directories[0]), "TITLE.GBA") == 0 &&
+          strcmp(g_installed_backend->dirent_get_name(directories[1]), "TITLE.GBA") == 0,
+          "each directory handle owns its current directory entry");
+    CHECK(!g_installed_backend->readdir(directories[0]) &&
+          g_installed_backend->dirent_get_name(directories[0]) == 0,
+          "first directory cursor reaches EOF independently");
+    CHECK(g_installed_backend->dirent_get_name(directories[1]) != 0,
+          "second directory cursor is unaffected by first-handle EOF");
+    CHECK(g_installed_backend->closedir(directories[0]) == 0,
+          "one directory slot can close while other iterators remain open");
+    CHECK(!g_installed_backend->readdir(directories[0]) &&
+          g_installed_backend->closedir(directories[0]) < 0,
+          "closed directory handles are rejected before slot reuse");
+    directory = g_installed_backend->opendir(
+        "/mnt/sdcard/Games/GBA", false);
+    CHECK(directory != 0,
+          "released directory-handle capacity can be reused");
+    CHECK(g_installed_backend->closedir(directory) == 0,
+          "reused directory handle closes");
+    for (i = 1u; i < H700_FAT_VFS_MAX_DIRS; ++i)
+        CHECK(g_installed_backend->closedir(directories[i]) == 0,
+              "all remaining directory-handle slots close cleanly");
 
     return 1;
 }
