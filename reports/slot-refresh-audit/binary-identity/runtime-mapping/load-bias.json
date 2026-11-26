@@ -1,0 +1,63 @@
+{
+  "artifact": "load-bias.json",
+  "subject": "armgba_libretro.so",
+  "elf": {
+    "source": "build/binary-identity/device/armgba_libretro.so",
+    "size": 2021992,
+    "type": "ET_DYN",
+    "pt_load": [
+      {
+        "index": 0,
+        "p_offset": 0,
+        "p_vaddr": 0,
+        "p_paddr": 0,
+        "p_filesz": 1529542,
+        "p_memsz": 1529542,
+        "p_align": 65536,
+        "p_flags": 5
+      },
+      {
+        "index": 1,
+        "p_offset": 1529760,
+        "p_vaddr": 1595296,
+        "p_paddr": 1595296,
+        "p_filesz": 215728,
+        "p_memsz": 5048336,
+        "p_align": 65536,
+        "p_flags": 6
+      }
+    ]
+  },
+  "method": {
+    "page_size": 4096,
+    "formula": "bias_i = map_start_i - (p_vaddr_i & ~(PAGE-1))",
+    "alternative_formula": "bias_i = map_start_i - map_offset_i - (p_vaddr_i & ~(PAGE-1)) + (p_offset_i & ~(PAGE-1))",
+    "cross_check": "all mapped PT_LOAD rows must yield the same bias"
+  },
+  "predicted_maps": [
+    {
+      "perms": "r-xp",
+      "offset": 0,
+      "start": "bias+0x000000",
+      "note": "PT_LOAD #0, p_vaddr=0"
+    },
+    {
+      "perms": "r--p",
+      "offset": 1527808,
+      "start": "bias+0x185000",
+      "note": "PT_LOAD #1 head, RELRO"
+    },
+    {
+      "perms": "rw-p",
+      "offset": 1609728,
+      "start": "bias+0x189000",
+      "note": "PT_LOAD #1 tail + .bss"
+    }
+  ],
+  "captured": null,
+  "status": "pending-capture",
+  "notes": [
+    "未取得 armgba_libretro.so 的 /proc/PID/maps 行：采集时 Slot 处于前端 UI，核心尚未 dlopen。需要在游戏运行中重新采集后重跑本脚本。",
+    "主解算行是 PT_LOAD #0（p_vaddr == p_offset == 0，offset 字段必为 00000000）；PT_LOAD #1 的行用于交叉验证，两者解出的 bias 必须相等。"
+  ]
+}

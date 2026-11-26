@@ -1,0 +1,68 @@
+# armgba_libretro.so — ELF PT_LOAD 与加载布局
+
+对象：`build/binary-identity/device/armgba_libretro.so`（设备 `/mnt/sdcard/SYSTEM/armgba_libretro.so` 的逐字节副本）
+来源：`python build/k22_ptload.py`（pyelftools 0.33，离线只读）
+
+## 1. ELF 头
+
+| 项 | 值 |
+| --- | --- |
+| 类型 | `ET_DYN`（位置无关共享对象，dlopen 加载） |
+| 机器 | `EM_AARCH64` / ELF64 / LSB |
+| 文件大小 | 2021992 B |
+| `e_entry` | `0x11880` |
+| `e_phnum` | 8 个程序头，其中 PT_LOAD 2 个 |
+
+## 2. PT_LOAD 全表
+
+| idx | flags | p_offset | p_vaddr | p_filesz | p_memsz | p_align | 页内起始 (4 KiB 对齐) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 | RX | `0x000000` | `0x000000` | `0x1756c6` | `0x1756c6` | `0x10000` | vaddr `0x000000` / off `0x000000` |
+| 1 | RW | `0x1757a0` | `0x1857a0` | `0x034ab0` | `0x4d0810` | `0x10000` | vaddr `0x185000` / off `0x175000` |
+
+```
+idx  flags  p_offset     p_vaddr      p_filesz     p_memsz      p_align
+0    RX     0x00000000   0x00000000   0x001756c6   0x001756c6   0x10000
+1    RW     0x001757a0   0x001857a0   0x00034ab0   0x004d0810   0x10000
+```
+
+## 3. 两个段的性质
+
+**LOAD #0（RX，代码/只读数据）**
+
+- `p_vaddr == p_offset == 0`，因此 `bias = 映射起始地址 − 0`，是最干净的一把尺子。
+- `p_filesz == p_memsz == 0x1756c6`，没有 .bss 尾巴，映射后不会被拆成多行。
+- 覆盖 `.text`（`0x11880`）到 `.gcc_except_table` 末尾（`0x1756c6`）。
+
+**LOAD #1（RW，数据 + .bss）**
+
+- `p_vaddr − p_offset = 0x10000`，即两段在文件与内存之间差一个 64 KiB 对齐块。
+- `p_filesz = 0x34ab0`（`.tdata`/`.data` 初始化数据），`p_memsz = 0x4d0810`，多出的 `0x49bd60`（约 4.61 MiB）是 `.bss` 零填充。
+- 两个 `gba` 符号（`0x4c16a8`、`0x4259b8`）都落在 `.bss`（`0x1ba250`–`0x655fb0`）里，即 LOAD #1 的零填充区。
+- `p_memsz` 大于 `p_filesz`，运行时这一行通常被内核拆成“文件映射部分 + 匿名零页部分”，`[vvar]` 式拆分不影响 bias 计算：仍用该行 `起始 − align_down(p_vaddr)`。
+
+## 4. bias 计算式
+
+对每个 PT_LOAD 行各自独立算一次：
+
+```
+bias_i = map_start_i − (p_vaddr_i & ~0xFFF)          # 4 KiB 页对齐
+       = map_start_i − align_down(p_vaddr_i, PAGE_SIZE)
+```
+
+代入本 ELF：
+
+```
+bias_0 = start(r-xp, offset 0x000000) − 0x000000 = start(r-xp)
+bias_1 = start(rw-p/r--p, offset 0x175000) − 0x185000
+```
+
+两者必须相等；差值非零说明选错了行或该行被 `mmap` 拆分/合并，应退回用 offset 字段核对：
+
+```
+map_offset_i == (p_vaddr_i & ~0xFFF) − (p_vaddr_base & ~0xFFF)   # 以最低 vaddr 段为基准
+```
+
+本 ELF 的 `p_align = 0x10000`：加载器可以按 64 KiB 对齐放置，但 Linux 的 `mmap` 以 4 KiB 为粒度，
+因此 bias 实际只需满足 4 KiB 对齐；maps 里出现 64 KiB 对齐也不代表规则改变。
+
