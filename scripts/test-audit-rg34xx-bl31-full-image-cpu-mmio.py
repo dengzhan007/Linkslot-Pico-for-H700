@@ -28,6 +28,15 @@ def main() -> int:
     words = module.literal_hits(literal_data)
     assert len(words) == 1 and words[0]["value"] == "0x090100c4", words
 
+    assert module.label(0x03001000) == "CPUX_CCU"
+    assert module.label(0x03001520) == "CPUX_CCU"
+    assert module.label(0x03001FFF) == "CPUX_CCU"
+    assert module.label(0x03002000) == "SID_SYS"
+    assert module.label(0x0300B000) == "PIO"
+    assert module.label(0x0300B124) == "PIO"
+    assert module.label(0x0300B130) == "PIO"
+    assert module.label(0x0300B3FF) == "PIO"
+    assert module.label(0x0300B400) == "SID_SYS"
     assert module.label(0x09010000) == "C0_CPUX_CFG"
     assert module.label(0x090100C4) == "C0_CPUX_CFG"
     assert module.label(0x09020000) is None

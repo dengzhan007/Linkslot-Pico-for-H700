@@ -18,7 +18,11 @@ BASE = 0x48000000
 EXPECTED_SIZE = 107216
 EXPECTED_SHA = "676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31"
 WINDOW = 16
+# More-specific H700 ranges precede the broad SYS_CFG/SID window so
+# reports distinguish CCU and PIO candidates without losing other SYS reads.
 RANGES = (
+    (0x03001000, 0x03002000, "CPUX_CCU"),
+    (0x0300B000, 0x0300B400, "PIO"),
     (0x03000000, 0x03010000, "SID_SYS"),
     (0x07000000, 0x07010000, "AON_CPUCFG_PRCM"),
     (0x08100000, 0x08110000, "CPU_SUBSYSTEM"),

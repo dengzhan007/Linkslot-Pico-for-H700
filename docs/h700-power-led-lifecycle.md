@@ -166,3 +166,31 @@ read at `0x03000024`; an abort on PI12/PIO remains fatal. Linux runtime
 clock-summary data is later in the boot chain and cannot replace a BL33
 handoff snapshot. Keep physical PI12 MMIO disabled in production until that
 gap and memory/secondary-core ownership gates are closed.
+
+
+## BL31 PIO/CCU access-candidate scan (2026-11-26)
+
+The exact matched BL31 monitor payload is scanned across the complete
+107,216-byte image by `scripts/audit-rg34xx-bl31-full-image-cpu-mmio.py`.
+The address classifier now reports two narrower H700 windows before the
+broad SYS_CFG/SID range:
+
+- `CPUX_CCU`: `[0x03001000, 0x03002000)`, the 4 KiB CPUX clock/CCU resource
+  identified by the pinned `sun50iw9p1-clk.dtsi` source audit. This is a
+  source-derived candidate range, not an MMIO readback or access approval.
+- `PIO`: `[0x0300b000, 0x0300b400)`, the exact 0x400-byte active PIO resource
+  in the sanitized live RG34XX FDT. It includes PI12 configuration/data
+  registers and the PI14/PI15 pins touched earlier by the BaseOS SPL.
+
+The broad `SID_SYS` classifier remains for the rest of
+`[0x03000000, 0x03100000)`; specific CCU/PIO hits are counted separately.
+Host regressions lock the range boundaries and ensure the generic label does
+not swallow the specific PIO/CCU classifications.
+
+This scan is deliberately heuristic: it decodes overlapping aligned AArch64
+windows and tracks local register constants. A candidate is a lead for
+manual disassembly/control-flow review; an absent candidate does not prove
+that BL31 never accesses the block through indirect, data-driven or secure
+paths. It cannot establish APB1 clock state, PIO access permissions, or
+register values at BL33 entry. PI12 physical MMIO therefore remains disabled
+in production, and `hardware_applied=0`.
