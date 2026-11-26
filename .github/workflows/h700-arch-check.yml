@@ -19,6 +19,7 @@ on:
       - "scripts/test-h700-rg34xx-input-map.sh"
       - "scripts/test-h700-rg34xx-input-scan.sh"
       - "scripts/test-h700-pio-mmu-mapping.sh"
+      - "scripts/test-h700-data-abort-recovery.sh"
       - "scripts/collect-rg34xx-readonly-inventory.sh"
       - "tools/test_inventory_script_safety.py"
       - "tools/inspect_h700_fdt.py"
@@ -60,6 +61,7 @@ on:
       - "scripts/test-h700-rg34xx-input-map.sh"
       - "scripts/test-h700-rg34xx-input-scan.sh"
       - "scripts/test-h700-pio-mmu-mapping.sh"
+      - "scripts/test-h700-data-abort-recovery.sh"
       - "scripts/collect-rg34xx-readonly-inventory.sh"
       - "tools/test_inventory_script_safety.py"
       - "tools/inspect_h700_fdt.py"
@@ -107,6 +109,7 @@ jobs:
           sh scripts/test-h700-rg34xx-input-map.sh
           sh scripts/test-h700-rg34xx-input-scan.sh
           sh scripts/test-h700-pio-mmu-mapping.sh
+          sh scripts/test-h700-data-abort-recovery.sh
           python3 tools/test_inventory_script_safety.py
           python3 tools/test_inspect_h700_fdt.py
           python3 tools/test_analyze_h700_opp_candidates.py
