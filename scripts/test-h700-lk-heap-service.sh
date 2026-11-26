@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -eu
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CC="${CC:-cc}"
 TMP_DIR="$(mktemp -d)"
-trap 'rm -rf "$TMP_DIR"' EXIT
+trap 'rm -rf "$TMP_DIR"' 0
 
 "$CC" -std=c11 -Wall -Wextra -Werror \
     -I"$ROOT/platform/h700/runtime" \
