@@ -133,6 +133,26 @@ def instruction_hits(raw: bytes) -> list[dict]:
                 regs.clear()
     return sorted(hits.values(), key=lambda row: (int(row["pc"], 16), int(row["address"], 16)))
 
+def region_disassembly(raw: bytes, start: int, end: int) -> tuple[str, list[dict]]:
+    md = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
+    md.detail = True
+    first = max(start, BASE)
+    last = min(end, BASE + len(raw))
+    listing = []
+    branches = []
+    for ins in md.disasm(raw[first - BASE:last - BASE], first):
+        byte_text = " ".join("%02x" % byte for byte in ins.bytes)
+        listing.append("%08x: %-11s %s %s" % (ins.address, byte_text, ins.mnemonic, ins.op_str))
+        if ins.mnemonic in ("b", "bl", "b.eq", "b.ne", "cbz", "cbnz", "tbz", "tbnz"):
+            if ins.operands and ins.operands[-1].type == ARM64_OP_IMM:
+                branches.append({
+                    "pc": "0x%08x" % ins.address,
+                    "mnemonic": ins.mnemonic,
+                    "target": "0x%08x" % int(ins.operands[-1].imm),
+                })
+    return "\n".join(listing) + "\n", branches
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--reports-root", type=Path, required=True)
@@ -145,6 +165,12 @@ def main() -> int:
         raise RuntimeError("monitor payload identity mismatch; refusing whole-image scan")
     literals = literal_hits(raw)
     accesses = instruction_hits(raw)
+    # The full-image candidate pass identified a dense cluster of CPUCFG
+    # accesses here. Save a contiguous linear listing so reviewers can inspect
+    # function shape and direct calls; it remains a candidate region, not CFG proof.
+    cpu_region_listing, cpu_region_branches = region_disassembly(
+        raw, 0x48002D00, 0x48003180
+    )
     counts = {name: sum(1 for hit in accesses if hit["window"] == name) for _, _, name in RANGES}
     report = {
         "schema": "rg34xx-bl31-whole-image-cpu-mmio-candidates-v1",
@@ -163,8 +189,12 @@ def main() -> int:
     }
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
+    report["cpu_control_region_direct_branches"] = cpu_region_branches
     (out / "full-image-cpu-mmio-candidates.json").write_text(
         json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    (out / "cpu-control-region-0x48002d00-0x48003180.txt").write_text(
+        cpu_region_listing, encoding="utf-8"
     )
     lines = [
         "# BL31 whole-image CPU/MMIO candidate scan", "",
