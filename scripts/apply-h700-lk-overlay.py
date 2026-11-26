@@ -253,6 +253,12 @@ def patch_arch_c(original: str) -> str:
 
 
 def patch_exceptions(original: str) -> str:
+    abort_entry = "FUNCTION(arm_data_abort)\n\tstmfd "
+    abort_entry_patched = "FUNCTION(arm_data_abort)\n\tcpsid if\n\tstmfd "
+    if original.count(abort_entry) != 1:
+        raise RuntimeError("unexpected pinned arm_data_abort entry; cannot safely mask nested interrupts")
+    original = original.replace(abort_entry, abort_entry_patched, 1)
+
     old = "\tb\t\tarm_data_abort_handler\n\tb\t\t.\n\nFUNCTION(arm_reserved)"
     new = (
         "\tmov\tr4, sp\n"

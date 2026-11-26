@@ -158,3 +158,20 @@ The pre-BL33 snapshot remains a separate requirement.
 - CI for the current recovery implementation is pending.
 - hardware_applied=0: no MMIO read/write, module load, boot-argument change,
   SD write, firmware flash, or diagnostic payload execution.
+
+
+### 3.5 Abort-mode asynchronous exception isolation
+
+The H700 overlay now emits `cpsid if` as the first instruction in the
+`arm_data_abort` vector, before it saves the 68-byte fault frame. This is
+deliberate for the pinned GammaOS early-start path: CRT0 initializes the
+SVC, Abort and FIQ stacks from the same early stack region, and the generic
+IRQ code explicitly assumes supervisor-mode interruption. An IRQ/FIQ nested
+after the abort frame is allocated could therefore interfere with the early
+stack or replace DFSR/DFAR before the exact matcher evaluates them.
+
+The saved origin CPSR is already captured in the frame by the vector, so a
+successful `LDM^` return restores the original IRQ/FIQ mask state together
+with the origin mode. A non-matching abort retains the fatal path and remains
+halted with interrupts masked. The overlay test asserts `cpsid if` precedes
+the first stack-save instruction in the Data Abort vector.

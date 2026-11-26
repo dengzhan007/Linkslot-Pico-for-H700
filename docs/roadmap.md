@@ -11,3 +11,6 @@
 - [x] Add host matcher matrix, AArch32 ARM-state assembly object check, and A32-vector-to-Thumb-C interworking link check.
 - [ ] Pass current H700 compile/host CI and Linkslot LK overlay generator/link regression.
 - [ ] Review emitted exception-vector and probe disassembly before considering device execution. No device probe or firmware execution is authorized yet.
+
+
+- [x] Mask IRQ/FIQ as the first A32 Data Abort vector instruction, before the fault frame is saved; successful LDM^ return restores the saved origin CPSR mask state.

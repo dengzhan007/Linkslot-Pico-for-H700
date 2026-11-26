@@ -1161,3 +1161,10 @@ LDM^ trampoline 恢复 SPSR/GPR/PC；非匹配 fault 仍走原 fatal exception_d
 诊断函数仅显式调用，不在任何启动路径中调用。当前只完成 source/host/assembler/link
 验证目标，CI 正在运行；未执行实机寄存器读取，hardware_applied=0。专项细节见
 [h700-lk-data-abort-recovery-audit.md](h700-lk-data-abort-recovery-audit.md)。
+
+
+**异常嵌套保护补充：** H700 overlay 的 Data Abort vector 在保存 68-byte
+异常帧前先执行 `cpsid if`，屏蔽 Abort mode 中的 IRQ/FIQ，防止早期复用栈
+被嵌套处理器覆盖、或 DFSR/DFAR 在匹配前被其它异常改写。成功的 `LDM^`
+异常返回从保存的 SPSR 恢复原中断状态；非匹配 abort 仍保持 fatal/halt。
+host/source/link CI 继续验证；没有实机探测。

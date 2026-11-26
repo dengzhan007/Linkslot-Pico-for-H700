@@ -172,6 +172,7 @@ def main() -> None:
     exception_text = overlay_exceptions.read_text(encoding="utf-8")
     faults_text = overlay_faults.read_text(encoding="utf-8")
     for token in (
+        "cpsid if",
         "mov\tr4, sp",
         "bic\tsp, sp, #7",
         "mov\tr0, r4",
@@ -184,6 +185,12 @@ def main() -> None:
     ):
         if token not in exception_text:
             raise RuntimeError("patched exception vector missing scoped recovery operation: " + repr(token))
+    abort_entry_at = exception_text.find("FUNCTION(arm_data_abort)")
+    first_push_at = exception_text.find("stmfd", abort_entry_at)
+    if abort_entry_at < 0 or first_push_at < 0:
+        raise RuntimeError("Data Abort vector entry cannot be located")
+    if "cpsid if" not in exception_text[abort_entry_at:first_push_at]:
+        raise RuntimeError("Data Abort vector must mask IRQ/FIQ before building the fault frame")
     if "h700_data_abort_try_recover((void *)frame)" not in faults_text:
         raise RuntimeError("patched LK Data Abort handler does not call the H700 exact matcher")
     if "exception_die(frame, -8," not in faults_text or "data abort, halting" not in faults_text:
