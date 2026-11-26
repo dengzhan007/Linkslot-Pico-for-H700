@@ -21,6 +21,8 @@ SCAFFOLD = (
     Path("platform/h700/runtime/h700_arch_timer.h"),
     Path("platform/h700/runtime/h700_bl33_entry_snapshot.c"),
     Path("platform/h700/runtime/h700_bl33_entry_snapshot.h"),
+    Path("platform/h700/arch/h700_physical_memory.c"),
+    Path("platform/h700/arch/h700_physical_memory.h"),
 )
 
 
@@ -137,6 +139,18 @@ def main() -> None:
             if not heap_path.is_file():
                 raise RuntimeError("H700 LK heap readiness source/header missing: " + str(heap_path))
         summary.append("PASS lk-heap-service-object: provider is present in the H700 LK OBJS list")
+
+        # arch/arm/mmu.c weakly calls this ABI; keep the provider in the real LK object graph.
+        dram_object = "arch/h700_physical_memory.o"
+        if f"$(LOCAL_DIR)/{dram_object}" not in platform_rules:
+            raise RuntimeError("H700 platform does not link the physical DRAM capacity provider")
+        for dram_path in (
+            root / "platform/h700/arch/h700_physical_memory.c",
+            root / "platform/h700/arch/h700_physical_memory.h",
+        ):
+            if not dram_path.is_file():
+                raise RuntimeError("H700 physical DRAM capacity source/header missing: " + str(dram_path))
+        summary.append("PASS physical-dram-object: provider is present in the H700 LK OBJS list")
 
         # Audit lifecycle assumptions against the exact pinned GammaOS LK checkout.
         lk_main = (worktree / "kernel/main.c").read_text(encoding="utf-8")
