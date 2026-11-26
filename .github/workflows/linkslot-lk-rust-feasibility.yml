@@ -25,6 +25,8 @@ on:
       - "scripts/apply-h700-lk-overlay.py"
       - "scripts/test-h700-lk-overlay.py"
       - "scripts/test-h700-bl33-entry-snapshot.sh"
+      - "scripts/patch-baseos-native-lk-override.py"
+      - "scripts/test-baseos-native-lk-override.py"
       - "scripts/test-h700-lk-project-guard.py"
       - "scripts/audit-slot-i18n-nostd.py"
       - "scripts/audit-libretro-static-abi.py"
@@ -61,6 +63,8 @@ on:
       - "scripts/apply-h700-lk-overlay.py"
       - "scripts/test-h700-lk-overlay.py"
       - "scripts/test-h700-bl33-entry-snapshot.sh"
+      - "scripts/patch-baseos-native-lk-override.py"
+      - "scripts/test-baseos-native-lk-override.py"
       - "scripts/audit-slot-i18n-nostd.py"
       - "scripts/audit-libretro-static-abi.py"
       - "scripts/build-mgba-aarch32-static.py"
@@ -216,6 +220,9 @@ jobs:
             --lk-source .ci/lk-reference \
             --overlay build/audit-work/linkslot-1.0.49/h700-lk-overlay \
             --out build/audit-work/linkslot-1.0.49/h700-lk-overlay-build
+
+      - name: Test matched BaseOS native BL33 firmware override
+        run: python3 scripts/test-baseos-native-lk-override.py
 
       - name: Test RG34XX native BL33 header packaging contract
         run: python3 scripts/test-package-h700-bl33.py
