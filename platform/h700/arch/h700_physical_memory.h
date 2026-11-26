@@ -9,7 +9,7 @@
  * to LK's generic arm_mmu_init(); it does not allocate, reserve or approve
  * any part of that interval for LK, heap, stack, DMA or an application.
  */
-#define H700_RG34XX_DRAM_BYTES UINT64_C(0x40000000)
+#define H700_RG34XX_DRAM_BYTES 0x40000000ULL
 
 uint64_t physical_memory_size(void);
 
