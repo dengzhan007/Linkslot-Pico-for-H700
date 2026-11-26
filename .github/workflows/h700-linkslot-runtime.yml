@@ -6,6 +6,8 @@ on:
     paths:
       - "integration/linkslot/h700-frontend-core/**"
       - "platform/h700/runtime/input_*.h"
+      - "platform/h700/runtime/vfs_service.h"
+      - "platform/h700/runtime/runtime_services.h"
       - "platform/h700/runtime/input_*.c"
       - "scripts/apply-linkslot-render-core.py"
       - "scripts/apply-linkslot-h700-frontend-core.py"
@@ -20,6 +22,8 @@ on:
     paths:
       - "integration/linkslot/h700-frontend-core/**"
       - "platform/h700/runtime/input_*.h"
+      - "platform/h700/runtime/vfs_service.h"
+      - "platform/h700/runtime/runtime_services.h"
       - "platform/h700/runtime/input_*.c"
       - "scripts/apply-linkslot-render-core.py"
       - "scripts/apply-linkslot-h700-frontend-core.py"

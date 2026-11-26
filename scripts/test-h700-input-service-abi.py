@@ -10,8 +10,30 @@ PROBE = r"""
 #include <stddef.h>
 #include <stdint.h>
 #include "input_service.h"
+#include "runtime_services.h"
 
 _Static_assert(sizeof(h700_input_event_t) == 4u, "input event ABI size");
+_Static_assert(sizeof(h700_time_service_v1_t) == 8u + 2u * sizeof(void *),
+    "time service table size");
+_Static_assert(sizeof(h700_vfs_service_v1_t) == 8u + 2u * sizeof(void *),
+    "VFS service table size");
+_Static_assert(offsetof(h700_vfs_service_v1_t, install) == 8u + sizeof(void *),
+    "VFS install callback offset");
+_Static_assert(sizeof(h700_runtime_services_v1_t) ==
+    8u + sizeof(h700_time_service_v1_t) +
+    sizeof(h700_input_service_v1_t) + sizeof(h700_vfs_service_v1_t),
+    "aggregate runtime service table size");
+_Static_assert(offsetof(h700_runtime_services_v1_t, time) == 8u,
+    "aggregate time service offset");
+_Static_assert(offsetof(h700_runtime_services_v1_t, input) ==
+    8u + sizeof(h700_time_service_v1_t), "aggregate input service offset");
+_Static_assert(offsetof(h700_runtime_services_v1_t, vfs) ==
+    8u + sizeof(h700_time_service_v1_t) + sizeof(h700_input_service_v1_t),
+    "aggregate VFS service offset");
+_Static_assert(offsetof(h700_runtime_services_v1_t, abi_version) == 0u,
+    "aggregate ABI version offset");
+_Static_assert(offsetof(h700_runtime_services_v1_t, struct_size) == 4u,
+    "aggregate struct size offset");
 _Static_assert(offsetof(h700_input_service_v1_t, abi_version) == 0u, "ABI version offset");
 _Static_assert(offsetof(h700_input_service_v1_t, struct_size) == 4u, "struct size offset");
 _Static_assert(offsetof(h700_input_service_v1_t, context) == 8u, "context offset");
@@ -35,6 +57,10 @@ static size_t fake_drain(void *context, h700_input_event_t *out, size_t capacity
     return 1u;
 }
 
+static bool fake_vfs_install(void *context) {
+    return context != NULL;
+}
+
 size_t h700_input_abi_probe(const h700_input_service_v1_t *service) {
     h700_input_event_t events[H700_INPUT_MAX_EVENTS];
     if (service == NULL || service->abi_version != H700_INPUT_ABI_VERSION) {
@@ -45,6 +71,21 @@ size_t h700_input_abi_probe(const h700_input_service_v1_t *service) {
     }
     return service->drain(service->context, events, H700_INPUT_MAX_EVENTS)
         + fake_drain(NULL, events, H700_INPUT_MAX_EVENTS);
+}
+
+bool h700_runtime_services_abi_probe(const h700_runtime_services_v1_t *services) {
+    if (services == NULL ||
+        services->abi_version != H700_RUNTIME_SERVICES_ABI_VERSION ||
+        services->struct_size < sizeof(*services) ||
+        services->time.abi_version != H700_TIME_ABI_VERSION ||
+        services->time.monotonic_ms == NULL ||
+        services->input.abi_version != H700_INPUT_ABI_VERSION ||
+        services->input.drain == NULL ||
+        services->vfs.abi_version != H700_VFS_SERVICE_ABI_VERSION) {
+        return false;
+    }
+    return services->vfs.install != NULL &&
+        services->vfs.install(services->vfs.context);
 }
 """
 
