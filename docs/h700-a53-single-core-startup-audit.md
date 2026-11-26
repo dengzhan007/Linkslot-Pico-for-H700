@@ -155,9 +155,34 @@ direct branches from BL31's first entry.
   `C0_RST_CTRL=0x09010000`, `C0_CTRL_REG0=0x09010010`,
   `AON_POWERON_RESET=0x07000440`, `AON_CLAMP=0x07000444` and
   `DBG_REG0=0x090100c0`.
-- The SoC variant is selected by `0x03000024 & 7`; its live value was not
-  read. Do not assume the H616-named branch is necessarily the H700 device's
-  active branch.
+- The selector register `0x03000024` is SYS_CFG VER_REG (H616 family
+  reference), not the SID window. The public H616 manual lists offset
+  `0x24` as VER_REG but leaves bits [7:0] undefined/reserved.
+- BL31 reads VER_REG and tests its low three bits. Its decoded RVBAR helper
+  selects:
+  - low3 = 0: `0x09010040 + core * 8`
+  - low3 != 0: `0x08100040 + core * 8`
+- The pinned BaseOS native SPL at commit
+  `cbe253a43f46cf551cc9a6c79a84015bde3686cf` uses
+  `(readl(0x03000024) & 7) == 2` to select the alternate bank
+  `0x08100040`; otherwise it selects `0x09010040`. Thus BL31 and SPL
+  select the same bank for values 0 and 2, but would diverge for values
+  1 or 3–7.
+- The H616-oriented linux-sunxi tools database independently records
+  `0x09010040` and alternate `0x08100040` RVBAR banks, with VER_REG at
+  `0x03000024`; its FEL helper treats a nonzero low byte as the alternate
+  die. This is family-level corroboration, not an H700 runtime value.
+- The target selector value has not been read. A future read-only probe needs
+  only `readl(0x03000024) & 7`; do not dump the entire SYS_CFG/VER_REG word.
+  The active bank must not be assumed from H616 naming alone.
+
+References:
+- H616 User Manual v1.0, SYS_CFG VER_REG at offset 0x24:
+  https://linux-sunxi.org/images/1/1d/H616_User_Manual_V1.0.pdf
+- linux-sunxi RVBAR/die-variant database:
+  https://github.com/linux-sunxi/sunxi-tools/blob/master/soc_info.c
+- linux-sunxi FEL alternate-RVBAR selection:
+  https://github.com/linux-sunxi/sunxi-tools/blob/master/fel.c
 
 This is strong static evidence that the matched vendor BL31 **can start
 secondary CPUs on a PSCI power-on request**. It is not evidence that BL31
