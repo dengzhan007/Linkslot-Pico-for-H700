@@ -32,6 +32,10 @@ def main() -> int:
     assert module.classify_address(0x40080000) == "Linux kernel destination / proposed app candidate"
     assert module.classify_address(0x41FFFFFF) == "Linux kernel destination / proposed app candidate"
     assert module.classify_address(0x42000000) == "Linux initrd reservation"
+    assert module.classify_address(0x08100020) == "Allwinner CPU subsystem control MMIO"
+    assert module.classify_address(0x09010000) == "H616-style C0_CPUX_CFG MMIO"
+    assert module.classify_address(0x090100c4) == "H616-style C0_CPUX_CFG MMIO"
+
     assert module.classify_address(0x4801A2CF) == "BL31 loaded monitor payload bytes"
     assert module.classify_address(0x4801A2D0) == "BL31 adjacent BSS/runtime/page-table bytes in unconditional map"
     assert module.classify_address(0x48040FFF) == "BL31 adjacent BSS/runtime/page-table bytes in unconditional map"
@@ -45,6 +49,14 @@ def main() -> int:
     assert module.BL31_PAGE_TABLE_ALLOCATOR["page_size"] == "0x1000"
     assert module.classify_address(0x7EC00000) == "unknown top-of-DRAM reservation"
     assert module.classify_address(0x80000000) is None
+
+    # MOV x1,#0x10; MOVK x1,#0x901,LSL#16; LDR/STR [x1]; RET.
+    mmio = bytes.fromhex("01 02 80 d2 21 20 a1 f2 20 00 40 b9 20 00 00 b9 c0 03 5f d6")
+    mmio_refs, _, _ = module.scan_addresses(mmio, module.IMAGE_BASE)
+    assert any(
+        item["kind"] == "memory-effective-address" and item["address"] == "0x09010010"
+        for item in mmio_refs
+    ), mmio_refs
 
     # B at +0 branches over non-code bytes at +4 to RET at +8.
     synthetic = struct.pack("<I", encode_b(0x48000000, 0x48000008))
