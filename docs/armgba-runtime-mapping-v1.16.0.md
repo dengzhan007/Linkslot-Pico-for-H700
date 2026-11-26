@@ -74,3 +74,17 @@ Slot 运行 PID 本次为 2301；核心只在游戏态 `dlopen`，退出游戏�
 - armGBA frames：在游戏态对当前 PID 进行严格有界、只读的指针/计数器采样。每次都须重新取当前 PID 与 maps 并重算 load bias，按主符号解引用一次，再加 11948 bytes；不进行扫描、不写入进程内存。
 
 这些操作尚未执行。所有硬件刷新率 writer 仍禁用，`hardware_applied=0`。指标必须单独报告：`slot_presents_per_s`、`armgba_committed_frames_per_s`、`lcd_irq_per_s`。
+
+
+## 6. 本次采样地址换算（仅公式，不是已读取的数据）
+
+`bias + 0x4259b8` 是主指针变量的地址。取得其中 8-byte `GBASystem*` 后，计数器地址为：
+
+```text
+gba_pointer_variable = current_load_bias + 0x4259b8
+GBASystem_pointer    = *(uint64_t *)gba_pointer_variable
+frame_counter_addr   = GBASystem_pointer + 0x2eac   # 11948 bytes
+frame_counter        = *(uint32_t *)frame_counter_addr
+```
+
+这里 `0x2eac = 11948`。指针变量和计数器均按 AArch64 64-bit/32-bit 宽度读取；每轮必须重新读取当前 PID/maps 并重算 bias。以上只是后续有界采样的地址公式，本轮没有执行任何一次解引用或内存读取。
