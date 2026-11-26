@@ -539,3 +539,27 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 **当前唯一有意义的下一步：**查明测试机实际 LCD 模组供应商、完整料号及 revision，并取得同一 revision 的 datasheet 或厂商确认，确认 pixel-clock、HT/VT、porches、refresh/overclock 限值。若无法获得可追溯的模组身份与规格，则保持 60 Hz 作为唯一已资格化的模式。之后才可能定义 120-Hz profile 与 VBlank/TE、buffer/cache、clock/TCON、readback、timeout、rollback 的硬件验证计划。
 
 原 FPS 数据不变：预游戏 presents 59.503/s、游戏态 presents 59.561/s、armGBA committed frames 59.722/s、IRQ293 59.590/s。全体刷新率 writer 继续禁用，`hardware_applied=0`。
+
+
+## 18. 将单核 LK event-step 纳入持久化 H700 workspace（2026-11-26）
+
+本轮按 Linkslot H700 runtime architecture §6 第 12 项继续推进，不再停留于纯 input adapter：
+
+- 发现已有 `integration/linkslot/h700-frontend-core/slot-lk-runtime` 实现，但它之前未列入 workspace members，package version 仍为 1.0.36。由此此前 workspace 的 `cargo test/check --workspace` 没有覆盖这个核心运行时组件。
+- 已将 `slot-lk-runtime` 加入 `integration/linkslot/h700-frontend-core/Cargo.toml` 的 workspace members，并将 package version 对齐到当前 Linkslot 1.0.49 适配基线。workspace 从 13 个增加为 **14 个** Rust packages。
+- 更新 [业务 crates README](../integration/linkslot/h700-frontend-core/README.md) 与 [runtime architecture](linkslot-h700-runtime-architecture.md)：明确 event-step 行为、边界和下一步，避免把 event loop 误写成已完成的 Linkslot LK app。
+- 现有 runtime 的明确契约：每步从 C-owned `H700TimeServiceV1` 读取一个单调时间戳；从 C-owned `H700InputServiceV1` 有界抽取事件；复用 Linkslot `Gestures` 生成并按序 dispatch actions；最后以同一个时间戳 tick application handler。其自身不管理线程、heap、GPIO、显示、音频、VFS 或 emulator。
+- 现有测试覆盖 action dispatch 顺序、MENU 长按 timer、POWER edge 顺序、无效 time/input ABI table。加入 workspace 后，这些测试会随全 workspace host tests 执行，AArch32 `armv7a-none-eabi` 与 AArch64 `aarch64-unknown-none` 的 `--no-default-features` cross-check 也会包含该 crate。
+
+代码提交：
+- workspace member：`184c9ec6970412d24631fcd44323c57f00f8647a`
+- runtime package version：`6d489f072e38fee2866a8e64d39f11a56622e0d7`
+- crate README：`514371cfc467c596239210a8637cdd6c206becf0`
+- runtime architecture：`86de40fb9e38939137e90dff0cdf0f60cb602bcf`
+
+验证状态（截至本节更新）：
+- [H700 boot audit tools #45739691039](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45739691039)：Linux host-tools 和 Windows PowerShell 两个 job 均已成功；这是工具链回归，不是 runtime crate 的直接验证。
+- [Linkslot LK Rust feasibility #45739691044](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45739691044)：**in progress**。checkout、immutable Linkslot 1.0.49、pinned mGBA/armGBA/GammaOS LK checkout 与 H700 BL33 overlay 生成步骤已通过；当时在安装 LLVM 工具链，runtime workspace host tests 与 AArch32/AArch64 workspace cross-check 尚未执行。只有对应步骤完成后才能标记新纳入的 event-step crate 通过 CI。
+- [H700 Linkslot runtime slices workflow](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/workflows/h700-linkslot-runtime.yml) 的 `integration/linkslot/h700-frontend-core/**` path filter 会因本轮 workspace/manifest 变化触发；须以对应最新 run 的结论为准。
+
+当前进展是 **runtime floor 有持久化代码且 CI 将覆盖它**，不是可启动 LK App。下一项为 application-owned action router，把 Quick Menu 与 game-library/search 逻辑接到 handler；之后再依次设计 VFS v3/static-core lifecycle、renderer/display service descriptors。不得提前接通未经批准的 framebuffer/scanout、GPIO、PCM 或存储硬件路径；heap/BL33 memory gate与单 active core约束保持 fail-closed。
