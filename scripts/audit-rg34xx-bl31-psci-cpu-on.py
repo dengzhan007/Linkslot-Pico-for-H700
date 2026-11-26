@@ -239,6 +239,7 @@ DISASSEMBLY_WINDOWS = (
     ("sram_resume_stack_setup_source", 0x480140a0, 0x18),
     ("sram_resume_return_target", 0x48015d14, 0x90),
     ("cpux_axi_clock_transition_helper", 0x48011ff8, 0x100),
+    ("cpux_axi_wait_target", 0x48014078, 0x100),
     ("normal_suspend_powerdown_helper", 0x48015d70, 0x80),
     ("system_suspend_cache_teardown_and_trampoline", 0x48015fb8, 0x270),
     ("system_suspend_caller_full", 0x480096f8, 0xa0),
