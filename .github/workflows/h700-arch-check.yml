@@ -91,6 +91,12 @@ jobs:
 
       - name: Run H700 read-only storage host regressions
         run: |
+          cc -std=c11 -Wall -Wextra -Werror \
+            platform/h700/arch/h700_physical_memory.c \
+            platform/h700/arch/tests/test_h700_physical_memory.c \
+            -o /tmp/test-h700-physical-memory
+          /tmp/test-h700-physical-memory
+          echo "PASS: RG34XX DRAM capacity provider returns 1 GiB (hardware allocation remains gated)."
           sh scripts/test-h700-gpt-readonly.sh
           sh scripts/test-h700-cpu-performance-service.sh
           sh scripts/test-h700-display-refresh-policy.sh
