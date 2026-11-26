@@ -182,10 +182,10 @@ def main() -> None:
         raise RuntimeError("CRT0 does not publish the four entry registers and publish-last magic")
     clear_loop = re.search(r"blt\s+\.L__bss_loop", crt0_text)
     publish_pos = crt0_text.find("ldr r0, =h700_bl33_entry_snapshot")
-    kmain_pos = crt0_text.search(/\bbl\s+kmain\b/)
+    kmain_match = re.search(r"\bbl\s+kmain\b", crt0_text)
     if clear_loop is None or publish_pos <= clear_loop.end():
         raise RuntimeError("entry snapshot must be published after the CRT0 BSS clear")
-    if kmain_pos < 0 or publish_pos > kmain_pos:
+    if kmain_match is None or publish_pos > kmain_match.start():
         raise RuntimeError("entry snapshot must be published before kmain")
 
     stubs = r'''volatile int critical_section_count = 1;
