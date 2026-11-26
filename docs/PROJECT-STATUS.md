@@ -609,3 +609,19 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 验证：[H700 Linkslot 1.0.49 runtime slices #45741150698](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45741150698) **success**。15-member workspace default/no-default host tests、AArch32/AArch64 freestanding checks、upstream input/model regression、完整 Frontend overlay build、CPU QuickRow fail-closed、C input ABI/queue host + cross compile 全部通过。新 SearchResults 路由代码包含在两个 workspace test 模式中。
 
 下一切片为搜索键盘 cursor intent 与 Pinyin candidate focus / page / commit；渲染 Cursor、拼音表、候选字符串和查询文本仍归 UI/App，不复制资源或索引。随后才接入上层 App adapter 与 VFS/core lifecycle。当前不代表 bootable LK App，也没有设备端执行或硬件写入。
+
+
+## 21. SearchKeyboard / Pinyin candidate 输入路由抽取与 CI（2026-11-26）
+
+继续对照 immutable upstream Linkslot 1.0.49 `App::game_search_input()`，在 `slot-app-router` 增加 stateless `route_search_keyboard(action, snapshot)`：
+- Snapshot 只读取 App 当前 candidate_focus、composition 是否非空、candidate count/page/pages/selected；不复制 keyboard query、拼音 composition、候选字符串或字典。
+- Select：有 composition 且候选不空时进入候选焦点；已聚焦时退出焦点。
+- 候选焦点下：Up/Down 按 pages 循环；Left/Right 在候选索引循环；A 返回 CommitCandidate；B 返回退出候选焦点。
+- 非候选焦点下：方向键返回现有 UI Cursor 移动意图；Y 切换键盘布局；A 激活当前 UI key；B 退格；Start 确认搜索；X/MENU 关闭搜索。
+- App 仍负责执行刷新候选、search_push/backspace、commit candidate、confirm hits 与 close flow；PinyinProvider、UI Cursor、SearchHit/shelf/folder 数据与 VFS 全部保持在原有层。
+
+代码提交：`da457481e12cd6317519c9a13c6ed6bfc7dbfaa3`。新增 7 项 host tests；和既有 QuickMenu 6 项、SearchResults 6 项合计 **19 项 app-router tests**。
+
+验证：[H700 Linkslot 1.0.49 runtime slices #45741616363](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45741616363) **success**。workspace 双 host test 模式、AArch32/AArch64 no-default checks、upstream input/model regression、完整 Linkslot 1.0.49 Frontend overlay、CPU Performance QuickRow fail-closed、C input queue + ABI 两架构交叉编译均通过；因此新 SearchKeyboard 路由在 default 和 no-default host tests 中均已执行通过。
+
+下一步不再继续拆单个按键动作，而是实现薄的 application adapter：仅在对应 App Phase 调用三种 router，把 typed commands 映射回现有 QuickRow/Keyboard/SearchResults 状态与 App 方法；所有持久化/VFS/设备副作用留在原有 handler。Adapter 通过后再推进 VFS v3 + 静态 core lifecycle 的只读/内存边界。
