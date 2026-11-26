@@ -19,6 +19,9 @@ EXPECTED_MONITOR_BYTES = 107216
 EXPECTED_MONITOR_SHA256 = "676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31"
 RANGES = (
     (0x40080000, 0x42000000, "Linux kernel destination / proposed app candidate"),
+    (0x08100000, 0x08101000, "Allwinner CPU subsystem control MMIO"),
+    (0x09010000, 0x09010200, "H616-style C0_CPUX_CFG MMIO"),
+
     (0x42000000, 0x42001000, "Linux initrd reservation"),
     (0x42E00000, 0x42E46200, "native SPL firmware package buffer"),
     (0x44000000, 0x44100000, "Linux FDT buffer"),
@@ -172,6 +175,7 @@ def scan_addresses(raw: bytes, entry: int) -> tuple[list[dict], str, int]:
                         if dest_name.startswith("w"):
                             value &= 0xFFFFFFFF
                         regs[dest] = value
+                        record(insn.address, "register-constant", value, insn.op_str)
 
             elif insn.mnemonic in ("add", "sub") and len(ops) >= 3:
                 if ops[0].type == ARM64_OP_REG and ops[1].type == ARM64_OP_REG and ops[2].type == ARM64_OP_IMM:
@@ -324,6 +328,7 @@ def build_report(identity: dict, entry: int, refs: list[dict], count: int) -> tu
         "limits": [
             "Only instructions reachable via direct control-flow edges are decoded; indirect branches/calls and exception-return paths may be incomplete.",
             "Register tracking is block-local and conservative; computed and indirect pointers may be missed.",
+            "CPU startup MMIO reporting covers statically tracked direct effective addresses only; it does not prove absence of all indirect or secure-world CPU-control operations.",
             "Recovered addresses are static leads; register aliasing/clobbers and indirect dataflow may still create false positives or miss references.",
             "No references found in a range would not prove that BL31 never accesses it.",
             "This does not prove Secure/Non-secure ownership, DMA reachability, cache aliases, runtime scratch, or per-boot behavior.",
@@ -392,6 +397,41 @@ def build_report(identity: dict, entry: int, refs: list[dict], count: int) -> tu
         ))
     else:
         lines.append("- No per-core TPIDR_EL3 context base was recovered.")
+
+    cpu_startup_refs = [
+        item for item in refs
+        if item["range"] in (
+            "Allwinner CPU subsystem control MMIO",
+            "H616-style C0_CPUX_CFG MMIO",
+        )
+    ]
+    report["cpu_startup_mmio_references"] = cpu_startup_refs
+    report["cpu_reset_mmio_accesses"] = [
+        item for item in cpu_startup_refs
+        if item["kind"] == "memory-effective-address"
+        and item["address"] in (
+            "0x09010000", "0x09010044", "0x09010048", "0x0901004c",
+            "0x09010050", "0x09010054", "0x09010058", "0x0901005c",
+            "0x090100c4", "0x08100040", "0x08100044", "0x08100048",
+            "0x0810004c", "0x08100050", "0x08100054", "0x08100058",
+            "0x0810005c",
+        )
+    ]
+
+    lines += ["", "## CPU startup / reset MMIO references", ""]
+    if cpu_startup_refs:
+        for item in cpu_startup_refs:
+            lines.append("- %s at %s (%s): %s" % (
+                item["address"], item["pc"], item["kind"], item["expression"]
+            ))
+    else:
+        lines.append("- No CPU subsystem / C0_CPUX_CFG MMIO reference was recovered.")
+
+    reset_refs = report["cpu_reset_mmio_accesses"]
+    if reset_refs:
+        lines.append("- CPU reset/debug/RVBAR MMIO accesses were recovered; review them before any single-core assumption.")
+    else:
+        lines.append("- No direct reachable access was recovered to C0_RST_CTRL, DBG_REG1, or RVBAR address registers. This is limited to statically tracked direct addresses.")
 
     candidate = [item for item in refs if item["range"] == RANGES[0][2]]
     lines += ["", "## Proposed application candidate references", ""]
