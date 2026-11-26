@@ -7,12 +7,17 @@
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
 
+**2026-11-26 实机输入验证推进：** Linux evdev 已确认 17 个按键；X/Y 依实测物理丝印修正。只读 PIO single-shot sampler 已新增，等待 host/交叉编译 CI；尚未在实机执行或接入 LK main loop。
+
 **2026-11-26 RG34XX live-FDT 输入映射与逻辑边沿层：**
 
 - reports 分支提交 `3de7f40d2d9f` 上传脱敏实机 live-FDT `input_devices`。该 FDT 为 143,936 B / 573 nodes；`/soc@03000000/gpio_keys`（`gpio-keys-polled`）状态 `okay`，17 个子节点全部 `okay`，声明 `poll-interval=20 ms`。17 个按键均解析到 `allwinner,sun50iw9p1-pinctrl` phandle `0x4b`、PIO base `0x0300b000`；声明 mux=0、pull=1、drive=2、active-low。
 - 固定版本 sunxi 内核头文件确认 pull=1 是弱上拉；上传报告文字中的“unpulled”需要更正。GPADC 与 `keyboard_1350mv` 节点禁用；AXP2101-PEK powerkey 为 `okay`，且独立于 17 个游戏按键。FDT 不证明 Linux driver binding、实际电平或物理按键事件。
 - 新增 `h700_rg34xx_input_map.c/.h`：用 17 键实机映射把调用者提供的 PIO bank A/E 电平快照转换成逻辑 press/release edges，送入既有 bounded input queue。纯软件，不含 MMIO、GPIO claim、pinmux/pull 写入、debounce、timer 或 EINT/GIC。
-- Host regression 本地通过；AArch64、AArch32 ARM-state、Thumb-2 freestanding 编译通过。CI 待本次提交触发后记录。尚未接通硬件采样；下一门槛仍是 `/proc/bus/input/devices` / `getevent -lp`、已存在 pinmux/pinconf readback 和物理逐键测试。
+- 新实机报告 `reports/rg34xx-input-runtime-20261126/` 已闭合 Linux evdev 输入路径：`ANBERNIC-keys` 为 `input1/event1`，72 条原始事件记录覆盖全部 17 个实体按键；一次额外 R1 是人工误触。设备没有 `getevent`，因此从 event1 只读采集并离线解码。独立 X/Y 复测 6/6 确认实体 X=PA2/code307、实体 Y=PA3/code306，已修正软件逻辑映射。
+- pinmux/pinconf 调试视图不一致：PA0–PA12/PE1 显示 MUX UNCLAIMED，PE0/PE2/PE3 显示 CSI1；全部 pinconf 显示 bias disabled/20mA。真实 evdev 事件证明按键路径正常，但调试视图不能作为写寄存器依据。未知的 `dierct-keys-polled`/event2 不并入游戏按键。
+- 新增 `h700_rg34xx_input_scan.c/.h`：单次只读 PA_DAT offset `0x10` 和 PE_DAT offset `0xA0`，接入已修正的 17 键 edge mapper。接口只有 read32，无 write32；不动 pinmux/pull/drive、debounce、timer、EINT/GIC；函数尚未从 LK 启动或主循环调用。
+- 新增 mock-PIO regression 校验只读寄存器 offset、X/Y 实际逻辑键边沿与 ABI 错误拒绝；CI 本次提交触发中，host/cross-build 验证后再更新结论。
 
 
 **2026-11-26 LK heap readiness 衔接更新（代码提交 `aca39f29c560`；三条关联 CI 工作流全部通过）：**

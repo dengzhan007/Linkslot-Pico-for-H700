@@ -13,6 +13,7 @@ on:
       - "scripts/test-h700-lk-heap-service.sh"
       - "scripts/test-h700-arch-timer.sh"
       - "scripts/test-h700-rg34xx-input-map.sh"
+      - "scripts/test-h700-rg34xx-input-scan.sh"
       - "scripts/test-h700-pio-mmu-mapping.sh"
       - "scripts/collect-rg34xx-readonly-inventory.sh"
       - "tools/test_inventory_script_safety.py"
@@ -49,6 +50,7 @@ on:
       - "scripts/test-h700-lk-heap-service.sh"
       - "scripts/test-h700-arch-timer.sh"
       - "scripts/test-h700-rg34xx-input-map.sh"
+      - "scripts/test-h700-rg34xx-input-scan.sh"
       - "scripts/test-h700-pio-mmu-mapping.sh"
       - "scripts/collect-rg34xx-readonly-inventory.sh"
       - "tools/test_inventory_script_safety.py"
@@ -88,6 +90,7 @@ jobs:
           sh scripts/test-h700-lk-heap-service.sh
           sh scripts/test-h700-arch-timer.sh
           sh scripts/test-h700-rg34xx-input-map.sh
+          sh scripts/test-h700-rg34xx-input-scan.sh
           sh scripts/test-h700-pio-mmu-mapping.sh
           python3 tools/test_inventory_script_safety.py
           python3 tools/test_inspect_h700_fdt.py

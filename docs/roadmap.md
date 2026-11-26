@@ -518,3 +518,16 @@ request GPIO lines, or add EINT/IRQ handling before that comparison closes.
 - [ ] 上述证据闭合后，另行实现只读 PIO bank sampling + 明确 debounce/20ms scheduling；暂不增加 EINT/GIC。
 
 当前安全边界：FDT 已确认映射；逻辑边沿层已实现；**硬件采样仍未实现**。禁止把静态 FDT 的 pull/mux 声明当作已完成的 pin ownership/readback 验证。
+
+
+## 2026-11-26 RG34XX 实机输入链路与只读 PIO sampler
+
+- [x] 活动 live FDT 的 17 个 GPIO 输入与 /proc/bus/input/devices 的 ANBERNIC-keys/event1 对上；72 条原始 evdev 记录覆盖 17 个实体键（含一次人工误触 R1）。设备无 getevent，改用只读 event char-device 原始采集并离线解码。
+- [x] X/Y 实体标签与 DTS 节点交叉：实体 X=PA2/code307/keyY；实体 Y=PA3/code306/keyX。X/Y 专项重复按压 6/6 一致；软件逻辑映射已修正。
+- [x] 记录 pinmux/pinconf 的不一致（PA bank MUX UNCLAIMED、部分 PE 显示 CSI1、pinconf 均 bias disabled）；按键实际工作，不把调试视图当成写寄存器授权。未知 dierct-keys-polled/event2 独立隔离。
+- [x] 新增 read-only single-shot PIO sampler：只读取 PA_DAT 0x10 / PE_DAT 0xA0（base 0x0300b000），无 write callback，不改 mux/pull/drive，不启用 EINT/GIC。
+- [x] Mock-PIO host tests 覆盖寄存器地址、空闲态、实体 X/Y press/release 顺序、ABI 错误拒绝；等待当前 CI 完成。
+- [ ] 在目标设备上通过受控诊断路径实测 PA_DAT/PE_DAT 只读快照与按键同步关系；在此之前 sampler 不接入 LK runtime。
+- [ ] 评估 20 ms cadence 与去抖；当前 evdev capture 证明按键事件可达，尚未测量接点 bounce 与 PIO 采样延迟。
+
+当前边界：Linux evdev 输入链路已实测；PIO 只读采样仅完成 host/mock 和 cross-build，**没有目标机 MMIO 执行、没有 LK 输入循环、没有 LK 启动/游戏运行验证**。

@@ -22,6 +22,11 @@ static void test_map(void){
  assert(find_button(H700_BTN_A)&&find_button(H700_BTN_A)->pin==0u);
  assert(find_button(H700_BTN_MENU)&&find_button(H700_BTN_MENU)->port==H700_RG34XX_GPIO_PORT_E&&find_button(H700_BTN_MENU)->pin==3u);
  assert(find_button(H700_BTN_MENU)->linux_code==312u);
+ /* Physical X/Y labels confirmed against the raw evdev captures. */
+ assert(find_button(H700_BTN_X)->port==H700_RG34XX_GPIO_PORT_A);
+ assert(find_button(H700_BTN_X)->pin==2u&&find_button(H700_BTN_X)->linux_code==307u);
+ assert(find_button(H700_BTN_Y)->port==H700_RG34XX_GPIO_PORT_A);
+ assert(find_button(H700_BTN_Y)->pin==3u&&find_button(H700_BTN_Y)->linux_code==306u);
  assert(find_button(H700_BTN_L2)->linux_code==314u&&find_button(H700_BTN_R2)->linux_code==315u);
 }
 static void test_edges(void){

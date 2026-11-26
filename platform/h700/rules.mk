@@ -25,6 +25,7 @@ OBJS += \
 	$(LOCAL_DIR)/runtime/h700_arch_timer.o \
 	$(LOCAL_DIR)/runtime/input_queue.o \
 	$(LOCAL_DIR)/runtime/h700_rg34xx_input_map.o \
+	$(LOCAL_DIR)/runtime/h700_rg34xx_input_scan.o \
 	$(LOCAL_DIR)/display/h700_display_refresh_policy.o \
 	$(LOCAL_DIR)/arch/h700_pio_mmu_mapping.o
 
