@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the matched RG34XX BL31 PSCI platform CPU_ON callback path."""
+"""Validate matched RG34XX BL31 PSCI CPU_ON and power-state callback paths."""
 from __future__ import annotations
 import argparse
 import hashlib
@@ -25,6 +25,7 @@ WORDS = {
     0x4800869c: 0x900001a1, 0x480086a0: 0xf947e021,
     0x480086a4: 0xf9400433, 0x480086c4: 0xaa1303e5,
     0x480086dc: 0xd61f00a0,
+    0x48002858: 0x97fffc20, 0x48002998: 0x97fffb7e,
     0x4800254c: 0x35000103, 0x4800255c: 0x94000207,
     0x48002d18: 0xd2800480, 0x48002d1c: 0xf2a06000,
     0x48002d20: 0xb9400000, 0x48002d24: 0xf240081f,
@@ -100,6 +101,12 @@ def main() -> int:
         raise RuntimeError("platform ops registration call changed")
     if decode_bl_target(0x4800255c, read_word(raw, 0x4800255c)) != 0x48002d78:
         raise RuntimeError("CPU_ON callback target changed")
+    if table[3] != 0x48002878:
+        raise RuntimeError("pwr_domain_suspend slot changed")
+    if decode_bl_target(0x48002998, read_word(raw, 0x48002998)) != 0x48001790:
+        raise RuntimeError("suspend CCU context-save call changed")
+    if decode_bl_target(0x48002858, read_word(raw, 0x48002858)) != 0x480018d8:
+        raise RuntimeError("suspend CCU context-restore call changed")
     if decode_bl_target(0x48002d8c, read_word(raw, 0x48002d8c)) != 0x48002d30:
         raise RuntimeError("per-core RVBAR helper call changed")
     if decode_bl_target(0x48002d90, read_word(raw, 0x48002d90)) != 0x48002d18:
@@ -137,6 +144,8 @@ def main() -> int:
                        "address": "0x%08x" % table[1]},
             "slot_2": {"name": "pwr_domain_off (standard plat_psci_ops_t order)",
                        "address": "0x%08x" % table[2]},
+            "slot_3": {"name": "pwr_domain_suspend (standard plat_psci_ops_t order)",
+                       "address": "0x%08x" % table[3]},
             "slot_7": {"name": "pwr_domain_on_finish (standard plat_psci_ops_t order)",
                        "address": "0x%08x" % table[7]},
             "registration_function": "0x480029bc",
@@ -153,6 +162,19 @@ def main() -> int:
             "standard_tf_a_psci_cpu_on_aarch64_fid": "0xc4000003",
             "standard_tf_a_capability_condition": "pwr_domain_on slot +8 and pwr_domain_on_finish slot +56 are both non-null",
             "slot_7_on_finish_address": "0x48002574",
+        },
+        "suspend_callback": {
+            "address": "0x%08x" % table[3],
+            "save_context": {
+                "callsite": "0x48002998",
+                "target": "0x48001790",
+                "ccu_candidates": ["0x03001000", "0x03001a78", "0x03001a8c"],
+            },
+            "restore_context": {
+                "callsite": "0x48002858",
+                "target": "0x480018d8",
+            },
+            "interpretation": "slot 3 is pwr_domain_suspend in standard TF-A plat_psci_ops_t order; calls are inside the registered suspend callback, not the primary BL31 entry path",
         },
         "callback": {
             "address": "0x4800254c",
@@ -201,6 +223,8 @@ def main() -> int:
             "The standard TF-A PSCI setup advertises PSCI_CPU_ON_AARCH64 (FID 0xc4000003) when both pwr_domain_on and pwr_domain_on_finish are non-null; this matched table contains both.",
             "This proves BL31 contains and exposes a CPU_ON-capable platform callback; it does not prove that the callback executes during initial BL31-to-BL33 handoff.",
             "The audit does not establish live CPU1-CPU3 reset state before Linux or Linkslot requests PSCI CPU_ON.",
+            "The registered plat_psci_ops slot 3 points to pwr_domain_suspend at 0x48002878; its calls to 0x48001790 and 0x480018d8 save and restore CPUX CCU/AON context during the suspend callback.",
+            "The CCU accesses in this callback are power-state preservation, not evidence of a BL33 startup clock transition or an exposed CPU DVFS API.",
             "BL31 and pinned BaseOS SPL select the same RVBAR bank only when VER_REG low3 is 0 or 2; values 1 or 3-7 would make their selector rules diverge. The live value is unknown.",
             "The exact vendor callback ABI/source revision is not recovered; this is a pinned binary plus standard ABI-position correlation, not exact vendor source identity.",
             "No hardware MMIO, flash, boot-media write or payload execution was performed.",
@@ -216,6 +240,8 @@ def main() -> int:
         "- Platform ops table: `0x480165f8`; slot +8 points to callback `0x4800254c`.",
         "- PSCI dispatch loads the global `psci_plat_pm_ops` pointer, reads its +8 slot, moves that function pointer to `x5`, then branches through `x5`.",
         "- Callback `0x4800254c` calls low-level CPU_ON routine `0x48002d78` at `0x4800255c` when `W3 == 0`.",
+        "- Standard TF-A platform-ops slot 3 points to pwr_domain_suspend at 0x48002878; its callsite 0x48002998 saves CCU context via 0x48001790 and 0x48002858 restores via 0x480018d8.",
+        "- The CCU save/restore sequence is scoped to the PSCI suspend callback, not proven to run during initial BL31-to-BL33 handoff; do not treat it as CPU DVFS support.",
         "- Low-level routine writes a per-core RVBAR and contains a CPU power/reset sequence; one SoC-selected variant uses `0x09010000`, `0x09010010`, `0x07000440`, `0x07000444` and `0x090100c0`.",
         "- RVBAR selector cross-check: BL31 uses VER_REG low3==0 for base 0x09010040, otherwise 0x08100040; pinned native SPL uses low3==2 for the alternate bank. Both agree only for selector values 0 and 2; the target value must be read.",
         "",

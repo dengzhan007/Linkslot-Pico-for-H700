@@ -15,6 +15,9 @@ spec.loader.exec_module(module)
 def main() -> int:
     assert module.decode_bl_target(0x48009dec, 0x97ffe2f4) == 0x480029bc
     assert module.decode_bl_target(0x4800255c, 0x94000207) == 0x48002d78
+    assert module.decode_bl_target(0x48002998, 0x97fffb7e) == 0x48001790
+    assert module.decode_bl_target(0x48002858, 0x97fffc20) == 0x480018d8
+    assert module.EXPECTED_TABLE[3] == 0x48002878
     assert module.decode_bl_target(0x48002d8c, 0x97ffffe9) == 0x48002d30
     assert module.decode_bl_target(0x48002d90, 0x97ffffe2) == 0x48002d18
     try:
