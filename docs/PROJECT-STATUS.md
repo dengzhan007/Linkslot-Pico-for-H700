@@ -2,19 +2,25 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-26（当前工作分支 HEAD 4801a811e3cd；1.0.49 runtime-slices #45749447531 与 LK feasibility #45750569522 成功；heap readiness 对象链接与双启动路径回归正在补齐，代码变更后的 CI 待验证。UI/GAME 显示复测仍约 59.6 Hz；120-Hz writer/boot-package 写入保持关闭。）
+**最后核对时间：** 2026-11-26（代码变更集 `aca39f29c560`；H700 AArch32/AArch64 #45752237207 与 boot-audit #45752237144 均成功；完整 Linkslot LK feasibility #45752237141 检查时为 58/74 steps、无失败，mGBA generic build 仍在执行。UI/GAME 显示复测仍约 59.6 Hz；120-Hz writer/boot-package 写入保持关闭。）
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
 
-**2026-11-26 LK heap readiness 衔接更新（本次代码变更，CI 待验证）：**
+**2026-11-26 LK heap readiness 衔接更新（代码提交 `aca39f29c560`；H700/boot-audit CI 通过，全量 feasibility 进行中）：**
 
 - 固定 GammaOS LK 9bf1419a49e0af6dba8b05916df382c9c9c6d0a8 的正常启动顺序为 target_early_init → heap_init → thread/DPC/timer → platform_init → target_init → apps_init；heap_get_info() 的 free-list 遍历受 LK critical section 保护。
 - 发现 target_init() 已调用 h700_lk_heap_service_mark_target_init_complete()，但 platform/h700/rules.mk 尚未把 runtime/lk_heap_service.o 加入真实 LK OBJS。现补齐对象图，并在 project guard 中检查固定 LK 源码顺序、heap API/临界区和对象清单。
-- 特殊路径：pinned LK 的 ENABLE_NANDWRITE bootstrap 会在未调用 heap_init() 时调用 target_init()。H700 marker 现对此路径 fail-closed；heap host regression 将分别编译/运行 normal 与 ENABLE_NANDWRITE=1 两种情形。
+- 特殊路径：pinned LK 的 ENABLE_NANDWRITE bootstrap 会在未调用 heap_init() 时调用 target_init()。H700 marker 现对此路径 fail-closed；normal 与 ENABLE_NANDWRITE=1 两种 host 回归均已通过。H700 编译 CI 也确认 heap service object 在 AArch64、AArch32 ARM-state、AArch32 Thumb-2 三种变体均可编译。
 - heap readiness 只表示 LK free-list 当前有非零可用空间，不是内存布局批准、heap 容量保证或完整 newlib/runtime 接入。完整 LK target link、物理内存 ownership 和设备启动仍未完成。
 
 
+
+**2026-11-26 H700 timer source audit：**
+
+- `reports/rg34xx-inventory-20261125-163152/interrupts.txt` 中 Linux live snapshot 显示 GIC-0 IRQ 27 `arch_timer` 在四个 CPU 列均有计数；另有 wakeupgen IRQ 3 `sun4i_timer0`。这证明 Linux 运行态有架构计时器活动，但不能直接证明 BL31→AArch32 SVC LK 的寄存器访问控制、`CNTFRQ` 值或计时器 IRQ 配置。
+- 当前 H700 `time_service.h` 只有 ABI 描述符，没有 C provider。候选应优先审计 AArch32 Generic Timer 的 `CNTVCT`/`CNTFRQ`（`MRRC p15,1` 读取 virtual counter）；必须确认 Non-secure PL1/EL2 trap 配置和 BL31 handoff 后频率/连续性，再决定是否启用。禁止复用 pinned MTK `platform/mt6785/timer.c` 的 GPT5。
+- `platform/h700/runtime` 仍无 monotonic provider，也未实现 H700 `platform_set_periodic_timer()`；本次没有接入或启动 timer IRQ，没有任何计时器寄存器写入。
 
 **2026-11-26 最新续接更新：**
 
