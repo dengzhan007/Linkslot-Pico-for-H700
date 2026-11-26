@@ -15,6 +15,8 @@ on:
       - "tools/armgba-frame-layout-probe.c"
       - "scripts/apply-linkslot-render-core.py"
       - "scripts/apply-linkslot-h700-frontend-core.py"
+      - "scripts/apply-linkslot-app-router.py"
+      - "scripts/test-linkslot-app-router-integration.py"
       - "integration/linkslot/h700-frontend-core/**"
       - "integration/linkslot/h700-render-core/**"
       - "scripts/audit-linkslot-nostd.py"
@@ -108,6 +110,8 @@ on:
       - "scripts/test-h700-lk-project-guard.py"
       - "scripts/apply-linkslot-render-core.py"
       - "scripts/apply-linkslot-h700-frontend-core.py"
+      - "scripts/apply-linkslot-app-router.py"
+      - "scripts/test-linkslot-app-router-integration.py"
       - "scripts/test-h700-input-service-abi.py"
       - "scripts/test-h700-input-queue.py"
       - "scripts/test-h700-input-queue.c"
@@ -264,6 +268,12 @@ jobs:
           python3 scripts/apply-linkslot-h700-frontend-core.py \
             --source .ci/upstream-linkslot \
             --crate-root integration/linkslot/h700-frontend-core
+          python3 scripts/apply-linkslot-app-router.py \
+            --source .ci/upstream-linkslot \
+            --crate integration/linkslot/h700-frontend-core/slot-app-router
+
+      - name: Verify phase-aware Linkslot App input integration
+        run: python3 scripts/test-linkslot-app-router-integration.py --source .ci/upstream-linkslot
 
       - name: Test persistent H700 no_std frontend business crates
         run: |
