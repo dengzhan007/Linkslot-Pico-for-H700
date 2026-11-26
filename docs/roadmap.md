@@ -432,3 +432,12 @@ The original sample PID 22514's exact first/last `/proc/PID/maps` snapshots were
 #### 2026-11-26 armGBA maps-only supplement
 
 The report branch now includes `armgba-maps-supplement-first.txt`, `armgba-maps-supplement-last.txt`, and `MAPS-SUPPLEMENT.md`. This is a new-PID 8064 capture, not recovered PID 22514 evidence. Both files contain 425 lines; the four armGBA mapping rows match exactly, and RX/R/RW independently calculate to `0x7f339a0000`. All 13 SHA256 manifest entries pass independent verification. Slot returned to UI, armGBA mappings are zero, trace marker/env remain absent. No frame sampling was repeated, no `/proc/PID/mem` read, and no hardware write occurred. Original FPS measurements remain unchanged; all metrics remain around 60/s, with no 120-Hz evidence. Keep all hardware writers disabled and `hardware_applied=0`.
+
+
+## RG34XX 120-Hz panel qualification gate (2026-11-26)
+
+The kernel #19 reverse audit and the separate UI/GAME/core frame-rate measurements are complete. Runtime rates remain around 60/s; the current live 60-Hz PLL/TCON pair is `0x88001703` / `0xf000000b`. The next blocker is no longer software timing discovery: it is the exact LCD module identity and its electrical timing specification.
+
+Anbernic's [official RG34XX specifications](https://win.anbernic.com/product/517.html) publish a 3.4-inch IPS 720×480 panel but no module part number or refresh ceiling. Slot maintainer discussion in [issue #147](https://github.com/BrandonKowalski/slot/issues/147) characterizes the 120-Hz mode as a display-driver tweak for panels slightly below 60 Hz and later skips the hack due to stutter reports/complexity. This is contextual evidence only, not a panel datasheet or proof for this exact `rg34xx_v1 + lcd_type=old` board.
+
+Next gate: identify the exact panel vendor/module/revision and obtain a matching datasheet or written vendor confirmation for pixel clock, HT/VT, porch and refresh/overclock limits. Until then 60 Hz is the only qualified mode. Keep the 120-Hz policy request-only, GAME 120-Hz opt-in default-off, all hardware writers disabled, and `hardware_applied=0`. Do not relax the pvaibhav `fog_fj035fhd05_v1` gate or transplant either its PLL/TCON pair or the raw boot-package modification.
