@@ -4,7 +4,7 @@
 
 **最后核对时间：** 2026-11-26（Linkslot main 1.0.49 feasibility 已在 #45646868006 通过 71/71；H700 boot-audit #45646868087 两 job 成功；ADB UI/GAME 实测仍约 59.6 Hz；已直接比较 TheGammaSqueeze 原始 boot-package 方案与 pvaibhav/slot runtime writer。120-Hz writer/boot-package 写入保持关闭。）
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
-**下一项显示分析（优先级最高）：** FDT timing 与 TCON/PLL 只读回读已完成：live panel 为 `rg34xx_v1 + lcd_type=old`，TCON divider word `0xf000000b`，PLL raw `0x88001703`。固定参考 sun50iw9 时钟代码将 live PLL 解为 288 MHz；同一公式把 pvaibhav 高刷候选 `0x88002b03` 解为 528 MHz，配合 divider 10 得 52.8-MHz DCLK / 约 120.13 Hz（820×536），但这不是 kernel #19 已确认的 decode，也不证明面板支持。Anbernic 未公开该内核源码；项目已有 stock p4 解压 ELF 且 GNU Build ID 与 live kernel 精确匹配。**该离线分析已完成**（见下方第 4 条与 `reports/kernel19-display-reverse-audit/ADDENDUM.md`）：panel init、PLL bitfield、divider 来源、TCON parent 继承均已闭合，不再重复导出 p4 或重复读 divider。随后分别补 Slot 600-present trace 与 armGBA committed-frame 计数；LCD IRQ 仍只作 scanout proxy。禁止使用 `/sys/class/sunxi_dump/write`，不接入、不调用硬件 writer。
+**当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
 
 **2026-11-26 最新续接更新：**
@@ -524,3 +524,18 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 - 未写 PLL/TCON/CCU/PMIC、未使用 `/dev/mem` 或 `sunxi_dump/write`；`hardware_applied=0`。
 
 报告与分析已同步修正：[fps-sampling README](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/slot-refresh-audit/fps-sampling/README.md)、[独立分析](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/slot-refresh-audit/fps-sampling/ANALYSIS.md)。原 FPS 数值不变：预游戏 presents 59.503/s、游戏态 presents 59.561/s、armGBA committed frames 59.722/s、IRQ293 59.590/s。显示刷新率仍没有 120-Hz 证据；硬件 writer 继续禁用。
+
+
+## 17. 120-Hz 显示能力的当前判定与下一门槛（2026-11-26）
+
+显示底层分析和刷新率测量已不再是待办：kernel #19 匹配二进制反向审计已闭合 `rg34xx_v1 + lcd_type=old` 的初始化、PLL factor table、TCON divider 与 clock parent；同一设备的 UI/GAME presents、armGBA committed frame 与 IRQ 也均已独立测量，结果约 60/s。当前 live 60-Hz pair 为 PLL `0x88001703`、divider `0xf000000b`。
+
+本项目不能把外部资料中的 120-Hz 数值直接视为 RG34XX 本机支持：
+
+- Anbernic [官方 RG34XX 产品规格](https://win.anbernic.com/product/517.html)仅公布 3.4-inch IPS OCA、720×480，没有 LCD 模组 part number、revision、native refresh 或 maximum pixel clock。
+- [Slot 上游 issue #147](https://github.com/BrandonKowalski/slot/issues/147) 中维护者解释，相关面板略低于 60 Hz，120-Hz tweak 是把 display driver 运行到 120 Hz；同一讨论后来因 stutter reports 和实现复杂度决定跳过该 hack。此为维护者/社区背景，不是针对本机模组的 datasheet 或电气验证。
+- 本机 live identity 为 `rg34xx_v1 + lcd_type=old`，与 pvaibhav writer 精确 gate 的 `fog_fj035fhd05_v1` 不同。不得改名、放宽 allowlist 或移植其 writer。
+
+**当前唯一有意义的下一步：**查明测试机实际 LCD 模组供应商、完整料号及 revision，并取得同一 revision 的 datasheet 或厂商确认，确认 pixel-clock、HT/VT、porches、refresh/overclock 限值。若无法获得可追溯的模组身份与规格，则保持 60 Hz 作为唯一已资格化的模式。之后才可能定义 120-Hz profile 与 VBlank/TE、buffer/cache、clock/TCON、readback、timeout、rollback 的硬件验证计划。
+
+原 FPS 数据不变：预游戏 presents 59.503/s、游戏态 presents 59.561/s、armGBA committed frames 59.722/s、IRQ293 59.590/s。全体刷新率 writer 继续禁用，`hardware_applied=0`。
