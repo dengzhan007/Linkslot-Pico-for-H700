@@ -829,3 +829,17 @@ Hard size boundary: this first integration path is only for a small diagnostic p
 - [ ] 在上述门槛通过后，才构建匹配 vendor header 的 32 KiB native firmware/SPL pair；再审查回滚路径和实机 proof-of-life。
 - [ ] RG34XX 实机冷启动验证 PI12 极性、点亮时机、游戏熄灯/退出复灯；当前仍未执行。
 - Hardware unchanged: `hardware_applied=0`；无 MMIO、无存储写入、无刷写、无 payload execution。
+
+
+## 2026-11-26 — PI12 production MMIO default-off safety gate
+
+- [x] Keep the PI12 C service and Linkslot game-state transition logic, but compile out the physical MMIO wrappers by default.
+- [x] Guard both RG34XX target lifecycle hooks with `H700_RG34XX_PI12_EARLY_ACCESS_ENABLE`; production H700 platform rules do not define the macro.
+- [x] Add host regression proving default early init / readiness / game-state C ABI return `ERR_NOT_READY` without touching PIO; keep fake injected-IO behavior tests.
+- [x] Allow the macro only in the disposable real-MMU/PI12 layout-test compile, so it validates the actual objects without enabling production startup.
+- [x] Project guard checks active Makefile assignments after stripping comments; full feasibility [#45847816950](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847816950) passed 81/81 (0 failures, 0 skipped), artifact [15133935777](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847816950/artifacts/15133935777).
+- [x] H700 three-ABI compile/host regression [#45847406072](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847406072) passed; boot-audit Linux/Windows [#45847165507](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847165507) passed.
+- [x] Static BaseOS SPL audit: RG34XX panel rule=2 uses PI15/PI14/PE6 PIO accesses before BL31; this proves SPL-stage use only, not APB1/PIO state after BL31 at BL33 entry.
+- [ ] Prove APB1/PIO clock/reset/access state at BL33 entry after vendor BL31; Linux later clock-summary and pre-BL31 SPL PIO use are insufficient substitutes.
+- [ ] Close BL31/Boot0 memory ownership and secondary A53 hold-off/SMP gates before any firmware packaging or execution.
+- Hardware remains unchanged: `hardware_applied=0`.

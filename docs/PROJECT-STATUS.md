@@ -2,7 +2,7 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-26。当前验证基线 `1396930d314ceb09d0736d1b6cbb5a5dca66e789` 的完整 Linkslot/LK feasibility [#45843270056](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45843270056) **81/81 steps 成功（0 failures / 0 skipped）**，产物 [15131735148](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45843270056/artifacts/15131735148)（387,985,474 bytes）；H700 AArch64/AArch32 ARM/Thumb-2 compile + host regressions [#45843270266](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45843270266) 成功。新增真实 LK early-MMU + RG34XX PI12 target-hook layout test：raw ELF 7,912 bytes（32 KiB loader extent 余量 24,856 bytes），真实 LK section table `tt=0x4a008000`（16 KiB aligned），`_end=0x4a00c024`。这仍是 minimal source/layout ELF，不是完整 LK、可刷写 firmware 或设备启动。APB1/PIO BL33 handoff 时钟、BL31/Boot0 内存所有权、次级 A53 核状态与 SMP 仍未关闭；`hardware_applied=0`。
+**最后核对时间：** 2026-11-26。当前代码基线 `166e3a97a4a011dff98ea9b33c959d47b643745e` 的完整 Linkslot/LK feasibility [#45847816950](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847816950) **81/81 steps 成功（0 failures / 0 skipped）**，产物 [15133935777](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847816950/artifacts/15133935777)（387,985,689 bytes）。同一代码阶段的 H700 AArch64/AArch32 ARM/Thumb-2 compile + host regressions [#45847406072](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847406072) 成功；boot-audit Linux/Windows [#45847165507](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847165507) 成功。真实 LK early-MMU + PI12 source/layout ELF 为 7,912 bytes（32 KiB raw extent 余量 24,856 bytes），section table `tt=0x4a008000`，`_end=0x4a00c024`；它不是完整 LK 或可刷写镜像。**PI12 production MMIO 当前默认关闭**：只有诊断 layout test 编译时显式 opt-in；BL31 后 APB1/PIO 入口状态、BL31/Boot0 内存所有权、secondary A53 hold-off/SMP 仍未关闭。无实机 MMIO、存储写入、刷写或 payload execution，`hardware_applied=0`.
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
@@ -106,7 +106,7 @@
 
 **本轮 RG34XX CPUX inventory v4（2026-11-25 04:05:51 UTC）：** 报告已上传至 [reports/rg34xx-inventory-20261125-cpux-v4](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261125-cpux-v4)。运行内核为 Linux 4.9.170 #19，Linaro GCC 5.3.1，构建时间 2026-05-26 13:58:08 CST；从 `/sys/kernel/notes` 解析出 GNU Build ID `a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68`（notes SHA-256 `6065c1a7ae894047f0e902551811b39d0c5a11b5afd894083eae46497d56e12d`）。config、kallsyms 和 sysfs 链接确认内建 `sun50i-cpufreq-nvmem`、`cpufreq-dt` 平台设备均成功绑定；live OPP 表只有 `speed` NVMEM cell，raw SID 为 `0x6c00`。五组运行频率列表严格对应九个带 `b1` named voltage 的 OPP，频率/电压采样亦与若干 `b1` 档位吻合。公开 Creality 4.9.191 候选因要求额外 `Icpu` cell 且将 `0x6c00` 映射 mask 1 而被排除；T507/Lineage 4.9.170 候选亦不匹配。结论更新为：运行时有效 OPP grid 强烈指向 `b1`，但不能因此声称 SID `0x6c00 → b1`，所有 OPP/DVFS 授权仍关闭。已从实机 stock `mmcblk0p4` 只读导出 64 MiB Android boot 分区；解压内核中 GNU Build ID `a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68` 与运行内核 `/sys/kernel/notes` 完全相同，首次建立**运行内核与 boot 分区内核二进制的精确身份关联**。完整文件不上传，仅保存[元数据报告](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-boot-p4-metadata.json)；分区 SHA-256 `41cfaa8f9ade4a5e05a89188abb7db154243e38b8e19c53b730f0a45ff325516`，压缩 kernel payload SHA-256 `cc4b5769cb8c9dcf8d013602e57c494a1153eb6714d9786cf847e39e3ecdd3af`。另扫描到 `fe7e68cd7aa14945d71f36e4fbf8412d959f4cc1` 第二个 GNU-note-like ID，尚未定位归属，不作解释。
 
-**本轮 RG34XX 电源灯实现：** 原厂 RG34XX（非 SP）设备树与 MustardOS RG34XX-H 配置均映射 `work_led=PI12`、`low_pwr_led=PI11`；仅控制 PI12。新增 `platform/h700/power/h700_rg34xx_power_led.c`，上电默认点亮；`target_early_init()` 早期点亮，`target_init()` 失败重试。新增 PIO 1 MiB Device MMU window mapping。Linkslot 1.0.45 `Session` 在 Playing/Polaroids 状态熄灭、退出后点亮；no_std 状态机仅在状态变化时调用 C ABI。暂不增加前端开关。提交：driver `af1922d0cecec278fc7bf2d81d63e4e621ab8685`、Session state `3cbc92669aac23b3e702c9518573d37adcd2fa54`、PIO mapping `c3a233e6f20defaf2ab0192f0de54f5c70921464`。Host tests 与 cross-compile 已通过：H700 AArch32/AArch64 compile check [#45524236936](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45524236936)（含 AArch64、AArch32 ARM、AArch32 Thumb-2 三组对象编译与 LED C host regression）；Linkslot runtime slices [#45524236833](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45524236833)（含 no_std 状态机测试和 Linkslot 1.0.45 Frontend overlay 编译）成功。实机极性、启动时机仍待验证；完整 LK target link/镜像仍受独立内存批准 gate 约束。
+**RG34XX PI12 电源灯实现（当前状态更正）：** PI12 driver、fake-IO service、Linkslot `Session` 状态转换和 MMU Device mapping 已完成；Playing/Polaroids 的关灯、退出后的点亮仍是未来 opt-in build 的目标行为。由于 BL33 handoff 后 APB1/PIO 状态未知、PIO Data Abort 不属于当前 SYS_CFG-only recovery 范围，现已通过 `H700_RG34XX_PI12_EARLY_ACCESS_ENABLE` 将物理 MMIO wrapper、`target_early_init()`、`target_init()` 和 C ABI 硬件调用默认关闭。production `platform/h700/rules.mk` 不定义此宏；默认 C ABI 返回 `ERR_NOT_READY`。只有一次性 host layout ELF 显式定义该宏来链接/测量真实 PI12 对象，不代表 production 已启用或设备已验证。
 
 **本轮 LK MMU 顺序修正（`ca1d1ce33b588bff85dc4ab9c949971ee2736ff4`）：** 对照 pinned GammaOS LK `arch/arm/arch.c` / `platform/mt6580/platform.c` 发现 `platform_init_mmu_mappings()` 在 `target_early_init()` 前必须建立 section table/TTBR、映射 DRAM 和设备窗口、最后启用 MMU；此前仅添加 PIO descriptor 的实现不完整。现在按 RG34XX live DRAM `[0x40000000,0x80000000)` 建 1024 个 1 MiB normal write-back RW identity sections，再将 `[0x03000000,0x03100000)` 设为 Device RW/XN，最后 `arch_enable_mmu()`。`DRAM_PHY_ADDR=0x40000000` 只供 LK 初始 section map 使用，不是 `H700_MEMBASE/H700_MEMSIZE` 或任何分配授权。fake-MMU 回归通过。
 
@@ -1224,3 +1224,38 @@ feasibility [#45834208280](https://github.com/dengzhan007/Linkslot-Pico-for-H700
 5. 最后才考虑一次明确授权的只读 PI12 LED proof-of-life；SYS_CFG probe 仍保持 dormant，不与 LED 首启诊断捆绑。
 
 本节为后续对话的真实续接点；新的 CI 结果必须以新的 HEAD/run ID 更新本文件，不能沿用历史 81/81 记录。
+
+
+## 2026-11-26 续接更新：PI12 默认关闭、安全门槛与最新完整 CI
+
+**当前代码 HEAD：** `166e3a97a4a011dff98ea9b33c959d47b643745e`。
+
+### 最新验证结果
+
+- 完整 Linkslot/LK feasibility [#45847816950](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847816950)：**81/81 steps completed，0 failures，0 skipped**；artifact [15133935777](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847816950/artifacts/15133935777)（387,985,689 bytes）。
+- H700 AArch64 / AArch32 ARM-state / AArch32 Thumb-2 compile、board/storage host regressions [#45847406072](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847406072)：success。该 run 的 HEAD 为 `a626caa28ad55dec5031bfb0c33a5ee67c8da5b6`，包含 PI12 默认关闭的 C/target 代码；之后只调整 project-guard 的注释过滤正则。
+- H700 boot-audit Linux/Windows [#45847165507](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847165507)：success。
+- 当前完整 feasibility 已通过 project/memory fail-closed guard（step 17）、真实 LK CRT0/exception/early-MMU/PI12 layout link（step 13）、Linkslot Frontend/no_std crates、输入、CMD17→GPT→FAT32→Libretro VFS、mGBA VFS v3/newlib archive 和 Rust static API 链接。
+
+### PI12 物理访问改为默认关闭
+
+- `platform/h700/power/h700_rg34xx_power_led.c` 的真实 PIO MMIO wrapper 由 `H700_RG34XX_PI12_EARLY_ACCESS_ENABLE` 控制，默认宏值为 0；未 opt-in 时 early init 和 game-state ABI 均返回 `ERR_NOT_READY`，不会读写 PIO。
+- `target/rg34xx_h700/init.c` 的 `target_early_init()` 与 `target_init()` 都受同一宏保护；正常 production `platform/h700/rules.mk` 不定义此宏。
+- fake-IO C service 和 Linkslot no_std 状态转换仍可测试；独立 early-MMU/PI12 layout ELF 仅在测试编译参数显式 opt-in，以验证真实 MMU/PI12 对象链接和 raw extent，不改变 production 默认。
+- 这样做是必要的：现有 Data Abort matcher 只恢复固定 SYS_CFG `VER_REG=0x03000024` 的受限读；PIO 地址（如 `0x0300b124` / `0x0300b130`）若触发 external Data Abort 仍会进入原 fatal halt，不能把普通 readback error 当成可恢复总线故障。
+
+### 新增 BaseOS SPL 源码证据（不等于 BL33 访问批准）
+
+已审查固定 BaseOS-MultiFrontend commit
+[`cbe253a43f46`](https://github.com/dengzhan007/BaseOS-MultiFrontend/tree/cbe253a43f46cf551cc9a6c79a84015bde3686cf)：
+`experiments/h700-boot-speed/spl/native-boot.c` 的 RG34XX active panel contract 为 rule=2（PE6 strap，high=old / low=boe）。在 SPL→BL31 之前，`baseos_vendor_handoff()` 会启动 `panel_start()`；该流程写 PIO `0x0300b124` / `0x0300b130` 控制 PI15/PI14，再在 panel sequence 中配置并读取 PE6（`0x0300b090`、`0x0300b0ac`、`0x0300b0a0`）。这证明当前 BaseOS SPL 源码路径在 BL31 前会访问主 PIO；**它不证明 BL31 运行后到 A32 BL33 入口时 APB1/PIO 状态未被改变**。Linux 正常运行期 APB1/PIO clock-summary 也不能替代该 handoff 状态证据。
+
+### 当前未关闭门槛与下一步
+
+1. 反向审查相同设备/monitor 的 BL31 初始化与平台代码，确认 BL31 是否会更改 APB1/PIO 时钟、复位或访问属性；若找不到可证明的 BL33 入口状态，PI12 继续默认关闭。
+2. 继续审查 `0x4a000000` 候选 BL33 runtime、真实 LK section table `0x4a008000`、BSS/`_end=0x4a00c024`、Abort stack 的 BL31/Boot0 生命周期与冲突；`H700_MEMORY_LAYOUT_APPROVED` 保持 unset。
+3. 查明 BL31→BL33 时 secondary Cortex-A53 cores 的 reset/hold-off 状态，或先设计并验证 SMP/coherency；pinned LK 的 scheduler/critical-section 仍是单核设计。
+4. 上述门槛关闭后，才构建匹配 vendor header 的 native firmware/SPL pair，并审查回滚和 proof-of-life。
+5. 实机冷启动与 PI12 游戏生命周期验证仍未执行。SYS_CFG probe 保持 dormant；不把 SYS_CFG 诊断和 PI12 诊断捆绑。
+
+全程 `hardware_applied=0`：无实机 MMIO 读/写、无模块加载、无 SD/Boot0/TOC1 写入、无刷写、无 payload execution。

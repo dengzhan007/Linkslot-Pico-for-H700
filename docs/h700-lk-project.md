@@ -16,9 +16,11 @@ This adds a real GammaOS LK project/target/platform selection path for the
   H700 `platform_init_mmu_mappings()` follows the pinned LK AArch32
   section-table contract: `arm_mmu_init()`, 1 GiB RG34XX DRAM identity map
   as normal write-back memory, 1 MiB SoC MMIO identity section as Device memory (covering SYS_CFG/VER_REG, PIO and CCU),
-  then `arch_enable_mmu()`. Only after that does `target_early_init()` turn
-  on PI12 before heap/thread startup. `target_init()` retries if early PIO
-  access failed.
+  then `arch_enable_mmu()` (with DSB before enable and ISB after enable). The
+  target lifecycle hooks link the PI12 service, but physical PIO MMIO is gated
+  by `H700_RG34XX_PI12_EARLY_ACCESS_ENABLE`; production rules do not define
+  this macro, so early/runtime target hooks remain no-ops for PI12 by default.
+  A separately approved opt-in build may enable the early PI12 request/retry.
   Neither hook creates fake fastboot/eMMC or memory-scratch capabilities.
 - `platform/h700/rules.mk` selects `ARCH=arm` / `ARM_CPU=cortex-a53` and assigns LK's generated `system-onesegment.ld` as the ELF linker script.
 - The H700 platform rules list the policy-only CPU selector/service/runtime owner,
@@ -31,7 +33,7 @@ This adds a real GammaOS LK project/target/platform selection path for the
   timer uses MTK GPT, and its mutex implementation is only a no-op placeholder;
   H700 must provide its own timer, logging and synchronization services.
 
-The project currently enables one minimal RG34XX board function: the PI12 work/power LED. It is not a general GPIO driver or input scanner. CPU performance objects remain policy-only; CPU DVFS, PMIC, MMC/SD hardware init and other H700 device drivers are not activated. The early MMU hook sets address-translation attributes only; the 1 GiB DRAM mapping does not allocate memory or approve any LK image, heap, stack, BSS, page-table, framebuffer, DMA or payload placement. This remains a scaffold, not a completed or bootable LK port.
+The project currently links one minimal RG34XX board service: the PI12 work/power LED. Its injected-IO behaviour is host-testable, but the physical PIO wrapper is disabled in production by default and the service is not a general GPIO driver or input scanner. CPU performance objects remain policy-only; CPU DVFS, PMIC, MMC/SD hardware init and other H700 device drivers are not activated. The early MMU hook sets address-translation attributes only; the 1 GiB DRAM mapping does not allocate memory or approve any LK image, heap, stack, BSS, page-table, framebuffer, DMA or payload placement. This remains a scaffold, not a completed or bootable LK port.
 
 ## LK heap readiness bridge and startup contract
 
@@ -515,3 +517,20 @@ A second minimal ELF now links the pinned LK's actual `arch_early_init()`, ARM s
 - LK early architecture and H700 C services compile as Thumb-2; FPEXC VMRS/VMSR instructions are used. Exception vectors and SYS_CFG probe assembly remain A32.
 
 Still not a bootable target: no thread/scheduler, vendor platform_early_init, GIC, timer, console, heap or storage. The 32 KiB loader extent is a file limit only; the `0x4a000000..0x4a0e0000` link bound is not an allocation grant. Do not set `H700_MEMORY_LAYOUT_APPROVED`, produce an installable image or execute until early APB1/PIO access, BL31/Boot0 memory ownership and secondary-core hold-off/SMP are independently resolved.
+
+
+## PI12 physical access default-off gate (2026-11-26)
+
+The physical PI12 MMIO wrapper defaults to disabled unless
+`H700_RG34XX_PI12_EARLY_ACCESS_ENABLE=1` is explicitly added by a separately
+qualified build. Production `platform/h700/rules.mk` does not define it;
+both `target_early_init()` and `target_init()` guard their PI12 calls, and
+the C ABI returns `ERR_NOT_READY` when disabled. Only the disposable
+real-MMU/PI12 layout test opts in to link-check the hardware path.
+
+Reason: the existing scoped Data Abort recovery only handles the single
+SYS_CFG VER_REG read. A PIO abort remains fatal. BaseOS native SPL source
+does access PI15/PI14/PE6 before BL31, but this does not prove BL31 leaves
+APB1/PIO accessible at A32 BL33 entry. Linux later clock-summary data is not
+an entry-state substitute. Keep the gate closed until the exact handoff
+clock/access and physical-memory/secondary-core gates are closed.

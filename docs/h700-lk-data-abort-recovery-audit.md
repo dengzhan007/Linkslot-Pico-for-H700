@@ -242,3 +242,27 @@ These new tests passed in the latest full feasibility run
 81/81, artifact [15123653120](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280/artifacts/15123653120).
 This remains host evidence only; no native firmware package was built from
 the test ELF and no device payload was executed.
+
+
+### 3.8 Peripheral-fault scope and PI12 default-off policy
+
+The matcher is intentionally limited to the one armed SYS_CFG VER_REG load at
+`0x03000024`. It does not recover PIO faults at `0x0300b124` /
+`0x0300b130`, nor arbitrary external aborts. A PIO external Data Abort still
+takes the original fatal LK exception path; the PI12 service's ordinary
+readback-error handling cannot catch a bus fault.
+
+Therefore the physical PI12 MMIO wrapper is compile-time disabled by default.
+Only a disposable host layout build defines
+`H700_RG34XX_PI12_EARLY_ACCESS_ENABLE=1` to prove the real object/link path.
+The production platform make rules leave it undefined. BaseOS native SPL
+uses PI15/PI14/PE6 before BL31, but this pre-BL31 fact does not prove the
+post-BL31 APB1/PIO state at A32 BL33 entry. Do not enable the wrapper until
+that handoff state, RAM ownership and secondary-core/Single-CPU contract are
+independently closed.
+
+Latest full Linkslot/LK feasibility after the default-off change:
+[#45847816950](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847816950), 81/81 steps, zero failures and zero skipped;
+artifact [15133935777](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847816950/artifacts/15133935777).
+H700 compile/host [#45847406072](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847406072) and boot-audit
+[#45847165507](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45847165507) passed.

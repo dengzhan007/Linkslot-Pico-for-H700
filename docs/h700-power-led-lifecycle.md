@@ -1,19 +1,21 @@
 # RG34XX PI12 电源灯生命周期
 
-## 默认行为
+## 设计目标与当前实际默认状态
 
-| 阶段 | PI12 工作/电源灯 | 说明 |
+设计目标是在未来通过 handoff/clock/ownership 审核的 opt-in LK build 中实现：
+
+| 阶段（opt-in build） | 目标 PI12 状态 | 说明 |
 |---|---|---|
-| LK 早期启动钩子 | 点亮 | 目标是灯亮即可表示已越过早期初始化，用户可松开电源键 |
+| LK 早期启动钩子 | 点亮 | 未来用于提示越过早期初始化 |
 | 前端 / 菜单 | 点亮 | 默认常亮 |
-| 游戏运行 `Phase::Playing` | 熄灭 | 只在状态变化时调用 C 服务 |
+| 游戏运行 `Phase::Playing` | 熄灭 | 只在状态变化时请求 C ABI |
 | 游戏成就拍立得页 `Phase::Polaroids` | 熄灭 | 仍属于当前游戏会话 |
 | 游戏退出、退卡动画、前端菜单 | 点亮 | 离开 Playing/Polaroids 后恢复 |
-| 睡眠 / 唤醒 | 暂无独立策略 | 后续按 suspend/resume 生命周期补充 |
+| 睡眠 / 唤醒 | 尚无独立策略 | 后续按 suspend/resume 生命周期补充 |
 
-当前默认启用“玩游戏熄灯”，没有用户设置项。前端设置开关等后续前端选项规划时再增加，未来默认仍为开启。
+**当前 production build 并没有启用上述物理行为。** `H700_RG34XX_PI12_EARLY_ACCESS_ENABLE` 默认值为 0，且 production `platform/h700/rules.mk` 不定义它；因此 `target_early_init()` / `target_init()` 不访问 PIO，Linkslot C ABI 返回 `ERR_NOT_READY`。这会让硬件保持 bootloader/firmware 留下的状态未知，不应写成“默认点亮”或“默认熄灭”。
 
-**实机行为尚未验证。** 目前代码按高电平点亮实现；实际极性、灯亮时间和用户松开电源键的可操作时机，仍需 RG34XX 冷启动验证。
+保留“玩游戏熄灯”作为未来 opt-in build 的默认策略，无前端用户设置项。真实 LED 极性、灯亮时间和是否足以作为松开电源键提示，仍需在安全门槛关闭后做 RG34XX 冷启动验证。
 
 ## 板级证据与寄存器
 
@@ -77,9 +79,9 @@ on an unverified assumption.
 
 - `slot-frontend-state::GamePowerLedState` 是 no_std transition latch：首次同步请求前端态（`game_active=false`），之后仅在 `false ↔ true` 变化时发出请求。
 - 临时 overlay 修改 Linkslot 1.0.45 的 `crates/slot/src/session.rs`。Session 读取 `App::phase()`；Playing/Polaroids 代表游戏活动，其余阶段视为前端态。
-- `Session::feed()` 在处理动作后同步一次；`Session::update()` 在 App 动画更新后同步一次。状态 latch 让真实 C ABI/GPIO 访问只发生在状态转换时，不会逐帧写寄存器。
-- C service 只改 PI12 bit 12，使用 read-modify-write 保留 PI11 和同 Bank 其他位。开始游戏拉低熄灭，退出游戏拉高点亮。
-- FFI 失败会输出一次 transition error，不做逐帧重试；后续状态变化会再次请求。早期 target hook 与 target_init retry 负责常规启动时初始化。
+- `Session::feed()` 在处理动作后同步一次；`Session::update()` 在 App 动画更新后同步一次。状态 latch 只在状态转换时调用 C ABI，不会逐帧请求硬件；production 默认 wrapper 返回 `ERR_NOT_READY`，只有经批准的 opt-in build 才会真正访问 GPIO。
+- opt-in C service 只改 PI12 bit 12，使用 read-modify-write 保留 PI11 和同 Bank 其他位。开始游戏拉低熄灭，退出游戏拉高点亮；默认 production build 不会执行这些 MMIO。
+- FFI 失败会输出一次 transition error，不做逐帧重试；后续状态变化会再次请求。早期 target hook 与 target_init retry 只有在显式 PI12 opt-in build 中启用。
 
 `upstream/linkslot` 保持不可变，所有 Session Rust 补丁由 `scripts/apply-linkslot-h700-frontend-core.py` 在隔离工作树生成。
 
@@ -89,7 +91,7 @@ on an unverified assumption.
 - 初始化先置 output latch，再切 pinmux；
 - 保留 PI11 和 Port I 其他位；
 - 游戏开始/结束切换和重复请求幂等；
-- 无效 ABI、未初始化、pinmux 丢失和读回失败。
+- 无效 ABI、未初始化、pinmux 丢失和读回失败；另有 default-off wrapper test，确认未 opt-in 时 early init/game-state C ABI 返回 `ERR_NOT_READY`。
 
 Rust no_std state tests 覆盖初始前端态、开始/退出游戏各一次请求，以及 600 次重复状态采样不会重复发出硬件请求。H700 AArch32/AArch64 compile check [#45526769732](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45526769732) 已通过，包括 AArch64、AArch32 ARM、Thumb-2 对象编译和 MMU/PIO fake-register tests；Linkslot runtime slices [#45524785105](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45524785105) 已通过 no_std state tests 与完整 Linkslot 1.0.45 Frontend overlay 编译。
 
@@ -143,3 +145,24 @@ that the actual LK MMU and PI12 objects link together and fit the 32 KiB raw
 extent. The generic injected-IO C service remains fully host-testable.
 Do not enable the macro in a target firmware until APB1/PIO access at BL33
 handoff, physical memory ownership and secondary-core behavior are qualified.
+
+
+## BaseOS SPL PIO use before BL31 — source audit (not BL33 approval)
+
+The pinned BaseOS-MultiFrontend commit
+[`cbe253a43f46`](https://github.com/dengzhan007/BaseOS-MultiFrontend/tree/cbe253a43f46cf551cc9a6c79a84015bde3686cf)
+contains the active RG34XX native SPL source in
+`experiments/h700-boot-speed/spl/native-boot.c`. Its RG34XX panel contract is
+rule=2 (PE6 strap; high=old, low=boe). Before handing off to vendor BL31,
+`baseos_vendor_handoff()` starts the panel sequence; the SPL writes
+`0x0300b124` / `0x0300b130` for PI15/PI14, then configures and reads PE6
+through `0x0300b090`, `0x0300b0ac`, and `0x0300b0a0`. This is positive
+source evidence that the native SPL uses the main PIO block before BL31.
+It does **not** prove the APB1/PIO clock/reset/access state after BL31 and at
+the A32 BL33 entry.
+
+The current Data Abort matcher only recovers the explicitly armed SYS_CFG
+read at `0x03000024`; an abort on PI12/PIO remains fatal. Linux runtime
+clock-summary data is later in the boot chain and cannot replace a BL33
+handoff snapshot. Keep physical PI12 MMIO disabled in production until that
+gap and memory/secondary-core ownership gates are closed.

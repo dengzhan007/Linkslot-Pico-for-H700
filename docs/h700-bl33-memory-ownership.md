@@ -379,3 +379,22 @@ firmware pairing.
 The successful full feasibility run [#45843270056](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45843270056) now links the pinned LK's actual `arm_mmu_init()` and H700's real `platform_init_mmu_mappings()` into a minimal A32 layout ELF. It reports the actual LK 4096-entry section table at `tt=0x4a008000` (16 KiB aligned), with linked `_end=0x4a00c024` and an image-base-to-`_end` span of `0xc024` bytes. Raw flat ELF size is 7,912 bytes and fits the existing 32 KiB loader file extent; this is not evidence that the runtime BSS/table range is physically safe or available.
 
 The linker address is still inside the historically copied `0x4a000000..0x4a0e0000` loader bound. No independent BL31/Boot0 ownership approval is inferred from the successful link. Keep `H700_MEMORY_LAYOUT_APPROVED` unset; do not build an installable package, flash or execute the ELF. Secondary A53 hold-off/SMP and early APB1/PIO handoff access are separate unresolved gates.
+
+
+### 2026-11-26 BaseOS SPL PIO access is pre-BL31 evidence only
+
+The pinned BaseOS-MultiFrontend source
+[`cbe253a43f46`](https://github.com/dengzhan007/BaseOS-MultiFrontend/tree/cbe253a43f46cf551cc9a6c79a84015bde3686cf)
+shows the active RG34XX native SPL's `baseos_vendor_handoff()` running the
+panel sequence before the monitor reset: PI15/PI14 configuration and output
+through `0x0300b124` / `0x0300b130`, plus PE6 configuration/read through
+`0x0300b090`, `0x0300b0ac`, and `0x0300b0a0`. The matching RG34XX panel
+contract is rule=2 (PE6 strap; high=old, low=boe).
+
+This establishes that the native SPL uses the main PIO block before BL31;
+it does not establish that vendor BL31 preserves APB1/PIO clock, reset or
+access state until the first A32 BL33 instruction. The Linux clock tree is a
+later runtime snapshot. This is not a memory allocation or BL33 access
+approval. Keep PI12 physical access disabled until a post-BL31/pre-BL33
+state proof, memory ownership review and secondary-core gate are complete.
+`H700_MEMORY_LAYOUT_APPROVED` remains unset.
