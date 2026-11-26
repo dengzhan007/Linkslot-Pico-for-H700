@@ -194,3 +194,33 @@ that BL31 never accesses the block through indirect, data-driven or secure
 paths. It cannot establish APB1 clock state, PIO access permissions, or
 register values at BL33 entry. PI12 physical MMIO therefore remains disabled
 in production, and `hardware_applied=0`.
+
+
+## BL31 PIO finding — conditional low-power code path (2026-11-26)
+
+The first CI run after adding the address classes
+([#45851421825](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45851421825))
+completed successfully. It initially reported one PIO candidate at
+PC `0x480134c8`, a load from `0x0300b100`. Manual disassembly of the exact
+matched monitor binary around `0x48013490` shows a coherent register setup
+and read-modify-write sequence involving `0x0300b100`, `0x0300b110`, and
+`0x0300b118`; the first 16-instruction scan window under-reported this
+sequence because later accesses fell outside its local register-tracking
+window.
+
+The local call chain includes `0x4800c404 → 0x4800c4d0`, a conditional
+`BL` at `0x4800c53c → 0x48013df0`, and `0x48013e40 → 0x48013490`.
+The surrounding `0x4800c4d0` path manipulates `SCR_EL3` and executes
+`WFI`. However, this function/call chain is not present in the existing
+primary-entry direct-control-flow disassembly, and its registration or
+invocation point has not been resolved. It is therefore evidence that the
+matched BL31 **contains a conditional PIO-access path**, not proof that the
+path runs at initial BL33 handoff or that it changes the PIO state during
+every boot.
+
+The scanner window is now expanded from 16 to 40 instructions, and its
+candidate context preserves the full tracking window. A synthetic regression
+separates a register's low address seed from its high-half `MOVK` by 24
+instructions, proving the scanner still recognizes the later MMIO load.
+Re-run CI and review the complete CCU/PIO rows before drawing any further
+conclusion. PI12 remains production default-off.

@@ -40,6 +40,25 @@ def main() -> int:
     assert module.label(0x09010000) == "C0_CPUX_CFG"
     assert module.label(0x090100C4) == "C0_CPUX_CFG"
     assert module.label(0x09020000) is None
+
+    # The address seed and high half may be separated by more than the old
+    # 16-instruction window. Keep this regression to prevent missing such
+    # PIO/CCU accesses in long register-setup sequences.
+    long_sequence = [0xD2962004] + [0xD503201F] * 24 + [
+        0xF2A06004, 0xB9400080, 0xD65F03C0
+    ]
+    long_raw = b"".join(struct.pack("<I", word) for word in long_sequence)
+    long_hits = module.instruction_hits(long_raw)
+    assert any(
+        item["mnemonic"] == "ldr" and item["address"] == "0x0300b100"
+        for item in long_hits
+    ), long_hits
+    long_context = next(
+        item["context"] for item in long_hits
+        if item["mnemonic"] == "ldr" and item["address"] == "0x0300b100"
+    )
+    assert any("mov x4, #0xb100" in row for row in long_context), long_context
+
     print("PASS: whole-payload BL31 overlapping decode and literal-word MMIO tests")
     return 0
 

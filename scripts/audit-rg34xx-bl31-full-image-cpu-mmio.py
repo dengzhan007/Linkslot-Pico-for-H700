@@ -17,7 +17,7 @@ from capstone.arm64_const import ARM64_OP_IMM, ARM64_OP_MEM, ARM64_OP_REG
 BASE = 0x48000000
 EXPECTED_SIZE = 107216
 EXPECTED_SHA = "676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31"
-WINDOW = 16
+WINDOW = 40
 # More-specific H700 ranges precede the broad SYS_CFG/SID window so
 # reports distinguish CCU and PIO candidates without losing other SYS reads.
 RANGES = (
@@ -129,7 +129,7 @@ def instruction_hits(raw: bytes) -> list[dict]:
                             "operands": ins.op_str,
                             "window": name,
                             "decode_window_start": "0x%08x" % start,
-                            "context": listing[-4:],
+                            "context": listing[-WINDOW:],
                         }
             if ins.mnemonic in ("b", "br", "ret", "eret", "drps") or ins.mnemonic.startswith("b."):
                 break
