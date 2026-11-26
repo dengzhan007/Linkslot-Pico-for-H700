@@ -299,12 +299,15 @@ The pinned [ROCKNIX panel firmware table](https://github.com/ROCKNIX/distributio
 
 The active C policy still carries the external 54-MHz / 840 / 536 and 54-MHz / 1679 / 536 timing candidates. These are not the observed live stock timing (26-MHz property / 820 / 536 plus the read-back divider), and must remain tagged as reference candidates rather than the final board profile. Do not use them to program hardware or infer that the current target supports either mode.
 
-### Next work
+### Next work (updated 2026-11-26)
 
-1. Recover or identify the exact 4.9.170 #19 display implementation from the Build-ID-matched stock kernel and trace `rg34xx_v1 + lcd_type=old` panel init, PLL bitfields, clock parents and final DCLK path.
-2. Compare that result with the pvaibhav/slot source and the independent ROCKNIX RG34XX panel table without transplanting either timing or writer.
-3. Measure UI presents and armGBA committed frames separately. Display IRQ remains only a scanout/vblank proxy.
-4. Keep the 120-Hz writer disabled, GAME 120-Hz opt-in default-off, and `hardware_applied=0` until an RG34XX-specific HAL has exact panel qualification, synchronized transition sequencing, scanout/cache ownership, readback, timeout and rollback coverage.
+The previous kernel/source and FPS-measurement gates are complete:
+
+1. **Completed — live timing path:** the Build-ID-matched kernel #19 reverse audit closes the `rg34xx_v1 + lcd_type=old` panel init, divider source, PLL factor table and TCON parent inheritance. Live readback is the 60-Hz pair `0x88001703` / `0xf000000b`; the derived current rate is about 59.57 Hz.
+2. **Completed — runtime rate accounting:** separate UI presents, game presents, armGBA committed frames and LCD IRQ have been measured. Results remain about 59.50/s pre-game presents, 59.56/s game presents, 59.72/s armGBA frames and 59.59/s IRQ. IRQ is only a scanout proxy. See the FPS report and maps-only supplement.
+3. **Open — exact physical panel qualification (the current blocker):** identify the actual LCD module vendor, complete part number and hardware revision fitted to the tested `rg34xx_v1 + lcd_type=old` unit. Obtain a matching panel datasheet or manufacturer confirmation of supported pixel-clock range, horizontal/vertical timing, blanking, refresh limits and overclock tolerance. The public Anbernic product page specifies a 3.4-inch IPS 720×480 display but does not publish the panel part number or refresh-rate limit. Upstream Slot maintainer discussion describes the panels as slightly below 60 Hz and the 120-Hz change as a driver tweak; the same discussion later says the hack was skipped because of reported stutter and implementation complexity. This is useful warning/context, not a datasheet or direct validation of this exact panel revision.
+4. **After qualification only:** derive a profile specifically for the identified panel revision; then design and test a safe HAL transition including VBlank/TE boundary, scanout buffer/cache ownership, clock and TCON sequencing, readback, timeouts and rollback. Until then, use the verified 60-Hz baseline and do not experiment with the candidate 528-MHz/divider-10 or boot-package timings.
+5. Keep GAME 120-Hz opt-in default-off and all hardware writers disabled. The current C policy remains a target-selection model only; `hardware_applied=0` is mandatory until all panel and transition gates pass.
 
 
 ## PLL register arithmetic cross-check (pinned public BSP reference only)
@@ -319,3 +322,20 @@ A source-level decode is now possible without guessing the raw PLL field layout.
 At our live 820×536 totals, the candidate computes to 52.8 MHz / (820×536) = **120.13 Hz**. The baseline computes to 26.1818 MHz / (820×536) = **59.569 Hz**. This arithmetic is coherent with the observed 60-Hz clock summary and IRQ slope, and makes the upstream 120-Hz pair internally coherent. It still does **not** prove the current kernel uses this exact PLL layout, that the live `tcon_lcd` parent is the same at runtime, that the panel revision tolerates 52.8 MHz, or that pvaibhav's write sequence is safe on `rg34xx_v1 + lcd_type=old`. The report's raw PLL remains recorded as raw hardware evidence; this section is an external-source decode only.
 
 Do not copy the high-mode candidate into our HAL or enable a writer. First match the exact Linux 4.9.170 #19 source/build ID, verify `clk-sun50iw9` factor definitions and runtime parent/mux path, then qualify the panel timing and safe transition boundary. The linked T507 source is a related sun50iw9 reference, not proven identical to the shipping binary.
+
+
+## 11. Panel specification and upstream 120-Hz hack context (2026-11-26)
+
+The current public hardware specification is insufficient to approve an overclock:
+
+- Anbernic's [official RG34XX specification](https://win.anbernic.com/product/517.html) lists a 3.4-inch IPS full-view OCA display at 720×480, but does not identify the LCD module/part number, hardware revision, native refresh rate or maximum pixel clock.
+- In [Slot issue #147, “120 Hz and schedutil governor”](https://github.com/BrandonKowalski/slot/issues/147), the Slot maintainer explains that the supported panels are slightly below 60 Hz and that the tweak runs the display driver at 120 Hz. In the same discussion, after stutter reports and consideration of implementation complexity, the maintainer says the 120-Hz hack will be skipped. This is maintainer/community context, not a panel datasheet and not direct proof about the exact RG34XX unit audited here.
+- Our live identity remains `rg34xx_v1 + lcd_type=old`. That is not the `fog_fj035fhd05_v1` profile required by the reviewed pvaibhav/slot writer. The 120-Hz register pair and the external boot-package FDT therefore remain unqualified references, not usable settings for this device.
+
+**Engineering interpretation:** do not describe 120 Hz as a native capability of the RG34XX panel. Treat it as an attempted display-driver overclock until the exact LCD module and its timing limits are identified. A successful UI/core frame counter near 120 would still not prove panel electrical acceptance or stable scanout.
+
+**Next evidence to seek:** a clearly readable rear-panel/FPC/module marking from the exact test unit (with the device powered off and safely opened only by the owner), a matching BOM/datasheet from Anbernic or the panel supplier, or written vendor confirmation tied to that board revision. If no traceable module identity/specification can be obtained, retain 60 Hz as the only qualified operating mode. Do not infer permission from unrelated RG34XX-SP, RG34XX-H, RG35XX-SP or other panel variants.
+
+Sources:
+- [Anbernic RG34XX product specification](https://win.anbernic.com/product/517.html)
+- [BrandonKowalski/slot issue #147](https://github.com/BrandonKowalski/slot/issues/147)
