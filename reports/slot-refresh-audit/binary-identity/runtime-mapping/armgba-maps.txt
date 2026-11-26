@@ -40,10 +40,25 @@ Slot 以 `ld-linux-aarch64.so.1 /mnt/sdcard/System/slot` 启动，`exe` 记录�
 400000000 dff000000000000 0 0 c000000000000 2
 ```
 
-sysfs 按最高字在前打印，共 6 字（覆盖 code 0–383）。`w4 = 0x0dff000000000000` 的 bit48
-→ code `256+48 = 304 = BTN_SOUTH`；相邻 bit49/50/51 → 305/306/307（B/C/X），
-bit52–55 → 308–311（TL/TR/TL2/TR2），bit56/58/59 → 312/314/315（SELECT/START/MODE）。
-这是一张标准手柄键表，A 即 `BTN_SOUTH = 304`。
+sysfs 按最高字在前打印，共 6 字（覆盖 code 0–383）。`w4 = 0x0dff000000000000` = `0x1ff<<48 | 0x400<<48 | 0x800<<48`，
+故置位的是 code 304–312 与 314、315：`w4` 的 bit48 → code `256+48 = 304 = BTN_SOUTH`。
+`w1 = 0xc000000000000` = `0xc<<48` → bit50/51 → code 114/115（`KEY_VOLUMEDOWN`/`KEY_VOLUMEUP`）。
+
+位图只给出“支持哪些 code”，**不给出语义**；语义取自设备树
+`/proc/device-tree/soc@03000000/gpio_keys/*/{label,linux,code}`（权威）：
+
+| DT 节点 | label | linux,code | 语义 |
+| --- | --- | --- | --- |
+| `keyA` | GPIO Key a | `0x130` = 304 | A（`BTN_SOUTH`），进游戏 |
+| `keyB` / `keyX` / `keyY` | b / x / y | `0x131`–`0x133` = 305–307 | B / X / Y |
+| `keyL1` / `keyR1` | L1 / R1 | `0x134` / `0x135` = 308 / 309 | 肩键 1 |
+| `keySEl` / `keyStart` | select / start | `0x136` / `0x137` = 310 / 311 | SELECT / START |
+| `keyMenu` | **GPIO Key Menu** | `0x138` = **312** | **M / Menu / Function 键** |
+| `keyL2` / `keyR2` | L2 / R2 | `0x13a` / `0x13b` = 314 / 315 | 肩键 2 |
+| `keyVol+` / `keyvol-` | Vol up / vol down | `0x73` / `0x72` = 115 / 114 | 音量 |
+
+注意 312 不是 `BTN_MODE`(316) —— 这台机器的 M 键复用的是 `BTN_TL2`，靠 label 才能认出来；
+只按“标准手柄键表”推会把它误判成 SELECT 那一类。A 即 `BTN_SOUTH = 304`。
 
 注入用 24 字节 `struct input_event`（`timeval 16 B + u16 type + u16 code + s32 value`）：
 
@@ -59,6 +74,32 @@ adb shell 'sleep 1; dd if=/tmp/a_release.bin of=/dev/input/event1 bs=24 count=2 
 ```
 
 结果：注入前 `grep -c armgba /proc/2301/maps` = 0，注入后 = **4**，PID 仍为 2301。
+
+### 3.1 退出游戏：长按 Menu 键（BTN_TL2 = 312）
+
+退出是**长按**，不是点按，所以按下与抬起必须落在**同一个打开的 fd** 里 ——
+evdev 客户端关闭时会为该客户端按下的所有键补发 key-up，分两次 `dd` 等于只产生一次极短的点按。
+用 shell 分组重定向保证单次 open：
+
+```sh
+adb shell '{ dd if=/tmp/menu_press.bin bs=48 count=1 2>/dev/null;
+             sleep 3;
+             dd if=/tmp/menu_release.bin bs=48 count=1 2>/dev/null; } > /dev/input/event1'
+```
+
+字节流（各 48 B = `EV_KEY` + `EV_SYN`）：
+
+```text
+menu_press.bin    EV_KEY(1), code=312, value=1  +  EV_SYN(0)
+menu_release.bin  EV_KEY(1), code=312, value=0  +  EV_SYN(0)
+```
+
+实测：长按 3 秒后 `grep -c armgba /proc/2301/maps` 由 4 回到 **0**，`maps` 总行数回到 415，
+PID 仍为 2301 —— 退出游戏同样是 `dlclose` + 回前端，不重启进程。取证见
+`build/runtime-mapping/game-live/exit-injection.txt`。
+
+一个采集陷阱：按 cmdline 扫进程时，adb 自己那条 `sh -c '...case *"/System/slot"*...'` 的
+命令行里含有该字符串，会被匹配成一个假 PID（本次出现过 9711）。扫到新 PID 先看它是否已消失。
 
 ## 4. 阶段一：UI 态（核心未加载）
 

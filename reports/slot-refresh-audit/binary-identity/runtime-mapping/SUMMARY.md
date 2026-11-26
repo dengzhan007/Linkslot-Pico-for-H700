@@ -4,7 +4,8 @@
 **未**重启或停止 Slot，**未**修改任何配置，**未**写任何硬件寄存器。
 二进制 SHA-256、面板参数、IRQ 293 数据已在本目录上级 `REPORT.md` 给定，此处不重复。
 
-唯一一次状态改变是应要求注入一次 A 键（`BTN_SOUTH=304`）把游戏打开，让核心 `dlopen`；
+状态改变只有两次键注入（均为应要求、可逆）：A 键（`BTN_SOUTH=304`）打开游戏让核心 `dlopen`，
+长按 Menu 键（`BTN_TL2=312`）3 秒退出、让核心 `dlclose`；
 方法与字节流见 `armgba-maps.txt` §3。
 
 ## 0. 结论速览
@@ -32,8 +33,9 @@
 | 已加载 `.so` 数量 | 12（无 libretro 核心） | 13（含 `armgba_libretro.so`） |
 
 核心只在游戏运行时 `dlopen`、退出即 `dlclose`，所以 UI 态取不到映射。两次采集之间由用户要求，
-向 `/dev/input/event1` 注入了一次 `BTN_SOUTH`(304) 按下+抬起把游戏打开（设备无 `input`/`sendevent`，
-用 `dd` 写 24 字节 `input_event`）；这不属审计禁止项，也未触碰寄存器或配置。方法见 `armgba-maps.txt` §3。
+向 `/dev/input/event1` 注入了两次按键：`BTN_SOUTH`(304) 打开游戏、长按 `BTN_TL2`(312) 3 秒退出
+（设备无 `input`/`sendevent`，用 `dd` 写 24 字节 `input_event`）；这不属审计禁止项，也未触碰寄存器或配置。
+退出后 `armgba` 行数由 4 回到 0、PID 仍为 2301。方法见 `armgba-maps.txt` §3 / §3.1。
 
 ## 2. PT_LOAD 与地址换算
 
@@ -151,7 +153,7 @@ bl   <消费函数>
 
 | 文件 | 内容 |
 | --- | --- |
-| `armgba-maps.txt` | PID 定位、`exe`、UI 态/游戏态两相、A 键注入方法、bias 解算表、`.bss` 归属 |
+| `armgba-maps.txt` | PID 定位、`exe`、UI 态/游戏态两相、进/退游戏的键注入方法、bias 解算表、`.bss` 归属 |
 | `armgba-pt-load.txt` | 2 个 PT_LOAD 全字段、页对齐展开、bias 公式 |
 | `armgba-symbol-refs.txt` | 符号表、GOT 槽、125 条引用索引、三个函数全文反汇编 |
 | `load-bias.json` | bias 方法、实测行、`captured` 结果与运行时符号表 |
