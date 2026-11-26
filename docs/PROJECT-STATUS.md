@@ -503,8 +503,24 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 - 完整 `slot-game-launch.log` 比首份 UI 摘要多包含窗口：进入游戏前 25 个 600-swap 窗口均值 **59.503 presents/s**；进入 armGBA 后 31 个窗口均值 **59.561 presents/s**。原始 `slot-ui-trace.log` 中最初 4 个窗口均值 59.345 仍正确，但只代表启动后首段，不是整个 UI/游戏期间的总均值。
 - IRQ293 仍为 **59.590 IRQ/s**。游戏态 presents 59.561、核心 committed frames 59.722、IRQ 59.590 三项互相接近，但分别代表前端 swap、核心完成帧、LCD IRQ。
 - 报告 bundle 的 9 个原始文件 SHA-256 全部匹配清单。后增 `ANALYSIS.md` 的 SHA 也已加入 fps-sampling 清单。
-- 证据完整性补充：本次采样文件记录 load bias `0x7f55ae0000` 与 map signature，但没有上传本次 PID 22514 的原始三条 maps 行；因此 CSV 的 counter 算术可独立完整复算，当前 bias 的 PT_LOAD 三行交叉验证仍是报告摘要声明，需后续补交 maps 首尾快照（无需重读进程内存）。
+- 证据完整性补充：原始采样 PID 22514 的 maps 首尾快照后来确认未找回，其 `0x7f55ae0000` bias 仍为摘要级证据。后续已对新 PID 8064 做独立 maps-only 补采，验证相同 ELF 的 RX/R/RW 三行 bias 解算方法；该补采不替代旧 PID 原始证据，详情与边界见第16节。
 - 预检的 ADB descriptor 显示 `occam/Nexus_4/mako`，但同一 ADB session 取回的 uname、DT SoC、BaseOS release 均指向 RG34XX/H700；该 descriptor 不能单独推翻设备身份，后续报告继续记录 DT model/compatible 与 CPU info 即可。
 - 恢复记录显示第一次 SIGTERM 后前端链进入 diagnostics helper 并阻塞；处理该 helper 后 init respawn 正常。最终 marker ABSENT、tracing 关闭、Slot PID 8064 回到 UI、armgba 映射 0。不要把第一次 respawn 失败从后续自动化报告中省略。
 
 当前三项结果仍全部约 60/s；没有 120-Hz 证据。所有刷新率硬件 writer 继续关闭，`hardware_applied=0`。
+
+
+## 16. armGBA maps-only 独立补采与证据边界（2026-11-26）
+
+原始游戏帧采样 PID **22514** 的首尾 `/proc/PID/maps` 快照已在本地采集目录、Agent 工作目录与仓库中搜索，确认未找回。旧采样记录的 load bias `0x7f55ae0000` 和 map signature `8f7db48f8bb8ea5f` 仍应明确视为采集摘要级信息；不得用另一个进程的 maps 回填或声称已证明旧 PID 的地址。
+
+已追加独立 maps-only 补采，完整报告位于 [MAPS-SUPPLEMENT.md](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/slot-refresh-audit/fps-sampling/MAPS-SUPPLEMENT.md)：
+
+- 明确 ADB serial 只有一台 `state=device`；设备侧 uname、DT model/compatible 与 `BASEOS_TARGET` 均确认 RG34XX/H700。
+- 新 Slot PID **8064**，同一 GBA ROM 与官方 armGBA core。首尾两份完整 `/proc/PID/maps` 各 **425 行**；两次采集的 armGBA 四行映射逐字节相同。
+- 三条文件映射独立得出相同新 bias：RX `0x7f339a0000 - 0`、R `0x7f33b25000 - 0x185000`、RW `0x7f33b28000 - 0x188000`，结果均为 **`0x7f339a0000`**。新 bias 与 PID22514 不同属 ASLR 正常现象；本结果验证 PT_LOAD 映射/对齐与 bias 算法，不回溯证明 PID22514 的旧 bias。
+- 两份 maps 文件、补充说明以及整个 `fps-sampling/SHA256SUMS.txt` 中列出的 **13/13 文件**均已独立复算 SHA-256，全部匹配。
+- 采集后长按 Menu 退出；PID8064 仍存活并回到 UI，armGBA maps=0、trace marker ABSENT、`SLOT_TRACE_LATENCY` absent。未重采 FPS、未读 `/proc/PID/mem`、未 ptrace/gdb、未杀进程或重启 Slot，未改配置/ROM/存档/启动分区。
+- 未写 PLL/TCON/CCU/PMIC、未使用 `/dev/mem` 或 `sunxi_dump/write`；`hardware_applied=0`。
+
+报告与分析已同步修正：[fps-sampling README](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/slot-refresh-audit/fps-sampling/README.md)、[独立分析](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/slot-refresh-audit/fps-sampling/ANALYSIS.md)。原 FPS 数值不变：预游戏 presents 59.503/s、游戏态 presents 59.561/s、armGBA committed frames 59.722/s、IRQ293 59.590/s。显示刷新率仍没有 120-Hz 证据；硬件 writer 继续禁用。
