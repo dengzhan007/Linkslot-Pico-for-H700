@@ -726,7 +726,7 @@ def inspect_fdt(path: Path) -> dict[str, Any]:
                 "type": (_strings(props.get("heap-type")) or [None])[0],
                 "status": (_strings(props.get("status")) or ["okay"])[0],
             })
-        if any("axp2202" in item.lower() for item in comp):
+        if any(item.lower() == "x-powers,axp2202" for item in comp):
             pmics.append({"node": node_path, "compatible": comp,
                           "status": (_strings(props.get("status")) or ["okay"])[0]})
         leaf = node_path.rsplit("/", 1)[-1].lower()

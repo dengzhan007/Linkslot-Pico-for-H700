@@ -397,6 +397,14 @@ class FdtInspectorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "synthetic.dtb"
             path.write_bytes(make_fdt())
+            parsed_nodes = MODULE.parse_fdt(path.read_bytes())
+            gpio_path = "/soc@03000000/gpio_keys/keyA"
+            self.assertIn(gpio_path, parsed_nodes)
+            self.assertIn("gpios", parsed_nodes[gpio_path])
+            self.assertEqual(
+                MODULE._cells(parsed_nodes[gpio_path]["gpios"]),
+                [0x60, 0, 0, 0, 1, 2, 1],
+            )
             report = MODULE.inspect_fdt(path)
 
         inputs = report["input_devices"]
