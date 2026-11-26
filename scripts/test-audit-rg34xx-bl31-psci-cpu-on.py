@@ -23,7 +23,29 @@ def main() -> int:
     assert module.EXPECTED_TABLE[5] == 0x480026c4
     # Slot pointer values are verified, but non-CPU_ON callback semantics
     # remain unclassified until the exact vendor TF-A ABI is identified.
-    assert module.EXPECTED_TABLE[7] == 0x48002574
+    assert module.EXPECTED_TABLE == [
+        0x48002510, 0x4800254c, 0x4800264c, 0x48002878, 0x48002680,
+        0x480026c4, 0x480025a0, 0x48002574, 0x48002544,
+    ]
+    assert module.OPS_MEMBER_NAMES == (
+        "affinst_standby", "affinst_on", "affinst_off", "affinst_suspend",
+        "affinst_on_finish", "affinst_suspend_finish", "system_off",
+        "system_reset", "get_sys_suspend_power_state"
+    )
+    assert module.WORDS[0x48002544] == 0x52A04020
+    assert module.WORDS[0x48002588] == 0x97FFFE50
+    assert module.WORDS[0x480025A8] == 0x97FFFE4C
+    assert module.WORDS[0x48009688] == 0xF9400021
+    assert module.WORDS[0x48009690] == 0xD63F0020
+    assert module.WORDS[0x480080F8] == 0xF9400835
+    assert module.WORDS[0x48008A84] == 0xF9400C26
+    assert module.WORDS[0x4800854C] == 0xF9401003
+    assert module.WORDS[0x48008918] == 0xF9401421
+    assert module.WORDS[0x4800971C] == 0xF9402000
+    assert module.WORDS[0x48009744] == 0xD63F0000
+    assert module.decode_bl_target(0x48002588, 0x97FFFE50) == 0x48001EC8
+    assert module.decode_bl_target(0x480025A8, 0x97FFFE4C) == 0x48001ED8
+    assert module.decode_bl_target(0x4800975C, 0x97FFFD8F) == 0x48008D98
     window_map = {name: (start, size) for name, start, size in module.DISASSEMBLY_WINDOWS}
     assert "ops_slot_0_raw" in window_map
     assert window_map["ops_slot_0_raw"][0] == 0x48002510
@@ -35,6 +57,12 @@ def main() -> int:
     assert window_map["psci_platform_registration"][0] <= 0x48009dec
     assert window_map["power_system_off_helper"][0] == 0x48001ec8
     assert window_map["power_cpu_off_helper"][0] == 0x48001ed8
+    assert window_map["legacy_slot0_standby_dispatch"][0] == 0x48009680
+    assert window_map["legacy_slot2_off_dispatch"][0] <= 0x48008118
+    assert window_map["legacy_slot3_suspend_dispatch"][0] <= 0x48008a90
+    assert window_map["legacy_slot4_on_finish_dispatch"][0] <= 0x48008560
+    assert window_map["legacy_slot5_suspend_finish_dispatch"][0] <= 0x4800893c
+    assert window_map["legacy_slot8_system_suspend_getter_dispatch"][0] <= 0x4800975c
     assert "ops_slot_3_raw" in window_map
     assert window_map["ops_slot_3_raw"][0] <= 0x48002998 < window_map["ops_slot_3_raw"][0] + window_map["ops_slot_3_raw"][1]
     assert window_map["ops_slot_5_raw"][0] <= 0x48002858 < window_map["ops_slot_5_raw"][0] + window_map["ops_slot_5_raw"][1]
@@ -51,7 +79,7 @@ def main() -> int:
         pass
     else:
         raise AssertionError("B instruction was incorrectly accepted as BL")
-    print("PASS: PSCI registration, callback and helper BL target decoding")
+    print("PASS: legacy PSCI nine-member ABI, callback dispatch and SYSTEM_SUSPEND getter")
     return 0
 
 if __name__ == "__main__":

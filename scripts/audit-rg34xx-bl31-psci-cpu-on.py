@@ -25,6 +25,20 @@ WORDS = {
     0x4800869c: 0x900001a1, 0x480086a0: 0xf947e021,
     0x480086a4: 0xf9400433, 0x480086c4: 0xaa1303e5,
     0x480086dc: 0xd61f00a0,
+    # Legacy plat_pm_ops_t member dispatches.
+    0x48009684: 0xf947e021, 0x48009688: 0xf9400021,
+    0x48009690: 0xd63f0020,
+    0x480080f8: 0xf9400835, 0x48008118: 0xd63f02a0,
+    0x48008a84: 0xf9400c26, 0x48008a90: 0xd63f00c0,
+    0x4800854c: 0xf9401003, 0x48008560: 0xd63f0060,
+    0x48008918: 0xf9401421, 0x4800893c: 0xd63f0060,
+    # Vendor SYSTEM_SUSPEND getter is the ninth (+0x40) member.
+    0x48002544: 0x52a04020, 0x48002548: 0xd65f03c0,
+    0x48009718: 0xf947e000, 0x4800971c: 0xf9402000,
+    0x48009720: 0xb5000120, 0x48009744: 0xd63f0000,
+    0x4800975c: 0x97fffd8f,
+    # Slot 7 system-reset and slot 6 system-off helper calls.
+    0x48002588: 0x97fffe50, 0x480025a8: 0x97fffe4c,
     0x48002858: 0x97fffc20, 0x48002874: 0x17ffff83,
     0x48002998: 0x97fffb7e,
     0x4800254c: 0x35000103, 0x4800255c: 0x94000207,
@@ -51,8 +65,24 @@ WORDS = {
     0x48002e14: 0xb90000a0, 0x48002e20: 0xb9400001,
     0x48002e28: 0xb9000002,
 }
+OPS_MEMBER_NAMES = (
+    "affinst_standby",
+    "affinst_on",
+    "affinst_off",
+    "affinst_suspend",
+    "affinst_on_finish",
+    "affinst_suspend_finish",
+    "system_off",
+    "system_reset",
+    "get_sys_suspend_power_state",
+)
+
 STRINGS = (
     b"psci_plat_pm_ops",
+    b"psci_plat_pm_ops->get_sys_suspend_power_state",
+    b"psci_system_suspend",
+    b"Sunxi System Reset",
+    b"Sunxi System Reset: operation not handled",
     b"services/std_svc/psci/psci_main.c",
     b"services/std_svc/psci/psci_setup.c",
     b"psci_afflvl0_on",
@@ -68,6 +98,13 @@ DISASSEMBLY_WINDOWS = (
     ("ops_slot_6_raw", 0x480025a0, 0x100),
     ("ops_slot_7_raw", 0x48002574, 0x100),
     ("ops_slot_8_raw", 0x48002544, 0x100),
+    ("legacy_slot0_standby_dispatch", 0x48009680, 0x20),
+    ("legacy_slot2_off_dispatch", 0x480080f0, 0x40),
+    ("legacy_slot3_suspend_dispatch", 0x48008a74, 0x24),
+    ("legacy_slot4_on_finish_dispatch", 0x48008544, 0x20),
+    ("legacy_slot5_suspend_finish_dispatch", 0x48008910, 0x34),
+    ("legacy_slot8_system_suspend_getter_dispatch", 0x48009714, 0x50),
+
     ("ccu_save_helper", 0x48001790, 0x100),
     ("ccu_restore_helper", 0x480018d8, 0x100),
     ("restore_callsite_context", 0x48002838, 0x80),
@@ -151,9 +188,49 @@ def main() -> int:
     if table != EXPECTED_TABLE:
         raise RuntimeError("platform ops table changed: %s" %
                            [hex(value) for value in table])
+    if len(table) != len(OPS_MEMBER_NAMES):
+        raise RuntimeError("legacy PSCI platform-ops member count changed")
+    if table[8] != 0x48002544:
+        raise RuntimeError("get_sys_suspend_power_state slot 8 pointer changed")
 
     if decode_bl_target(0x48009dec, read_word(raw, 0x48009dec)) != 0x480029bc:
         raise RuntimeError("platform ops registration call changed")
+    dispatch_words = {
+        0x48009684: 0xf947e021,  # global ops pointer load
+        0x48009688: 0xf9400021,  # slot 0 (+0x00)
+        0x48009690: 0xd63f0020,  # slot 0 indirect call
+        0x48008608: 0xf9400433,  # slot 1 (+0x08)
+        0x480080f8: 0xf9400835,  # slot 2 (+0x10)
+        0x48008118: 0xd63f02a0,
+        0x48008a84: 0xf9400c26,  # slot 3 (+0x18)
+        0x48008a90: 0xd63f00c0,
+        0x4800854c: 0xf9401003,  # slot 4 (+0x20)
+        0x48008560: 0xd63f0060,
+        0x48008918: 0xf9401421,  # slot 5 (+0x28)
+        0x4800893c: 0xd63f0060,
+        0x48009718: 0xf947e000,  # SYSTEM_SUSPEND global ops pointer load
+        0x4800971c: 0xf9402000,  # slot 8 (+0x40)
+        0x48009720: 0xb5000120,  # null check
+        0x48009744: 0xd63f0000,  # indirect getter call
+        0x48002544: 0x52a04020,  # mov w0, #0x02010000
+        0x48002548: 0xd65f03c0,
+        0x48002588: 0x97fffe50,  # system_reset -> helper
+        0x480025a8: 0x97fffe4c,  # system_off -> helper
+        0x4800975c: 0x97fffd8f,  # getter result -> suspend transition
+    }
+    for address, expected in dispatch_words.items():
+        actual = read_word(raw, address)
+        if actual != expected:
+            raise RuntimeError(
+                "legacy PSCI dispatch mismatch at 0x%08x: got 0x%08x expected 0x%08x"
+                % (address, actual, expected)
+            )
+    if decode_bl_target(0x48002588, read_word(raw, 0x48002588)) != 0x48001ec8:
+        raise RuntimeError("system_reset helper target changed")
+    if decode_bl_target(0x480025a8, read_word(raw, 0x480025a8)) != 0x48001ed8:
+        raise RuntimeError("system_off helper target changed")
+    if decode_bl_target(0x4800975c, read_word(raw, 0x4800975c)) != 0x48008d98:
+        raise RuntimeError("SYSTEM_SUSPEND transition target changed")
     if decode_bl_target(0x4800255c, read_word(raw, 0x4800255c)) != 0x48002d78:
         raise RuntimeError("CPU_ON callback target changed")
     if table[3] != 0x48002878:
@@ -199,39 +276,70 @@ def main() -> int:
         "monitor": {"bytes": len(raw), "sha256": digest, "base": "0x48000000"},
         "platform_ops": {
             "table_address": "0x480165f8",
+            "table_bytes": len(table) * 8,
+            "abi_family": "legacy Allwinner TF-A plat_pm_ops_t eight-member order plus vendor get_sys_suspend_power_state extension",
+            "member_order": list(OPS_MEMBER_NAMES),
             "entries": ["0x%08x" % value for value in table],
-            "slot_0": "cpu_standby (standard plat_psci_ops_t order)",
-            "slot_1": {"name": "pwr_domain_on (standard plat_psci_ops_t order)",
-                       "address": "0x%08x" % table[1]},
-            "slot_2": {"name": "pwr_domain_off (standard plat_psci_ops_t order)",
-                       "address": "0x%08x" % table[2]},
-            "slot_3": {"name": "unclassified (exact vendor plat_psci_ops_t ABI not pinned)",
-                       "address": "0x%08x" % table[3]},
-            "slot_4": {"name": "unclassified (exact vendor plat_psci_ops_t ABI not pinned)",
-                       "address": "0x%08x" % table[4]},
-            "slot_5": {"name": "unclassified (exact vendor plat_psci_ops_t ABI not pinned)",
-                       "address": "0x%08x" % table[5]},
-            "slot_7": {"name": "unclassified (exact vendor plat_psci_ops_t ABI not pinned)",
-                       "address": "0x%08x" % table[7]},
+            "members": [
+                {"slot": index, "byte_offset": "0x%02x" % (index * 8),
+                 "name": OPS_MEMBER_NAMES[index], "address": "0x%08x" % table[index]}
+                for index in range(len(table))
+            ],
+            "slot_0": {"name": OPS_MEMBER_NAMES[0], "address": "0x%08x" % table[0],
+                       "dispatch_load_pc": "0x48009688", "indirect_call_pc": "0x48009690"},
+            "slot_1": {"name": OPS_MEMBER_NAMES[1], "address": "0x%08x" % table[1],
+                       "dispatch_load_pc": "0x48008608", "indirect_branch_pc": "0x48008640"},
+            "slot_2": {"name": OPS_MEMBER_NAMES[2], "address": "0x%08x" % table[2],
+                       "dispatch_load_pc": "0x480080f8", "indirect_call_pc": "0x48008118"},
+            "slot_3": {"name": OPS_MEMBER_NAMES[3], "address": "0x%08x" % table[3],
+                       "dispatch_load_pc": "0x48008a84", "indirect_call_pc": "0x48008a90"},
+            "slot_4": {"name": OPS_MEMBER_NAMES[4], "address": "0x%08x" % table[4],
+                       "dispatch_load_pc": "0x4800854c", "indirect_call_pc": "0x48008560"},
+            "slot_5": {"name": OPS_MEMBER_NAMES[5], "address": "0x%08x" % table[5],
+                       "dispatch_load_pc": "0x48008918", "indirect_call_pc": "0x4800893c"},
+            "slot_6": {"name": OPS_MEMBER_NAMES[6], "address": "0x%08x" % table[6],
+                       "entry_helper_call_pc": "0x480025a8", "entry_helper_target": "0x48001ed8"},
+            "slot_7": {"name": OPS_MEMBER_NAMES[7], "address": "0x%08x" % table[7],
+                       "reset_log_function_pc": "0x48002584",
+                       "entry_helper_call_pc": "0x48002588", "entry_helper_target": "0x48001ec8"},
+            "slot_8": {"name": OPS_MEMBER_NAMES[8], "address": "0x%08x" % table[8],
+                       "return_pc": "0x48002544", "return_value": "0x02010000",
+                       "dispatch_load_pc": "0x4800971c", "indirect_call_pc": "0x48009744"},
             "registration_function": "0x480029bc",
             "registration_callsite": "0x48009dec",
         },
         "dispatch": {
             "global_pointer_address": "0x4801bfc0",
             "global_string": "psci_plat_pm_ops",
-            "ops_pointer_load_pc": "0x48008604",
-            "slot_plus_8_load_pc": "0x48008608",
-            "callback_move_pc": "0x48008628",
-            "indirect_branch_pc": "0x48008640",
-            "second_dispatch": "0x480086a0..0x480086dc",
-            "standard_tf_a_psci_cpu_on_aarch64_fid": "0xc4000003",
-            "capability_advertisement_proof": "not established: exact vendor plat_psci_ops_t ABI and pwr_domain_on_finish slot are not pinned",
-            "slot_7_unclassified_address": "0x48002574",
+            "member_order": list(OPS_MEMBER_NAMES),
+            "member_loads": {
+                "slot_0": {"offset": "0x00", "pc": "0x48009688"},
+                "slot_1": {"offset": "0x08", "pc": "0x48008608"},
+                "slot_2": {"offset": "0x10", "pc": "0x480080f8"},
+                "slot_3": {"offset": "0x18", "pc": "0x48008a84"},
+                "slot_4": {"offset": "0x20", "pc": "0x4800854c"},
+                "slot_5": {"offset": "0x28", "pc": "0x48008918"},
+                "slot_8": {"offset": "0x40", "pc": "0x4800971c"},
+            },
+            "indirect_calls": {
+                "slot_0": "0x48009690",
+                "slot_2": "0x48008118",
+                "slot_3": "0x48008a90",
+                "slot_4": "0x48008560",
+                "slot_5": "0x4800893c",
+                "slot_8": "0x48009744",
+            },
+            "slot_1_indirect_branch_pc": "0x48008640",
+            "system_suspend_entry_transition_pc": "0x4800975c",
+            "system_suspend_entry_transition_target": "0x48008d98",
+            "psci_system_suspend_string_present": True,
+            "psci_plat_pm_ops_getter_string_present": True,
         },
         "disassembly_file": "PSCI-CALLBACK-DISASSEMBLY.txt",
         "power_management_path_candidates": {
             "slot_3_function": {
                 "entry": "0x%08x" % table[3],
+                "semantic_member": OPS_MEMBER_NAMES[3],
                 "save_context_callsite": "0x48002998",
                 "save_context_target": "0x48001790",
                 "ccu_candidates": ["0x03001000", "0x03001a78", "0x03001a8c"],
@@ -239,13 +347,27 @@ def main() -> int:
             },
             "slot_5_function": {
                 "entry": "0x%08x" % table[5],
+                "semantic_member": OPS_MEMBER_NAMES[5],
                 "restore_context_callsite": "0x48002858",
                 "restore_context_target": "0x480018d8",
                 "tail_branch_callsite": "0x48002874",
                 "tail_branch_target": "0x%08x" % decode_b_target(0x48002874, read_word(raw, 0x48002874)),
+                "next_member": OPS_MEMBER_NAMES[4],
                 "restore_call_within_slot5_function": table[5] <= 0x48002858 < 0x48002878,
             },
-            "interpretation": "the function entered through raw slot 3 contains the conditional CCU save call; the separate function entered through raw slot 5 contains the conditional CCU restore call and tail-branches to raw slot 4. Slots 3/4/5 remain semantically unclassified because the exact vendor ABI is not pinned",
+            "slot8_system_suspend_getter": {
+                "entry": "0x%08x" % table[8],
+                "member": OPS_MEMBER_NAMES[8],
+                "return_instruction_pc": "0x48002544",
+                "return_value": "0x02010000",
+                "caller_function": "0x480096f8",
+                "global_ops_pointer_load_pc": "0x48009718",
+                "member_pointer_load_pc": "0x4800971c",
+                "indirect_call_pc": "0x48009744",
+                "next_suspend_dispatch_pc": "0x4800975c",
+                "next_suspend_dispatch_target": "0x48008d98",
+            },
+            "interpretation": "eight legacy affinst/system power callbacks followed by a vendor get_sys_suspend_power_state extension; dispatch offsets and the exact embedded getter string identify slot 8",
         },
         "callback": {
             "address": "0x4800254c",
@@ -289,17 +411,19 @@ def main() -> int:
         },
         "embedded_strings": [value.decode() for value in STRINGS],
         "interpretation": [
-            "The matched binary registers a platform operation table whose second pointer slot is loaded by PSCI dispatcher code and invoked through an indirect branch.",
-            "In the standard TF-A plat_psci_ops_t layout, the second member is pwr_domain_on; its callback reaches code that programs a per-core RVBAR and sequences CPU power/reset.",
-            "The table's slot 1 callback reaches the CPU_ON low-level routine, but PSCI feature advertisement is not inferred because the exact vendor plat_psci_ops_t ABI and pwr_domain_on_finish slot are not pinned.",
-            "This proves BL31 contains and exposes a CPU_ON-capable platform callback; it does not prove that the callback executes during initial BL31-to-BL33 handoff.",
-            "The audit does not establish live CPU1-CPU3 reset state before Linux or Linkslot requests PSCI CPU_ON.",
-            "The function entered through raw slot 3 at 0x48002878 contains the CCU save call at 0x48002998; the separate function entered through raw slot 5 at 0x480026c4 contains the CCU restore call at 0x48002858 and tail-branches at 0x48002874 to raw slot 4 at 0x48002680.",
-            "The two helper calls are in separate registered raw platform-ops entry regions. Exact semantic callback names, runtime invocation, and cold-boot reachability remain unresolved; they do not establish a BL33 startup clock transition or CPU DVFS API.",
-            "BL31 and pinned BaseOS SPL select the same RVBAR bank only when VER_REG low3 is 0 or 2; values 1 or 3-7 would make their selector rules diverge. The live value is unknown.",
-            "The exact vendor callback ABI/source revision is not recovered; this is a pinned binary plus standard ABI-position correlation, not exact vendor source identity.",
+            "The matched BL31 registers a nine-entry platform-ops table at 0x480165f8 through 0x48009dec -> 0x480029bc.",
+            "The first eight entries match the legacy Allwinner TF-A plat_pm_ops_t order: affinst_standby, affinst_on, affinst_off, affinst_suspend, affinst_on_finish, affinst_suspend_finish, system_off and system_reset.",
+            "The ninth entry is the vendor get_sys_suspend_power_state extension: the exact member string is present, SYSTEM_SUSPEND loads table byte offset +0x40 and indirectly calls the function at 0x48002544.",
+            "The getter returns encoded power state 0x02010000 and its caller passes that value to transition function 0x48008d98.",
+            "Slots 0-5 are independently selected by matching table byte offsets and indirect call sites; slot 7 references Sunxi System Reset messages and calls reset helper 0x48001ec8, while slot 6 calls power-off helper 0x48001ed8.",
+            "Slot 1 affinst_on reaches CPU_ON helper 0x48002d78, but initial BL31-to-BL33 core release is not established.",
+            "Slot 3 affinst_suspend contains the conditional CCU/AON save helper; slot 5 affinst_suspend_finish contains the conditional restore helper and tail-branches to slot 4 affinst_on_finish.",
+            "These are static binary ABI/control-flow findings. They do not prove suspend/resume, CPU_ON, system-off or system-reset execution on the tested device.",
+            "CCU save/restore helpers do not establish a BL33 startup PLL transition or an exposed CPU DVFS API.",
+            "The exact vendor TF-A source commit is not recovered; effective callback semantics are identified from table order, dispatcher offsets, embedded strings and function behavior.",
+            "The live VER_REG selector value, secondary A53 reset/hold state and BL31-to-BL33 memory ownership remain runtime questions.",
             "No hardware MMIO, flash, boot-media write or payload execution was performed.",
-        ],
+
     }
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -308,11 +432,17 @@ def main() -> int:
     disassembly_path = args.out.parent / "PSCI-CALLBACK-DISASSEMBLY.txt"
     disassembly_path.write_text(render_disassembly(raw), encoding="utf-8")
     markdown = [
-        "# Matched BL31 PSCI CPU_ON callback audit", "",
+        "# Matched BL31 legacy nine-member PSCI platform-ops audit", "",
         "- Monitor: 107,216 bytes; SHA-256 `%s`." % digest,
-        "- Platform ops table: `0x480165f8`; slot +8 points to callback `0x4800254c`.",
-        "- PSCI dispatch loads the global `psci_plat_pm_ops` pointer, reads its +8 slot, moves that function pointer to `x5`, then branches through `x5`.",
-        "- Callback `0x4800254c` calls low-level CPU_ON routine `0x48002d78` at `0x4800255c` when `W3 == 0`.",
+        "- Platform-ops table `0x480165f8` has nine 64-bit entries: affinst_standby, affinst_on, affinst_off, affinst_suspend, affinst_on_finish, affinst_suspend_finish, system_off, system_reset, get_sys_suspend_power_state.",
+        "- Slots 0–5 are selected by dispatcher loads at table offsets +0x00, +0x08, +0x10, +0x18, +0x20 and +0x28; their load/call sites are pinned in the JSON report.",
+        "- Slot 1 affinst_on reaches CPU_ON helper `0x48002d78`; slot 3 affinst_suspend saves CCU state through `0x48001790`; slot 5 affinst_suspend_finish restores via `0x480018d8` and tail-branches to slot 4 affinst_on_finish.",
+        "- Slot 7 system_reset references `Sunxi System Reset` messages and calls helper `0x48001ec8`; slot 6 system_off calls helper `0x48001ed8`.",
+        "- SYSTEM_SUSPEND loads slot 8 at byte offset +0x40 (PC `0x4800971c`), calls it indirectly (PC `0x48009744`), receives `0x02010000`, then enters transition `0x48008d98`.",
+        "- The effective ABI is the legacy Allwinner `plat_pm_ops_t` order with a vendor getter extension; the exact source commit is not identified.",
+
+        "- Slot 1 affinst_on calls CPU_ON helper `0x48002d78` at `0x4800255c` when `W3 == 0`.",
+        "- The exact embedded strings `psci_plat_pm_ops->get_sys_suspend_power_state` and `psci_system_suspend` are present in the matched monitor.",
         "- Raw slot 3 entry 0x48002878 contains the conditional CCU save call at 0x48002998 -> 0x48001790. Separate raw slot 5 entry 0x480026c4 contains the conditional CCU restore call at 0x48002858 -> 0x480018d8; its epilogue at 0x48002874 branches to raw slot 4 entry 0x48002680.",
         "- Full disassembly windows for all table entries and both CCU helpers are saved in PSCI-CALLBACK-DISASSEMBLY.txt for function-boundary/CFG review.",
         "- Slot 3/5 helper-call ownership by raw table-entry code regions is established; semantic callback names, runtime execution and cold-boot reachability remain unresolved. No BL33 startup clock transition or CPU DVFS support is established.",
@@ -320,8 +450,8 @@ def main() -> int:
         "- RVBAR selector cross-check: BL31 uses VER_REG low3==0 for base 0x09010040, otherwise 0x08100040; pinned native SPL uses low3==2 for the alternate bank. Both agree only for selector values 0 and 2; the target value must be read.",
         "",
         "## Interpretation", "",
-        "- In the standard TF-A `plat_psci_ops_t` layout, the second function pointer is `pwr_domain_on`; embedded PSCI source strings and dispatcher references support the platform-ops interpretation.",
-        "- The slot-1 callback reaches the CPU_ON low-level sequence. PSCI feature advertisement is not inferred until the exact vendor TF-A ABI and pwr_domain_on_finish slot are identified.",
+        "- The effective callback ABI is the legacy Allwinner `plat_pm_ops_t` order plus the vendor `get_sys_suspend_power_state` extension; do not apply modern `plat_psci_ops_t` slot offsets.",
+        "- Callback semantics are mapped from binary table entries, dispatcher byte offsets, indirect calls, embedded strings and helper behavior; the exact vendor source commit remains unknown.",
         "- This proves the matched BL31 exposes a CPU_ON-capable callback. It does **not** prove the path runs automatically at initial BL31-to-BL33 handoff.",
         "- The exact SoC variant selected by `0x03000024 & 7` was not read on-device. Do not assume the H616-named register branch is the RG34XX H700 active branch.",
         "- The exact vendor callback ABI/source revision is not recovered; this is a binary and standard ABI-position correlation, not exact source identity.",
@@ -329,7 +459,7 @@ def main() -> int:
         "- No hardware MMIO, flash, boot-media write or payload execution occurred.", "",
     ]
     (args.out.parent / "PSCI-CPU-ON.md").write_text("\n".join(markdown), encoding="utf-8")
-    print("PASS: matched BL31 PSCI ops table, dispatch, CPU_ON callback and reset sequence")
+    print("PASS: matched BL31 legacy nine-member PSCI table, callback dispatch and SYSTEM_SUSPEND getter")
     print("  table[1] = 0x%08x -> low-level 0x48002d78" % table[1])
     print("  callback disassembly = %s" % disassembly_path)
     print("  monitor SHA-256 = %s" % digest)
