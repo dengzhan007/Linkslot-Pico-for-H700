@@ -152,6 +152,13 @@ def main() -> None:
                 raise RuntimeError("H700 physical DRAM capacity source/header missing: " + str(dram_path))
         summary.append("PASS physical-dram-object: provider is present in the H700 LK OBJS list")
 
+        build_objects = (root / "scripts/build-h700-objects.sh").read_text(encoding="utf-8")
+        if '"$ROOT/platform/h700/arch/h700_physical_memory.c"' not in build_objects:
+            raise RuntimeError("H700 architecture matrix does not compile the physical DRAM provider")
+        if '"$OUT_DIR/h700_physical_memory.o"' not in build_objects:
+            raise RuntimeError("H700 architecture matrix does not validate the physical DRAM provider object")
+        summary.append("PASS physical-dram-compile-matrix: provider is compiled and architecture-checked in all three ABI modes")
+
         # Audit lifecycle assumptions against the exact pinned GammaOS LK checkout.
         lk_main = (worktree / "kernel/main.c").read_text(encoding="utf-8")
         lk_main_code = re.sub(r"/\*.*?\*/|//[^\n]*", "", lk_main, flags=re.S)

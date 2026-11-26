@@ -251,6 +251,16 @@ jobs:
             --overlay build/audit-work/linkslot-1.0.49/h700-lk-overlay \
             --out build/audit-work/linkslot-1.0.49/h700-lk-project-guard
 
+      - name: Test RG34XX physical DRAM capacity provider
+        run: |
+          mkdir -p build/audit-work/linkslot-1.0.49/physical-memory
+          cc -std=c11 -Wall -Wextra -Werror \
+            platform/h700/arch/h700_physical_memory.c \
+            platform/h700/arch/tests/test_h700_physical_memory.c \
+            -o build/audit-work/linkslot-1.0.49/physical-memory/test
+          build/audit-work/linkslot-1.0.49/physical-memory/test
+          echo "PASS: RG34XX physical DRAM capacity is 1 GiB; memory ownership remains separately gated."
+
       - name: Install pinned Rust toolchain and freestanding targets
         uses: dtolnay/rust-toolchain@1.96.0
         with:
