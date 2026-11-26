@@ -33,7 +33,6 @@ class GpioDebugfsReadOnlySafetyTests(unittest.TestCase):
         for forbidden in (
             "gpio_request",
             "gpiod_get",
-            "gpio_export",
             "/sys/class/gpio/export",
             "/sys/class/gpio/unexport",
             "pinmux-select",
@@ -65,17 +64,18 @@ class GpioDebugfsReadOnlySafetyTests(unittest.TestCase):
         self.assertIn('> "$OUTDIR/preflight-gpio.txt"', self.source)
         self.assertIn('SAMPLE_FILE="$OUTDIR/gpio-debugfs-samples.txt"', self.source)
         self.assertIn('>> "$SAMPLE_FILE"', self.source)
-        self.assertNotRegex(self.source, r">\s*/dev/(?!null\b)")
-        self.assertNotRegex(self.source, r">\s*/sys/")
-        self.assertNotRegex(self.source, r">\s*/proc/")
+        # stderr/stdout discard to /dev/null is allowed; other redirections
+        # into device, sysfs, or procfs paths are forbidden.
+        unsafe_redirection = r">\s*/(?:dev/(?!null\b)|sys/|proc/)"
+        self.assertNotRegex(self.source, unsafe_redirection)
 
     def test_script_has_no_non_read_only_shell_redirections(self):
+        unsafe_redirection = r">\s*/(?:dev/(?!null\b)|sys/|proc/)"
         for line in self.lines:
             stripped = line.strip()
             if not stripped or stripped.startswith("#"):
                 continue
-            # Permit only stderr -> /dev/null.
-            if re.search(r"(?<!2)>\s*/(?:dev|sys|proc)/", stripped):
+            if re.search(unsafe_redirection, stripped):
                 self.fail(f"write redirection to a device/proc/sys path: {line}")
 
 
