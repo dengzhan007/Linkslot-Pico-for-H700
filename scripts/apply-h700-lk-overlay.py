@@ -366,8 +366,10 @@ build; it is not a firmware image.
   +0x1000, and capture the first-entry SP/LR/r4/CPSR before VBAR or stack/mode
   changes. CPSR/SP/LR are held in shared AAPCS callee-saved r5/r6/r7 registers;
   r4 remains untouched for the existing boot-argument handoff. These registers
-  are not banked in FIQ mode. The values are written to the H700 BSS snapshot
-  only after LK clears BSS and before kmain.
+  are not banked in FIQ mode. The overlay also changes the boot-argument scratch
+  and optional TrustZone linker-retention load to r0 so neither overwrites the
+  captured r6/r7. The values are written to the H700 BSS snapshot only after
+  LK clears BSS and before kmain.
 - Packaging: the normal GammaOS lk.img includes an MTK image header. Use
   the raw lk-no-mtk-header.bin intermediate and run
   scripts/package-h700-bl33.py with the SHA-pinned active RG34XX loader.bin
