@@ -303,3 +303,61 @@ change is justified.
 
 `hardware_applied=0`; the matched diagnostic BL33 has not been executed or
 flashed, and SMP remains disabled.
+
+
+## Kernel-module preflight and LK-side MMU alternative (2026-11-26)
+
+The latest read-only device preflight is committed on the reports branch at
+`2963c8c479486a98c5202dad86e14dbe6e0f466f`:
+
+- Report: [rg34xx-kmod-preflight-20261126](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-kmod-preflight-20261126).
+- The running Linux `4.9.170 #19` has `CONFIG_MODULES=y`,
+  `CONFIG_MODULE_UNLOAD=y`, `CONFIG_KALLSYMS=y`, `CONFIG_DEVMEM=y`,
+  and `CONFIG_STRICT_DEVMEM` unset.
+- It has no `/lib/modules/4.9.170/build`, kernel `Makefile`,
+  `Module.symvers`, or `/usr/src/linux*`. Thus a version-matched
+  out-of-tree module cannot be built from the installed image.
+- `syscon` is registered, but debugfs/regmap exposes only four unrelated
+  devices; there is no SYS_CFG regmap view. `/proc/iomem` lists the PIO
+  sub-range but no separate resource for SYS_CFG at `0x03000000`.
+- No module was built or loaded and no register was accessed. The
+  `/dev/mem` EFAULT is not a selector value. Stop userspace retries.
+
+### Existing LK MMU coverage
+
+The H700 LK hook `platform/h700/arch/h700_pio_mmu_mapping.c` calls
+`arm_mmu_map_section(0x03000000, 0x03000000, DEVICE_SHARED | RW | XN)`
+before `arch_enable_mmu()`. The 1 MiB AArch32 section is
+`[0x03000000, 0x03100000)`, so it contains both:
+
+- SYS_CFG VER_REG at `0x03000024`;
+- RG34XX PIO at `0x0300b000`.
+
+The mapping is installed by `arch_early_init` before
+`target_early_init`. Compile-time assertions and the host fake-MMU regression
+now pin both addresses to this section. This closes a *page-table coverage*
+question only; it does not prove that BL31 leaves SYS_CFG readable from the
+eventual BL33 security state, that the peripheral bus responds, or that the
+register read is fault-free.
+
+### Next safe experiment
+
+The preferred next step is no longer an on-device kernel module. It is a
+narrow LK-only diagnostic design:
+
+1. Review the pinned LK AArch32 Data Abort vector and exception frame contract.
+2. Add a recovery-contained accessor that attempts exactly one aligned
+   32-bit read at `0x03000024`; on abort it records a fault status and resumes
+   without retrying. No writes, other addresses, or broad register dump.
+3. Decide how the masked value `VER_REG & 7` / fault status is returned without
+   allocating memory or changing the boot-media contract.
+4. Only after the source path and recovery are host-tested should a diagnostic
+   BL33 execution be considered, with the existing recovery/rollback plan.
+
+A post-entry LK read can establish a later VER_REG value, but **cannot**
+prove the reset/RVBAR registers' state at the earlier BL31→BL33 handoff.
+That remains a distinct pre-BL33 capture gate. The selector-rule mismatch
+between the pinned SPL and BL31 remains unresolved; no code change is
+authorized by a guessed value.
+
+`hardware_applied=0`; no MMIO read/write was performed by this report.

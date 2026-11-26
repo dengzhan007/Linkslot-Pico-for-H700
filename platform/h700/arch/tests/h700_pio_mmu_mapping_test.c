@@ -8,7 +8,9 @@
 #define EXPECTED_DRAM_BASE 0x40000000u
 #define EXPECTED_DRAM_END  0x80000000u
 #define SECTION_SIZE       0x00100000u
-#define PIO_BASE           0x03000000u
+#define SOC_MMIO_BASE      0x03000000u
+#define SYS_CFG_VER_REG    0x03000024u
+#define RG34XX_PIO_BASE    0x0300b000u
 
 static unsigned int g_call;
 static unsigned int g_dram_maps;
@@ -40,7 +42,7 @@ void arm_mmu_map_section(addr_t paddr, addr_t vaddr, unsigned int flags)
         return;
     }
 
-    assert(paddr == PIO_BASE);
+    assert(paddr == SOC_MMIO_BASE);
     assert(flags == (MMU_MEMORY_TYPE_DEVICE_SHARED |
                      MMU_MEMORY_AP_READ_WRITE | MMU_MEMORY_XN));
     g_pio_maps++;
@@ -59,11 +61,17 @@ void arch_enable_mmu(void)
 
 int main(void)
 {
+    /* Both addresses must remain within the one mapped 1 MiB Device section. */
+    assert(SYS_CFG_VER_REG >= SOC_MMIO_BASE);
+    assert(SYS_CFG_VER_REG < SOC_MMIO_BASE + SECTION_SIZE);
+    assert(RG34XX_PIO_BASE >= SOC_MMIO_BASE);
+    assert(RG34XX_PIO_BASE < SOC_MMIO_BASE + SECTION_SIZE);
+
     platform_init_mmu_mappings();
     assert(g_call == 2u);
     assert(g_enabled == 1u);
     assert(g_dram_maps == 1024u);
     assert(g_pio_maps == 1u);
-    puts("RG34XX MMU init -> 1GiB DRAM WB map -> PIO Device map -> MMU enable: PASS");
+    puts("RG34XX MMU: 1GiB DRAM WB + SYS_CFG/PIO/CCU Device section -> MMU enable: PASS");
     return 0;
 }

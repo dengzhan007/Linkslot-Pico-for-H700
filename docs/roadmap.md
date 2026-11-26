@@ -772,3 +772,12 @@ Hard size boundary: this first integration path is only for a small diagnostic p
   the selector choice; a pre-BL33 capture is separately required for CPU
   reset/RVBAR handoff state. Keep the selector mismatch unresolved and keep
   the single-core/SMP gate closed until evidence is valid.
+
+
+## 2026-11-26 continuation — SYS_CFG/RVBAR and LK MMU coverage
+
+- [x] Review the latest `reports` branch kernel-module preflight (`2963c8c4`). The running Linux 4.9.170 image supports modules but contains no matching build tree, `Module.symvers`, or kernel headers; debugfs/regmap exposes no SYS_CFG instance. Do not retry userspace `/dev/mem` and do not build a module against an unverified generic BSP source tree.
+- [x] Cross-check the existing GammaOS LK H700 MMU hook: its 1 MiB identity-mapped Device section at `0x03000000` covers both SYS_CFG VER_REG `0x03000024` and RG34XX PIO `0x0300b000`. Add compile-time assertions and host regression checks for this coverage. This is mapping evidence only, not proof of bus/firewall access.
+- [ ] Design a single-word, read-only VER_REG probe with an explicit Data Abort recovery path and a minimal result channel. Do not issue a bare volatile read from a boot hook before the abort behavior is contained and reviewed.
+- [ ] Keep the separate pre-BL33 CPU reset/RVBAR snapshot gate open. A later LK read of VER_REG cannot establish CPU state at the earlier BL31→BL33 handoff.
+- Hardware state remains unchanged: no module load, MMIO write, boot-argument or boot-media modification; `hardware_applied=0`.

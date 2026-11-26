@@ -9,7 +9,7 @@
  *
  *   1. initialize the LK section translation table;
  *   2. map the verified RG34XX 1 GiB DRAM range as normal write-back memory;
- *   3. map the H700 PIO/CCU 1 MiB window as shared Device memory;
+ *   3. map the H700 SoC MMIO 1 MiB window (SYS_CFG, PIO, CCU) as shared Device memory;
  *   4. enable the MMU only after all identity mappings are installed.
  *
  * DRAM base/size are the live RG34XX inventory values. These mappings do
@@ -26,7 +26,16 @@
 #define H700_DRAM_SIZE 0x40000000u
 #define H700_MMU_SECTION_SIZE 0x00100000u
 
-#define H700_PIO_WINDOW_BASE 0x03000000u
+#define H700_SOC_MMIO_WINDOW_BASE 0x03000000u
+#define H700_SYS_CFG_VER_REG 0x03000024u
+#define H700_RG34XX_PIO_BASE 0x0300b000u
+
+_Static_assert((H700_SYS_CFG_VER_REG & ~(H700_MMU_SECTION_SIZE - 1u)) ==
+                   H700_SOC_MMIO_WINDOW_BASE,
+               "SYS_CFG VER_REG must remain inside the mapped SoC MMIO section");
+_Static_assert((H700_RG34XX_PIO_BASE & ~(H700_MMU_SECTION_SIZE - 1u)) ==
+                   H700_SOC_MMIO_WINDOW_BASE,
+               "RG34XX PIO must remain inside the mapped SoC MMIO section");
 
 void platform_init_mmu_mappings(void)
 {
@@ -46,10 +55,10 @@ void platform_init_mmu_mappings(void)
                 MMU_MEMORY_AP_READ_WRITE);
     }
 
-    /* PIO@0x0300b000 and CCU live in this 1 MiB physical window. */
+    /* This Device section covers SYS_CFG/VER_REG, PIO and CCU. */
     arm_mmu_map_section(
-        H700_PIO_WINDOW_BASE,
-        H700_PIO_WINDOW_BASE,
+        H700_SOC_MMIO_WINDOW_BASE,
+        H700_SOC_MMIO_WINDOW_BASE,
         MMU_MEMORY_TYPE_DEVICE_SHARED |
             MMU_MEMORY_AP_READ_WRITE |
             MMU_MEMORY_XN);

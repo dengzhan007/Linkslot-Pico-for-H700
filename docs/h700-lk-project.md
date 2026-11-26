@@ -15,7 +15,7 @@ This adds a real GammaOS LK project/target/platform selection path for the
   generic `target/init.c` is excluded because it imports MTK-only defaults.
   H700 `platform_init_mmu_mappings()` follows the pinned LK AArch32
   section-table contract: `arm_mmu_init()`, 1 GiB RG34XX DRAM identity map
-  as normal write-back memory, 1 MiB PIO/CCU identity map as Device memory,
+  as normal write-back memory, 1 MiB SoC MMIO identity section as Device memory (covering SYS_CFG/VER_REG, PIO and CCU),
   then `arch_enable_mmu()`. Only after that does `target_early_init()` turn
   on PI12 before heap/thread startup. `target_init()` retries if early PIO
   access failed.
@@ -233,7 +233,7 @@ MMU. The RG34XX implementation now follows that order:
 2. The observed RG34XX DRAM range `[0x40000000, 0x80000000)` is remapped as
    normal write-back, read/write memory (1024 one-MiB sections).
 3. `[0x03000000, 0x03100000)` is remapped as shared Device, read/write,
-   execute-never memory for H700 CCU/PIO registers.
+   execute-never memory for H700 SoC MMIO: SYS_CFG/VER_REG at `0x03000024`, PIO at `0x0300b000`, and CCU.
 4. `arch_enable_mmu()` enables translation only after all descriptors are set.
 5. LK then proceeds to cache setup and `target_early_init()`, where PI12 is
    configured and turned on.
@@ -246,7 +246,7 @@ secure/monitor, framebuffer, CMA, unknown-reserved and current-loader
 lifetimes remain separate memory-safety gates.
 
 A fake-MMU host regression verifies the call order and descriptor attributes:
-one table initialization, 1024 DRAM sections, one PIO Device section, then
+one table initialization, 1024 DRAM sections, one shared SYS_CFG/PIO/CCU Device section, then
 one MMU enable. H700 AArch64, AArch32 ARM and AArch32 Thumb-2 object builds
 also compile this hook. Neither proves a full LK target link or a hardware boot.
 See `platform/h700/arch/h700_pio_mmu_mapping.c` and
@@ -440,3 +440,13 @@ The primary controller at /interrupt-controller@03020000 is ARM Cortex-A15/A9 GI
 The /timer_arch node declares architected timers in standard order: secure physical PPI13 / INTID29; non-secure physical PPI14 / INTID30; virtual PPI11 / INTID27; EL2 physical PPI10 / INTID26. The 0xf08 flags encode CPU mask 0xF (CPU0–CPU3) and active-low level-sensitive. Linux GIC-0 27 Level arch_timer activity matches the virtual timer INTID27 across all four CPUs. A distinct allwinner,sun4i-a10-timer at 0x03009000/0x400 uses sunxi-wakeupgen input48, matching Linux wakeupgen 48 sun4i_timer0.
 
 This closes the static GIC identity/register and timer-PPI mapping question. It does not close firmware handoff. The next target diagnostic must read actual CPSR/security state, CNTFRQ, monotonic CNTVCT samples, GICD/GICC/GICH/GICV identification/control state, Group0/Group1NS ownership, PPI27 ownership and EL2 trap/CNTVOFF state without modifying hardware. The pinned LK IRQ vector calls platform_irq() and reschedules via thread_preempt() when requested; H700 still lacks a GIC provider and platform_irq()/platform_fiq(). Do not transplant the MTK GIC driver or write any GIC/timer register before ownership is proven.
+
+
+### SYS_CFG / PIO address coverage note (2026-11-26)
+
+The existing one-MiB Device section `[0x03000000, 0x03100000)` contains
+both SYS_CFG VER_REG `0x03000024` and RG34XX PIO `0x0300b000`. Source
+`_Static_assert` checks and the fake-MMU host regression pin these addresses
+to the same descriptor. This is only address-translation coverage: it does not
+prove BL31 security/firewall permissions, bus access, or a safe exception
+recovery path. No diagnostic register read has been wired into LK startup.
