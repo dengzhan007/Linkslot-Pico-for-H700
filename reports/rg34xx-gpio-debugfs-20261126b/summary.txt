@@ -1,0 +1,16 @@
+collector=rg34xx-gpio-debugfs-readonly-v1
+captured_at=Thu Nov 26 06:16:37 UTC 2026
+kernel=Linux rg34xx 4.9.170 #19 SMP PREEMPT Tue May 26 13:58:08 CST 2026 aarch64 Linux
+uid=0
+source=/sys/kernel/debug/gpio
+samples_requested=1200
+nominal_sleep_seconds=0.1
+actual_sample_times=recorded from /proc/uptime
+access=read-only cat of existing gpiolib debugfs file
+no_debugfs_mount=1
+no_gpio_export_or_request=1
+no_pinmux_pinconf_gpio_eint_gic_writes=1
+samples_written=1200
+preflight=preflight-gpio.txt
+samples=gpio-debugfs-samples.txt
+sample_sleep_seconds=0.1 (nominal; cat overhead adds latency)

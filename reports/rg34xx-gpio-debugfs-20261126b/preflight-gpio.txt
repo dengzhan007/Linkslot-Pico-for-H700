@@ -1,0 +1,39 @@
+gpiochip1: GPIOs 0-287, parent: platform/pio, pio:
+ gpio-0   (                    |GPIO Key a          ) in  hi    
+ gpio-1   (                    |GPIO Key b          ) in  hi    
+ gpio-2   (                    |GPIO Key y          ) in  hi    
+ gpio-3   (                    |GPIO Key x          ) in  hi    
+ gpio-4   (                    |GPIO Key start      ) in  hi    
+ gpio-5   (                    |GPIO Key select     ) in  hi    
+ gpio-6   (                    |GPIO Key Up         ) in  hi    
+ gpio-7   (                    |GPIO Key R2         ) in  hi    
+ gpio-8   (                    |GPIO Key left       ) in  hi    
+ gpio-9   (                    |GPIO Key right      ) in  hi    
+ gpio-10  (                    |GPIO Key L1         ) in  hi    
+ gpio-11  (                    |GPIO Key L2         ) in  hi    
+ gpio-12  (                    |GPIO Key R1         ) in  hi    
+ gpio-128 (                    |GPIO Key Down       ) in  hi    
+ gpio-129 (                    |GPIO Key Vol up     ) in  hi    
+ gpio-130 (                    |GPIO Key vol down   ) in  hi    
+ gpio-131 (                    |GPIO Key Menu       ) in  hi    
+ gpio-132 (                    |sdc2 power enable   ) out hi    
+ gpio-147 (                    |?                   ) out hi    
+ gpio-150 (                    |cd                  ) in  hi    
+ gpio-207 (                    |wlan_hostwake       ) in  lo    
+ gpio-208 (                    |bt_hostwake         ) in  hi    
+ gpio-209 (                    |bt_wake             ) out hi    
+ gpio-210 (                    |wlan_regon          ) out hi    
+ gpio-211 (                    |bt_rst              ) out hi    
+ gpio-259 (                    |Headphone detection ) in  lo    
+ gpio-260 (                    |usb_id_det          ) in  lo    
+ gpio-261 (                    |                    ) out lo    
+ gpio-264 (                    |?                   ) in  hi    
+ gpio-265 (                    |?                   ) in  hi    
+ gpio-266 (                    |?                   ) in  hi    
+ gpio-267 (                    |low_pwr_led_ctl     ) out lo    
+ gpio-268 (                    |work_led_ctl        ) out hi    
+ gpio-270 (                    |?                   ) in  hi    
+ gpio-271 (                    |?                   ) in  hi    
+ gpio-272 (                    |?                   ) out lo    
+
+gpiochip0: GPIOs 352-383, parent: platform/r_pio, r_pio:
