@@ -33,8 +33,8 @@ pinctrl pin enumeration.
 | Right | PA9 | EV_ABS / code 0x10 (ABS_X), value +1 |
 | A | PA0 | EV_KEY, code 0x130 |
 | B | PA1 | EV_KEY, code 0x131 |
-| X | PA3 | EV_KEY, code 0x132 |
-| Y | PA2 | EV_KEY, code 0x133 |
+| keyX | PA3 | EV_KEY, code 306 (0x132) |
+| keyY | PA2 | EV_KEY, code 307 (0x133) |
 | Start | PA4 | EV_KEY, code 0x137 |
 | Select | PA5 | EV_KEY, code 0x136 |
 | L1 | PA10 | EV_KEY, code 0x134 |

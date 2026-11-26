@@ -17,7 +17,7 @@
 - 新实机报告 `reports/rg34xx-input-runtime-20261126/` 已闭合 Linux evdev 输入路径：`ANBERNIC-keys` 为 `input1/event1`，72 条原始事件记录覆盖全部 17 个实体按键；一次额外 R1 是人工误触。设备没有 `getevent`，因此从 event1 只读采集并离线解码。独立 X/Y 复测 6/6 确认实体 X=PA2/code307、实体 Y=PA3/code306，已修正软件逻辑映射。
 - pinmux/pinconf 调试视图不一致：PA0–PA12/PE1 显示 MUX UNCLAIMED，PE0/PE2/PE3 显示 CSI1；全部 pinconf 显示 bias disabled/20mA。真实 evdev 事件证明按键路径正常，但调试视图不能作为写寄存器依据。未知的 `dierct-keys-polled`/event2 不并入游戏按键。
 - 新增 `h700_rg34xx_input_scan.c/.h`：单次只读 PA_DAT offset `0x10` 和 PE_DAT offset `0xA0`，接入已修正的 17 键 edge mapper。接口只有 read32，无 write32；不动 pinmux/pull/drive、debounce、timer、EINT/GIC；函数尚未从 LK 启动或主循环调用。
-- 新增 mock-PIO regression 校验只读寄存器 offset、X/Y 实际逻辑键边沿与 ABI 错误拒绝；CI 本次提交触发中，host/cross-build 验证后再更新结论。
+- 新增 mock-PIO regression 校验只读寄存器 offset、X/Y 实际逻辑键边沿与 ABI 错误拒绝。H700 AArch64/AArch32 ARM/Thumb-2 编译及 storage/board host regressions 已通过 [#45761004754](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45761004754)；boot-audit Linux/Windows 验证通过 [#45761004741](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45761004741)。完整 Linkslot feasibility [#45761004736](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45761004736) 仍在运行，不把它计作通过。
 
 
 **2026-11-26 LK heap readiness 衔接更新（代码提交 `aca39f29c560`；三条关联 CI 工作流全部通过）：**
