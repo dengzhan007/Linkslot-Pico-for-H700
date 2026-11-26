@@ -423,7 +423,7 @@ def main() -> int:
             "The exact vendor TF-A source commit is not recovered; effective callback semantics are identified from table order, dispatcher offsets, embedded strings and function behavior.",
             "The live VER_REG selector value, secondary A53 reset/hold state and BL31-to-BL33 memory ownership remain runtime questions.",
             "No hardware MMIO, flash, boot-media write or payload execution was performed.",
-
+        ],
     }
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
