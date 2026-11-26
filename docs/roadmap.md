@@ -410,3 +410,12 @@ The armGBA ELF is unstripped. Its `.symtab` contains two local objects named `gb
 ### 2026-11-26 armGBA runtime mapping closure
 
 The exact official v1.16.0-pvaibhav.2 core now has a verified runtime load bias and primary GBA pointer: three PT_LOAD-backed maps agree on bias `0x7f64070000`; `gba@0x4259b8` is the libretro main pointer, while `gba@0x4c16a8` is the link-cable cache. The exact-source committed-frame field is at +11948 bytes from the primary `struct GBA *`. See [runtime mapping report](armgba-runtime-mapping-v1.16.0.md). No process memory was read and no frame rate was measured yet. Next phase requires explicit permission for Slot trace enable/restart and bounded read-only frame-counter sampling. UI presents, core frames and LCD IRQ remain separate; no refresh writer is enabled.
+
+
+### 2026-11-26 runtime rates measured: presents / committed frames / IRQ
+
+The earlier gates are now closed with real device data in [fps-sampling](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/slot-refresh-audit/fps-sampling): `slot_presents_per_s` 59.345 mean (4 pace lines), `armgba_committed_frames_per_s` 59.722 (1184 frames / 19.825 s, 79 bounded 12-byte samples, 948 B total), and `lcd_irq_per_s` 59.590 (1203 / 20.188 s). The game ran on the hash-matched official armGBA core with primary pointer `gba@0x4259b8`; per-sample maps and three-line bias checks all agreed on `0x7f55ae0000`. Actual sample rate was 3.934 Hz, not the 5 Hz plan; quantization and interval statistics are in the report.
+
+Marker was created only for the UI trace and removed afterwards; Slot was restarted only through the confirmed PID 1 respawn chain and restored to UI (PID 8064, tracing off, no armgba mapping). A diagnostics helper blocked the first restart and was terminated specifically, with the failure recorded rather than hidden. No refresh writer was enabled: `hardware_applied=0`.
+
+Next display work still cannot claim 120 Hz: panel acceptance, timing margin, TE/VBlank behaviour and rollback remain unverified, and all hardware writers stay disabled. Do not substitute IRQ or UI presents for the core's committed-frame metric.

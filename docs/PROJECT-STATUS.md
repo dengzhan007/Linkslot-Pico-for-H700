@@ -478,3 +478,18 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 - **尚未读取**主指针的内容或 frameCounter；未使用 `/proc/PID/mem`，未启用 UI tracing、未创建 marker、未重启 Slot、未写硬件。偏移 + 映射地址闭合只代表可以设计有界读取，不等于已经获得帧率实测。
 
 下一步需要明确授权后才执行设备操作：启用 UI trace marker 并重启 Slot；以及在游戏态做有界只读的主指针/计数器采样。在此之前继续保持无进程内存读取、无配置更改、无硬件写入。UI presents、armGBA committed frames、LCD IRQ 三项独立统计，`hardware_applied=0`。
+
+
+## 14. UI presents 与 armGBA committed-frame 实测闭环（2026-11-26）
+
+已按用户明确授权完成全自动 ADB 采集，报告见 [fps-sampling](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/slot-refresh-audit/fps-sampling)。本节取代前面各节中“marker/重启/进程内存读取尚未执行”的待办表述。
+
+- 预检：单设备 `state=device`，uid=0，`BASEOS_TARGET=rg34xx`，`/mnt/sdcard` 可读写；`/etc/inittab` 有 `::respawn:/sbin/frontend-session`，Slot PPID 链 `slot -> frontend-session -> PID 1` 已确认，因此允许 SIGTERM 后由 init respawn。核心 SHA-256 `4ebae098...e889` 与官方包一致，`SLOT_TRACE_LATENCY` absent，marker 初始不存在，原有 `slot.log`（3624 B，`0d5991ea...350b1b`）先备份再采集，未覆盖。
+- `slot_presents_per_s`：临时创建 `$SLOT_ROOT/System/trace-latency.on` 并 SIGTERM 重启后，从新 PID 22514 的 `fd/2`（实测 `/mnt/sdcard/Logs/slot.log`）取得 4 条 pace 记录：58.67 / 59.57 / 59.57 / 59.57，均值 59.345，nominal 60.00 fps，stale 全 0，missed game periods 10。日志行本身无时间戳；host 轮询看到第 2/3 条的时间是 01:09:58Z / 01:10:01Z。
+- `armgba_committed_frames_per_s`：同一 PID 22514 在游戏态 `dlopen` 核心（`CT特种部队1.gba`，日志确认 `core /mnt/sdcard/System/armgba_libretro.so`），每轮重扫 PID/maps 并由 r-xp/r--p/rw-p 三行独立解出相同 bias `0x7f55ae0000`；主指针变量 `bias+0x4259b8`，指针 `0x7f1c0ea4d0` 对齐且稳定，计数器 `+0x2eac` 的 4 B 范围每轮验证为 rw 映射。19.825228 s 内 79 个样本、1184 帧，实测 **59.722 committed frames/s**；因 adb 往返实际采样率 3.934 Hz（目标 5 Hz），间隔 0.249–0.266 s，uint32 差分量化误差约 ±3.93 fps。`SLOT_TRACE_LATENCY` 始终 absent。
+- `lcd_irq_per_s`：只读 `/proc/interrupts`，IRQ 293 在 20.187913 s 内增加 1203 次，即 **59.590 IRQ/s**；这仍是扫描/中断代理，不能当作前两项 FPS。
+- 内存边界：每样本仅 8 B 主指针 + 4 B 计数器，共 **948 B**（预算 4096 B）；无扫描、无 ptrace、无 gdb、无进程内存写入。
+- 清理：长按 Menu（BTN_TL2=312）退出游戏后 armgba 映射回到 0；删除本轮 marker 恢复 ABSENT；再次 SIGTERM 并经 init respawn 到 PID 8064，其 `fd/2` 仍为 `/mnt/sdcard/Logs/slot.log`，`presents/s` 行数回到 0，UI 正常，marker 不存在。未重启设备，未改配置/ROM/存档/刷新率。
+- 例外与恢复：首次 SIGTERM 后 `frontend-session` 进入 `baseos-control-center --diagnostics` 并阻塞，60 s 内没有新 Slot PID；该失败已如实记录。B 键切到前端选择器，MENU 无效，只对该辅助进程发 SIGTERM 后 init 正常 respawn。用户后来提示在选择器上选中 `slot-pvaibhav` 按 A 也可返回，此时已完成 respawn，故未再操作。
+
+结论：UI presents、armGBA committed frames、LCD IRQ 三项均约 60/s，但这只说明当前都在 60 Hz 路径上，不构成 120 Hz 可用的证据。`hardware_applied=0` 保持不变；PLL/TCON/CCU/PMIC、`/dev/mem`、面板 allowlist 和 120 Hz writer 均未触碰。
