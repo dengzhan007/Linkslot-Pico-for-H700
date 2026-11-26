@@ -535,7 +535,7 @@ request GPIO lines, or add EINT/IRQ handling as part of this readback work.
 - [x] 新增 read-only single-shot PIO sampler：只读取 PA_DAT 0x10 / PE_DAT 0xA0（base 0x0300b000），无 write callback，不改 mux/pull/drive，不启用 EINT/GIC。
 - [x] Mock-PIO host tests 覆盖寄存器地址、空闲态、实体 X/Y press/release 顺序、ABI 错误拒绝；H700 编译/storage host regressions [#45761004754](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45761004754) 与 boot audit [#45761004741](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45761004741) 均通过。
 - [ ] 在目标设备上通过受控诊断路径实测 PA_DAT/PE_DAT 只读快照与按键同步关系；在此之前 sampler 不接入 LK runtime。
-- [ ] 评估 20 ms cadence 与去抖；当前 evdev capture 证明按键事件可达，尚未测量接点 bounce 与 PIO 采样延迟。
+- [ ] 评估 20 ms cadence 与去抖；当前 debugfs 约 105 ms 采样只证明稳定 press/release，不足以测量接点 bounce 或子 100 ms 边沿；LK 直接 PIO 高频采样与输入调度尚未验证。
 
 当前边界：Linux evdev 输入链路已实测；PIO 只读采样仅完成 host/mock 和 cross-build，**没有目标机 MMIO 执行、没有 LK 输入循环、没有 LK 启动/游戏运行验证**。
 
