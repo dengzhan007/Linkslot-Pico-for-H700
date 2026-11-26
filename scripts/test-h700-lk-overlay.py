@@ -161,6 +161,11 @@ def main() -> None:
         raise RuntimeError("arch.c does not preserve the relocated H700 vector base")
     if "set_vector_base(MEMBASE);" in arch_text:
         raise RuntimeError("arch.c still resets VBAR to MEMBASE")
+
+    if arch_text.count("vmrs %0, fpexc") != 2 or arch_text.count("vmsr fpexc, %0") != 2:
+        raise RuntimeError("Cortex-A53 FPEXC initialization must use two VMRS and two VMSR operations")
+    if "p10, 7" in arch_text:
+        raise RuntimeError("legacy MRC/MCR p10 FPEXC syntax must not remain in the H700 Cortex-A53 overlay")
     rules_text = overlay_rules.read_text(encoding="utf-8")
     a53_branch = re.search(
         r"ifeq \(\$\(ARM_CPU\),cortex-a53\)(.*?)HANDLED_CORE := true",
