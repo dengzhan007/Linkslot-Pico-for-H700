@@ -102,6 +102,7 @@ jobs:
             .ci/reports/reports/rg34xx-inventory-20261126-timer/boot0-secondary.bin
             .ci/reports/reports/rg34xx-inventory-20261126-timer/boot0-primary.json
             .ci/reports/reports/rg34xx-inventory-20261126-timer/boot0-secondary.json
+            .ci/reports/reports/rg34xx-inventory-20261126-timer/toc1-extracted/items/monitor.bin
           if-no-files-found: error
           retention-days: 30
       - name: Upload BL31 disassembly and audit report
