@@ -4,39 +4,54 @@
 
 | 来源 | Ref / commit | 在本项目中的用途 |
 |---|---|---|
-| [linkSlot 三分支最新快照](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/upstream/linkslot) | 本仓库归档分支 HEAD `241e7c1974926fa22552b200852914ceaccbfd42`；原始 GitCode commit 见下表 | 当前 Linkslot 业务、数据格式和功能的只读来源 |
+| [linkSlot 三分支最新快照](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/upstream/linkslot) | 本仓库归档分支 HEAD `6122c8f2357ecae43295fdb1a158ff5ef7488325`；原始 GitCode commit 见下表 | 当前 Linkslot 业务、数据格式和功能的只读来源 |
 | [luguiyi/linkslot 公共仓库](https://github.com/luguiyi/linkslot) | 查询记录：`main` @ `9275419ca99846fe6738027b2ade72e1804fdc08` | 公开仓库基线；当前公开 main 的 Cargo version 为 1.0.0，不等同于用户提供的私有 GitCode 快照 |
 | [GammaOS LK](https://github.com/TheGammaSqueeze/lk-mt6785) | `lk-gba-emu-sd-card-kpa` @ `9bf1419a49e0af6dba8b05916df382c9c9c6d0a8` | 裸机运行时/Core ABI 参考；该分支当前是 AArch32 LK，不是 H700 AArch64 port |
 | [armGBA-pico](https://github.com/TheGammaSqueeze/armGBA-pico) | `main` @ `75dbb3108b16d7fa72e60e523a0e4ec3b14af122` | GBA 核心候选；A32 固定地址 blob、Core ABI、过滤和 cheats 研究参考 |
 | [gambatte-pico](https://github.com/TheGammaSqueeze/gambatte-pico) | GammaOS LK submodule @ `7d6a1d3def653b71f2ed03c02829277868511932` | GB/GBC 裸机集成参考；首选核心候选 |
 | [gpsp-pico](https://github.com/TheGammaSqueeze/gpsp-pico) | GammaOS LK submodule @ `c3c909554a1b9a968c527b1f8153bba2fc57b0d1` | GBA 备选核心与 Pico Core ABI 适配参考 |
 
-## Linkslot 最新三分支快照身份（2026-11-25）
+## Linkslot 三分支快照身份（2026-11-27）
 
-快照说明文件：[UPSTREAM-SNAPSHOT.md](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/upstream/linkslot/UPSTREAM-SNAPSHOT.md)。本轮来源是 GitCode / AtomGit 私有仓库 `luguiyi691/linkslot`，同步时间 2026-11-25 20:40（UTC+8）。令牌未进入项目仓库、脚本或清单。
+快照说明文件：[UPSTREAM-SNAPSHOT.md](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/upstream/linkslot/UPSTREAM-SNAPSHOT.md)。本次来源为 GitCode 私有仓库 `luguiyi691/linkslot`，同步时间 **2026-11-27 20:47（UTC+8）**。已枚举远端 `main`、`DEV`、`test` 三个分支。访问令牌仅用于镜像读取，未写入仓库、脚本或清单。
 
 | 本地快照路径 | 原始来源分支 | 原始来源 commit | 来源提交时间（UTC+8） | Cargo 版本 | 源码文件数 |
 |---|---|---|---|---:|---:|
 | `upstream/linkslot/` 根目录 | `main` | `b84f37f1a6259a625e9095279dd132f5ef2116af` | 2026-11-25 10:39 | 1.0.49 | 851 |
-| `upstream/linkslot/DEV/` | `DEV` | `a800adb2e3a51d05ffe80abeae2e1ec52247b951` | 2026-11-25 11:40 | 1.1.0 | 872 |
-| `upstream/linkslot/test/` | `test` | `8c7a37055eb68f71170320d4a17cdb9251785186` | 2026-11-25 10:37 | 1.0.49 | 851 |
+| `upstream/linkslot/DEV/` | `DEV` | `ebc6094890dd02210720b79a94fe64e3f11d30fc` | 2026-11-26 09:13 | 1.1.0 | 875 |
+| `upstream/linkslot/test/` | `test` | `b1342bed9deca313ae3954f0022c941af4e0b031` | 2026-11-27 20:39 | 1.0.60 | 854 |
 
-以上三个 SHA 是原始来源仓库提交，不是本仓库归档 commit。归档分支 HEAD 为 `241e7c1974926fa22552b200852914ceaccbfd42`。三个版本均附各自的 `SHA256SUMS.txt`；快照说明记录了复制的源文件清单、blob 字节哈希和文件 mode。
+以上 SHA 是 GitCode 源仓库提交，不是本仓库归档提交。本仓库只读归档分支 HEAD 为 `6122c8f2357ecae43295fdb1a158ff5ef7488325`。
 
-### 三分支差异核验
+### 相对上一版快照的变化
 
-- `main` 与 `test` 的 851 个源码文件内容完全一致；test 快照仅不含根目录归档说明文件 `UPSTREAM-SNAPSHOT.md`。因此当前稳定基线选择 `main 1.0.49`，`test 1.0.49` 作为同内容交叉核对，不需要重复移植。
-- `DEV 1.1.0` 相对 main：文件树比较为新增 21、删除 1、修改 46。新增内容集中于平台包、Arcade/NeoGeo、FBNeo、DAT 目录和检修门；修改覆盖 `slot-model`、`slot-store`、`slot-ui`、`slot`、翻译、打包及扩展包管理。
-- DEV 的主要结构变化包括新增 `Platform::Arcade` / `Platform::Neogeo`，增加 FBNeo 核心，并通过 schema 2 / `kind=platform` 的 LSP 平台包按安装状态激活机种。它不是简单的 1.0.49 bugfix 分支。
+上一版同步于 2026-11-25 20:40（UTC+8），其 `main` 为 `b84f37f`（1.0.49）、`DEV` 为 `a800adb`（1.1.0，872 文件）、`test` 为 `8c7a370`（1.0.49，851 文件）。
+
+| 分支 | 上一版 | 本次 | 相对上一版 |
+|---|---|---|---|
+| `main` | `b84f37f`（1.0.49） | `b84f37f`（1.0.49） | **无变化**：0 个文件变更，源码树逐字节相同 |
+| `DEV` | `a800adb`（1.1.0，872 文件） | `ebc6094`（1.1.0，875 文件） | 57 个文件变更，+3035 / −2287；3 新增、0 删除 |
+| `test` | `8c7a370`（1.0.49，851 文件） | `b1342be`（1.0.60，854 文件） | 85 个文件变更，+9042 / −6455；3 新增、0 删除 |
+
+新增文件：
+
+- `DEV/`：`crates/slot-ui/assets/SlotSimplifiedChinese.ttf`、`crates/slot-ui/src/paper.rs`、`crates/slot-ui/src/shelf_header.rs`
+- `test/`：`crates/slot-ui/assets/SlotSimplifiedChinese.ttf`、`crates/slot-ui/src/shelf_header.rs`、`small-draw-calls.txt`
+
+### 三分支差异与稳定基线判断
+
+- **`main` 仍是首期移植的稳定对照基线：** 版本 1.0.49、851 个源码文件；本次相对上一版快照无任何文件变化。此前已围绕 main 1.0.49 建立的 H700 移植结论不会因为这次源快照同步而自动失效。
+- **`test` 已不再与 `main` 相同：** 当前为 1.0.60，有 85 个文件变化和 3 个新增文件。其最新 changelog 包括 Web 批量导入/导出与菜单图标细化；v1.0.50–1.0.60 还包含较大范围的 UI/HUD/通知/传输界面调整。它是需要审查的上游候选，不是当前稳定主线，不应直接替换 main 基线。
+- **`DEV` 仍是独立的下一代功能分支：** 当前 1.1.0、875 个文件；相对上次快照 57 个文件变化，新增内容集中于 Arcade/NeoGeo/FBNeo、platform-pack 和相关 UI/QA。它不是首期 GB/GBC/GBA 垂直切片的直接升级目标。
+- 三个分支均按各自来源 commit 的树原样归档，没有在同步时进行分支合并、挑选或移植。每份快照均带基于 Git blob 字节生成的 `SHA256SUMS.txt`；文件 mode 按源树保留。
 
 ### 对当前 H700 移植的直接影响
 
-- 1.0.49 是首期 GB/GBC/GBA 移植的稳定对照基线；main 与 test 无需分别适配。
-- DEV 1.1.0 作为下一代架构差异来源单独保留。当前裸机首期仍只实现 GB/GBC/GBA，不提前引入 Arcade、NeoGeo、FBNeo 或动态平台包机制；但机种/核心表与存储布局不得设计成无法向后扩展。
-- `crates/slot-retro/src/ffi.rs` 在旧 1.0.45、main 1.0.49、DEV 1.1.0 三份快照中的 blob SHA 均为 `2e7b1b0bb3e1665de01f6458b6dfc7fe65a61f34`（7,649 bytes）。此前 21 个 mGBA namespaced exports 的静态 API 链接验证仍有明确的 ABI 兼容依据，但仍需在新快照上重新执行完整 patch/build workflow。
-- `slot-model/src/core.rs` 已发生变化：1.0.45 blob `d7fe752e7968d00dafaa3dbadacf2a749580a64e`（4,750 bytes），main 1.0.49 为 `cd877949a3b30c62cf178fd91add3e258a09c66d`（5,761 bytes），DEV 1.1.0 为 `51dd6ed87d1d3c2e80e18d6759ad687b22b5c481`（6,199 bytes）。H700 持久化 no_std 核心表需要从 1.0.45 重新对齐到 1.0.49，保留本地 no_std/alloc 边界和已验证的核心元数据。
-- `crates/slot/src/app.rs` 从 1.0.45 到 main 1.0.49、DEV 1.1.0 均有大幅变化（725,712 → 760,471 → 830,714 bytes）。不能把旧 patcher 的锚点命中或旧版本编译通过视为新版本兼容证明。
-- 1.0.49 changelog 包含 armGBA netpacket 联机修复、Web 日志维护和云同步/卡带传输 UI 更新。armGBA 的 netpacket 语义应保留；当前 H700 尚未完成的网络后端不应因此被假定已支持联机。
+- 首期继续以 **main 1.0.49** 为业务/API 与数据格式基线；本次确认 main 未变化，因此无需因快照刷新而重做所有 1.0.49 兼容性验证。
+- 将 `test` 1.0.60 作为差异审查来源，优先检查对 GB/GBC/GBA 主界面、游戏选择、输入、渲染和状态持久化有影响的改动；Web 批量导入/导出及视觉资源不自动进入裸机首期。
+- `DEV` 1.1.0 的机种/核心模型及平台包数据契约继续作为后续扩展参考；首期不提前引入 Arcade、NeoGeo、FBNeo 或动态平台包机制。
+- `crates/slot-retro/src/ffi.rs` 的旧 ABI 兼容结论仍需以各分支当前 blob SHA 分别核验；不得因目录名或版本号相近，将旧 patcher 锚点命中当作新源码兼容证明。
+- `slot-model/src/core.rs` 与 `crates/slot/src/app.rs` 等关键业务入口应继续做精确 blob/差异审查。尤其 `test` 1.0.60 的 85 文件更新不能只凭 changelog 概括为“仅清理警告”。
 
 ## 历史快照
 
