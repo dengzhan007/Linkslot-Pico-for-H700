@@ -38,8 +38,8 @@ Thus, `context + 0xa4` is a selector/index input to controller initialization in
 At `0x48013ac8`, the decoded instruction sequence:
 
 1. Forms candidate addresses `0x07022000` and `0x0701019c`, writes `0x33` to the former and `0x1000` then `0x10001` to the latter. The precise H700 register semantics of these writes have not been independently established.
-2. Forms the indexed lookup address from `0x48014628`.
-3. Loads a 64-bit value using `LDR X1, [X1, W0, SXTW #3]`.
+2. Forms lookup origin `0x48014628`.
+3. Loads a 64-bit value using `LDR X1, [X1, W0, SXTW #3]`. This sign-extends the 32-bit value in W0 and scales it by eight; the actual value from context `+0xa4` is unknown, so the selected location may be before or after `0x48014628`.
 4. Uses the loaded value as an object base and accesses offsets including `+0x0c`, `+0x14`, and `+0x18`.
 5. Stores the loaded value into global slot `0x48015548`.
 
@@ -51,12 +51,12 @@ This is strong evidence of a TWI/I2C-master-style controller abstraction. It is 
 
 A direct comparison of code references with the raw monitor bytes exposes an unresolved initialization boundary:
 
-- Code at `0x48013ac8` uses `0x48014628` as the base of a selector-indexed 64-bit load and subsequently treats the loaded value as an object pointer. However, the raw file bytes at that address decode as small integer pairs, for example `(0x0000000b, 0x000186a0)`, `(0x002dc6c0, 0x0000000c)`, and `(0x0000000f, 0x000186a0)`. Interpreted literally as 64-bit pointers, these values are not plausible mapped object addresses. Therefore the binary proves the *use-time lookup pattern*, not that the raw file contains the valid runtime pointer table.
-- Code repeatedly loads `[0x48014668]` and passes the result as a context pointer, but the raw file's initial 64-bit value at `0x48014668` is `2`, not a valid context pointer.
+- Code at `0x48013ac8` uses `0x48014628` as the lookup origin for a signed, eight-byte-scaled index and subsequently treats the loaded value as an object pointer. The actual signed index is not captured. The eight qwords immediately following the lookup origin decode as scalar/encoded-looking values, for example `(0x0000000b, 0x000186a0)`, `(0x002dc6c0, 0x0000000c)`, and `(0x0000000f, 0x000186a0)`, not plausible mapped pointers. They are only the adjacent bytes at offsets `+0x00..+0x38`; **they are not proven to be the selected entries**. A negative signed selector can address locations before `0x48014628`. Therefore the binary proves the *use-time lookup instruction and pointer use*, not the runtime table layout.
+- Code repeatedly loads the qword at `0x48014668` and passes it to helpers as a context pointer, but the raw file's initial value there is `2`, not a valid pointer.
 - Global slot `0x48015548` also has raw initial value `2`, but `0x48013b14` explicitly overwrites it with the object pointer selected in the preceding instructions. This proves at least this pointer slot is runtime-populated before the controller helper consumes it.
 - In the direct static address-reference review of this payload, no direct store to `0x48014628` or `0x48014668` was identified. This does not exclude indirect stores, runtime relocation/fixups, an external loader patch, or initialization outside the reviewed direct-reference pattern.
 
-Therefore the raw table bytes cannot be treated as the runtime pointer table, and the raw `0x48014668=2` value cannot be treated as the live context pointer. The function path establishes how these values are consumed, but not who populates them or when.
+Therefore the adjacent raw qwords cannot be treated as the selected runtime pointer table, and the raw `0x48014668=2` value cannot be treated as the live context pointer. The function path establishes how these values are consumed, but not the runtime signed index, which memory location it selects, or who populates those locations.
 
 
 ## 4A. Pinned BaseOS native SPL patch audit (2026-11-27)
@@ -73,7 +73,7 @@ A reproducible host audit was added:
 
 - `scripts/audit-rg34xx-bl31-twi-descriptors.py`
 - `scripts/test-audit-rg34xx-bl31-twi-descriptors.py`
-- The audit pins the monitor size/SHA, checks the selector loads, indexed lookup instruction, object-pointer publication, raw qwords and BaseOS SPL patch offsets. It produces `TWI-DESCRIPTOR.md` and `twi-descriptor-report.json`.
+- The audit pins the monitor size/SHA, checks the selector loads, signed indexed lookup instruction, object-pointer publication, adjacent raw qwords and BaseOS SPL patch offsets. It produces `TWI-DESCRIPTOR.md` and `twi-descriptor-report.json`.
 - Workflow integration is in `.github/workflows/h700-bl31-memory-audit.yml`; [BL31 audit #96](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45965474745) passed the complete `audit-matched-bl31` job on audit-script HEAD `f4676657ff0864e9ecd01878c59886798ac1ea11`. Artifact: [15182980313](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45965474745/artifacts/15182980313).
 - The initial run [#95](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45965350913) failed only because the new assertion expected `x19` at `0x480126d4`; the matched instruction uses `x0`. This audit-script assertion was corrected and the entire workflow passed on #96. No firmware/product code was modified.
 
@@ -98,7 +98,7 @@ Unresolved:
 
 1. Who initializes or relocates the context pointer at `0x48014668`?
 2. Who populates or transforms the indexed lookup data consumed from `0x48014628`, and what are its runtime contents/layout?
-3. What value does context `+0xa4` carry on the actual RG34XX suspend path?
+3. What signed value does context `+0xa4` carry on the actual RG34XX suspend path, and what absolute address does its scaled lookup select?
 4. What controller base/object, bus number, slave address and command sequence are selected?
 5. What final PMIC/RTC/power action follows the transfer, and what consumes the GP_DATA2 phase markers?
 
