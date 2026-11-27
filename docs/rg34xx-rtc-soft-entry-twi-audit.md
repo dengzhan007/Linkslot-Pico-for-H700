@@ -2,7 +2,7 @@
 
 Date: 2026-11-27
 
-Status: **TWI-like controller path is statically present; selected controller, bus, PMIC command and final platform action remain unresolved.**
+Status: **The signed-index lookup has a static H616-family TWI0–TWI4/R-TWI0 base-map correlation. R-TWI0 is a strong conditional candidate (index 73), but the actual runtime selector is not captured; PMIC command and final platform action remain unresolved.**
 
 This is a read-only host disassembly review of the exact monitor payload captured from the RG34XX non-SP inventory. It does not issue SMC, MMIO, I2C/TWI transactions, or suspend requests.
 
@@ -13,6 +13,7 @@ This is a read-only host disassembly review of the exact monitor payload capture
 - SHA-256: `676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31`
 - Source capture: [BL31 audit #94 artifact 15178074907](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45956263984/artifacts/15178074907)
 - Static disassembly and host assertions: [BL31 audit #94 artifact 15178254258](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45956263984/artifacts/15178254258)
+- Expanded signed-index/base-map audit: [BL31 audit #101 artifact 15182284425](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45966329671/artifacts/15182284425)
 
 All addresses below refer to this exact payload and are file-base-plus-offset addresses.
 
@@ -40,10 +41,10 @@ At `0x48013ac8`, the decoded instruction sequence:
 1. Forms candidate addresses `0x07022000` and `0x0701019c`, writes `0x33` to the former and `0x1000` then `0x10001` to the latter. The precise H700 register semantics of these writes have not been independently established.
 2. Forms lookup origin `0x48014628`.
 3. Loads a 64-bit value using `LDR X1, [X1, W0, SXTW #3]`. This sign-extends the 32-bit value in W0 and scales it by eight; the actual value from context `+0xa4` is unknown, so the selected location may be before or after `0x48014628`.
-4. Uses the loaded value as an object base and accesses offsets including `+0x0c`, `+0x14`, and `+0x18`.
-5. Stores the loaded value into global slot `0x48015548`.
+4. Uses the loaded value as a controller MMIO base and accesses offsets including `+0x0c`, `+0x14`, and `+0x18`.
+5. Stores the loaded controller base into global slot `0x48015548`.
 
-The helper at `0x48013a48` reloads the object pointer from global slot `0x48015548`, programs fields at object offsets `+0x0c`, `+0x10`, and `+0x20`, and polls for expected values including `0xf8` and `0x3a`. The transport routine at `0x48013b98` uses object offsets `+0x08`, `+0x0c`, `+0x10`, `+0x14`, `+0x18`, `+0x1c`, and `+0x20` for DATA/control/status/clock/reset/extension/line-control-like fields. It issues START/STOP/read/write-style operations and branches on status values including `0x08`, `0x18`, and `0x28`.
+The helper at `0x48013a48` reloads the controller base from global slot `0x48015548`, programs fields at MMIO offsets `+0x0c`, `+0x10`, and `+0x20`, and polls for expected values including `0xf8` and `0x3a`. The transport routine at `0x48013b98` uses MMIO offsets `+0x08`, `+0x0c`, `+0x10`, `+0x14`, `+0x18`, `+0x1c`, and `+0x20`. It issues START/STOP/read/write-style operations and branches on status values including `0x08`, `0x18`, and `0x28`.
 
 This is strong evidence of a TWI/I2C-master-style controller abstraction. It is not sufficient to name a bus instance, a PMIC slave address, a register map, or a particular power-off command.
 
@@ -79,11 +80,48 @@ A reproducible host audit was added:
 
 **Interpretation update:** do not describe `0x48014628` as a proven initialized runtime pointer table. It is a lookup base used by the code; its runtime contents and the runtime context pointer at `0x48014668` remain unknown. The pinned SPL header patch does not explain either value.
 
+
+## 4B. H616-family TWI base-map correlation (2026-11-27)
+
+The signed lookup is not merely an opaque pointer-table pattern. A host scan of the exact matched monitor's lookup-origin neighborhood found this consecutive six-qword sequence:
+
+| Signed lookup index if selected | Monitor data address | Raw qword | H616 family label |
+|---:|---:|---:|---|
+| 68 | `0x48014848` | `0x0000000005002000` | TWI0 |
+| 69 | `0x48014850` | `0x0000000005002400` | TWI1 |
+| 70 | `0x48014858` | `0x0000000005002800` | TWI2 |
+| 71 | `0x48014860` | `0x0000000005002c00` | TWI3 |
+| 72 | `0x48014868` | `0x0000000005003000` | TWI4 |
+| 73 | `0x48014870` | `0x0000000007081400` | R-TWI0 |
+
+The selected address is computed relative to lookup origin `0x48014628`: `0x48014628 + signed_index * 8`. For index 73, this yields `0x48014870`, whose qword is `0x07081400`. The sequence of six values matches the H616 User Manual v1.0 §9.1.5 TWI/R-TWI controller base table (p.582). The exact addresses and family labels are cross-reference evidence, not an assertion that the H700 hardware is register-identical in every respect.
+
+The controller offsets used by the matched BL31 also align with the H616 TWI register layout:
+
+| Offset | H616 register |
+|---:|---|
+| `+0x08` | DATA |
+| `+0x0c` | CNTR |
+| `+0x10` | STAT |
+| `+0x14` | CCR |
+| `+0x18` | SRST |
+| `+0x1c` | EFR |
+| `+0x20` | LCR |
+
+Cross-reference sources:
+- H616 User Manual v1.0, §9.1.5, TWI/R-TWI base addresses and register offsets: [PDF](https://www.scs.stanford.edu/~zyedidia/docs/allwinner/h616.pdf)
+- H616 device tree R-TWI0 node at `0x07081400`: [sun50i-h616.dtsi](https://kernel.googlesource.com/pub/scm/linux/kernel/git/chenhuacai/linux-loongson/+/refs/heads/master/arch/arm64/boot/dts/allwinner/sun50i-h616.dtsi)
+- RG34XX live FDT inventory: `reports/rg34xx-inventory-20261126-timer/live-fdt.json`; it places the AXP2202 PMU node under `/soc@03000000/twi@0x07081400/pmu`, compatible `x-powers,axp2202`.
+
+**Conditional conclusion:** if the actual context `+0xa4` value at this call site is 73, BL31 selects the R-TWI0 base `0x07081400`, which is consistent with the live-FDT AXP2202 parent node. This three-way agreement (monitor lookup data, H616 family register map, target live FDT) makes R-TWI0 the strongest static candidate. However, the selector is a signed 32-bit runtime value and has not been captured. The audit therefore does **not** claim that the actual suspend path selected R-TWI0; indices 68–72 remain valid alternatives from the same static mapping.
+
+BL31 audits [#100](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45966317624) and [#101](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45966329671) both passed after the controller-base scan and H616 label classification were added. #101 artifact: [15182284425](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45966329671/artifacts/15182284425).
+
 ## 5. Relationship to the live FDT
 
 The uploaded live-FDT inventory reports an AXP2202 PMIC node beneath an H700 R-TWI-like node at `0x07081400`, compatible `x-powers,axp2202`. The H616 family reference maps R-TWI0 at `0x07081400`, and H616 DTS sources associate R-PIO PL0/PL1 with `s_i2c`.
 
-This is a plausible family-level correspondence only. It does **not** prove that the descriptor selected through context `+0xa4` resolves to `0x07081400`; no selected object pointer, bus index, slave address, transaction capture, or target-specific schematic/readback is available.
+The live FDT AXP2202 node agrees with the static H616-family lookup candidate at index 73 (`0x07081400`). This makes R-TWI0 the strongest static candidate, but does **not** prove that the actual suspend context selected index 73. The signed runtime value at context `+0xa4`, PMIC slave address, transaction capture, and target-specific schematic/readback remain unavailable.
 
 ## 6. Conclusions and next evidence
 
@@ -91,7 +129,8 @@ Confirmed statically:
 
 - RTC soft-entry continuation `0x48012670` calls `0x48012070`; a return reaches `0x480126a4` self-loop.
 - The continuation carries context `+0xa4` into the TWI-like controller initialization path.
-- `0x48013ac8` performs a selector-indexed 64-bit load from lookup base `0x48014628`, uses the loaded value as an object base, and saves it to `0x48015548`; raw file bytes do not prove the runtime table contents.
+- `0x48013ac8` performs a signed selector-indexed 64-bit load from lookup origin `0x48014628`, uses the loaded value as the controller MMIO base, and saves it to `0x48015548`.
+- Monitor qwords at signed indices 68–73 correlate with H616 family TWI0–TWI4 and R-TWI0 base addresses; the R-TWI0 qword at index 73 is `0x07081400` and agrees with the live-FDT AXP2202 parent node. This is a conditional static map, not a captured runtime selection.
 - `0x48013a48` and `0x48013b98` implement controller setup and transfer/status handling.
 
 Unresolved:
@@ -99,9 +138,9 @@ Unresolved:
 1. Who initializes or relocates the context pointer at `0x48014668`?
 2. Who populates or transforms the indexed lookup data consumed from `0x48014628`, and what are its runtime contents/layout?
 3. What signed value does context `+0xa4` carry on the actual RG34XX suspend path, and what absolute address does its scaled lookup select?
-4. What controller base/object, bus number, slave address and command sequence are selected?
+4. What signed selector is present at context `+0xa4` on the actual RG34XX suspend path (in particular, is it 73), and therefore which of the statically mapped TWI0–TWI4/R-TWI0 bases is actually selected? The PMIC slave address and command sequence are also unresolved.
 5. What final PMIC/RTC/power action follows the transfer, and what consumes the GP_DATA2 phase markers?
 
-Next work should remain host/static: identify the runtime writer/loader patch or another authoritative memory image for the initialized data, then verify the selector-to-object mapping. Do not guess a bus or slave address and do not issue a TWI transaction.
+Next work should remain host/static: trace the source/producer of context `+0xa4` and its signed value through the RTC soft-entry caller, or identify a trustworthy pre-suspend read-only capture. The static base mapping is already constrained; the missing fact is the runtime selector. Do not infer that selector from the FDT, do not guess a PMIC slave address, and do not issue a TWI transaction.
 
 No hardware access or modification was performed. `H700_MEMORY_LAYOUT_APPROVED` remains unset and `hardware_applied=0`.
