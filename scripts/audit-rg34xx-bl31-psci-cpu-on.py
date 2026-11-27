@@ -921,7 +921,7 @@ def main() -> int:
     if read_word(raw, ARM_SVC_HANDLER_RECORD_ADDRESS) != ARM_SVC_HANDLER_ADDRESS:
         raise RuntimeError("arm_svc runtime-service handler pointer changed")
     arm_svc_name_offset = ARM_SVC_NAME_ADDRESS - BASE
-    if raw[arm_svc_name_offset:arm_svc_name_offset + 8] != b"arm_svc\\x00":
+    if raw[arm_svc_name_offset:arm_svc_name_offset + 8] != b"arm_svc" + bytes((0,)):
         raise RuntimeError("arm_svc runtime-service name string changed")
 
     if decode_cond_branch_target(0x4800372c, read_word(raw, 0x4800372c)) != 0x48003b8c:
