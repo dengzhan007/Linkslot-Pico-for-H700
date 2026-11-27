@@ -85,12 +85,30 @@ The #45301188593 AArch64 SPL symbol map contains:
 | `preloader_console_init` | `0x25170` |
 | `serial_init` | `0x2a374` |
 
-The build log also compiles the serial driver objects. This proves the console
-code is present in the exact reproduced SPL; combined with the pinned
-`board_init_f()` source ordering, it gives a deterministic early UART setup
-path before the SPL hands control to the vendor monitor. It is still static
-build/source evidence rather than a trace of this path executing on a live
-device.
+The build log compiles the legacy/non-DM serial path:
+`spl/drivers/serial/serial.o`, `serial_ns16550.o` and `ns16550.o`.
+The #45301188593 symbol map contains `eserial1_device` and
+`eserial1_init`, but no `eserial2_device` through `eserial6_device`.
+
+In the pinned
+[`serial_ns16550.c`](https://github.com/u-boot/u-boot/blob/5508406582f6f7120dce0c4b3059819a41788db2/drivers/serial/serial_ns16550.c),
+`eserial1_device` is compiled only when `CFG_SYS_NS16550_COM1` is defined;
+`default_serial_console()` selects it for `CONFIG_CONS_INDEX == 1`.
+The U-Boot serial Kconfig defaults `SPECIFY_CONSOLE_INDEX` on for non-DM
+SPL serial and gives `CONS_INDEX` a default of 1.
+[`sunxi-common.h`](https://github.com/u-boot/u-boot/blob/5508406582f6f7120dce0c4b3059819a41788db2/include/configs/sunxi-common.h)
+maps `CFG_SYS_NS16550_COM1` to `SUNXI_UART0_BASE`; the H6/H616
+[`serial.h`](https://github.com/u-boot/u-boot/blob/5508406582f6f7120dce0c4b3059819a41788db2/arch/arm/include/asm/arch-sunxi/serial.h)
+defines that base as `0x05000000`. The same console index controls the H616
+PH0/PH1 GPIO branch and the UART gate/reset bit in `clock_init_uart()`.
+
+Together, the exact link map, compiled legacy serial objects, Kconfig defaults
+and source selection rules make `CONFIG_CONS_INDEX=1` / COM1 / UART0 the
+strong build-level inference for this SPL. The generated `.config` was not
+retained in the CI artifact, so this is **not** a direct config-file readback
+or runtime trace. It does, however, narrow the linked console device to
+COM1/UART0 rather than merely assuming that any UART might be used.
+
 
 **H616 TZPC note:** the pinned U-Boot `tzpc_init()` header path is a no-op
 for H616; do not count that call as proof of peripheral security permissions.

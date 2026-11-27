@@ -38,11 +38,15 @@
   `preloader_console_init()`。H616 的 UART0 console-index-1 分支把 PH0/PH1
   设为 UART0 mux（mux value 2），PH1 pull-up；`clock_init_uart()` 将
   APB2 配为 24 MHz、打开 UART gate 并解除 reset；console init 调用
-  `serial_init()`。精确 reproduction 的 SPL symbol map 中确实有
-  `board_init_f`、`clock_init_uart`、`preloader_console_init` 和
-  `serial_init`。生成的完整 `.config` 未随 artifact 发布，因此 console
-  index 的 1 是该 U-Boot Kconfig 默认/源代码路径，不能冒充独立 config
-  文件读回。
+  `serial_init()`。精确 reproduction 的 SPL symbol map 中有
+  `board_init_f`、`clock_init_uart`、`preloader_console_init`、
+  `serial_init`、`eserial1_device` 和 `eserial1_init`，没有 eserial2–6。
+  legacy/non-DM `serial_ns16550.c` 仅在 COM1 被定义时生成
+  `eserial1_device`，`default_serial_console()` 按
+  `CONFIG_CONS_INDEX` 选择该设备；`sunxi-common.h` 将 COM1 映射到
+  `SUNXI_UART0_BASE=0x05000000`。Kconfig 对 non-DM SPL serial 默认启用
+  `SPECIFY_CONSOLE_INDEX` 且 `CONS_INDEX=1`。这些是强链接/源码推断；
+  生成的完整 `.config` 未随 artifact 发布，不能称为直接 config readback。
 - 目标机 exact vendor monitor（SHA-256
   `676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31`）
   在 BL33 准备路径调用 UART gate selector：若 SPL 留下已有 gate bit，

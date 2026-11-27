@@ -251,8 +251,13 @@ In summary:
   UART0, configures APB2 from OSC24M at 24 MHz, enables the selected UART
   gate and deasserts reset; `preloader_console_init()` invokes
   `serial_init()`. The exact reproduced SPL symbol map includes
-  `clock_init_uart`, `preloader_console_init`, `serial_init` and
-  `board_init_f`.
+  `clock_init_uart`, `preloader_console_init`, `serial_init`,
+  `board_init_f`, `eserial1_device` and `eserial1_init`, but no
+  `eserial2`–`eserial6` device symbols. The legacy/non-DM U-Boot serial
+  source maps COM1 to H616 UART0 (`0x05000000`); Kconfig defaults
+  `CONFIG_CONS_INDEX` to 1 for this SPL serial path. This is a strong
+  link/source inference of UART0 selection, not a direct readback of the
+  generated `.config`, which was not retained.
 - The exact target monitor (107,216 bytes, SHA-256
   `676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31`)
   calls a UART gate selector before BL33 preparation. If a UART gate is
