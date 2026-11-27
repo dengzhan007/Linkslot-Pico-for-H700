@@ -871,7 +871,7 @@ def _serial_inventory(nodes: dict[str, dict[str, bytes]]) -> dict[str, Any]:
         pinctrl_names = _strings(props.get("pinctrl-names"))
         pinctrl_states = []
         for property_name, raw_refs in sorted(props.items()):
-            match = re.fullmatch(r"pinctrl-(\\d+)", property_name)
+            match = re.fullmatch(r"pinctrl-(\d+)", property_name)
             if not match:
                 continue
             state_index = int(match.group(1), 10)
