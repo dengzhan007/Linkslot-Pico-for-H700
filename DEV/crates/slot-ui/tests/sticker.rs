@@ -1,4 +1,4 @@
-use slot_ui::{Language, 
+use slot_ui::{switch_style as sw, Language,
     about_face, about_lines, thanks_lines, AboutFields, ABOUT_H, ABOUT_W, AUTHOR, CONTRIBUTOR,
     ORIGINAL_AUTHOR, ORIGINAL_LICENSE, ORIGINAL_URL, ORIGINAL_VERSION,
 };
@@ -64,8 +64,10 @@ fn the_about_face_is_full_screen_and_has_the_switch_header() {
         let at = ((y * face.w + x) * 4) as usize;
         [face.rgba[at], face.rgba[at + 1], face.rgba[at + 2]]
     };
-    assert_eq!(pixel(50, 30), [0xe6, 0x00, 0x12], "the red accent bar");
-    assert_eq!(pixel(10, 10), [0x24, 0x24, 0x29], "the top band");
+    let accent = sw::accent();
+    let top = sw::bg_top();
+    assert_eq!(pixel(50, 30), accent, "the accent bar");
+    assert_eq!(pixel(10, 10), [top[0], top[1], top[2]], "the top band");
     assert!(
         face.rgba.chunks(4).any(|pixel| pixel[3] > 0),
         "the page is empty"

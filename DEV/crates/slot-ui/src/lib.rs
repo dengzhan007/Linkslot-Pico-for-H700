@@ -33,6 +33,7 @@ mod rebuild;
 mod refusal;
 pub mod search;
 mod shelf;
+mod shelf_header;
 mod shell;
 mod silhouette;
 mod slot_chrome;
@@ -96,21 +97,23 @@ pub use link_art::{
 pub use plate::{
     arrows_hint_face, arrows_hint_width, cap_width, centred_hints, hint_face, hint_face_ink, hint_quad, hint_row,
     hint_width, large_word_face, slot_name_face, title_face, vertical_arrows_hint_face,
-    vertical_arrows_hint_width, word_face, word_face_ink, word_width, Hint, UndoFace, SLOT_NAME_H,
+    vertical_arrows_hint_width, status_face, word_face, word_face_ink, word_width, Hint, UndoFace, SLOT_NAME_H,
     ARROW_GAP, CAP,
     CAP_GAP,
     HINT_EDGE, HINT_GAP, HINT_H, LEGEND_GAP, TITLE_H, TITLE_W,
 };
 pub use polaroids::{photo_face, PhotoFace, Polaroids, DOT, PHOTO_H, PHOTO_W};
 pub use power_menu::{
-    menu_face, power_card_face, power_icon_face, power_label_face, power_title_face, PowerChoice,
-    MENU_PAD, POWER_CARD_H, POWER_CARD_W,
+    menu_face, power_card_face, power_icon_face, power_label_face, power_panel_face,
+    power_title_face, PowerChoice, MENU_PAD, POWER_CARD_H, POWER_CARD_W, POWER_PANEL_H,
+    POWER_PANEL_W,
 };
 pub use quick_menu::{
-    quick_caret_face, quick_caret_face_state, quick_icon_face, quick_label_face,
-    quick_label_face_state, quick_legend_faces, quick_title_face, quick_value_face, QuickMenu,
-    QuickMenuFaces, QuickRow, QuickValue, QUICK_CARD_H, QUICK_CARD_W, QUICK_EDGE, QUICK_PITCH,
-    QUICK_SPLIT, QUICK_TOP, row_top,
+    quick_background_face, quick_caret_face, quick_caret_face_state, quick_card_face,
+    quick_icon_face, quick_label_face,
+    quick_label_face_state, quick_legend_faces, quick_number_face, quick_page_meta_face,
+    quick_title_face, quick_value_face, QuickMenu, QuickMenuFaces, QuickRow, QuickValue,
+    QUICK_CARD_H, QUICK_CARD_W, QUICK_EDGE, QUICK_PITCH, QUICK_SPLIT, QUICK_TOP, row_top,
 };
 pub use rebuild::{rebuild_count_face, rebuild_title_face, RebuildScreen};
 pub use refusal::Refusal;
@@ -118,7 +121,13 @@ pub use refusal::Refusal;
 /// can name the language without depending on `slot-i18n` themselves.
 pub use slot_i18n::Language;
 pub use search::{candidate_bar, results_face, CANDIDATE_POS};
-pub use shelf::{foot_y, playtime_plate, rest_y, set_shelf_slack, Shelf};
+pub use shelf::{display_box, foot_y, playtime_panel_face, playtime_plate, rest_y, set_shelf_slack, Shelf, SHELF_CART_FOOT};
+pub use shelf_header::{
+    design_plate_face, flat_page_dot_face, flat_side_tile_face, flat_slot_face,
+    game_title as shelf_game_title_face, header as shelf_header_face, legacy_header, RailItem,
+    FLAT_SLOT_H, FLAT_SLOT_W, FLAT_TILE_H, FLAT_TILE_W, LEGACY_HEADER_H, LEGACY_HEADER_W,
+    DESIGN_PLATE_H, DESIGN_PLATE_W, HEADER_H, HEADER_W, SHELF_TITLE_H, SHELF_TITLE_W,
+};
 pub use shell::{
     gb_table_shells, gba_shell_for, lookup_order_is_exact_then_family_then_default, shell_for,
     shell_presets, table_keys, Finish, Shell, DEFAULT_SHELL, DMG_SHELL, DUAL_MODE_SHELL,
@@ -127,7 +136,7 @@ pub use shell::{
 pub use silhouette::{gb_silhouette, silhouette, GbShell};
 pub use slot_chrome::{
     draw_empty_slot, draw_empty_slot_with, draw_slot_back_layer, draw_slot_front_layer, draw_slot_name, draw_slot_plate, ease, edge, housing,
-    opening, recess, SlotChrome, ALERT_PX, LIP_H, MOUTH_H, MOUTH_W,
+    opening, recess, SlotChrome, ALERT_PX, LIP_H, MOUTH_H, MOUTH_W, SLOT_Y,
 };
 pub use theme::{current as theme, set_theme};
 pub use status_bar::{draw_shelf_legend, wifi_face, StatusBar, STATUS_H, STATUS_MARGIN, WIFI_PX};

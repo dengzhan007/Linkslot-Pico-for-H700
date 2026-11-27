@@ -57,28 +57,27 @@ pub struct WifiPanelView<'a> {
     pub auto_off_label: &'a str,
 }
 
-const HEADER_H: f32 = 88.0;
-const SIDE: f32 = 48.0;
+const SIDE: f32 = 24.0;
 const CARD_W: f32 = OUT_W as f32 - 2.0 * SIDE;
 const SWITCH_TOP: f32 = 96.0;
-const SWITCH_H: f32 = 40.0;
-const AUTO_OFF_TOP: f32 = 142.0;
-const AUTO_OFF_H: f32 = 40.0;
-const STATUS_TOP: f32 = 188.0;
-const STATUS_H: f32 = 44.0;
-const LIST_TOP: f32 = 236.0;
-const ROW_H: f32 = 28.0;
+const SWITCH_H: f32 = 48.0;
+const AUTO_OFF_TOP: f32 = 150.0;
+const AUTO_OFF_H: f32 = 48.0;
+const STATUS_TOP: f32 = 204.0;
+const STATUS_H: f32 = 24.0;
+const LIST_TOP: f32 = 234.0;
+const ROW_H: f32 = 40.0;
 const ROW_GAP: f32 = 4.0;
-const LIST_ROWS: usize = 5;
+const LIST_ROWS: usize = 3;
 const MANUAL_TOP: f32 = LIST_TOP + LIST_ROWS as f32 * (ROW_H + ROW_GAP);
-const HINT_TOP: f32 = 434.0;
-const HINT_H: f32 = 28.0;
+const HINT_TOP: f32 = 420.0;
+const HINT_H: f32 = 20.0;
 const READING_TOP: f32 = 120.0;
 const READING_H: f32 = 64.0;
 
-const RAIL_W: f32 = 76.0;
-const RAIL_H: f32 = 26.0;
-const KNOB: f32 = 22.0;
+const RAIL_W: f32 = 34.0;
+const RAIL_H: f32 = 20.0;
+const KNOB: f32 = 16.0;
 const RAIL_OFF: [u8; 4] = [0x5a, 0x5a, 0x64, 0xff];
 
 /// Bar count drawn for a signal reading.
@@ -154,9 +153,9 @@ pub fn wifi_panel(view: &WifiPanelView, lang: Language) -> UndoFace {
         &mut face,
         slot_i18n::t(lang, "device.quick.wifi.manual"),
         18.0,
-        12.0,
+        13.0,
         CARD_W - 48.0,
-        SIDE + 24.0,
+        SIDE + 40.0,
         MANUAL_TOP,
         ROW_H,
         manual_ink,
@@ -165,28 +164,17 @@ pub fn wifi_panel(view: &WifiPanelView, lang: Language) -> UndoFace {
     face
 }
 
-/// The Switch-style heading band with the red accent bar and the page title.
+/// The Console Flat heading: one hairline and the 26px page title.
 fn heading(face: &mut UndoFace, title: &str) {
-    kb::fill(face, 0.0, 0.0, OUT_W as f32, HEADER_H, sw::bg_top());
-    kb::fill(face, SIDE, 16.0, 5.0, 30.0, accent());
-    kb::draw_box(
-        face,
-        title,
-        28.0,
-        15.0,
-        64.0,
-        12.0,
-        OUT_W as f32 - 96.0,
-        40.0,
-        sw::ink(),
-    );
+    kb::fill(face, 28.0, 40.0, OUT_W as f32 - 56.0, 1.0, sw::surface_border());
+    kb::draw_left(face, title, 26.0, 15.0, 300.0, 32.0, 48.0, 34.0, sw::ink());
 }
 
 fn hint(face: &mut UndoFace, lang: Language) {
     kb::draw_box(
         face,
         slot_i18n::t(lang, "device.quick.wifi.hint"),
-        16.0,
+        13.0,
         11.0,
         SIDE,
         HINT_TOP,
@@ -207,21 +195,10 @@ fn accent_ink() -> [u8; 3] {
 /// A Switch-style rounded card: white with a white rim when selected, charcoal
 /// surface with a light rim otherwise.
 fn card_at(face: &mut UndoFace, x: f32, y: f32, w: f32, h: f32, selected: bool) {
-    let (rim, fill) = if selected {
-        (sw::selected_border(), sw::selected())
-    } else {
-        (sw::surface_border(), sw::surface())
-    };
-    sw::fill_round(face, x, y, w, h, sw::CARD_RADIUS, rim);
-    sw::fill_round(
-        face,
-        x + 1.0,
-        y + 1.0,
-        w - 2.0,
-        h - 2.0,
-        (sw::CARD_RADIUS - 1.0).max(0.0),
-        fill,
-    );
+    if selected {
+        sw::fill_round(face, x, y, w, h, 11.0, sw::selected());
+        sw::fill_round(face, x - 8.0, y + 12.0, 3.0, 24.0, 2.0, accent());
+    }
 }
 
 /// The Wi-Fi switch card: label on the left, a track and a white round knob on
@@ -232,10 +209,10 @@ fn switch_row(face: &mut UndoFace, on: bool, selected: bool) {
     kb::draw_left(
         face,
         "WiFi",
-        24.0,
-        14.0,
+        16.0,
+        12.0,
         300.0,
-        SIDE + 24.0,
+        SIDE + 16.0,
         SWITCH_TOP,
         SWITCH_H,
         ink,
@@ -269,10 +246,10 @@ fn auto_off_row(face: &mut UndoFace, value: &str, selected: bool, lang: Language
     kb::draw_left(
         face,
         slot_i18n::t(lang, "device.quick.wifi.auto_off"),
-        22.0,
-        14.0,
+        16.0,
+        12.0,
         320.0,
-        SIDE + 24.0,
+        SIDE + 16.0,
         AUTO_OFF_TOP,
         AUTO_OFF_H,
         ink,
@@ -280,10 +257,10 @@ fn auto_off_row(face: &mut UndoFace, value: &str, selected: bool, lang: Language
     right_text(
         face,
         value,
-        20.0,
-        12.0,
+        10.0,
+        8.0,
         280.0,
-        OUT_W as f32 - SIDE - 24.0,
+        OUT_W as f32 - SIDE - 16.0,
         AUTO_OFF_TOP,
         AUTO_OFF_H,
         ink,
@@ -312,7 +289,6 @@ fn right_text(
 /// The compressed connection state card: the current network on the first line
 /// and the most pressing status (error, connecting or activity) below it.
 fn status_card(face: &mut UndoFace, view: &WifiPanelView, lang: Language) {
-    card_at(face, SIDE, STATUS_TOP, CARD_W, STATUS_H, false);
     let line1 = match view.connected {
         Some(name) => slot_i18n::t_args(lang, "device.quick.wifi.connected", &[("name", name)]),
         None => slot_i18n::t(lang, "device.quick.wifi.not_connected").to_string(),
@@ -322,39 +298,16 @@ fn status_card(face: &mut UndoFace, view: &WifiPanelView, lang: Language) {
     } else {
         sw::ink_dim()
     };
-    kb::draw_left(
-        face,
-        &line1,
-        15.0,
-        10.0,
-        CARD_W - 48.0,
-        SIDE + 24.0,
-        STATUS_TOP + 1.0,
-        20.0,
-        ink1,
-    );
-    let line2 = if let Some(message) = view.error {
-        Some((slot_i18n::t_args(lang, "device.quick.wifi.error", &[("message", message)]), accent_ink()))
+    let (text, ink) = if let Some(message) = view.error {
+        (slot_i18n::t_args(lang, "device.quick.wifi.error", &[("message", message)]), accent_ink())
     } else if let Some(name) = view.connecting {
-        Some((slot_i18n::t_args(lang, "device.quick.wifi.connecting_to", &[("name", name)]), sw::ink()))
-    } else if view.status.is_empty() {
-        None
+        (slot_i18n::t_args(lang, "device.quick.wifi.connecting_to", &[("name", name)]), sw::ink())
+    } else if !view.status.is_empty() {
+        (slot_i18n::t_args(lang, "device.quick.wifi.status", &[("status", view.status)]), sw::ink_dim())
     } else {
-        Some((slot_i18n::t_args(lang, "device.quick.wifi.status", &[("status", &view.status)]), sw::ink_dim()))
+        (line1, ink1)
     };
-    if let Some((text, ink)) = line2 {
-        kb::draw_left(
-            face,
-            &text,
-            13.0,
-            10.0,
-            CARD_W - 48.0,
-            SIDE + 24.0,
-            STATUS_TOP + 21.0,
-            22.0,
-            ink,
-        );
-    }
+    kb::draw_left(face, &text, 13.0, 11.0, CARD_W - 32.0, SIDE + 8.0, STATUS_TOP, STATUS_H, ink);
 }
 
 /// One row message centred over the list area.
@@ -362,12 +315,12 @@ fn centred_message(face: &mut UndoFace, text: &str) {
     kb::draw_box(
         face,
         text,
-        22.0,
-        14.0,
+        16.0,
+        11.0,
         SIDE,
         LIST_TOP,
         CARD_W,
-        140.0,
+        100.0,
         sw::ink_dim(),
     );
 }
@@ -387,13 +340,13 @@ fn wifi_row(
     } else {
         sw::ink_dim()
     };
-    signal_icon(face, SIDE + 16.0, y + 7.0, entry.signal, selected);
+    signal_icon(face, SIDE + 16.0, y + 12.0, entry.signal, selected);
     kb::draw_left(
         face,
         &entry.ssid,
-        17.0,
-        11.0,
-        300.0,
+        18.0,
+        13.0,
+        292.0,
         SIDE + 48.0,
         y,
         ROW_H,
@@ -403,8 +356,8 @@ fn wifi_row(
         kb::draw_left(
             face,
             slot_i18n::t(lang, "device.quick.wifi.connecting"),
-            13.0,
-            10.0,
+            12.0,
+            11.0,
             100.0,
             SIDE + 360.0,
             y,
@@ -413,7 +366,7 @@ fn wifi_row(
         );
     }
     if is_current(view.connected, &entry.ssid) {
-        kb::draw_left(face, slot_i18n::t(lang, "device.quick.wifi.current"), 13.0, 10.0, 56.0, SIDE + 470.0, y, ROW_H, ink);
+        kb::draw_left(face, slot_i18n::t(lang, "device.quick.wifi.current"), 12.0, 11.0, 56.0, SIDE + 470.0, y, ROW_H, ink);
     }
     let lock = if entry.saved {
         slot_i18n::t(lang, "device.quick.wifi.saved")
@@ -422,7 +375,7 @@ fn wifi_row(
     } else {
         slot_i18n::t(lang, "device.quick.wifi.open")
     };
-    kb::draw_left(face, lock, 13.0, 10.0, 80.0, SIDE + 540.0, y, ROW_H, dim);
+    kb::draw_left(face, lock, 12.0, 11.0, 80.0, SIDE + 540.0, y, ROW_H, dim);
 }
 
 /// Whether `connected` (an SSID, optionally followed by " · <address>") names
@@ -457,13 +410,13 @@ fn signal_icon(face: &mut UndoFace, x: f32, top: f32, signal: i32, selected: boo
     } else {
         [0x4c, 0x51, 0x60, 0xff]
     };
-    for (i, height) in [5.0_f32, 8.0, 11.0, 14.0].into_iter().enumerate() {
+    for (i, height) in [6.0_f32, 9.0, 12.0, 16.0].into_iter().enumerate() {
         let colour = if i < bars { lit } else { dim };
         kb::fill(
             face,
-            x + i as f32 * 7.0,
-            top + 14.0 - height,
-            4.0,
+            x + i as f32 * 8.0,
+            top + 16.0 - height,
+            5.0,
             height,
             colour,
         );
@@ -489,14 +442,6 @@ pub fn web_dialog(url: Option<&str>, error: Option<&str>, lang: Language) -> Und
 
     let x = ((OUT_W as f32 - DIALOG_W) / 2.0).round();
     let y = ((OUT_H as f32 - DIALOG_H) / 2.0).round();
-    kb::fill(
-        &mut face,
-        x + 8.0,
-        y + 10.0,
-        DIALOG_W,
-        DIALOG_H,
-        [0, 0, 0, 96],
-    );
     sw::fill_round(
         &mut face,
         x,
@@ -515,14 +460,13 @@ pub fn web_dialog(url: Option<&str>, error: Option<&str>, lang: Language) -> Und
         (sw::DIALOG_RADIUS - 1.0).max(0.0),
         sw::surface(),
     );
-    kb::fill(&mut face, x + 32.0, y + 30.0, 5.0, 28.0, accent());
     kb::draw_left(
         &mut face,
         slot_i18n::t(lang, "device.quick.web.title"),
         26.0,
         14.0,
-        DIALOG_W - 96.0,
-        x + 48.0,
+        DIALOG_W - 64.0,
+        x + 24.0,
         y + 20.0,
         44.0,
         sw::ink(),
@@ -535,8 +479,8 @@ pub fn web_dialog(url: Option<&str>, error: Option<&str>, lang: Language) -> Und
                 slot_i18n::t(lang, "device.quick.web.failed"),
                 18.0,
                 12.0,
-                DIALOG_W - 96.0,
-                x + 48.0,
+                DIALOG_W - 48.0,
+                x + 24.0,
                 y + 74.0,
                 24.0,
                 sw::accent(),
@@ -546,9 +490,9 @@ pub fn web_dialog(url: Option<&str>, error: Option<&str>, lang: Language) -> Und
                 message,
                 20.0,
                 12.0,
-                x + 48.0,
+                x + 24.0,
                 y + 104.0,
-                DIALOG_W - 96.0,
+                DIALOG_W - 48.0,
                 80.0,
                 3,
                 sw::ink(),
@@ -558,9 +502,9 @@ pub fn web_dialog(url: Option<&str>, error: Option<&str>, lang: Language) -> Und
                 slot_i18n::t(lang, "device.quick.web.back"),
                 16.0,
                 11.0,
-                x + 48.0,
+                x + 24.0,
                 y + 206.0,
-                DIALOG_W - 96.0,
+                DIALOG_W - 48.0,
                 30.0,
                 sw::ink_dim(),
             );
@@ -571,8 +515,8 @@ pub fn web_dialog(url: Option<&str>, error: Option<&str>, lang: Language) -> Und
                 slot_i18n::t(lang, "device.quick.web.running"),
                 18.0,
                 12.0,
-                DIALOG_W - 96.0,
-                x + 48.0,
+                DIALOG_W - 48.0,
+                x + 24.0,
                 y + 74.0,
                 24.0,
                 sw::ink_dim(),
@@ -607,8 +551,8 @@ pub fn web_dialog(url: Option<&str>, error: Option<&str>, lang: Language) -> Und
                 slot_i18n::t(lang, "device.quick.web.starting"),
                 18.0,
                 12.0,
-                DIALOG_W - 96.0,
-                x + 48.0,
+                DIALOG_W - 48.0,
+                x + 24.0,
                 y + 84.0,
                 28.0,
                 sw::ink_dim(),
@@ -618,9 +562,9 @@ pub fn web_dialog(url: Option<&str>, error: Option<&str>, lang: Language) -> Und
                 slot_i18n::t(lang, "device.quick.web.wait"),
                 20.0,
                 12.0,
-                x + 48.0,
+                x + 24.0,
                 y + 130.0,
-                DIALOG_W - 96.0,
+                DIALOG_W - 48.0,
                 40.0,
                 sw::ink_dim(),
             );
@@ -629,9 +573,9 @@ pub fn web_dialog(url: Option<&str>, error: Option<&str>, lang: Language) -> Und
                 slot_i18n::t(lang, "device.quick.web.cancel"),
                 16.0,
                 11.0,
-                x + 48.0,
+                x + 24.0,
                 y + 206.0,
-                DIALOG_W - 96.0,
+                DIALOG_W - 48.0,
                 30.0,
                 sw::ink_dim(),
             );

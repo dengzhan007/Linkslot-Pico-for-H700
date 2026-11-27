@@ -446,8 +446,10 @@ mod tests {
     fn the_about_page_is_full_screen_and_has_the_switch_header() {
         let face = about_face(&fields(), Language::ZhCn);
         assert_eq!((face.w, face.h), (OUT_W, OUT_H));
-        assert_eq!(rgb(&face, 50, 30), [0xe6, 0x00, 0x12]);
-        assert_eq!(rgb(&face, 10, 10), [0x24, 0x24, 0x29]);
+        let accent = sw::accent();
+        let bg = sw::bg_top();
+        assert_eq!(rgb(&face, 50, 30), [accent[0], accent[1], accent[2]]);
+        assert_eq!(rgb(&face, 10, 10), [bg[0], bg[1], bg[2]]);
     }
 
     #[test]
@@ -514,7 +516,8 @@ mod tests {
         );
         let face = about_thanks_face(&fields(), Language::ZhCn);
         assert_eq!((face.w, face.h), (OUT_W, OUT_H));
-        assert_eq!(rgb(&face, 50, 30), [0xe6, 0x00, 0x12]);
+        let accent = sw::accent();
+        assert_eq!(rgb(&face, 50, 30), [accent[0], accent[1], accent[2]]);
     }
 
     #[test]

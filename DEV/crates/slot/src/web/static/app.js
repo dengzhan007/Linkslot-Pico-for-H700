@@ -30,6 +30,8 @@
     fileMove: null,
     fileAction: null,
     status: null,
+    overviewRomsCount: null,
+    overviewPlatforms: null,
     saves: null,
     files: null,
     filesBusy: false,
@@ -232,7 +234,19 @@
     if (!bytes && bytes !== 0) return '—';
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+  }
+
+  /// Compact duration for the overview rows: 12h 36m / 42m / 9s.
+  function fmtDurationShort(seconds) {
+    var value = Number(seconds) || 0;
+    if (value <= 0) return '—';
+    var hours = Math.floor(value / 3600);
+    var minutes = Math.floor((value % 3600) / 60);
+    if (hours > 0) return hours + 'h ' + minutes + 'm';
+    if (minutes > 0) return minutes + 'm';
+    return Math.max(1, Math.floor(value % 60)) + 's';
   }
 
   function uploadLimitText() {
@@ -671,8 +685,7 @@
       pages[pageIndex].hidden = pages[pageIndex].getAttribute('data-page') !== tab;
     }
     if (tab === 'overview') {
-      refreshStatus().catch(function () {});
-      loadRecentLog();
+      refreshStatus().then(loadOverview).catch(function () {});
     } else if (tab === 'roms') {
       showRomsView(currentRomsView());
     } else if (tab === 'saves') {
@@ -741,15 +754,32 @@
     var storage = status.storage || {};
     var web = status.web || {};
 
-    $('ovWifi').textContent = network.connected ? network.ssid || t('web.overview.connected') : t('web.overview.disconnected');
-    $('ovIp').textContent = network.ip || t('web.overview.no_ipv4');
-    $('ovUrl').textContent = web.url || '—';
-    $('ovGames').textContent = String(storage.games || 0);
-    $('ovCounts').textContent = t('web.overview.states_saves', { states: storage.states || 0, battery: storage.battery || 0 });
-    $('ovWritable').textContent = status.writable ? t('web.overview.writable') : t('web.overview.readonly_game');
-    $('ovWritable').className = 'v ' + (status.writable ? 'ok' : 'warn');
-    $('ovUptime').textContent = t('web.overview.running', { duration: fmtUptime(status.uptime_secs) });
-    $('ovPlaytime').textContent = fmtDuration(storage.playtime_seconds);
+    var device = status.device || 'linkSlot';
+    var wifiText = network.connected
+      ? t('web.overview.wifi_connected')
+      : t('web.overview.wifi_off');
+    var ip = network.ip || t('web.overview.no_ipv4');
+    var states = storage.states || 0;
+    var battery = storage.battery || 0;
+    var games = state.overviewRomsCount != null ? state.overviewRomsCount : (storage.games || 0);
+    var platforms = state.overviewPlatforms || 0;
+
+    $('ovDevice').textContent = device;
+    $('ovDeviceSub').textContent = ip + ' · ' + wifiText;
+    $('ovLibrary').textContent = String(games || 0);
+    $('ovLibrarySub').textContent = platforms
+      ? t('web.overview.librarySub', { count: platforms })
+      : t('web.overview.scanned');
+    $('ovSaves').textContent = String(states + battery);
+    $('ovSavesSub').textContent = t('web.overview.states_saves', { states: states, battery: battery });
+    $('ovPlaytime').textContent = fmtDurationShort(storage.playtime_seconds);
+    $('ovStorage').textContent = status.disk
+      ? t('web.overview.diskValue', { free: fmtBytes(status.disk.free), total: fmtBytes(status.disk.total) })
+      : t('web.overview.states_saves', { states: states, battery: battery });
+    $('ovVersion').textContent = 'v' + (status.slot || '—');
+    $('ovNetwork').textContent = network.connected
+      ? 'WiFi · ' + (network.ip || ip)
+      : t('web.overview.wifi_off');
 
     renderAbout();
   }
@@ -765,16 +795,165 @@
     renderUpgradeStatus();
   }
 
+  // -------------------------------------------------------------- 概览数据
+
+  function overviewCoverClass(platform) {
+    return 'p-' + String(platform || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  function overviewUnitLatest(unit) {
+    var latest = 0;
+    var states = (unit && unit.states) || [];
+    var battery = (unit && unit.battery) || [];
+    for (var i = 0; i < states.length; i += 1) latest = Math.max(latest, states[i].mtime || 0);
+    for (var j = 0; j < battery.length; j += 1) latest = Math.max(latest, battery[j].mtime || 0);
+    return latest;
+  }
+
+  function overviewSyncKey(platform, emulator, game) {
+    return String(platform || '') + '\u0000' + String(emulator || '') + '\u0000' + String(game || '');
+  }
+
+  function renderOverviewGames(roms, saves, sync) {
+    var container = $('ovRecentGames');
+    if (!container) return;
+    var units = ((saves && saves.units) || []).slice();
+    units.sort(function (a, b) {
+      var byTime = overviewUnitLatest(b) - overviewUnitLatest(a);
+      if (byTime) return byTime;
+      return String(a.game || '').localeCompare(String(b.game || ''));
+    });
+
+    var synced = {};
+    ((sync && sync.caches) || []).forEach(function (cache) {
+      synced[overviewSyncKey(cache.platform, cache.emulator, cache.game)] = true;
+    });
+
+    var rows = [];
+    if (units.length) {
+      units.slice(0, 4).forEach(function (unit) {
+        var key = overviewSyncKey(unit.platform, unit.emulator, unit.game);
+        var meta = [unit.platform || '—', unit.emulator || '—'];
+        meta.push(synced[key] ? t('web.overview.synced') : t('web.overview.local'));
+        var time = unit.playtime_total_seconds || unit.playtime_seconds;
+        rows.push(
+          '<div class="ov-game">' +
+            '<span class="ov-cover ' + overviewCoverClass(unit.platform) + '"></span>' +
+            '<span><div class="ov-game-name">' + esc(unit.game || t('web.roms.unnamed')) + '</div>' +
+            '<div class="ov-game-meta">' + esc(meta.join(' · ')) + '</div></span>' +
+            '<span class="ov-game-time">' + esc(fmtDurationShort(time)) + '</span>' +
+          '</div>'
+        );
+      });
+    } else {
+      ((roms && roms.games) || []).slice(0, 4).forEach(function (game) {
+        rows.push(
+          '<div class="ov-game">' +
+            '<span class="ov-cover ' + overviewCoverClass(game.platform) + '"></span>' +
+            '<span><div class="ov-game-name">' + esc(game.stem || t('web.roms.unnamed')) + '</div>' +
+            '<div class="ov-game-meta">' + esc((game.platform || '—') + ' · ' + t('web.overview.local')) + '</div></span>' +
+            '<span class="ov-game-time">' + esc(fmtBytes(game.size)) + '</span>' +
+          '</div>'
+        );
+      });
+    }
+    container.innerHTML = rows.length ? rows.join('') : '<div class="empty">' + esc(t('web.overview.noGames')) + '</div>';
+  }
+
+  function renderOverviewSync(sync, saves) {
+    var container = $('ovSyncReceipt');
+    if (!container) return;
+    var cache = ((sync && sync.caches) || [])[0];
+    if (!cache) {
+      container.innerHTML = '<div class="empty">' + esc(t('web.overview.noSync')) + '</div>';
+      return;
+    }
+    var unit = ((saves && saves.units) || []).find(function (item) {
+      return item.platform === cache.platform &&
+        item.emulator === cache.emulator &&
+        item.game === cache.game;
+    });
+    var stamp = String(cache.synced_at || '').replace('T', ' ').replace('Z', '').slice(0, 16);
+    var sizeOf = function (items) {
+      return (items || []).reduce(function (sum, item) { return sum + (item.size || 0); }, 0);
+    };
+    var fileCount = function (items) {
+      return (items || []).length;
+    };
+    var rows;
+    if (unit) {
+      rows =
+        '<div class="row"><span>' + esc(t('web.overview.statesLabel')) + '</span><span>' +
+          esc(fmtBytes(sizeOf(unit.states))) + ' · ' + esc(t('web.overview.fileCount', { count: fileCount(unit.states) })) +
+        '</span></div>' +
+        '<div class="row"><span>' + esc(t('web.overview.battery')) + '</span><span>' +
+          esc(fmtBytes(sizeOf(unit.battery))) + ' · ' + esc(t('web.overview.fileCount', { count: fileCount(unit.battery) })) +
+        '</span></div>';
+    } else {
+      rows =
+        '<div class="row"><span>' + esc(t('web.overview.syncVersion')) + '</span><span>v' + esc(String(cache.version || '—')) + '</span></div>';
+    }
+    rows += '<div class="row"><span>' + esc(t('web.overview.syncTime')) + '</span><span>' + esc(stamp || '—') + '</span></div>';
+    container.innerHTML =
+      '<div class="ov-receipt"><div class="ov-receipt-inner">' +
+        '<span class="stamp">' + esc(t('web.overview.done')) + '</span>' +
+        '<div class="micro">SYNC RECEIPT / ' + esc(t('web.overview.syncReceipt')) + '</div>' +
+        '<div class="title">' + esc(t('web.overview.syncDone')) + '</div>' +
+        '<div class="sub">' + esc((cache.game || '—') + ' · ' + (cache.platform || '—') + ' / ' + (cache.emulator || '—')) + '</div>' +
+        '<div class="rule"></div>' + rows +
+      '</div></div>';
+  }
+
+  function renderOverviewActivity(sync) {
+    var container = $('ovActivity');
+    if (!container) return;
+    var lines = ((sync && sync.log_tail) || []).filter(function (line) { return String(line || '').trim(); });
+    lines = lines.slice(-3);
+    if (!lines.length) {
+      container.innerHTML = '<div class="empty">' + esc(t('web.overview.noActivity')) + '</div>';
+      return;
+    }
+    container.innerHTML = lines.map(function (line) {
+      var text = String(line).trim();
+      var match = text.match(/(\d{2}:\d{2}:\d{2})/);
+      var time = match ? match[1] : '—';
+      var rest = match ? text.replace(match[1], '').trim() : text;
+      return '<div class="row"><b>' + esc(time) + '</b><span>' + esc(rest.slice(0, 140)) + '</span></div>';
+    }).join('');
+  }
+
+  function loadOverview() {
+    return Promise.all([
+      api('/api/roms').catch(function () { return { games: [] }; }),
+      api('/api/saves').catch(function () { return { units: [] }; }),
+      api('/api/sync').catch(function () { return {}; })
+    ]).then(function (results) {
+      var roms = results[0] || {};
+      var saves = results[1] || {};
+      var sync = results[2] || {};
+      state.sync = sync;
+      var games = roms.games || [];
+      var platforms = {};
+      games.forEach(function (game) { platforms[game.platform] = true; });
+      state.overviewRomsCount = games.length;
+      state.overviewPlatforms = Object.keys(platforms).length;
+      renderOverviewGames(roms, saves, sync);
+      renderOverviewSync(sync, saves);
+      renderOverviewActivity(sync);
+      if (state.status) renderStatus();
+    });
+  }
+
   // -------------------------------------------------------------- 成就页
 
   var achGames = [];
 
   var ACH_ACCENTS = {
-    'builtin:first-launch': '#00d4aa',
-    'builtin:play-1h': '#4fc3f7',
-    'builtin:play-5h': '#f2b84b',
-    'builtin:launch-10': '#a78bfa',
-    'builtin:launch-30': '#ff6b6b'
+    'builtin:first-launch': '#7A5620',
+    'builtin:play-1h': '#3F6B5A',
+    'builtin:play-5h': '#B07123',
+    'builtin:launch-10': '#6B5A8E',
+    'builtin:launch-30': '#A8342F'
   };
 
   function showAchTab(tab) {
@@ -1298,16 +1477,7 @@
   }
 
   function loadRecentLog() {
-    return api('/api/sync')
-      .then(function (info) {
-        state.sync = info;
-        var lines = (info && info.log_tail) || [];
-        var recent = lines.slice(-12);
-        $('recentLog').textContent = recent.length ? recent.join('\n') : t('web.common.noLog');
-      })
-      .catch(function () {
-        $('recentLog').textContent = t('web.common.noLog');
-      });
+    return loadOverview().catch(function () {});
   }
 
   // ---------------------------------------------------------------- 游戏库
@@ -2863,8 +3033,8 @@
         var sw = Number(layer.w) || 1;
         var sh = Number(layer.h) || 1;
         var stroke = Number(layer.stroke_width) || 0;
-        ctx.fillStyle = layer.colour || '#00d4aa';
-        ctx.strokeStyle = layer.stroke || layer.colour || '#00d4aa';
+        ctx.fillStyle = layer.colour || '#C9A45C';
+        ctx.strokeStyle = layer.stroke || layer.colour || '#C9A45C';
         ctx.lineWidth = Math.max(1, stroke);
         ctx.beginPath();
         if (layer.kind === 'ellipse') {
@@ -2922,7 +3092,7 @@
         selected.y + (selected.h || 0) >= size.height - 10;
       if (!bleed) {
         ctx.save();
-        ctx.strokeStyle = '#00d4aa';
+        ctx.strokeStyle = '#C9A45C';
         ctx.lineWidth = 1;
         var centreX = selected.x + (selected.w || 0) / 2;
         var centreY = selected.y + (selected.h || 0) / 2;
@@ -9672,9 +9842,34 @@
       state.savesSort = this.value;
       renderSaves();
     });
-    $('ovRefreshLog').addEventListener('click', function () {
-      loadRecentLog();
-    });
+    if ($('ovRefresh')) {
+      $('ovRefresh').addEventListener('click', function () {
+        refreshStatus().then(loadOverview).catch(function () {});
+      });
+    }
+    if ($('ovStartServer')) {
+      $('ovStartServer').addEventListener('click', function () {
+        toast(t('web.overview.serverRunning'), 'ok');
+      });
+    }
+    if ($('ovUploadGame')) {
+      $('ovUploadGame').addEventListener('click', function () { showTab('files'); });
+    }
+    if ($('ovImportCollection')) {
+      $('ovImportCollection').addEventListener('click', function () { showTab('roms'); });
+    }
+    if ($('ovOpenFiles')) {
+      $('ovOpenFiles').addEventListener('click', function () { showTab('files'); });
+    }
+    if ($('ovAllGames')) {
+      $('ovAllGames').addEventListener('click', function () { showTab('roms'); });
+    }
+    if ($('ovSyncHistory')) {
+      $('ovSyncHistory').addEventListener('click', function () { showTab('sync'); });
+    }
+    if ($('ovAllLogs')) {
+      $('ovAllLogs').addEventListener('click', function () { showTab('sync'); });
+    }
     $('refreshSync').addEventListener('click', function () {
       // Refreshing the cache/log only: do not reset formFilled, or unsaved
       // WebDAV edits would be silently replaced by the server copy.

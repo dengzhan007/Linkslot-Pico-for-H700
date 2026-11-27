@@ -1141,7 +1141,7 @@ fn dismissing_the_settle_beat_puts_the_game_card_back() {
         .iter()
         .filter(|draw| match **draw {
             Draw::Rect { w, .. } | Draw::Tex { w, .. } | Draw::Turned { w, .. } => {
-                (w - 360.0).abs() < 1.0
+                (w - slot_ui::display_box(slot_store::Platform::Gba).0).abs() < 1.0
             }
             Draw::Game | Draw::Shot { .. } => false,
         })

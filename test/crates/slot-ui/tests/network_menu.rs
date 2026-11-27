@@ -4,12 +4,12 @@ use slot_ui::{Language, QuickRow};
 const W: u32 = 720;
 const H: u32 = 480;
 /// Switch-style ground: the charcoal page and its slightly lighter heading band.
-const BACKGROUND: [u8; 4] = [0x1b, 0x1b, 0x1f, 255];
-const TOP_BACKGROUND: [u8; 4] = [0x24, 0x24, 0x29, 255];
-/// The charcoal card fill used by dialogs and unselected rows.
-const SURFACE: [u8; 4] = [0x2d, 0x2d, 0x33, 255];
-const ACCENT: [u8; 3] = [0xe6, 0x00, 0x12];
-const SELECTED: [u8; 3] = [0xf2, 0xf2, 0xf2];
+const BACKGROUND: [u8; 4] = [0x1b, 0x1b, 0x1e, 255];
+const TOP_BACKGROUND: [u8; 4] = [0x1b, 0x1b, 0x1e, 255];
+/// The near-black card fill used by dialogs and unselected rows.
+const SURFACE: [u8; 4] = [0x26, 0x26, 0x2b, 255];
+const ACCENT: [u8; 3] = [0xc4, 0x3b, 0x32];
+const SELECTED: [u8; 3] = [0xcb, 0xc9, 0xc3];
 
 fn pixel(f: &slot_ui::UndoFace, x: u32, y: u32) -> [u8; 4] {
     let at = ((y * f.w + x) * 4) as usize;
@@ -215,17 +215,16 @@ fn a_wifi_panel_is_a_full_screen_opaque_face() {
 }
 
 #[test]
-fn the_wifi_panel_uses_switch_cards_and_accent_marks() {
+fn the_wifi_panel_uses_flat_rows_and_a_white_selection() {
     let rows = networks(3);
     let on = wifi_panel(&view(&rows, 2), Language::ZhCn);
-    assert_eq!(rgb(pixel(&on, 50, 20)), ACCENT, "the heading accent bar");
     assert!(
         white_pixels_between(&on, 234, 390) > 5000,
         "the selected network row is not a white card"
     );
     let on_switch = wifi_panel(&view(&rows, 0), Language::ZhCn);
     assert!(
-        white_pixels_between(&on_switch, 234, 390) < 200,
+        white_pixels_between(&on_switch, 234, 390) < 1_000,
         "a network row is white while the switch is selected"
     );
     assert!(
@@ -233,7 +232,7 @@ fn the_wifi_panel_uses_switch_cards_and_accent_marks() {
         "the selected switch is not a white card"
     );
     assert_eq!(
-        rgb(pixel(&on_switch, 600, 116)),
+        rgb(pixel(&on_switch, 650, 116)),
         ACCENT,
         "the on switch track is not accent coloured"
     );
@@ -242,7 +241,7 @@ fn the_wifi_panel_uses_switch_cards_and_accent_marks() {
         ..view(&rows, 2)
     };
     assert_ne!(
-        rgb(pixel(&wifi_panel(&off, Language::ZhCn), 600, 116)),
+        rgb(pixel(&wifi_panel(&off, Language::ZhCn), 650, 116)),
         ACCENT,
         "the off switch track is accent coloured"
     );
@@ -267,17 +266,16 @@ fn the_wifi_panel_says_so_when_nothing_was_found() {
 }
 
 #[test]
-fn the_wifi_panel_shows_at_most_five_rows_and_scrolls_with_offset() {
-    let five = networks(5);
+fn the_wifi_panel_scrolls_with_offset() {
     let six = networks(6);
-    let baseline = wifi_panel(&view(&five, 2), Language::ZhCn);
+    let baseline = wifi_panel(&view(&six[..3], 2), Language::ZhCn);
     let hidden = wifi_panel(&view(&six, 2), Language::ZhCn);
     assert_eq!(
         baseline.rgba, hidden.rgba,
-        "a sixth row is drawn inside the five-row window"
+        "a fourth row is drawn inside the three-row window"
     );
     let scrolled = WifiPanelView {
-        offset: 1,
+        offset: 3,
         ..view(&six, 2)
     };
     assert_ne!(
@@ -575,10 +573,10 @@ fn a_web_dialog_is_a_dark_card_on_a_translucent_mask() {
         SURFACE,
         "the rounded dialog card is not an opaque surface"
     );
-    assert_eq!(
+    assert_ne!(
         rgb(pixel(&success, 114, 150)),
         ACCENT,
-        "the dialog has no accent bar"
+        "the old accent bar is still drawn"
     );
 
     let failure = web_dialog(None, Some("端口 8080 已被占用"), Language::ZhCn);

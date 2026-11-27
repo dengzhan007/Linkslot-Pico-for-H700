@@ -1312,7 +1312,7 @@ pub fn hold_card(lang: Language) -> UndoFace {
         sw::ink_dim(),
     );
     let [bx, by, bw, bh] = HOLD_BAR;
-    sw::fill_round(&mut face, bx, by, bw, bh, bh / 2.0, sw::bg_top());
+    sw::fill_round(&mut face, bx, by, bw, bh, bh / 2.0, sw::surface_border());
     face
 }
 
@@ -1577,10 +1577,12 @@ mod tests {
     }
 
     fn white_pixels_below(face: &UndoFace, y0: u32) -> usize {
+        let selected = sw::selected();
+        let selected = [selected[0], selected[1], selected[2]];
         let mut count = 0;
         for y in y0..face.h {
             for x in 0..face.w {
-                if rgb(face, x, y) == [0xf2, 0xf2, 0xf2] {
+                if rgb(face, x, y) == selected {
                     count += 1;
                 }
             }
@@ -1593,11 +1595,17 @@ mod tests {
         let available = [true; 26];
         let face = picker(4, available, Language::ZhCn);
         assert_eq!((face.w, face.h), (720, 480));
+        let bg = sw::bg_top();
         assert_eq!(
             (rgb(&face, 0, 0), alpha(&face, 0, 0)),
-            ([0x24, 0x24, 0x29], 255)
+            ([bg[0], bg[1], bg[2]], 255)
         );
-        assert_eq!(rgb(&face, 50, 20), [0xe6, 0x00, 0x12], "the accent bar");
+        let accent = sw::accent();
+        assert_eq!(
+            rgb(&face, 50, 20),
+            [accent[0], accent[1], accent[2]],
+            "the accent bar"
+        );
         assert!(white_pixels_below(&face, PICKER_TOP as u32) > 0);
         let dim = [false; 26];
         assert!(
@@ -1612,7 +1620,8 @@ mod tests {
         let top = panel("存档相册", &rows, 0, Language::ZhCn);
         let lower = panel("存档相册", &rows, 7, Language::ZhCn);
         assert_eq!((top.w, top.h), (720, 480));
-        assert_eq!(rgb(&top, 0, 0), [0x24, 0x24, 0x29]);
+        let bg = sw::bg_top();
+        assert_eq!(rgb(&top, 0, 0), [bg[0], bg[1], bg[2]]);
         let card_row = |face: &UndoFace| white_pixels_below(face, ROW_TOP as u32);
         assert!(card_row(&top) > 0);
         assert!(card_row(&lower) > 0);
@@ -1626,7 +1635,8 @@ mod tests {
     fn the_content_chooser_marks_the_row_in_force_and_moves_the_cursor() {
         let first = transfer_content_menu(0, 0, Language::ZhCn);
         assert_eq!((first.w, first.h), (720, 480));
-        assert_eq!(rgb(&first, 0, 0), [0x24, 0x24, 0x29]);
+        let bg = sw::bg_top();
+        assert_eq!(rgb(&first, 0, 0), [bg[0], bg[1], bg[2]]);
         assert!(
             white_pixels_below(&first, 88) > 0,
             "the cursor row is not on a white card"

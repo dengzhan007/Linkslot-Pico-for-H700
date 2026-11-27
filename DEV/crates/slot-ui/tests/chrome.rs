@@ -836,8 +836,8 @@ fn the_slot_sits_in_a_recessed_bay() {
     );
     let step = |a: [f32; 4], b: [f32; 4]| (0..3).map(|i| a[i] - b[i]).sum::<f32>();
     assert!(
-        step(housing(), recess()) > 0.0 && step(recess(), opening()) > 0.0,
-        "the bay does not read as a step between the shell and the opening"
+        step(recess(), housing()) > 0.0 && step(recess(), opening()) > 0.0,
+        "the bay does not read as a raised plate around a dark opening"
     );
 }
 

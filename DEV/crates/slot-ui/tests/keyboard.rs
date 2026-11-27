@@ -1,4 +1,5 @@
 use slot_ui::keyboard::{input_line, panel, row_rect, rows, Cursor, Key, INPUT_POS, LAYOUT_COUNT};
+use slot_ui::switch_style as sw;
 
 const W: u32 = 720;
 const H: u32 = 480;
@@ -394,7 +395,7 @@ fn a_panel_is_a_full_screen_face_with_a_blank_input_band() {
             for x in x0..x0 + 640 {
                 assert_eq!(
                     pixel(&f, x, y),
-                    [0x1b, 0x1b, 0x1f, 255],
+                    sw::bg(),
                     "layout {layout} draws in the input band at ({x}, {y})"
                 );
             }
@@ -437,9 +438,10 @@ fn the_input_line_shows_the_field_and_masks_passwords() {
 
     let empty = input_line("", false, None);
     let ink = |f: &slot_ui::UndoFace| {
+        let ink = sw::ink();
         f.rgba
             .chunks(4)
-            .filter(|p| p[3] == 255 && [p[0], p[1], p[2]] == [0xf4, 0xf4, 0xf4])
+            .filter(|p| p[3] == 255 && [p[0], p[1], p[2]] == ink)
             .count()
     };
     assert_eq!(ink(&empty), 0, "empty input prints text");
@@ -452,9 +454,10 @@ fn the_error_line_is_red_and_only_appears_with_an_error() {
     let broken = input_line("abc", false, Some("密码至少 8 位（留空表示开放网络）"));
     assert_ne!(clean.rgba, broken.rgba);
     let red = |f: &slot_ui::UndoFace| {
+        let stamp = sw::stamp();
         f.rgba
             .chunks(4)
-            .any(|p| p[3] > 128 && p[0] == 0xe6 && p[1] == 0x00 && p[2] == 0x12)
+            .any(|p| p[3] > 128 && p[0] == stamp[0] && p[1] == stamp[1] && p[2] == stamp[2])
     };
     assert!(red(&broken), "the error line is not red");
     assert!(!red(&clean), "clean input shows a red line");
@@ -477,22 +480,25 @@ fn the_keys_are_switch_cards_and_the_selected_one_is_white_with_a_red_rim() {
     let (x, y, _w, h) = row_rect(Cursor::default());
     let (xi, yi) = (x as u32, y as u32);
     let surface = pixel(&plain, xi + 4, yi + 4);
+    let want_surface = sw::surface();
     assert_eq!(
         [surface[0], surface[1], surface[2]],
-        [0x2d, 0x2d, 0x33],
-        "an unselected key is not a charcoal card"
+        [want_surface[0], want_surface[1], want_surface[2]],
+        "an unselected key is not a surface card"
     );
     let white = pixel(&picked, xi + 4, yi + 4);
+    let want_selected = sw::selected();
     assert_eq!(
         [white[0], white[1], white[2]],
-        [0xf2, 0xf2, 0xf2],
-        "the selected key is not white"
+        [want_selected[0], want_selected[1], want_selected[2]],
+        "the selected key is not the selected card"
     );
     let rim = pixel(&picked, xi + 1, yi + h as u32 / 2);
+    let want_accent = sw::accent();
     assert_eq!(
         [rim[0], rim[1], rim[2]],
-        [0xe6, 0x00, 0x12],
-        "the selected key has no red rim"
+        [want_accent[0], want_accent[1], want_accent[2]],
+        "the selected key has no accent rim"
     );
 
     for layout in 0..LAYOUT_COUNT {
@@ -522,10 +528,11 @@ fn the_input_line_is_a_rounded_switch_field() {
         "the rounded corner is not transparent"
     );
     let mut surface = 0;
+    let want = sw::surface();
     for y in 6..84 {
         for x in 6..634 {
             let p = pixel(&plain, x, y);
-            if p[3] == 255 && [p[0], p[1], p[2]] == [0x2d, 0x2d, 0x33] {
+            if p[3] == 255 && [p[0], p[1], p[2]] == [want[0], want[1], want[2]] {
                 surface += 1;
             }
         }

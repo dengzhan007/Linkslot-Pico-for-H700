@@ -207,6 +207,8 @@ fn step(s: &mut Session, now: &mut Millis, ev: Option<RawEvent>) {
 fn drawn(s: &Session) -> Vec<Draw> {
     let mut out = Vec::new();
     s.app().draw(&mut out);
+    // The bar/alarm live in the frontend's top notification layer.
+    s.app().draw_top_hud(&mut out);
     out.retain(|d| !matches!(d, Draw::Game));
     out
 }

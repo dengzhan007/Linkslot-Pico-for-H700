@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use common::tmp_root_with_carts;
 use slot::app::{
     App, ConflictPage, ConflictUi, KeyboardPurpose, Phase, ShelfSync, SyncArt, SyncChoice,
-    SyncFace, SyncFaces,
+    SyncFace,
 };
 use slot::sync_job::{
     ChangedSince, ConflictInfo, Direction, ResolveSpec, SyncLauncher, SyncOutcome, SyncRequest,
@@ -168,7 +168,8 @@ fn attempt_sync(app: &mut App) {
         if matches!(
             app.shelf_sync(),
             ShelfSync::Running { .. } | ShelfSync::Result { .. }
-        ) {
+        ) || app.notice_view().is_some()
+        {
             return;
         }
     }
@@ -282,6 +283,16 @@ fn running_phase(app: &App) -> &ShelfSync {
 
 fn banner(app: &App) -> String {
     app.sync_texts().banner
+}
+
+fn failure_notice(app: &App) -> String {
+    match app.notice_view() {
+        Some((title, detail, _)) => {
+            assert_eq!(title, "同步失败", "the failure is not the large notice");
+            detail.to_string()
+        }
+        None => String::new(),
+    }
 }
 
 fn has_rect(out: &[Draw], w: f32, h: f32) -> bool {
@@ -786,13 +797,12 @@ fn a_mod_without_a_cloud_uses_the_target_side() {
     start_sync(&mut a);
 
     let texts = a.sync_texts();
-    assert_eq!(texts.side_remote, "目标");
     assert_eq!(texts.rail[1], "连接");
-    assert_eq!(texts.target_label, "网络目标");
-    assert_eq!(texts.side_local, "本机");
     assert_eq!(texts.title, "同步电池存档");
     assert!(
-        texts.subtitle.contains("Emerald") && texts.subtitle.contains("手动同步"),
+        texts.subtitle.contains("Emerald")
+            && texts.subtitle.contains("手动同步")
+            && texts.subtitle.contains("上传"),
         "subtitle was {:?}",
         texts.subtitle
     );
@@ -1003,7 +1013,7 @@ fn manual_mods_show_their_own_stage_and_error_detail() {
         ..outcome(SyncResult::Error)
     });
     a.update(0.1);
-    assert_eq!(banner(&a), "请先在 mod 管理页填写 GBAStation 地址");
+    assert_eq!(failure_notice(&a), "请先在 mod 管理页填写 GBAStation 地址");
 }
 
 #[test]
@@ -1060,9 +1070,8 @@ fn a_mod_with_the_cloud_animation_gets_the_settle_beat() {
     );
     let texts = a.sync_texts();
     assert_eq!(texts.title, "同步 GBAStation");
-    assert_eq!(texts.side_remote, "云端");
     assert_eq!(texts.banner, "已推送到 GBAStation");
-    assert!(texts.completion_hint.contains("即将返回"));
+    assert_eq!(texts.completion_hint, "完成");
 
     for _ in 0..300 {
         a.update(1.0 / 60.0);
@@ -1141,7 +1150,7 @@ fn dismissing_the_settle_beat_puts_the_game_card_back() {
         .iter()
         .filter(|draw| match **draw {
             Draw::Rect { w, .. } | Draw::Tex { w, .. } | Draw::Turned { w, .. } => {
-                (w - 360.0).abs() < 1.0
+                (w - slot_ui::display_box(slot_store::Platform::Gba).0).abs() < 1.0
             }
             Draw::Game | Draw::Shot { .. } => false,
         })
@@ -1408,11 +1417,15 @@ fn the_result_after_the_card_ejects_does_not_flash_the_screen() {
     assert!(ejected, "the cloud card never ejected");
     assert!(
         matches!(a.shelf_sync(), ShelfSync::Result { .. }),
-        "the eject never handed over to the result banner"
+        "the eject never handed over to the small result"
     );
     assert!(
-        !a.sync_result_fade_active(),
-        "the result painted the shelf black again after the eject"
+        a.sync_result_active(),
+        "the result is not the active small notification"
+    );
+    assert!(
+        a.toast_top().is_some(),
+        "the result does not occupy the top small row"
     );
 }
 
@@ -1448,9 +1461,9 @@ fn network_errors_show_the_cli_detail_and_other_errors_show_a_short_line() {
         start_sync(&mut a);
         fake.finish(failure(category));
         a.update(1.0 / 60.0);
-        assert_eq!(banner(&a), line, "wrong short line for {category:?}");
+        assert_eq!(failure_notice(&a), line, "wrong short line for {category:?}");
         assert!(
-            !banner(&a).contains("linkSlot"),
+            !failure_notice(&a).contains("linkSlot"),
             "the raw CLI detail leaked into the banner"
         );
     }
@@ -1463,7 +1476,7 @@ fn network_errors_show_the_cli_detail_and_other_errors_show_a_short_line() {
     start_sync(&mut a);
     fake.finish(failure(Some("net")));
     a.update(1.0 / 60.0);
-    assert_eq!(banner(&a), "linkSlot: 失败摘要");
+    assert_eq!(failure_notice(&a), "linkSlot: 失败摘要");
 }
 
 #[test]
@@ -1473,7 +1486,7 @@ fn a_process_that_vanishes_without_a_block_reports_an_error() {
     start_sync(&mut a);
     fake.exit_without_outcome();
     a.update(1.0 / 60.0);
-    assert_eq!(banner(&a), "同步进程意外退出");
+    assert_eq!(failure_notice(&a), "同步进程意外退出");
 }
 
 #[test]
@@ -1518,7 +1531,7 @@ fn a_job_running_past_two_minutes_is_cancelled_with_a_timeout_line() {
     a.update(SYNC_TIMEOUT_MS as f32 / 1000.0 + 1.0);
 
     assert_eq!(fake.cancels(), 1, "the timed out job was not terminated");
-    assert_eq!(banner(&a), "同步超时");
+    assert_eq!(failure_notice(&a), "同步超时");
     a.update(SYNC_RESULT_MS as f32 / 1000.0 + 0.1);
     assert!(!a.shelf_sync_active());
 }
@@ -1907,9 +1920,9 @@ fn b_abandons_the_remaining_unit_with_a_banner() {
     a.apply(Action::GbaDown(Btn::B));
     assert!(a.conflict_ui().is_none(), "B did not close the pages");
     assert!(
-        banner(&a).contains("电池存档未同步"),
+        failure_notice(&a).contains("电池存档未同步"),
         "the abandon banner was {:?}",
-        banner(&a)
+        failure_notice(&a)
     );
     assert_eq!(fake.launches(), 2, "B launched another sync");
 }
@@ -1923,7 +1936,7 @@ fn b_on_a_fresh_conflict_closes_without_launching() {
     assert!(a.conflict_ui().is_none(), "B did not close the pages");
     assert!(matches!(a.phase(), Phase::Shelf));
     assert_eq!(fake.launches(), 1, "B confirmed something");
-    assert!(banner(&a).contains("未同步"));
+    assert!(failure_notice(&a).contains("未同步"));
 }
 
 #[test]
@@ -2120,89 +2133,80 @@ fn face(tex: usize, w: u32, h: u32) -> SyncFace {
 /// A complete set of stand-in stage textures; the drawing code only needs
 /// non-zero sizes and stable ids.
 fn test_sync_art() -> SyncArt {
-    let mut next = 40;
+    let mut next = 41;
     let mut art = || {
         let tex = next;
         next += 1;
         face(tex, 32, 32)
     };
     SyncArt {
-        sheet: face(40, 656, 440),
-        dock: face(41, 232, 16),
-        cloud_card: face(42, 172, 110),
-        target_card: face(43, 172, 110),
-        shadow: art(),
-        lane: art(),
-        packet: art(),
-        stamp: art(),
-        dot_done: art(),
-        dot_active: art(),
-        dot_pending: art(),
-        dir_left: art(),
-        dir_right: art(),
-        dir_wait: art(),
-        chip: art(),
+        card: face(40, 520, 400),
+        ring: [
+            face(50, 192, 192),
+            face(51, 192, 192),
+            face(52, 192, 192),
+            face(53, 192, 192),
+            face(54, 192, 192),
+            face(55, 192, 192),
+        ],
+        cloud: art(),
+        target: art(),
+        check: art(),
+        arrow_up: art(),
+        arrow_down: art(),
+        seal: art(),
+        head: art(),
+        scan: art(),
     }
 }
 
 #[test]
-fn the_sync_stage_draws_its_sheet_and_cloud_card() {
+fn the_sync_stage_draws_the_flat_sync_ring_card() {
     let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
     let (mut a, _fake) = rig(d.path());
     a.set_sync_art(test_sync_art());
     start_sync(&mut a);
     let out = drew(&a);
 
-    let page = out
-        .iter()
-        .position(|draw| {
-            matches!(
-                *draw,
-                Draw::Rect { w, h, colour, .. }
-                    if (w - 720.0).abs() < 0.01
-                        && (h - 480.0).abs() < 0.01
-                        && colour[3] > 0.2
-                        && colour[3] < 1.0
-            )
-        })
-        .expect("the translucent stage mask was not drawn");
-    let sheet = out
-        .iter()
-        .position(|draw| matches!(*draw, Draw::Tex { tex, .. } if tex == TexId::from_raw(40)))
-        .expect("the sync sheet was not drawn");
-    let card = out
-        .iter()
-        .position(|draw| matches!(*draw, Draw::Tex { tex, .. } if tex == TexId::from_raw(42)))
-        .expect("the cloud card was not drawn");
-    assert!(sheet > page, "the sheet is under the dim mask");
-    assert!(card > sheet, "the cloud card is under the sheet");
+    assert!(
+        out.iter().any(|draw| matches!(
+            *draw,
+            Draw::Tex { x, y, w, h, .. }
+                if (x - 100.0).abs() < 0.01
+                    && (y - 40.0).abs() < 0.01
+                    && (w - 520.0).abs() < 0.01
+                    && (h - 400.0).abs() < 0.01
+        )),
+        "the rounded sync card was not drawn"
+    );
+    assert!(
+        out.iter().any(|draw| matches!(
+            *draw,
+            Draw::Rect { w, h, .. } if (w - 720.0).abs() < 0.01 && (h - 480.0).abs() < 0.01
+        )),
+        "the sync stage has no full-screen ground"
+    );
 }
 
 #[test]
-fn the_result_banner_is_drawn_with_the_rasterised_text() {
+fn the_result_is_a_small_top_row() {
     let d = tmp_root_with_carts(&["Emerald", "Fusion"]);
     let (mut a, fake) = rig(d.path());
     start_sync(&mut a);
     fake.finish(ok(Direction::Download, 7));
     a.update(1.0 / 60.0);
-    a.set_sync_text_faces(SyncFaces {
-        banner: Some(face(21, 300, 28)),
-        ..SyncFaces::default()
-    });
-    let out = drew(&a);
+    a.update(1.2);
     assert!(
-        out.iter()
-            .any(|draw| matches!(*draw, Draw::Tex { tex, .. } if tex == TexId::from_raw(21))),
-        "the banner text was not drawn"
+        a.sync_result_active(),
+        "the result is not the small notification"
     );
-    assert!(
-        out.iter()
-            .any(|draw| matches!(*draw, Draw::Rect { colour, .. } if colour[3] > 0.3)),
-        "the banner has no backing band"
+    assert_eq!(
+        a.toast_top(),
+        Some(slot_ui::TOAST_TOP),
+        "the result is not in the top strip"
     );
+    assert_eq!(banner(&a), "已拉取版本 7");
 }
-
-// ---- gating ----------------------------------------------------------------
 
 #[test]
 fn a_linked_session_refuses_to_sync() {
@@ -2212,9 +2216,9 @@ fn a_linked_session_refuses_to_sync() {
     attempt_sync(&mut a);
     assert_eq!(fake.launches(), 0, "a sync ran during a link session");
     assert!(
-        banner(&a).contains("联机"),
+        failure_notice(&a).contains("联机"),
         "the refusal line was {:?}",
-        banner(&a)
+        failure_notice(&a)
     );
 }
 
@@ -2237,9 +2241,9 @@ fn a_read_only_card_refuses_to_sync() {
     attempt_sync(&mut a);
     assert_eq!(fake.launches(), 0, "a sync ran with a read-only card");
     assert!(
-        banner(&a).contains("只读"),
+        failure_notice(&a).contains("只读"),
         "the refusal line was {:?}",
-        banner(&a)
+        failure_notice(&a)
     );
 }
 
@@ -2297,3 +2301,32 @@ fn a_manual_mod_can_ship_a_cover_for_its_network_chip() {
     );
 }
 
+
+/// A delete reloads every shelf from the card (`reload_shelves`); the backing
+/// plate ids are boot textures, so the rebuilt rack must get them again.
+#[test]
+fn deleting_a_cart_keeps_the_shelf_shadow() {
+    let d = tmp_root_with_carts(&["Emerald", "Fusion", "Other"]);
+    let (mut a, _fake) = rig(d.path());
+    let shadow = TexId::from_raw(0x5157);
+    a.set_cart_shadow(shadow);
+    let drawn = |a: &mut App| {
+        let mut out = Vec::new();
+        a.draw(&mut out);
+        out.iter()
+            .any(|d| matches!(*d, Draw::Tex { tex, .. } if tex == shadow))
+    };
+    assert!(drawn(&mut a), "the shelf had no shadow at boot");
+
+    a.apply(Action::GbaDown(Btn::B));
+    a.update(1.3);
+    a.apply(Action::GbaDown(Btn::X));
+    a.apply(Action::GbaDown(Btn::Up));
+    a.apply(Action::GbaDown(Btn::A));
+    a.apply(Action::GbaDown(Btn::A));
+    assert!(!d.path().join("Games/GBA/Emerald.gba").exists());
+    assert!(
+        drawn(&mut a),
+        "the reloaded shelf lost its shadow after a delete"
+    );
+}

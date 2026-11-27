@@ -197,13 +197,12 @@ const KEY_GAP: f32 = 6.0;
 const KEY_RADIUS: f32 = 8.0;
 const KEYS_TOP: f32 = 194.0;
 const KEYS_BAND_H: f32 = 204.0;
-const TITLE_X: f32 = 64.0;
-const TITLE_TOP: f32 = 12.0;
-const TITLE_H: f32 = 40.0;
+const TITLE_X: f32 = 32.0;
+const TITLE_TOP: f32 = 48.0;
+const TITLE_H: f32 = 34.0;
 const HINT_TOP: f32 = 408.0;
 const HINT_H: f32 = 28.0;
-const SIDE: f32 = 48.0;
-const HEADER_H: f32 = 88.0;
+const SIDE: f32 = 24.0;
 
 /// Pixel rectangle `(x, y, w, h)` of the selected key cap, for the outline the
 /// app draws over the panel.
@@ -286,13 +285,12 @@ fn keyboard_face(
     lang: Language,
 ) -> UndoFace {
     let mut face = blank(OUT_W, OUT_H, sw::bg());
-    fill(&mut face, 0.0, 0.0, OUT_W as f32, HEADER_H, sw::bg_top());
-    fill(&mut face, SIDE, 16.0, 5.0, 30.0, accent());
+    fill(&mut face, 28.0, 40.0, OUT_W as f32 - 56.0, 1.0, sw::surface_border());
     let text_w = OUT_W as f32 - TITLE_X - 32.0;
     draw_box(
         &mut face,
         title,
-        28.0,
+        26.0,
         15.0,
         TITLE_X,
         TITLE_TOP,
@@ -340,23 +338,9 @@ fn draw_key(
     selected: bool,
 ) {
     if selected {
-        sw::fill_round(face, x, y, w, h, KEY_RADIUS, accent());
-        sw::fill_round(
-            face,
-            x + 2.0,
-            y + 2.0,
-            w - 4.0,
-            h - 4.0,
-            (KEY_RADIUS - 2.0).max(0.0),
-            sw::selected(),
-        );
+        sw::fill_round(face, x, y, w, h, KEY_RADIUS, sw::selected());
     } else {
-        let border = if function_row {
-            accent_dim()
-        } else {
-            sw::surface_border()
-        };
-        sw::fill_round(face, x, y, w, h, KEY_RADIUS, border);
+        sw::fill_round(face, x, y, w, h, KEY_RADIUS, sw::surface_border());
         sw::fill_round(
             face,
             x + 1.0,
@@ -370,14 +354,14 @@ fn draw_key(
     let ink = if selected {
         sw::ink_selected()
     } else if function_row {
-        sw::accent()
+        sw::ink_dim()
     } else {
         sw::ink()
     };
     let px = if label.chars().count() == 1 {
-        24.0
+        16.0
     } else {
-        17.0
+        13.0
     };
     draw_box(
         face,
@@ -392,18 +376,7 @@ fn draw_key(
     );
 }
 
-fn accent() -> [u8; 4] {
-    [sw::accent()[0], sw::accent()[1], sw::accent()[2], 0xff]
-}
 
-fn accent_dim() -> [u8; 4] {
-    [
-        sw::accent_dim()[0],
-        sw::accent_dim()[1],
-        sw::accent_dim()[2],
-        0xff,
-    ]
-}
 
 /// The typed text line as a rounded Switch-style field, transparent outside the
 /// card so it can sit on top of the panel: the field itself followed by the
@@ -441,7 +414,7 @@ pub fn input_line(text: &str, masked: bool, error: Option<&str>) -> UndoFace {
             24.0,
             58.0,
             28.0,
-            sw::accent(),
+            sw::stamp(),
         );
     }
     face

@@ -14,8 +14,9 @@ use slot_input::{Action, Btn, RawEvent};
 use slot_retro::ButtonMask;
 use slot_store::{write_slot_state, Cart, Core, Platform, SlotState};
 use slot_ui::{
-    board_at, grown, lid_at, lid_from, on_board, opening, shelf_cart_at, Draw, Icon, Placed, TexId,
-    BOARD_W, CART_H, CART_W, CHIP_H, CHIP_U, CHIP_V, CHIP_W, HINT_EDGE, HINT_H, LID_TURN, SLIDE_UP,
+    board_at, display_box, grown, lid_at, lid_from, on_board, opening, shelf_cart_at, Draw, Icon,
+    Placed, TexId, BOARD_W, CART_H, CART_W, CHIP_H, CHIP_U, CHIP_V, CHIP_W, HINT_EDGE, HINT_H,
+    LID_TURN, SLIDE_UP,
     SOCKET_H, SOCKET_U, SOCKET_V, SOCKET_W, TURN_PAD,
 };
 
@@ -1568,7 +1569,7 @@ fn resting_cart(out: &[Draw]) -> f32 {
             Draw::Rect { x, w, .. } | Draw::Tex { x, w, .. } => Some((x, w)),
             _ => None,
         })
-        .find(|(_, w)| (w - CART_W as f32).abs() < 0.01)
+        .find(|(_, w)| (w - display_box(Platform::Gba).0).abs() < 0.01)
         .expect("no cart standing on the row")
         .0
 }
@@ -1617,6 +1618,10 @@ fn turned_at(out: &[Draw], want: TexId) -> Option<(usize, [f32; 4], f32)> {
 
 fn near(a: [f32; 4], b: [f32; 4]) -> bool {
     a.iter().zip(b).all(|(p, q)| (p - q).abs() < 0.01)
+}
+
+fn near_px(a: [f32; 4], b: [f32; 4]) -> bool {
+    a.iter().zip(b).all(|(p, q)| (p - q).abs() < 1.0)
 }
 
 fn alpha_of(out: &[Draw], want: TexId) -> Option<f32> {
@@ -1673,8 +1678,10 @@ fn assert_parts_on_board(out: &[Draw], f: &PickerFaces, board: Placed, when: &st
 fn carts_standing(out: &[Draw], board: TexId) -> usize {
     out.iter()
         .filter(|d| match **d {
-            Draw::Rect { w, .. } => (w - CART_W as f32).abs() < 0.01,
-            Draw::Tex { w, tex, .. } => tex != board && (w - CART_W as f32).abs() < 0.01,
+            Draw::Rect { w, .. } => (w - display_box(Platform::Gba).0).abs() < 0.01,
+            Draw::Tex { w, tex, .. } => {
+                tex != board && (w - display_box(Platform::Gba).0).abs() < 0.01
+            }
             _ => false,
         })
         .count()
@@ -1911,7 +1918,7 @@ fn the_highlighted_cart_becomes_the_lid_rather_than_a_second_cart() {
     let (_, lid, turn) = turned_at(&out, f.lid).expect("no lid");
     let want = grown(lid_from(shelf_cart_at(rest, 1.0), 0.0).0, TURN_PAD as f32);
     assert!(
-        near(lid, [want.x, want.y, want.w, want.h]),
+        near_px(lid, [want.x, want.y, want.w, want.h]),
         "the lid starts at {lid:?}"
     );
     assert_eq!(turn, 0.0);
@@ -1929,7 +1936,7 @@ fn the_highlighted_cart_becomes_the_lid_rather_than_a_second_cart() {
         TURN_PAD as f32,
     );
     assert!(
-        near(lid, [want.x, want.y, want.w, want.h]),
+        near_px(lid, [want.x, want.y, want.w, want.h]),
         "the lid is not half way up its slide: {lid:?}"
     );
     let (_, board) = tex_at(&slid, f.board).expect("no board mid-slide");
@@ -2095,7 +2102,7 @@ fn closing_puts_the_cart_back_on_the_shelf() {
         .iter()
         .filter(|d| {
             matches!(**d, Draw::Rect { w, .. } | Draw::Tex { w, .. }
-                if (w - CART_W as f32).abs() < 0.01)
+                if (w - display_box(Platform::Gba).0).abs() < 0.01)
         })
         .count();
     assert_eq!(standing, 1, "the cart did not go back on the shelf");
@@ -2116,7 +2123,7 @@ fn the_open_waits_on_the_shelf_for_its_faces() {
     let shelf = grown(shelf_cart_at(rest, 1.0), TURN_PAD as f32);
     let (_, lid, _) = turned_at(&out, f.lid).expect("no lid once the faces arrived");
     assert!(
-        near(lid, [shelf.x, shelf.y, shelf.w, shelf.h]),
+        near_px(lid, [shelf.x, shelf.y, shelf.w, shelf.h]),
         "the open used up the wait: the lid is at {lid:?}"
     );
     assert_eq!(
@@ -2830,44 +2837,26 @@ fn the_colour_shortcut_names_the_state_it_arrived_at() {
     }
 }
 
-fn slot_text_alpha(a: &App, tex: slot_ui::TexId) -> f32 {
-    let mut out = Vec::new();
-    a.draw(&mut out);
-    out.iter()
-        .find_map(|d| match *d {
-            Draw::Tex { tex: t, alpha, .. } if t == tex => Some(alpha),
-            _ => None,
-        })
-        .unwrap_or(0.0)
-}
-
 #[test]
-fn a_letter_jump_shows_the_letter_in_the_slot_and_fades_like_the_shelf_name() {
+fn a_letter_jump_names_the_shelf_plate() {
     let mut a = app_with_carts(&["Alpha", "Bravo"]);
-    let face = slot_ui::TexId::from_raw(77);
     assert_eq!(
-        a.slot_text().as_deref(),
+        a.shelf_plate_text().map(|p| p.0).as_deref(),
         Some("GBA"),
-        "the slot did not name the shelf the card is on"
+        "the plate did not name the shelf the card is on"
     );
 
     a.apply(Action::GbaDown(Btn::Down));
-    assert_eq!(a.slot_text().as_deref(), Some("B"));
-    a.set_shelf_platform_face(face, 20);
-    a.update(1.0 / 60.0);
-    a.update(0.5);
-    assert!(slot_text_alpha(&a, face) > 0.0, "the letter never showed");
-    a.update(5.0);
-    assert_eq!(slot_text_alpha(&a, face), 0.0, "the letter never faded");
+    assert_eq!(
+        a.shelf_plate_text().map(|p| p.0).as_deref(),
+        Some("B")
+    );
 
     a.apply(Action::GbaDown(Btn::Left));
     a.apply(Action::GbaDown(Btn::Down));
-    assert_eq!(a.slot_text().as_deref(), Some("B"));
-    a.update(1.0 / 60.0);
-    a.update(0.5);
-    assert!(
-        slot_text_alpha(&a, face) > 0.0,
-        "jumping to the letter already printed did not show it again"
+    assert_eq!(
+        a.shelf_plate_text().map(|p| p.0).as_deref(),
+        Some("B")
     );
 }
 

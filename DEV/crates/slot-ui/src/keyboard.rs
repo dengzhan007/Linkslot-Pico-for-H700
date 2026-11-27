@@ -441,7 +441,7 @@ pub fn input_line(text: &str, masked: bool, error: Option<&str>) -> UndoFace {
             24.0,
             58.0,
             28.0,
-            sw::accent(),
+            sw::stamp(),
         );
     }
     face

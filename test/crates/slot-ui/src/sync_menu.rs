@@ -35,21 +35,17 @@ pub struct SyncMenuView<'a> {
     pub needs_setup: bool,
 }
 
-const PANEL_X: f32 = 32.0;
-const PANEL_Y: f32 = 20.0;
-const PANEL_W: f32 = OUT_W as f32 - 2.0 * PANEL_X;
-const PANEL_H: f32 = OUT_H as f32 - 2.0 * PANEL_Y;
-const SIDE: f32 = PANEL_X + 24.0;
-const CARD_W: f32 = PANEL_W - 48.0;
-const STATUS_TOP: f32 = PANEL_Y + 68.0;
-const STATUS_H: f32 = 46.0;
-const LIST_TOP: f32 = PANEL_Y + 124.0;
+const SIDE: f32 = 24.0;
+const CARD_W: f32 = OUT_W as f32 - 2.0 * SIDE;
+const STATUS_TOP: f32 = 96.0;
+const STATUS_H: f32 = 40.0;
+const LIST_TOP: f32 = 144.0;
 const LIST_ROWS: usize = 4;
 const ROW_H: f32 = 42.0;
 const ROW_GAP: f32 = 4.0;
-const TEST_TOP: f32 = PANEL_Y + 314.0;
-const SWITCH_TOP: f32 = PANEL_Y + 354.0;
-const ACTION_H: f32 = 34.0;
+const TEST_TOP: f32 = 336.0;
+const SWITCH_TOP: f32 = 386.0;
+const ACTION_H: f32 = 40.0;
 
 pub fn sync_menu_face(view: &SyncMenuView, lang: Language) -> UndoFace {
     let mut face = UndoFace {
@@ -57,40 +53,21 @@ pub fn sync_menu_face(view: &SyncMenuView, lang: Language) -> UndoFace {
         w: OUT_W,
         h: OUT_H,
     };
-    // Deliberately opaque: the page is a modal sheet, not a translucent layer
-    // over the shelf.  This keeps the background clean and avoids the previous
-    // "blurry cards behind the popup" effect on the LCD.
-    fill(&mut face, 0.0, 0.0, OUT_W as f32, OUT_H as f32, [0x08, 0x08, 0x0b, 0xff]);
-    let panel = sw::rounded_face(
-        PANEL_W as u32,
-        PANEL_H as u32,
-        18.0,
-        [0x1c, 0x1c, 0x22, 0xff],
-        Some([0x4d, 0x4d, 0x58, 0xff]),
-    );
-    blit(&mut face, &panel, PANEL_X, PANEL_Y);
-    fill(
-        &mut face,
-        SIDE,
-        PANEL_Y + 22.0,
-        5.0,
-        30.0,
-        [sw::accent()[0], sw::accent()[1], sw::accent()[2], 0xff],
-    );
-    kb::draw_box(
+    fill(&mut face, 0.0, 0.0, OUT_W as f32, OUT_H as f32, sw::bg());
+    fill(&mut face, 28.0, 40.0, OUT_W as f32 - 56.0, 1.0, sw::surface_border());
+    kb::draw_left(
         &mut face,
         slot_i18n::t(lang, "device.quick.sync.title"),
-        30.0,
-        20.0,
-        SIDE + 16.0,
-        PANEL_Y + 14.0,
+        26.0,
+        15.0,
         500.0,
-        40.0,
+        32.0,
+        48.0,
+        34.0,
         sw::ink(),
     );
 
     if view.needs_setup {
-        card(&mut face, LIST_TOP, 174.0, false);
         kb::draw_left(
             &mut face,
             slot_i18n::t(lang, "device.quick.sync.empty"),
@@ -162,21 +139,19 @@ pub fn sync_menu_face(view: &SyncMenuView, lang: Language) -> UndoFace {
     } else {
         (slot_i18n::t(lang, "device.quick.sync.test_other"), sw::ink_dim())
     };
-    card(&mut face, STATUS_TOP, STATUS_H, false);
-    kb::draw_box(
+    kb::draw_left(
         &mut face,
         status,
-        15.0,
-        11.0,
-        SIDE + 18.0,
+        10.0,
+        8.0,
+        CARD_W,
+        SIDE,
         STATUS_TOP,
-        CARD_W - 36.0,
         STATUS_H,
         ink,
     );
 
     if view.rows.is_empty() {
-        card(&mut face, LIST_TOP, 120.0, false);
         kb::draw_box(
             &mut face,
             slot_i18n::t(lang, "device.quick.sync.need_webdav"),
@@ -210,30 +185,30 @@ pub fn sync_menu_face(view: &SyncMenuView, lang: Language) -> UndoFace {
                 &mut face,
                 row.name,
                 17.0,
-                12.0,
+                13.0,
                 260.0,
-                SIDE + 18.0,
+                SIDE + 16.0,
                 y,
-                28.0,
+                26.0,
                 row_ink,
             );
             kb::draw_left(
                 &mut face,
                 row.detail,
                 11.0,
-                9.0,
+                10.0,
                 330.0,
-                SIDE + 18.0,
-                y + 23.0,
-                18.0,
+                SIDE + 16.0,
+                y + 26.0,
+                15.0,
                 dim,
             );
             if row.active {
                 kb::draw_left(
                     &mut face,
                     slot_i18n::t(lang, "device.quick.sync.current"),
-                    13.0,
-                    10.0,
+                    15.0,
+                    12.0,
                     52.0,
                     SIDE + CARD_W - 112.0,
                     y,
@@ -245,8 +220,8 @@ pub fn sync_menu_face(view: &SyncMenuView, lang: Language) -> UndoFace {
             kb::draw_left(
                 &mut face,
                 lock,
-                11.0,
-                9.0,
+                12.0,
+                10.0,
                 92.0,
                 SIDE + CARD_W - 174.0,
                 y,
@@ -293,17 +268,20 @@ pub fn sync_menu_face(view: &SyncMenuView, lang: Language) -> UndoFace {
         12.0,
         9.0,
         SIDE,
-        418.0,
+        436.0,
         CARD_W,
-        24.0,
+        20.0,
         sw::ink_dim(),
     );
     face
 }
 
 fn card(face: &mut UndoFace, y: f32, h: f32, selected: bool) {
-    let card = sw::card_face(CARD_W as u32, h as u32, selected);
-    blit(face, &card, SIDE, y);
+    if !selected {
+        return;
+    }
+    sw::fill_round(face, SIDE, y, CARD_W, h, 11.0, sw::selected());
+    sw::fill_round(face, SIDE - 8.0, y + (h - 24.0) / 2.0, 3.0, 24.0, 2.0, accent());
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -316,32 +294,32 @@ fn action_card(
     enabled: bool,
     switch: bool,
 ) {
-    let (fill, border) = if enabled {
-        (
-            if switch {
-                [0x2b, 0x2b, 0x31, 0xff]
-            } else {
-                [0x35, 0x35, 0x3d, 0xff]
-            },
-            Some(if switch {
-                [sw::accent()[0], sw::accent()[1], sw::accent()[2], 0xff]
-            } else {
-                [0x6a, 0x6a, 0x76, 0xff]
-            }),
-        )
+    let (fill, border) = if enabled && switch {
+        (sw::selected(), None)
+    } else if enabled {
+        ([0x00, 0x00, 0x00, 0x00], Some(sw::surface_border()))
     } else {
         ([0x1a, 0x1a, 0x1f, 0xff], Some([0x32, 0x32, 0x38, 0xbf]))
     };
-    let action = sw::rounded_face(CARD_W as u32, ACTION_H as u32, 9.0, fill, border);
+    let action = sw::rounded_face(CARD_W as u32, ACTION_H as u32, 10.0, fill, border);
     blit(face, &action, SIDE, y);
-    let ink = if enabled { sw::ink() } else { [0x66, 0x66, 0x70] };
+    if enabled && switch {
+        sw::fill_round(face, SIDE - 8.0, y + 8.0, 3.0, 24.0, 2.0, accent());
+    }
+    let ink = if enabled && switch {
+        sw::ink_selected()
+    } else if enabled {
+        sw::ink()
+    } else {
+        [0x66, 0x66, 0x70]
+    };
     let key_ink = if enabled { sw::accent() } else { [0x55, 0x55, 0x5d] };
-    kb::draw_left(face, key, 14.0, 10.0, 20.0, SIDE + 16.0, y, ACTION_H, key_ink);
+    kb::draw_left(face, key, 13.0, 10.0, 20.0, SIDE + 16.0, y, ACTION_H, key_ink);
     kb::draw_left(
         face,
         label,
-        14.0,
-        10.0,
+        15.0,
+        12.0,
         CARD_W - 70.0,
         SIDE + 46.0,
         y,
@@ -361,6 +339,10 @@ fn action_card(
             [0x55, 0x55, 0x5d],
         );
     }
+}
+
+fn accent() -> [u8; 4] {
+    [sw::accent()[0], sw::accent()[1], sw::accent()[2], 0xff]
 }
 
 fn accent_ink() -> [u8; 3] {

@@ -1,6 +1,7 @@
 use slot_store::GbPalette;
 use slot_ui::{
-    Language, toast_face, toast_rect, Draw, Hud, HudKind, Toast, ALARM_BAND_H, OUT_H, OUT_W, PLATE_H,
+    alarm_rect, toast_box, toast_face, toast_rect, Draw, Hud, HudKind, Language, Toast, OUT_H,
+    OUT_W, TOAST_TOP,
 };
 
 #[test]
@@ -45,7 +46,6 @@ fn the_banner_says_what_happened_and_never_what_is_on_screen() {
             Toast::ShaderDot,
             Toast::ShaderSimpletex,
             Toast::ShaderFourPass,
-            Toast::CardUnwritable,
             Toast::FavoriteOn,
             Toast::FavoriteOff,
             Toast::RepairClean,
@@ -54,6 +54,7 @@ fn the_banner_says_what_happened_and_never_what_is_on_screen() {
             Toast::LogDebug,
             Toast::LogDebugFailed,
             Toast::Duplicate,
+            Toast::UpgradeNoPackage,
         ],
         "a banner was added or dropped: every face is uploaded by its place in this list"
     );
@@ -87,7 +88,7 @@ fn no_toast_is_shrunk_to_fit_its_box() {
     let (top, bottom) = rows(Toast::StateSaved);
     for t in Toast::all()
         .into_iter()
-        .filter(|t| !t.alarm() && !matches!(t, Toast::Palette(_)))
+        .filter(|t| !matches!(t, Toast::Palette(_)))
     {
         let (a, b) = rows(t);
         assert!(
@@ -139,43 +140,48 @@ fn a_toast_carries_its_own_halo() {
 }
 
 #[test]
-fn a_toast_sits_in_the_plate_band_and_is_backed_by_it() {
+fn a_toast_is_a_top_panel_without_a_full_width_plate() {
     let mut h = Hud::new();
+    let face = slot_ui::TexId::from_raw(1);
+    h.set_toasts(vec![face]);
     h.toast(Toast::StateSaved, 0);
-    let mut out = Vec::new();
-    h.draw(0, &mut out);
 
-    let plate = out
-        .iter()
-        .find(|d| matches!(d, Draw::Rect { w, .. } if *w == OUT_W as f32))
-        .expect("the toast has nothing to be read against");
-    let Draw::Rect { colour, h: ph, .. } = plate else {
-        unreachable!()
-    };
-    assert!(colour[3] > 0.6, "the plate is too faint to give contrast");
-    assert!((*ph - PLATE_H).abs() < 0.01, "the plate is not the band");
-
-    let (_, y, _, th) = toast_rect(Toast::StateSaved);
-    assert!(
-        y >= 0.0 && y + th <= PLATE_H,
-        "the toast at {y} is outside the band"
+    let (toast, alpha) = h.toast_view(0).expect("the toast disappeared");
+    assert_eq!(toast, Toast::StateSaved);
+    assert_eq!(alpha, 1.0);
+    assert_eq!(h.toast_face(toast), Some(face), "the face was not kept");
+    let (x, y, w, th) = toast_rect(Toast::StateSaved);
+    assert_eq!(
+        y, TOAST_TOP,
+        "the toast did not take the row under the status bar"
     );
+    assert!(
+        y + th < OUT_H as f32 * 0.2,
+        "the toast at {y} is not in the top row"
+    );
+    assert_eq!(x + w / 2.0, OUT_W as f32 / 2.0);
 }
 
 #[test]
-fn a_toast_takes_the_band_from_the_bar() {
+fn a_toast_and_the_hud_bar_live_in_separate_bands() {
     let mut h = Hud::new();
     h.show(HudKind::Volume, 50, false, 0);
-    let mut bar_only = Vec::new();
-    h.draw(0, &mut bar_only);
-    let bars = bar_only.len();
-
     h.toast(Toast::StateSaved, 0);
-    let mut both = Vec::new();
-    h.draw(0, &mut both);
+
+    assert!(h.toast_view(0).is_some(), "the toast was dropped");
+    assert!(h.bar_alpha(0).is_some(), "the bar disappeared");
+    let (_, y, _, _) = toast_rect(Toast::StateSaved);
+    assert!(y < OUT_H as f32 / 4.0, "the toast left the top row");
+
+    // The stack sits the bar under the toast row; the HUD just blits at the
+    // row the caller hands it.
+    let bar_y = y + toast_box(Toast::StateSaved).1 as f32 + 8.0;
+    let mut out = Vec::new();
+    h.draw_bar_at(h.bar_alpha(0).expect("no bar"), bar_y, &mut out);
     assert!(
-        both.len() < bars,
-        "the bar is still drawn underneath the toast"
+        out.iter()
+            .any(|d| matches!(d, Draw::Rect { y, .. } if (*y - bar_y).abs() < 0.01)),
+        "the bar did not take the row it was given"
     );
 }
 
@@ -185,13 +191,19 @@ fn a_palette_banner_names_the_palette_without_its_boot_combo() {
     assert_eq!(Toast::Palette(p).text(Language::ZhCn), "GBC 深绿");
 }
 
-fn band(h: &Hud, now: u64) -> Option<(f32, f32, [f32; 4])> {
+fn alarm_panel(h: &Hud) -> Option<(f32, f32, [f32; 4])> {
+    if !h.alarmed() {
+        return None;
+    }
+    let (_, at, want_w, want_h) = alarm_rect();
     let mut out = Vec::new();
-    h.draw(now, &mut out);
+    h.draw_alarm_at(at, &mut out);
     out.iter().rev().find_map(|d| match d {
         Draw::Rect {
             y, w, h, colour, ..
-        } if *w == OUT_W as f32 && *h == ALARM_BAND_H => Some((*y, *h, *colour)),
+        } if (*w - want_w).abs() < 0.01 && (*h - want_h).abs() < 0.01 => {
+            Some((*y, *h, *colour))
+        }
         _ => None,
     })
 }
@@ -201,98 +213,84 @@ fn the_card_alarm_stays_up_until_it_is_cleared() {
     let mut h = Hud::new();
     h.set_alarm(true, 1_000);
     assert!(
-        band(&h, 3_600_000).is_some(),
+        alarm_panel(&h).is_some(),
         "the alarm went away by itself"
     );
     h.set_alarm(false, 3_600_001);
-    let mut out = Vec::new();
-    h.draw(3_600_002, &mut out);
-    assert!(out.is_empty(), "the alarm outlived a write that landed");
+    assert!(!h.alarmed(), "the alarm outlived a write that landed");
 }
 
 #[test]
-fn the_card_alarm_is_a_red_band_across_the_middle_that_pulses() {
+fn the_card_alarm_is_a_flat_top_panel() {
     let mut h = Hud::new();
     h.set_alarm(true, 0);
-    let (y, bh, bright) = band(&h, 0).expect("no alarm band");
-    let middle = OUT_H as f32 / 2.0;
+    let (y, bh, _) = alarm_panel(&h).expect("no alarm panel");
     assert!(
-        (y + bh / 2.0 - middle).abs() < 0.5,
-        "the band is not centred"
-    );
-    assert!(
-        bright[0] > 2.0 * bright[1] && bright[0] > 2.0 * bright[2],
-        "{bright:?} is not red"
-    );
-    let (_, _, dim) = band(&h, 250).unwrap();
-    assert!(
-        dim[0] < bright[0] - 0.2,
-        "the band did not pulse: {bright:?} then {dim:?}"
+        y + bh < OUT_H as f32 * 0.25,
+        "the alarm panel is not in the top notification stack"
     );
 }
 
 #[test]
-fn a_second_failure_does_not_restart_the_pulse() {
+fn a_second_failure_does_not_restart_the_panel() {
     let mut h = Hud::new();
     h.set_alarm(true, 0);
     h.set_alarm(true, 250);
     let mut fresh = Hud::new();
     fresh.set_alarm(true, 0);
-    assert_eq!(band(&h, 500), band(&fresh, 500));
+    assert_eq!(alarm_panel(&h), alarm_panel(&fresh));
 }
 
 #[test]
 fn the_card_alarm_text_is_large_and_inside_its_band() {
-    let alarm = toast_face(Toast::CardUnwritable, Language::ZhCn);
-    let toast = toast_face(Toast::StateSaved, Language::ZhCn);
-    assert!(alarm.h > toast.h && alarm.w > toast.w);
-    let (x, y, w, th) = toast_rect(Toast::CardUnwritable);
-    let top = (OUT_H as f32 - ALARM_BAND_H) / 2.0;
+    let (x, y, w, h) = alarm_rect();
+    assert_eq!(
+        (w, h),
+        (slot_ui::notice::NOTICE_W, slot_ui::notice::NOTICE_H)
+    );
     assert!(
-        y >= top && y + th <= top + ALARM_BAND_H,
-        "the alarm text overhangs its band"
+        y + h < OUT_H as f32 * 0.25,
+        "the alarm text is not in the top notification stack"
     );
     assert_eq!(x + w / 2.0, OUT_W as f32 / 2.0);
 }
 
 #[test]
-fn the_card_alarm_is_drawn_over_the_volume_bar() {
-    let mut h = Hud::new();
-    h.set_alarm(true, 0);
-    h.show(HudKind::Volume, 50, false, 1_000);
-    let mut out = Vec::new();
-    h.draw(1_100, &mut out);
-    let alarm = out
-        .iter()
-        .position(|d| matches!(d, Draw::Rect { h, .. } if *h == ALARM_BAND_H))
-        .expect("the bar hid the alarm");
-    assert!(alarm > 0, "the bar was not drawn under the alarm");
-    assert!(
-        out[alarm + 1..]
-            .iter()
-            .all(|d| matches!(d, Draw::Tex { .. })),
-        "something was drawn over the alarm band"
-    );
-}
-
-#[test]
 fn the_card_alarm_says_what_failed_and_what_it_costs() {
-    assert_eq!(Toast::CardUnwritable.text(Language::ZhCn), "无法写入存储卡");
     assert_eq!(
-        Toast::CardUnwritable.detail(Language::ZhCn),
-        Some("当前进度未能保存")
+        slot_i18n::t(Language::ZhCn, "device.toast.card_unwritable"),
+        "无法写入存储卡"
     );
-    assert_eq!(Toast::StateSaved.detail(Language::ZhCn), None);
+    assert_eq!(
+        slot_i18n::t(Language::ZhCn, "device.toast.card_unwritable.detail"),
+        "当前进度未能保存"
+    );
 }
 
 #[test]
-fn the_card_alarm_inks_both_of_its_lines() {
-    let f = toast_face(Toast::CardUnwritable, Language::ZhCn);
-    let inked = |rows: std::ops::Range<u32>| {
-        rows.into_iter()
-            .any(|y| (0..f.w).any(|x| f.rgba[((y * f.w + x) * 4 + 3) as usize] > 0x80))
-    };
-    let half = f.h / 2;
-    assert!(inked(0..half), "the first line is blank");
-    assert!(inked(half + 8..f.h), "the second line is blank");
+fn the_card_alarm_is_a_large_two_line_notice() {
+    let f = slot_ui::notice::notice_face(
+        "无法写入存储卡",
+        "当前进度未能保存",
+        None,
+        Language::ZhCn,
+    );
+    assert_eq!(
+        (f.w, f.h),
+        (
+            slot_ui::notice::NOTICE_W as u32,
+            slot_ui::notice::NOTICE_H as u32
+        )
+    );
+    assert!(f.rgba.iter().any(|a| *a > 0));
+}
+
+#[test]
+fn the_result_and_status_use_the_small_notification_shell() {
+    let result = slot_ui::small_result_face("已拉取版本 7");
+    let status = slot_ui::small_status_face("正在同步");
+    assert_eq!((result.w, result.h), (378, 40), "the result is not the small shell");
+    assert_eq!((status.w, status.h), (378, 40), "the status is not the small shell");
+    assert!(result.rgba.iter().any(|a| *a > 0), "the result drew nothing");
+    assert!(status.rgba.iter().any(|a| *a > 0), "the status drew nothing");
 }

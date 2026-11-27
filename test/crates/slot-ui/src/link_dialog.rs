@@ -12,10 +12,6 @@ use slot_gfx::{OUT_H, OUT_W};
 const DIALOG_W: f32 = 560.0;
 const DIALOG_H: f32 = 260.0;
 
-fn accent() -> [u8; 4] {
-    [sw::accent()[0], sw::accent()[1], sw::accent()[2], 0xff]
-}
-
 fn face(title: &str, heading: &str, body: &str, hint: &str) -> UndoFace {
     let mut face = kb::blank(OUT_W, OUT_H, [0, 0, 0, 0]);
     kb::fill(
@@ -29,14 +25,6 @@ fn face(title: &str, heading: &str, body: &str, hint: &str) -> UndoFace {
 
     let x = ((OUT_W as f32 - DIALOG_W) / 2.0).round();
     let y = ((OUT_H as f32 - DIALOG_H) / 2.0).round();
-    kb::fill(
-        &mut face,
-        x + 8.0,
-        y + 10.0,
-        DIALOG_W,
-        DIALOG_H,
-        [0, 0, 0, 96],
-    );
     sw::fill_round(
         &mut face,
         x,
@@ -55,15 +43,13 @@ fn face(title: &str, heading: &str, body: &str, hint: &str) -> UndoFace {
         (sw::DIALOG_RADIUS - 1.0).max(0.0),
         sw::surface(),
     );
-    kb::fill(&mut face, x + 32.0, y + 30.0, 5.0, 28.0, accent());
-
     kb::draw_left(
         &mut face,
         title,
         26.0,
         14.0,
-        DIALOG_W - 96.0,
-        x + 48.0,
+        DIALOG_W - 64.0,
+        x + 32.0,
         y + 20.0,
         44.0,
         sw::ink(),

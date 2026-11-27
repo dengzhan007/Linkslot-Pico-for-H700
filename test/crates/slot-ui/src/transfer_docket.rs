@@ -1,48 +1,51 @@
-//! The cart-transfer "transfer docket": a cream paper manifest printed by the
-//! console while the card stays in the slot.  The app moves this finished
-//! face; the percentage, bar fill, check boxes and stamp are dynamic.
-//!
-//! The docket reports *real* byte progress.  Unlike the cloud-sync screen,
-//! which only knows stages, this one has a legitimate percentage; the manifest
-//! below it makes that percentage meaningful.
+//! The cart-transfer card: a Console Flat "transfer link" manifest shown while
+//! the cartridge stays in the slot.  The card itself is static; the percentage,
+//! bar fill, per-item states, link arrow and data dot are drawn by the app.
 
 use crate::plate::UndoFace;
 use crate::switch_style as sw;
 
 pub const DOCKET_W: u32 = 560;
-pub const DOCKET_H: u32 = 320;
+pub const DOCKET_H: u32 = 344;
 
-/// Where the docket sits on the 720x480 screen.
-pub const DOCKET_AT: (f32, f32) = (80.0, 88.0);
-/// Where the cartridge thumbnail is pasted by the app.
-pub const CARD_FRAME: (f32, f32, f32, f32) = (96.0, 162.0, 90.0, 51.0);
-pub const CARD_INNER: (f32, f32, f32, f32) = (99.0, 165.0, 84.0, 47.0);
+/// Where the card sits on the 720x480 screen.
+pub const DOCKET_AT: (f32, f32) = (80.0, 70.0);
+/// The game thumbnail frame (absolute screen coordinates) and the paste area.
+pub const CARD_FRAME: (f32, f32, f32, f32) = (104.0, 168.0, 64.0, 38.0);
+pub const CARD_INNER: (f32, f32, f32, f32) = (105.0, 169.0, 62.0, 36.0);
 /// Dynamic text anchors (absolute screen coordinates).
-pub const PERCENT_AT: (f32, f32) = (96.0, 240.0);
-pub const BYTES_AT: (f32, f32) = (240.0, 264.0);
-pub const BAR: (f32, f32, f32, f32) = (240.0, 252.0, 384.0, 6.0);
+pub const PERCENT_AT: (f32, f32) = (104.0, 248.0);
+pub const BYTES_AT: (f32, f32) = (196.0, 270.0);
+pub const BAR: (f32, f32, f32, f32) = (196.0, 260.0, 420.0, 4.0);
+/// The link line's endpoints and the arrow centre.
+pub const LINK_X0: f32 = 142.0;
+pub const LINK_X1: f32 = 578.0;
+pub const LINK_Y: f32 = 223.0;
+pub const ARROW_CENTRE: (f32, f32) = (360.0, 223.0);
 /// Manifest rows, absolute Y.
-pub const ROW_Y: [f32; 4] = [310.0, 328.0, 346.0, 364.0];
-pub const COL_L: f32 = 96.0;
+pub const ROW_Y: [f32; 4] = [312.0, 328.0, 344.0, 360.0];
+pub const COL_L: f32 = 104.0;
 pub const COL_R: f32 = 380.0;
-pub const COL_L_RIGHT: f32 = 312.0;
-pub const COL_R_RIGHT: f32 = 624.0;
+pub const COL_L_RIGHT: f32 = 340.0;
+pub const COL_R_RIGHT: f32 = 616.0;
 pub const CHECK_PX: u32 = 10;
-pub const CHECK_DY: f32 = 2.0;
+pub const CHECK_DY: f32 = 0.0;
 /// The per-item mini bar runs from `x + 16` to `right - MINI_BAR_RIGHT`.
-pub const MINI_BAR_DY: f32 = 15.0;
-pub const MINI_BAR_RIGHT: f32 = 44.0;
-/// The completion stamp's centre, absolute.
-pub const STAMP_CENTRE: (f32, f32) = (600.0, 112.0);
+pub const MINI_BAR_DY: f32 = 14.0;
+pub const MINI_BAR_RIGHT: f32 = 10.0;
+/// The completion badge's centre, absolute.
+pub const BADGE_CENTRE: (f32, f32) = (596.0, 140.0);
+pub const BADGE_PX: u32 = 24;
+pub const ARROW_PX: u32 = 8;
 
-pub const PAPER: [u8; 4] = [232, 226, 205, 255];
-pub const PAPER_BORDER: [u8; 4] = [201, 195, 180, 255];
-pub const PAPER_EDGE: [u8; 4] = [181, 174, 156, 255];
-pub const PAPER_INK: [u8; 3] = [46, 41, 34];
-pub const PAPER_DIM: [u8; 3] = [98, 92, 79];
-pub const PAPER_FAINT: [u8; 3] = [102, 95, 81];
-pub const HOST_DOT: [u8; 4] = [23, 107, 83, 255];
-pub const JOIN_DOT: [u8; 4] = [40, 91, 148, 255];
+pub const PAPER: [u8; 4] = [0x26, 0x26, 0x2b, 255];
+pub const PAPER_BORDER: [u8; 4] = [0x3a, 0x3a, 0x42, 255];
+pub const PAPER_EDGE: [u8; 4] = [0x3a, 0x3a, 0x42, 255];
+pub const PAPER_INK: [u8; 3] = [0xf4, 0xf4, 0xf1];
+pub const PAPER_DIM: [u8; 3] = [0xa6, 0xa6, 0xad];
+pub const PAPER_FAINT: [u8; 3] = [0x74, 0x74, 0x7c];
+pub const HOST_DOT: [u8; 4] = [0x66, 0xe2, 0xba, 255];
+pub const JOIN_DOT: [u8; 4] = [0x8a, 0xc8, 0xff, 255];
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum DocketFlow {
@@ -60,8 +63,8 @@ pub struct DocketAsset<'a> {
     pub size: &'a str,
 }
 
-/// Everything the static docket face prints.  `reverse` mirrors the arrow for
-/// a receive; the local device always stays on the left.
+/// Everything the static card prints.  `reverse` is used by the app for the
+/// link arrow / data dot; the card only needs the roles and the flow.
 pub struct DocketView<'a> {
     pub flow: DocketFlow,
     pub reverse: bool,
@@ -100,11 +103,6 @@ fn cart(face: UndoFace) -> crate::CartFace {
     }
 }
 
-fn accent() -> [u8; 4] {
-    let a = sw::accent();
-    [a[0], a[1], a[2], 255]
-}
-
 fn blit(dst: &mut UndoFace, src: &UndoFace, x: i32, y: i32) {
     for sy in 0..src.h as i32 {
         let dy = y + sy;
@@ -117,22 +115,11 @@ fn blit(dst: &mut UndoFace, src: &UndoFace, x: i32, y: i32) {
                 continue;
             }
             let si = ((sy as u32 * src.w + sx as u32) * 4) as usize;
-            let a = src.rgba[si + 3] as u32;
-            if a == 0 {
+            if src.rgba[si + 3] == 0 {
                 continue;
             }
             let di = ((dy as u32 * dst.w + dx as u32) * 4) as usize;
-            let da = dst.rgba[di + 3] as u32;
-            let out = a + da * (255 - a) / 255;
-            if out == 0 {
-                continue;
-            }
-            for c in 0..3 {
-                dst.rgba[di + c] = ((src.rgba[si + c] as u32 * a
-                    + dst.rgba[di + c] as u32 * da * (255 - a) / 255)
-                    / out) as u8;
-            }
-            dst.rgba[di + 3] = out as u8;
+            dst.rgba[di..di + 4].copy_from_slice(&src.rgba[si..si + 4]);
         }
     }
 }
@@ -152,393 +139,308 @@ fn dot(face: &mut UndoFace, x: f32, y: f32, r: f32, colour: [u8; 4]) {
     sw::fill_round(face, x - r, y - r, r * 2.0, r * 2.0, (r - 0.01).max(0.0), colour);
 }
 
-/// A soft contact shadow under the paper.  The face is larger than the docket
-/// so the app can offset it without clipping.
-pub fn shadow_face() -> crate::CartFace {
-    let (w, h) = (DOCKET_W + 8, DOCKET_H + 8);
-    let mut face = blank(w, h);
-    for i in 0..7 {
-        let inset = i as f32;
-        let alpha = (16 - i * 2).max(0) as u8;
-        sw::fill_round(
-            &mut face,
-            4.0 + inset,
-            6.0 + inset,
-            DOCKET_W as f32 - inset * 2.0,
-            DOCKET_H as f32 - inset * 2.0,
-            7.0,
-            [0, 0, 0, alpha],
-        );
+fn dashed(face: &mut UndoFace, x0: f32, y: f32, width: f32, colour: [u8; 4]) {
+    let mut x = x0;
+    while x < x0 + width {
+        let w = 7.0f32.min(x0 + width - x);
+        sw::fill_round(face, x, y, w, 1.0, 0.0, colour);
+        x += 12.0;
     }
-    cart(face)
 }
 
-/// The paper, header and every line that does not change with the percentage.
+fn point_segment(px: f32, py: f32, ax: f32, ay: f32, bx: f32, by: f32) -> f32 {
+    let (dx, dy) = (bx - ax, by - ay);
+    let len = dx * dx + dy * dy;
+    if len <= f32::EPSILON {
+        return ((px - ax) * (px - ax) + (py - ay) * (py - ay)).sqrt();
+    }
+    let t = (((px - ax) * dx + (py - ay) * dy) / len).clamp(0.0, 1.0);
+    let qx = ax + dx * t;
+    let qy = ay + dy * t;
+    ((px - qx) * (px - qx) + (py - qy) * (py - qy)).sqrt()
+}
+
+fn stroke(face: &mut UndoFace, points: &[(f32, f32)], width: f32, colour: [u8; 3]) {
+    for y in 0..face.h {
+        for x in 0..face.w {
+            let px = x as f32 + 0.5;
+            let py = y as f32 + 0.5;
+            let mut distance = f32::INFINITY;
+            for pair in points.windows(2) {
+                distance = distance.min(point_segment(
+                    px, py, pair[0].0, pair[0].1, pair[1].0, pair[1].1,
+                ));
+            }
+            let alpha = ((width / 2.0 + 0.5 - distance).clamp(0.0, 1.0) * 255.0) as u8;
+            if alpha > 0 {
+                let at = ((y * face.w + x) * 4) as usize;
+                let src = alpha as f32 / 255.0;
+                let dst = face.rgba[at + 3] as f32 / 255.0;
+                let out = src + dst * (1.0 - src);
+                if out <= 0.0 {
+                    continue;
+                }
+                for channel in 0..3 {
+                    let a = colour[channel] as f32 / 255.0;
+                    let b = face.rgba[at + channel] as f32 / 255.0;
+                    face.rgba[at + channel] =
+                        (((a * src + b * dst * (1.0 - src)) / out) * 255.0).round() as u8;
+                }
+                face.rgba[at + 3] = (out * 255.0).round() as u8;
+            }
+        }
+    }
+}
+
+fn draw_device(face: &mut UndoFace, x: f32, host: bool) {
+    let icon = sw::rounded_face(
+        30,
+        18,
+        4.0,
+        [0x1a, 0x1a, 0x1e, 255],
+        Some([PAPER_INK[0], PAPER_INK[1], PAPER_INK[2], 255]),
+    );
+    blit(face, &icon, x as i32, 144);
+    sw::fill_round(
+        face,
+        x + 5.0,
+        150.0,
+        15.0,
+        1.0,
+        0.0,
+        [PAPER_INK[0], PAPER_INK[1], PAPER_INK[2], 255],
+    );
+    sw::fill_round(
+        face,
+        x + 5.0,
+        154.0,
+        11.0,
+        1.0,
+        0.0,
+        [PAPER_DIM[0], PAPER_DIM[1], PAPER_DIM[2], 255],
+    );
+    dot(
+        face,
+        x + 25.0,
+        147.0,
+        2.5,
+        if host { HOST_DOT } else { JOIN_DOT },
+    );
+}
+
+/// The card, header and every line that does not change with the percentage.
 pub fn docket_face(view: &DocketView) -> crate::CartFace {
     let mut face = blank(DOCKET_W, DOCKET_H);
-    let paper = sw::rounded_face(
-        DOCKET_W,
-        DOCKET_H,
-        6.0,
-        PAPER,
-        Some(PAPER_BORDER),
-    );
-    blit(&mut face, &paper, 0, 0);
-    sw::fill_round(&mut face, 2.0, 1.0, (DOCKET_W - 4) as f32, 1.0, 0.0, [245, 241, 226, 255]);
-    sw::fill_round(&mut face, 8.0, 6.0, 1.0, (DOCKET_H - 12) as f32, 0.0, [238, 233, 217, 255]);
-    sw::fill_round(
-        &mut face,
-        (DOCKET_W - 9) as f32,
-        6.0,
-        1.0,
-        (DOCKET_H - 12) as f32,
-        0.5,
-        [238, 233, 217, 255],
-    );
+    let card = sw::rounded_face(DOCKET_W, DOCKET_H, 12.0, PAPER, Some(PAPER_BORDER));
+    blit(&mut face, &card, 0, 0);
 
-    // Header: accent bar, title, content pill, status.
-    sw::fill_round(&mut face, 16.0, 16.0, 5.0, 26.0, 2.5, accent());
+    // Header: red spine, title, content chip, hairline.
+    let accent = sw::accent();
+    let accent4 = [accent[0], accent[1], accent[2], 255];
+    sw::fill_round(&mut face, 24.0, 16.0, 3.0, 22.0, 1.5, accent4);
     crate::keyboard::draw_left(
         &mut face,
         view.title,
-        26.0,
-        18.0,
+        20.0,
+        10.0,
         400.0,
-        30.0,
-        8.0,
-        32.0,
+        36.0,
+        12.0,
+        26.0,
         PAPER_INK,
     );
-    if !matches!(view.flow, DocketFlow::Done) {
-        let pill = sw::rounded_face(90, 22, 6.0, [222, 216, 198, 255], Some(PAPER_BORDER));
-        blit(&mut face, &pill, 454, 12);
-        crate::keyboard::draw_box(
-            &mut face,
-            view.content,
-            10.0,
-            8.0,
-            454.0,
-            12.0,
-            90.0,
-            22.0,
-            PAPER_INK,
-        );
-    }
-    let status_dot = if matches!(view.flow, DocketFlow::Waiting) {
-        PAPER_EDGE
-    } else {
-        accent()
-    };
-    dot(&mut face, 18.0, 59.0, 3.5, status_dot);
+    let chip = sw::rounded_face(80, 20, 10.0, sw::surface(), Some(PAPER_BORDER));
+    blit(&mut face, &chip, 456, 16);
+    crate::keyboard::draw_box(
+        &mut face,
+        view.content,
+        9.0,
+        8.0,
+        456.0,
+        16.0,
+        80.0,
+        20.0,
+        PAPER_DIM,
+    );
+    sw::fill_round(&mut face, 24.0, 48.0, 512.0, 1.0, 0.0, PAPER_EDGE);
+
+    // Status, role, and the waiting sub-line.
+    dot(&mut face, 27.0, 70.0, 3.0, accent4);
     crate::keyboard::draw_left(
         &mut face,
         view.status,
-        16.0,
-        12.0,
+        14.0,
+        10.0,
         420.0,
-        28.0,
-        48.0,
+        38.0,
+        62.0,
         20.0,
         PAPER_INK,
     );
+    if matches!(view.flow, DocketFlow::Waiting) {
+        crate::keyboard::draw_left(
+            &mut face,
+            view.waiting_line,
+            10.0,
+            9.0,
+            300.0,
+            40.0,
+            80.0,
+            14.0,
+            PAPER_DIM,
+        );
+    }
 
-    // Product line: cartridge thumbnail frame, game name, platform / total.
-    let frame = sw::rounded_face(
-        90,
-        51,
-        2.0,
-        [PAPER_INK[0], PAPER_INK[1], PAPER_INK[2], 255],
-        None,
-    );
-    blit(&mut face, &frame, 16, 74);
+    // Game thumbnail frame (the app pastes the cart face inside) and name.
+    let frame = sw::rounded_face(64, 38, 4.0, [0x1d, 0x1d, 0x22, 255], Some(PAPER_EDGE));
+    blit(&mut face, &frame, 24, 98);
     crate::keyboard::draw_left(
         &mut face,
         view.game,
         18.0,
-        13.0,
-        340.0,
-        118.0,
-        68.0,
+        10.0,
+        420.0,
+        100.0,
+        96.0,
         24.0,
         PAPER_INK,
     );
     crate::keyboard::draw_left(
         &mut face,
         view.platform_line,
-        11.0,
-        10.0,
-        340.0,
-        118.0,
-        94.0,
+        10.5,
+        9.0,
+        420.0,
+        100.0,
+        120.0,
         16.0,
         PAPER_DIM,
     );
 
-    // Local/peer identities and a compact arrow, not a full-width divider.
-    let left_w = ink_width(view.role_local, 11.0);
-    let right_w = ink_width(view.role_peer, 11.0);
-    let arrow_w = 34.0;
-    let gap = 14.0;
-    let total = 6.0 + left_w + gap + arrow_w + gap + 6.0 + right_w;
-    let x = (DOCKET_W as f32 - total) / 2.0;
-    let cy = 136.0;
-    dot(&mut face, x + 3.0, cy, 3.2, if view.host { HOST_DOT } else { JOIN_DOT });
-    crate::keyboard::draw_text(
-        &mut face,
-        view.role_local,
-        11.0,
-        x + 12.0,
-        cy - 7.0,
-        PAPER_DIM,
-    );
-    let ax0 = x + 6.0 + left_w + gap;
-    let ax1 = ax0 + arrow_w;
-    let (start, end) = if view.reverse { (ax1, ax0) } else { (ax0, ax1) };
-    sw::fill_round(
-        &mut face,
-        start.min(end),
-        cy - 1.0,
-        (end - start).abs().max(1.0),
-        2.0,
-        1.0,
-        accent(),
-    );
-    let dir = if end > start { 1.0 } else { -1.0 };
-    for i in 0..7 {
-        let half = (7 - i) as f32 * 0.62;
-        let bx = end - dir * (7 - i) as f32;
-        sw::fill_round(
-            &mut face,
-            bx,
-            cy - half,
-            1.0,
-            half * 2.0,
-            0.0,
-            accent(),
-        );
-    }
-    let rx = x + 6.0 + left_w + gap + arrow_w + gap;
-    dot(&mut face, rx + 3.0, cy, 3.2, if view.host { JOIN_DOT } else { HOST_DOT });
-    crate::keyboard::draw_text(
-        &mut face,
-        view.role_peer,
-        11.0,
-        rx + 12.0,
-        cy - 7.0,
-        PAPER_DIM,
-    );
-
-    // Waiting state: no 0%.  A dashed slot plus one clear sentence.
+    // Two devices, one link, and the role dots.  The app paints the direction
+    // arrow and the moving data dot on this line.
+    draw_device(&mut face, 24.0, view.host);
+    draw_device(&mut face, 506.0, !view.host);
+    crate::keyboard::draw_text(&mut face, view.role_local, 9.5, 24.0, 166.0, PAPER_DIM);
+    draw_right(&mut face, view.role_peer, 9.5, 536.0, 166.0, PAPER_DIM);
     if matches!(view.flow, DocketFlow::Waiting) {
-        crate::keyboard::draw_text(&mut face, view.waiting_line, 16.0, 16.0, 150.0, PAPER_INK);
-        let mut x = 160.0;
-        while x < 544.0 {
-            sw::fill_round(&mut face, x, 176.0, 8.0, 6.0, 0.0, PAPER_EDGE);
-            x += 14.0;
-        }
-        crate::keyboard::draw_left(
-            &mut face,
-            view.waiting_after,
-            10.0,
-            9.0,
-            384.0,
-            160.0,
-            188.0,
-            14.0,
-            PAPER_FAINT,
-        );
+        dashed(&mut face, 62.0, 153.0, 436.0, PAPER_EDGE);
     } else {
-        // The track is static; the app paints the red fill on top.
-        sw::fill_round(&mut face, 160.0, 164.0, 384.0, 6.0, 3.0, [216, 208, 188, 255]);
-        sw::fill_round(&mut face, 160.0, 164.0, 384.0, 1.0, 0.0, [201, 195, 180, 255]);
-        sw::fill_round(&mut face, 160.0, 169.0, 384.0, 1.0, 0.0, [201, 195, 180, 255]);
+        sw::fill_round(&mut face, 62.0, 153.0, 436.0, 1.0, 0.0, PAPER_EDGE);
     }
 
-    // Manifest: two semantic columns.  A group that is not part of this
-    // transfer still says so, so "仅存档" cannot be mistaken for a cart copy.
-    crate::keyboard::draw_text(&mut face, view.group_cart, 10.0, 16.0, 204.0, PAPER_DIM);
-    crate::keyboard::draw_text(&mut face, view.group_save, 10.0, 300.0, 204.0, PAPER_DIM);
-    sw::fill_round(&mut face, 16.0, 216.0, 216.0, 1.0, 0.0, [201, 195, 180, 255]);
-    sw::fill_round(&mut face, 300.0, 216.0, 244.0, 1.0, 0.0, [201, 195, 180, 255]);
+    // Progress track; the app paints the red fill on top.
+    if matches!(view.flow, DocketFlow::Waiting) {
+        dashed(&mut face, 116.0, 191.5, 420.0, PAPER_EDGE);
+    } else {
+        sw::fill_round(&mut face, 116.0, 190.0, 420.0, 4.0, 2.0, PAPER_EDGE);
+    }
 
-    let rows = [
-        (view.cart, 16.0, 232.0),
-        (view.save, 300.0, 544.0),
+    // Manifest: two explicit, equal-width groups.
+    sw::fill_round(&mut face, 24.0, 234.0, 512.0, 1.0, 0.0, PAPER_EDGE);
+    crate::keyboard::draw_text(&mut face, view.group_cart, 9.5, 24.0, 222.0, PAPER_FAINT);
+    crate::keyboard::draw_text(&mut face, view.group_save, 9.5, 300.0, 222.0, PAPER_FAINT);
+
+    let cart_note = if view.cart.is_empty() {
+        if view.partial_note.is_empty() {
+            Some(view.not_included)
+        } else {
+            Some(view.partial_note)
+        }
+    } else {
+        None
+    };
+    let save_note = if view.save.is_empty() {
+        Some(view.not_included)
+    } else {
+        None
+    };
+    let groups = [
+        (view.cart, COL_L - DOCKET_AT.0, COL_L_RIGHT - DOCKET_AT.0, cart_note),
+        (view.save, COL_R - DOCKET_AT.0, COL_R_RIGHT - DOCKET_AT.0, save_note),
     ];
-    for (assets, x, right) in rows {
-        if assets.is_empty() {
-            crate::keyboard::draw_text(
-                &mut face,
-                view.not_included,
-                11.0,
-                x + 16.0,
-                222.0,
-                PAPER_FAINT,
-            );
+    for (assets, x, right, note) in groups {
+        if let Some(note) = note {
+            crate::keyboard::draw_text(&mut face, note, 10.0, x + 16.0, 242.0, PAPER_FAINT);
             continue;
         }
         for (index, asset) in assets.iter().take(4).enumerate() {
-            let y = 222.0 + index as f32 * 18.0;
+            let y = 242.0 + index as f32 * 16.0;
             crate::keyboard::draw_left(
                 &mut face,
                 asset.label,
-                12.0,
-                10.0,
-                right - (x + 16.0) - 56.0,
+                11.0,
+                9.0,
+                right - (x + 16.0) - 52.0,
                 x + 16.0,
-                y,
+                y - 1.0,
                 16.0,
-                PAPER_INK,
+                PAPER_DIM,
             );
-            draw_right(&mut face, asset.size, 10.0, right, y + 2.0, PAPER_FAINT);
+            draw_right(&mut face, asset.size, 9.5, right, y + 1.0, PAPER_FAINT);
         }
     }
-    if !view.partial_note.is_empty() && view.cart.len() < 4 {
-        let row = if view.cart.is_empty() {
-            1
-        } else {
-            view.cart.len().min(3)
-        };
-        let y = 222.0 + row as f32 * 18.0;
-        crate::keyboard::draw_text(&mut face, view.partial_note, 9.0, 32.0, y, PAPER_FAINT);
-    }
 
-    // Footer: perforation, barcode, network hint, maker's mark.
-    let mut x = 16.0;
-    while x < 544.0 {
-        sw::fill_round(&mut face, x, 302.0, 4.0, 1.0, 0.0, PAPER_EDGE);
-        x += 8.0;
-    }
-    let bars = [2u32, 1, 2, 1, 3, 1, 1, 2, 3, 1, 2, 1, 3, 1, 1];
-    let mut bx = 16.0;
-    for width in bars {
-        sw::fill_round(
-            &mut face,
-            bx,
-            304.0,
-            width as f32,
-            12.0,
-            0.0,
-            [PAPER_INK[0], PAPER_INK[1], PAPER_INK[2], 255],
-        );
-        bx += width as f32 + 2.0;
-    }
+    // Footer: the network/hint line and a small brand mark.
     crate::keyboard::draw_left(
         &mut face,
         view.footer_hint,
         9.0,
         8.0,
         430.0,
-        92.0,
-        304.0,
+        24.0,
+        320.0,
         12.0,
         PAPER_FAINT,
     );
-    draw_right(&mut face, "LINKSLOT", 7.0, 544.0, 305.0, PAPER_FAINT);
+    draw_right(&mut face, "LINKSLOT", 8.0, 536.0, 320.0, PAPER_FAINT);
 
     cart(face)
 }
 
-/// A tiny filled check.  The docket's static face leaves the checkbox empty;
-/// the app draws this on completed rows.
+/// The white check on a completed manifest row.
 pub fn check_face() -> crate::CartFace {
     let n = CHECK_PX;
     let mut face = blank(n, n);
-    for y in 0..n {
-        for x in 0..n {
-            let mut red = 0u32;
-            let mut white = 0u32;
-            for sy in 0..4 {
-                for sx in 0..4 {
-                    let px = x as f32 + (sx as f32 + 0.5) / 4.0;
-                    let py = y as f32 + (sy as f32 + 0.5) / 4.0;
-                    let dx = (px - n as f32 / 2.0).abs() - (n as f32 / 2.0 - 2.0);
-                    let dy = (py - n as f32 / 2.0).abs() - (n as f32 / 2.0 - 2.0);
-                    if dx.max(0.0).hypot(dy.max(0.0)) <= 2.0 {
-                        red += 1;
-                        let a = (2.5, 5.2);
-                        let b = (4.4, 7.2);
-                        let c = (8.0, 3.2);
-                        let near = |x0: f32, y0: f32, x1: f32, y1: f32| {
-                            let (vx, vy) = (x1 - x0, y1 - y0);
-                            let t = (((px - x0) * vx + (py - y0) * vy)
-                                / (vx * vx + vy * vy).max(f32::EPSILON))
-                                .clamp(0.0, 1.0);
-                            ((px - (x0 + vx * t)).powi(2) + (py - (y0 + vy * t)).powi(2))
-                                .sqrt()
-                                <= 1.25
-                        };
-                        if near(a.0, a.1, b.0, b.1) || near(b.0, b.1, c.0, c.1) {
-                            white += 1;
-                        }
-                    }
-                }
-            }
-            if red == 0 {
-                continue;
-            }
-            let at = ((y * n + x) * 4) as usize;
-            let w = white as u32;
-            for ch in 0..3 {
-                let under = accent()[ch] as u32 * (red - w) / red;
-                let over = 255u32 * w / red;
-                face.rgba[at + ch] = (under + over).min(255) as u8;
-            }
-            face.rgba[at + 3] = (red * 255 / 16) as u8;
-        }
-    }
+    stroke(
+        &mut face,
+        &[(2.5, 5.2), (4.4, 7.2), (8.0, 3.2)],
+        1.25,
+        PAPER_INK,
+    );
     cart(face)
 }
 
-/// The completion stamp: two rings and a check, baked at an angle because
-/// `Draw::Tex` is axis-aligned.
-pub fn stamp_face() -> crate::CartFace {
-    let n = 40u32;
+/// The red completion badge: a filled red circle with a white check.
+pub fn badge_face() -> crate::CartFace {
+    let n = BADGE_PX;
     let mut face = blank(n, n);
-    let c = n as f32 / 2.0;
-    let angle = 8.0_f32.to_radians();
-    let (sin, cos) = angle.sin_cos();
-    let ink = accent();
-    for y in 0..n {
-        for x in 0..n {
-            let mut hits = 0u32;
-            for sy in 0..4 {
-                for sx in 0..4 {
-                    let px = x as f32 + (sx as f32 + 0.5) / 4.0;
-                    let py = y as f32 + (sy as f32 + 0.5) / 4.0;
-                    let dx = px - c;
-                    let dy = py - c;
-                    let rx = dx * cos - dy * sin;
-                    let ry = dx * sin + dy * cos;
-                    let r = (rx * rx + ry * ry).sqrt();
-                    let ring = (r - 17.5).abs() <= 1.3;
-                    let inner = (r - 13.5).abs() <= 0.5;
-                    let check = segment_dist(rx, ry, -7.0, 1.0, -2.0, 7.0) <= 1.5
-                        || segment_dist(rx, ry, -2.0, 7.0, 8.0, -7.0) <= 1.5;
-                    if ring || inner || check {
-                        hits += 1;
-                    }
-                }
-            }
-            if hits == 0 {
-                continue;
-            }
-            let at = ((y * n + x) * 4) as usize;
-            face.rgba[at..at + 3].copy_from_slice(&ink[..3]);
-            face.rgba[at + 3] = (hits * 255 / 16) as u8;
-        }
-    }
+    let accent = sw::accent();
+    sw::fill_round(
+        &mut face,
+        0.0,
+        0.0,
+        n as f32,
+        n as f32,
+        n as f32 / 2.0,
+        [accent[0], accent[1], accent[2], 255],
+    );
+    stroke(&mut face, &[(6.5, 12.5), (10.5, 17.0), (18.0, 7.5)], 1.6, PAPER_INK);
     cart(face)
 }
 
-fn segment_dist(px: f32, py: f32, ax: f32, ay: f32, bx: f32, by: f32) -> f32 {
-    let (dx, dy) = (bx - ax, by - ay);
-    let len2 = dx * dx + dy * dy;
-    if len2 <= f32::EPSILON {
-        return ((px - ax).powi(2) + (py - ay).powi(2)).sqrt();
-    }
-    let t = (((px - ax) * dx + (py - ay) * dy) / len2).clamp(0.0, 1.0);
-    ((px - (ax + dx * t)).powi(2) + (py - (ay + dy * t)).powi(2)).sqrt()
+/// The direction arrow on the link.  `reverse` points left.
+pub fn arrow_face(reverse: bool) -> crate::CartFace {
+    let n = ARROW_PX;
+    let mut face = blank(n, n);
+    let accent = sw::accent();
+    let points = if reverse {
+        [(6.0, 1.5), (2.5, 4.0), (6.0, 6.5)]
+    } else {
+        [(2.0, 1.5), (5.5, 4.0), (2.0, 6.5)]
+    };
+    stroke(&mut face, &points, 1.5, [accent[0], accent[1], accent[2]]);
+    cart(face)
 }
 
 #[cfg(test)]
@@ -578,7 +480,7 @@ mod tests {
     }
 
     #[test]
-    fn the_docket_is_paper_sized() {
+    fn the_docket_is_the_flat_transfer_card() {
         let face = docket_face(&view(&[], &[]));
         assert_eq!((face.w, face.h), (DOCKET_W, DOCKET_H));
         assert_eq!(alpha(&face, 0, 0), 0);
@@ -587,24 +489,19 @@ mod tests {
     }
 
     #[test]
-    fn the_check_has_red_and_white_ink() {
-        let face = check_face();
-        assert_eq!((face.w, face.h), (CHECK_PX, CHECK_PX));
-        let inked = (0..face.w * face.h)
-            .filter(|i| face.rgba[(*i as usize) * 4 + 3] > 0)
+    fn the_check_and_badge_have_ink() {
+        let check = check_face();
+        assert_eq!((check.w, check.h), (CHECK_PX, CHECK_PX));
+        let inked = (0..check.w * check.h)
+            .filter(|i| check.rgba[(*i as usize) * 4 + 3] > 0)
             .count();
         assert!(inked > 20, "the check has too little ink: {inked}");
-    }
-
-    #[test]
-    fn the_stamp_is_a_ring_with_a_check() {
-        let face = stamp_face();
-        assert_eq!((face.w, face.h), (40, 40));
-        assert_eq!(alpha(&face, 0, 0), 0);
-        let inked = (0..face.w * face.h)
-            .filter(|i| face.rgba[(*i as usize) * 4 + 3] > 0)
-            .count();
-        assert!(inked > 100, "the stamp has too little ink: {inked}");
+        let badge = badge_face();
+        assert_eq!((badge.w, badge.h), (BADGE_PX, BADGE_PX));
+        assert!(badge.rgba.iter().any(|byte| *byte > 0));
+        let right = arrow_face(false);
+        let left = arrow_face(true);
+        assert_ne!(right.rgba, left.rgba);
     }
 
     #[test]

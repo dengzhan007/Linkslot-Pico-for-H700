@@ -48,8 +48,20 @@ impl PowerChoice {
     }
 }
 
-pub const POWER_CARD_W: u32 = 520;
-pub const POWER_CARD_H: u32 = 52;
+pub const POWER_CARD_W: u32 = 400;
+pub const POWER_CARD_H: u32 = 48;
+pub const POWER_PANEL_W: u32 = 440;
+pub const POWER_PANEL_H: u32 = 292;
+
+pub fn power_panel_face() -> UndoFace {
+    switch_style::rounded_face(
+        POWER_PANEL_W,
+        POWER_PANEL_H,
+        14.0,
+        [0x2A, 0x24, 0x20, 255],
+        Some([0x4A, 0x3D, 0x33, 255]),
+    )
+}
 
 pub fn power_card_face(selected: bool) -> UndoFace {
     switch_style::card_face(POWER_CARD_W, POWER_CARD_H, selected)

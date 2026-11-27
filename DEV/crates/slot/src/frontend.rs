@@ -10,16 +10,20 @@ use slot_input::{InputSource, Millis};
 use slot_power::{Platform, Power};
 use slot_store::{format_stamp, Platform as CartPlatform};
 use slot_ui::{
-    about_face, about_thanks_face, arrows_hint_face, badge_face, bezel_face, cart_shadow, chip_face_for,
-    cart_face, chip_shadow_face, date_time_text, gb_cart_shadow, hhmm, hint_face, icon_face,
+    about_face, about_thanks_face, arrows_hint_face, badge_face, bezel_face, cart_shadow,
+    chip_face_for,
+    cart_face, chip_shadow_face, gb_cart_shadow, hhmm, hint_face, icon_face,
     large_word_face, menu_face,
-    photo_face, quick_caret_face_state, quick_icon_face, quick_label_face_state, quick_legend_faces,
-    quick_title_face, quick_value_face, rebuild_count_face, rebuild_title_face,
-    set_clock_hint_face, socket_face, title_face, toast_face, wallpaper_face,
+    photo_face, quick_background_face, quick_caret_face_state, quick_card_face, quick_icon_face,
+    quick_label_face_state,
+    quick_legend_faces, quick_number_face, quick_page_meta_face, quick_title_face, quick_value_face,
+    rebuild_count_face, rebuild_title_face,
+    set_clock_hint_face, socket_face, status_face, title_face, toast_face,
+    wallpaper_face,
     word_face, AboutFields, AboutPage, CartFace, GbShell, Icon, LinkBadge,
     PowerChoice, QuickMenuFaces, QuickRow, QuickValue, RebuildScreen, Toast, UndoFace, ALERT_PX,
     BOLT_PX,
-    HUD_ICON_PX, HUD_INK, QUICK_CARD_H, QUICK_CARD_W,
+    HUD_ICON_PX,
 };
 
 use crate::app::{
@@ -160,6 +164,10 @@ pub struct Frontend {
     hold_tex: Option<TexId>,
     nav_title: Option<TexId>,
     nav_title_shown: String,
+    quick_special_open: bool,
+    quick_special_key: Option<(slot_i18n::Language, usize, String)>,
+    quick_mods_texs: [Option<TexId>; 2],
+    quick_version_texs: [Option<TexId>; 2],
     folder_tex: Option<TexId>,
     folder_shown: Option<crate::app::FolderHeader>,
     folder_prev_tex: Option<TexId>,
@@ -341,6 +349,7 @@ struct Clocks {
     platform_tex: Option<TexId>,
     playtime: String,
     playtime_tex: Option<TexId>,
+    playtime_panel: Option<TexId>,
 }
 
 #[derive(Default)]
@@ -373,6 +382,8 @@ impl Frontend {
             guide_tex: None, guide_shown: None,
             hold_tex: None,
             nav_title: None, nav_title_shown: String::new(),
+            quick_special_open: false, quick_special_key: None,
+            quick_mods_texs: [None; 2], quick_version_texs: [None; 2],
             folder_tex: None, folder_shown: None,
             folder_prev_tex: None, folder_prev_shown: None,
             transfer_header_tex: None, transfer_header_shown: None,
@@ -563,6 +574,63 @@ impl Frontend {
         }
     }
 
+    fn sync_quick_specials(&mut self, compositor: &mut Compositor) {
+        if self.session.app().quick_menu().is_none() {
+            self.quick_special_open = false;
+            return;
+        }
+        let lang = self.session.app().language();
+        let count = self.session.app().quick_mods_count();
+        let version = format!("v{}", crate::build_info::Build::current().version);
+        let key = (lang, count, version.clone());
+        if self.quick_special_open && self.quick_special_key.as_ref() == Some(&key) {
+            return;
+        }
+        let mods_text = slot_i18n::t_args(
+            lang,
+            "device.quick.value.mods",
+            &[("count", &count.to_string())],
+        )
+        .to_string();
+        let mods_dim = slot_ui::quick_value_face(&mods_text, false);
+        let mods_lit = slot_ui::quick_value_face(&mods_text, true);
+        let version_dim = slot_ui::quick_value_face(&version, false);
+        let version_lit = slot_ui::quick_value_face(&version, true);
+        let mods_dim_size = (mods_dim.w, mods_dim.h);
+        let mods_lit_size = (mods_lit.w, mods_lit.h);
+        let version_dim_size = (version_dim.w, version_dim.h);
+        let version_lit_size = (version_lit.w, version_lit.h);
+        let mods_faces = [
+            (
+                upload(compositor, &mut self.quick_mods_texs[0], mods_dim),
+                mods_dim_size.0,
+                mods_dim_size.1,
+            ),
+            (
+                upload(compositor, &mut self.quick_mods_texs[1], mods_lit),
+                mods_lit_size.0,
+                mods_lit_size.1,
+            ),
+        ];
+        let version_faces = [
+            (
+                upload(compositor, &mut self.quick_version_texs[0], version_dim),
+                version_dim_size.0,
+                version_dim_size.1,
+            ),
+            (
+                upload(compositor, &mut self.quick_version_texs[1], version_lit),
+                version_lit_size.0,
+                version_lit_size.1,
+            ),
+        ];
+        self.session
+            .app_mut()
+            .set_quick_special_values(mods_faces, version_faces);
+        self.quick_special_open = true;
+        self.quick_special_key = Some(key);
+    }
+
     fn sync_front_deck(&mut self, compositor: &mut Compositor) {
         let lang = self.session.app().language();
         let carts = self.session.app().front_deck_carts();
@@ -725,7 +793,7 @@ impl Frontend {
         let icons = Icon::ALL
             .iter()
             .map(|i| {
-                let f = icon_face(*i, HUD_ICON_PX, HUD_INK);
+                let f = icon_face(*i, HUD_ICON_PX, slot_ui::switch_style::ink());
                 compositor.create_texture(f.w, f.h, &f.rgba)
             })
             .collect();
@@ -752,7 +820,7 @@ impl Frontend {
         let rounded = gb_cart_shadow(GbShell::Rounded);
         let rounded = compositor.create_texture(rounded.w, rounded.h, &rounded.rgba);
         self.session.app_mut().set_gb_cart_shadows(notched, rounded);
-        let bolt = icon_face(Icon::Charging, BOLT_PX, HUD_INK);
+        let bolt = icon_face(Icon::Charging, BOLT_PX, slot_ui::switch_style::ink());
         let bolt_id = compositor.create_texture(bolt.w, bolt.h, &bolt.rgba);
         self.session.app_mut().set_bolt_face(bolt_id);
         let star = slot_ui::favorite_star_face();
@@ -762,7 +830,7 @@ impl Frontend {
             .set_favorite_star(star_id, star.w, star.h);
         // Shelf header: Wi-Fi state icon and the bottom key legend. These are
         // static faces uploaded once at boot.
-        let wifi = slot_ui::wifi_face(slot_ui::WIFI_PX, HUD_INK);
+        let wifi = slot_ui::wifi_face(slot_ui::WIFI_PX, slot_ui::switch_style::ink());
         let (wifi_w, wifi_h) = (wifi.w, wifi.h);
         let wifi_id = compositor.create_texture(wifi_w, wifi_h, &wifi.rgba);
         self.session
@@ -1040,6 +1108,7 @@ impl Frontend {
         let tray = up(faces.tray).0;
         let tray_label = up(faces.tray_label);
         let lines = faces.shutdown.into_iter().map(&mut up).collect();
+        let quick_background = up(faces.quick_background);
         let cards = faces.quick_cards.map(&mut up);
         let power_cards = faces.power_cards.map(&mut up);
         let power_labels = faces
@@ -1061,6 +1130,7 @@ impl Frontend {
             })
             .collect();
         let power_title = up(faces.power_title);
+        let power_panel = up(faces.power_panel);
         let labels = faces
             .quick_labels
             .into_iter()
@@ -1086,6 +1156,8 @@ impl Frontend {
             })
             .collect();
         let titles = faces.quick_titles.map(&mut up);
+        let page_metas = faces.quick_page_metas.map(&mut up);
+        let numbers = faces.quick_numbers.into_iter().map(&mut up).collect();
         let legend = faces.quick_legend.map(|f| {
             let (tex, w, _) = up(f);
             (tex, w)
@@ -1118,13 +1190,17 @@ impl Frontend {
         app.set_link_badge_faces(link_badges);
         app.set_shutdown_faces(lines);
         app.set_power_menu_faces(power_cards, power_labels, power_icons, power_title);
+        app.set_power_panel_face(power_panel);
         app.set_quick_menu_faces(QuickMenuFaces {
+            background: quick_background,
             cards,
             labels,
             values,
             carets,
             icons,
             titles,
+            page_metas,
+            numbers,
             legend,
         });
         app.set_core_part_faces(sockets, chips, blanks, shadow);
@@ -2056,6 +2132,7 @@ impl Frontend {
         // mid-frame cannot mix the two.
         let lang = self.session.app().language();
         self.sync_front_deck(compositor);
+        self.sync_quick_specials(compositor);
         // The canvas the picture is composited into: the Advance's 240x160, or a
         // Famicom's 256x224. It has to be told before the picture/source rects
         // are, because those are ratios of *this* canvas and the pipeline sizes
@@ -2218,6 +2295,11 @@ impl Frontend {
                     });
                 }
             }
+        } else if self.session.app().navigation_visible()
+            && !self.session.app().folder_mode()
+        {
+            // v1.0.49 shelf: no centred game-title overlay.  The cartridge
+            // label and the playtime plate carry this information.
         } else if self.session.app().navigation_visible() {
             let anim = self.session.app().folder_animation();
             let kind = anim.as_ref().map(|anim| anim.kind);
@@ -3642,12 +3724,16 @@ struct UiFaces {
     power_labels: Vec<[UndoFace; 2]>,
     power_icons: Vec<[CartFace; 2]>,
     power_title: UndoFace,
+    power_panel: UndoFace,
+    quick_background: UndoFace,
     quick_cards: [UndoFace; 2],
     quick_labels: Vec<[UndoFace; 2]>,
     quick_values: Vec<[UndoFace; 2]>,
     quick_carets: [[UndoFace; 2]; 2],
     quick_icons: Vec<[CartFace; 2]>,
     quick_titles: [UndoFace; QuickRow::QUICK_PAGES],
+    quick_page_metas: [UndoFace; QuickRow::QUICK_PAGES],
+    quick_numbers: Vec<UndoFace>,
     quick_legend: [UndoFace; 3],
     sockets: Vec<CartFace>,
     chips: Vec<Vec<CartFace>>,
@@ -3710,9 +3796,9 @@ impl UiFaces {
                 .map(|c| [false, true].map(|lit| slot_ui::power_icon_face(*c, lit, lang)))
                 .collect(),
             power_title: slot_ui::power_title_face(lang),
-            quick_cards: [false, true].map(|selected| {
-                slot_ui::switch_style::card_face(QUICK_CARD_W, QUICK_CARD_H, selected)
-            }),
+            power_panel: slot_ui::power_panel_face(),
+            quick_background: quick_background_face(),
+            quick_cards: [false, true].map(quick_card_face),
             quick_labels: QuickRow::ALL
                 .iter()
                 .map(|r| [false, true].map(|lit| quick_label_face_state(*r, lit, lang)))
@@ -3734,6 +3820,10 @@ impl UiFaces {
                 .map(|r| [false, true].map(|lit| quick_icon_face(*r, lit, lang)))
                 .collect(),
             quick_titles: std::array::from_fn(|index| quick_title_face(index, lang)),
+            quick_page_metas: std::array::from_fn(|index| {
+                quick_page_meta_face(QuickRow::page_len_at(index))
+            }),
+            quick_numbers: (1..=7).map(quick_number_face).collect(),
             quick_legend: quick_legend_faces(lang),
             sockets: slot_store::Core::EVERY
                 .iter()
@@ -3875,7 +3965,7 @@ fn sync_clock(app: &mut App, compositor: &mut Compositor, clocks: &mut Clocks) {
     }
     let shown = hhmm(app.wall_secs());
     if shown != clocks.shown {
-        let face = word_face(&shown);
+        let face = status_face(&shown, 14.0, slot_ui::switch_style::ink());
         clocks.shown = shown;
         let w = face.w;
         let id = upload(compositor, &mut clocks.shelf, face);
@@ -3901,7 +3991,7 @@ fn sync_clock(app: &mut App, compositor: &mut Compositor, clocks: &mut Clocks) {
     if battery_shown != clocks.battery {
         clocks.battery = battery_shown.clone();
         if !battery_shown.is_empty() {
-            let face = word_face(&battery_shown);
+            let face = status_face(&battery_shown, 11.0, slot_ui::switch_style::ink());
             let w = face.w;
             let id = upload(compositor, &mut clocks.battery_tex, face);
             app.set_battery_percent_face(id, w);
@@ -3913,16 +4003,21 @@ fn sync_clock(app: &mut App, compositor: &mut Compositor, clocks: &mut Clocks) {
         clocks.playtime = playtime_shown.clone();
         if playtime_shown.is_empty() {
             clocks.playtime_tex = None;
+            clocks.playtime_panel = None;
             app.clear_shelf_playtime_face();
         } else {
             let face = slot_ui::sync_overlay::line_face(&playtime_shown, 360.0, 20.0);
             if face.w == 0 || face.h == 0 {
                 clocks.playtime_tex = None;
+                clocks.playtime_panel = None;
                 app.clear_shelf_playtime_face();
             } else {
                 let (w, h) = (face.w, face.h);
                 let id = upload(compositor, &mut clocks.playtime_tex, face);
                 app.set_shelf_playtime_face(id, w, h);
+                let panel = slot_ui::playtime_panel_face(w + 12, h + 12);
+                let panel_id = upload(compositor, &mut clocks.playtime_panel, panel);
+                app.set_shelf_playtime_panel(panel_id, w + 12, h + 12);
             }
         }
     }
@@ -3932,7 +4027,12 @@ fn sync_quick_clock(app: &mut App, compositor: &mut Compositor, state: &mut Quic
     if app.quick_menu().is_none() {
         return;
     }
-    let text = date_time_text(app.wall_secs(), app.language());
+    let stamp = format_stamp(app.wall_secs());
+    let text = if stamp.len() >= 16 {
+        format!("{}-{} {}", &stamp[5..7], &stamp[8..10], &stamp[11..16])
+    } else {
+        stamp
+    };
     if text == state.shown {
         return;
     }
@@ -4561,7 +4661,11 @@ mod faces_lang_tests {
         for lang in Language::ALL {
             for row in QuickRow::ALL {
                 assert!(!row.label(lang).is_empty(), "{row:?} has no label");
-                assert!(!row.icon_text(lang).is_empty(), "{row:?} has no icon text");
+                let icon = slot_ui::quick_icon_face(row, false, lang);
+                assert!(
+                    icon.rgba.chunks(4).any(|pixel| pixel[3] > 0),
+                    "{row:?} has no icon"
+                );
             }
             for value in QuickValue::ALL {
                 assert!(!value.text(lang).is_empty(), "{value:?} has no text");
@@ -4577,6 +4681,9 @@ mod faces_lang_tests {
         for key in [
             "device.app.shelf.hold_sync",
             "device.app.shelf.search",
+            "device.app.shelf.start",
+            "device.app.shelf.core",
+            "device.app.shelf.settings",
             "device.app.shelf.hold_intro",
             "device.app.transfer.legend_send",
             "device.app.transfer.legend_exit",

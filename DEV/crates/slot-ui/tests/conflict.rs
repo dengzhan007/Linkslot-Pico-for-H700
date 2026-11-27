@@ -4,7 +4,12 @@ use slot_ui::conflict::{
     conflict_face, ConflictDirection, ConflictPage, ConflictUnitView, ConflictView, CARD_W,
     CONTENT_Y, CARD_X, DIRECTION_Y, SAV_ACCENT, STATE_ACCENT, TAB_H, TAB_UNDERLINE_Y, TAB_Y,
 };
-use slot_ui::{Language, UndoFace};
+use slot_ui::{switch_style as sw, Language, UndoFace};
+
+fn bg_rgb() -> [u8; 3] {
+    let bg = sw::bg();
+    [bg[0], bg[1], bg[2]]
+}
 
 fn unit(version: u32, locked: bool, reason: &str) -> ConflictUnitView {
     ConflictUnitView {
@@ -92,8 +97,8 @@ fn the_conflict_face_is_opaque_and_full_screen() {
             face.rgba.chunks(4).all(|p| p[3] == 255),
             "the conflict face is not fully opaque"
         );
-        assert_eq!(pixel(&face, 0, 0), [0x1b, 0x1b, 0x1f, 255]);
-        assert_eq!(pixel(&face, 719, 479), [0x1b, 0x1b, 0x1f, 255]);
+        assert_eq!(pixel(&face, 0, 0), sw::bg());
+        assert_eq!(pixel(&face, 719, 479), sw::bg());
     }
 }
 
@@ -192,7 +197,7 @@ fn the_tab_bar_shows_the_page_number_and_underline() {
     // Page number "1 / 3" sits at the top right.
     let number_ink = (480..700)
         .flat_map(|x| (TAB_Y as u32..(TAB_Y + TAB_H) as u32).map(move |y| (x, y)))
-        .filter(|(x, y)| rgb(&face, *x, *y) != [0x1b, 0x1b, 0x1f])
+        .filter(|(x, y)| rgb(&face, *x, *y) != bg_rgb())
         .count();
     assert!(number_ink > 20, "the page number is missing");
 
@@ -212,7 +217,7 @@ fn a_single_page_has_no_tabs_and_no_page_number() {
     let face = conflict_face(&single, Language::ZhCn);
     let top = (0..720)
         .flat_map(|x| (0..60).map(move |y| (x, y)))
-        .filter(|(x, y)| rgb(&face, *x, *y) != [0x1b, 0x1b, 0x1f])
+        .filter(|(x, y)| rgb(&face, *x, *y) != bg_rgb())
         .count();
     assert!(
         top < 120,
@@ -239,7 +244,8 @@ fn the_direction_choice_moves_the_white_chip() {
         .flat_map(|x| (row.1..row.3).map(move |y| (x, y)))
         .filter(|(x, y)| {
             let p = rgb(&a, *x, *y);
-            p == [0xf2, 0xf2, 0xf2]
+            let selected = sw::selected();
+            p == [selected[0], selected[1], selected[2]]
         })
         .count();
     assert!(white_a > 300, "the selected direction chip is missing");
@@ -265,7 +271,7 @@ fn the_error_and_syncing_states_have_their_own_lines() {
     let plain = conflict_face(&view(ConflictPage::State), Language::ZhCn);
     let hint_ink = ((DIRECTION_Y as u32 - 18)..(DIRECTION_Y as u32 - 2))
         .flat_map(|y| (0..720).map(move |x| (x, y)))
-        .filter(|(x, y)| rgb(&plain, *x, *y) != [0x1b, 0x1b, 0x1f])
+        .filter(|(x, y)| rgb(&plain, *x, *y) != bg_rgb())
         .count();
     assert!(
         hint_ink > 20,
@@ -327,7 +333,7 @@ fn a_locked_tab_shows_a_check_mark_in_the_tab_bar() {
 #[test]
 fn the_all_page_cards_sit_at_the_exported_geometry() {
     let face = conflict_face(&view(ConflictPage::All), Language::ZhCn);
-    let surface = [0x2d, 0x2d, 0x33, 0xff];
+    let surface = sw::surface();
     let x = CARD_X as u32 + 12;
     for top in [CONTENT_Y, CONTENT_Y + 132.0] {
         let y = top as u32 + 24;
@@ -340,14 +346,15 @@ fn the_all_page_cards_sit_at_the_exported_geometry() {
     // The gap between the two cards is the page background.
     assert_eq!(
         pixel(&face, x, (CONTENT_Y + 124.0) as u32),
-        [0x1b, 0x1b, 0x1f, 255]
+        sw::bg()
     );
 }
 
 #[test]
 fn the_selected_direction_chip_starts_at_the_card_edge() {
     let face = conflict_face(&view(ConflictPage::State), Language::ZhCn);
-    let white = [0xf2, 0xf2, 0xf2, 0xff];
+    let selected = sw::selected();
+    let white = [selected[0], selected[1], selected[2], 255];
     assert_eq!(
         pixel(&face, CARD_X as u32 + 8, DIRECTION_Y as u32 + 8),
         white,

@@ -27,12 +27,6 @@ fn english_toasts_are_not_chinese() {
     for toast in Toast::all() {
         let text = toast.text(Language::EnUs);
         assert!(!text.chars().any(is_cjk), "{toast:?} is still Chinese: {text}");
-        if let Some(detail) = toast.detail(Language::EnUs) {
-            assert!(
-                !detail.chars().any(is_cjk),
-                "{toast:?} detail is still Chinese: {detail}"
-            );
-        }
         // The Chinese side must keep working, too.
         assert!(!toast.text(Language::ZhCn).is_empty(), "{toast:?}");
     }

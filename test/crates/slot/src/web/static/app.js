@@ -18,6 +18,7 @@
   var SETTINGS_TABS = ['general', 'network', 'maintenance', 'about'];
   var ROM_BATCH = 40;
   var SAVE_BATCH = 10;
+  var EXPORT_PLAN_KEY = 'linkslot.exportPlan.v1';
 
   var state = {
     modGroupsClosed: {},
@@ -30,6 +31,8 @@
     fileMove: null,
     fileAction: null,
     status: null,
+    overviewRomsCount: null,
+    overviewPlatforms: null,
     saves: null,
     files: null,
     filesBusy: false,
@@ -41,6 +44,9 @@
     romFilter: '',
     romQuery: '',
     romView: null,
+    exportPlan: null,
+    exportPlanBusy: false,
+    batchImport: null,
     addGameFile: null,
     savesView: null,
     selectedRom: null,
@@ -77,7 +83,7 @@
     upgradeXhr: null,
     uploadBusy: false,
     uploadInline: false,
-    // A single-game export downloads itself; a platform export keeps its link.
+    // A single-game export downloads itself once the pack is ready.
     gameExportPending: null,
     uploadXhr: null,
     toastTimer: null,
@@ -153,6 +159,9 @@
     if (brand) brand.textContent = t('web.page.brandSub');
     var title = document.querySelector('title');
     if (title) title.textContent = t('web.page.title');
+    if (state.exportPlan) renderExportPlanProgress();
+    if (state.batchImport) renderBatchImport();
+    updateExportPlanBanner();
   }
 
   function setLanguage(lang) {
@@ -232,7 +241,19 @@
     if (!bytes && bytes !== 0) return '—';
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+  }
+
+  /// Compact duration for the overview rows: 12h 36m / 42m / 9s.
+  function fmtDurationShort(seconds) {
+    var value = Number(seconds) || 0;
+    if (value <= 0) return '—';
+    var hours = Math.floor(value / 3600);
+    var minutes = Math.floor((value % 3600) / 60);
+    if (hours > 0) return hours + 'h ' + minutes + 'm';
+    if (minutes > 0) return minutes + 'm';
+    return Math.max(1, Math.floor(value % 60)) + 's';
   }
 
   function uploadLimitText() {
@@ -671,8 +692,7 @@
       pages[pageIndex].hidden = pages[pageIndex].getAttribute('data-page') !== tab;
     }
     if (tab === 'overview') {
-      refreshStatus().catch(function () {});
-      loadRecentLog();
+      refreshStatus().then(loadOverview).catch(function () {});
     } else if (tab === 'roms') {
       showRomsView(currentRomsView());
     } else if (tab === 'saves') {
@@ -741,15 +761,32 @@
     var storage = status.storage || {};
     var web = status.web || {};
 
-    $('ovWifi').textContent = network.connected ? network.ssid || t('web.overview.connected') : t('web.overview.disconnected');
-    $('ovIp').textContent = network.ip || t('web.overview.no_ipv4');
-    $('ovUrl').textContent = web.url || '—';
-    $('ovGames').textContent = String(storage.games || 0);
-    $('ovCounts').textContent = t('web.overview.states_saves', { states: storage.states || 0, battery: storage.battery || 0 });
-    $('ovWritable').textContent = status.writable ? t('web.overview.writable') : t('web.overview.readonly_game');
-    $('ovWritable').className = 'v ' + (status.writable ? 'ok' : 'warn');
-    $('ovUptime').textContent = t('web.overview.running', { duration: fmtUptime(status.uptime_secs) });
-    $('ovPlaytime').textContent = fmtDuration(storage.playtime_seconds);
+    var device = status.device || 'linkSlot';
+    var wifiText = network.connected
+      ? t('web.overview.wifi_connected')
+      : t('web.overview.wifi_off');
+    var ip = network.ip || t('web.overview.no_ipv4');
+    var states = storage.states || 0;
+    var battery = storage.battery || 0;
+    var games = state.overviewRomsCount != null ? state.overviewRomsCount : (storage.games || 0);
+    var platforms = state.overviewPlatforms || 0;
+
+    $('ovDevice').textContent = device;
+    $('ovDeviceSub').textContent = ip + ' · ' + wifiText;
+    $('ovLibrary').textContent = String(games || 0);
+    $('ovLibrarySub').textContent = platforms
+      ? t('web.overview.librarySub', { count: platforms })
+      : t('web.overview.scanned');
+    $('ovSaves').textContent = String(states + battery);
+    $('ovSavesSub').textContent = t('web.overview.states_saves', { states: states, battery: battery });
+    $('ovPlaytime').textContent = fmtDurationShort(storage.playtime_seconds);
+    $('ovStorage').textContent = status.disk
+      ? t('web.overview.diskValue', { free: fmtBytes(status.disk.free), total: fmtBytes(status.disk.total) })
+      : t('web.overview.states_saves', { states: states, battery: battery });
+    $('ovVersion').textContent = 'v' + (status.slot || '—');
+    $('ovNetwork').textContent = network.connected
+      ? 'WiFi · ' + (network.ip || ip)
+      : t('web.overview.wifi_off');
 
     renderAbout();
   }
@@ -765,16 +802,165 @@
     renderUpgradeStatus();
   }
 
+  // -------------------------------------------------------------- 概览数据
+
+  function overviewCoverClass(platform) {
+    return 'p-' + String(platform || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  function overviewUnitLatest(unit) {
+    var latest = 0;
+    var states = (unit && unit.states) || [];
+    var battery = (unit && unit.battery) || [];
+    for (var i = 0; i < states.length; i += 1) latest = Math.max(latest, states[i].mtime || 0);
+    for (var j = 0; j < battery.length; j += 1) latest = Math.max(latest, battery[j].mtime || 0);
+    return latest;
+  }
+
+  function overviewSyncKey(platform, emulator, game) {
+    return String(platform || '') + '\u0000' + String(emulator || '') + '\u0000' + String(game || '');
+  }
+
+  function renderOverviewGames(roms, saves, sync) {
+    var container = $('ovRecentGames');
+    if (!container) return;
+    var units = ((saves && saves.units) || []).slice();
+    units.sort(function (a, b) {
+      var byTime = overviewUnitLatest(b) - overviewUnitLatest(a);
+      if (byTime) return byTime;
+      return String(a.game || '').localeCompare(String(b.game || ''));
+    });
+
+    var synced = {};
+    ((sync && sync.caches) || []).forEach(function (cache) {
+      synced[overviewSyncKey(cache.platform, cache.emulator, cache.game)] = true;
+    });
+
+    var rows = [];
+    if (units.length) {
+      units.slice(0, 4).forEach(function (unit) {
+        var key = overviewSyncKey(unit.platform, unit.emulator, unit.game);
+        var meta = [unit.platform || '—', unit.emulator || '—'];
+        meta.push(synced[key] ? t('web.overview.synced') : t('web.overview.local'));
+        var time = unit.playtime_total_seconds || unit.playtime_seconds;
+        rows.push(
+          '<div class="ov-game">' +
+            '<span class="ov-cover ' + overviewCoverClass(unit.platform) + '"></span>' +
+            '<span><div class="ov-game-name">' + esc(unit.game || t('web.roms.unnamed')) + '</div>' +
+            '<div class="ov-game-meta">' + esc(meta.join(' · ')) + '</div></span>' +
+            '<span class="ov-game-time">' + esc(fmtDurationShort(time)) + '</span>' +
+          '</div>'
+        );
+      });
+    } else {
+      ((roms && roms.games) || []).slice(0, 4).forEach(function (game) {
+        rows.push(
+          '<div class="ov-game">' +
+            '<span class="ov-cover ' + overviewCoverClass(game.platform) + '"></span>' +
+            '<span><div class="ov-game-name">' + esc(game.stem || t('web.roms.unnamed')) + '</div>' +
+            '<div class="ov-game-meta">' + esc((game.platform || '—') + ' · ' + t('web.overview.local')) + '</div></span>' +
+            '<span class="ov-game-time">' + esc(fmtBytes(game.size)) + '</span>' +
+          '</div>'
+        );
+      });
+    }
+    container.innerHTML = rows.length ? rows.join('') : '<div class="empty">' + esc(t('web.overview.noGames')) + '</div>';
+  }
+
+  function renderOverviewSync(sync, saves) {
+    var container = $('ovSyncReceipt');
+    if (!container) return;
+    var cache = ((sync && sync.caches) || [])[0];
+    if (!cache) {
+      container.innerHTML = '<div class="empty">' + esc(t('web.overview.noSync')) + '</div>';
+      return;
+    }
+    var unit = ((saves && saves.units) || []).find(function (item) {
+      return item.platform === cache.platform &&
+        item.emulator === cache.emulator &&
+        item.game === cache.game;
+    });
+    var stamp = String(cache.synced_at || '').replace('T', ' ').replace('Z', '').slice(0, 16);
+    var sizeOf = function (items) {
+      return (items || []).reduce(function (sum, item) { return sum + (item.size || 0); }, 0);
+    };
+    var fileCount = function (items) {
+      return (items || []).length;
+    };
+    var rows;
+    if (unit) {
+      rows =
+        '<div class="row"><span>' + esc(t('web.overview.statesLabel')) + '</span><span>' +
+          esc(fmtBytes(sizeOf(unit.states))) + ' · ' + esc(t('web.overview.fileCount', { count: fileCount(unit.states) })) +
+        '</span></div>' +
+        '<div class="row"><span>' + esc(t('web.overview.battery')) + '</span><span>' +
+          esc(fmtBytes(sizeOf(unit.battery))) + ' · ' + esc(t('web.overview.fileCount', { count: fileCount(unit.battery) })) +
+        '</span></div>';
+    } else {
+      rows =
+        '<div class="row"><span>' + esc(t('web.overview.syncVersion')) + '</span><span>v' + esc(String(cache.version || '—')) + '</span></div>';
+    }
+    rows += '<div class="row"><span>' + esc(t('web.overview.syncTime')) + '</span><span>' + esc(stamp || '—') + '</span></div>';
+    container.innerHTML =
+      '<div class="ov-receipt"><div class="ov-receipt-inner">' +
+        '<span class="stamp">' + esc(t('web.overview.done')) + '</span>' +
+        '<div class="micro">SYNC RECEIPT / ' + esc(t('web.overview.syncReceipt')) + '</div>' +
+        '<div class="title">' + esc(t('web.overview.syncDone')) + '</div>' +
+        '<div class="sub">' + esc((cache.game || '—') + ' · ' + (cache.platform || '—') + ' / ' + (cache.emulator || '—')) + '</div>' +
+        '<div class="rule"></div>' + rows +
+      '</div></div>';
+  }
+
+  function renderOverviewActivity(sync) {
+    var container = $('ovActivity');
+    if (!container) return;
+    var lines = ((sync && sync.log_tail) || []).filter(function (line) { return String(line || '').trim(); });
+    lines = lines.slice(-3);
+    if (!lines.length) {
+      container.innerHTML = '<div class="empty">' + esc(t('web.overview.noActivity')) + '</div>';
+      return;
+    }
+    container.innerHTML = lines.map(function (line) {
+      var text = String(line).trim();
+      var match = text.match(/(\d{2}:\d{2}:\d{2})/);
+      var time = match ? match[1] : '—';
+      var rest = match ? text.replace(match[1], '').trim() : text;
+      return '<div class="row"><b>' + esc(time) + '</b><span>' + esc(rest.slice(0, 140)) + '</span></div>';
+    }).join('');
+  }
+
+  function loadOverview() {
+    return Promise.all([
+      api('/api/roms').catch(function () { return { games: [] }; }),
+      api('/api/saves').catch(function () { return { units: [] }; }),
+      api('/api/sync').catch(function () { return {}; })
+    ]).then(function (results) {
+      var roms = results[0] || {};
+      var saves = results[1] || {};
+      var sync = results[2] || {};
+      state.sync = sync;
+      var games = roms.games || [];
+      var platforms = {};
+      games.forEach(function (game) { platforms[game.platform] = true; });
+      state.overviewRomsCount = games.length;
+      state.overviewPlatforms = Object.keys(platforms).length;
+      renderOverviewGames(roms, saves, sync);
+      renderOverviewSync(sync, saves);
+      renderOverviewActivity(sync);
+      if (state.status) renderStatus();
+    });
+  }
+
   // -------------------------------------------------------------- 成就页
 
   var achGames = [];
 
   var ACH_ACCENTS = {
-    'builtin:first-launch': '#00d4aa',
-    'builtin:play-1h': '#4fc3f7',
-    'builtin:play-5h': '#f2b84b',
-    'builtin:launch-10': '#a78bfa',
-    'builtin:launch-30': '#ff6b6b'
+    'builtin:first-launch': '#7A5620',
+    'builtin:play-1h': '#3F6B5A',
+    'builtin:play-5h': '#B07123',
+    'builtin:launch-10': '#6B5A8E',
+    'builtin:launch-30': '#A8342F'
   };
 
   function showAchTab(tab) {
@@ -1209,6 +1395,10 @@
 
   function applyWritable() {
     var writable = isWritable();
+    var romBusy =
+      collectionBusy ||
+      state.exportPlanBusy ||
+      !!(state.batchImport && state.batchImport.running);
     var banner = $('writeBanner');
     if (banner) banner.classList.toggle('hidden', writable);
     document.body.classList.toggle('readonly', !writable);
@@ -1227,14 +1417,14 @@
     var videoPick = $('romVideoPick');
     if (videoPick) videoPick.disabled = !writable;
     var romReplace = $('romReplaceRom');
-    if (romReplace) romReplace.disabled = !writable;
+    if (romReplace) romReplace.disabled = !writable || romBusy;
     var romRename = $('romRename');
-    if (romRename) romRename.disabled = !writable;
+    if (romRename) romRename.disabled = !writable || romBusy;
     var romDelete = $('romDelete');
-    if (romDelete) romDelete.disabled = !writable;
+    if (romDelete) romDelete.disabled = !writable || romBusy;
     applyPlayWebGate(writable);
     var romExport = $('romExport');
-    if (romExport) romExport.disabled = !writable || collectionBusy;
+    if (romExport) romExport.disabled = !writable || romBusy;
     ['romGuidePath', 'romGuideSave', 'romGuidePick'].forEach(function (id) {
       var control = $(id);
       if (control) control.disabled = !writable;
@@ -1248,13 +1438,13 @@
     var frontCardCopy = $('frontCardCopy');
     if (frontCardCopy) frontCardCopy.disabled = !writable;
     var addGame = $('addGame');
-    if (addGame) addGame.disabled = !writable || collectionBusy;
+    if (addGame) addGame.disabled = !writable || romBusy;
     var collectionImport = $('collectionImport');
-    if (collectionImport) collectionImport.disabled = !writable || collectionBusy;
-    var collectionExport = $('collectionExport');
-    if (collectionExport) {
-      collectionExport.disabled = !writable || collectionBusy || !state.romFilter;
-    }
+    if (collectionImport) collectionImport.disabled = !writable || romBusy;
+    var batchImport = $('batchImport');
+    if (batchImport) batchImport.disabled = !writable || romBusy;
+    var batchExport = $('batchExport');
+    if (batchExport) batchExport.disabled = !writable || romBusy;
     var coverSave = $('coverSave');
     if (coverSave) coverSave.disabled = !writable || state.coverBusy;
     var dynamic = document.querySelectorAll('[data-action="upload"],[data-action="sync"],[data-action="delete-save"]');
@@ -1298,16 +1488,7 @@
   }
 
   function loadRecentLog() {
-    return api('/api/sync')
-      .then(function (info) {
-        state.sync = info;
-        var lines = (info && info.log_tail) || [];
-        var recent = lines.slice(-12);
-        $('recentLog').textContent = recent.length ? recent.join('\n') : t('web.common.noLog');
-      })
-      .catch(function () {
-        $('recentLog').textContent = t('web.common.noLog');
-      });
+    return loadOverview().catch(function () {});
   }
 
   // ---------------------------------------------------------------- 游戏库
@@ -1494,16 +1675,6 @@
       if (counts[all[n].platform] !== undefined) counts[all[n].platform] += 1;
     }
     var filters = $('romFilters');
-    var exportButton = $('collectionExport');
-    if (exportButton) {
-      exportButton.textContent = state.romFilter
-        ? t('web.roms.export_named', { platform: state.romFilter })
-        : t('web.roms.export_disabled');
-      exportButton.disabled = !state.romFilter || collectionBusy || !isWritable();
-      exportButton.title = state.romFilter
-        ? t('web.roms.export_hint', { platform: state.romFilter })
-        : t('web.roms.export_none');
-    }
     if (filters) {
       var buttons = filters.querySelectorAll('[data-platform]');
       for (var b = 0; b < buttons.length; b += 1) {
@@ -2863,8 +3034,8 @@
         var sw = Number(layer.w) || 1;
         var sh = Number(layer.h) || 1;
         var stroke = Number(layer.stroke_width) || 0;
-        ctx.fillStyle = layer.colour || '#00d4aa';
-        ctx.strokeStyle = layer.stroke || layer.colour || '#00d4aa';
+        ctx.fillStyle = layer.colour || '#C9A45C';
+        ctx.strokeStyle = layer.stroke || layer.colour || '#C9A45C';
         ctx.lineWidth = Math.max(1, stroke);
         ctx.beginPath();
         if (layer.kind === 'ellipse') {
@@ -2922,7 +3093,7 @@
         selected.y + (selected.h || 0) >= size.height - 10;
       if (!bleed) {
         ctx.save();
-        ctx.strokeStyle = '#00d4aa';
+        ctx.strokeStyle = '#C9A45C';
         ctx.lineWidth = 1;
         var centreX = selected.x + (selected.w || 0) / 2;
         var centreY = selected.y + (selected.h || 0) / 2;
@@ -4247,17 +4418,7 @@
 
   function setCollectionBusy(busy) {
     collectionBusy = busy;
-    var importButton = $('collectionImport');
-    if (importButton) importButton.disabled = busy || !isWritable();
-    var exportButton = $('collectionExport');
-    if (exportButton) {
-      exportButton.disabled = busy || !state.romFilter || !isWritable();
-      exportButton.textContent = state.romFilter
-        ? t('web.roms.export_named', { platform: state.romFilter })
-        : t('web.roms.export_disabled');
-    }
-    var romExport = $('romExport');
-    if (romExport) romExport.disabled = busy || !isWritable();
+    applyWritable();
   }
 
   function showCollectionPanel() {
@@ -4351,35 +4512,36 @@
   }
 
   function startCollectionExport(rom) {
-    var single = typeof rom === 'string' && rom.length > 0;
-    if (!single && !state.romFilter) {
-      toast(t('web.collection.export_pick'), 'warn');
-      return;
-    }
+    if (typeof rom !== 'string' || !rom) return;
     if (!isWritable()) {
       toast(t('web.collection.readonly_export'), 'warn');
       return;
     }
+    if (
+      collectionBusy ||
+      state.exportPlanBusy ||
+      (state.batchImport && state.batchImport.running)
+    ) {
+      toast(t('web.roms.exportPlanBusy'), 'warn');
+      return;
+    }
     setCollectionBusy(true);
     showCollectionPanel();
-    if (single) {
-      var panel = $('collectionStatus');
-      if (panel && panel.scrollIntoView) panel.scrollIntoView({ block: 'nearest' });
-    }
-    state.gameExportPending = single ? single : null;
-    $('collectionStage').textContent = single
-      ? t('web.collection.exporting_game')
-      : t('web.collection.starting_export');
+    var panel = $('collectionStatus');
+    if (panel && panel.scrollIntoView) panel.scrollIntoView({ block: 'nearest' });
+    state.gameExportPending = rom;
+    $('collectionStage').textContent = t('web.collection.exporting_game');
     $('collectionCount').textContent = '';
     $('collectionError').textContent = '';
     $('collectionDownload').hidden = true;
-    apiWrite('/api/collection/export', single ? { rom: rom } : { platform: state.romFilter })
+    apiWrite('/api/collection/export', { rom: rom })
       .then(function (data) {
         renderCollectionStatus(data);
         startCollectionPolling();
       })
       .catch(function (error) {
         setCollectionBusy(false);
+        state.gameExportPending = null;
         $('collectionStage').textContent = t('web.collection.export_failed');
         $('collectionError').textContent = (error && error.message) || String(error);
       });
@@ -4411,6 +4573,14 @@
     }
     if (!isWritable()) {
       toast(t('web.collection.readonly_import'), 'warn');
+      return;
+    }
+    if (
+      collectionBusy ||
+      state.exportPlanBusy ||
+      (state.batchImport && state.batchImport.running)
+    ) {
+      toast(t('web.roms.exportPlanBusy'), 'warn');
       return;
     }
     if (
@@ -4469,6 +4639,993 @@
         $('collectionError').textContent = (error && error.message) || String(error);
         apiWrite('/api/collection/upload/cancel', {}).catch(function () {});
       });
+  }
+
+  // ------------------------------------------------------- 导出计划
+  var exportPlanSelection = null;
+
+  function closeModal(id) {
+    var dialog = $(id);
+    if (dialog && dialog.open) dialog.close();
+  }
+
+  function exportPlanDoneCount(plan) {
+    if (!plan || !plan.items) return 0;
+    var count = 0;
+    for (var i = 0; i < plan.items.length; i += 1) {
+      if (plan.items[i].state === 'done') count += 1;
+    }
+    return count;
+  }
+
+  function exportPlanFailedCount(plan) {
+    if (!plan || !plan.items) return 0;
+    var count = 0;
+    for (var i = 0; i < plan.items.length; i += 1) {
+      if (plan.items[i].state === 'failed') count += 1;
+    }
+    return count;
+  }
+
+  function exportPlanPendingCount(plan) {
+    if (!plan || !plan.items) return 0;
+    var count = 0;
+    for (var i = 0; i < plan.items.length; i += 1) {
+      if (plan.items[i].state === 'pending') count += 1;
+    }
+    return count;
+  }
+
+  function loadStoredExportPlan() {
+    var raw = null;
+    try {
+      raw = window.localStorage.getItem(EXPORT_PLAN_KEY);
+    } catch (error) {
+      return null;
+    }
+    if (!raw) return null;
+    try {
+      var plan = JSON.parse(raw);
+      if (!plan || !Array.isArray(plan.items) || !plan.items.length) return null;
+      return plan;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function storeExportPlan(plan) {
+    try {
+      if (plan) window.localStorage.setItem(EXPORT_PLAN_KEY, JSON.stringify(plan));
+      else window.localStorage.removeItem(EXPORT_PLAN_KEY);
+    } catch (error) {
+      // Private mode / quota: the in-memory plan still works for this page.
+    }
+  }
+
+  function restoreExportPlan() {
+    var plan = loadStoredExportPlan();
+    if (!plan) {
+      state.exportPlan = null;
+      updateExportPlanBanner();
+      return;
+    }
+    var changed = false;
+    for (var i = 0; i < plan.items.length; i += 1) {
+      var item = plan.items[i];
+      if (item.state === 'exporting' || item.state === 'downloading') {
+        item.state = 'pending';
+        item.error = null;
+        changed = true;
+      }
+    }
+    if (plan.status === 'running') {
+      plan.status = 'paused';
+      changed = true;
+    }
+    var total = plan.items.length;
+    var done = exportPlanDoneCount(plan);
+    if (plan.status !== 'cancelled' && done >= total && plan.status !== 'done') {
+      plan.status = 'done';
+      changed = true;
+    } else if (plan.status === 'done' && done < total) {
+      plan.status = 'paused';
+      changed = true;
+    }
+    state.exportPlan = plan;
+    if (changed) storeExportPlan(plan);
+    updateExportPlanBanner();
+  }
+
+  function updateExportPlanBanner() {
+    var banner = $('exportPlanBanner');
+    var text = $('exportPlanBannerText');
+    if (!banner || !text) return;
+    var plan = state.exportPlan;
+    if (!plan || plan.status === 'done' || plan.status === 'cancelled') {
+      banner.hidden = true;
+      return;
+    }
+    var total = plan.items.length;
+    var done = exportPlanDoneCount(plan);
+    if (done >= total) {
+      banner.hidden = true;
+      return;
+    }
+    banner.hidden = false;
+    text.textContent = t('web.roms.exportPlanBanner', { done: done, total: total });
+  }
+
+  function safePlanFileName(value) {
+    var name = String(value || '')
+      .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_')
+      .replace(/\s+/g, ' ')
+      .replace(/^[. ]+|[. ]+$/g, '')
+      .slice(0, 120);
+    return name || 'game';
+  }
+
+  function exportPackFileName(game) {
+    var parts = String((game && game.rom) || '')
+      .split('/')
+      .filter(function (part) { return part.length > 0; });
+    var platform = parts.length > 1 ? parts[1] : ((game && game.platform) || 'ROM');
+    var rest = parts.length > 2
+      ? parts.slice(2).join('-')
+      : ((game && game.stem) || 'game');
+    rest = rest.replace(/\.(gba|gb|gbc|nes|sfc|smc|fig|md|gen|smd|bin)$/i, '');
+    return safePlanFileName(platform + '-' + rest) + '.zip';
+  }
+
+  function selectedExportGames() {
+    var all = state.roms || [];
+    return all.filter(function (game) {
+      return !!(exportPlanSelection && exportPlanSelection[game.rom]);
+    });
+  }
+
+  function updateExportPlanSelectionSummary() {
+    var games = selectedExportGames();
+    var bytes = 0;
+    for (var i = 0; i < games.length; i += 1) bytes += Number(games[i].size) || 0;
+    var label = $('exportPlanSelected');
+    if (label) {
+      label.textContent = t('web.roms.exportPlanSelected', {
+        count: games.length,
+        size: fmtBytesShort(bytes)
+      });
+    }
+    var start = $('exportPlanStart');
+    if (start) start.disabled = !games.length || !isWritable();
+  }
+
+  function renderExportPlanSelection() {
+    var container = $('exportPlanList');
+    if (!container) return;
+    var list = filteredRoms();
+    if (!list.length) {
+      container.innerHTML = '<div class="empty">' + esc(t('web.roms.exportPlanEmpty')) + '</div>';
+      updateExportPlanSelectionSummary();
+      return;
+    }
+    var html = [];
+    for (var i = 0; i < list.length; i += 1) {
+      var game = list[i];
+      var checked = exportPlanSelection && exportPlanSelection[game.rom] ? ' checked' : '';
+      html.push(
+        '<label class="export-plan-row">' +
+          '<input type="checkbox" data-plan-rom="' + esc(game.rom) + '"' + checked + '>' +
+          '<span class="plan-name">' + esc(game.stem || game.rom) + '</span>' +
+          '<span class="plan-meta">' + esc(game.platform) + ' · ' + esc(fmtBytes(game.size)) + '</span>' +
+        '</label>'
+      );
+    }
+    container.innerHTML = html.join('');
+    updateExportPlanSelectionSummary();
+  }
+
+  function openExportPlanDialog() {
+    if (
+      collectionBusy ||
+      state.exportPlanBusy ||
+      (state.batchImport && state.batchImport.running)
+    ) {
+      toast(t('web.roms.exportPlanBusy'), 'warn');
+      return;
+    }
+    var active = state.exportPlan;
+    if (active && active.status !== 'done' && active.status !== 'cancelled') {
+      toast(t('web.roms.exportPlanExists'), 'warn');
+      openExportPlanProgress();
+      return;
+    }
+    if (!state.roms) {
+      loadRoms().then(function () {
+        if (state.roms) openExportPlanDialog();
+      });
+      return;
+    }
+    if (active) {
+      if (!window.confirm(t('web.roms.exportPlanConfirmReplace'))) return;
+      state.exportPlan = null;
+      storeExportPlan(null);
+      updateExportPlanBanner();
+    }
+    exportPlanSelection = {};
+    renderExportPlanSelection();
+    var dialog = $('exportPlanDialog');
+    if (dialog && dialog.showModal) dialog.showModal();
+  }
+
+  function selectAllExportPlan() {
+    var list = filteredRoms();
+    exportPlanSelection = exportPlanSelection || {};
+    for (var i = 0; i < list.length; i += 1) {
+      exportPlanSelection[list[i].rom] = true;
+    }
+    renderExportPlanSelection();
+  }
+
+  function startSelectedExportPlan() {
+    var games = selectedExportGames();
+    if (!games.length) {
+      toast(t('web.roms.exportPlanNoSelection'), 'warn');
+      return;
+    }
+    if (!isWritable()) {
+      toast(t('web.collection.readonly_export'), 'warn');
+      return;
+    }
+    if (state.exportPlan && state.exportPlan.status !== 'done' && state.exportPlan.status !== 'cancelled') {
+      toast(t('web.roms.exportPlanExists'), 'warn');
+      return;
+    }
+    var used = {};
+    var items = [];
+    for (var i = 0; i < games.length; i += 1) {
+      var game = games[i];
+      var base = exportPackFileName(game);
+      var name = base;
+      var suffix = 2;
+      while (used[name.toLowerCase()]) {
+        name = base.replace(/\.zip$/i, '') + '-' + suffix + '.zip';
+        suffix += 1;
+      }
+      used[name.toLowerCase()] = true;
+      items.push({
+        rom: game.rom,
+        platform: game.platform,
+        stem: game.stem,
+        size: Number(game.size) || 0,
+        name: name,
+        state: 'pending',
+        error: null,
+        serverFile: null
+      });
+    }
+    state.exportPlan = {
+      version: 1,
+      id: Date.now(),
+      created: new Date().toISOString(),
+      status: 'running',
+      items: items
+    };
+    storeExportPlan(state.exportPlan);
+    closeModal('exportPlanDialog');
+    runExportPlan();
+  }
+
+  function openExportPlanProgress() {
+    if (!state.exportPlan) return;
+    renderExportPlanProgress();
+    var dialog = $('exportPlanProgressDialog');
+    if (dialog && dialog.showModal && !dialog.open) dialog.showModal();
+  }
+
+  function renderExportPlanProgress() {
+    var plan = state.exportPlan;
+    var stage = $('exportPlanProgressStage');
+    var count = $('exportPlanProgressCount');
+    var bar = $('exportPlanProgressBar');
+    var list = $('exportPlanProgressItems');
+    var pause = $('exportPlanPause');
+    var abort = $('exportPlanAbort');
+    var close = $('exportPlanProgressClose');
+    if (!plan) {
+      if (stage) stage.textContent = '—';
+      if (count) count.textContent = '';
+      if (list) list.innerHTML = '';
+      updateExportPlanBanner();
+      return;
+    }
+    var total = plan.items.length;
+    var done = exportPlanDoneCount(plan);
+    var failed = exportPlanFailedCount(plan);
+    var current = null;
+    var currentIndex = 0;
+    for (var i = 0; i < total; i += 1) {
+      if (plan.items[i].state === 'exporting' || plan.items[i].state === 'downloading') {
+        current = plan.items[i];
+        currentIndex = i + 1;
+        break;
+      }
+    }
+    if (stage) {
+      if (current) {
+        stage.textContent = current.state === 'downloading'
+          ? t('web.roms.exportPlanDownloading', {
+              name: current.name,
+              index: currentIndex,
+              total: total
+            })
+          : t('web.roms.exportPlanPacking', {
+              name: current.name,
+              index: currentIndex,
+              total: total
+            });
+      } else if (plan.status === 'done') {
+        stage.textContent = t('web.roms.exportPlanDone', { done: done, total: total, failed: failed });
+      } else if (plan.status === 'cancelled') {
+        stage.textContent = t('web.roms.exportPlanAborted');
+      } else {
+        stage.textContent = t('web.roms.exportPlanPaused');
+      }
+    }
+    if (count) {
+      count.textContent =
+        t('web.roms.exportPlanCount', { done: done, total: total }) +
+        (failed ? ' · ' + t('web.roms.exportPlanFailedCount', { failed: failed }) : '');
+    }
+    if (bar) bar.style.width = (total ? Math.round((done / total) * 100) : 0) + '%';
+    if (list) {
+      var html = [];
+      for (var j = 0; j < total; j += 1) {
+        var item = plan.items[j];
+        var mark = item.state === 'done'
+          ? '✓'
+          : item.state === 'failed'
+            ? '✕'
+            : item.state === 'exporting' || item.state === 'downloading'
+              ? '…'
+              : '•';
+        var rowClass = item.state === 'done' ? ' done' : item.state === 'failed' ? ' failed' : '';
+        html.push(
+          '<div class="export-plan-item' + rowClass + '">' +
+            '<span class="plan-state">' + mark + '</span>' +
+            '<span class="plan-name">' + esc(item.name) + '</span>' +
+            (item.error ? '<span class="plan-error">' + esc(item.error) + '</span>' : '') +
+          '</div>'
+        );
+      }
+      list.innerHTML = html.join('');
+    }
+    if (pause) {
+      var canResume = !state.exportPlanBusy && plan.status === 'paused' &&
+        (exportPlanPendingCount(plan) + exportPlanFailedCount(plan)) > 0;
+      pause.disabled =
+        !(state.exportPlanBusy || canResume) ||
+        state.exportPlanAbort ||
+        plan.status === 'cancelled';
+      pause.textContent = state.exportPlanBusy
+        ? t('web.roms.exportPlanPause')
+        : t('web.roms.exportPlanResumeRun');
+    }
+    if (abort) abort.disabled = plan.status === 'done' || plan.status === 'cancelled';
+    if (close) close.hidden = state.exportPlanBusy;
+    updateExportPlanBanner();
+  }
+
+  function waitCollectionIdle(onStatus) {
+    return new Promise(function (resolve, reject) {
+      function check() {
+        api('/api/collection/status')
+          .then(function (status) {
+            if (typeof onStatus === 'function') onStatus(status);
+            if (status && !status.running) {
+              resolve(status);
+              return;
+            }
+            window.setTimeout(check, 900);
+          })
+          .catch(reject);
+      }
+      check();
+    });
+  }
+
+  function runExportPlan() {
+    var plan = state.exportPlan;
+    if (!plan || state.exportPlanBusy) return;
+    if (plan.status === 'done' || plan.status === 'cancelled') return;
+    if (!isWritable()) {
+      toast(t('web.collection.readonly_export'), 'warn');
+      return;
+    }
+    if (collectionBusy || (state.batchImport && state.batchImport.running)) {
+      toast(t('web.roms.exportPlanBusy'), 'warn');
+      return;
+    }
+    for (var i = 0; i < plan.items.length; i += 1) {
+      if (plan.items[i].state === 'failed') {
+        plan.items[i].state = 'pending';
+        plan.items[i].error = null;
+      }
+    }
+    state.exportPlanBusy = true;
+    state.exportPlanAbort = false;
+    state.exportPlanPaused = false;
+    plan.status = 'running';
+    storeExportPlan(plan);
+    var panel = $('collectionStatus');
+    if (panel) panel.hidden = true;
+    applyWritable();
+    openExportPlanProgress();
+    exportPlanNext();
+  }
+
+  function exportPlanNext() {
+    var plan = state.exportPlan;
+    if (!plan) {
+      finishExportPlan();
+      return;
+    }
+    if (state.exportPlanAbort || state.exportPlanPaused) {
+      finishExportPlan();
+      return;
+    }
+    if (!isWritable()) {
+      state.exportPlanPaused = true;
+      plan.status = 'paused';
+      storeExportPlan(plan);
+      toast(t('web.collection.readonly_export'), 'warn');
+      finishExportPlan();
+      return;
+    }
+    var item = null;
+    for (var i = 0; i < plan.items.length; i += 1) {
+      if (plan.items[i].state === 'pending') {
+        item = plan.items[i];
+        break;
+      }
+    }
+    if (!item) {
+      finishExportPlan();
+      return;
+    }
+    var leftover = item.serverFile;
+    item.serverFile = null;
+    item.state = 'exporting';
+    item.error = null;
+    storeExportPlan(plan);
+    renderExportPlanProgress();
+    var start = leftover
+      ? apiWrite('/api/files/delete', { path: leftover }).catch(function () {})
+      : Promise.resolve();
+    start
+      .then(function () {
+        return apiWrite('/api/collection/export', { rom: item.rom });
+      })
+      .then(waitCollectionIdle)
+      .then(function (status) {
+        if (state.exportPlanAbort) throw new Error(t('web.roms.exportPlanAborted'));
+        status = status || {};
+        if (status.errors && status.errors.length) throw new Error(status.errors[0]);
+        if (!status.file) throw new Error(t('web.roms.exportPlanPackFailed'));
+        item.serverFile = status.file;
+        item.state = 'downloading';
+        storeExportPlan(plan);
+        renderExportPlanProgress();
+        return fetch('/api/files/download?path=' + encodePath(status.file)).then(function (response) {
+          if (!response.ok) throw new Error(t('web.error.http', { status: response.status }));
+          return response.blob();
+        }).then(function (blob) {
+          return apiWrite('/api/files/delete', { path: status.file })
+            .catch(function () {})
+            .then(function () {
+              item.serverFile = null;
+              downloadBlob(item.name, blob);
+              item.state = 'done';
+              item.error = null;
+              storeExportPlan(plan);
+              renderExportPlanProgress();
+            });
+        });
+      })
+      .catch(function (error) {
+        if (state.exportPlanAbort) {
+          item.state = 'pending';
+        } else {
+          item.state = 'failed';
+          item.error = (error && error.message) || t('web.error.unknown');
+        }
+        if (item.serverFile) {
+          apiWrite('/api/files/delete', { path: item.serverFile }).catch(function () {});
+          item.serverFile = null;
+        }
+        storeExportPlan(plan);
+        renderExportPlanProgress();
+        if (error && error.status === 409) {
+          state.exportPlanPaused = true;
+          plan.status = 'paused';
+          storeExportPlan(plan);
+          toast(t('web.collection.readonly_export'), 'warn');
+        }
+      })
+      .then(function () {
+        if (state.exportPlanAbort || state.exportPlanPaused) {
+          finishExportPlan();
+          return;
+        }
+        window.setTimeout(exportPlanNext, 700);
+      });
+  }
+
+  function finishExportPlan() {
+    var plan = state.exportPlan;
+    var aborted = state.exportPlanAbort;
+    var paused = state.exportPlanPaused;
+    state.exportPlanBusy = false;
+    state.exportPlanAbort = false;
+    state.exportPlanPaused = false;
+    if (plan) {
+      var total = plan.items.length;
+      var done = exportPlanDoneCount(plan);
+      var failed = exportPlanFailedCount(plan);
+      if (aborted) plan.status = 'cancelled';
+      else if (done >= total) plan.status = 'done';
+      else plan.status = 'paused';
+      storeExportPlan(plan);
+      if (plan.status === 'done') {
+        toast(
+          t('web.roms.exportPlanDone', { done: done, total: total, failed: failed }),
+          failed ? 'warn' : 'ok',
+          5000
+        );
+      } else if (!aborted && !paused) {
+        toast(t('web.roms.exportPlanPaused'), 'warn');
+      }
+    }
+    applyWritable();
+    renderExportPlanProgress();
+    updateExportPlanBanner();
+  }
+
+  function pauseExportPlan() {
+    var plan = state.exportPlan;
+    if (!plan) return;
+    if (state.exportPlanBusy) {
+      state.exportPlanPaused = true;
+      plan.status = 'paused';
+      storeExportPlan(plan);
+      renderExportPlanProgress();
+      updateExportPlanBanner();
+      toast(t('web.roms.exportPlanPaused'));
+      return;
+    }
+    if (
+      plan.status === 'paused' &&
+      (exportPlanPendingCount(plan) + exportPlanFailedCount(plan)) > 0
+    ) {
+      runExportPlan();
+    }
+  }
+
+  function abortExportPlan() {
+    var plan = state.exportPlan;
+    if (!plan) return;
+    if (!window.confirm(t('web.roms.exportPlanAbortConfirm'))) return;
+    state.exportPlanAbort = true;
+    state.exportPlanPaused = false;
+    plan.status = 'cancelled';
+    storeExportPlan(plan);
+    if (state.exportPlanBusy) {
+      apiWrite('/api/collection/cancel', {}).catch(function () {});
+    }
+    updateExportPlanBanner();
+    renderExportPlanProgress();
+    toast(t('web.roms.exportPlanAborted'), 'warn');
+    if (!state.exportPlanBusy) {
+      state.exportPlanAbort = false;
+      applyWritable();
+    }
+  }
+
+  function discardExportPlan() {
+    var plan = state.exportPlan;
+    if (!plan) return;
+    if (state.exportPlanBusy) {
+      toast(t('web.roms.exportPlanDiscardBusy'), 'warn');
+      return;
+    }
+    if (!window.confirm(t('web.roms.exportPlanAbortConfirm'))) return;
+    state.exportPlan = null;
+    storeExportPlan(null);
+    updateExportPlanBanner();
+    renderExportPlanProgress();
+    applyWritable();
+  }
+
+
+  // ------------------------------------------------------- 批量导入
+  function openBatchImportPick() {
+    if (!isWritable()) {
+      toast(t('web.collection.readonly_import'), 'warn');
+      return;
+    }
+    if (
+      collectionBusy ||
+      state.exportPlanBusy ||
+      (state.batchImport && state.batchImport.running)
+    ) {
+      toast(t('web.roms.exportPlanBusy'), 'warn');
+      return;
+    }
+    if (state.batchImport && !state.batchImport.running) {
+      closeModal('batchImportDialog');
+      state.batchImport = null;
+      applyWritable();
+    }
+    var dialog = $('batchImportPickDialog');
+    if (dialog && dialog.showModal) dialog.showModal();
+  }
+
+  function pickBatchImportFolder() {
+    closeModal('batchImportPickDialog');
+    var input = $('batchImportFolder');
+    if (input) {
+      input.value = '';
+      input.click();
+    }
+  }
+
+  function pickBatchImportZips() {
+    closeModal('batchImportPickDialog');
+    var input = $('batchImportZips');
+    if (input) {
+      input.value = '';
+      input.click();
+    }
+  }
+
+  function batchImportFilesChanged(input) {
+    var files = input && input.files ? Array.prototype.slice.call(input.files) : [];
+    if (input) input.value = '';
+    startBatchImport(files);
+  }
+
+  function resetBatchImportDialog() {
+    var stage = $('batchImportStage');
+    if (stage) stage.textContent = '—';
+    var count = $('batchImportCount');
+    if (count) count.textContent = '';
+    var bar = $('batchImportBar');
+    if (bar) bar.style.width = '0%';
+    var results = $('batchImportResults');
+    if (results) results.innerHTML = '';
+    var cancel = $('batchImportCancel');
+    if (cancel) cancel.disabled = false;
+    var close = $('batchImportClose');
+    if (close) close.hidden = true;
+  }
+
+  function startBatchImport(files) {
+    var zips = (files || []).filter(function (file) {
+      return file && /\.zip$/i.test(file.name || '');
+    });
+    zips.sort(function (left, right) {
+      var a = left.webkitRelativePath || left.name || '';
+      var b = right.webkitRelativePath || right.name || '';
+      return a.localeCompare(b);
+    });
+    if (!zips.length) {
+      toast(t('web.roms.batchImportEmpty'), 'warn');
+      return;
+    }
+    if (!isWritable()) {
+      toast(t('web.collection.readonly_import'), 'warn');
+      return;
+    }
+    if (
+      collectionBusy ||
+      state.exportPlanBusy ||
+      (state.batchImport && state.batchImport.running)
+    ) {
+      toast(t('web.roms.exportPlanBusy'), 'warn');
+      return;
+    }
+    if (!window.confirm(t('web.roms.batchImportConfirm', { count: zips.length }))) {
+      return;
+    }
+    state.batchImport = {
+      files: zips,
+      index: 0,
+      running: true,
+      cancelled: false,
+      cancelling: false,
+      cancelledServer: false,
+      results: [],
+      totals: { imported: 0, skipped: 0, duplicates: 0, failed: 0 },
+      currentPercent: 0,
+      currentDone: 0,
+      currentTotal: 0,
+      currentPhase: 'upload',
+      currentName: ''
+    };
+    resetBatchImportDialog();
+    var panel = $('collectionStatus');
+    if (panel) panel.hidden = true;
+    var dialog = $('batchImportDialog');
+    if (dialog && dialog.showModal) dialog.showModal();
+    applyWritable();
+    renderBatchImport();
+    batchImportNext();
+  }
+
+  function batchImportNext() {
+    var batch = state.batchImport;
+    if (!batch) return;
+    if (batch.cancelled) {
+      finishBatchImport(true);
+      return;
+    }
+    if (batch.index >= batch.files.length) {
+      finishBatchImport(false);
+      return;
+    }
+    var file = batch.files[batch.index];
+    batch.currentName = file.webkitRelativePath || file.name || '—';
+    batch.currentPercent = 0;
+    batch.currentDone = 0;
+    batch.currentTotal = 0;
+    batch.currentPhase = 'upload';
+    renderBatchImport();
+    importCollectionFile(file)
+      .then(function (status) {
+        if (batch.cancelled) {
+          finishBatchImport(true);
+          return;
+        }
+        var imported = Number(status && status.imported) || 0;
+        var skipped = Number(status && status.skipped) || 0;
+        var duplicates = Number(status && status.duplicates) || 0;
+        batch.results.push({
+          name: batch.currentName,
+          ok: true,
+          imported: imported,
+          skipped: skipped,
+          duplicates: duplicates,
+          error: ''
+        });
+        batch.totals.imported += imported;
+        batch.totals.skipped += skipped;
+        batch.totals.duplicates += duplicates;
+        batch.index += 1;
+        batch.currentPhase = 'upload';
+        batch.currentPercent = 0;
+        batch.currentDone = 0;
+        batch.currentTotal = 0;
+        renderBatchImport();
+        batchImportNext();
+      })
+      .catch(function (error) {
+        if (batch.cancelled) {
+          finishBatchImport(true);
+          return;
+        }
+        batch.results.push({
+          name: batch.currentName,
+          ok: false,
+          imported: 0,
+          skipped: 0,
+          duplicates: 0,
+          error: (error && error.message) || t('web.error.unknown')
+        });
+        batch.totals.failed += 1;
+        batch.index += 1;
+        batch.currentPhase = 'upload';
+        batch.currentPercent = 0;
+        batch.currentDone = 0;
+        batch.currentTotal = 0;
+        apiWrite('/api/collection/upload/cancel', {}).catch(function () {});
+        apiWrite('/api/collection/cancel', {}).catch(function () {});
+        renderBatchImport();
+        if (error && error.status === 409) {
+          finishBatchImport(false);
+          return;
+        }
+        batchImportNext();
+      });
+  }
+
+  function importCollectionFile(file) {
+    var batch = state.batchImport;
+    if (!batch) return Promise.reject(new Error(t('web.error.unknown')));
+    var chunkSize = Math.min(8 * 1024 * 1024, MAX_UPLOAD_BYTES);
+    var offset = 0;
+    var total = Math.max(1, Number(file.size) || 0);
+    return apiWrite('/api/collection/upload/start', {})
+      .then(function () {
+        function chunk() {
+          if (!batch || batch.cancelled) {
+            return Promise.reject(new Error(t('web.collection.cancelled')));
+          }
+          if (offset >= file.size) return Promise.resolve();
+          var end = Math.min(file.size, offset + chunkSize);
+          var blob = file.slice(offset, end);
+          return api('/api/collection/upload?offset=' + offset, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/octet-stream',
+              'X-Slot-Web': '1'
+            },
+            body: blob
+          }).then(function (data) {
+            offset = (data && data.offset) || end;
+            batch.currentPhase = 'upload';
+            batch.currentPercent = Math.min(100, Math.round((offset / total) * 100));
+            renderBatchImport();
+            return chunk();
+          });
+        }
+        return chunk();
+      })
+      .then(function () {
+        if (!batch || batch.cancelled) {
+          throw new Error(t('web.collection.cancelled'));
+        }
+        batch.currentPhase = 'import';
+        batch.currentPercent = 100;
+        renderBatchImport();
+        return apiWrite('/api/collection/upload/finish', { overwrite: true });
+      })
+      .then(function () {
+        return waitCollectionIdle(function (status) {
+          if (!batch) return;
+          batch.currentDone = Number(status && status.done) || 0;
+          batch.currentTotal = Number(status && status.total) || 0;
+          renderBatchImport();
+          if (batch.cancelled && !batch.cancelledServer) {
+            batch.cancelledServer = true;
+            apiWrite('/api/collection/cancel', {}).catch(function () {});
+          }
+        });
+      })
+      .then(function (status) {
+        if (!batch || batch.cancelled) {
+          throw new Error(t('web.collection.cancelled'));
+        }
+        if (status && status.cancelled) {
+          throw new Error(t('web.collection.cancelled'));
+        }
+        if (status && status.errors && status.errors.length) {
+          throw new Error(status.errors[0]);
+        }
+        return status;
+      });
+  }
+
+  function renderBatchImport() {
+    var batch = state.batchImport;
+    if (!batch) return;
+    var total = batch.files.length;
+    var stage = $('batchImportStage');
+    var count = $('batchImportCount');
+    var bar = $('batchImportBar');
+    var results = $('batchImportResults');
+    var cancel = $('batchImportCancel');
+    var close = $('batchImportClose');
+    if (stage) {
+      if (!batch.running) {
+        if (batch.cancelled) {
+          stage.textContent = t('web.roms.batchImportCancelled');
+        } else {
+          var okCount = Math.max(0, batch.index - batch.totals.failed);
+          stage.textContent = t('web.roms.batchImportDone', {
+            ok: okCount,
+            failed: batch.totals.failed
+          });
+        }
+      } else if (batch.cancelling) {
+        stage.textContent = t('web.roms.batchImportCancelling');
+      } else {
+        var current = t('web.roms.batchImportCurrent', {
+          index: Math.min(batch.index + 1, total),
+          total: total,
+          name: batch.currentName || '—'
+        });
+        if (batch.currentPhase === 'import') {
+          current += ' · ' + t('web.roms.batchImportImporting', {
+            done: batch.currentDone,
+            total: batch.currentTotal || '—'
+          });
+        } else {
+          current += ' · ' + t('web.roms.batchImportUpload', {
+            percent: batch.currentPercent || 0
+          });
+        }
+        stage.textContent = current;
+      }
+    }
+    if (count) {
+      count.textContent = t('web.roms.batchImportCount', {
+        done: Math.min(batch.index, total),
+        total: total,
+        imported: batch.totals.imported,
+        failed: batch.totals.failed
+      });
+    }
+    if (bar) {
+      var fraction = 0;
+      if (batch.currentPhase === 'import') {
+        var importFraction = batch.currentTotal
+          ? Math.min(1, batch.currentDone / batch.currentTotal)
+          : 0;
+        fraction = 0.5 + importFraction * 0.5;
+      } else {
+        fraction = Math.min(0.5, (batch.currentPercent || 0) / 200);
+      }
+      var percent = total
+        ? Math.min(100, Math.round(((batch.index + fraction) / total) * 100))
+        : 0;
+      bar.style.width = percent + '%';
+    }
+    if (cancel) cancel.disabled = !batch.running || batch.cancelling;
+    if (close) close.hidden = batch.running;
+    if (results) {
+      var html = [];
+      for (var i = 0; i < batch.results.length; i += 1) {
+        var result = batch.results[i];
+        var detail = result.ok
+          ? t('web.roms.batchImportResult', {
+              imported: result.imported,
+              duplicates: result.duplicates,
+              skipped: result.skipped
+            })
+          : result.error || '';
+        html.push(
+          '<div class="batch-import-result ' + (result.ok ? 'ok' : 'failed') + '">' +
+            '<span class="result-state">' + (result.ok ? '✓' : '✕') + '</span>' +
+            '<span class="result-name">' + esc(result.name) + '</span>' +
+            '<span class="result-detail">' + esc(detail) + '</span>' +
+          '</div>'
+        );
+      }
+      results.innerHTML = html.join('');
+      if (results.scrollHeight) results.scrollTop = results.scrollHeight;
+    }
+  }
+
+  function finishBatchImport(cancelled) {
+    var batch = state.batchImport;
+    if (!batch || !batch.running) return;
+    batch.running = false;
+    batch.cancelled = !!cancelled;
+    batch.cancelling = false;
+    renderBatchImport();
+    applyWritable();
+    loadRoms();
+    if (cancelled) {
+      toast(t('web.roms.batchImportCancelled'), 'warn');
+    } else {
+      var okCount = Math.max(0, batch.index - batch.totals.failed);
+      toast(
+        t('web.roms.batchImportDone', { ok: okCount, failed: batch.totals.failed }),
+        batch.totals.failed ? 'warn' : 'ok',
+        5000
+      );
+    }
+  }
+
+  function cancelBatchImport() {
+    var batch = state.batchImport;
+    if (!batch || !batch.running) return;
+    batch.cancelled = true;
+    batch.cancelling = true;
+    if (batch.currentPhase === 'upload') {
+      apiWrite('/api/collection/upload/cancel', {}).catch(function () {});
+    } else {
+      apiWrite('/api/collection/cancel', {}).catch(function () {});
+    }
+    renderBatchImport();
   }
 
   // Browser play needs a writable card only for the save write-back; the ROM
@@ -5011,12 +6168,6 @@
     if (collectionImport) {
       collectionImport.addEventListener('click', function () {
         $('collectionImportFile').click();
-      });
-    }
-    var collectionExport = $('collectionExport');
-    if (collectionExport) {
-      collectionExport.addEventListener('click', function () {
-        startCollectionExport();
       });
     }
     var collectionImportFile = $('collectionImportFile');
@@ -9672,9 +10823,38 @@
       state.savesSort = this.value;
       renderSaves();
     });
-    $('ovRefreshLog').addEventListener('click', function () {
-      loadRecentLog();
-    });
+    if ($('ovRefresh')) {
+      $('ovRefresh').addEventListener('click', function () {
+        refreshStatus().then(loadOverview).catch(function () {});
+      });
+    }
+    if ($('ovStartServer')) {
+      $('ovStartServer').addEventListener('click', function () {
+        toast(t('web.overview.serverRunning'), 'ok');
+      });
+    }
+    if ($('ovUploadGame')) {
+      $('ovUploadGame').addEventListener('click', function () { showTab('files'); });
+    }
+    if ($('ovImportCollection')) {
+      $('ovImportCollection').addEventListener('click', function () {
+        showTab('roms');
+        var button = $('collectionImport');
+        if (button) button.click();
+      });
+    }
+    if ($('ovOpenFiles')) {
+      $('ovOpenFiles').addEventListener('click', function () { showTab('files'); });
+    }
+    if ($('ovAllGames')) {
+      $('ovAllGames').addEventListener('click', function () { showTab('roms'); });
+    }
+    if ($('ovSyncHistory')) {
+      $('ovSyncHistory').addEventListener('click', function () { showTab('sync'); });
+    }
+    if ($('ovAllLogs')) {
+      $('ovAllLogs').addEventListener('click', function () { showTab('sync'); });
+    }
     $('refreshSync').addEventListener('click', function () {
       // Refreshing the cache/log only: do not reset formFilled, or unsaved
       // WebDAV edits would be silently replaced by the server copy.
@@ -10167,6 +11347,118 @@
       });
   }
 
+  function bindBatchTools() {
+    var batchExport = $('batchExport');
+    if (batchExport) batchExport.addEventListener('click', openExportPlanDialog);
+    var batchImport = $('batchImport');
+    if (batchImport) batchImport.addEventListener('click', openBatchImportPick);
+
+    var pickFolder = $('batchImportPickFolder');
+    if (pickFolder) pickFolder.addEventListener('click', pickBatchImportFolder);
+    var pickZips = $('batchImportPickZips');
+    if (pickZips) pickZips.addEventListener('click', pickBatchImportZips);
+    var closePick = $('closeBatchImportPick');
+    if (closePick) closePick.addEventListener('click', function () {
+      closeModal('batchImportPickDialog');
+    });
+    var folderInput = $('batchImportFolder');
+    if (folderInput) {
+      folderInput.addEventListener('change', function () {
+        batchImportFilesChanged(folderInput);
+      });
+    }
+    var zipsInput = $('batchImportZips');
+    if (zipsInput) {
+      zipsInput.addEventListener('change', function () {
+        batchImportFilesChanged(zipsInput);
+      });
+    }
+    var batchCancel = $('batchImportCancel');
+    if (batchCancel) batchCancel.addEventListener('click', cancelBatchImport);
+    var batchClose = $('batchImportClose');
+    if (batchClose) {
+      batchClose.addEventListener('click', function () {
+        if (state.batchImport && state.batchImport.running) return;
+        closeModal('batchImportDialog');
+        state.batchImport = null;
+        applyWritable();
+      });
+    }
+    var batchDialog = $('batchImportDialog');
+    if (batchDialog) {
+      batchDialog.addEventListener('cancel', function (event) {
+        if (state.batchImport && state.batchImport.running) event.preventDefault();
+      });
+    }
+    var pickDialog = $('batchImportPickDialog');
+    if (pickDialog) {
+      pickDialog.addEventListener('click', function (event) {
+        if (event.target === pickDialog) pickDialog.close();
+      });
+    }
+
+    var closePlan = $('closeExportPlan');
+    if (closePlan) closePlan.addEventListener('click', function () {
+      closeModal('exportPlanDialog');
+    });
+    var planCancel = $('exportPlanCancel');
+    if (planCancel) planCancel.addEventListener('click', function () {
+      closeModal('exportPlanDialog');
+    });
+    var planDialog = $('exportPlanDialog');
+    if (planDialog) {
+      planDialog.addEventListener('click', function (event) {
+        if (event.target === planDialog) planDialog.close();
+      });
+    }
+    var planList = $('exportPlanList');
+    if (planList) {
+      planList.addEventListener('change', function (event) {
+        var input = event.target.closest('input[data-plan-rom]');
+        if (!input) return;
+        var rom = input.getAttribute('data-plan-rom');
+        exportPlanSelection = exportPlanSelection || {};
+        if (input.checked) exportPlanSelection[rom] = true;
+        else delete exportPlanSelection[rom];
+        updateExportPlanSelectionSummary();
+      });
+    }
+    var selectAll = $('exportPlanSelectAll');
+    if (selectAll) selectAll.addEventListener('click', selectAllExportPlan);
+    var clearPlan = $('exportPlanClear');
+    if (clearPlan) {
+      clearPlan.addEventListener('click', function () {
+        exportPlanSelection = {};
+        renderExportPlanSelection();
+      });
+    }
+    var planStart = $('exportPlanStart');
+    if (planStart) planStart.addEventListener('click', startSelectedExportPlan);
+
+    var closeProgress = $('closeExportPlanProgress');
+    if (closeProgress) closeProgress.addEventListener('click', function () {
+      closeModal('exportPlanProgressDialog');
+    });
+    var progressClose = $('exportPlanProgressClose');
+    if (progressClose) progressClose.addEventListener('click', function () {
+      closeModal('exportPlanProgressDialog');
+    });
+    var pause = $('exportPlanPause');
+    if (pause) pause.addEventListener('click', pauseExportPlan);
+    var abort = $('exportPlanAbort');
+    if (abort) abort.addEventListener('click', abortExportPlan);
+
+    var resume = $('exportPlanResume');
+    if (resume) {
+      resume.addEventListener('click', function () {
+        openExportPlanProgress();
+        runExportPlan();
+      });
+    }
+    var discard = $('exportPlanDiscard');
+    if (discard) discard.addEventListener('click', discardExportPlan);
+  }
+
   function start() {
     if (!window.fetch) {
       var banner = $('writeBanner');
@@ -10181,6 +11473,7 @@
     bindRomTabs();
     bindSearchFields();
     bindRoms();
+    bindBatchTools();
     bindFrontEditor();
     bindUpload();
     bindSaveUpload();
@@ -10199,6 +11492,7 @@
     bindSettings();
     loadI18n().then(function () {
       applyI18n();
+      restoreExportPlan();
       showTab(currentTab());
       refreshStatus().catch(function () {});
       loadWebSettings();

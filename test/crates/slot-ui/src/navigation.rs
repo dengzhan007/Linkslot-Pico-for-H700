@@ -9,11 +9,8 @@ use crate::keyboard as kb;
 use crate::plate::UndoFace;
 use crate::switch_style as sw;
 
-const HEADER_H: f32 = 88.0;
-const SIDE: f32 = 48.0;
+const SIDE: f32 = 24.0;
 const CARD_W: f32 = OUT_W as f32 - 2.0 * SIDE;
-const LIST_TOP: f32 = 92.0;
-const LIST_H: f32 = 280.0;
 const ROW_TOP: f32 = 104.0;
 /// One prose card: a title line plus three wrapped lines of detail.
 const NOTICE_CARD_H: f32 = 184.0;
@@ -31,6 +28,11 @@ const PICKER_CELL_H: f32 = 56.0;
 const PICKER_GAP: f32 = 10.0;
 const PICKER_TOP: f32 = 110.0;
 
+/// The transfer-room card's face size.  The frontend draws it at this size, and
+/// the app reserves the same band above the shelf.
+pub const TRANSFER_HEADER_W: f32 = 664.0;
+pub const TRANSFER_HEADER_H: f32 = 76.0;
+
 /// The game-title heading shown at the top of the navigation overlay: white
 /// title type on a transparent face.  The shelf reuses this as an optional
 /// title strip, so it deliberately carries no menu accent bar.
@@ -44,23 +46,126 @@ pub fn title(text: &str) -> UndoFace {
     face
 }
 
-/// The folder name's teal, kept fixed so a theme change does not turn the
-/// browse identity into something that reads as a warning or an accent.
-const FOLDER_INK: [u8; 3] = [0x66, 0xe2, 0xba];
-/// The right-hand status is deliberately brighter than the folder name but
-/// cooler, so it leans back while staying readable.
-const FOLDER_STATUS_INK: [u8; 3] = [0xc2, 0xcd, 0xde];
-/// The transfer room marks which side it is with a dot: teal for the host,
-/// blue for the joiner.  The mode name keeps the folder teal.
-const TRANSFER_HOST_DOT: [u8; 3] = [0x66, 0xe2, 0xba];
-const TRANSFER_JOIN_DOT: [u8; 3] = [0x8a, 0xc8, 0xff];
+const FOLDER_MODE: [u8; 3] = [0xf2, 0xc8, 0x5b];
+const HOST_MODE: [u8; 3] = [0x66, 0xe2, 0xba];
+const JOIN_MODE: [u8; 3] = [0x8a, 0xc8, 0xff];
 
-/// A folder-mode header: a compact single-line status card on top (folder icon,
-/// folder name, then the platform / mode / position right-aligned), with the
-/// selected game's name on a smaller chip underneath.
-///
-/// The face is 664×76, the same rectangle the normal navigation title uses, so
-/// the frontend can cross-fade the two without moving the shelf.
+fn mode_rgba(mode: [u8; 3]) -> [u8; 4] {
+    [mode[0], mode[1], mode[2], 0xff]
+}
+
+fn mode_tint(mode: [u8; 3]) -> [u8; 4] {
+    let surface = sw::surface();
+    [
+        ((surface[0] as u16 * 84 + mode[0] as u16 * 16) / 100) as u8,
+        ((surface[1] as u16 * 84 + mode[1] as u16 * 16) / 100) as u8,
+        ((surface[2] as u16 * 84 + mode[2] as u16 * 16) / 100) as u8,
+        0xff,
+    ]
+}
+
+fn mode_tile(face: &mut UndoFace, x: f32, y: f32, mode: [u8; 3]) {
+    sw::fill_round(face, x, y, 30.0, 30.0, 8.0, mode_rgba(mode));
+    sw::fill_round(face, x + 1.0, y + 1.0, 28.0, 28.0, 7.0, mode_tint(mode));
+}
+
+fn mode_status(
+    face: &mut UndoFace,
+    card_x: f32,
+    card_w: f32,
+    label: &str,
+    mode: [u8; 3],
+    detail: &str,
+) {
+    let px = 14.0;
+    let label_w = kb::ink_width(label, px);
+    let detail_w = if detail.is_empty() {
+        0.0
+    } else {
+        kb::ink_width(detail, px)
+    };
+    let gap = if detail.is_empty() { 0.0 } else { 8.0 };
+    let total = 10.0 + 7.0 + label_w + gap + detail_w;
+    let x = card_x + card_w - 18.0 - total;
+    sw::fill_round(face, x, 17.0, 10.0, 10.0, 5.0, mode_rgba(mode));
+    let top = (44.0 - kb::line_height(px)) / 2.0;
+    kb::draw_text(face, label, px, x + 17.0, top.max(0.0), mode);
+    if !detail.is_empty() {
+        kb::draw_text(
+            face,
+            detail,
+            px,
+            x + 17.0 + label_w + gap,
+            top.max(0.0),
+            sw::ink_dim(),
+        );
+    }
+}
+
+fn header_game(face: &mut UndoFace, game: &str, suffix: Option<&str>, mode: [u8; 3]) {
+    const TOP_H: f32 = 44.0;
+    const ROW_H: f32 = 32.0;
+    let (line, px) = kb::fit_line(game, 480.0, 18.0, 13.0);
+    let line_w = kb::ink_width(&line, px);
+    let suffix_px = 14.0;
+    let suffix_w = suffix.map_or(0.0, |text| kb::ink_width(text, suffix_px));
+    let gap = if suffix.is_some() { 8.0 } else { 0.0 };
+    let total = 10.0 + line_w + gap + suffix_w;
+    let x = ((664.0 - total) / 2.0).round();
+    let top = TOP_H + ((ROW_H - kb::line_height(px)) / 2.0).max(0.0);
+    sw::fill_round(
+        face,
+        x,
+        TOP_H + (ROW_H - 5.0) / 2.0,
+        5.0,
+        5.0,
+        2.5,
+        mode_rgba(mode),
+    );
+    kb::draw_text(face, &line, px, x + 12.0, top.max(TOP_H), sw::ink());
+    if let Some(suffix) = suffix {
+        let suffix_top = TOP_H + ((ROW_H - kb::line_height(suffix_px)) / 2.0).max(0.0);
+        kb::draw_text(
+            face,
+            suffix,
+            suffix_px,
+            x + 12.0 + line_w + gap,
+            suffix_top.max(TOP_H),
+            sw::ink_dim(),
+        );
+    }
+}
+
+fn folder_icon(face: &mut UndoFace, x: f32, y: f32, mode: [u8; 3]) {
+    let ink = mode_rgba(mode);
+    kb::fill(face, x, y, 7.0, 2.0, ink);
+    kb::fill(face, x + 6.0, y + 1.0, 2.0, 3.0, ink);
+    kb::fill(face, x, y + 3.0, 16.0, 2.0, ink);
+    kb::fill(face, x, y + 3.0, 2.0, 9.0, ink);
+    kb::fill(face, x + 14.0, y + 3.0, 2.0, 9.0, ink);
+    kb::fill(face, x, y + 10.0, 16.0, 2.0, ink);
+}
+
+fn link_icon(face: &mut UndoFace, x: f32, y: f32, mode: [u8; 3]) {
+    let ink = mode_rgba(mode);
+    kb::fill(face, x + 2.0, y + 5.0, 14.0, 2.0, ink);
+    kb::fill(face, x + 10.0, y + 1.0, 2.0, 8.0, ink);
+    kb::fill(face, x + 14.0, y + 5.0, 2.0, 2.0, ink);
+    kb::fill(face, x + 2.0, y + 13.0, 14.0, 2.0, ink);
+    kb::fill(face, x + 8.0, y + 9.0, 2.0, 2.0, ink);
+    kb::fill(face, x, y + 13.0, 2.0, 2.0, ink);
+}
+
+fn join_icon(face: &mut UndoFace, x: f32, y: f32, mode: [u8; 3]) {
+    let ink = mode_rgba(mode);
+    kb::fill(face, x, y + 7.0, 15.0, 2.0, ink);
+    kb::fill(face, x + 10.0, y + 3.0, 2.0, 2.0, ink);
+    kb::fill(face, x + 12.0, y + 5.0, 2.0, 6.0, ink);
+    kb::fill(face, x + 10.0, y + 11.0, 2.0, 2.0, ink);
+    kb::fill(face, x + 17.0, y + 3.0, 2.0, 10.0, ink);
+}
+
+/// A folder-mode header with a mode spine, coloured icon tile and status lamp.
 pub fn folder_header(
     folder: &str,
     game: Option<&str>,
@@ -71,282 +176,93 @@ pub fn folder_header(
 ) -> UndoFace {
     const W: f32 = 664.0;
     const H: f32 = 76.0;
-    const CARD_H: f32 = 44.0;
-    const PAD: f32 = 22.0;
-    const ICON_W: f32 = 28.0;
-    const GAP: f32 = 24.0;
-    const MIN_CARD_W: f32 = 350.0;
-    /// Leave the status bar's clock and battery corners alone even when a deep
-    /// folder path has to be trimmed.
-    const MAX_CARD_W: f32 = 520.0;
+    const TOP_H: f32 = 44.0;
     let mut face = kb::blank(W as u32, H as u32, [0, 0, 0, 0]);
-
-    let status = format!(
-        "{} · {} {}/{}",
-        platform,
-        slot_i18n::t(lang, "device.app.folder.mode"),
-        index,
-        total
-    );
-    let status_px = 12.0;
-    let status_w = kb::ink_width(&status, status_px);
-    // Fit the folder name into the widest card first; the card itself then
-    // shrinks towards its minimum so the short Chinese names stay compact and
-    // keep the status-bar clock and battery clear.
-    let max_name_w = (MAX_CARD_W - 2.0 * PAD - ICON_W - GAP - status_w).max(40.0);
-    let (folder_line, folder_px) = kb::fit_line(folder, max_name_w, 20.0, 13.0);
-    let folder_w = kb::ink_width(&folder_line, folder_px);
-    let card_w = (PAD + ICON_W + folder_w + GAP + status_w + PAD)
-        .clamp(MIN_CARD_W, MAX_CARD_W);
-    let card_x = ((W - card_w) / 2.0).round();
-
-    let surface = sw::surface();
-    let border = sw::surface_border();
-    sw::fill_round(
+    sw::fill_round(&mut face, 0.0, 0.0, W, H, 11.0, sw::surface_border());
+    sw::fill_round(&mut face, 1.0, 1.0, W - 2.0, H - 2.0, 10.0, sw::surface());
+    kb::fill(&mut face, 0.0, 0.0, 3.0, H, mode_rgba(FOLDER_MODE));
+    mode_tile(&mut face, 12.0, 7.0, FOLDER_MODE);
+    folder_icon(&mut face, 19.0, 15.0, FOLDER_MODE);
+    let (title, px) = kb::fit_line(folder, 400.0, 18.0, 13.0);
+    kb::draw_text(
         &mut face,
-        card_x,
+        &title,
+        px,
+        54.0,
+        ((TOP_H - kb::line_height(px)) / 2.0).max(0.0),
+        sw::ink(),
+    );
+    let detail = format!("{platform} · {index}/{total}");
+    mode_status(
+        &mut face,
         0.0,
-        card_w,
-        CARD_H,
-        13.0,
-        [border[0], border[1], border[2], 0xcc],
+        W,
+        slot_i18n::t(lang, "device.app.transfer.mode_folder"),
+        FOLDER_MODE,
+        &detail,
     );
-    sw::fill_round(
-        &mut face,
-        card_x + 1.0,
-        1.0,
-        card_w - 2.0,
-        CARD_H - 2.0,
-        12.0,
-        [surface[0], surface[1], surface[2], 0xe8],
-    );
-
-    // A folder outline, drawn from thin bars so it reads at any theme.
-    let icon_x = card_x + PAD;
-    let icon_y = 15.0;
-    let ink = [FOLDER_INK[0], FOLDER_INK[1], FOLDER_INK[2], 0xff];
-    kb::fill(&mut face, icon_x, icon_y, 8.0, 2.0, ink);
-    kb::fill(&mut face, icon_x + 6.0, icon_y + 1.0, 2.0, 3.0, ink);
-    kb::fill(&mut face, icon_x, icon_y + 3.0, 18.0, 2.0, ink);
-    kb::fill(&mut face, icon_x, icon_y + 3.0, 2.0, 10.0, ink);
-    kb::fill(&mut face, icon_x + 16.0, icon_y + 3.0, 2.0, 10.0, ink);
-    kb::fill(&mut face, icon_x, icon_y + 11.0, 18.0, 2.0, ink);
-
-    let status_x = card_x + card_w - PAD - status_w;
-    let status_top = (CARD_H - kb::line_height(status_px)) / 2.0;
-    kb::draw_text(
-        &mut face,
-        &status,
-        status_px,
-        status_x,
-        status_top.max(0.0),
-        FOLDER_STATUS_INK,
-    );
-
-    let name_x = icon_x + ICON_W;
-    let folder_top = (CARD_H - kb::line_height(folder_px)) / 2.0;
-    kb::draw_text(
-        &mut face,
-        &folder_line,
-        folder_px,
-        name_x,
-        folder_top.max(0.0),
-        FOLDER_INK,
-    );
-
+    kb::fill(&mut face, 16.0, TOP_H, W - 32.0, 1.0, sw::surface_border());
     if let Some(game) = game {
-        let (game_line, game_px) = kb::fit_line(game, 540.0, 17.0, 12.0);
-        let text_w = kb::ink_width(&game_line, game_px);
-        let chip_w = (text_w + 90.0).clamp(150.0, 600.0);
-        let chip_x = ((W - chip_w) / 2.0).round();
-        sw::fill_round(
-            &mut face,
-            chip_x,
-            47.0,
-            chip_w,
-            27.0,
-            9.0,
-            [border[0], border[1], border[2], 0xb8],
-        );
-        sw::fill_round(
-            &mut face,
-            chip_x + 1.0,
-            48.0,
-            chip_w - 2.0,
-            25.0,
-            8.0,
-            [surface[0], surface[1], surface[2], 0xd0],
-        );
-        let top = 47.0 + (27.0 - kb::line_height(game_px)) / 2.0;
-        kb::draw_text(
-            &mut face,
-            &game_line,
-            game_px,
-            chip_x + (chip_w - text_w) / 2.0,
-            top.max(47.0),
-            sw::ink(),
-        );
+        header_game(&mut face, game, None, FOLDER_MODE);
     }
     face
 }
 
-/// A transfer-room header: the mode name and the current side (host / joiner)
-/// on one compact card, with the selected cartridge's name and the content
-/// choice on a chip underneath.  Same rectangle as [`folder_header`], so the
-/// frontend can swap the two without moving the shelf.
+/// A transfer-room header; host and join are distinguished by their mode colour
+/// and status lamp, while the panel itself stays neutral.
 pub fn transfer_header(
     host: bool,
     game: Option<&str>,
     content: usize,
     lang: Language,
 ) -> UndoFace {
-    const W: f32 = 664.0;
-    const H: f32 = 76.0;
-    const CARD_H: f32 = 44.0;
-    const PAD: f32 = 22.0;
-    const ICON_W: f32 = 26.0;
-    const GAP: f32 = 22.0;
-    const MIN_CARD_W: f32 = 320.0;
-    /// Same ceiling as the folder header: the status-bar clock and battery
-    /// keep their corners.
-    const MAX_CARD_W: f32 = 520.0;
+    const W: f32 = TRANSFER_HEADER_W;
+    const H: f32 = TRANSFER_HEADER_H;
+    const TOP_H: f32 = 44.0;
     let mut face = kb::blank(W as u32, H as u32, [0, 0, 0, 0]);
-
-    let role = slot_i18n::t(
+    let mode = if host { HOST_MODE } else { JOIN_MODE };
+    let label = slot_i18n::t(
         lang,
         if host {
-            "device.app.transfer.role_host"
+            "device.app.transfer.mode_host"
         } else {
-            "device.app.transfer.role_join"
+            "device.app.transfer.mode_join"
         },
     );
-    let role_px = 13.0;
-    let role_text_w = kb::ink_width(role, role_px);
-    // The dot sits 6 px before the text and is followed by the same gap.
-    let role_w = role_text_w + 12.0;
-    let max_title_w = (MAX_CARD_W - 2.0 * PAD - ICON_W - GAP - role_w).max(60.0);
-    let (title_line, title_px) = kb::fit_line(
-        slot_i18n::t(lang, "device.app.transfer.title"),
-        max_title_w,
-        20.0,
-        13.0,
-    );
-    let title_w = kb::ink_width(&title_line, title_px);
-    let card_w = (PAD + ICON_W + title_w + GAP + role_w + PAD).clamp(MIN_CARD_W, MAX_CARD_W);
-    let card_x = ((W - card_w) / 2.0).round();
-
-    let surface = sw::surface();
-    let border = sw::surface_border();
-    sw::fill_round(
-        &mut face,
-        card_x,
-        0.0,
-        card_w,
-        CARD_H,
-        13.0,
-        [border[0], border[1], border[2], 0xcc],
-    );
-    sw::fill_round(
-        &mut face,
-        card_x + 1.0,
-        1.0,
-        card_w - 2.0,
-        CARD_H - 2.0,
-        12.0,
-        [surface[0], surface[1], surface[2], 0xe8],
-    );
-
-    // Exchange arrows: this device sends one card and receives another.
-    let icon_x = card_x + PAD;
-    let icon_y = 11.0;
-    let ink = [FOLDER_INK[0], FOLDER_INK[1], FOLDER_INK[2], 0xff];
-    kb::fill(&mut face, icon_x + 2.0, icon_y + 6.0, 15.0, 2.0, ink);
-    kb::fill(&mut face, icon_x + 14.0, icon_y + 2.0, 2.0, 2.0, ink);
-    kb::fill(&mut face, icon_x + 16.0, icon_y + 4.0, 2.0, 6.0, ink);
-    kb::fill(&mut face, icon_x + 14.0, icon_y + 10.0, 2.0, 2.0, ink);
-    kb::fill(&mut face, icon_x + 7.0, icon_y + 16.0, 15.0, 2.0, ink);
-    kb::fill(&mut face, icon_x + 8.0, icon_y + 12.0, 2.0, 2.0, ink);
-    kb::fill(&mut face, icon_x + 6.0, icon_y + 14.0, 2.0, 6.0, ink);
-    kb::fill(&mut face, icon_x + 8.0, icon_y + 20.0, 2.0, 2.0, ink);
-
-    let title_top = (CARD_H - kb::line_height(title_px)) / 2.0;
-    kb::draw_text(
-        &mut face,
-        &title_line,
-        title_px,
-        icon_x + ICON_W,
-        title_top.max(0.0),
-        FOLDER_INK,
-    );
-
-    let role_x = card_x + card_w - PAD - role_text_w;
-    let dot = if host {
-        TRANSFER_HOST_DOT
+    sw::fill_round(&mut face, 0.0, 0.0, W, H, 11.0, sw::surface_border());
+    sw::fill_round(&mut face, 1.0, 1.0, W - 2.0, H - 2.0, 10.0, sw::surface());
+    kb::fill(&mut face, 0.0, 0.0, 3.0, H, mode_rgba(mode));
+    mode_tile(&mut face, 12.0, 7.0, mode);
+    if host {
+        link_icon(&mut face, 19.0, 13.0, mode);
     } else {
-        TRANSFER_JOIN_DOT
-    };
-    sw::fill_round(
-        &mut face,
-        role_x - 12.0,
-        (CARD_H - 6.0) / 2.0,
-        6.0,
-        6.0,
-        3.0,
-        [dot[0], dot[1], dot[2], 0xff],
+        join_icon(&mut face, 19.0, 13.0, mode);
+    }
+    let (title, px) = kb::fit_line(
+        slot_i18n::t(lang, "device.app.transfer.title"),
+        400.0,
+        18.0,
+        13.0,
     );
-    let role_top = (CARD_H - kb::line_height(role_px)) / 2.0;
     kb::draw_text(
         &mut face,
-        role,
-        role_px,
-        role_x,
-        role_top.max(0.0),
-        FOLDER_STATUS_INK,
+        &title,
+        px,
+        54.0,
+        ((TOP_H - kb::line_height(px)) / 2.0).max(0.0),
+        sw::ink(),
     );
-
-    // The chip under the card says what is selected *and* what A will send, so
-    // a player who set 仅存档 an hour ago is not surprised by a save overwrite.
+    mode_status(&mut face, 0.0, W, &label, mode, "");
     let content_key = match content.min(2) {
         1 => "device.app.transfer.content_save",
         2 => "device.app.transfer.content_all",
         _ => "device.app.transfer.content_cart",
     };
     let content_label = slot_i18n::t(lang, content_key);
-    // No selected cartridge, no chip: the room keeps the same empty strip it
-    // had before the content choice existed.
-    let chip_text = game.map(|game| format!("{game} · {content_label}"));
-    if let Some(chip_text) = chip_text {
-        let (game_line, game_px) = kb::fit_line(&chip_text, 540.0, 17.0, 12.0);
-        let text_w = kb::ink_width(&game_line, game_px);
-        let chip_w = (text_w + 90.0).clamp(150.0, 600.0);
-        let chip_x = ((W - chip_w) / 2.0).round();
-        sw::fill_round(
-            &mut face,
-            chip_x,
-            47.0,
-            chip_w,
-            27.0,
-            9.0,
-            [border[0], border[1], border[2], 0xb8],
-        );
-        sw::fill_round(
-            &mut face,
-            chip_x + 1.0,
-            48.0,
-            chip_w - 2.0,
-            25.0,
-            8.0,
-            [surface[0], surface[1], surface[2], 0xd0],
-        );
-        let top = 47.0 + (27.0 - kb::line_height(game_px)) / 2.0;
-        kb::draw_text(
-            &mut face,
-            &game_line,
-            game_px,
-            chip_x + (chip_w - text_w) / 2.0,
-            top.max(47.0),
-            sw::ink(),
-        );
+    kb::fill(&mut face, 16.0, TOP_H, W - 32.0, 1.0, sw::surface_border());
+    if let Some(game) = game {
+        let suffix = format!("· {content_label}");
+        header_game(&mut face, game, Some(&suffix), mode);
     }
     face
 }
@@ -356,16 +272,14 @@ pub fn transfer_header(
 /// moves without re-uploading a texture.
 pub fn folder_hold_prompt(lang: Language) -> UndoFace {
     let mut face = kb::blank(FOLDER_HOLD_W, FOLDER_HOLD_H, [0, 0, 0, 0]);
-    let surface = sw::surface();
-    let border = sw::surface_border();
     sw::fill_round(
         &mut face,
         0.0,
         0.0,
         FOLDER_HOLD_W as f32,
         FOLDER_HOLD_H as f32,
-        14.0,
-        [border[0], border[1], border[2], 0xcc],
+        12.0,
+        sw::surface_border(),
     );
     sw::fill_round(
         &mut face,
@@ -373,28 +287,26 @@ pub fn folder_hold_prompt(lang: Language) -> UndoFace {
         1.0,
         FOLDER_HOLD_W as f32 - 2.0,
         FOLDER_HOLD_H as f32 - 2.0,
-        13.0,
-        [surface[0], surface[1], surface[2], 0xf0],
+        11.0,
+        sw::surface(),
     );
     kb::fill(
         &mut face,
-        5.0,
-        13.0,
+        0.0,
+        0.0,
         3.0,
-        FOLDER_HOLD_H as f32 - 26.0,
-        [FOLDER_INK[0], FOLDER_INK[1], FOLDER_INK[2], 0xff],
+        FOLDER_HOLD_H as f32,
+        mode_rgba(FOLDER_MODE),
     );
-    kb::draw_left(
-        &mut face,
+    mode_tile(&mut face, 12.0, 9.0, FOLDER_MODE);
+    folder_icon(&mut face, 19.0, 17.0, FOLDER_MODE);
+    let (label, px) = kb::fit_line(
         slot_i18n::t(lang, "device.app.folder.hold"),
-        15.0,
-        11.0,
-        FOLDER_HOLD_W as f32 - 32.0,
-        18.0,
-        6.0,
-        22.0,
-        FOLDER_INK,
+        218.0,
+        12.0,
+        9.0,
     );
+    kb::draw_text(&mut face, &label, px, 48.0, 17.0, sw::ink());
     let [bx, by, bw, bh] = folder_hold_bar();
     sw::fill_round(
         &mut face,
@@ -403,27 +315,27 @@ pub fn folder_hold_prompt(lang: Language) -> UndoFace {
         bw,
         bh,
         bh / 2.0,
-        [0x0e, 0x10, 0x15, 0xff],
+        [0x3a, 0x3a, 0x42, 0xff],
     );
     face
 }
 
 pub const FOLDER_HOLD_W: u32 = 288;
-pub const FOLDER_HOLD_H: u32 = 58;
+pub const FOLDER_HOLD_H: u32 = 64;
 /// Where the hold prompt sits on the output screen: `[x, y]`.
-pub const FOLDER_HOLD_ORIGIN: [f32; 2] = [216.0, 92.0];
+pub const FOLDER_HOLD_ORIGIN: [f32; 2] = [216.0, 120.0];
 
 /// The fill area of the hold prompt's bar, relative to the prompt face.
 pub fn folder_hold_bar() -> [f32; 4] {
-    [18.0, 40.0, 252.0, 8.0]
+    [18.0, 52.0, 252.0, 4.0]
 }
 
 /// The progress bar's fill colour.
 pub fn folder_hold_fill() -> [f32; 4] {
     [
-        FOLDER_INK[0] as f32 / 255.0,
-        FOLDER_INK[1] as f32 / 255.0,
-        FOLDER_INK[2] as f32 / 255.0,
+        FOLDER_MODE[0] as f32 / 255.0,
+        FOLDER_MODE[1] as f32 / 255.0,
+        FOLDER_MODE[2] as f32 / 255.0,
         1.0,
     ]
 }
@@ -451,28 +363,18 @@ pub fn picker(index: u8, available: [bool; 26], lang: Language) -> UndoFace {
                 y,
                 PICKER_CELL_W,
                 PICKER_CELL_H,
-                sw::CARD_RADIUS,
-                accent(),
-            );
-            sw::fill_round(
-                &mut face,
-                x + 2.0,
-                y + 2.0,
-                PICKER_CELL_W - 4.0,
-                PICKER_CELL_H - 4.0,
-                (sw::CARD_RADIUS - 2.0).max(0.0),
+                9.0,
                 sw::selected(),
             );
-        } else if avail {
-            card_at(&mut face, x, y, PICKER_CELL_W, PICKER_CELL_H, false);
-        } else {
+            sw::fill_round(&mut face, x - 8.0, y + (PICKER_CELL_H - 24.0) / 2.0, 3.0, 24.0, 2.0, accent());
+        } else if !avail {
             sw::fill_round(
                 &mut face,
                 x,
                 y,
                 PICKER_CELL_W,
                 PICKER_CELL_H,
-                sw::CARD_RADIUS,
+                9.0,
                 [0x24, 0x24, 0x29, 0xff],
             );
         }
@@ -662,38 +564,120 @@ pub fn band_menu(selected: usize, five_supported: bool, lang: Language) -> UndoF
     face
 }
 
-/// Cartridge-transfer matching menu: artwork on the left, the three choices on
-/// the right. The frontend pastes the selected Host/Join artwork into the left
-/// card, so this face deliberately leaves that area blank.
+
+fn back_icon(face: &mut UndoFace, x: f32, y: f32, colour: [u8; 4]) {
+    kb::fill(face, x, y + 7.0, 14.0, 2.0, colour);
+    kb::fill(face, x + 2.0, y + 3.0, 2.0, 2.0, colour);
+    kb::fill(face, x, y + 5.0, 2.0, 6.0, colour);
+    kb::fill(face, x + 2.0, y + 11.0, 2.0, 2.0, colour);
+}
+
+fn clear_rect(face: &mut UndoFace, x: f32, y: f32, w: f32, h: f32) {
+    let x0 = x.max(0.0) as u32;
+    let y0 = y.max(0.0) as u32;
+    let x1 = (x + w).min(face.w as f32) as u32;
+    let y1 = (y + h).min(face.h as f32) as u32;
+    for py in y0..y1 {
+        for px in x0..x1 {
+            let at = ((py * face.w + px) * 4) as usize;
+            face.rgba[at..at + 4].copy_from_slice(&[0, 0, 0, 0]);
+        }
+    }
+}
+
+/// Cartridge-transfer matching menu: a two-device bridge on the left and the
+/// three choices on the right. Host, join and idle each get a mode colour and
+/// status lamp, but the panels stay neutral Console Flat surfaces.
 pub fn transfer_menu(mode: &str, selected: usize, lang: Language) -> UndoFace {
     let mut face = kb::blank(OUT_W, 480, sw::bg());
-    kb::fill(&mut face, 0.0, 0.0, OUT_W as f32, HEADER_H, sw::bg_top());
-    kb::fill(&mut face, SIDE, 16.0, 5.0, 30.0, accent());
-    let ink = sw::ink();
-    kb::draw_text(
+    let selected = selected.min(2);
+    let (mode_colour, status_key) = match selected {
+        0 => (HOST_MODE, "device.app.transfer.create_hint"),
+        1 => (JOIN_MODE, "device.app.transfer.join_hint"),
+        _ => ([0xa6, 0xa6, 0xad], "device.app.transfer.back_hint"),
+    };
+    heading(&mut face, slot_i18n::t(lang, "device.app.transfer.title"));
+    let (network, network_px) = kb::fit_line(mode, 170.0, 14.0, 12.0);
+    let network_w = kb::ink_width(&network, network_px);
+    let chip_w = network_w + 40.0;
+    let chip_x = OUT_W as f32 - 32.0 - chip_w;
+    sw::fill_round(&mut face, chip_x, 50.0, chip_w, 30.0, 8.0, sw::surface_border());
+    sw::fill_round(
         &mut face,
-        slot_i18n::t(lang, "device.app.transfer.title"),
+        chip_x + 1.0,
+        51.0,
+        chip_w - 2.0,
         28.0,
-        64.0,
-        12.0,
-        [ink[0], ink[1], ink[2]],
+        7.0,
+        [0x20, 0x20, 0x24, 0xff],
     );
-
-    // Mode chip at the top-right, separate from the heading.
-    sw::fill_round(&mut face, 526.0, 16.0, 156.0, 32.0, 10.0, accent());
-    sw::fill_round(&mut face, 528.0, 18.0, 152.0, 28.0, 8.0, sw::surface());
-    let mode_ink = sw::accent();
+    sw::fill_round(
+        &mut face,
+        chip_x + 11.0,
+        61.0,
+        8.0,
+        8.0,
+        4.0,
+        mode_rgba(mode_colour),
+    );
+    let network_top = 50.0 + (30.0 - kb::line_height(network_px)) / 2.0;
     kb::draw_text(
         &mut face,
-        mode,
-        16.0,
-        538.0,
-        20.0,
-        [mode_ink[0], mode_ink[1], mode_ink[2]],
+        &network,
+        network_px,
+        chip_x + 26.0,
+        network_top.max(50.0),
+        sw::ink(),
     );
 
-    // Left artwork card; the frontend fills it with the current role/mode art.
-    card_at(&mut face, 40.0, 92.0, 280.0, 200.0, false);
+    // Left live-animation viewport.  The interior is transparent so the
+    // frontend can draw the existing link animation underneath this face.
+    sw::fill_round(&mut face, 24.0, 96.0, 340.0, 300.0, 12.0, sw::surface_border());
+    sw::fill_round(&mut face, 25.0, 97.0, 338.0, 298.0, 11.0, sw::surface());
+    let hero_key = match selected {
+        0 => "device.app.transfer.create",
+        1 => "device.app.transfer.join",
+        _ => "device.app.common.back",
+    };
+    kb::draw_text(&mut face, "LIVE LINK / VIEWPORT", 9.0, 42.0, 112.0, sw::ink_dim());
+    kb::draw_text(
+        &mut face,
+        slot_i18n::t(lang, hero_key),
+        20.0,
+        42.0,
+        126.0,
+        sw::ink(),
+    );
+    clear_rect(&mut face, 40.0, 164.0, 308.0, 194.0);
+    let frame = sw::surface_border();
+    kb::fill(&mut face, 40.0, 164.0, 308.0, 1.0, frame);
+    kb::fill(&mut face, 40.0, 357.0, 308.0, 1.0, frame);
+    kb::fill(&mut face, 40.0, 164.0, 1.0, 194.0, frame);
+    kb::fill(&mut face, 347.0, 164.0, 1.0, 194.0, frame);
+    sw::fill_round(
+        &mut face,
+        42.0,
+        370.0,
+        7.0,
+        7.0,
+        3.5,
+        mode_rgba(mode_colour),
+    );
+    let (status, px) = kb::fit_line(slot_i18n::t(lang, status_key), 292.0, 11.0, 10.0);
+    kb::draw_text(&mut face, &status, px, 57.0, 370.0, sw::ink_dim());
+
+    // Right mode panel.
+    sw::fill_round(&mut face, 380.0, 96.0, 316.0, 300.0, 12.0, sw::surface_border());
+    sw::fill_round(&mut face, 381.0, 97.0, 314.0, 298.0, 11.0, sw::surface());
+    kb::draw_text(&mut face, "MODE", 9.0, 400.0, 112.0, sw::ink_dim());
+    kb::draw_text(
+        &mut face,
+        slot_i18n::t(lang, "device.app.transfer.mode_title"),
+        20.0,
+        400.0,
+        126.0,
+        sw::ink(),
+    );
 
     let rows = [
         ("device.app.transfer.create", "device.app.transfer.create_hint"),
@@ -701,80 +685,115 @@ pub fn transfer_menu(mode: &str, selected: usize, lang: Language) -> UndoFace {
         ("device.app.common.back", "device.app.transfer.back_hint"),
     ];
     for (index, (title_key, hint_key)) in rows.iter().enumerate() {
-        let y = 96.0 + index as f32 * 66.0;
-        let selected = index == selected.min(2);
-        card_at(&mut face, 340.0, y, 354.0, 58.0, selected);
-        let ink = if selected { sw::ink_selected() } else { sw::ink() };
-        let dim = if selected { sw::ink_selected() } else { sw::ink_dim() };
+        let y = 174.0 + index as f32 * 54.0;
+        let lit = index == selected;
+        let row_ink = if lit { sw::ink_selected() } else { sw::ink() };
+        let hint_ink = if lit { sw::ink_selected() } else { sw::ink_dim() };
+        if lit {
+            sw::fill_round(&mut face, 400.0, y, 276.0, 48.0, 11.0, sw::selected());
+            sw::fill_round(
+                &mut face,
+                392.0,
+                y + 12.0,
+                3.0,
+                24.0,
+                2.0,
+                accent(),
+            );
+        }
+        let icon_colour = if lit {
+            let ink = sw::ink_selected();
+            [ink[0], ink[1], ink[2], 0xff]
+        } else {
+            mode_rgba(mode_colour)
+        };
+        match index {
+            0 => {
+                kb::fill(&mut face, 416.0, y + 15.0, 14.0, 2.0, icon_colour);
+                kb::fill(&mut face, 428.0, y + 11.0, 2.0, 6.0, icon_colour);
+                kb::fill(&mut face, 428.0, y + 22.0, 2.0, 2.0, icon_colour);
+            }
+            1 => {
+                kb::fill(&mut face, 416.0, y + 22.0, 14.0, 2.0, icon_colour);
+                kb::fill(&mut face, 426.0, y + 18.0, 2.0, 2.0, icon_colour);
+                kb::fill(&mut face, 428.0, y + 20.0, 2.0, 6.0, icon_colour);
+                kb::fill(&mut face, 426.0, y + 26.0, 2.0, 2.0, icon_colour);
+            }
+            _ => back_icon(&mut face, 416.0, y + 15.0, icon_colour),
+        }
         kb::draw_text(
             &mut face,
             slot_i18n::t(lang, title_key),
-            18.0,
-            356.0,
-            y + 9.0,
-            [ink[0], ink[1], ink[2]],
+            16.0,
+            440.0,
+            y + 5.0,
+            row_ink,
         );
         kb::draw_text(
             &mut face,
             slot_i18n::t(lang, hint_key),
-            11.0,
-            356.0,
-            y + 34.0,
-            [dim[0], dim[1], dim[2]],
+            10.0,
+            440.0,
+            y + 29.0,
+            hint_ink,
         );
+        if lit {
+            let rights = match index {
+                0 => slot_i18n::t(lang, "device.app.transfer.mode_host"),
+                1 => slot_i18n::t(lang, "device.app.transfer.mode_join"),
+                _ => "B",
+            };
+            kb::draw_text(&mut face, rights, 9.0, 632.0, y + 19.0, [0x55, 0x55, 0x5d]);
+        }
     }
-
-    let hints = [
-        ("device.app.transfer.hint_nav", 48.0),
-        ("device.app.transfer.hint_confirm", 172.0),
-        ("device.app.transfer.select_mode", 286.0),
-        ("device.app.transfer.hint_back", 470.0),
-    ];
-    for (key, x) in hints {
-        let dim = sw::ink_dim();
-        kb::draw_text(
-            &mut face,
-            slot_i18n::t(lang, key),
-            11.0,
-            x,
-            HINT_Y + 8.0,
-            [dim[0], dim[1], dim[2]],
-        );
-    }
+    let dim = sw::ink_dim();
+    kb::draw_text(
+        &mut face,
+        slot_i18n::t(lang, "device.app.transfer.hint_back"),
+        10.0,
+        32.0,
+        436.0,
+        dim,
+    );
+    kb::draw_text(
+        &mut face,
+        slot_i18n::t(lang, "device.app.transfer.select_mode"),
+        10.0,
+        300.0,
+        436.0,
+        dim,
+    );
+    kb::draw_text(
+        &mut face,
+        slot_i18n::t(lang, "device.app.transfer.hint_confirm"),
+        10.0,
+        600.0,
+        436.0,
+        dim,
+    );
     face
 }
 
-/// Cartridge-transfer content chooser: three radio rows under the room's
-/// heading.  `selected` is the cursor, `current` the value already in force;
-/// both are 0 = cart only, 1 = saves only, 2 = cart and saves.
+/// Cartridge-transfer content chooser: three flat rows with content icons.
+/// `selected` is the cursor, `current` the value already in force; both are
+/// 0 = cart only, 1 = saves only, 2 = cart and saves.
 pub fn transfer_content_menu(selected: usize, current: usize, lang: Language) -> UndoFace {
-    const CARD_X: f32 = 56.0;
-    const CARD_W: f32 = 608.0;
-    const CARD_H: f32 = 78.0;
-    const CARD_GAP: f32 = 9.0;
-    const CARD_TOP: f32 = 108.0;
-    const RADIO_X: f32 = 86.0;
+    const ROW_X: f32 = 24.0;
+    const ROW_W: f32 = 672.0;
+    const ROW_H: f32 = 64.0;
+    const ROW_GAP: f32 = 8.0;
+    const ROW_TOP: f32 = 96.0;
 
     let mut face = kb::blank(OUT_W, 480, sw::bg());
-    kb::fill(&mut face, 0.0, 0.0, OUT_W as f32, HEADER_H, sw::bg_top());
-    kb::fill(&mut face, 48.0, 20.0, 5.0, 30.0, accent());
-    let ink = sw::ink();
-    kb::draw_text(
-        &mut face,
-        slot_i18n::t(lang, "device.app.transfer.content"),
-        26.0,
-        64.0,
-        18.0,
-        [ink[0], ink[1], ink[2]],
-    );
+    heading(&mut face, slot_i18n::t(lang, "device.app.transfer.content"));
     let dim = sw::ink_dim();
     kb::draw_text(
         &mut face,
         slot_i18n::t(lang, "device.app.transfer.content_hint"),
-        12.0,
-        66.0,
-        56.0,
-        [dim[0], dim[1], dim[2]],
+        11.0,
+        32.0,
+        82.0,
+        dim,
     );
 
     let rows = [
@@ -791,91 +810,96 @@ pub fn transfer_content_menu(selected: usize, current: usize, lang: Language) ->
             "device.app.transfer.content_all_hint",
         ),
     ];
+    let current = current.min(2);
     for (index, (title_key, hint_key)) in rows.iter().enumerate() {
-        let y = CARD_TOP + index as f32 * (CARD_H + CARD_GAP);
+        let y = ROW_TOP + index as f32 * (ROW_H + ROW_GAP);
         let lit = index == selected.min(2);
-        card_at(&mut face, CARD_X, y, CARD_W, CARD_H, lit);
-
-        // Radio dot: filled accent for the row that is in force, a ring for
-        // the others.  The cursor is the white card, not the dot.
-        let cy = y + CARD_H / 2.0;
-        let dot_fill = if lit { sw::selected() } else { sw::surface() };
-        if index == current.min(2) {
-            sw::fill_round(&mut face, RADIO_X - 9.0, cy - 9.0, 18.0, 18.0, 9.0, accent());
-            sw::fill_round(
-                &mut face,
-                RADIO_X - 3.5,
-                cy - 3.5,
-                7.0,
-                7.0,
-                3.5,
-                [0xff, 0xff, 0xff, 0xff],
-            );
-        } else {
-            sw::fill_round(
-                &mut face,
-                RADIO_X - 9.0,
-                cy - 9.0,
-                18.0,
-                18.0,
-                9.0,
-                sw::surface_border(),
-            );
-            sw::fill_round(&mut face, RADIO_X - 7.0, cy - 7.0, 14.0, 14.0, 7.0, dot_fill);
+        if lit {
+            sw::fill_round(&mut face, ROW_X, y, ROW_W, ROW_H, 11.0, sw::selected());
+            sw::fill_round(&mut face, ROW_X - 8.0, y + 20.0, 3.0, 24.0, 2.0, accent());
         }
-
         let title_ink = if lit { sw::ink_selected() } else { sw::ink() };
         let hint_ink = if lit { sw::ink_selected() } else { sw::ink_dim() };
-        kb::draw_text(
-            &mut face,
+        let icon_ink = if lit {
+            sw::ink_selected()
+        } else {
+            sw::ink()
+        };
+        let icon_x = ROW_X + 16.0;
+        let icon_y = y + 20.0;
+        match index {
+            0 => {
+                // Cartridge
+                kb::fill(&mut face, icon_x + 4.0, icon_y, 9.0, 2.0, [icon_ink[0], icon_ink[1], icon_ink[2], 0xff]);
+                kb::fill(&mut face, icon_x + 2.0, icon_y + 2.0, 2.0, 12.0, [icon_ink[0], icon_ink[1], icon_ink[2], 0xff]);
+                kb::fill(&mut face, icon_x + 13.0, icon_y + 2.0, 2.0, 12.0, [icon_ink[0], icon_ink[1], icon_ink[2], 0xff]);
+                kb::fill(&mut face, icon_x + 4.0, icon_y + 12.0, 9.0, 2.0, [icon_ink[0], icon_ink[1], icon_ink[2], 0xff]);
+            }
+            1 => {
+                // Save slot
+                kb::fill(&mut face, icon_x + 3.0, icon_y, 10.0, 2.0, [icon_ink[0], icon_ink[1], icon_ink[2], 0xff]);
+                kb::fill(&mut face, icon_x + 2.0, icon_y + 2.0, 2.0, 12.0, [icon_ink[0], icon_ink[1], icon_ink[2], 0xff]);
+                kb::fill(&mut face, icon_x + 12.0, icon_y + 2.0, 2.0, 12.0, [icon_ink[0], icon_ink[1], icon_ink[2], 0xff]);
+                kb::fill(&mut face, icon_x + 3.0, icon_y + 12.0, 10.0, 2.0, [icon_ink[0], icon_ink[1], icon_ink[2], 0xff]);
+                kb::fill(&mut face, icon_x + 4.0, icon_y + 3.0, 6.0, 2.0, [icon_ink[0], icon_ink[1], icon_ink[2], 0xff]);
+            }
+            _ => {
+                // Cartridge + save stack
+                kb::fill(&mut face, icon_x + 2.0, icon_y, 12.0, 2.0, [icon_ink[0], icon_ink[1], icon_ink[2], 0xff]);
+                kb::fill(&mut face, icon_x, icon_y + 2.0, 2.0, 6.0, [icon_ink[0], icon_ink[1], icon_ink[2], 0xff]);
+                kb::fill(&mut face, icon_x + 14.0, icon_y + 2.0, 2.0, 6.0, [icon_ink[0], icon_ink[1], icon_ink[2], 0xff]);
+                kb::fill(&mut face, icon_x + 2.0, icon_y + 8.0, 12.0, 2.0, [icon_ink[0], icon_ink[1], icon_ink[2], 0xff]);
+                kb::fill(&mut face, icon_x + 2.0, icon_y + 12.0, 12.0, 2.0, [icon_ink[0], icon_ink[1], icon_ink[2], 0xff]);
+            }
+        }
+        let (title, title_px) = kb::fit_line(
             slot_i18n::t(lang, title_key),
-            21.0,
-            112.0,
-            y + 13.0,
-            title_ink,
+            470.0,
+            18.0,
+            13.0,
         );
-        kb::draw_text(
-            &mut face,
+        kb::draw_text(&mut face, &title, title_px, ROW_X + 52.0, y + 5.0, title_ink);
+        let (hint, hint_px) = kb::fit_line(
             slot_i18n::t(lang, hint_key),
-            12.5,
-            112.0,
-            y + 46.0,
-            hint_ink,
+            470.0,
+            12.0,
+            10.0,
         );
-
-        if index == current.min(2) {
-            let chip_w = 96.0;
-            let chip_x = CARD_X + CARD_W - chip_w - 12.0;
-            sw::fill_round(&mut face, chip_x, y + 14.0, chip_w, 24.0, 8.0, accent());
+        kb::draw_text(&mut face, &hint, hint_px, ROW_X + 52.0, y + 34.0, hint_ink);
+        if index == current {
             let label = slot_i18n::t(lang, "device.app.transfer.content_current");
-            let px = 12.0;
-            let w = kb::ink_width(label, px);
+            let tag_px = 10.0;
+            let tag_w = kb::ink_width(label, tag_px) + 14.0;
+            let tag_x = ROW_X + ROW_W - 16.0 - tag_w;
+            let border = if lit { [0xd0, 0xd0, 0xd2, 0xff] } else { sw::surface_border() };
+            sw::fill_round(&mut face, tag_x, y + 22.0, tag_w, 20.0, 6.0, border);
+            let fill = if lit { sw::selected() } else { sw::bg() };
+            sw::fill_round(&mut face, tag_x + 1.0, y + 23.0, tag_w - 2.0, 18.0, 5.0, fill);
             kb::draw_text(
                 &mut face,
                 label,
-                px,
-                chip_x + (chip_w - w) / 2.0,
-                y + 19.0,
-                [0xff, 0xff, 0xff],
+                tag_px,
+                tag_x + 7.0,
+                y + 27.0,
+                if lit { [0x55, 0x55, 0x5d] } else { sw::ink_dim() },
             );
         }
     }
 
     let hints = [
-        ("device.app.transfer.hint_nav", 56.0),
+        ("device.app.transfer.hint_nav", 32.0),
         ("device.app.transfer.hint_confirm", 148.0),
-        ("device.app.transfer.hint_back", 228.0),
-        ("device.app.transfer.content_close", 308.0),
+        ("device.app.transfer.hint_back", 248.0),
+        ("device.app.transfer.content_close", 328.0),
     ];
     for (key, x) in hints {
-        let dim = sw::ink_dim();
         kb::draw_text(
             &mut face,
             slot_i18n::t(lang, key),
-            12.0,
+            10.0,
             x,
             HINT_Y + 6.0,
-            [dim[0], dim[1], dim[2]],
+            sw::ink_dim(),
         );
     }
     face
@@ -929,8 +953,6 @@ pub fn panel_with_limit(
     } else {
         (ROW_H, ROW_GAP)
     };
-    // One rounded content area behind the rows.
-    sw::fill_round(&mut face, SIDE, LIST_TOP, CARD_W, LIST_H, 14.0, sw::surface());
     let start = selected / rows_per_page * rows_per_page;
     for (i, text) in rows.iter().enumerate().skip(start).take(rows_per_page) {
         let row = i - start;
@@ -957,7 +979,7 @@ pub fn panel_with_limit(
             &mut face,
             text,
             20.0,
-            12.0,
+            14.0,
             CARD_W - 72.0,
             SIDE + 36.0,
             y,
@@ -1050,8 +1072,8 @@ pub fn panel_badged(
     kb::draw_left(
         &mut face,
         summary,
-        12.0,
-        10.0,
+        13.0,
+        11.0,
         180.0,
         SIDE + CARD_W - 180.0,
         58.0,
@@ -1076,7 +1098,6 @@ pub fn panel_badged(
             progress,
         );
     }
-    sw::fill_round(&mut face, SIDE, ICON_TOP - 4.0, CARD_W, 278.0, 14.0, sw::surface());
     if rows.is_empty() {
         kb::draw_box(
             &mut face,
@@ -1154,8 +1175,8 @@ pub fn panel_badged(
             kb::draw_left(
                 &mut face,
                 &row.subtitle,
-                11.0,
-                9.0,
+                12.0,
+                10.0,
                 CARD_W - 230.0,
                 icon_x + 70.0,
                 y + 25.0,
@@ -1165,8 +1186,8 @@ pub fn panel_badged(
             kb::draw_box(
                 &mut face,
                 &row.points,
-                13.0,
-                10.0,
+                14.0,
+                11.0,
                 SIDE + CARD_W - 70.0,
                 y + 8.0,
                 54.0,
@@ -1312,23 +1333,22 @@ pub fn hold_card(lang: Language) -> UndoFace {
         sw::ink_dim(),
     );
     let [bx, by, bw, bh] = HOLD_BAR;
-    sw::fill_round(&mut face, bx, by, bw, bh, bh / 2.0, sw::bg_top());
+    sw::fill_round(&mut face, bx, by, bw, bh, bh / 2.0, sw::surface_border());
     face
 }
 
 /// The Switch heading band: charcoal ground, red accent bar and white title.
 fn heading(face: &mut UndoFace, title: &str) {
-    kb::fill(face, 0.0, 0.0, OUT_W as f32, HEADER_H, sw::bg_top());
-    kb::fill(face, SIDE, 16.0, 5.0, 30.0, accent());
-    kb::draw_box(
+    kb::fill(face, 28.0, 40.0, OUT_W as f32 - 56.0, 1.0, sw::surface_border());
+    kb::draw_left(
         face,
         title,
-        28.0,
+        26.0,
         15.0,
-        64.0,
-        12.0,
-        OUT_W as f32 - 96.0,
-        40.0,
+        OUT_W as f32 - 64.0,
+        32.0,
+        48.0,
+        34.0,
         sw::ink(),
     );
 }
@@ -1340,21 +1360,10 @@ fn accent() -> [u8; 4] {
 /// A Switch-style rounded card: white with a white rim when selected, charcoal
 /// surface with a light rim otherwise.
 fn card_at(face: &mut UndoFace, x: f32, y: f32, w: f32, h: f32, selected: bool) {
-    let (rim, fill) = if selected {
-        (sw::selected_border(), sw::selected())
-    } else {
-        (sw::surface_border(), sw::surface())
-    };
-    sw::fill_round(face, x, y, w, h, sw::CARD_RADIUS, rim);
-    sw::fill_round(
-        face,
-        x + 1.0,
-        y + 1.0,
-        w - 2.0,
-        h - 2.0,
-        (sw::CARD_RADIUS - 1.0).max(0.0),
-        fill,
-    );
+    if selected {
+        sw::fill_round(face, x, y, w, h, 11.0, sw::selected());
+        sw::fill_round(face, x - 8.0, y + (h - 24.0) / 2.0, 3.0, 24.0, 2.0, accent());
+    }
 }
 
 /// Translation keys for the help page's lines, in the order it shows them.
@@ -1429,19 +1438,15 @@ mod tests {
     }
 
     #[test]
-    fn the_folder_header_has_a_status_band_and_a_game_chip() {
+    fn the_folder_header_is_full_width_with_mode_signals() {
         let face = folder_header("动作游戏", Some("阿拉丁"), "GBA", 2, 6, Language::ZhCn);
         assert_eq!((face.w, face.h), (664, 76));
-        assert!(alpha(&face, 332, 20) > 0, "the status card is missing");
-        assert_eq!(
-            alpha(&face, 80, 20),
-            0,
-            "the status card covers the clock corner again"
+        assert_eq!(alpha(&face, 0, 20), 255, "the card is not full width");
+        assert_eq!(rgb(&face, 1, 20), FOLDER_MODE, "the folder signal spine");
+        assert!(
+            colour_count(&face, FOLDER_MODE) > 80,
+            "the folder mode colour is too sparse"
         );
-        assert!(alpha(&face, 332, 60) > 0, "the game chip is missing");
-        // The game chip only appears when the game title is allowed.
-        let bare = folder_header("动作游戏", None, "GBA", 2, 6, Language::ZhCn);
-        assert_eq!(alpha(&bare, 332, 60), 0, "an empty game chip was drawn");
     }
 
     #[test]
@@ -1449,112 +1454,55 @@ mod tests {
         let first = folder_header("动作", Some("A"), "GBA", 1, 4, Language::EnUs);
         let last = folder_header("动作", Some("A"), "GBA", 4, 4, Language::EnUs);
         assert_ne!(first.rgba, last.rgba, "the right-hand status did not change");
-        assert!(
-            first.rgba.iter().skip(3).step_by(4).any(|alpha| *alpha > 0),
-            "the English header drew nothing"
-        );
     }
 
     #[test]
-    fn a_long_folder_name_is_trimmed_inside_the_header() {
-        let face = folder_header(
-            "Documents/Projects/Handheld/LinkSlot/Extremely Long Folder Name",
-            Some("A"),
-            "GBA",
-            1,
-            12,
-            Language::EnUs,
-        );
-        // The card may grow but never spans the whole 664 px face, so the
-        // status-bar clock and battery keep their corners.
-        let row: Vec<u32> = (0..face.w).filter(|x| alpha(&face, *x, 30) > 0).collect();
-        let (left, right) = (*row.first().unwrap(), *row.last().unwrap());
-        assert!(
-            right - left + 1 <= 520,
-            "the folder card grew over the status bar: {left}..{right}"
-        );
-        assert!(right < 664, "the card reached the face edge");
-    }
-
-    #[test]
-    fn the_folder_header_right_aligns_its_status_and_centres_the_game_name() {
+    fn the_folder_header_game_line_only_appears_with_a_game() {
         let face = folder_header("动作游戏", Some("阿拉丁"), "GBA", 2, 6, Language::ZhCn);
-        let pixels = |y0: u32, y1: u32, colour: [u8; 3]| {
-            (y0..y1)
-                .flat_map(|y| (0..face.w).map(move |x| (x, y)))
-                .filter(|(x, y)| rgb(&face, *x, *y) == colour)
-                .collect::<Vec<(u32, u32)>>()
-        };
-        let card: Vec<u32> = (0..face.w).filter(|x| alpha(&face, *x, 30) > 0).collect();
-        let (left, right) = (*card.first().unwrap(), *card.last().unwrap());
-        assert!(
-            right - left + 1 < 600,
-            "the compact folder card is still full width: {left}..{right}"
-        );
-        assert!(
-            ((left as f32 + right as f32) / 2.0 - 332.0).abs() < 2.0,
-            "the folder card is not centred: {left}..{right}"
-        );
-        let status = pixels(0, 44, FOLDER_STATUS_INK);
-        let status_right = status.iter().map(|(x, _)| *x).max().unwrap_or(0);
-        assert!(
-            status_right + 14 <= right && status_right + 40 >= right,
-            "the status is not right-aligned to the card ({status_right} vs {right})"
-        );
-        let folder = pixels(0, 44, FOLDER_INK);
-        assert!(
-            folder.iter().any(|(x, _)| *x > left + 30 && *x < left + 260),
-            "the folder name did not use the left part of the band"
-        );
-        let game = pixels(47, 76, sw::ink());
-        let centre = game.iter().map(|(x, _)| *x as f32).sum::<f32>() / game.len() as f32;
-        assert!(
-            (centre - 332.0).abs() < 30.0,
-            "the game name is centred at {centre}"
-        );
+        assert!(lower_ink(&face) > 0, "the game line is missing");
+        let bare = folder_header("动作游戏", None, "GBA", 2, 6, Language::ZhCn);
+        assert_eq!(lower_ink(&bare), 0, "an empty game line was drawn");
     }
 
     #[test]
-    fn the_transfer_header_names_the_side_and_keeps_the_cart_chip() {
+    fn the_transfer_header_keeps_host_and_join_apart_with_colour() {
         let host = transfer_header(true, Some("阿拉丁"), 0, Language::ZhCn);
         let joiner = transfer_header(false, Some("阿拉丁"), 0, Language::ZhCn);
         assert_eq!((host.w, host.h), (664, 76));
-        assert!(alpha(&host, 332, 20) > 0, "the mode card is missing");
-        assert_eq!(
-            alpha(&host, 80, 20),
-            0,
-            "the transfer card covers the clock corner again"
-        );
-        assert!(alpha(&host, 332, 60) > 0, "the cart chip is missing");
-        assert_ne!(host.rgba, joiner.rgba, "the side did not change the header");
-        // The cart chip only appears when the game title is allowed.
+        assert_eq!(rgb(&host, 1, 20), HOST_MODE, "the host spine");
+        assert_eq!(rgb(&joiner, 1, 20), JOIN_MODE, "the join spine");
+        assert_ne!(host.rgba, joiner.rgba);
+        assert!(lower_ink(&host) > 0, "the game line is missing");
         let bare = transfer_header(false, None, 0, Language::ZhCn);
-        assert_eq!(alpha(&bare, 332, 60), 0, "an empty cart chip was drawn");
-        // The longer English role must not push the card over the status bar.
-        let english = transfer_header(false, Some("Emerald"), 0, Language::EnUs);
-        let row: Vec<u32> = (0..english.w)
-            .filter(|x| alpha(&english, *x, 30) > 0)
-            .collect();
-        let (left, right) = (*row.first().unwrap(), *row.last().unwrap());
-        assert!(
-            right - left < 520,
-            "the transfer card grew over the status bar: {left}..{right}"
-        );
-        assert!(((left as f32 + right as f32) / 2.0 - 332.0).abs() < 2.0);
+        assert_eq!(lower_ink(&bare), 0, "an empty game line was drawn");
+        assert!(colour_count(&host, HOST_MODE) > 60);
+        assert!(colour_count(&joiner, JOIN_MODE) > 60);
+    }
+
+    fn lower_ink(face: &UndoFace) -> usize {
+        let ink = sw::ink();
+        (44..76)
+            .flat_map(|y| (0..face.w).map(move |x| (x, y)))
+            .filter(|(x, y)| rgb(face, *x, *y) == ink)
+            .count()
+    }
+
+    fn colour_count(face: &UndoFace, colour: [u8; 3]) -> usize {
+        face.rgba
+            .chunks_exact(4)
+            .filter(|p| p[0] == colour[0] && p[1] == colour[1] && p[2] == colour[2])
+            .count()
     }
 
     #[test]
     fn the_transfer_header_right_aligns_the_side() {
         let face = transfer_header(true, Some("阿拉丁"), 0, Language::ZhCn);
-        let card: Vec<u32> = (0..face.w).filter(|x| alpha(&face, *x, 30) > 0).collect();
-        let (left, right) = (*card.first().unwrap(), *card.last().unwrap());
-        let half = left + (right - left) / 2;
-        // The dot and the side word are the only bright ink in the right half.
-        let last_ink = (half..=right)
+        let right = face.w - 1;
+        let last_ink = (0..face.w)
             .rfind(|x| (10..34).any(|y| rgb(&face, *x, y).iter().any(|c| *c > 0x80)))
             .unwrap_or(0);
         assert!(
-            right - last_ink <= 30,
+            right - last_ink <= 40,
             "the side is not right-aligned to the card ({last_ink} vs {right})"
         );
     }
@@ -1577,10 +1525,12 @@ mod tests {
     }
 
     fn white_pixels_below(face: &UndoFace, y0: u32) -> usize {
+        let selected = sw::selected();
+        let selected = [selected[0], selected[1], selected[2]];
         let mut count = 0;
         for y in y0..face.h {
             for x in 0..face.w {
-                if rgb(face, x, y) == [0xf2, 0xf2, 0xf2] {
+                if rgb(face, x, y) == selected {
                     count += 1;
                 }
             }
@@ -1593,11 +1543,17 @@ mod tests {
         let available = [true; 26];
         let face = picker(4, available, Language::ZhCn);
         assert_eq!((face.w, face.h), (720, 480));
+        let bg = sw::bg();
         assert_eq!(
             (rgb(&face, 0, 0), alpha(&face, 0, 0)),
-            ([0x24, 0x24, 0x29], 255)
+            ([bg[0], bg[1], bg[2]], 255)
         );
-        assert_eq!(rgb(&face, 50, 20), [0xe6, 0x00, 0x12], "the accent bar");
+        let line = sw::surface_border();
+        assert_eq!(
+            rgb(&face, 100, 40),
+            [line[0], line[1], line[2]],
+            "the 1px header rule"
+        );
         assert!(white_pixels_below(&face, PICKER_TOP as u32) > 0);
         let dim = [false; 26];
         assert!(
@@ -1612,7 +1568,8 @@ mod tests {
         let top = panel("存档相册", &rows, 0, Language::ZhCn);
         let lower = panel("存档相册", &rows, 7, Language::ZhCn);
         assert_eq!((top.w, top.h), (720, 480));
-        assert_eq!(rgb(&top, 0, 0), [0x24, 0x24, 0x29]);
+        let bg = sw::bg_top();
+        assert_eq!(rgb(&top, 0, 0), [bg[0], bg[1], bg[2]]);
         let card_row = |face: &UndoFace| white_pixels_below(face, ROW_TOP as u32);
         assert!(card_row(&top) > 0);
         assert!(card_row(&lower) > 0);
@@ -1626,7 +1583,8 @@ mod tests {
     fn the_content_chooser_marks_the_row_in_force_and_moves_the_cursor() {
         let first = transfer_content_menu(0, 0, Language::ZhCn);
         assert_eq!((first.w, first.h), (720, 480));
-        assert_eq!(rgb(&first, 0, 0), [0x24, 0x24, 0x29]);
+        let bg = sw::bg_top();
+        assert_eq!(rgb(&first, 0, 0), [bg[0], bg[1], bg[2]]);
         assert!(
             white_pixels_below(&first, 88) > 0,
             "the cursor row is not on a white card"

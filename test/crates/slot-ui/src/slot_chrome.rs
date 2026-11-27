@@ -11,6 +11,8 @@ pub const ALERT_PX: f32 = 44.0;
 
 pub const MOUTH_H: f32 = 58.0;
 const BAND_Y: f32 = OUT_H as f32 - MOUTH_H;
+/// The resting slot lip (alias kept for layout tests).
+pub const SLOT_Y: f32 = BAND_Y;
 
 pub const MOUTH_W: f32 = SEATED_W as f32 + 14.0;
 const SLIT_H: f32 = 9.0;
@@ -77,6 +79,11 @@ pub struct SlotChrome<'a> {
     pub face: Option<TexId>,
     pub rest: f32,
     pub scale: f32,
+    /// Extra height at the floating pose; the transfer room drops the shelf so
+    /// tall cartridges clear the room header, and this lets the insert start
+    /// from that lowered row instead of snapping up on the first frame.  It
+    /// fades out as the cartridge catches the slot.
+    pub lift: f32,
     pub seat: f32,
     pub alert: Option<(TexId, f32)>,
     pub dim: f32,
@@ -120,7 +127,7 @@ impl SlotChrome<'_> {
         let (cw, ch) = (w0 + (sw - w0) * k, h0 + (sh - h0) * k);
         let centre = self.rest + w0 / 2.0;
         let x = centre + (CX - centre) * k - cw / 2.0;
-        let y = foot0 + (seated_foot - foot0) * travel - ch;
+        let y = foot0 + self.lift * (1.0 - travel) + (seated_foot - foot0) * travel - ch;
         let cart_alpha = if seat >= 1.0 { chrome } else { 1.0 };
         out.push(match self.face {
             Some(tex) => Draw::Tex {

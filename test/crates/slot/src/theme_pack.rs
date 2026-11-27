@@ -121,7 +121,7 @@ mod tests {
         assert!(pack.wallpaper().is_some());
         assert!(pack.theme_file().is_none());
         // Without its own palette the pack defers to linkSlot/Config/theme.txt.
-        assert_eq!(pack.theme(&root).preset, slot_store::ThemePreset::Default);
+        assert_eq!(pack.theme(&root).preset, slot_store::ThemePreset::Warm);
         let _ = std::fs::remove_dir_all(&root);
     }
 }

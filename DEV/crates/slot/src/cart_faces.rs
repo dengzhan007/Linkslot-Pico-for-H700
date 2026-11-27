@@ -3,7 +3,6 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
-use std::time::UNIX_EPOCH;
 
 use slot_gfx::{Compositor, TexId};
 use slot_store::Cart;
@@ -25,7 +24,6 @@ struct Queue {
 type Shared = Arc<(Mutex<Queue>, Condvar)>;
 
 pub struct CartFaces {
-    root: PathBuf,
     queue: Shared,
     built: Receiver<(Key, u64, CartFace)>,
     pending: HashSet<Key>,
@@ -48,7 +46,6 @@ impl CartFaces {
             }
         }
         CartFaces {
-            root,
             queue,
             built,
             pending: HashSet::new(),
@@ -119,10 +116,7 @@ impl CartFaces {
                 continue;
             }
             if let Some(cart) = app.face_cart(w.shelf, w.index) {
-                let mut cart = cart.clone();
-                if cart.label.is_none() && app.fallback_cover_enabled() {
-                    cart.label = latest_state_screenshot(&self.root, &cart);
-                }
+                let cart = cart.clone();
                 queue.jobs.push_back((key, cart, generation));
                 self.pending.insert(key);
             }
@@ -162,66 +156,6 @@ impl Drop for CartFaces {
     }
 }
 
-/// Newest screenshot produced by an in-game save state for a cartridge.
-/// `resume.png` is written next to the automatic resume state on exit, so a
-/// file with the same FAT timestamp as a timestamped snapshot wins.
-/// Covers only the no-label case; an explicit Labels/<name>.png always wins.
-fn latest_state_screenshot(root: &Path, cart: &Cart) -> Option<PathBuf> {
-    let mut best: Option<(u64, PathBuf)> = None;
-    // Every core the app can load, not a hand-written pair: the state
-    // directory is `States/<platform>/<core.as_str()>/<stem>`, so a core left
-    // out here is a machine whose carts never get a fallback cover — which is
-    // exactly what happened to the Famicom while this read `["mgba", "gpsp"]`.
-    for core in slot_store::Core::EVERY {
-        let dir = root
-            .join("States")
-            .join(cart.platform.dir_name())
-            .join(core.as_str())
-            .join(&cart.stem);
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            continue;
-        };
-        for entry in entries.filter_map(|entry| entry.ok()) {
-            let path = entry.path();
-            if !path
-                .extension()
-                .and_then(|extension| extension.to_str())
-                .is_some_and(|extension| extension.eq_ignore_ascii_case("png"))
-            {
-                continue;
-            }
-            let Ok(metadata) = entry.metadata() else {
-                continue;
-            };
-            if !metadata.is_file() {
-                continue;
-            }
-            let modified = metadata
-                .modified()
-                .ok()
-                .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
-                .map_or(0, |duration| duration.as_secs());
-            let prefer_resume = path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name| name.eq_ignore_ascii_case("resume.png"));
-            let wins = best.as_ref().is_none_or(|(stamp, current)| {
-                modified > *stamp
-                    || (modified == *stamp
-                        && prefer_resume
-                        && current
-                            .file_name()
-                            .and_then(|name| name.to_str())
-                            .is_none_or(|name| !name.eq_ignore_ascii_case("resume.png")))
-            });
-            if wins {
-                best = Some((modified, path));
-            }
-        }
-    }
-    best.map(|(_, path)| path)
-}
-
 fn work(queue: &Shared, outbox: &Sender<(Key, u64, CartFace)>, root: &Path) {
     let (lock, wake) = &**queue;
     loop {
@@ -244,82 +178,3 @@ fn work(queue: &Shared, outbox: &Sender<(Key, u64, CartFace)>, root: &Path) {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use slot_store::{Cart, Platform};
-
-    fn cart(platform: Platform, stem: &str) -> Cart {
-        Cart {
-            platform,
-            stem: stem.to_string(),
-            rom: PathBuf::from(format!("Games/{}/{stem}.rom", platform.dir_name())),
-            label: None,
-            title: String::new(),
-            code: String::new(),
-            shell: None,
-        model: Default::default(),
-        front: None,
-}
-    }
-
-    fn shot(root: &Path, platform: Platform, core: &str, stem: &str, name: &str) {
-        let dir = root
-            .join("States")
-            .join(platform.dir_name())
-            .join(core)
-            .join(stem);
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join(name), b"png").unwrap();
-    }
-
-    /// The fallback cover is "the newest screenshot of this cart", and a cart's
-    /// screenshots live under whichever core ran it. A hand-written core list
-    /// here is a machine that silently never gets a cover — the Famicom's case.
-    #[test]
-    fn the_fallback_cover_finds_a_famicom_carts_screenshot() {
-        let d = tempfile::tempdir().unwrap();
-        let root = d.path();
-        let fc = cart(Platform::Fc, "Mario");
-        shot(root, Platform::Fc, "fceumm", "Mario", "resume.png");
-
-        assert_eq!(
-            latest_state_screenshot(root, &fc),
-            Some(root.join("States/FC/fceumm/Mario/resume.png")),
-            "an FC cart's own screenshot was not seen"
-        );
-    }
-
-    /// Same cart name on two machines is two carts, and the cover must come
-    /// from the one being drawn — `States/GBA/mgba/Emerald` is not `States/FC/…`.
-    #[test]
-    fn one_cart_never_wears_another_machines_screenshot() {
-        let d = tempfile::tempdir().unwrap();
-        let root = d.path();
-        shot(root, Platform::Gba, "mgba", "Emerald", "resume.png");
-
-        assert_eq!(latest_state_screenshot(root, &cart(Platform::Fc, "Emerald")), None);
-        assert_eq!(
-            latest_state_screenshot(root, &cart(Platform::Gba, "Emerald")),
-            Some(root.join("States/GBA/mgba/Emerald/resume.png"))
-        );
-    }
-
-    /// Two cores can leave a screenshot for the same cart (a card whose
-    /// `selected_core.txt` changed machines) — the newest file wins regardless
-    /// of which core wrote it.
-    #[test]
-    fn the_newest_screenshot_wins_across_cores() {
-        let d = tempfile::tempdir().unwrap();
-        let root = d.path();
-        shot(root, Platform::Gba, "mgba", "Emerald", "2026-01-01_00-00-00.png");
-        std::thread::sleep(std::time::Duration::from_millis(1100));
-        shot(root, Platform::Gba, "gpsp", "Emerald", "2026-01-02_00-00-00.png");
-
-        let found = latest_state_screenshot(root, &cart(Platform::Gba, "Emerald")).unwrap();
-        assert!(
-            found.ends_with(Path::new("gpsp").join("Emerald").join("2026-01-02_00-00-00.png")),
-            "the older screenshot won: {found:?}"
-        );
-    }
-}

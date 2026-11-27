@@ -311,6 +311,8 @@ fn status(shared: &Shared) -> Response {
         json!({
             "slot": slot_ui::PROJECT_VERSION,
             "linkslot": linkslot,
+            "device": crate::linkcfg::read_device_name(&shared.root),
+            "theme": slot_store::Theme::read(&shared.root).preset.as_str(),
             "uptime_secs": shared.started.elapsed().as_secs(),
             "web": {
                 "port": shared.port,
@@ -318,9 +320,32 @@ fn status(shared: &Shared) -> Response {
             },
             "network": wifi,
             "storage": storage,
+            "disk": disk_space(&shared.root),
             "writable": shared.writable(),
         }),
     )
+}
+
+/// Free/total bytes for the card root; unavailable on non-Unix hosts.
+fn disk_space(root: &Path) -> Option<serde_json::Value> {
+    #[cfg(unix)]
+    {
+        use std::ffi::CString;
+        use std::os::unix::ffi::OsStrExt;
+        let path = CString::new(root.as_os_str().as_bytes()).ok()?;
+        let mut stats: libc::statvfs = unsafe { std::mem::zeroed() };
+        if unsafe { libc::statvfs(path.as_ptr(), &mut stats) } != 0 {
+            return None;
+        }
+        let total = (stats.f_blocks as u64).saturating_mul(stats.f_frsize as u64);
+        let free = (stats.f_bavail as u64).saturating_mul(stats.f_frsize as u64);
+        Some(json!({ "free": free, "total": total }))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = root;
+        None
+    }
 }
 
 struct WifiSnapshot {

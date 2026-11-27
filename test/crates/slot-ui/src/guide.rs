@@ -30,9 +30,9 @@ const BAR_W: f32 = 4.0;
 /// A short guide still gets a thumb tall enough to read as a position cue.
 const BAR_MIN_H: f32 = 20.0;
 
-const IMAGE_X: f32 = 48.0;
+const IMAGE_X: f32 = 24.0;
 const IMAGE_Y: f32 = 88.0;
-const IMAGE_W: f32 = 624.0;
+const IMAGE_W: f32 = 672.0;
 const IMAGE_H: f32 = 342.0;
 
 fn line_step() -> f32 {
@@ -58,11 +58,10 @@ pub fn page_face(
     lang: Language,
 ) -> UndoFace {
     let mut face = kb::blank(OUT_W, OUT_H, sw::bg());
-    kb::fill(&mut face, 0.0, 0.0, OUT_W as f32, 70.0, sw::bg_top());
-    kb::fill(&mut face, TEXT_X, 72.0, OUT_W as f32 - 96.0, 1.0, [0x3a, 0x3a, 0x42, 0xff]);
+    kb::fill(&mut face, 28.0, 40.0, OUT_W as f32 - 56.0, 1.0, [0x3a, 0x3a, 0x42, 0xff]);
 
-    let (heading, px) = kb::fit_line(title, TEXT_W, 22.0, 14.0);
-    kb::draw_text(&mut face, &heading, px, TEXT_X, 24.0, sw::ink());
+    let (heading, px) = kb::fit_line(title, TEXT_W, 26.0, 15.0);
+    kb::draw_text(&mut face, &heading, px, 32.0, 48.0, sw::ink());
 
     let line_h = line_step();
     for (index, line) in lines.iter().take(visible_lines()).enumerate() {
@@ -125,12 +124,11 @@ pub fn image_face(
     lang: Language,
 ) -> UndoFace {
     let mut face = kb::blank(OUT_W, OUT_H, sw::bg());
-    kb::fill(&mut face, 0.0, 0.0, OUT_W as f32, 70.0, sw::bg_top());
-    kb::fill(&mut face, 48.0, 72.0, OUT_W as f32 - 96.0, 1.0, [0x3a, 0x3a, 0x42, 0xff]);
+    kb::fill(&mut face, 28.0, 40.0, OUT_W as f32 - 56.0, 1.0, [0x3a, 0x3a, 0x42, 0xff]);
     kb::fill(&mut face, IMAGE_X, IMAGE_Y, IMAGE_W, IMAGE_H, [0x0b, 0x0b, 0x10, 0xff]);
 
-    let (heading, px) = kb::fit_line(title, 624.0, 22.0, 14.0);
-    kb::draw_text(&mut face, &heading, px, 48.0, 24.0, sw::ink());
+    let (heading, px) = kb::fit_line(title, 600.0, 26.0, 15.0);
+    kb::draw_text(&mut face, &heading, px, 32.0, 48.0, sw::ink());
 
     if width > 0 && height > 0 && rgba.len() >= (width as usize * height as usize * 4) {
         let scale = (IMAGE_W / width as f32).min(IMAGE_H / height as f32);

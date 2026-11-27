@@ -166,7 +166,7 @@ fn the_menu_covers_the_screen_in_the_case_materials() {
         }
         other => panic!("the menu drew {other:?} rather than a ground"),
     }
-    assert!(out.len() >= 3, "the Switch header was not drawn");
+    assert!(out.len() >= 2, "the flat power panel was not drawn");
 }
 
 #[test]

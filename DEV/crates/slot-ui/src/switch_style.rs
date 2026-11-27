@@ -1,5 +1,5 @@
-//! Shared Nintendo-Switch-inspired menu surface: charcoal background, rounded
-//! cards, a white selected card and the red accent used by the device menus.
+//! Shared menu surface for the cartridge-cabinet UI: warm charcoal or ivory
+//! paper, rounded cards, a high-contrast selected card and a brass accent.
 
 use crate::plate::UndoFace;
 use crate::text;
@@ -36,6 +36,36 @@ pub fn accent() -> [u8; 3] {
 }
 pub fn accent_dim() -> [u8; 3] {
     crate::slot_chrome::theme().accent_dim
+}
+pub fn paper() -> [u8; 4] {
+    crate::slot_chrome::theme().paper
+}
+pub fn paper_ink() -> [u8; 3] {
+    crate::slot_chrome::theme().paper_ink
+}
+pub fn paper_muted() -> [u8; 3] {
+    crate::slot_chrome::theme().paper_muted
+}
+pub fn paper_edge() -> [u8; 4] {
+    crate::slot_chrome::theme().paper_edge
+}
+pub fn stamp() -> [u8; 3] {
+    crate::slot_chrome::theme().stamp
+}
+pub fn gold() -> [u8; 3] {
+    crate::slot_chrome::theme().gold
+}
+pub fn bar() -> [u8; 4] {
+    crate::slot_chrome::theme().bar
+}
+pub fn bar_edge() -> [u8; 4] {
+    crate::slot_chrome::theme().bar_edge
+}
+pub fn is_light() -> bool {
+    matches!(
+        crate::slot_chrome::theme().preset,
+        slot_store::ThemePreset::Paper
+    )
 }
 
 pub const CARD_RADIUS: f32 = 11.0;
@@ -224,9 +254,10 @@ mod tests {
     }
 
     #[test]
-    fn the_selected_card_is_white() {
+    fn the_selected_card_uses_the_theme_selected_fill() {
         let card = card_face(120, 40, true);
-        assert_eq!(rgb(&card, 60, 20), [0xf2, 0xf2, 0xf2]);
+        let selected = selected();
+        assert_eq!(rgb(&card, 60, 20), [selected[0], selected[1], selected[2]]);
     }
 
     #[test]

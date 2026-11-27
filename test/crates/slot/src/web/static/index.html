@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<!-- The Web manager keeps the original cyan theme; the handheld preset does not affect it. -->
+<html lang="zh-CN" data-theme="cyan">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -21,20 +22,20 @@
       </span>
       <span class="version" id="slotVersion">v—</span>
     </div>
+    <nav class="tabs" id="tabs" aria-label="页面导航" data-i18n-aria="web.nav.aria">
+      <a class="tab" href="#overview" data-tab="overview" data-i18n="web.nav.overview">概览</a>
+      <a class="tab" href="#roms" data-tab="roms" data-i18n="web.nav.roms">游戏库</a>
+      <a class="tab" href="#saves" data-tab="saves" data-i18n="web.nav.saves">存档</a>
+      <a class="tab" href="#sync" data-tab="sync" data-i18n="web.nav.sync">云同步</a>
+      <a class="tab" href="#mods" data-tab="mods" data-i18n="web.nav.mods">扩展</a>
+      <a class="tab" href="#files" data-tab="files" data-i18n="web.nav.files">文件</a>
+      <a class="tab" href="#settings" data-tab="settings" data-i18n="web.nav.settings">设置</a>
+    </nav>
     <div class="topbar-right">
       <span class="status-chip" id="statusChip"><i class="dot"></i><span id="statusText" data-i18n="web.shell.connecting">连接中…</span></span>
       <span class="version mono" id="linkslotVersion" title="linkSlot CLI 版本" data-i18n-title="web.shell.cliVersionTitle">CLI —</span>
     </div>
   </div>
-  <nav class="tabs" id="tabs" aria-label="页面导航" data-i18n-aria="web.nav.aria">
-    <a class="tab" href="#overview" data-tab="overview" data-i18n="web.nav.overview">概览</a>
-    <a class="tab" href="#roms" data-tab="roms" data-i18n="web.nav.roms">游戏库</a>
-    <a class="tab" href="#saves" data-tab="saves" data-i18n="web.nav.saves">存档</a>
-    <a class="tab" href="#sync" data-tab="sync" data-i18n="web.nav.sync">云同步</a>
-    <a class="tab" href="#mods" data-tab="mods" data-i18n="web.nav.mods">扩展</a>
-    <a class="tab" href="#files" data-tab="files" data-i18n="web.nav.files">文件</a>
-    <a class="tab" href="#settings" data-tab="settings" data-i18n="web.nav.settings">设置</a>
-  </nav>
 </header>
 
 <main class="container">
@@ -43,39 +44,87 @@
   </div>
 
   <!-- ============================ 概览 ============================ -->
-  <section class="page" data-page="overview">
-    <div class="grid stats">
-      <div class="card stat">
-        <span class="k">WiFi</span>
-        <span class="v" id="ovWifi">—</span>
-        <span class="sub" id="ovIp">—</span>
+  <section class="page ov-page" data-page="overview">
+    <div class="ov-head">
+      <div>
+        <h1 data-i18n="web.overview.title">概览</h1>
+        <div class="sub" data-i18n="web.overview.subtitle">设备、游戏库与存档一目了然</div>
       </div>
-      <div class="card stat">
-        <span class="k" data-i18n="web.overview.address">访问地址</span>
-        <span class="v small mono" id="ovUrl">—</span>
-        <span class="sub" data-i18n="web.overview.addressHint">手机与电脑连接同一 WiFi 后打开</span>
-      </div>
-      <div class="card stat">
-        <span class="k" data-i18n="web.overview.units">游戏</span>
-        <span class="v" id="ovGames">—</span>
-        <span class="sub" id="ovCounts" data-i18n="web.overview.unitsValue">即时存档 — · 电池存档 —</span>
-      </div>
-      <div class="card stat">
-        <span class="k" data-i18n="web.overview.playtime">游戏总时长</span>
-        <span class="v small" id="ovPlaytime">—</span>
-        <span class="sub" data-i18n="web.overview.playtimeHint">所有游戏跨设备累计</span>
-      </div>
-      <div class="card stat">
-        <span class="k" data-i18n="web.overview.device">设备状态</span>
-        <span class="v" id="ovWritable">—</span>
-        <span class="sub" id="ovUptime" data-i18n="web.overview.uptime">已运行 —</span>
+      <div class="ov-actions">
+        <button class="btn small" type="button" id="ovRefresh" data-i18n="web.overview.refresh">刷新</button>
+        <button class="btn small primary" type="button" id="ovStartServer" data-i18n="web.overview.startServer">启动网络服务器</button>
       </div>
     </div>
 
-    <section class="card">
-      <h2><span data-i18n="web.overview.recentLog">最近日志</span> <button class="btn ghost small" type="button" id="ovRefreshLog" data-i18n="web.common.refresh">刷新</button></h2>
-      <pre class="log" id="recentLog" data-i18n="web.common.noLog">暂无日志</pre>
-    </section>
+    <div class="ov-stats">
+      <div class="ov-stat">
+        <span class="ov-k">DEVICE</span>
+        <span class="ov-v" id="ovDevice">—</span>
+        <span class="ov-sub" id="ovDeviceSub">—</span>
+      </div>
+      <div class="ov-stat">
+        <span class="ov-k">LIBRARY</span>
+        <span class="ov-v" id="ovLibrary">—</span>
+        <span class="ov-sub" id="ovLibrarySub" data-i18n="web.overview.scanned">已扫描</span>
+      </div>
+      <div class="ov-stat">
+        <span class="ov-k">SAVES</span>
+        <span class="ov-v" id="ovSaves">—</span>
+        <span class="ov-sub" id="ovSavesSub">—</span>
+      </div>
+      <div class="ov-stat">
+        <span class="ov-k">PLAYTIME</span>
+        <span class="ov-v" id="ovPlaytime">—</span>
+        <span class="ov-sub" data-i18n="web.overview.playtimeHint">所有游戏跨设备累计</span>
+      </div>
+    </div>
+
+    <div class="ov-main">
+      <section class="ov-card ov-recent">
+        <div class="ov-card-head">
+          <h2 data-i18n="web.overview.recentGames">最近游玩</h2>
+          <button class="ov-link" type="button" id="ovAllGames" data-i18n="web.overview.viewAll">查看全部 ›</button>
+        </div>
+        <div class="ov-games" id="ovRecentGames"></div>
+      </section>
+
+      <div class="ov-side">
+        <section class="ov-card">
+          <div class="ov-card-head">
+            <h2 data-i18n="web.overview.recentSync">最近同步</h2>
+            <button class="ov-link" type="button" id="ovSyncHistory" data-i18n="web.overview.records">记录 ›</button>
+          </div>
+          <div id="ovSyncReceipt"></div>
+        </section>
+        <section class="ov-card">
+          <div class="ov-card-head"><h2 data-i18n="web.overview.quickActions">快捷操作</h2></div>
+          <div class="ov-quick">
+            <button class="ov-quick-btn" type="button" id="ovUploadGame" data-i18n="web.overview.uploadGame">上传游戏</button>
+            <button class="ov-quick-btn" type="button" id="ovImportCollection" data-i18n="web.overview.importCollection">导入游戏包</button>
+            <button class="ov-quick-btn" type="button" id="ovOpenFiles" data-i18n="web.overview.openFiles">打开文件页</button>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div class="ov-bottom">
+      <section class="ov-card">
+        <div class="ov-card-head">
+          <h2 data-i18n="web.overview.recentActivity">最近活动</h2>
+          <button class="ov-link" type="button" id="ovAllLogs" data-i18n="web.overview.allLogs">全部日志 ›</button>
+        </div>
+        <div class="ov-activity" id="ovActivity"></div>
+      </section>
+      <section class="ov-card">
+        <div class="ov-card-head"><h2 data-i18n="web.overview.deviceStatus">设备状态</h2></div>
+        <div class="ov-device">
+          <div class="ov-ds-row"><span data-i18n="web.overview.storage">存储卡</span><b id="ovStorage">—</b></div>
+          <div class="ov-ds-row"><span data-i18n="web.overview.version">版本</span><b id="ovVersion">—</b></div>
+          <div class="ov-ds-row"><span data-i18n="web.overview.network">网络</span><b id="ovNetwork">—</b></div>
+        </div>
+      </section>
+    </div>
+    <pre class="hidden" id="recentLog" hidden></pre>
   </section>
 
   <!-- ============================ 游戏库 ============================ -->
@@ -103,21 +152,31 @@
         <button class="search-clear" type="button" data-search-clear="romSearch" aria-label="清除搜索" data-i18n-aria="web.common.clearSearch" data-i18n-title="web.common.clearSearch" title="清除搜索">×</button>
       </div>
       <button class="btn primary" type="button" id="addGame" title="选择机种并上传一个 ROM" data-i18n-title="web.roms.addTitle" data-i18n="web.roms.add">添加游戏</button>
-      <button class="btn ghost" type="button" id="collectionImport" title="导入合集，或导入单个游戏包" data-i18n-title="web.roms.importTitle" data-i18n="web.roms.import">导入游戏/合集</button>
-      <button class="btn ghost" type="button" id="collectionExport" disabled title="先在平台上选中一个集合" data-i18n-title="web.roms.exportTitle" data-i18n="web.roms.export">导出合集</button>
+      <button class="btn ghost" type="button" id="collectionImport" title="导入单个游戏包 ZIP" data-i18n-title="web.roms.importTitle" data-i18n="web.roms.import">导入游戏包</button>
+      <button class="btn ghost" type="button" id="batchImport" title="选择一个文件夹或多个 ZIP，逐个导入" data-i18n-title="web.roms.batchImportTitle" data-i18n="web.roms.batchImport">批量导入</button>
+      <button class="btn ghost" type="button" id="batchExport" title="选择一批 ROM，逐个导出游戏包" data-i18n-title="web.roms.batchExportTitle" data-i18n="web.roms.batchExport">批量导出</button>
       <input id="collectionImportFile" type="file" accept=".zip,application/zip" hidden>
+      <input id="batchImportFolder" type="file" webkitdirectory multiple hidden>
+      <input id="batchImportZips" type="file" multiple accept=".zip,application/zip" hidden>
     </div>
     <div class="collection-status" id="collectionStatus" hidden>
       <div class="collection-status-line">
         <strong id="collectionStage">—</strong>
         <span id="collectionCount"></span>
         <span class="collection-actions">
-          <a class="btn ghost small" id="collectionDownload" hidden data-i18n="web.roms.download">下载合集</a>
+          <a class="btn ghost small" id="collectionDownload" hidden data-i18n="web.roms.download">下载游戏包</a>
           <button class="btn ghost small" id="collectionCancel" type="button" data-i18n="web.common.cancel">取消</button>
         </span>
       </div>
       <div class="bar"><div id="collectionBar"></div></div>
       <p class="hint" id="collectionError"></p>
+    </div>
+    <div class="export-plan-banner" id="exportPlanBanner" hidden>
+      <span class="hint" id="exportPlanBannerText"></span>
+      <span class="export-plan-banner-actions">
+        <button class="btn primary small" type="button" id="exportPlanResume" data-i18n="web.roms.exportPlanResume">继续导出计划</button>
+        <button class="btn ghost small" type="button" id="exportPlanDiscard" data-i18n="web.roms.exportPlanDiscard">放弃</button>
+      </span>
     </div>
     <div id="romList" class="rom-grid">
       <div class="empty" data-i18n="web.roms.loading">正在读取游戏库…</div>
@@ -849,7 +908,7 @@
         <button class="btn danger-solid" type="button" id="romDelete" data-i18n="web.rom.delete">删除 ROM</button>
       </div>
       <p class="hint" id="romPlayWebHint" data-i18n="web.rom.playHint">模拟器在浏览器里运行，电池存档自动读写；目前支持 GBA / GB / GBC / FC。</p>
-      <p class="hint" data-i18n="web.rom.exportTail">导出后使用工具栏的「导入游戏/合集」可恢复完整游戏包；替换 ROM 只改当前文件内容。</p>
+      <p class="hint" data-i18n="web.rom.exportTail">导出后使用工具栏的「导入游戏包」可恢复完整游戏包；替换 ROM 只改当前文件内容。</p>
       </div>
       <input id="romFileInput" type="file" hidden>
       <input id="romIntroInput" type="file" accept=".txt,text/plain" hidden>
@@ -1106,6 +1165,77 @@
   </div>
   <iframe id="modUiFrame" sandbox="allow-scripts allow-forms" referrerpolicy="no-referrer" title="mod 管理页面" data-i18n-title="web.mod.page"></iframe>
   <p class="hint" id="modUiStatus" role="status">—</p>
+</dialog>
+
+<dialog id="batchImportPickDialog" class="modal batch-import-pick-dialog" aria-labelledby="batchImportPickTitle">
+  <div class="dialog-head">
+    <div>
+      <h2 id="batchImportPickTitle" data-i18n="web.roms.batchImport">批量导入</h2>
+      <p class="hint" data-i18n="web.roms.batchImportPickHint">选择一个文件夹，或一次选多个 ZIP；会逐个导入，重复内容自动跳过。</p>
+    </div>
+    <button class="icon-btn" type="button" id="closeBatchImportPick" aria-label="关闭" data-i18n-aria="web.common.close">×</button>
+  </div>
+  <div class="batch-import-pick">
+    <button class="btn primary" type="button" id="batchImportPickFolder" data-i18n="web.roms.batchImportFolder">选择文件夹</button>
+    <button class="btn secondary" type="button" id="batchImportPickZips" data-i18n="web.roms.batchImportZips">选择多个 ZIP</button>
+  </div>
+  <p class="hint" data-i18n="web.roms.batchImportFolderHint">桌面 Chrome / Edge / Firefox 支持选择文件夹；其他浏览器请用多选 ZIP。</p>
+</dialog>
+
+<dialog id="batchImportDialog" class="modal batch-import-dialog" aria-labelledby="batchImportProgressTitle">
+  <div class="dialog-head">
+    <div>
+      <h2 id="batchImportProgressTitle" data-i18n="web.roms.batchImportProgressTitle">批量导入中</h2>
+      <p class="hint" id="batchImportStage">—</p>
+    </div>
+  </div>
+  <div class="upload-progress-track"><div class="upload-progress-bar" id="batchImportBar"></div></div>
+  <p class="hint" id="batchImportCount"></p>
+  <div class="batch-import-results" id="batchImportResults"></div>
+  <div class="row-actions">
+    <button class="btn ghost" type="button" id="batchImportCancel" data-i18n="web.common.cancel">取消</button>
+    <button class="btn primary" type="button" id="batchImportClose" data-i18n="web.common.close" hidden>关闭</button>
+  </div>
+</dialog>
+
+<dialog id="exportPlanDialog" class="modal export-plan-dialog" aria-labelledby="exportPlanTitle">
+  <div class="dialog-head">
+    <div>
+      <h2 id="exportPlanTitle" data-i18n="web.roms.batchExport">批量导出</h2>
+      <p class="hint" data-i18n="web.roms.exportPlanHint">选择要导出的游戏。每个游戏包会下载到浏览器默认下载目录；已完成的打勾，中断后可继续。</p>
+    </div>
+    <button class="icon-btn" type="button" id="closeExportPlan" aria-label="关闭" data-i18n-aria="web.common.close">×</button>
+  </div>
+  <div class="export-plan-toolbar">
+    <button class="btn ghost small" type="button" id="exportPlanSelectAll" data-i18n="web.roms.exportPlanSelectAll">全选当前筛选</button>
+    <button class="btn ghost small" type="button" id="exportPlanClear" data-i18n="web.roms.exportPlanClear">清空</button>
+    <span class="hint" id="exportPlanSelected"></span>
+  </div>
+  <div class="export-plan-list" id="exportPlanList"></div>
+  <p class="hint" data-i18n="web.roms.exportPlanLocalOnly">计划保存在当前浏览器；清空站点数据会丢失。</p>
+  <div class="row-actions">
+    <button class="btn ghost" type="button" id="exportPlanCancel" data-i18n="web.common.cancel">取消</button>
+    <button class="btn primary" type="button" id="exportPlanStart" data-i18n="web.roms.exportPlanStart">开始导出</button>
+  </div>
+</dialog>
+
+<dialog id="exportPlanProgressDialog" class="modal export-plan-progress-dialog" aria-labelledby="exportPlanProgressTitle">
+  <div class="dialog-head">
+    <div>
+      <h2 id="exportPlanProgressTitle" data-i18n="web.roms.exportPlanProgressTitle">导出计划</h2>
+      <p class="hint" id="exportPlanProgressStage">—</p>
+    </div>
+    <button class="icon-btn" type="button" id="closeExportPlanProgress" aria-label="关闭" data-i18n-aria="web.common.close">×</button>
+  </div>
+  <div class="upload-progress-track"><div class="upload-progress-bar" id="exportPlanProgressBar"></div></div>
+  <p class="hint" id="exportPlanProgressCount"></p>
+  <p class="hint" data-i18n="web.roms.exportPlanBlockedHint">如果没有看到文件，请允许浏览器下载多个文件，然后重新导出缺失的游戏。</p>
+  <div class="export-plan-items" id="exportPlanProgressItems"></div>
+  <div class="row-actions">
+    <button class="btn ghost" type="button" id="exportPlanPause" data-i18n="web.roms.exportPlanPause">暂停</button>
+    <button class="btn danger" type="button" id="exportPlanAbort" data-i18n="web.roms.exportPlanAbort">取消计划</button>
+    <button class="btn primary" type="button" id="exportPlanProgressClose" data-i18n="web.common.close">关闭</button>
+  </div>
 </dialog>
 
 <div class="upload-overlay hidden" id="uploadProgressOverlay" role="status" aria-live="polite">

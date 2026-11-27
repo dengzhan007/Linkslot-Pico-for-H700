@@ -115,7 +115,7 @@ fn the_rows_run_in_the_order_the_user_chose() {
     );
     assert_eq!(
         QuickRow::SHELF_LOOK.map(|row| row.label(Language::ZhCn)),
-        ["游戏标题", QuickRow::FallbackCover.label(Language::ZhCn), "显示最近游玩"]
+        ["游戏标题", "显示最近游玩"]
     );
     assert_eq!(
         QuickRow::GAME.map(|row| row.label(Language::ZhCn)),
@@ -243,13 +243,32 @@ fn the_pages_partition_the_rows_without_overlap() {
             seen.push(row);
         }
     }
-    assert_eq!(seen.len(), QuickRow::ALL.len());
+    // Two compatibility slots stay in ALL to keep persisted indices stable but
+    // are no longer reachable from the UI: the removed save-screenshot toggle
+    // and the old Web Teal theme.
+    let hidden = [
+        QuickRow::FallbackCover,
+        QuickRow::ThemeDefault,
+        QuickRow::ThemeWeb,
+    ];
+    assert_eq!(seen.len(), QuickRow::ALL.len() - hidden.len());
     for row in QuickRow::ALL {
+        if hidden.contains(&row) {
+            continue;
+        }
         assert!(seen.contains(&row), "{row:?} is on no page");
     }
 
-    let labels: HashSet<&str> = QuickRow::ALL.iter().map(|r| r.label(Language::ZhCn)).collect();
-    assert_eq!(labels.len(), QuickRow::ALL.len(), "two rows share a label");
+    let labels: HashSet<&str> = QuickRow::ALL
+        .iter()
+        .filter(|r| !hidden.contains(r))
+        .map(|r| r.label(Language::ZhCn))
+        .collect();
+    assert_eq!(
+        labels.len(),
+        QuickRow::ALL.len() - hidden.len(),
+        "two rows share a label"
+    );
     assert!(QuickRow::ALL.iter().all(|r| !r.label(Language::ZhCn).is_empty()));
 }
 
@@ -352,12 +371,7 @@ fn every_row_has_an_icon_and_every_page_a_title_in_both_languages() {
                 face.w > 0 && face.rgba.chunks(4).any(|p| p[3] > 0),
                 "no icon for {row:?} in {lang:?}"
             );
-            // The tile fallback has to read in both languages: a single Chinese
-            // character is not an English badge.
-            assert!(
-                !row.icon_text(lang).is_empty(),
-                "{row:?} has no fallback tile text in {lang:?}"
-            );
+            assert_eq!((face.w, face.h), (22, 22), "{row:?} has the wrong icon box");
         }
         for index in 0..QuickRow::QUICK_PAGES {
             assert!(
@@ -392,10 +406,6 @@ fn every_label_reads_in_both_languages_and_english_is_not_chinese() {
         assert!(
             !row.label(Language::EnUs).chars().any(is_cjk),
             "{row:?} is still Chinese in English"
-        );
-        assert!(
-            !row.icon_text(Language::EnUs).chars().any(is_cjk),
-            "{row:?} keeps a Chinese badge in English"
         );
     }
     for index in 0..QuickRow::QUICK_PAGES {
@@ -549,8 +559,10 @@ fn a_value_is_grey_until_its_row_is_in_hand() {
             .map(|p| [p[0], p[1], p[2]])
             .expect("an empty face")
     };
-    assert_eq!(inkiest(true), [0x1a, 0x1a, 0x1a]);
-    assert_eq!(inkiest(false), [0x9a, 0x9a, 0xa4]);
+    let lit = [0x6C, 0x6C, 0x72];
+    let dim = [0xA6, 0xA6, 0xAD];
+    assert_eq!(inkiest(true), lit);
+    assert_eq!(inkiest(false), dim);
 }
 
 #[test]

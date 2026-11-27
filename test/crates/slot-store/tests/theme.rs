@@ -50,22 +50,24 @@ fn a_missing_file_is_the_default_theme() {
 
 #[test]
 fn preset_lines_select_a_complete_ui_palette() {
+    // Every historic palette name now resolves to the single warm theme.
     let web = Theme::parse("preset web\n");
-    assert_eq!(web.preset, ThemePreset::Web);
-    assert_eq!(web.bg, [0x1a, 0x1a, 0x2e, 0xff]);
-    assert_eq!(web.accent, [0x00, 0xd4, 0xaa]);
+    assert_eq!(web.preset, ThemePreset::Warm);
+    assert_eq!(web.bg, Theme::default().bg);
+    assert_eq!(web.accent, Theme::default().accent);
 
     let warm = Theme::parse("theme warm\n");
     assert_eq!(warm.preset, ThemePreset::Warm);
-    assert_eq!(warm.selected, [0xf4, 0xe5, 0xd2, 0xff]);
+    assert_eq!(warm.bg, Theme::default().bg);
+    assert_eq!(warm.ink, Theme::default().ink);
 }
 
 #[test]
 fn explicit_colours_still_override_a_preset() {
-    let t = Theme::parse("preset web\naccent #112233\n");
-    assert_eq!(t.preset, ThemePreset::Web);
+    let t = Theme::parse("preset paper\naccent #112233\n");
+    assert_eq!(t.preset, ThemePreset::Warm);
     assert_eq!(t.accent, [0x11, 0x22, 0x33]);
-    assert_eq!(t.bg, [0x1a, 0x1a, 0x2e, 0xff]);
+    assert_eq!(t.bg, Theme::default().bg);
 }
 
 #[test]

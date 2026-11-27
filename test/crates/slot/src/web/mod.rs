@@ -420,7 +420,10 @@ fn route_inner(shared: &Shared, request: &Request) -> Response {
         return modui::route(shared, request);
     }
     match request.method {
-        Method::Get | Method::Head => assets::route(&request.path),
+        Method::Get | Method::Head => {
+            let theme = slot_store::Theme::read(&shared.root).preset.as_str();
+            assets::route_with_theme(&request.path, theme)
+        }
         _ => Response::error(405, "不支持的请求方法"),
     }
 }

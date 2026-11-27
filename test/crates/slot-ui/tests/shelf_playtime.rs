@@ -1,4 +1,4 @@
-use slot_ui::{playtime_plate, MOUTH_H, OUT_H, OUT_W, STATUS_H};
+use slot_ui::{playtime_plate, MOUTH_H, OUT_H, OUT_W, STATUS_H, STATUS_MARGIN};
 
 #[test]
 fn the_plate_sits_below_the_selected_cartridge() {
@@ -39,9 +39,9 @@ fn gba_gb_and_gbc_carts_all_keep_the_plate_below_the_cart() {
 fn the_plate_is_clamped_inside_the_screen_margins() {
     let face = (200, 20);
     let (left, _, w, _) = playtime_plate((-200.0, 134.0, 240.0, 141.0), face);
-    assert_eq!(left, 24.0);
+    assert_eq!(left, STATUS_MARGIN);
     let (right, _, _, _) = playtime_plate((680.0, 134.0, 240.0, 141.0), face);
-    assert_eq!(right + w, OUT_W as f32 - 24.0);
+    assert_eq!(right + w, OUT_W as f32 - STATUS_MARGIN);
 }
 
 #[test]

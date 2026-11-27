@@ -28,8 +28,29 @@ pub fn playtime_plate(cart: (f32, f32, f32, f32), face: (u32, u32)) -> (f32, f32
 }
 
 
+/// Flat Console Flat panel for the selected cart's playtime line.
+pub fn playtime_panel_face(w: u32, h: u32) -> crate::plate::UndoFace {
+    crate::switch_style::rounded_face(
+        w,
+        h,
+        8.0,
+        crate::switch_style::surface(),
+        Some(crate::switch_style::surface_border()),
+    )
+}
+
 const SIDE_SCALE: f32 = 0.78;
 const SIDE_ALPHA: f32 = 0.55;
+
+/// Kept for callers/tests that describe the shelf's resting foot.  The shelf
+/// itself uses `foot_y`; this is the no-slack GBA foot.
+pub const SHELF_CART_FOOT: f32 = (OUT_H as f32 + CART_H as f32) / 2.0;
+
+/// Compatibility wrapper for the v1.0.50 `display_box` spelling.
+pub fn display_box(platform: slot_store::Platform) -> (f32, f32) {
+    let (w, h) = cart_box(platform);
+    (w as f32, h as f32)
+}
 
 static SLACK: AtomicU32 = AtomicU32::new(0);
 

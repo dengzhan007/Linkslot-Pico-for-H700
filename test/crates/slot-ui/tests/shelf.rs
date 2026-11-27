@@ -1,9 +1,9 @@
 use slot_model::{Battery, Charge};
 use slot_store::{Cart, Platform};
 use slot_ui::{
-    draw_shelf_legend, gauge_width, hint_face, label_colour, rest_y, wifi_face, Draw, GbShell,
-    Printed, Shelf, StatusBar, TexId, CART_W, GB_CART_H, GB_CART_W, HINT_H, OUT_W, STATUS_H,
-    STATUS_MARGIN, WIFI_PX,
+    cart_box, draw_shelf_legend, drop_to_clear, gauge_width, hint_face, label_colour, rest_y,
+    wifi_face, Draw, GbShell, Printed, Shelf, StatusBar, TexId, CART_W, GB_CART_H, GB_CART_W,
+    HINT_H, OUT_W, STATUS_H, STATUS_MARGIN, WIFI_PX,
 };
 
 fn shelf_with(n: usize) -> Shelf {
@@ -984,5 +984,73 @@ fn a_cart_pushed_onto_the_row_draws_rather_than_stopping_the_device() {
         backed(&s),
         2,
         "the row holding a cart the shells never heard of did not draw both its neighbours"
+    );
+}
+
+/// The transfer room's header ends at 116; this is the same clearance the app
+/// asks for (card bottom + 8 px of air).
+const ROOM_CLEAR: f32 = 124.0;
+
+#[test]
+fn a_tall_cart_is_the_one_that_needs_the_room_lift() {
+    let gb = drop_to_clear(Platform::Gb, ROOM_CLEAR);
+    let fc = drop_to_clear(Platform::Fc, ROOM_CLEAR);
+    let sfc = drop_to_clear(Platform::Sfc, ROOM_CLEAR);
+    let md = drop_to_clear(Platform::Md, ROOM_CLEAR);
+    assert!(
+        gb > fc && fc > sfc && sfc > md && md > 0.0,
+        "the room lift does not follow the cassette heights: {gb}, {fc}, {sfc}, {md}"
+    );
+    assert_eq!(
+        drop_to_clear(Platform::Gba, ROOM_CLEAR),
+        0.0,
+        "the room moved an Advance cartridge that already clears the header"
+    );
+
+    let gb_h = cart_box(Platform::Gb).1 as f32;
+    assert!(
+        (rest_y(gb_h) + gb - ROOM_CLEAR).abs() < 0.01,
+        "the Game Boy pak still reaches the room header"
+    );
+}
+
+#[test]
+fn a_room_lift_drops_the_whole_row_by_the_same_amount() {
+    let mut s = gb_shelf_with(3);
+    settle(&mut s);
+    s.set_faces((0..3).map(|i| TexId::from_raw(20 + i)).collect());
+    let boxes = |lift: f32| {
+        let mut out = Vec::new();
+        s.draw_row_lifted(None, 0.0, 0.0, 1.0, lift, &mut out);
+        out.iter()
+            .filter_map(|d| match *d {
+                Draw::Tex { x, y, w, h, .. } => Some((x, y, w, h)),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let plain = boxes(0.0);
+    let lifted = boxes(40.0);
+    assert_eq!(
+        plain.len(),
+        lifted.len(),
+        "the room lift changed how many cartridges are on the row"
+    );
+    for (flat, down) in plain.iter().zip(lifted.iter()) {
+        assert_eq!(flat.0, down.0, "the room lift moved a cartridge sideways");
+        assert_eq!(flat.2, down.2, "the room lift resized a cartridge");
+        assert!(
+            (down.1 - (flat.1 + 40.0)).abs() < 0.01,
+            "a cartridge did not drop with the row: {} against {}",
+            down.1,
+            flat.1
+        );
+    }
+
+    let (_, y, _, _) = s.selected_rect_lifted(40.0).expect("no selection");
+    let (_, plain_y, _, _) = s.selected_rect().expect("no selection");
+    assert!(
+        (y - (plain_y + 40.0)).abs() < 0.01,
+        "the selected box did not follow the lifted row"
     );
 }

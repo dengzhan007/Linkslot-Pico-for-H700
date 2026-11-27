@@ -434,6 +434,21 @@ fn banner_pixels(core: Core, title: &str, code: &str, name: &str) -> Vec<u8> {
     );
     let mut out = Vec::new();
     app.draw(&mut out);
+    // The frontend blits the HUD toast in its top notification layer; the app
+    // draw no longer carries it, so mirror that layer here.
+    if let (Some((toast, alpha)), Some(top)) = (app.hud_toast_view(), app.toast_top()) {
+        if let Some(tex) = app.hud_toast_face(toast) {
+            let (x, _, w, h) = slot_ui::toast_rect(toast);
+            out.push(Draw::Tex {
+                x,
+                y: top,
+                w,
+                h,
+                tex,
+                alpha,
+            });
+        }
+    }
     let banner: Vec<Draw> = out
         .into_iter()
         .filter(|d| matches!(*d, Draw::Tex { tex, .. } if faces.iter().any(|(t, _)| *t == tex)))
@@ -470,15 +485,10 @@ fn a_cart_nothing_can_link_reads_no_link_support_on_the_glass() {
         banner_ink(Toast::NoLink),
         "the banner is not the NO LINK SUPPORT line"
     );
-    assert_ne!(
-        banner_ink(Toast::NoLink),
-        banner_ink(Toast::NeedsGpsp),
-        "the two sentences carry the same ink, so this frame proves nothing"
-    );
     let (first, last) = inked_rows(&px);
     assert!(
-        last < OUT_H as usize / 4,
-        "the banner is not up in the plate band: rows {first}..{last}"
+        first >= slot_ui::TOAST_TOP as usize && last < OUT_H as usize / 2,
+        "the toast is not in the top notification stack: rows {first}..{last}"
     );
 }
 

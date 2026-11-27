@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<!-- The Web manager keeps the original cyan theme; the handheld preset does not affect it. -->
+<html lang="zh-CN" data-theme="cyan">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -21,20 +22,20 @@
       </span>
       <span class="version" id="slotVersion">v—</span>
     </div>
+    <nav class="tabs" id="tabs" aria-label="页面导航" data-i18n-aria="web.nav.aria">
+      <a class="tab" href="#overview" data-tab="overview" data-i18n="web.nav.overview">概览</a>
+      <a class="tab" href="#roms" data-tab="roms" data-i18n="web.nav.roms">游戏库</a>
+      <a class="tab" href="#saves" data-tab="saves" data-i18n="web.nav.saves">存档</a>
+      <a class="tab" href="#sync" data-tab="sync" data-i18n="web.nav.sync">云同步</a>
+      <a class="tab" href="#mods" data-tab="mods" data-i18n="web.nav.mods">扩展</a>
+      <a class="tab" href="#files" data-tab="files" data-i18n="web.nav.files">文件</a>
+      <a class="tab" href="#settings" data-tab="settings" data-i18n="web.nav.settings">设置</a>
+    </nav>
     <div class="topbar-right">
       <span class="status-chip" id="statusChip"><i class="dot"></i><span id="statusText" data-i18n="web.shell.connecting">连接中…</span></span>
       <span class="version mono" id="linkslotVersion" title="linkSlot CLI 版本" data-i18n-title="web.shell.cliVersionTitle">CLI —</span>
     </div>
   </div>
-  <nav class="tabs" id="tabs" aria-label="页面导航" data-i18n-aria="web.nav.aria">
-    <a class="tab" href="#overview" data-tab="overview" data-i18n="web.nav.overview">概览</a>
-    <a class="tab" href="#roms" data-tab="roms" data-i18n="web.nav.roms">游戏库</a>
-    <a class="tab" href="#saves" data-tab="saves" data-i18n="web.nav.saves">存档</a>
-    <a class="tab" href="#sync" data-tab="sync" data-i18n="web.nav.sync">云同步</a>
-    <a class="tab" href="#mods" data-tab="mods" data-i18n="web.nav.mods">扩展</a>
-    <a class="tab" href="#files" data-tab="files" data-i18n="web.nav.files">文件</a>
-    <a class="tab" href="#settings" data-tab="settings" data-i18n="web.nav.settings">设置</a>
-  </nav>
 </header>
 
 <main class="container">
@@ -43,39 +44,87 @@
   </div>
 
   <!-- ============================ 概览 ============================ -->
-  <section class="page" data-page="overview">
-    <div class="grid stats">
-      <div class="card stat">
-        <span class="k">WiFi</span>
-        <span class="v" id="ovWifi">—</span>
-        <span class="sub" id="ovIp">—</span>
+  <section class="page ov-page" data-page="overview">
+    <div class="ov-head">
+      <div>
+        <h1 data-i18n="web.overview.title">概览</h1>
+        <div class="sub" data-i18n="web.overview.subtitle">设备、游戏库与存档一目了然</div>
       </div>
-      <div class="card stat">
-        <span class="k" data-i18n="web.overview.address">访问地址</span>
-        <span class="v small mono" id="ovUrl">—</span>
-        <span class="sub" data-i18n="web.overview.addressHint">手机与电脑连接同一 WiFi 后打开</span>
-      </div>
-      <div class="card stat">
-        <span class="k" data-i18n="web.overview.units">游戏</span>
-        <span class="v" id="ovGames">—</span>
-        <span class="sub" id="ovCounts" data-i18n="web.overview.unitsValue">即时存档 — · 电池存档 —</span>
-      </div>
-      <div class="card stat">
-        <span class="k" data-i18n="web.overview.playtime">游戏总时长</span>
-        <span class="v small" id="ovPlaytime">—</span>
-        <span class="sub" data-i18n="web.overview.playtimeHint">所有游戏跨设备累计</span>
-      </div>
-      <div class="card stat">
-        <span class="k" data-i18n="web.overview.device">设备状态</span>
-        <span class="v" id="ovWritable">—</span>
-        <span class="sub" id="ovUptime" data-i18n="web.overview.uptime">已运行 —</span>
+      <div class="ov-actions">
+        <button class="btn small" type="button" id="ovRefresh" data-i18n="web.overview.refresh">刷新</button>
+        <button class="btn small primary" type="button" id="ovStartServer" data-i18n="web.overview.startServer">启动网络服务器</button>
       </div>
     </div>
 
-    <section class="card">
-      <h2><span data-i18n="web.overview.recentLog">最近日志</span> <button class="btn ghost small" type="button" id="ovRefreshLog" data-i18n="web.common.refresh">刷新</button></h2>
-      <pre class="log" id="recentLog" data-i18n="web.common.noLog">暂无日志</pre>
-    </section>
+    <div class="ov-stats">
+      <div class="ov-stat">
+        <span class="ov-k">DEVICE</span>
+        <span class="ov-v" id="ovDevice">—</span>
+        <span class="ov-sub" id="ovDeviceSub">—</span>
+      </div>
+      <div class="ov-stat">
+        <span class="ov-k">LIBRARY</span>
+        <span class="ov-v" id="ovLibrary">—</span>
+        <span class="ov-sub" id="ovLibrarySub" data-i18n="web.overview.scanned">已扫描</span>
+      </div>
+      <div class="ov-stat">
+        <span class="ov-k">SAVES</span>
+        <span class="ov-v" id="ovSaves">—</span>
+        <span class="ov-sub" id="ovSavesSub">—</span>
+      </div>
+      <div class="ov-stat">
+        <span class="ov-k">PLAYTIME</span>
+        <span class="ov-v" id="ovPlaytime">—</span>
+        <span class="ov-sub" data-i18n="web.overview.playtimeHint">所有游戏跨设备累计</span>
+      </div>
+    </div>
+
+    <div class="ov-main">
+      <section class="ov-card ov-recent">
+        <div class="ov-card-head">
+          <h2 data-i18n="web.overview.recentGames">最近游玩</h2>
+          <button class="ov-link" type="button" id="ovAllGames" data-i18n="web.overview.viewAll">查看全部 ›</button>
+        </div>
+        <div class="ov-games" id="ovRecentGames"></div>
+      </section>
+
+      <div class="ov-side">
+        <section class="ov-card">
+          <div class="ov-card-head">
+            <h2 data-i18n="web.overview.recentSync">最近同步</h2>
+            <button class="ov-link" type="button" id="ovSyncHistory" data-i18n="web.overview.records">记录 ›</button>
+          </div>
+          <div id="ovSyncReceipt"></div>
+        </section>
+        <section class="ov-card">
+          <div class="ov-card-head"><h2 data-i18n="web.overview.quickActions">快捷操作</h2></div>
+          <div class="ov-quick">
+            <button class="ov-quick-btn" type="button" id="ovUploadGame" data-i18n="web.overview.uploadGame">上传游戏</button>
+            <button class="ov-quick-btn" type="button" id="ovImportCollection" data-i18n="web.overview.importCollection">导入合集</button>
+            <button class="ov-quick-btn" type="button" id="ovOpenFiles" data-i18n="web.overview.openFiles">打开文件页</button>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div class="ov-bottom">
+      <section class="ov-card">
+        <div class="ov-card-head">
+          <h2 data-i18n="web.overview.recentActivity">最近活动</h2>
+          <button class="ov-link" type="button" id="ovAllLogs" data-i18n="web.overview.allLogs">全部日志 ›</button>
+        </div>
+        <div class="ov-activity" id="ovActivity"></div>
+      </section>
+      <section class="ov-card">
+        <div class="ov-card-head"><h2 data-i18n="web.overview.deviceStatus">设备状态</h2></div>
+        <div class="ov-device">
+          <div class="ov-ds-row"><span data-i18n="web.overview.storage">存储卡</span><b id="ovStorage">—</b></div>
+          <div class="ov-ds-row"><span data-i18n="web.overview.version">版本</span><b id="ovVersion">—</b></div>
+          <div class="ov-ds-row"><span data-i18n="web.overview.network">网络</span><b id="ovNetwork">—</b></div>
+        </div>
+      </section>
+    </div>
+    <pre class="hidden" id="recentLog" hidden></pre>
   </section>
 
   <!-- ============================ 游戏库 ============================ -->

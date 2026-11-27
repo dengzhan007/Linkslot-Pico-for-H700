@@ -11,6 +11,8 @@ pub const ALERT_PX: f32 = 44.0;
 
 pub const MOUTH_H: f32 = 58.0;
 const BAND_Y: f32 = OUT_H as f32 - MOUTH_H;
+/// The resting slot lip (alias kept for layout tests).
+pub const SLOT_Y: f32 = BAND_Y;
 
 pub const MOUTH_W: f32 = SEATED_W as f32 + 14.0;
 const SLIT_H: f32 = 9.0;

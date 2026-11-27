@@ -10,20 +10,24 @@ use slot_input::{InputSource, Millis};
 use slot_power::{Platform, Power};
 use slot_store::{format_stamp, Platform as CartPlatform};
 use slot_ui::{
-    about_face, about_thanks_face, arrows_hint_face, badge_face, bezel_face, cart_shadow, chip_face_for,
-    cart_face, chip_shadow_face, date_time_text, gb_cart_shadow, hhmm, hint_face, icon_face,
+    about_face, about_thanks_face, arrows_hint_face, badge_face, bezel_face, cart_shadow,
+    chip_face_for,
+    cart_face, chip_shadow_face, gb_cart_shadow, hhmm, hint_face, icon_face,
     large_word_face, menu_face,
-    photo_face, quick_caret_face_state, quick_icon_face, quick_label_face_state, quick_legend_faces,
-    quick_title_face, quick_value_face, rebuild_count_face, rebuild_title_face,
-    set_clock_hint_face, socket_face, title_face, toast_face, wallpaper_face,
+    photo_face, quick_background_face, quick_caret_face_state, quick_card_face, quick_icon_face,
+    quick_label_face_state,
+    quick_legend_faces, quick_number_face, quick_page_meta_face, quick_title_face, quick_value_face,
+    rebuild_count_face, rebuild_title_face,
+    set_clock_hint_face, socket_face, status_face, title_face, toast_face,
+    wallpaper_face,
     word_face, AboutFields, AboutPage, CartFace, GbShell, Icon, LinkBadge,
     PowerChoice, QuickMenuFaces, QuickRow, QuickValue, RebuildScreen, Toast, UndoFace, ALERT_PX,
     BOLT_PX,
-    HUD_ICON_PX, HUD_INK, QUICK_CARD_H, QUICK_CARD_W,
+    HUD_ICON_PX,
 };
 
 use crate::app::{
-    App, GameIntroFaces, LinkRow, Phase, SyncFace, SyncFaces, SyncTexts, TransferFaces,
+    App, GameIntroFaces, GameMenu, LinkRow, Phase, SyncFace, SyncFaces, SyncTexts, TransferFaces,
 };
 use crate::build_info::Build;
 use crate::cart_faces::CartFaces;
@@ -40,26 +44,18 @@ const DOZE_TIMEOUT: Duration = Duration::from_secs(180);
 const ALERT_INK: [u8; 3] = [0xf0, 0xb4, 0x3c];
 
 /// The shelf-sync overlay text sizes, in 720x480 pixels.
-const SYNC_TITLE_PX: f32 = 26.0;
+const SYNC_TITLE_PX: f32 = 20.0;
 const SYNC_TITLE_MAX_W: f32 = 420.0;
-const SYNC_SUBTITLE_PX: f32 = 12.0;
-const SYNC_SUBTITLE_MAX_W: f32 = 540.0;
+const SYNC_SUBTITLE_PX: f32 = 11.0;
+const SYNC_SUBTITLE_MAX_W: f32 = 420.0;
 const SYNC_BANNER_PX: f32 = 20.0;
-const SYNC_BANNER_MAX_W: f32 = 560.0;
-const SYNC_RESULT_PX: f32 = 26.0;
-const SYNC_RESULT_MAX_W: f32 = 620.0;
-const SYNC_SIDE_PX: f32 = 11.0;
-const SYNC_SIDE_MAX_W: f32 = 80.0;
-const SYNC_STICKER_PX: f32 = 13.0;
-const SYNC_STICKER_MAX_W: f32 = 90.0;
-const SYNC_RAIL_PX: f32 = 11.0;
+const SYNC_BANNER_MAX_W: f32 = 460.0;
+const SYNC_RAIL_PX: f32 = 9.0;
 const SYNC_RAIL_MAX_W: f32 = 60.0;
-const SYNC_FOOTER_PX: f32 = 11.0;
+const SYNC_FOOTER_PX: f32 = 9.0;
 const SYNC_FOOTER_MAX_W: f32 = 400.0;
 const SYNC_PERCENT_PX: f32 = 12.0;
 const SYNC_PERCENT_MAX_W: f32 = 56.0;
-const SYNC_HINT_PX: f32 = 11.0;
-const SYNC_HINT_MAX_W: f32 = 90.0;
 
 /// Which language the baked [`UiFaces`] belong to, and which build is in
 /// flight.
@@ -143,7 +139,7 @@ impl FacesLang {
 pub struct Frontend {
     utility_tex: Option<TexId>,
     notice_tex: Option<TexId>,
-    notice_shown: Option<(String, String, Option<u64>)>,
+    notice_shown: Option<(String, String, Option<u64>, Language)>,
     utility_shown: Option<(
         String,
         Vec<String>,
@@ -160,6 +156,12 @@ pub struct Frontend {
     hold_tex: Option<TexId>,
     nav_title: Option<TexId>,
     nav_title_shown: String,
+    shelf_title_tex: Option<TexId>,
+    shelf_title_shown: Option<(String, bool)>,
+    quick_special_open: bool,
+    quick_special_key: Option<(slot_i18n::Language, usize, String)>,
+    quick_mods_texs: [Option<TexId>; 2],
+    quick_version_texs: [Option<TexId>; 2],
     folder_tex: Option<TexId>,
     folder_shown: Option<crate::app::FolderHeader>,
     folder_prev_tex: Option<TexId>,
@@ -189,6 +191,8 @@ pub struct Frontend {
     core_board_tex: Option<TexId>,
     core_lid_tex: Option<TexId>,
     core_built: Option<String>,
+    core_picker_title_tex: Option<TexId>,
+    core_picker_title_lang: Option<Language>,
     front_deck_shown: Option<String>,
     front_deck_texs: Vec<(TexId, u32, u32)>,
     front_deck_title: Option<(TexId, u32, u32)>,
@@ -246,6 +250,7 @@ pub struct Frontend {
     search_candidate_tex: Option<TexId>,
     search_candidate_shown: Option<(String, Vec<String>, usize, usize, usize, Language)>,
     search_results_tex: Option<TexId>,
+    hud_panel_tex: Option<TexId>,
     search_results_shown: Option<(String, usize, usize, Vec<(CartPlatform, String)>, Language)>,
     /// Opaque full-screen textures for the multi-page conflict overlay; the
     /// key is the app's conflict view (page/direction/locks/versions/error).
@@ -289,14 +294,12 @@ struct SyncTextCache {
     subtitle: Option<TexId>,
     banner: Option<TexId>,
     result: Option<TexId>,
-    side_local: Option<TexId>,
-    side_remote: Option<TexId>,
-    cloud_label: Option<TexId>,
-    target_label: Option<TexId>,
+    status: Option<TexId>,
     rail_labels: [Option<TexId>; 5],
     progress_left: Option<TexId>,
     progress_right: Option<TexId>,
-    completion_hint: Option<TexId>,
+    completion_hint: Option<SyncFace>,
+    return_hint: Option<SyncFace>,
     cancel_hint: Option<SyncFace>,
     cancel_lang: Option<Language>,
 }
@@ -367,6 +370,9 @@ impl Frontend {
             guide_tex: None, guide_shown: None,
             hold_tex: None,
             nav_title: None, nav_title_shown: String::new(),
+            shelf_title_tex: None, shelf_title_shown: None,
+            quick_special_open: false, quick_special_key: None,
+            quick_mods_texs: [None; 2], quick_version_texs: [None; 2],
             folder_tex: None, folder_shown: None,
             folder_prev_tex: None, folder_prev_shown: None,
             transfer_header_tex: None, transfer_header_shown: None,
@@ -390,6 +396,8 @@ impl Frontend {
             core_board_tex: None,
             core_lid_tex: None,
             core_built: None,
+            core_picker_title_tex: None,
+            core_picker_title_lang: None,
             front_deck_shown: None,
             front_deck_texs: Vec::new(),
             front_deck_title: None,
@@ -442,6 +450,7 @@ impl Frontend {
             search_candidate_tex: None,
             search_candidate_shown: None,
             search_results_tex: None,
+            hud_panel_tex: None,
             search_results_shown: None,
             conflict_tex: None,
             conflict_shown: None,
@@ -479,29 +488,95 @@ impl Frontend {
 
     /// The transfer menu's generic panel is text-only; overlay the role art
     /// selected by the current Host/Join row and hotspot/Wi-Fi mode.
-    fn draw_transfer_mode_art(&mut self) {
-        let Some((tex, ..)) = self.session.app().transfer_mode_art() else {
+    /// The transfer-mode left panel reuses the live link animation.  The menu
+    /// face leaves a transparent viewport; these draw ops sit underneath it, so
+    /// anything outside the viewport is hidden by the opaque face.
+    fn draw_transfer_anim(&mut self, selected: usize) {
+        // The menu face leaves this viewport transparent so the live link art
+        // can show through.  Paint an opaque stage first: the shelf behind the
+        // menu must never become the animation's background.
+        self.draws.push(Draw::Rect {
+            x: 40.0,
+            y: 164.0,
+            w: 308.0,
+            h: 194.0,
+            colour: [0x14 as f32 / 255.0, 0x14 as f32 / 255.0, 0x18 as f32 / 255.0, 1.0],
+        });
+        let app = self.session.app();
+        let Some(sprites) = app.link_sprites().copied() else {
             return;
         };
-        let width = 250.0;
-        let height = 148.0;
-        let x = 55.0;
-        let y = 112.0;
-        self.draws.push(Draw::Rect {
-            x,
-            y,
-            w: width,
-            h: height,
-            colour: [0.04, 0.05, 0.08, 0.92],
-        });
-        self.draws.push(Draw::Tex {
-            x,
-            y,
-            w: width,
-            h: height,
-            tex,
-            alpha: 1.0,
-        });
+        let role = if selected == 1 { LinkRow::Join } else { LinkRow::Host };
+        let now = app.now();
+        let menu = GameMenu::Working {
+            role,
+            step: LinkStep::Radio,
+            since: now.saturating_sub(900),
+        };
+        let mut art = Vec::new();
+        // Transfer mode is always a network session: use the Wi-Fi/hotspot
+        // art rather than the GBA cable/adapter art.  Passing `true` selects
+        // the transport-specific single-machine composition here.
+        crate::link_screen::draw_link_art_transport(
+            menu,
+            app.link_kind(),
+            app.link_transport(),
+            true,
+            now,
+            &sprites,
+            &mut art,
+        );
+        let (tx, ty, tw, th) = (40.0, 164.0, 308.0, 194.0);
+        let crop: (f32, f32, f32, f32) = (168.0, 120.0, 384.0, 232.0);
+        let scale: f32 = (tw / crop.2).min(th / crop.3);
+        let ox = tx + (tw - crop.2 * scale) / 2.0;
+        let oy = ty + (th - crop.3 * scale) / 2.0;
+        let map = |x: f32, y: f32| ((x - crop.0) * scale + ox, (y - crop.1) * scale + oy);
+        for op in art {
+            match op {
+                Draw::Rect { x, y, w, h, colour } => {
+                    let left = x.max(crop.0);
+                    let top = y.max(crop.1);
+                    let right = (x + w).min(crop.0 + crop.2);
+                    let bottom = (y + h).min(crop.1 + crop.3);
+                    if right <= left || bottom <= top {
+                        continue;
+                    }
+                    let (mx, my) = map(left, top);
+                    self.draws.push(Draw::Rect {
+                        x: mx,
+                        y: my,
+                        w: (right - left) * scale,
+                        h: (bottom - top) * scale,
+                        colour,
+                    });
+                }
+                Draw::Tex { x, y, w, h, tex, alpha } => {
+                    let (mx, my) = map(x, y);
+                    self.draws.push(Draw::Tex {
+                        x: mx,
+                        y: my,
+                        w: w * scale,
+                        h: h * scale,
+                        tex,
+                        alpha,
+                    });
+                }
+                Draw::Turned { x, y, w, h, tex, alpha, turn } => {
+                    let (mx, my) = map(x, y);
+                    self.draws.push(Draw::Turned {
+                        x: mx,
+                        y: my,
+                        w: w * scale,
+                        h: h * scale,
+                        tex,
+                        alpha,
+                        turn,
+                    });
+                }
+                Draw::Game | Draw::Shot { .. } => {}
+            }
+        }
     }
 
     fn draw_guide(&mut self, compositor: &mut Compositor) {
@@ -551,6 +626,63 @@ impl Frontend {
                 alpha: 1.0,
             });
         }
+    }
+
+    fn sync_quick_specials(&mut self, compositor: &mut Compositor) {
+        if self.session.app().quick_menu().is_none() {
+            self.quick_special_open = false;
+            return;
+        }
+        let lang = self.session.app().language();
+        let count = self.session.app().quick_mods_count();
+        let version = format!("v{}", crate::build_info::Build::current().version);
+        let key = (lang, count, version.clone());
+        if self.quick_special_open && self.quick_special_key.as_ref() == Some(&key) {
+            return;
+        }
+        let mods_text = slot_i18n::t_args(
+            lang,
+            "device.quick.value.mods",
+            &[("count", &count.to_string())],
+        )
+        .to_string();
+        let mods_dim = slot_ui::quick_value_face(&mods_text, false);
+        let mods_lit = slot_ui::quick_value_face(&mods_text, true);
+        let version_dim = slot_ui::quick_value_face(&version, false);
+        let version_lit = slot_ui::quick_value_face(&version, true);
+        let mods_dim_size = (mods_dim.w, mods_dim.h);
+        let mods_lit_size = (mods_lit.w, mods_lit.h);
+        let version_dim_size = (version_dim.w, version_dim.h);
+        let version_lit_size = (version_lit.w, version_lit.h);
+        let mods_faces = [
+            (
+                upload(compositor, &mut self.quick_mods_texs[0], mods_dim),
+                mods_dim_size.0,
+                mods_dim_size.1,
+            ),
+            (
+                upload(compositor, &mut self.quick_mods_texs[1], mods_lit),
+                mods_lit_size.0,
+                mods_lit_size.1,
+            ),
+        ];
+        let version_faces = [
+            (
+                upload(compositor, &mut self.quick_version_texs[0], version_dim),
+                version_dim_size.0,
+                version_dim_size.1,
+            ),
+            (
+                upload(compositor, &mut self.quick_version_texs[1], version_lit),
+                version_lit_size.0,
+                version_lit_size.1,
+            ),
+        ];
+        self.session
+            .app_mut()
+            .set_quick_special_values(mods_faces, version_faces);
+        self.quick_special_open = true;
+        self.quick_special_key = Some(key);
     }
 
     fn sync_front_deck(&mut self, compositor: &mut Compositor) {
@@ -715,7 +847,7 @@ impl Frontend {
         let icons = Icon::ALL
             .iter()
             .map(|i| {
-                let f = icon_face(*i, HUD_ICON_PX, HUD_INK);
+                let f = icon_face(*i, HUD_ICON_PX, slot_ui::switch_style::ink());
                 compositor.create_texture(f.w, f.h, &f.rgba)
             })
             .collect();
@@ -742,7 +874,7 @@ impl Frontend {
         let rounded = gb_cart_shadow(GbShell::Rounded);
         let rounded = compositor.create_texture(rounded.w, rounded.h, &rounded.rgba);
         self.session.app_mut().set_gb_cart_shadows(notched, rounded);
-        let bolt = icon_face(Icon::Charging, BOLT_PX, HUD_INK);
+        let bolt = icon_face(Icon::Charging, BOLT_PX, slot_ui::switch_style::ink());
         let bolt_id = compositor.create_texture(bolt.w, bolt.h, &bolt.rgba);
         self.session.app_mut().set_bolt_face(bolt_id);
         let star = slot_ui::favorite_star_face();
@@ -752,7 +884,7 @@ impl Frontend {
             .set_favorite_star(star_id, star.w, star.h);
         // Shelf header: Wi-Fi state icon and the bottom key legend. These are
         // static faces uploaded once at boot.
-        let wifi = slot_ui::wifi_face(slot_ui::WIFI_PX, HUD_INK);
+        let wifi = slot_ui::wifi_face(slot_ui::WIFI_PX, slot_ui::switch_style::ink());
         let (wifi_w, wifi_h) = (wifi.w, wifi.h);
         let wifi_id = compositor.create_texture(wifi_w, wifi_h, &wifi.rgba);
         self.session
@@ -788,42 +920,30 @@ impl Frontend {
             .app_mut()
             .set_transfer_legend_faces(transfer_left, transfer_right);
         let sync = crate::app::SyncArt {
-            sheet: sync_face(compositor, slot_ui::stage_sheet_face()),
-            dock: sync_face(compositor, slot_ui::dock_face()),
-            cloud_card: sync_face(compositor, slot_ui::cloud_card_face()),
-            target_card: sync_face(compositor, slot_ui::target_card_face()),
-            shadow: sync_face(compositor, slot_ui::shadow_face()),
-            lane: sync_face(compositor, slot_ui::lane_face()),
-            packet: sync_face(compositor, slot_ui::packet_face()),
-            stamp: sync_face(compositor, slot_ui::stamp_face()),
-            dot_done: sync_face(
-                compositor,
-                slot_ui::stage_dot_face(slot_ui::StageDot::Done),
-            ),
-            dot_active: sync_face(
-                compositor,
-                slot_ui::stage_dot_face(slot_ui::StageDot::Active),
-            ),
-            dot_pending: sync_face(
-                compositor,
-                slot_ui::stage_dot_face(slot_ui::StageDot::Pending),
-            ),
-            dir_left: sync_face(
-                compositor,
-                slot_ui::direction_face(slot_ui::Travel::Left),
-            ),
-            dir_right: sync_face(
-                compositor,
-                slot_ui::direction_face(slot_ui::Travel::Right),
-            ),
-            dir_wait: sync_face(compositor, slot_ui::wait_face()),
-            chip: sync_face(compositor, slot_ui::percent_chip_face()),
+            card: sync_face(compositor, slot_ui::sync_card_face()),
+            ring: [
+                sync_face(compositor, slot_ui::sync_ring_face(0)),
+                sync_face(compositor, slot_ui::sync_ring_face(1)),
+                sync_face(compositor, slot_ui::sync_ring_face(2)),
+                sync_face(compositor, slot_ui::sync_ring_face(3)),
+                sync_face(compositor, slot_ui::sync_ring_face(4)),
+                sync_face(compositor, slot_ui::sync_ring_face(5)),
+            ],
+            cloud: sync_face(compositor, slot_ui::cloud_face(42.0)),
+            target: sync_face(compositor, slot_ui::sync_target_face()),
+            check: sync_face(compositor, slot_ui::sync_check_face()),
+            arrow_up: sync_face(compositor, slot_ui::arrow_face(slot_ui::Arrow::Up, 12.0)),
+            arrow_down: sync_face(compositor, slot_ui::arrow_face(slot_ui::Arrow::Down, 12.0)),
+            seal: sync_face(compositor, slot_ui::sync_seal_face()),
+            head: sync_face(compositor, slot_ui::sync_head_face()),
+            scan: sync_face(compositor, slot_ui::sync_scan_face()),
         };
         self.session.app_mut().set_sync_art(sync);
         let transfer_art = crate::app::TransferArt {
-            stamp: sync_face(compositor, slot_ui::transfer_docket::stamp_face()),
             check: sync_face(compositor, slot_ui::transfer_docket::check_face()),
-            shadow: sync_face(compositor, slot_ui::transfer_docket::shadow_face()),
+            badge: sync_face(compositor, slot_ui::transfer_docket::badge_face()),
+            arrow_right: sync_face(compositor, slot_ui::transfer_docket::arrow_face(false)),
+            arrow_left: sync_face(compositor, slot_ui::transfer_docket::arrow_face(true)),
         };
         self.session.app_mut().set_transfer_art(transfer_art);
         crate::boot_time::mark("shelf faces");
@@ -972,6 +1092,7 @@ impl Frontend {
         let tray = up(faces.tray).0;
         let tray_label = up(faces.tray_label);
         let lines = faces.shutdown.into_iter().map(&mut up).collect();
+        let quick_background = up(faces.quick_background);
         let cards = faces.quick_cards.map(&mut up);
         let power_cards = faces.power_cards.map(&mut up);
         let power_labels = faces
@@ -993,6 +1114,7 @@ impl Frontend {
             })
             .collect();
         let power_title = up(faces.power_title);
+        let power_panel = up(faces.power_panel);
         let labels = faces
             .quick_labels
             .into_iter()
@@ -1018,6 +1140,8 @@ impl Frontend {
             })
             .collect();
         let titles = faces.quick_titles.map(&mut up);
+        let page_metas = faces.quick_page_metas.map(&mut up);
+        let numbers = faces.quick_numbers.into_iter().map(&mut up).collect();
         let legend = faces.quick_legend.map(|f| {
             let (tex, w, _) = up(f);
             (tex, w)
@@ -1032,7 +1156,23 @@ impl Frontend {
             .collect();
         let roles = faces.link_roles.into_iter().map(&mut up).collect();
         let modes = faces.link_modes.into_iter().map(&mut up).collect();
-        let bands = faces.link_bands.into_iter().map(&mut up).collect();
+        let mut bands = Vec::new();
+        let mut band_blocks = Vec::new();
+        for (index, face) in faces.link_bands.into_iter().enumerate() {
+            let (tex, w, h) = up(face);
+            bands.push((tex, w, h));
+            if h > 0 {
+                let block_w = ((w as f32 * 30.0 / h as f32).round() as u32).saturating_add(16);
+                let colour = if index == 0 {
+                    [0x4f, 0xc3, 0xf7, 255]
+                } else {
+                    [0xf2, 0xb8, 0x4b, 255]
+                };
+                let block = slot_ui::switch_style::rounded_face(block_w, 30, 6.0, colour, None);
+                let (block_tex, block_w, block_h) = up(block);
+                band_blocks.push((block_tex, block_w, block_h));
+            }
+        }
         let linked = up(faces.linked);
         let link_confirm = up(faces.link_confirm);
         let cart_delete = up(faces.cart_delete);
@@ -1050,13 +1190,17 @@ impl Frontend {
         app.set_link_badge_faces(link_badges);
         app.set_shutdown_faces(lines);
         app.set_power_menu_faces(power_cards, power_labels, power_icons, power_title);
+        app.set_power_panel_face(power_panel);
         app.set_quick_menu_faces(QuickMenuFaces {
+            background: quick_background,
             cards,
             labels,
             values,
             carets,
             icons,
             titles,
+            page_metas,
+            numbers,
             legend,
         });
         app.set_core_part_faces(sockets, chips, blanks, shadow);
@@ -1070,6 +1214,7 @@ impl Frontend {
         app.set_link_menu_faces(roles);
         app.set_link_mode_faces(modes);
         app.set_link_band_faces(bands);
+        app.set_link_band_blocks(band_blocks);
         app.set_link_linked_face(linked);
         app.set_link_dialog_faces(link_confirm);
         app.set_cart_delete_face(cart_delete);
@@ -1077,11 +1222,63 @@ impl Frontend {
         app.set_link_step_faces(steps);
         app.set_link_fail_faces(fails);
         app.set_toast_faces(toasts);
+        let lang = app.language();
+        if self.hud_panel_tex.is_none() {
+            let face = slot_ui::switch_style::rounded_face(
+                378,
+                40,
+                12.0,
+                slot_ui::switch_style::surface(),
+                Some(slot_ui::switch_style::surface_border()),
+            );
+            self.hud_panel_tex = Some(compositor.create_texture(face.w, face.h, &face.rgba));
+        }
+        app.set_hud_panel_face(self.hud_panel_tex.expect("HUD panel texture"));
+        let labels = [
+            "device.app.hud.brightness",
+            "device.app.hud.blue_light",
+            "device.app.hud.volume",
+            "device.app.hud.rewind",
+        ]
+        .iter()
+        .map(|key| {
+            let face = slot_ui::line_face_coloured(
+                slot_i18n::t(lang, key),
+                140.0,
+                13.0,
+                slot_ui::HUD_INK,
+            );
+            let tex = compositor.create_texture(face.w, face.h, &face.rgba);
+            (tex, face.w, face.h)
+        })
+        .collect();
+        app.set_hud_labels(labels);
+        let values = (0..=100u8)
+            .map(|value| {
+                let face = slot_ui::line_face_coloured(
+                    &value.to_string(),
+                    50.0,
+                    18.0,
+                    slot_ui::HUD_INK,
+                );
+                let tex = compositor.create_texture(face.w, face.h, &face.rgba);
+                (tex, face.w, face.h)
+            })
+            .collect();
+        app.set_hud_value_faces(values);
+        let alarm_face = slot_ui::notice::notice_face(
+            slot_i18n::t(lang, "device.toast.card_unwritable"),
+            slot_i18n::t(lang, "device.toast.card_unwritable.detail"),
+            None,
+            lang,
+        );
+        let alarm_tex =
+            compositor.create_texture(alarm_face.w, alarm_face.h, &alarm_face.rgba);
+        app.set_hud_alarm_face(alarm_tex);
 
         // The shelf legend lives outside UiFaces, so it was uploaded only at
         // boot and kept the old language after a switch.  Rebuild it with the
         // same language as the freshly rebuilt menu.
-        let lang = self.session.app().language();
         let shelf_left = sized_legend_faces(
             compositor,
             &[
@@ -1285,7 +1482,7 @@ impl Frontend {
                 let percent = slot_ui::line_face_coloured(
                     &format!("{}%", view.percent),
                     140.0,
-                    36.0,
+                    32.0,
                     slot_ui::transfer_docket::PAPER_INK,
                 );
                 if percent.w > 0 && percent.h > 0 {
@@ -1303,7 +1500,7 @@ impl Frontend {
                         transfer_size_text(view.bytes_total)
                     ),
                     220.0,
-                    11.0,
+                    10.0,
                     slot_ui::transfer_docket::PAPER_DIM,
                 );
                 if bytes.w > 0 && bytes.h > 0 {
@@ -1419,24 +1616,13 @@ impl Frontend {
         let platform = intro.platform;
         let shell = intro.shell;
         let title = intro.title.clone();
-        let mut plate = slot_ui::switch_style::rounded_face(
+        let plate = slot_ui::switch_style::rounded_face(
             640,
             420,
             18.0,
             crate::app::INTRO_PANEL,
             Some(crate::app::INTRO_PANEL_EDGE),
         );
-        // A thin accent rule along the top edge, matching the Web panels.
-        let accent = slot_ui::switch_style::accent();
-        for y in 1..4u32 {
-            for x in 18..622u32 {
-                let at = ((y * plate.w + x) * 4) as usize;
-                plate.rgba[at] = accent[0];
-                plate.rgba[at + 1] = accent[1];
-                plate.rgba[at + 2] = accent[2];
-                plate.rgba[at + 3] = 255;
-            }
-        }
         // The card no longer repeats the cartridge label: its white title art
         // was the "shelf title" showing through on the paper. Only a demo video
         // keeps a side column.
@@ -1447,42 +1633,21 @@ impl Frontend {
         };
         let (body_face, max_scroll) =
             intro_scrolling_face(&description, body_w, body_h, 0, crate::app::INTRO_TEXT);
-        let accent = slot_ui::switch_style::accent();
-        let hint_cap = [
-            crate::app::INTRO_PANEL_EDGE[0],
-            crate::app::INTRO_PANEL_EDGE[1],
-            crate::app::INTRO_PANEL_EDGE[2],
-        ];
         let hint = if max_scroll > 0 {
-            slot_ui::hint_face_ink(
+            slot_ui::hint_face(
                 "B",
                 slot_i18n::t(lang, "device.app.intro.back_scroll"),
-                hint_cap,
-                accent,
-                crate::app::INTRO_MUTED,
             )
         } else {
-            slot_ui::hint_face_ink(
-                "B",
-                slot_i18n::t(lang, "device.app.common.back"),
-                hint_cap,
-                accent,
-                crate::app::INTRO_MUTED,
-            )
+            slot_ui::hint_face("B", slot_i18n::t(lang, "device.app.common.back"))
         };
-        let hint_delete = slot_ui::hint_face_ink(
+        let hint_delete = slot_ui::hint_face(
             "X",
             slot_i18n::t(lang, "device.app.intro.delete_cart"),
-            hint_cap,
-                accent,
-                crate::app::INTRO_MUTED,
         );
-        let hint_achievements = slot_ui::hint_face_ink(
+        let hint_achievements = slot_ui::hint_face(
             "Y",
             slot_i18n::t(lang, "device.app.intro.achievements"),
-            hint_cap,
-                accent,
-                crate::app::INTRO_MUTED,
         );
         // A previous intro should already have released these; drain anything
         // left so reopening cannot silently accumulate GL textures. This must
@@ -1745,6 +1910,7 @@ impl Frontend {
         // mid-frame cannot mix the two.
         let lang = self.session.app().language();
         self.sync_front_deck(compositor);
+        self.sync_quick_specials(compositor);
         // The canvas the picture is composited into: the Advance's 240x160, or a
         // Famicom's 256x224. It has to be told before the picture/source rects
         // are, because those are ratios of *this* canvas and the pipeline sizes
@@ -1788,6 +1954,8 @@ impl Frontend {
             &mut self.core_board_tex,
             &mut self.core_lid_tex,
             &mut self.core_built,
+            &mut self.core_picker_title_tex,
+            &mut self.core_picker_title_lang,
         );
         sync_network_chip(
             self.session.app_mut(),
@@ -1877,12 +2045,16 @@ impl Frontend {
         self.sync_transfer(compositor);
         self.draws.clear();
         self.session.app().draw(&mut self.draws);
+        // The whole top notification stack (alarm, notice, toast, control bar)
+        // owns the strip under the clock/battery bar, so the headings step
+        // aside for it instead of painting over or peeking around it.
+        let top_up = self.session.app().top_notification_up();
         let transfer_header = self.session.app().transfer_header();
         if let Some(header) = transfer_header {
             // A transient HUD toast owns the top strip while it is up.  The
             // card painted over it hid "connected" / "they already own this
             // cart"; yield the strip until the message fades.
-            if !self.session.app().hud_toast_visible() {
+            if !top_up {
                 if self.transfer_header_shown.as_ref() != Some(&header) {
                     let face = slot_ui::navigation::transfer_header(
                         header.host,
@@ -1894,15 +2066,63 @@ impl Frontend {
                     self.transfer_header_shown = Some(header);
                 }
                 if let Some(tex) = self.transfer_header_tex {
-                    let y = 14.0 + self.session.app().transfer_header_offset();
+                    // The shelf clock/battery strip owns y=0..36.  Start the
+                    // room card below it instead of painting over the strip.
+                    let w = slot_ui::navigation::TRANSFER_HEADER_W;
+                    let h = slot_ui::navigation::TRANSFER_HEADER_H;
+                    let y = crate::app::TRANSFER_HEADER_Y
+                        + self.session.app().transfer_header_offset();
                     self.draws.push(Draw::Tex {
-                        x: 28.0,
+                        x: (OUT_W as f32 - w) / 2.0,
                         y: y.round(),
-                        w: 664.0,
-                        h: 76.0,
+                        w,
+                        h,
                         tex,
                         alpha: 1.0,
                     });
+                }
+            }
+        } else if self.session.app().navigation_visible()
+            && !self.session.app().folder_mode()
+            && self.session.app().folder_animation().is_none()
+        {
+            // Main shelf: the centred game title and platform/playtime line.
+            // Keep it above the cart (cart tops sit around y=139) instead of
+            // painting over the label.
+            if let Some(title) = self.session.app().shelf_game_title_text() {
+                // The plate under the cartridge already shows platform and
+                // playtime; the centred title carries only the game name.
+                let compact = self.session.app().shelf_title_compact();
+                let title_key = (title, compact);
+                if self.shelf_title_shown.as_ref() != Some(&title_key)
+                    || self.shelf_title_tex.is_none()
+                {
+                    let face = if compact {
+                        slot_ui::shelf_game_title_compact(&title_key.0)
+                    } else {
+                        slot_ui::shelf_game_title_face(&title_key.0, "")
+                    };
+                    upload(compositor, &mut self.shelf_title_tex, face);
+                    self.shelf_title_shown = Some(title_key);
+                }
+                if let Some(tex) = self.shelf_title_tex {
+                    let (y, h) = if compact {
+                        (36.0, slot_ui::SHELF_TITLE_COMPACT_H as f32)
+                    } else {
+                        (64.0, slot_ui::SHELF_TITLE_H as f32)
+                    };
+                    // The notification stack owns the top of the screen; let
+                    // the game title return when the rows clear.
+                    if !top_up {
+                        self.draws.push(Draw::Tex {
+                            x: 28.0,
+                            y,
+                            w: slot_ui::SHELF_TITLE_W as f32,
+                            h,
+                            tex,
+                            alpha: 1.0,
+                        });
+                    }
                 }
             }
         } else if self.session.app().navigation_visible() {
@@ -1911,14 +2131,26 @@ impl Frontend {
             let progress = anim.as_ref().map(|anim| anim.progress).unwrap_or(1.0);
             let eased = slot_ui::ease(progress);
             let folder_mode = self.session.app().folder_mode();
-            let header = self.session.app().folder_header();
+            let header = if top_up {
+                None
+            } else {
+                self.session.app().folder_header()
+            };
             let title_text = self.session.app().rom_title().map(str::to_string);
-            let title_alpha = match kind {
-                Some(crate::app::FolderAnimKind::Enter) => 1.0 - eased,
-                Some(crate::app::FolderAnimKind::Leave) => eased,
-                Some(crate::app::FolderAnimKind::Group) => 0.0,
-                None if folder_mode => 0.0,
-                None => 1.0,
+            let title_alpha = if top_up {
+                // The top notification stack owns the strip under the
+                // clock/battery bar; the heading would peek around it.
+                0.0
+            } else {
+                match kind {
+                    // Entering folder mode: the folder header owns the top of
+                    // the screen.  Do not cross-fade the game title through it.
+                    Some(crate::app::FolderAnimKind::Enter) => 0.0,
+                    Some(crate::app::FolderAnimKind::Leave) => 0.0,
+                    Some(crate::app::FolderAnimKind::Group) => 0.0,
+                    None if folder_mode => 0.0,
+                    None => 1.0,
+                }
             };
             if let Some(text) = title_text {
                 if self.nav_title_shown != text || self.nav_title.is_none() {
@@ -2115,6 +2347,9 @@ impl Frontend {
                 upload(compositor, &mut self.utility_tex, face);
                 self.utility_shown = Some(key);
             }
+            if self.session.app().transfer_menu_open() {
+                self.draw_transfer_anim(content.2);
+            }
             if let Some(tex) = self.utility_tex {
                 self.draws.push(Draw::Tex {
                     x: 0.0,
@@ -2125,7 +2360,6 @@ impl Frontend {
                     alpha: 1.0,
                 });
             }
-            self.draw_transfer_mode_art();
         }
         self.draw_guide(compositor);
         // The exit prompt sits over the menu it was opened from. Only the bar
@@ -2161,6 +2395,9 @@ impl Frontend {
             }
         }
         self.draw_notice(compositor);
+        self.draw_sync_small();
+        self.draw_toast();
+        self.session.app().draw_top_hud(&mut self.draws);
         self.draw_network_overlays(compositor);
         // The conflict pages are opaque; draw them last so the shelf and every
         // other overlay can never show through them.
@@ -2190,10 +2427,20 @@ fn draw_notice(&mut self, compositor: &mut Compositor) {
             self.notice_shown = None;
             return;
         };
+        let Some(top) = self.session.app().notice_top() else {
+            self.notice_shown = None;
+            return;
+        };
         let badge = self.session.app().notice_badge();
-        let key = (title.to_string(), detail.to_string(), Self::badge_hash(badge));
+        let lang = self.session.app().language();
+        let key = (
+            title.to_string(),
+            detail.to_string(),
+            Self::badge_hash(badge),
+            lang,
+        );
         if self.notice_shown.as_ref() != Some(&key) {
-            let face = slot_ui::notice::notice_face(&key.0, &key.1, badge);
+            let face = slot_ui::notice::notice_face(&key.0, &key.1, badge, lang);
             upload(compositor, &mut self.notice_tex, face);
             self.notice_shown = Some(key);
         }
@@ -2205,16 +2452,73 @@ fn draw_notice(&mut self, compositor: &mut Compositor) {
             return;
         }
         if let Some(tex) = self.notice_tex {
-            let (x, y, w, h) = slot_ui::notice::notice_rect();
+            let (x, _, w, h) = slot_ui::notice::notice_rect();
             self.draws.push(Draw::Tex {
                 x: x.round(),
-                y: y.round(),
+                y: top.round(),
                 w,
                 h,
                 tex,
                 alpha,
             });
         }
+    }
+
+    /// The transient HUD toast: one row of the top notification stack.  The
+    /// HUD owns its timer and the uploaded face; this layer blits it after the
+    /// headings so a shelf title, folder header or menu cannot paint over it.
+    fn draw_toast(&mut self) {
+        if self.session.app().sync_small_active() {
+            return;
+        }
+        let Some(top) = self.session.app().toast_top() else {
+            return;
+        };
+        let Some((toast, alpha)) = self.session.app().hud_toast_view() else {
+            return;
+        };
+        let Some(tex) = self.session.app().hud_toast_face(toast) else {
+            return;
+        };
+        let (x, _, w, h) = slot_ui::toast_rect(toast);
+        self.draws.push(Draw::Tex {
+            x,
+            y: top,
+            w,
+            h,
+            tex,
+            alpha,
+        });
+    }
+
+    /// The sync result / manual-mod status: the small 378x40 row of the top
+    /// stack.  It replaces the old bottom result banner and the old dimmed
+    /// mods-running screen.
+    fn draw_sync_small(&mut self) {
+        let app = self.session.app();
+        if !app.sync_small_active() {
+            return;
+        }
+        let Some(top) = app.toast_top() else {
+            return;
+        };
+        let face = if app.sync_result_active() {
+            app.sync_result_face()
+        } else {
+            app.sync_status_face()
+        };
+        let Some(face) = face else {
+            return;
+        };
+        let x = (slot_gfx::OUT_W as f32 - face.w as f32) / 2.0;
+        self.draws.push(Draw::Tex {
+            x,
+            y: top,
+            w: face.w as f32,
+            h: face.h as f32,
+            tex: face.tex,
+            alpha: 1.0,
+        });
     }
 
     fn draw_conflict_page(&mut self, compositor: &mut Compositor) {
@@ -2867,6 +3171,9 @@ fn draw_notice(&mut self, compositor: &mut Compositor) {
                 upload(compositor, &mut self.utility_tex, face);
                 self.utility_shown = Some(key);
             }
+            if self.session.app().transfer_menu_open() {
+                self.draw_transfer_anim(content.2);
+            }
             if let Some(tex) = self.utility_tex {
                 self.draws.push(Draw::Tex {
                     x: 0.0,
@@ -2877,7 +3184,6 @@ fn draw_notice(&mut self, compositor: &mut Compositor) {
                     alpha: 1.0,
                 });
             }
-            self.draw_transfer_mode_art();
         }
         compositor.draw_list(&self.draws);
         true
@@ -3024,7 +3330,7 @@ fn intro_title_face(title: &str) -> UndoFace {
     let (w, h) = (560u32, 34u32);
     let mut rgba = vec![0u8; (w * h * 4) as usize];
     if let Some(font) = slot_ui::text::label_font() {
-        let layout = slot_ui::text::fit(font, title, w as f32 - 4.0, 1, 22.0, 13.0);
+        let layout = slot_ui::text::fit(font, title, w as f32 - 4.0, 1, 26.0, 13.0);
         slot_ui::text::draw_left(&mut rgba, w, h, &layout, crate::app::INTRO_TEXT, 1.0);
     }
     UndoFace { rgba, w, h }
@@ -3301,12 +3607,16 @@ struct UiFaces {
     power_labels: Vec<[UndoFace; 2]>,
     power_icons: Vec<[CartFace; 2]>,
     power_title: UndoFace,
+    power_panel: UndoFace,
+    quick_background: UndoFace,
     quick_cards: [UndoFace; 2],
     quick_labels: Vec<[UndoFace; 2]>,
     quick_values: Vec<[UndoFace; 2]>,
     quick_carets: [[UndoFace; 2]; 2],
     quick_icons: Vec<[CartFace; 2]>,
     quick_titles: [UndoFace; QuickRow::QUICK_PAGES],
+    quick_page_metas: [UndoFace; QuickRow::QUICK_PAGES],
+    quick_numbers: Vec<UndoFace>,
     quick_legend: [UndoFace; 3],
     sockets: Vec<CartFace>,
     chips: Vec<Vec<CartFace>>,
@@ -3369,9 +3679,9 @@ impl UiFaces {
                 .map(|c| [false, true].map(|lit| slot_ui::power_icon_face(*c, lit, lang)))
                 .collect(),
             power_title: slot_ui::power_title_face(lang),
-            quick_cards: [false, true].map(|selected| {
-                slot_ui::switch_style::card_face(QUICK_CARD_W, QUICK_CARD_H, selected)
-            }),
+            power_panel: slot_ui::power_panel_face(),
+            quick_background: quick_background_face(),
+            quick_cards: [false, true].map(quick_card_face),
             quick_labels: QuickRow::ALL
                 .iter()
                 .map(|r| [false, true].map(|lit| quick_label_face_state(*r, lit, lang)))
@@ -3393,6 +3703,10 @@ impl UiFaces {
                 .map(|r| [false, true].map(|lit| quick_icon_face(*r, lit, lang)))
                 .collect(),
             quick_titles: std::array::from_fn(|index| quick_title_face(index, lang)),
+            quick_page_metas: std::array::from_fn(|index| {
+                quick_page_meta_face(QuickRow::page_len_at(index))
+            }),
+            quick_numbers: (1..=7).map(quick_number_face).collect(),
             quick_legend: quick_legend_faces(lang),
             sockets: slot_store::Core::EVERY
                 .iter()
@@ -3534,7 +3848,7 @@ fn sync_clock(app: &mut App, compositor: &mut Compositor, clocks: &mut Clocks) {
     }
     let shown = hhmm(app.wall_secs());
     if shown != clocks.shown {
-        let face = word_face(&shown);
+        let face = status_face(&shown, 14.0, slot_ui::switch_style::ink());
         clocks.shown = shown;
         let w = face.w;
         let id = upload(compositor, &mut clocks.shelf, face);
@@ -3560,7 +3874,7 @@ fn sync_clock(app: &mut App, compositor: &mut Compositor, clocks: &mut Clocks) {
     if battery_shown != clocks.battery {
         clocks.battery = battery_shown.clone();
         if !battery_shown.is_empty() {
-            let face = word_face(&battery_shown);
+            let face = status_face(&battery_shown, 11.0, slot_ui::switch_style::ink());
             let w = face.w;
             let id = upload(compositor, &mut clocks.battery_tex, face);
             app.set_battery_percent_face(id, w);
@@ -3591,7 +3905,12 @@ fn sync_quick_clock(app: &mut App, compositor: &mut Compositor, state: &mut Quic
     if app.quick_menu().is_none() {
         return;
     }
-    let text = date_time_text(app.wall_secs(), app.language());
+    let stamp = format_stamp(app.wall_secs());
+    let text = if stamp.len() >= 16 {
+        format!("{}-{} {}", &stamp[5..7], &stamp[8..10], &stamp[11..16])
+    } else {
+        stamp
+    };
     if text == state.shown {
         return;
     }
@@ -3648,7 +3967,20 @@ fn sync_core_picker(
     board: &mut Option<TexId>,
     lid: &mut Option<TexId>,
     built: &mut Option<String>,
+    title_tex: &mut Option<TexId>,
+    title_lang: &mut Option<Language>,
 ) {
+    let lang = app.language();
+    if *title_lang != Some(lang) {
+        let face = slot_ui::switch_style::title_face(
+            slot_i18n::t(lang, "device.app.core_picker.title"),
+            26.0,
+        );
+        let tex = compositor.create_texture(face.w, face.h, &face.rgba);
+        app.set_core_picker_title(tex, face.w, face.h);
+        *title_tex = Some(tex);
+        *title_lang = Some(lang);
+    }
     let current = app
         .selected_stem()
         .and_then(|stem| app.carts().find(|cart| cart.stem == stem).cloned());
@@ -3839,10 +4171,21 @@ fn sync_shelf_sync(app: &mut App, compositor: &mut Compositor, cache: &mut SyncT
             w: face.w,
             h: face.h,
         });
+        if let Some(old) = cache.return_hint.take() {
+            compositor.delete_texture(old.tex);
+        }
+        let face = hint_face("B", slot_i18n::t(lang, "device.app.common.back"));
+        let tex = compositor.create_texture(face.w, face.h, &face.rgba);
+        cache.return_hint = Some(SyncFace {
+            tex,
+            w: face.w,
+            h: face.h,
+        });
         cache.cancel_lang = Some(lang);
         hint_rebuilt = true;
     }
     let cancel_hint = cache.cancel_hint;
+    let return_hint = cache.return_hint;
     let texts = app.sync_texts();
     if cache.texts.as_ref() == Some(&texts) && !hint_rebuilt {
         return;
@@ -3871,43 +4214,32 @@ fn sync_shelf_sync(app: &mut App, compositor: &mut Compositor, cache: &mut SyncT
         SYNC_BANNER_PX,
         slot_ui::HUD_INK,
     );
-    let result = upload_line(
+    let result_face = slot_ui::small_result_face(&texts.banner);
+    let result_tex = upload_rgba(
         compositor,
         &mut cache.result,
-        &texts.banner,
-        SYNC_RESULT_MAX_W,
-        SYNC_RESULT_PX,
+        result_face.w,
+        result_face.h,
+        &result_face.rgba,
     );
-    let side_local = upload_line(
+    let result = Some(SyncFace {
+        tex: result_tex,
+        w: result_face.w,
+        h: result_face.h,
+    });
+    let status_face = slot_ui::small_status_face(&texts.banner);
+    let status_tex = upload_rgba(
         compositor,
-        &mut cache.side_local,
-        &texts.side_local,
-        SYNC_SIDE_MAX_W,
-        SYNC_SIDE_PX,
+        &mut cache.status,
+        status_face.w,
+        status_face.h,
+        &status_face.rgba,
     );
-    let side_remote = upload_line(
-        compositor,
-        &mut cache.side_remote,
-        &texts.side_remote,
-        SYNC_SIDE_MAX_W,
-        SYNC_SIDE_PX,
-    );
-    let cloud_label = upload_line_coloured(
-        compositor,
-        &mut cache.cloud_label,
-        &texts.cloud_label,
-        SYNC_STICKER_MAX_W,
-        SYNC_STICKER_PX,
-        slot_ui::STICKER_INK,
-    );
-    let target_label = upload_line_coloured(
-        compositor,
-        &mut cache.target_label,
-        &texts.target_label,
-        SYNC_STICKER_MAX_W,
-        SYNC_STICKER_PX,
-        slot_ui::HUD_INK,
-    );
+    let status = Some(SyncFace {
+        tex: status_tex,
+        w: status_face.w,
+        h: status_face.h,
+    });
     let rail_labels = [
         upload_line(
             compositor,
@@ -3959,26 +4291,36 @@ fn sync_shelf_sync(app: &mut App, compositor: &mut Compositor, cache: &mut SyncT
         SYNC_PERCENT_MAX_W,
         SYNC_PERCENT_PX,
     );
-    let completion_hint = upload_line(
-        compositor,
-        &mut cache.completion_hint,
-        &texts.completion_hint,
-        SYNC_HINT_MAX_W,
-        SYNC_HINT_PX,
-    );
+    let completion_hint = if texts.completion_hint.is_empty() {
+        None
+    } else {
+        let face = hint_face("A", &texts.completion_hint);
+        let tex = match cache.completion_hint {
+            Some(old) => {
+                compositor.update_texture(old.tex, face.w, face.h, &face.rgba);
+                old.tex
+            }
+            None => compositor.create_texture(face.w, face.h, &face.rgba),
+        };
+        let sync_face = SyncFace {
+            tex,
+            w: face.w,
+            h: face.h,
+        };
+        cache.completion_hint = Some(sync_face);
+        Some(sync_face)
+    };
     app.set_sync_text_faces(SyncFaces {
         title,
         subtitle,
         banner,
         result,
-        side_local,
-        side_remote,
-        cloud_label,
-        target_label,
+        status,
         rail_labels,
         progress_left,
         progress_right,
         completion_hint,
+        return_hint,
         cancel_hint,
     });
     cache.texts = Some(texts);
@@ -4042,7 +4384,8 @@ fn folder_draw(
     let tex = (*slot)?;
     Some(Draw::Tex {
         x: 28.0 + dx,
-        y: 14.0 + dy,
+        // Keep the top clock/battery strip clear.
+        y: 40.0 + dy,
         w: 664.0,
         h: 76.0,
         tex,
@@ -4220,7 +4563,11 @@ mod faces_lang_tests {
         for lang in Language::ALL {
             for row in QuickRow::ALL {
                 assert!(!row.label(lang).is_empty(), "{row:?} has no label");
-                assert!(!row.icon_text(lang).is_empty(), "{row:?} has no icon text");
+                let icon = slot_ui::quick_icon_face(row, false, lang);
+                assert!(
+                    icon.rgba.chunks(4).any(|pixel| pixel[3] > 0),
+                    "{row:?} has no icon"
+                );
             }
             for value in QuickValue::ALL {
                 assert!(!value.text(lang).is_empty(), "{value:?} has no text");
@@ -4236,6 +4583,9 @@ mod faces_lang_tests {
         for key in [
             "device.app.shelf.hold_sync",
             "device.app.shelf.search",
+            "device.app.shelf.start",
+            "device.app.shelf.core",
+            "device.app.shelf.settings",
             "device.app.shelf.hold_intro",
             "device.app.transfer.legend_send",
             "device.app.transfer.legend_exit",

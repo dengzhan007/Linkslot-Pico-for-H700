@@ -1,35 +1,39 @@
-use slot_gfx::{Draw, TexId, OUT_H, OUT_W};
+use slot_gfx::{Draw, TexId, OUT_W};
 use slot_store::{BLUE_LIGHT_MAX, BRIGHTNESS_MAX, VOLUME_MAX};
 
 use crate::icon::icon_box;
-use crate::toast::toast_rect;
+use crate::switch_style as sw;
 use crate::{Badge, Icon, Toast};
 
 pub type Millis = u64;
 
 pub const HUD_MS: Millis = 1500;
 const FADE_MS: Millis = 250;
-const PULSE_MS: Millis = 500;
+
 
 pub const PLATE_H: f32 = 40.0;
-pub(crate) const PLATE: [f32; 4] = [0.0, 0.0, 0.0, 0.72];
-pub const ALARM_BAND_H: f32 = 120.0;
-const ALARM_BRIGHT: [f32; 4] = [0.82, 0.10, 0.10, 0.94];
-const ALARM_DIM: [f32; 4] = [0.40, 0.03, 0.03, 0.94];
+const HUD_PANEL_W: f32 = 378.0;
+/// The volume/brightness/rewind bar's height; the top notification stack uses
+/// it to place the rows under each other.
+pub const HUD_BAR_H: f32 = 40.0;
 
 pub const HUD_ICON_PX: f32 = 24.0;
+/// The control bar's glyph is the small 16px version of the HUD icon.
+const BAR_ICON_PX: f32 = 16.0;
 pub const HUD_INK: [u8; 3] = [0xf5, 0xf2, 0xef];
-const ICON_GAP: f32 = 10.0;
-
 const BADGE_MARGIN: f32 = 12.0;
+/// The small notification's left marker.
+const MARKER_W: f32 = 3.0;
+const MARKER_H: f32 = 24.0;
+const BAR_X: f32 = 14.0;
+const BAR_Y: f32 = 32.0;
+const BAR_W: f32 = 350.0;
+const BAR_H: f32 = 2.0;
 
 pub fn badge_at(w: f32, h: f32) -> (f32, f32) {
     (OUT_W as f32 - BADGE_MARGIN - w, (PLATE_H - h) / 2.0)
 }
 
-const BAR_W: f32 = 320.0;
-const BAR_H: f32 = 6.0;
-const BAR_Y: f32 = (PLATE_H - BAR_H) / 2.0;
 pub(crate) const TRACK: [f32; 4] = [1.0, 1.0, 1.0, 0.18];
 pub(crate) const FILL: [f32; 4] = [
     HUD_INK[0] as f32 / 255.0,
@@ -142,6 +146,10 @@ pub struct Hud {
     alarm: Option<Millis>,
     icons: Vec<TexId>,
     toasts: Vec<TexId>,
+    panel: Option<TexId>,
+    alarm_face: Option<TexId>,
+    labels: Vec<(TexId, u32, u32)>,
+    values: Vec<(TexId, u32, u32)>,
     link: LinkBadge,
     link_faces: Vec<TexId>,
 }
@@ -157,6 +165,22 @@ impl Hud {
 
     pub fn set_toasts(&mut self, toasts: Vec<TexId>) {
         self.toasts = toasts;
+    }
+
+    pub fn set_panel(&mut self, panel: TexId) {
+        self.panel = Some(panel);
+    }
+
+    /// The four kind labels (brightness / blue light / volume / rewind), in
+    /// [`HudKind`] order; the frontend uploads them once per language.
+    pub fn set_labels(&mut self, labels: Vec<(TexId, u32, u32)>) {
+        self.labels = labels;
+    }
+
+    /// The 0..=100 value faces; the control bar picks the current value's face
+    /// instead of drawing four separate digit textures.
+    pub fn set_value_faces(&mut self, values: Vec<(TexId, u32, u32)>) {
+        self.values = values;
     }
 
     pub fn toast(&mut self, toast: Toast, now: Millis) {
@@ -183,6 +207,20 @@ impl Hud {
         self.toast_visible(now)
             .then(|| self.said.map(|(t, _)| t))
             .flatten()
+    }
+
+    /// The toast still on screen and its fade alpha.  The top notification
+    /// layer (frontend) blits it; the HUD itself only owns the bar/badges and
+    /// the storage-card alarm.
+    pub fn toast_view(&self, now: Millis) -> Option<(Toast, f32)> {
+        let (toast, _) = self.said?;
+        let alpha = self.toast_alpha(now);
+        (alpha > 0.0).then_some((toast, alpha))
+    }
+
+    /// The uploaded face for `toast`, if the boot pass supplied it.
+    pub fn toast_face(&self, toast: Toast) -> Option<TexId> {
+        self.toasts.get(toast.index()).copied()
     }
 
     pub fn show(&mut self, kind: HudKind, value: u8, muted: bool, now: Millis) {
@@ -229,26 +267,19 @@ impl Hud {
     }
 
     pub fn visible(&self, now: Millis) -> bool {
-        self.alpha(now) > 0.0
+        self.bar_alpha(now).is_some()
     }
 
-    pub fn draw(&self, now: Millis, out: &mut Vec<Draw>) {
+    /// The volume/brightness/rewind bar's fade alpha while it is on screen.
+    pub fn bar_alpha(&self, now: Millis) -> Option<f32> {
         let alpha = self.alpha(now);
-        let toast = self.toast_alpha(now);
-        if alpha > 0.0 || toast > 0.0 {
-            out.push(Draw::Rect {
-                x: 0.0,
-                y: 0.0,
-                w: OUT_W as f32,
-                h: PLATE_H,
-                colour: faded(PLATE, alpha.max(toast)),
-            });
-            if toast > 0.0 {
-                self.draw_toast(now, out);
-            } else {
-                self.draw_bar(alpha, out);
-            }
-        }
+        (alpha > 0.0).then_some(alpha)
+    }
+
+    /// The overlay that sits above every screen: only the link and fast-forward
+    /// badges stay here.  The bar/alarm are blitted by the caller in the top
+    /// notification stack ([`Hud::draw_bar_at`] / [`Hud::draw_alarm_at`]).
+    pub fn draw(&self, out: &mut Vec<Draw>) {
         let link = self
             .link
             .face_index()
@@ -257,18 +288,88 @@ impl Hud {
         if let Some(tex) = link.or(ff) {
             self.place_badge(tex, out);
         }
-        if let Some(since) = self.alarm {
-            self.draw_alarm(now.saturating_sub(since), out);
-        }
     }
 
-    fn draw_bar(&self, alpha: f32, out: &mut Vec<Draw>) {
-        let x = (OUT_W as f32 - BAR_W) / 2.0;
-        if let Some(tex) = self.icon() {
-            let (w, h) = icon_box(HUD_ICON_PX);
+    /// Draw the volume/brightness/rewind control as the small 378x40
+    /// notification shell: a 3x24 marker, a 16px glyph, a 13px kind label, an
+    /// 18px value on the right and a 2px track along the bottom.
+    pub fn draw_bar_at(&self, alpha: f32, y: f32, out: &mut Vec<Draw>) {
+        let x = (OUT_W as f32 - HUD_PANEL_W) / 2.0;
+        if let Some(tex) = self.panel {
             out.push(Draw::Tex {
-                x: x - ICON_GAP - w as f32,
-                y: (PLATE_H - h as f32) / 2.0,
+                x,
+                y,
+                w: HUD_PANEL_W,
+                h: HUD_BAR_H,
+                tex,
+                alpha,
+            });
+        } else {
+            let border = sw::surface_border();
+            let surface = sw::surface();
+            out.push(Draw::Rect {
+                x,
+                y,
+                w: HUD_PANEL_W,
+                h: HUD_BAR_H,
+                colour: faded(
+                    [
+                        border[0] as f32 / 255.0,
+                        border[1] as f32 / 255.0,
+                        border[2] as f32 / 255.0,
+                        1.0,
+                    ],
+                    alpha,
+                ),
+            });
+            out.push(Draw::Rect {
+                x: x + 1.0,
+                y: y + 1.0,
+                w: HUD_PANEL_W - 2.0,
+                h: HUD_BAR_H - 2.0,
+                colour: faded(
+                    [
+                        surface[0] as f32 / 255.0,
+                        surface[1] as f32 / 255.0,
+                        surface[2] as f32 / 255.0,
+                        1.0,
+                    ],
+                    alpha,
+                ),
+            });
+        }
+        // The shared small-notification marker at the left.
+        out.push(Draw::Rect {
+            x: x + 7.0,
+            y: y + 8.0,
+            w: MARKER_W,
+            h: MARKER_H,
+            colour: faded(FILL, alpha),
+        });
+        if let Some(tex) = self.icon() {
+            out.push(Draw::Tex {
+                x: x + 14.0,
+                y: y + (HUD_BAR_H - BAR_ICON_PX) / 2.0,
+                w: BAR_ICON_PX,
+                h: BAR_ICON_PX,
+                tex,
+                alpha,
+            });
+        }
+        if let Some((tex, w, h)) = self.labels.get(self.kind as usize).copied() {
+            out.push(Draw::Tex {
+                x: x + 38.0,
+                y: y + (HUD_BAR_H - h as f32) / 2.0,
+                w: w as f32,
+                h: h as f32,
+                tex,
+                alpha,
+            });
+        }
+        if let Some((tex, w, h)) = self.values.get(self.value as usize).copied() {
+            out.push(Draw::Tex {
+                x: x + HUD_PANEL_W - 16.0 - w as f32,
+                y: y + (HUD_BAR_H - h as f32) / 2.0,
                 w: w as f32,
                 h: h as f32,
                 tex,
@@ -276,19 +377,22 @@ impl Hud {
             });
         }
         out.push(Draw::Rect {
-            x,
-            y: BAR_Y,
+            x: x + BAR_X,
+            y: y + BAR_Y,
             w: BAR_W,
             h: BAR_H,
             colour: faded(TRACK, alpha),
         });
-        out.push(Draw::Rect {
-            x,
-            y: BAR_Y,
-            w: BAR_W * self.fraction(),
-            h: BAR_H,
-            colour: faded(FILL, alpha),
-        });
+        let filled = BAR_W * self.fraction();
+        if filled > 0.0 {
+            out.push(Draw::Rect {
+                x: x + BAR_X,
+                y: y + BAR_Y,
+                w: filled,
+                h: BAR_H,
+                colour: faded(FILL, alpha),
+            });
+        }
     }
 
     fn place_badge(&self, tex: TexId, out: &mut Vec<Draw>) {
@@ -305,52 +409,52 @@ impl Hud {
         });
     }
 
-    fn draw_alarm(&self, age: Millis, out: &mut Vec<Draw>) {
-        out.push(Draw::Rect {
-            x: 0.0,
-            y: (OUT_H as f32 - ALARM_BAND_H) / 2.0,
-            w: OUT_W as f32,
-            h: ALARM_BAND_H,
-            colour: pulse(age),
-        });
-        let alarm = Toast::CardUnwritable;
-        let Some(tex) = self.toasts.get(alarm.index()).copied() else {
-            return;
-        };
-        let (x, y, w, h) = toast_rect(alarm);
-        out.push(Draw::Tex {
-            x,
-            y,
-            w,
-            h,
-            tex,
-            alpha: 1.0,
-        });
+    /// The persistent storage-card alarm is a large notification card, not a
+    /// toast: the frontend uploads its 480x82 face here.
+    pub fn set_alarm_face(&mut self, face: TexId) {
+        self.alarm_face = Some(face);
     }
 
-    fn draw_toast(&self, now: Millis, out: &mut Vec<Draw>) {
-        let alpha = self.toast_alpha(now);
-        if alpha <= 0.0 {
+    /// Draw the persistent storage-card alarm with its top edge at `y`.
+    pub fn draw_alarm_at(&self, y: f32, out: &mut Vec<Draw>) {
+        let (w, h) = (crate::notice::NOTICE_W, crate::notice::NOTICE_H);
+        let x = (OUT_W as f32 - w) / 2.0;
+        if let Some(tex) = self.alarm_face {
+            out.push(Draw::Tex {
+                x,
+                y,
+                w,
+                h,
+                tex,
+                alpha: 1.0,
+            });
             return;
         }
-        let Some(tex) = self
-            .said
-            .and_then(|(t, _)| self.toasts.get(t.index()))
-            .copied()
-        else {
-            return;
-        };
-        let Some((said, _)) = self.said else {
-            return;
-        };
-        let (x, y, w, h) = toast_rect(said);
-        out.push(Draw::Tex {
+        let border = sw::surface_border();
+        let surface = sw::surface();
+        out.push(Draw::Rect {
             x,
             y,
             w,
             h,
-            tex,
-            alpha,
+            colour: [
+                border[0] as f32 / 255.0,
+                border[1] as f32 / 255.0,
+                border[2] as f32 / 255.0,
+                1.0,
+            ],
+        });
+        out.push(Draw::Rect {
+            x: x + 1.0,
+            y: y + 1.0,
+            w: w - 2.0,
+            h: h - 2.0,
+            colour: [
+                surface[0] as f32 / 255.0,
+                surface[1] as f32 / 255.0,
+                surface[2] as f32 / 255.0,
+                1.0,
+            ],
         });
     }
 
@@ -390,12 +494,6 @@ fn fade(shown: Millis, now: Millis) -> f32 {
         return 0.0;
     }
     ((HUD_MS - age) as f32 / FADE_MS as f32).min(1.0)
-}
-
-fn pulse(age: Millis) -> [f32; 4] {
-    let phase = (age % PULSE_MS) as f32 / PULSE_MS as f32;
-    let t = 0.5 + 0.5 * (phase * std::f32::consts::TAU).cos();
-    std::array::from_fn(|i| ALARM_DIM[i] + (ALARM_BRIGHT[i] - ALARM_DIM[i]) * t)
 }
 
 fn faded(colour: [f32; 4], alpha: f32) -> [f32; 4] {

@@ -1,11 +1,12 @@
-use slot_gfx::{OUT_H, OUT_W};
+use slot_gfx::OUT_W;
 use slot_i18n::Language;
 use slot_store::GbPalette;
 
-use crate::hud::{HUD_INK, PLATE_H};
+use crate::hud::HUD_INK;
 use crate::quick_menu::palette_name;
-use crate::icon::{haloed, HALO_PX};
+use crate::switch_style as sw;
 use crate::text;
+use crate::plate::UndoFace;
 use crate::CartFace;
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -29,7 +30,6 @@ pub enum Toast {
     ShaderDot,
     ShaderSimpletex,
     ShaderFourPass,
-    CardUnwritable,
     FavoriteOn,
     FavoriteOff,
     RepairClean,
@@ -78,7 +78,7 @@ pub enum Toast {
 }
 
 impl Toast {
-    const FIXED: [Toast; 49] = [
+    const FIXED: [Toast; 48] = [
         Toast::StateSaved,
         Toast::StateLoaded,
         Toast::NeedsGpsp,
@@ -95,7 +95,6 @@ impl Toast {
         Toast::ShaderDot,
         Toast::ShaderSimpletex,
         Toast::ShaderFourPass,
-        Toast::CardUnwritable,
         Toast::FavoriteOn,
         Toast::FavoriteOff,
         Toast::RepairClean,
@@ -144,29 +143,6 @@ impl Toast {
         }
     }
 
-    pub fn alarm(self) -> bool {
-        self == Toast::CardUnwritable
-    }
-
-    /// True when this toast draws a second line under its title.
-    ///
-    /// Separate from [`Toast::detail`] because the box has to be measured
-    /// before a language is known: only one toast has a detail, and that does
-    /// not depend on the language.
-    pub fn has_detail(self) -> bool {
-        matches!(self, Toast::CardUnwritable)
-    }
-
-    pub fn detail(self, lang: Language) -> Option<&'static str> {
-        match self {
-            Toast::CardUnwritable => Some(slot_i18n::t(
-                lang,
-                "device.toast.card_unwritable.detail",
-            )),
-            _ => None,
-        }
-    }
-
     pub fn text(self, lang: Language) -> &'static str {
         match self {
             Toast::Palette(p) => palette_name(p, lang),
@@ -186,7 +162,6 @@ impl Toast {
             Toast::ShaderDot => slot_i18n::t(lang, "device.toast.shader_dot"),
             Toast::ShaderSimpletex => slot_i18n::t(lang, "device.toast.shader_simpletex"),
             Toast::ShaderFourPass => slot_i18n::t(lang, "device.toast.shader_four_pass"),
-            Toast::CardUnwritable => slot_i18n::t(lang, "device.toast.card_unwritable"),
             Toast::FavoriteOn => slot_i18n::t(lang, "device.toast.favorite_on"),
             Toast::FavoriteOff => slot_i18n::t(lang, "device.toast.favorite_off"),
             Toast::RepairClean => slot_i18n::t(lang, "device.toast.repair_clean"),
@@ -223,62 +198,49 @@ impl Toast {
     }
 }
 
-const TOAST_W: u32 = 240;
+const TOAST_W: u32 = 360;
 const TOAST_H: u32 = 22;
-const TOAST_PX: f32 = 16.0;
-const TOAST_MIN_PX: f32 = 12.0;
+const TOAST_PX: f32 = 14.0;
+const TOAST_MIN_PX: f32 = 11.0;
 
-const ALARM_W: u32 = 560;
-const ALARM_H: u32 = 44;
-const ALARM_PX: f32 = 32.0;
-const DETAIL_H: u32 = 30;
-const DETAIL_PX: f32 = 20.0;
+/// A toast sits directly under the 36 px clock/battery strip: all notifications
+/// and the volume/brightness/rewind bar share this top stack.  No notice is
+/// left floating over the bottom key legend.
+pub const TOAST_TOP: f32 = 36.0;
 
 struct Setting {
     w: u32,
     h: u32,
     px: f32,
     min_px: f32,
-    middle: f32,
 }
 
-fn setting(toast: Toast) -> Setting {
-    match toast.alarm() {
-        true => Setting {
-            w: ALARM_W,
-            h: ALARM_H,
-            px: ALARM_PX,
-            min_px: ALARM_PX,
-            middle: OUT_H as f32 / 2.0,
-        },
-        false => Setting {
-            w: TOAST_W,
-            h: TOAST_H,
-            px: TOAST_PX,
-            min_px: TOAST_MIN_PX,
-            middle: PLATE_H / 2.0,
-        },
+fn setting(_toast: Toast) -> Setting {
+    Setting {
+        w: TOAST_W,
+        h: TOAST_H,
+        px: TOAST_PX,
+        min_px: TOAST_MIN_PX,
     }
 }
 
 pub fn toast_rect(toast: Toast) -> (f32, f32, f32, f32) {
     let (w, h) = toast_box(toast);
     let (w, h) = (w as f32, h as f32);
-    let middle = setting(toast).middle;
-    ((OUT_W as f32 - w) / 2.0, middle - h / 2.0, w, h)
+    ((OUT_W as f32 - w) / 2.0, TOAST_TOP, w, h)
 }
+
+/// The storage-card alarm: a persistent large notification in the top stack.
+pub fn alarm_rect() -> (f32, f32, f32, f32) {
+    let (w, h) = (crate::notice::NOTICE_W, crate::notice::NOTICE_H);
+    ((OUT_W as f32 - w) / 2.0, TOAST_TOP, w, h)
+}
+
+const TOAST_PAD: u32 = 9;
 
 pub fn toast_box(toast: Toast) -> (u32, u32) {
     let s = setting(toast);
-    (s.w + 2 * HALO_PX, s.h + detail_h(toast) + 2 * HALO_PX)
-}
-
-fn detail_h(toast: Toast) -> u32 {
-    if toast.has_detail() {
-        DETAIL_H
-    } else {
-        0
-    }
+    (s.w + 2 * TOAST_PAD, s.h + 2 * TOAST_PAD)
 }
 
 pub fn toast_face(toast: Toast, lang: Language) -> CartFace {
@@ -290,13 +252,111 @@ pub fn toast_face(toast: Toast, lang: Language) -> CartFace {
         };
     };
     let s = setting(toast);
-    let layout = text::fit(font, toast.text(lang), s.w as f32, 1, s.px, s.min_px);
-    let mut cov = text::coverage(s.w, s.h, &layout);
-    if let Some(detail) = toast.detail(lang) {
-        let layout = text::fit(font, detail, s.w as f32, 1, DETAIL_PX, DETAIL_PX);
-        cov.extend(text::coverage(s.w, DETAIL_H, &layout));
+    let (w, h) = toast_box(toast);
+    let mut face = UndoFace { rgba: vec![0u8; (w * h * 4) as usize], w, h };
+    sw::fill_round(&mut face, 0.0, 0.0, w as f32, h as f32, 10.0, sw::surface_border());
+    sw::fill_round(&mut face, 1.0, 1.0, w as f32 - 2.0, h as f32 - 2.0, 9.0, sw::surface());
+    let pad = TOAST_PAD;
+    let icon_x = 14.0;
+    let icon_y = (h as f32 - 18.0) / 2.0;
+    let white = [HUD_INK[0], HUD_INK[1], HUD_INK[2], 255];
+    for (dx, dy) in [(2.0, 9.0), (4.0, 11.0), (6.0, 13.0), (8.0, 11.0), (10.0, 9.0), (12.0, 7.0)] {
+        kb_fill(&mut face, icon_x + dx, icon_y + dy, 2.0, 2.0, white);
     }
-    haloed(&cov, s.w, s.h + detail_h(toast), HUD_INK)
+    let text_x = 34.0;
+    let text_w = w.saturating_sub(46);
+    let layout = text::fit(font, toast.text(lang), text_w as f32, 1, s.px, s.min_px);
+    let mut title = UndoFace { rgba: vec![0u8; (text_w * s.h * 4) as usize], w: text_w, h: s.h };
+    text::draw_centred(&mut title.rgba, text_w, s.h, &layout, HUD_INK);
+    blit_face(&mut face, &title, text_x as u32, pad);
+    let (face_w, face_h) = (face.w, face.h);
+    CartFace { rgba: face.rgba, w: face_w, h: face_h }
+}
+
+/// A sync result on the small 378x40 notification shell: the same card as the
+/// transient toasts, with a check and the dynamic result line.
+pub fn small_result_face(text: &str) -> CartFace {
+    small_face(text, SmallGlyph::Check)
+}
+
+/// The persistent "mod is running" status on the small shell: a cartridge and
+/// the current stage line.
+pub fn small_status_face(text: &str) -> CartFace {
+    small_face(text, SmallGlyph::Cart)
+}
+
+enum SmallGlyph {
+    Check,
+    Cart,
+}
+
+fn small_face(text: &str, glyph: SmallGlyph) -> CartFace {
+    let Some(font) = text::label_font() else {
+        return CartFace {
+            rgba: Vec::new(),
+            w: 0,
+            h: 0,
+        };
+    };
+    let (w, h) = (crate::toast::toast_box(Toast::StateSaved).0, crate::toast::toast_box(Toast::StateSaved).1);
+    let mut face = UndoFace { rgba: vec![0u8; (w * h * 4) as usize], w, h };
+    sw::fill_round(&mut face, 0.0, 0.0, w as f32, h as f32, 10.0, sw::surface_border());
+    sw::fill_round(&mut face, 1.0, 1.0, w as f32 - 2.0, h as f32 - 2.0, 9.0, sw::surface());
+    let white = [HUD_INK[0], HUD_INK[1], HUD_INK[2], 255];
+    // The small shell's left marker, shared with the HUD control bar.
+    kb_fill(&mut face, 8.0, 12.0, 3.0, 24.0, white);
+    match glyph {
+        SmallGlyph::Check => {
+            for (dx, dy) in [(2.0, 9.0), (4.0, 11.0), (6.0, 13.0), (8.0, 11.0), (10.0, 9.0), (12.0, 7.0)] {
+                kb_fill(&mut face, 14.0 + dx, 11.0 + dy, 2.0, 2.0, white);
+            }
+        }
+        SmallGlyph::Cart => {
+            // A tiny cartridge outline: body, label window, bottom notch.
+            kb_fill(&mut face, 14.0, 11.0, 12.0, 2.0, white);
+            kb_fill(&mut face, 14.0, 11.0, 2.0, 16.0, white);
+            kb_fill(&mut face, 24.0, 11.0, 2.0, 16.0, white);
+            kb_fill(&mut face, 14.0, 25.0, 12.0, 2.0, white);
+            kb_fill(&mut face, 17.0, 15.0, 6.0, 2.0, white);
+        }
+    }
+    let text_w = w.saturating_sub(46);
+    let layout = text::fit(font, text, text_w as f32, 1, TOAST_PX, TOAST_MIN_PX);
+    let mut title = UndoFace { rgba: vec![0u8; (text_w * 22 * 4) as usize], w: text_w, h: 22 };
+    text::draw_centred(&mut title.rgba, text_w, 22, &layout, HUD_INK);
+    blit_face(&mut face, &title, 34, TOAST_PAD);
+    let (face_w, face_h) = (face.w, face.h);
+    CartFace { rgba: face.rgba, w: face_w, h: face_h }
+}
+
+fn kb_fill(face: &mut UndoFace, x: f32, y: f32, w: f32, h: f32, colour: [u8; 4]) {    for py in y as u32..(y + h) as u32 {
+        for px in x as u32..(x + w) as u32 {
+            if px < face.w && py < face.h {
+                let at = ((py * face.w + px) * 4) as usize;
+                face.rgba[at..at + 4].copy_from_slice(&colour);
+            }
+        }
+    }
+}
+
+fn blit_face(dst: &mut UndoFace, src: &UndoFace, x: u32, y: u32) {
+    for sy in 0..src.h {
+        for sx in 0..src.w {
+            let di = (((y + sy) * dst.w + x + sx) * 4) as usize;
+            let si = ((sy * src.w + sx) * 4) as usize;
+            let a = src.rgba[si + 3] as u32;
+            if a == 0 {
+                continue;
+            }
+            for c in 0..3 {
+                dst.rgba[di + c] = ((src.rgba[si + c] as u32 * a
+                    + dst.rgba[di + c] as u32 * (255 - a)
+                    + 127)
+                    / 255) as u8;
+            }
+            dst.rgba[di + 3] = 255;
+        }
+    }
 }
 
 #[cfg(test)]

@@ -9,11 +9,12 @@ fn the_generated_shelf_ground_is_a_full_opaque_frame() {
     assert_eq!((face.w, face.h), (720, 480));
     assert_eq!(face.rgba.len(), (720 * 480 * 4) as usize);
     assert!(face.rgba.chunks(4).all(|pixel| pixel[3] == 255));
-    // The generated face must not be a flat black rectangle.
+    // The single shipped theme is warm ink; the generated ground must be a
+    // dark cabinet rather than a flat black rectangle.
+    let top = &face.rgba[..4];
     assert!(
-        face.rgba
-            .chunks(4)
-            .any(|pixel| pixel[0] > 32 && pixel[1] > 32 && pixel[2] > 32)
+        top[0] < 80 && top[1] < 80 && top[2] < 80,
+        "warm shelf ground is not dark: {top:?}"
     );
 }
 

@@ -5,21 +5,24 @@
 //! the game — five seconds and it is gone.
 
 use slot_gfx::OUT_W;
+use slot_i18n::Language;
 
 use crate::keyboard as kb;
 use crate::switch_style as sw;
 use crate::plate::UndoFace;
 
-pub const NOTICE_W: f32 = 420.0;
-pub const NOTICE_H: f32 = 62.0;
-/// Just under the 40 px status bar.
-pub const NOTICE_TOP: f32 = 52.0;
+pub const NOTICE_W: f32 = 480.0;
+pub const NOTICE_H: f32 = 82.0;
+/// The notice/achievement card sits in the same top notification stack as the
+/// toast; the app stacks the active rows (alarm, notice, toast, HUD bar) and
+/// this is the base row when nothing ranks above it.
+pub const NOTICE_TOP: f32 = 36.0;
 /// How long a notice stays on screen, counting the fades.
 pub const NOTICE_MS: u64 = 5000;
 /// Fade in at the start and out at the end.
 pub const NOTICE_FADE_MS: u64 = 300;
 /// 成就徽章在卡片里的像素尺寸（正方形）。
-pub const BADGE_PX: u32 = 44;
+pub const BADGE_PX: u32 = 48;
 
 pub fn notice_rect() -> (f32, f32, f32, f32) {
     ((OUT_W as f32 - NOTICE_W) / 2.0, NOTICE_TOP, NOTICE_W, NOTICE_H)
@@ -38,64 +41,34 @@ pub fn notice_alpha(shown: u64, now: u64) -> f32 {
 
 /// The card itself: transparent everywhere except the plate, so the caller can
 /// blit it straight over the picture.
-pub fn notice_face(title: &str, detail: &str, badge: Option<&[u8]>) -> UndoFace {
+pub fn notice_face(title: &str, detail: &str, badge: Option<&[u8]>, lang: Language) -> UndoFace {
     let w = NOTICE_W as u32;
     let h = NOTICE_H as u32;
     let mut face = kb::blank(w, h, [0, 0, 0, 0]);
-    let radius = 12.0;
-    // Soft drop shadow, then the plate in the dialog's own colours.
-    kb::fill(&mut face, 0.0, 3.0, NOTICE_W, NOTICE_H, [0, 0, 0, 80]);
-    sw::fill_round(&mut face, 0.0, 0.0, NOTICE_W, NOTICE_H, radius, sw::surface_border());
-    sw::fill_round(
-        &mut face,
-        1.0,
-        1.0,
-        NOTICE_W - 2.0,
-        NOTICE_H - 2.0,
-        (radius - 1.0).max(0.0),
-        sw::surface(),
-    );
     let has_badge = badge.is_some_and(|rgba| rgba.len() == (BADGE_PX * BADGE_PX * 4) as usize);
-    // The same accent spine the modal dialogs carry.
-    let accent = sw::accent();
-    let spine_x = if has_badge { 6.0 } else { 14.0 };
-    kb::fill(
-        &mut face,
-        spine_x,
-        13.0,
-        4.0,
-        NOTICE_H - 26.0,
-        [accent[0], accent[1], accent[2], 0xff],
-    );
+    sw::fill_round(&mut face, 0.0, 0.0, NOTICE_W, NOTICE_H, 12.0, sw::surface_border());
+    sw::fill_round(&mut face, 1.0, 1.0, NOTICE_W - 2.0, NOTICE_H - 2.0, 11.0, sw::surface());
+    let accent = if has_badge { [0xf2, 0xc8, 0x5b] } else { sw::accent() };
+    kb::fill(&mut face, 7.0, 28.0, 3.0, 26.0, [accent[0], accent[1], accent[2], 255]);
     if has_badge {
         if let Some(rgba) = badge {
-            blit_rgba(&mut face, rgba, BADGE_PX, BADGE_PX, 12.0, 9.0);
+            blit_rgba(&mut face, rgba, BADGE_PX, BADGE_PX, 15.0, 17.0);
         }
     }
-    let text_x = if has_badge { 66.0 } else { 28.0 };
+    let text_x = if has_badge { 78.0 } else { 25.0 };
     let text_w = NOTICE_W - text_x - 16.0;
-    kb::draw_left(
-        &mut face,
-        title,
-        if has_badge { 16.0 } else { 17.0 },
-        if has_badge { 11.0 } else { 12.0 },
-        text_w,
-        text_x,
-        9.0,
-        22.0,
-        sw::ink(),
-    );
-    kb::draw_left(
-        &mut face,
-        detail,
-        12.0,
-        9.0,
-        text_w,
-        text_x,
-        34.0,
-        20.0,
-        sw::ink_dim(),
-    );
+    if has_badge {
+        let eyebrow = match lang {
+            Language::ZhCn => "ACHIEVEMENT / 已解锁",
+            Language::EnUs => "ACHIEVEMENT / UNLOCKED",
+        };
+        kb::draw_left(&mut face, eyebrow, 9.0, 8.0, text_w, text_x, 12.0, 14.0, accent);
+        kb::draw_left(&mut face, title, 15.0, 11.0, text_w, text_x, 26.0, 24.0, sw::ink());
+        kb::draw_left(&mut face, detail, 10.0, 9.0, text_w, text_x, 51.0, 20.0, sw::ink_dim());
+    } else {
+        kb::draw_left(&mut face, title, 15.0, 11.0, text_w, text_x, 22.0, 26.0, sw::ink());
+        kb::draw_left(&mut face, detail, 11.0, 9.0, text_w, text_x, 48.0, 20.0, sw::ink_dim());
+    }
     face
 }
 
@@ -147,7 +120,7 @@ mod tests {
 
     #[test]
     fn the_face_is_a_rounded_card_with_clean_corners() {
-        let face = notice_face("联机已断开", "对方已断开连接 · 可继续游戏", None);
+        let face = notice_face("联机已断开", "对方已断开连接 · 可继续游戏", None, Language::ZhCn);
         assert_eq!((face.w, face.h), (NOTICE_W as u32, NOTICE_H as u32));
         let at = |x: u32, y: u32| face.rgba[((y * face.w + x) * 4 + 3) as usize];
         assert_eq!(at(0, 0), 0, "the card corner is square");
@@ -158,9 +131,9 @@ mod tests {
     }
 
     #[test]
-    fn the_card_sits_under_the_status_bar() {
+    fn the_card_sits_below_the_status_bar() {
         let (_, y, _, h) = notice_rect();
-        assert!(y >= 40.0, "the notice overlapped the status bar: {y}");
+        assert!(y >= 36.0, "the notice overlapped the status bar: {y}");
         assert!(y + h <= 480.0, "the notice ran off the screen");
     }
 }
@@ -181,8 +154,8 @@ mod badge_tests {
     #[test]
     fn a_badge_is_drawn_into_the_card() {
         let badge = [250u8, 20, 250, 255].repeat((BADGE_PX * BADGE_PX) as usize);
-        let with = notice_face("成就解锁", "初入丛林 · +5", Some(&badge));
-        let plain = notice_face("成就解锁", "初入丛林 · +5", None);
+        let with = notice_face("成就解锁", "初入丛林 · +5", Some(&badge), Language::ZhCn);
+        let plain = notice_face("成就解锁", "初入丛林 · +5", None, Language::ZhCn);
 
         let badge_px = pixel(&with, 30, 20);
         let plain_px = pixel(&plain, 30, 20);

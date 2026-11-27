@@ -18,8 +18,9 @@ use slot_store::{
     ThemePreset, BLUE_LIGHT_MAX, BRIGHTNESS_MAX, FF_SPEEDS, RING_MAX, VOLUME_MAX,
 };
 use slot_ui::{
-    board_from_for, board_zoom, draw_backdrop, draw_empty_slot_with, draw_shelf_legend, draw_slot_name,
-    draw_about, ease, grown, lid_at, lid_from_for, lift_of, on_board_for, shelf_cart_at, ClockPicker,
+    board_from_for, board_zoom, draw_backdrop, draw_empty_slot_with, draw_shelf_legend,
+    draw_about, draw_slot_name, ease, grown, lid_at, lid_from_for, lift_of, on_board_for,
+    shelf_cart_at, ClockPicker,
     Draw, FfState, GbShell, Hud, HudKind, Icon, LinkBadge, Millis, Placed, Polaroids, PowerChoice,
     QuickMenu, QuickMenuFaces, QuickRow, QuickValue, Refusal, Shelf, SlotChrome, StatusBar, TexId,
     Toast, BOARD_W, BOARD_X, CART_W, CHIP_H, CHIP_U, CHIP_V, CHIP_W, HINT_EDGE, HINT_H, HOP_LIFT,
@@ -194,17 +195,17 @@ const INTRO_CLOSE_MS: Millis = 420;
 const INTRO_PLATE_W: f32 = 640.0;
 const INTRO_PLATE_H: f32 = 420.0;
 /// One paper colour for the back label, the paper tab and the card itself.
-pub const INTRO_PAPER: [u8; 4] = [234, 229, 215, 255];
-pub const INTRO_PAPER_BORDER: [u8; 4] = [201, 195, 180, 255];
+pub const INTRO_PAPER: [u8; 4] = [239, 221, 196, 255];
+pub const INTRO_PAPER_BORDER: [u8; 4] = [212, 186, 159, 255];
 /// Ink on that paper; kept for the small cartridge-label art.
-pub const INTRO_INK: [u8; 3] = [58, 60, 66];
+pub const INTRO_INK: [u8; 3] = [56, 28, 20];
 /// Dark dossier surface for the detail card.
-pub const INTRO_PANEL: [u8; 4] = [25, 26, 37, 255];
-pub const INTRO_PANEL_EDGE: [u8; 4] = [52, 54, 74, 255];
-pub const INTRO_TEXT: [u8; 3] = [233, 235, 242];
-pub const INTRO_MUTED: [u8; 3] = [158, 164, 184];
-pub const INTRO_DIM: [u8; 3] = [110, 116, 136];
-pub const INTRO_TRACK: [u8; 3] = [48, 50, 66];
+pub const INTRO_PANEL: [u8; 4] = [42, 36, 32, 255];
+pub const INTRO_PANEL_EDGE: [u8; 4] = [74, 61, 51, 255];
+pub const INTRO_TEXT: [u8; 3] = [242, 236, 226];
+pub const INTRO_MUTED: [u8; 3] = [179, 165, 150];
+pub const INTRO_DIM: [u8; 3] = [124, 112, 100];
+pub const INTRO_TRACK: [u8; 3] = [56, 46, 39];
 
 /// The small label on the back of each cartridge, in cart pixels.  It is much
 /// smaller than the front label: the shell around it is what makes the object
@@ -1862,8 +1863,6 @@ pub struct App {
     pub wifi_ui: Option<WifiUi>,
     pub sync_ui: Option<SyncUi>,
     upgrade_ui: Option<UpgradeUi>,
-    /// Rebuild fallback covers once the eject animation returns to the shelf.
-    fallback_refresh_after_eject: bool,
     sync_refresh_at: Millis,
     pub mods_ui: Option<ModsUi>,
     pub keyboard: Option<KeyboardState>,
@@ -1926,6 +1925,7 @@ pub struct App {
     power_labels: Vec<[(TexId, u32, u32); 2]>,
     power_icons: Vec<[(TexId, u32, u32); 2]>,
     power_title: Option<(TexId, u32, u32)>,
+    power_panel: Option<(TexId, u32, u32)>,
     core_picker: Option<CorePicker>,
     core_board_face: Option<TexId>,
     core_lid_face: Option<TexId>,
@@ -2063,6 +2063,8 @@ pub struct App {
     clock_faces: Option<(TexId, TexId)>,
     quick_menu_faces: Option<QuickMenuFaces>,
     quick_clock_faces: Option<[(TexId, u32, u32); 2]>,
+    quick_mods_faces: Option<[(TexId, u32, u32); 2]>,
+    quick_version_faces: Option<[(TexId, u32, u32); 2]>,
     about_face: Option<TexId>,
     wallpaper: Option<TexId>,
     /// The active machine's screen overlay, once the frontend has uploaded
@@ -2096,8 +2098,11 @@ pub struct App {
     bolt: Option<TexId>,
     shelf_platform: slot_ui::Printed,
     shelf_playtime_text: String,
+    /// Prefix-free duration used by the shelf v2 title meta line.
+    shelf_playtime_compact: String,
     shelf_playtime_key: Option<(String, Platform)>,
     shelf_playtime_face: Option<(TexId, u32, u32)>,
+    shelf_playtime_panel: Option<(TexId, u32, u32)>,
     name_pending: bool,
     slot_letter: Option<char>,
     shelf_named: Option<Millis>,
@@ -2648,7 +2653,7 @@ impl App {
             boot_mods: None,
             boot_job: None,
             utility: None, guide: None,
-            theme_preset: ThemePreset::Default,
+            theme_preset: ThemePreset::Warm,
             language: Language::default(),
             language_checked_at: 0,
             cheat_rows: Vec::new(), cheat_key: String::new(), cheat_pending: None,
@@ -2656,7 +2661,6 @@ impl App {
             wifi_ui: None,
             sync_ui: None,
             upgrade_ui: None,
-            fallback_refresh_after_eject: false,
             sync_refresh_at: 0,
             mods_ui: None,
             keyboard: None,
@@ -2710,6 +2714,7 @@ impl App {
             power_labels: Vec::new(),
             power_icons: Vec::new(),
             power_title: None,
+            power_panel: None,
             core_picker: None,
             core_board_face: None,
             core_lid_face: None,
@@ -2819,6 +2824,8 @@ impl App {
             clock_faces: None,
             quick_menu_faces: None,
             quick_clock_faces: None,
+            quick_mods_faces: None,
+            quick_version_faces: None,
             about_face: None,
             wallpaper: None,
             fc_mask_face: None,
@@ -2843,8 +2850,10 @@ impl App {
             bolt: None,
             shelf_platform: slot_ui::Printed::default(),
             shelf_playtime_text: String::new(),
+            shelf_playtime_compact: String::new(),
             shelf_playtime_key: None,
             shelf_playtime_face: None,
+            shelf_playtime_panel: None,
             name_pending: false,
             slot_letter: None,
             shelf_named: None,
@@ -3763,22 +3772,6 @@ impl App {
         self.slot_letter = Some(letter);
         self.shelf_named = None;
         self.name_pending = true;
-    }
-
-    fn slot_name_alpha(&self) -> f32 {
-        let Some(at) = self.shelf_named else {
-            return 0.0;
-        };
-        let t = self.now().saturating_sub(at);
-        let level = if t < SLOT_NAME_IN_MS {
-            t as f32 / SLOT_NAME_IN_MS as f32
-        } else if t < SLOT_NAME_IN_MS + SLOT_NAME_HOLD_MS {
-            1.0
-        } else {
-            let out = t - SLOT_NAME_IN_MS - SLOT_NAME_HOLD_MS;
-            1.0 - (out as f32 / SLOT_NAME_OUT_MS as f32).min(1.0)
-        };
-        SLOT_NAME_ALPHA * ease(level)
     }
 
     /// 当前已激活的平台包机种；没 `root`（`App::new` 阶段）时为空。
@@ -4946,8 +4939,11 @@ impl App {
             QuickRow::BlueLight => Some(QuickValue::level(self.state.blue_light)),
             QuickRow::Recents => Some(QuickValue::flag(self.state.show_recents)),
             QuickRow::Theme => None,
-            QuickRow::ThemeDefault => Some(self.theme_value(ThemePreset::Default)),
-            QuickRow::ThemeWeb => Some(self.theme_value(ThemePreset::Web)),
+            // Technical compatibility slots: the first is Paper (device
+            // default), the last is Warm.  ThemeWeb stays for QuickRow index
+            // stability but is no longer shown.
+            QuickRow::ThemeDefault => Some(self.theme_value(ThemePreset::Warm)),
+            QuickRow::ThemeWeb => Some(self.theme_value(ThemePreset::Warm)),
             QuickRow::ThemeWarm => Some(self.theme_value(ThemePreset::Warm)),
             QuickRow::RomTitle => Some(QuickValue::flag(self.state.show_rom_title)),
             QuickRow::FallbackCover => Some(QuickValue::flag(self.state.fallback_cover)),
@@ -4979,6 +4975,22 @@ impl App {
 
     pub fn set_quick_menu_faces(&mut self, faces: QuickMenuFaces) {
         self.quick_menu_faces = Some(faces);
+    }
+
+    pub fn set_quick_special_values(
+        &mut self,
+        mods: [(TexId, u32, u32); 2],
+        version: [(TexId, u32, u32); 2],
+    ) {
+        self.quick_mods_faces = Some(mods);
+        self.quick_version_faces = Some(version);
+    }
+
+    pub fn quick_mods_count(&self) -> usize {
+        self.root
+            .as_deref()
+            .and_then(|root| slot_mods::list(root).ok())
+            .map_or(0, |rows| rows.len())
     }
 
     /// The language the UI should be drawn in.
@@ -5337,8 +5349,74 @@ impl App {
         }
     }
 
+    /// Legacy warm shelf header: active platform, `游戏库` and the item count.
+    pub fn shelf_header_text(&self) -> Option<(String, String, String)> {
+        let (platform, _) = self.shelf_plate_text()?;
+        let count = self.carts().count();
+        Some((
+            platform,
+            slot_i18n::t(self.language, "device.app.shelf.game_library").to_string(),
+            slot_i18n::t_args(
+                self.language,
+                "device.app.shelf.count",
+                &[("count", &count.to_string())],
+            )
+            .to_string(),
+        ))
+    }
+
+    /// Plate under the shelf slot: short code plus the full machine name.
+    pub fn shelf_plate_text(&self) -> Option<(String, String)> {
+        let code = self.slot_text()?;
+        let name = match code.as_str() {
+            "GBA" => "GAME BOY ADVANCE",
+            "GB" => "GAME BOY",
+            "GBC" => "GAME BOY COLOR",
+            "FC" => "FAMICOM",
+            "SFC" => "SUPER FAMICOM",
+            "MD" => "MEGA DRIVE",
+            _ => "LINKSLOT LIBRARY",
+        };
+        Some((code, name.to_string()))
+    }
+
     pub fn shelf_platform_name(&self) -> Option<&'static str> {
         Some(self.shelves[self.shelf_at].0.name(self.language))
+    }
+
+    pub fn shelf_game_title_text(&self) -> Option<String> {
+        if !self.navigation_visible() || !self.state.show_rom_title {
+            return None;
+        }
+        self.shelf()
+            .carts
+            .get(self.shelf().index)
+            .map(slot_ui::label_text)
+    }
+
+    pub fn shelf_meta_text(&self) -> String {
+        if self.shelf_game_title_text().is_none() {
+            return String::new();
+        }
+        let Some(cart) = self.shelf().carts.get(self.shelf().index) else {
+            return String::new();
+        };
+        let platform = match cart.platform {
+            Platform::Gba => slot_i18n::t(self.language, "device.app.platform.gba"),
+            Platform::Gb => slot_i18n::t(self.language, "device.app.platform.gb"),
+            Platform::Gbc => slot_i18n::t(self.language, "device.app.platform.gbc"),
+            Platform::Fc => slot_i18n::t(self.language, "device.app.platform.fc"),
+            Platform::Sfc => slot_i18n::t(self.language, "device.app.platform.sfc"),
+            Platform::Md => slot_i18n::t(self.language, "device.app.platform.md"),
+            // 街机与 NeoGeo 复用平台包里的显示名，避免再造一套 `platform.*` 键。
+            Platform::Arcade => slot_i18n::t(self.language, "device.app.arcade.title"),
+            Platform::Neogeo => slot_i18n::t(self.language, "device.app.arcade.neogeo"),
+        };
+        if self.shelf_playtime_compact.is_empty() {
+            platform.to_string()
+        } else {
+            format!("{} · {}", platform, self.shelf_playtime_compact)
+        }
     }
 
     /// Colour of the shelf's platform / collection name.  A one-letter jump
@@ -5369,6 +5447,11 @@ impl App {
 
     pub fn clear_shelf_playtime_face(&mut self) {
         self.shelf_playtime_face = None;
+        self.shelf_playtime_panel = None;
+    }
+
+    pub fn set_shelf_playtime_panel(&mut self, face: TexId, w: u32, h: u32) {
+        self.shelf_playtime_panel = Some((face, w, h));
     }
 
     pub fn phase(&self) -> &Phase {
@@ -5504,10 +5587,6 @@ impl App {
     /// browse sets, not only the cart labels.
     fn refresh_library_after_web(&mut self) {
         self.reload_shelves();
-    }
-
-    pub(crate) fn fallback_cover_enabled(&self) -> bool {
-        self.state.fallback_cover
     }
 
     pub fn face_cart(&self, shelf: usize, index: usize) -> Option<&Cart> {
@@ -11223,8 +11302,8 @@ impl App {
 
     fn theme_choice(row: QuickRow) -> Option<ThemePreset> {
         match row {
-            QuickRow::ThemeDefault => Some(ThemePreset::Default),
-            QuickRow::ThemeWeb => Some(ThemePreset::Web),
+            QuickRow::ThemeDefault => Some(ThemePreset::Warm),
+            QuickRow::ThemeWeb => Some(ThemePreset::Warm),
             QuickRow::ThemeWarm => Some(ThemePreset::Warm),
             _ => None,
         }
@@ -11296,11 +11375,8 @@ impl App {
             return;
         }
         if row == QuickRow::FallbackCover {
-            self.state.fallback_cover = !self.state.fallback_cover;
-            self.persist();
-            // Existing face textures must be rebuilt with or without the
-            // state screenshot fallback.
-            self.invalidate_cart_faces();
+            // Kept as a compatibility row only; the shelf no longer uses
+            // state screenshots as covers.
             return;
         }
         let s = &mut self.state;
@@ -11827,11 +11903,9 @@ impl App {
             let returned_to_shelf =
                 matches!(self.phase, Phase::Ejecting { .. }) && matches!(phase, Phase::Shelf);
             self.phase = phase;
-            if returned_to_shelf && std::mem::take(&mut self.fallback_refresh_after_eject) {
-                // The cover is virtual: Labels/ is never touched, so the next
-                // generation still sees label.is_none() and may pick the newest
-                // state screenshot.
-                self.invalidate_cart_faces();
+            if returned_to_shelf {
+                // No fallback-cover refresh is needed; the default label is
+                // independent of the exit screenshot.
             }
             self.refused_from = None;
             if matches!(self.phase, Phase::Arcade { .. } | Phase::Shelf) {
@@ -12449,16 +12523,19 @@ impl App {
     fn refresh_shelf_playtime(&mut self) {
         if !matches!(self.phase, Phase::Shelf) {
             self.shelf_playtime_text.clear();
+            self.shelf_playtime_compact.clear();
             self.shelf_playtime_key = None;
             return;
         }
         let Some(stem) = self.selected_stem().map(str::to_string) else {
             self.shelf_playtime_text.clear();
+            self.shelf_playtime_compact.clear();
             self.shelf_playtime_key = None;
             return;
         };
         let Some(platform) = self.shelf().carts.get(self.shelf().index).map(|c| c.platform) else {
             self.shelf_playtime_text.clear();
+            self.shelf_playtime_compact.clear();
             self.shelf_playtime_key = None;
             return;
         };
@@ -12481,6 +12558,7 @@ impl App {
                 playtime.total_seconds.max(playtime.seconds)
             })
             .unwrap_or(0);
+        self.shelf_playtime_compact = crate::playtime::format_duration(seconds).unwrap_or_default();
         self.shelf_playtime_text = crate::playtime::format_duration(seconds)
             .map(|duration| {
                 slot_i18n::t_args(
@@ -12700,31 +12778,37 @@ impl App {
                 picker.draw(line, hint, back, self.language, out);
                 return;
             }
-            Phase::QuickMenu { row } => QuickMenu {
-                row: *row,
-                values: QuickRow::ALL.map(|r| self.quick_value(r)),
-                clock: self.quick_clock_faces,
-                fc_mask_value: self.fc_mask_value,
-                gb_mask_value: self.gb_mask_value,
-                gbc_mask_value: self.gbc_mask_value,
-                sfc_mask_value: self.sfc_mask_value,
-                faces: self.quick_menu_faces.as_ref(),
+            Phase::QuickMenu { row } => {
+                QuickMenu {
+                    row: *row,
+                    values: QuickRow::ALL.map(|r| self.quick_value(r)),
+                    clock: self.quick_clock_faces,
+                    fc_mask_value: self.fc_mask_value,
+                    gb_mask_value: self.gb_mask_value,
+                    gbc_mask_value: self.gbc_mask_value,
+                    sfc_mask_value: self.sfc_mask_value,
+                    mods_value: self.quick_mods_faces,
+                    version_value: self.quick_version_faces,
+                    faces: self.quick_menu_faces.as_ref(),
+                }
+                .draw(out);
+                StatusBar {
+                    clock: self.shelf_clock,
+                    battery: self.battery,
+                    percent: self.battery_percent,
+                    bolt: self.bolt,
+                    wifi: self.wifi_face,
+                    wifi_on: self.wifi_connected,
+                }
+                .draw_compact(out);
             }
-            .draw(out),
             Phase::Arcade { .. } => self.draw_arcade(out),
             Phase::Service { state } => self.draw_service(state, out),
             Phase::Shelf => {
                 let accent = self.shelves[self.shelf_at].0.accent();
                 let kind = self.shelves[self.shelf_at].0.collection_kind();
                 let plate = self.collection_slot_back(kind);
-                draw_backdrop(
-                    self.collection_backdrop(kind),
-                    self.shelf_backdrop,
-                    accent,
-                    kind,
-                    self.collection_overlay(kind),
-                    out,
-                );
+                self.draw_flat_shelf_ground(out);
                 // 柜子不是卡带架：它没有卡带行，本阶段先画一块占位面板（4b 换成
                 // `slot_ui::cabinet` 的小柜）。
                 if let Some(platform) = self.shelves[self.shelf_at].0.cabinet() {
@@ -12841,12 +12925,16 @@ impl App {
                             slot_ui::draw_slot_front_layer(out);
                         } else {
                             draw_empty_slot_with(plate, out);
-                        }
-                        // A nameplate carries the rack's name itself (built-in
-                        // plates and upstream's slot_back art both do); fall
-                        // back to the printed name only when there is none.
-                        if plate.is_none() {
-                            draw_slot_name(self.shelf_platform, self.slot_name_alpha(), out);
+                            // A nameplate carries the rack's name itself
+                            // (built-in plates and upstream's slot_back art
+                            // both do); fall back to printed text without one.
+                            if plate.is_none() {
+                                draw_slot_name(
+                                    self.shelf_platform,
+                                    self.slot_name_alpha(),
+                                    out,
+                                );
+                            }
                         }
                     }
                 }
@@ -13129,6 +13217,10 @@ impl App {
         self.power_labels = labels;
         self.power_icons = icons;
         self.power_title = Some(title);
+    }
+
+    pub fn set_power_panel_face(&mut self, panel: (TexId, u32, u32)) {
+        self.power_panel = Some(panel);
     }
 
     pub fn set_core_board_faces(&mut self, board: TexId, lid: TexId) {
@@ -14005,10 +14097,29 @@ impl App {
             colour: switch_colour(slot_ui::switch_style::bg_top()),
         });
         out.push(Draw::Rect {
-            x: 48.0,
-            y: 22.0,
-            w: 5.0,
-            h: 30.0,
+            x: 0.0,
+            y: 0.0,
+            w: OUT_W as f32,
+            h: OUT_H as f32,
+            colour: [0.0, 0.0, 0.0, 0.44],
+        });
+        let panel_x = (OUT_W as f32 - slot_ui::POWER_PANEL_W as f32) / 2.0;
+        let panel_y = 92.0;
+        if let Some((tex, w, h)) = self.power_panel {
+            out.push(Draw::Tex {
+                x: panel_x,
+                y: panel_y,
+                w: w as f32,
+                h: h as f32,
+                tex,
+                alpha: 1.0,
+            });
+        }
+        out.push(Draw::Rect {
+            x: panel_x + 20.0,
+            y: 112.0,
+            w: 4.0,
+            h: 26.0,
             colour: switch_colour([
                 slot_ui::switch_style::accent()[0],
                 slot_ui::switch_style::accent()[1],
@@ -14018,8 +14129,8 @@ impl App {
         });
         if let Some((tex, w, h)) = self.power_title {
             out.push(Draw::Tex {
-                x: 64.0,
-                y: 18.0,
+                x: panel_x + 34.0,
+                y: 106.0,
                 w: w as f32,
                 h: h as f32,
                 tex,
@@ -14034,7 +14145,7 @@ impl App {
         for choice in PowerChoice::ALL {
             let selected = choice.index() == index;
             let (tex, w, h) = cards[selected as usize];
-            let y = 176.0 + 68.0 * choice.index() as f32;
+            let y = 168.0 + 55.0 * choice.index() as f32;
             out.push(Draw::Tex {
                 x: card_x,
                 y,
@@ -15223,16 +15334,8 @@ impl App {
         // its clean flag into the next cartridge.
         self.restart_clean = false;
         self.restart_pending = false;
-        // Remember that this cart had no real cover before it leaves the screen.
-        // The actual face rebuild waits for the eject animation to finish so the
-        // current cart does not turn blank during the animation.
-        self.fallback_refresh_after_eject = self.state.fallback_cover
-            && self
-                .shelf()
-                .carts
-                .iter()
-                .find(|candidate| candidate.stem == cart)
-                .is_some_and(|candidate| candidate.label.is_none());
+        // The old fallback-cover refresh is gone; the default label is baked
+        // into the cart face and does not depend on the exit screenshot.
         // A host room lives with the current game.  A follow switch is the one
         // eject that keeps it: the peer is deliberately moving this side into
         // the host's next cart.
@@ -17781,10 +17884,7 @@ impl App {
     /// The selected cart's screen rectangle, matching `Shelf::draw_row`.
     fn selected_cart_rect(&self) -> Option<(usize, Platform, SyncRect)> {
         let cart = self.shelf().carts.get(self.shelf().index)?;
-        let (x, scale) = self.shelf().selected_at();
-        let (cw, ch) = slot_ui::cart_box(cart.platform);
-        let (w, h) = (cw as f32 * scale, ch as f32 * scale);
-        let y = slot_ui::rest_y(ch as f32) + ch as f32 - h;
+        let (x, y, w, h) = self.shelf().selected_rect()?;
         Some((self.shelf().index, cart.platform, (x, y, w, h)))
     }
 
@@ -18386,6 +18486,33 @@ impl App {
         }
     }
 
+    #[allow(dead_code)]
+    fn draw_flat_shelf_ground(&self, out: &mut Vec<Draw>) {
+        let bg = [0x1b as f32 / 255.0, 0x1b as f32 / 255.0, 0x1e as f32 / 255.0, 1.0];
+        let stage = [0x20 as f32 / 255.0, 0x20 as f32 / 255.0, 0x24 as f32 / 255.0, 1.0];
+        let line = [0x2a as f32 / 255.0, 0x2a as f32 / 255.0, 0x30 as f32 / 255.0, 1.0];
+        out.push(Draw::Rect { x: 0.0, y: 0.0, w: OUT_W as f32, h: OUT_H as f32, colour: bg });
+        out.push(Draw::Rect { x: 0.0, y: 92.0, w: OUT_W as f32, h: 273.0, colour: stage });
+        out.push(Draw::Rect { x: 0.0, y: 92.0, w: OUT_W as f32, h: 1.0, colour: line });
+        out.push(Draw::Rect { x: 0.0, y: 364.0, w: OUT_W as f32, h: 1.0, colour: line });
+    }
+
+    fn slot_name_alpha(&self) -> f32 {
+        let Some(at) = self.shelf_named else {
+            return 0.0;
+        };
+        let t = self.now().saturating_sub(at);
+        let level = if t < SLOT_NAME_IN_MS {
+            t as f32 / SLOT_NAME_IN_MS as f32
+        } else if t < SLOT_NAME_IN_MS + SLOT_NAME_HOLD_MS {
+            1.0
+        } else {
+            let out = t - SLOT_NAME_IN_MS - SLOT_NAME_HOLD_MS;
+            1.0 - (out as f32 / SLOT_NAME_OUT_MS as f32).min(1.0)
+        };
+        SLOT_NAME_ALPHA * ease(level)
+    }
+
     fn draw_shelf_playtime(&self, out: &mut Vec<Draw>) {
         let Some((_, _, (cart_x, cart_y, cart_w, cart_h))) = self.selected_cart_rect() else {
             return;
@@ -18400,20 +18527,31 @@ impl App {
             (cart_x, cart_y, cart_w, cart_h),
             (face_w, face_h),
         );
-        out.push(Draw::Rect {
-            x,
-            y,
-            w,
-            h,
-            colour: [0.0, 0.0, 0.0, 0.66],
-        });
-        out.push(Draw::Rect {
-            x,
-            y,
-            w,
-            h: 1.0,
-            colour: [1.0, 1.0, 1.0, 0.10],
-        });
+        if let Some((panel, pw, ph)) = self.shelf_playtime_panel {
+            out.push(Draw::Tex {
+                x,
+                y,
+                w: pw as f32,
+                h: ph as f32,
+                tex: panel,
+                alpha: 1.0,
+            });
+        } else {
+            out.push(Draw::Rect {
+                x,
+                y,
+                w,
+                h,
+                colour: [0.0, 0.0, 0.0, 0.66],
+            });
+            out.push(Draw::Rect {
+                x,
+                y,
+                w,
+                h: 1.0,
+                colour: [1.0, 1.0, 1.0, 0.10],
+            });
+        }
         out.push(Draw::Tex {
             x: x + (w - face_w as f32) / 2.0,
             y: y + (h - face_h as f32) / 2.0,

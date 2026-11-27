@@ -14,7 +14,7 @@ fn fill(kind: HudKind, value: u8) -> f32 {
     let mut h = Hud::new();
     h.show(kind, value, false, 0);
     let mut out = Vec::new();
-    h.draw(0, &mut out);
+    h.draw_bar_at(1.0, 36.0, &mut out);
     match out.last().expect("no bar in the list") {
         Draw::Rect { w, .. } => *w,
         _ => panic!("the bar must be a rect"),
@@ -45,36 +45,35 @@ fn volume_reads_against_100_not_the_nine_step_scale() {
 }
 
 #[test]
-fn the_hud_sits_at_the_top_of_the_screen() {
+fn the_hud_bar_sits_in_the_top_notification_stack() {
     let mut h = Hud::new();
     h.show(HudKind::Volume, 50, false, 0);
     let mut out = Vec::new();
-    h.draw(0, &mut out);
+    h.draw_bar_at(1.0, 36.0, &mut out);
     let lowest = out.iter().filter_map(bottom_edge).fold(0.0f32, f32::max);
     assert!(
-        lowest < OUT_H as f32 / 2.0,
-        "hud reaches {lowest}, expected the top half"
+        lowest < OUT_H as f32 * 0.3,
+        "hud reaches {lowest}, expected the top stack"
     );
 }
 
 #[test]
-fn the_hud_draws_a_dark_plate_behind_itself() {
+fn the_hud_draws_an_independent_panel() {
     let mut h = Hud::new();
     h.show(HudKind::Brightness, 5, false, 0);
     let mut out = Vec::new();
-    h.draw(0, &mut out);
-    let plate = out.first().expect("nothing drawn");
-    let Draw::Rect { w, colour, .. } = plate else {
-        panic!("first draw is not the plate")
+    h.draw_bar_at(1.0, 36.0, &mut out);
+    let panel = out.first().expect("nothing drawn");
+    let Draw::Rect { w, h: ph, colour, .. } = panel else {
+        panic!("first draw is not the panel")
     };
-    assert_eq!(*w, OUT_W as f32, "the plate does not span the screen");
+    assert_eq!(*w, 378.0, "the HUD is still a full-width bar");
+    assert_eq!(*ph, 40.0, "the HUD panel is the wrong height");
+    assert!(colour[3] > 0.6, "the panel is too transparent");
     assert!(
-        colour[0] < 0.2 && colour[1] < 0.2 && colour[2] < 0.2,
-        "the plate is not dark"
-    );
-    assert!(
-        colour[3] > 0.6,
-        "the plate is too transparent to give contrast"
+        !out.iter()
+            .any(|d| matches!(d, Draw::Rect { w, .. } if *w == OUT_W as f32)),
+        "the HUD still draws the full-width plate"
     );
 }
 
@@ -103,7 +102,7 @@ fn an_empty_rewind_buffer_still_draws_an_empty_bar() {
     let mut h = Hud::new();
     h.show(HudKind::Rewind, 0, false, 0);
     let mut out = Vec::new();
-    h.draw(0, &mut out);
+    h.draw_bar_at(1.0, 36.0, &mut out);
     assert!(
         out.len() >= 2,
         "the track disappeared when the buffer emptied"
@@ -145,7 +144,7 @@ fn the_badge_outlives_the_bar_timer_without_a_plate() {
     let mut h = Hud::new();
     h.set_ff(FfState::Latched);
     let mut out = Vec::new();
-    h.draw(60_000, &mut out);
+    h.draw(&mut out);
     assert!(
         !out.iter()
             .any(|d| matches!(d, Draw::Rect { w, .. } if *w == OUT_W as f32)),
@@ -163,12 +162,12 @@ fn the_badge_leaves_when_fast_forward_stops() {
     h.set_ff(FfState::Held);
     h.set_ff(FfState::Off);
     let mut out = Vec::new();
-    h.draw(0, &mut out);
+    h.draw(&mut out);
     assert!(out.is_empty(), "the plate outlived the fast forward");
 }
 
 #[test]
-fn the_ff_badge_draws_no_plate_but_the_bar_still_does() {
+fn the_bar_and_badge_draw_no_full_width_plate() {
     let full = |out: &Vec<Draw>| {
         out.iter()
             .filter(|d| matches!(d, Draw::Rect { w, .. } if *w == OUT_W as f32))
@@ -178,18 +177,14 @@ fn the_ff_badge_draws_no_plate_but_the_bar_still_does() {
     let mut badge_only = Hud::new();
     badge_only.set_ff(FfState::Held);
     let mut out = Vec::new();
-    badge_only.draw(60_000, &mut out);
-    assert_eq!(
-        full(&out),
-        0,
-        "the badge is still drawing the full width plate"
-    );
+    badge_only.draw(&mut out);
+    assert_eq!(full(&out), 0, "the badge is drawing a full width plate");
 
     let mut with_bar = Hud::new();
     with_bar.show(HudKind::Volume, 50, false, 0);
     let mut out = Vec::new();
-    with_bar.draw(0, &mut out);
-    assert_eq!(full(&out), 1, "the bar lost the plate it is read against");
+    with_bar.draw_bar_at(1.0, 36.0, &mut out);
+    assert_eq!(full(&out), 0, "the HUD bar is still full width");
 }
 
 fn badges() -> Vec<TexId> {
@@ -202,7 +197,7 @@ fn the_link_badge_takes_the_fast_forward_corner_without_a_plate() {
     h.set_link_faces(badges());
     h.set_link(LinkBadge::Hosting);
     let mut out = Vec::new();
-    h.draw(60_000, &mut out);
+    h.draw(&mut out);
     assert_eq!(out.len(), 1, "the badge came with company: {out:?}");
     let (w, _) = icon_box(HUD_ICON_PX);
     assert!(matches!(out[0], Draw::Tex { tex, x, .. }
@@ -229,7 +224,7 @@ fn the_link_badge_outranks_fast_forward() {
     h.set_ff(FfState::Latched);
     h.set_link(LinkBadge::JoinedLost);
     let mut out = Vec::new();
-    h.draw(0, &mut out);
+    h.draw(&mut out);
     let texes: Vec<TexId> = out
         .iter()
         .filter_map(|d| match d {

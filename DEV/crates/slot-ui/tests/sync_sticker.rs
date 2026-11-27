@@ -20,9 +20,15 @@ fn the_builtin_sticker_is_a_dark_plate_with_a_red_rail_not_a_game_label() {
     let sticker = cart("同步云存档", Some(CartSticker::Text));
     assert_ne!(legacy.rgba, sticker.rgba, "the sticker changed nothing");
 
-    // The project accent rail survives the paste.
+    // The project accent rail survives the paste (brass, not the old red).
+    let accent = slot_ui::switch_style::accent();
     assert!(
-        has(&sticker, |px| px[0] > 180 && px[1] < 70 && px[2] < 70),
+        has(&sticker, |px| {
+            (px[0] as i16 - accent[0] as i16).abs() < 80
+                && (px[1] as i16 - accent[1] as i16).abs() < 80
+                && (px[2] as i16 - accent[2] as i16).abs() < 80
+                && px[3] > 100
+        }),
         "no accent rail on the sticker"
     );
     // White ink, not the label's contrast colour.

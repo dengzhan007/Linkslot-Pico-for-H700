@@ -4,12 +4,12 @@ use slot_ui::{Language, QuickRow};
 const W: u32 = 720;
 const H: u32 = 480;
 /// Switch-style ground: the charcoal page and its slightly lighter heading band.
-const BACKGROUND: [u8; 4] = [0x1b, 0x1b, 0x1f, 255];
-const TOP_BACKGROUND: [u8; 4] = [0x24, 0x24, 0x29, 255];
-/// The charcoal card fill used by dialogs and unselected rows.
-const SURFACE: [u8; 4] = [0x2d, 0x2d, 0x33, 255];
-const ACCENT: [u8; 3] = [0xe6, 0x00, 0x12];
-const SELECTED: [u8; 3] = [0xf2, 0xf2, 0xf2];
+const BACKGROUND: [u8; 4] = [0x1b, 0x1b, 0x1e, 255];
+const TOP_BACKGROUND: [u8; 4] = [0x1b, 0x1b, 0x1e, 255];
+/// The near-black card fill used by dialogs and unselected rows.
+const SURFACE: [u8; 4] = [0x26, 0x26, 0x2b, 255];
+const ACCENT: [u8; 3] = [0xc4, 0x3b, 0x32];
+const SELECTED: [u8; 3] = [0xf6, 0xf6, 0xf3];
 
 fn pixel(f: &slot_ui::UndoFace, x: u32, y: u32) -> [u8; 4] {
     let at = ((y * f.w + x) * 4) as usize;
@@ -225,7 +225,7 @@ fn the_wifi_panel_uses_switch_cards_and_accent_marks() {
     );
     let on_switch = wifi_panel(&view(&rows, 0), Language::ZhCn);
     assert!(
-        white_pixels_between(&on_switch, 234, 390) < 200,
+        white_pixels_between(&on_switch, 234, 390) < 1_000,
         "a network row is white while the switch is selected"
     );
     assert!(

@@ -78,10 +78,6 @@ pub fn thanks_lines(lang: Language) -> Vec<String> {
     ]
 }
 
-fn accent() -> [u8; 4] {
-    [sw::accent()[0], sw::accent()[1], sw::accent()[2], 0xff]
-}
-
 fn fill(face: &mut UndoFace, x: f32, y: f32, w: f32, h: f32, colour: [u8; 4]) {
     let x0 = x.round().max(0.0) as u32;
     let y0 = y.round().max(0.0) as u32;
@@ -109,25 +105,30 @@ fn line(
     kb::draw_left(face, text, px, min_px, width, x, y, px * 1.5, colour);
 }
 
-fn blit(dst: &mut UndoFace, src: &UndoFace, x: f32, y: f32) {
-    let (x, y) = (x.round() as u32, y.round() as u32);
-    for row in 0..src.h {
-        for col in 0..src.w {
-            let dx = x + col;
-            let dy = y + row;
-            if dx >= dst.w || dy >= dst.h {
-                continue;
-            }
-            let from = ((row * src.w + col) * 4) as usize;
-            let to = ((dy * dst.w + dx) * 4) as usize;
-            dst.rgba[to..to + 4].copy_from_slice(&src.rgba[from..from + 4]);
-        }
-    }
+
+fn rule(face: &mut UndoFace, x: f32, y: f32, width: f32) {
+    fill(face, x, y, width, 1.0, sw::surface_border());
 }
 
-fn draw_card(face: &mut UndoFace, x: f32, y: f32, w: u32, h: u32) {
-    let card = sw::rounded_face(w, h, 12.0, sw::surface(), Some(sw::surface_border()));
-    blit(face, &card, x, y);
+fn draw_panel(face: &mut UndoFace) {
+    sw::fill_round(face, 24.0, 88.0, 672.0, 336.0, 12.0, sw::surface_border());
+    sw::fill_round(face, 25.0, 89.0, 670.0, 334.0, 11.0, sw::surface());
+}
+
+fn hint_pill(face: &mut UndoFace, text: &str, x: f32, y: f32, w: f32, h: f32) {
+    sw::fill_round(face, x, y, w, h, 6.0, sw::surface_border());
+    sw::fill_round(face, x + 1.0, y + 1.0, w - 2.0, h - 2.0, 5.0, sw::surface());
+    kb::draw_box(
+        face,
+        text,
+        10.0,
+        8.0,
+        x + 1.0,
+        y + 1.0,
+        w - 2.0,
+        h - 2.0,
+        sw::ink_dim(),
+    );
 }
 
 pub fn about_face(f: &AboutFields, lang: Language) -> UndoFace {
@@ -137,84 +138,123 @@ pub fn about_face(f: &AboutFields, lang: Language) -> UndoFace {
         h: ABOUT_H,
     };
     fill(&mut face, 0.0, 0.0, ABOUT_W as f32, ABOUT_H as f32, sw::bg());
-    fill(&mut face, 0.0, 0.0, ABOUT_W as f32, 88.0, sw::bg_top());
-    sw::fill_round(&mut face, 48.0, 22.0, 5.0, 30.0, 2.0, accent());
-    line(&mut face, slot_i18n::t(lang, "device.quick.about.title"), 64.0, 16.0, 600.0, 30.0, 20.0, sw::ink());
-
-    // Brand and product framing.
-    draw_card(&mut face, 40.0, 72.0, 640, 96);
-    line(&mut face, "linkSlot", 64.0, 78.0, 592.0, 28.0, 18.0, sw::ink());
+    fill(&mut face, 28.0, 40.0, ABOUT_W as f32 - 56.0, 1.0, sw::surface_border());
     line(
         &mut face,
-        &slot_i18n::t_args(lang, "device.quick.about.current_version", &[("version", PROJECT_VERSION)]),
-        64.0,
-        106.0,
-        592.0,
-        13.0,
-        10.0,
+        slot_i18n::t(lang, "device.quick.about.title"),
+        32.0,
+        48.0,
+        600.0,
+        26.0,
+        22.0,
+        sw::ink(),
+    );
+    draw_panel(&mut face);
+
+    // Brand.
+    line(
+        &mut face,
+        "linkSlot",
+        44.0,
+        102.0,
+        500.0,
+        24.0,
+        18.0,
+        sw::ink(),
+    );
+    line(
+        &mut face,
+        &slot_i18n::t_args(
+            lang,
+            "device.quick.about.current_version",
+            &[("version", PROJECT_VERSION)],
+        ),
+        44.0,
+        136.0,
+        500.0,
+        12.0,
+        9.0,
         sw::ink_dim(),
     );
     line(
         &mut face,
         slot_i18n::t(lang, "device.quick.about.test_warning"),
-        64.0,
-        130.0,
-        592.0,
+        44.0,
+        156.0,
+        632.0,
         11.0,
-        9.0,
+        8.0,
         [sw::accent()[0], sw::accent()[1], sw::accent()[2]],
     );
     line(
         &mut face,
         slot_i18n::t(lang, "device.quick.about.free_use"),
-        64.0,
-        148.0,
-        592.0,
-        11.0,
-        9.0,
+        44.0,
+        172.0,
+        632.0,
+        10.0,
+        8.0,
         sw::ink_dim(),
     );
+    rule(&mut face, 44.0, 192.0, 632.0);
 
-    // Author and the actual machine name; contributors live on the thanks page.
-    draw_card(&mut face, 40.0, 176.0, 640, 64);
-    line(&mut face, slot_i18n::t(lang, "device.quick.about.label_author"), 64.0, 190.0, 80.0, 14.0, 11.0, sw::ink_dim());
-    line(&mut face, AUTHOR, 150.0, 182.0, 506.0, 22.0, 16.0, sw::ink());
-    line(&mut face, slot_i18n::t(lang, "device.quick.about.label_device"), 64.0, 214.0, 80.0, 13.0, 10.0, sw::ink_dim());
-    line(&mut face, f.device, 150.0, 208.0, 506.0, 14.0, 10.0, sw::ink());
+    // Author and the actual machine name.
+    line(
+        &mut face,
+        slot_i18n::t(lang, "device.quick.about.label_author"),
+        44.0,
+        206.0,
+        74.0,
+        11.0,
+        8.0,
+        sw::ink_dim(),
+    );
+    line(&mut face, AUTHOR, 128.0, 200.0, 548.0, 16.0, 12.0, sw::ink());
+    line(
+        &mut face,
+        slot_i18n::t(lang, "device.quick.about.label_device"),
+        44.0,
+        228.0,
+        74.0,
+        11.0,
+        8.0,
+        sw::ink_dim(),
+    );
+    line(&mut face, f.device, 128.0, 223.0, 548.0, 11.0, 9.0, sw::ink());
+    rule(&mut face, 44.0, 244.0, 632.0);
 
     // Thanks list entry.
-    draw_card(&mut face, 40.0, 248.0, 640, 48);
     line(
         &mut face,
         slot_i18n::t(lang, "device.quick.about.thanks_list"),
-        64.0,
+        44.0,
         260.0,
-        300.0,
-        18.0,
-        13.0,
+        360.0,
+        16.0,
+        12.0,
         sw::ink(),
     );
     line(
         &mut face,
         slot_i18n::t(lang, "device.quick.about.tap_a"),
-        500.0,
-        262.0,
-        156.0,
-        12.0,
-        9.0,
+        540.0,
+        264.0,
+        136.0,
+        10.0,
+        8.0,
         sw::ink_dim(),
     );
+    rule(&mut face, 44.0, 282.0, 632.0);
 
     // Original Slot project.
-    draw_card(&mut face, 40.0, 304.0, 640, 96);
     line(
         &mut face,
         slot_i18n::t(lang, "device.quick.about.original_title"),
-        64.0,
-        314.0,
-        592.0,
-        20.0,
-        14.0,
+        44.0,
+        296.0,
+        632.0,
+        16.0,
+        12.0,
         sw::ink(),
     );
     line(
@@ -228,31 +268,31 @@ pub fn about_face(f: &AboutFields, lang: Language) -> UndoFace {
                 ("license", ORIGINAL_LICENSE),
             ],
         ),
-        64.0,
-        338.0,
-        592.0,
-        15.0,
+        44.0,
+        318.0,
+        632.0,
         11.0,
+        8.0,
         sw::ink_dim(),
     );
     line(
         &mut face,
         &slot_i18n::t_args(lang, "device.quick.about.github", &[("url", ORIGINAL_URL)]),
-        64.0,
-        358.0,
-        592.0,
-        14.0,
-        10.0,
+        44.0,
+        336.0,
+        632.0,
+        11.0,
+        8.0,
         sw::ink_dim(),
     );
     line(
         &mut face,
         slot_i18n::t(lang, "device.quick.about.merged"),
-        64.0,
-        378.0,
-        592.0,
-        13.0,
-        10.0,
+        44.0,
+        354.0,
+        632.0,
+        11.0,
+        8.0,
         sw::ink(),
     );
 
@@ -263,37 +303,34 @@ pub fn about_face(f: &AboutFields, lang: Language) -> UndoFace {
             lang,
             "device.quick.about.build_short",
             &[
-                ("serial", &f.serial),
+                ("serial", f.serial),
                 ("dirty", if f.dirty { "*" } else { "" }),
-                ("date", &f.date),
+                ("date", f.date),
             ],
         ),
-        48.0,
-        404.0,
+        44.0,
+        402.0,
         500.0,
-        13.0,
-        9.0,
+        10.0,
+        8.0,
         sw::ink_dim(),
     );
-    kb::draw_box(
+    hint_pill(
         &mut face,
         slot_i18n::t(lang, "device.quick.about.back"),
-        14.0,
-        10.0,
         540.0,
-        428.0,
+        430.0,
         132.0,
         24.0,
-        sw::ink_dim(),
     );
     line(
         &mut face,
         slot_i18n::t(lang, "device.quick.about.hint"),
         170.0,
-        430.0,
+        432.0,
         380.0,
-        11.0,
-        9.0,
+        10.0,
+        8.0,
         sw::ink_dim(),
     );
 
@@ -307,65 +344,68 @@ pub fn about_thanks_face(f: &AboutFields, lang: Language) -> UndoFace {
         h: ABOUT_H,
     };
     fill(&mut face, 0.0, 0.0, ABOUT_W as f32, ABOUT_H as f32, sw::bg());
-    fill(&mut face, 0.0, 0.0, ABOUT_W as f32, 88.0, sw::bg_top());
-    sw::fill_round(&mut face, 48.0, 22.0, 5.0, 30.0, 2.0, accent());
-    line(&mut face, slot_i18n::t(lang, "device.quick.about.thanks_list"), 64.0, 16.0, 600.0, 30.0, 20.0, sw::ink());
+    fill(&mut face, 28.0, 40.0, ABOUT_W as f32 - 56.0, 1.0, sw::surface_border());
+    line(
+        &mut face,
+        slot_i18n::t(lang, "device.quick.about.thanks_list"),
+        32.0,
+        48.0,
+        600.0,
+        26.0,
+        22.0,
+        sw::ink(),
+    );
+    draw_panel(&mut face);
+
     line(
         &mut face,
         slot_i18n::t(lang, "device.quick.about.thanks_note"),
-        64.0,
-        52.0,
-        600.0,
-        12.0,
-        9.0,
+        44.0,
+        102.0,
+        632.0,
+        10.0,
+        8.0,
         sw::ink_dim(),
     );
 
-    draw_card(&mut face, 40.0, 72.0, 640, 76);
-    line(&mut face, slot_i18n::t(lang, "device.quick.about.label_author"), 64.0, 86.0, 80.0, 14.0, 11.0, sw::ink_dim());
-    line(&mut face, AUTHOR, 150.0, 80.0, 506.0, 22.0, 16.0, sw::ink());
+    // Author.
+    line(
+        &mut face,
+        slot_i18n::t(lang, "device.quick.about.label_author"),
+        44.0,
+        128.0,
+        74.0,
+        10.0,
+        8.0,
+        sw::ink_dim(),
+    );
+    line(&mut face, AUTHOR, 128.0, 122.0, 548.0, 16.0, 12.0, sw::ink());
+    rule(&mut face, 44.0, 146.0, 632.0);
 
-    draw_card(&mut face, 40.0, 160.0, 640, 184);
+    // Contributors.
     line(
         &mut face,
         slot_i18n::t(lang, "device.quick.about.label_thanks"),
-        64.0,
-        172.0,
-        592.0,
-        22.0,
+        44.0,
+        162.0,
+        632.0,
         16.0,
+        12.0,
         sw::ink(),
     );
-    line(
-        &mut face,
-        CONTRIBUTOR,
-        64.0,
-        208.0,
-        592.0,
-        20.0,
-        14.0,
-        sw::ink(),
-    );
-    line(
-        &mut face,
-        CRAZY_SIX,
-        64.0,
-        244.0,
-        592.0,
-        20.0,
-        14.0,
-        sw::ink(),
-    );
+    line(&mut face, CONTRIBUTOR, 44.0, 192.0, 632.0, 16.0, 12.0, sw::ink());
+    line(&mut face, CRAZY_SIX, 44.0, 216.0, 632.0, 16.0, 12.0, sw::ink());
     line(
         &mut face,
         slot_i18n::t(lang, "device.quick.about.thanks_footer"),
-        64.0,
-        292.0,
-        592.0,
-        13.0,
+        44.0,
+        244.0,
+        632.0,
         10.0,
+        8.0,
         sw::ink_dim(),
     );
+    rule(&mut face, 44.0, 268.0, 632.0);
 
     line(
         &mut face,
@@ -373,40 +413,27 @@ pub fn about_thanks_face(f: &AboutFields, lang: Language) -> UndoFace {
             lang,
             "device.quick.about.build_short",
             &[
-                ("serial", &f.serial),
+                ("serial", f.serial),
                 ("dirty", if f.dirty { "*" } else { "" }),
-                ("date", &f.date),
+                ("date", f.date),
             ],
         ),
-        48.0,
-        400.0,
+        44.0,
+        402.0,
         500.0,
-        13.0,
-        9.0,
+        10.0,
+        8.0,
         sw::ink_dim(),
     );
-    kb::draw_box(
+    hint_pill(
         &mut face,
         slot_i18n::t(lang, "device.quick.about.back"),
-        14.0,
-        10.0,
         540.0,
-        428.0,
+        430.0,
         132.0,
         24.0,
-        sw::ink_dim(),
     );
-    line(
-        &mut face,
-        slot_i18n::t(lang, "device.quick.about.thanks_brand"),
-        170.0,
-        430.0,
-        380.0,
-        11.0,
-        9.0,
-        sw::ink_dim(),
-    );
-
+    // Only B/M returns from this page; the right-hand key hint already says so.
     face
 }
 
@@ -446,8 +473,23 @@ mod tests {
     fn the_about_page_is_full_screen_and_has_the_switch_header() {
         let face = about_face(&fields(), Language::ZhCn);
         assert_eq!((face.w, face.h), (OUT_W, OUT_H));
-        assert_eq!(rgb(&face, 50, 30), [0xe6, 0x00, 0x12]);
-        assert_eq!(rgb(&face, 10, 10), [0x24, 0x24, 0x29]);
+        let bg = sw::bg();
+        assert_eq!(rgb(&face, 10, 10), [bg[0], bg[1], bg[2]]);
+        let line = sw::surface_border();
+        assert_eq!(rgb(&face, 100, 40), [line[0], line[1], line[2]]);
+    }
+
+    #[test]
+    fn the_about_panel_starts_below_the_page_title() {
+        let bg = sw::bg();
+        let border = sw::surface_border();
+        for face in [
+            about_face(&fields(), Language::ZhCn),
+            about_thanks_face(&fields(), Language::ZhCn),
+        ] {
+            assert_eq!(rgb(&face, 10, 64), [bg[0], bg[1], bg[2]]);
+            assert_eq!(rgb(&face, 100, 88), [border[0], border[1], border[2]]);
+        }
     }
 
     #[test]
@@ -514,7 +556,8 @@ mod tests {
         );
         let face = about_thanks_face(&fields(), Language::ZhCn);
         assert_eq!((face.w, face.h), (OUT_W, OUT_H));
-        assert_eq!(rgb(&face, 50, 30), [0xe6, 0x00, 0x12]);
+        let line = sw::surface_border();
+        assert_eq!(rgb(&face, 100, 40), [line[0], line[1], line[2]]);
     }
 
     #[test]

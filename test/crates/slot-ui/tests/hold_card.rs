@@ -7,7 +7,7 @@
 //! different pieces of code, so the geometry has to be pinned somewhere.
 
 use slot_ui::navigation::{hold_card, hold_fill, HOLD_BAR};
-use slot_ui::switch_style::{bg_top, surface};
+use slot_ui::switch_style::{surface, surface_border};
 use slot_ui::{Language, UndoFace};
 
 fn alpha(face: &UndoFace, x: u32, y: u32) -> u8 {
@@ -54,7 +54,7 @@ fn the_bar_is_inside_the_card_and_its_track_is_drawn() {
 
     let mid = pixel(&face, (x + w / 2.0) as u32, (y + h / 2.0) as u32);
     assert_ne!(mid, surface(), "the bar's track was not drawn");
-    assert_eq!(mid, bg_top(), "the bar's track is the wrong colour");
+    assert_eq!(mid, surface_border(), "the bar's track is the wrong colour");
 }
 
 #[test]

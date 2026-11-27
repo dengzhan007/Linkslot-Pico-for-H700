@@ -69,31 +69,16 @@ fn open_at(a: &mut App, row: QuickRow) {
 
 #[test]
 fn the_theme_row_opens_a_list_and_applies_the_chosen_preset() {
-    let (d, mut a, _) = on_carousel();
+    let (_d, mut a, _) = on_carousel();
     open_at(&mut a, QuickRow::Theme);
     assert_eq!(a.quick_menu(), Some(QuickRow::Theme));
 
     press(&mut a, Btn::A);
-    assert_eq!(a.quick_menu(), Some(QuickRow::ThemeDefault));
+    assert_eq!(a.quick_menu(), Some(QuickRow::ThemeWarm));
     assert_eq!(
-        a.quick_value(QuickRow::ThemeDefault),
+        a.quick_value(QuickRow::ThemeWarm),
         Some(QuickValue::ThemeCurrent)
     );
-
-    press(&mut a, Btn::Down);
-    assert_eq!(a.quick_menu(), Some(QuickRow::ThemeWeb));
-    assert_eq!(
-        a.quick_value(QuickRow::ThemeWeb),
-        Some(QuickValue::ThemePick)
-    );
-    press(&mut a, Btn::A);
-    assert_eq!(
-        a.quick_value(QuickRow::ThemeWeb),
-        Some(QuickValue::ThemeCurrent)
-    );
-    let written = std::fs::read_to_string(d.path().join("linkSlot/Config/theme.txt")).unwrap();
-    assert!(written.contains("preset web"), "{written}");
-
     press(&mut a, Btn::B);
     assert_eq!(a.quick_menu(), Some(QuickRow::Theme));
     // 主题 now lives under 画面, so backing out lands on that page.
@@ -890,7 +875,8 @@ fn brightness_and_volume_still_answer_over_the_quick_menu() {
 fn fake_faces(a: &mut App) {
     let id = TexId::from_raw;
     a.set_quick_menu_faces(QuickMenuFaces {
-        cards: [(id(600), 624, 42), (id(601), 624, 42)],
+        background: (id(590), 720, 480),
+        cards: [(id(600), 672, 48), (id(601), 672, 48)],
         labels: (0..QuickRow::ALL.len())
             .map(|i| [(id(100 + i), 200, 40), (id(150 + i), 200, 40)])
             .collect(),
@@ -922,6 +908,8 @@ fn fake_faces(a: &mut App) {
             (id(809), 160, 40),
             (id(815), 160, 40),
         ],
+        page_metas: std::array::from_fn(|i| (id(820 + i), 90, 20)),
+        numbers: (0..7).map(|i| (id(830 + i), 18, 20)).collect(),
         legend: [(id(400), 70), (id(401), 110), (id(402), 80)],
     });
     a.set_quick_clock_faces((id(500), 150, 40), (id(501), 150, 40));
@@ -955,14 +943,14 @@ fn drawn(out: &[Draw], id: usize) -> bool {
 }
 
 #[test]
-fn the_arrows_stand_only_around_the_selected_rows_value() {
+fn every_row_has_one_right_chevron() {
     let (_d, mut a, _) = on_carousel();
     fake_faces(&mut a);
     open_at(&mut a, QuickRow::FastForward);
     let out = frame(&a);
     assert!(
-        drawn(&out, 302) && drawn(&out, 303),
-        "no arrows on Fast Forward"
+        !drawn(&out, 302) && drawn(&out, 303),
+        "Fast Forward should have one right chevron"
     );
     assert!(
         drawn(&out, value(QuickValue::Speed6, true)),
@@ -1141,11 +1129,11 @@ fn the_selected_card_sits_behind_the_selected_row() {
                 _ => None,
             })
             .collect();
-        let offset = row.position().saturating_sub(7);
+        let offset = row.position().saturating_sub(5);
         let top = QUICK_TOP + QUICK_PITCH * (row.position() - offset) as f32;
         assert_eq!(
             cards,
-            vec![[48.0, top, 624.0, 42.0]],
+            vec![[24.0, top, 672.0, 48.0]],
             "{row:?}"
         );
         press(&mut a, Btn::Down);
@@ -1158,7 +1146,7 @@ fn labels_start_and_values_end_inside_the_selected_card() {
     fake_faces(&mut a);
     open_at(&mut a, QuickRow::FastForward);
     let out = frame(&a);
-    let card_right = 672.0;
+    let card_right = 696.0;
     for row in QuickRow::GAME.iter().take(8).copied() {
         let id = if row == QuickRow::FastForward {
             150 + row.index()
@@ -1166,12 +1154,12 @@ fn labels_start_and_values_end_inside_the_selected_card() {
             100 + row.index()
         };
         let [x, ..] = placed(&out, id).expect("a label was not drawn");
-        assert_eq!(x, 104.0, "{row:?}'s label");
+        assert_eq!(x, 75.0, "{row:?}'s label");
     }
     let [x, _, w, _] = placed(&out, value(QuickValue::On, false)).expect("rumble's value");
-    assert_eq!(x + w, card_right - 24.0, "an unselected value");
+    assert_eq!(x + w, card_right - 16.0 - 10.0 - 8.0, "an unselected value");
     let [x, _, w, _] = placed(&out, 303).expect("the right arrow");
-    assert_eq!(x + w, card_right - 24.0, "the arrow around the selected value");
+    assert_eq!(x + w, card_right - 16.0, "the row chevron");
 }
 
 #[test]

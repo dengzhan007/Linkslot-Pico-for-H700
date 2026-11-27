@@ -148,6 +148,7 @@ fn chrome_into(c: &Cart, seat: f32, out: &mut Vec<Draw>) {
         face: None,
         rest: centred(c),
         scale: 1.0,
+        lift: 0.0,
         seat,
         alert: None,
         dim: 0.5,
@@ -178,6 +179,7 @@ fn a_cart_the_row_had_not_finished_moving_slides_across_as_it_goes_in() {
             face: Some(face),
             rest,
             scale,
+            lift: 0.0,
             seat,
             alert: None,
             dim: 0.0,
@@ -235,6 +237,7 @@ fn draw_powering_on(t: f32, out: &mut Vec<Draw>) {
         face: None,
         rest: CENTRED,
         scale: 1.0,
+        lift: 0.0,
         seat: 1.0,
         alert: None,
         dim: 0.0,
@@ -646,6 +649,7 @@ fn the_empty_slot_is_the_same_slot_the_chrome_draws() {
         face: None,
         rest: CENTRED,
         scale: 1.0,
+        lift: 0.0,
         seat: 1.0,
         alert: None,
         dim: 0.0,
@@ -832,8 +836,8 @@ fn the_slot_sits_in_a_recessed_bay() {
     );
     let step = |a: [f32; 4], b: [f32; 4]| (0..3).map(|i| a[i] - b[i]).sum::<f32>();
     assert!(
-        step(housing(), recess()) > 0.0 && step(recess(), opening()) > 0.0,
-        "the bay does not read as a step between the shell and the opening"
+        step(recess(), housing()) > 0.0 && step(recess(), opening()) > 0.0,
+        "the bay does not read as a raised plate around a dark opening"
     );
 }
 
@@ -890,4 +894,46 @@ fn a_rack_nameplate_fills_the_slot_trough_behind_the_plastic() {
     let mut plain = Vec::new();
     draw_empty_slot_with(None, &mut plain);
     assert!(!plain.iter().any(|d| matches!(d, Draw::Tex { .. })));
+}
+
+#[test]
+fn a_room_lift_only_moves_the_cart_before_it_catches_the_slot() {
+    let c = pak();
+    let face = TexId::from_raw(3);
+    let at = |seat: f32, lift: f32| {
+        let mut out = Vec::new();
+        SlotChrome {
+            cart: &c,
+            face: Some(face),
+            rest: centred(&c),
+            scale: 1.0,
+            lift,
+            seat,
+            alert: None,
+            dim: 0.0,
+            screen: 0.0,
+            game: false,
+            plate: None,
+        }
+        .draw(&mut out);
+        out.iter()
+            .find(|d| matches!(d, Draw::Tex { .. }))
+            .map(quad)
+            .expect("no cartridge in the list")
+    };
+    let plain = at(0.0, 0.0);
+    let down = at(0.0, 40.0);
+    assert!(
+        (down.y - (plain.y + 40.0)).abs() < 0.01,
+        "the lifted cartridge did not start 40 px lower: {} against {}",
+        down.y,
+        plain.y
+    );
+    assert_eq!(down.x, plain.x, "the room lift moved the cartridge sideways");
+    let seated = at(1.0, 0.0);
+    let seated_down = at(1.0, 40.0);
+    assert_eq!(
+        seated, seated_down,
+        "the room lift moved the cartridge that is already seated in the slot"
+    );
 }

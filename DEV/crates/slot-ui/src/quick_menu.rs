@@ -4,10 +4,54 @@ use slot_store::{Device, GbPalette};
 use slot_store::{Platform, ResumeKind};
 
 use crate::draw::{Draw, TexId, OUT_H, OUT_W};
-use crate::plate::{arrows_hint_face, hint_face, UndoFace};
+use crate::plate::{hint_face, hint_face_ink, UndoFace};
 use crate::power_menu::{MENU_H, MENU_PAD, MENU_PX};
 use crate::switch_style;
 use crate::text;
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+enum MenuIcon {
+    Clock,
+    Globe,
+    Calendar,
+    Grid,
+    Update,
+    Info,
+    Monitor,
+    Palette,
+    Mask,
+    Theme,
+    FastForward,
+    Rewind,
+    Speaker,
+    Rumble,
+    Save,
+    Load,
+    Keyboard,
+    Map,
+    Layout,
+    Turbo,
+    Wifi,
+    Web,
+    Cloud,
+    Transfer,
+    Hotspot,
+    Star,
+    Prev,
+    Next,
+    Reset,
+    Text,
+    Cover,
+    Arrows,
+    Cart,
+    Gamepad,
+    DPad,
+    Shoulder,
+    Gear,
+    Sun,
+    Moon,
+    Link,
+}
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum QuickRow {
@@ -254,19 +298,13 @@ impl QuickRow {
         QuickRow::SfcMask,
     ];
 
-    pub const THEMES: [QuickRow; 3] = [
-        QuickRow::ThemeDefault,
-        QuickRow::ThemeWeb,
-        QuickRow::ThemeWarm,
-    ];
+    /// One shipped theme.  `ThemeDefault`/`ThemeWeb` remain as compatibility
+    /// discriminants, but no page can select them any more.
+    pub const THEMES: &[QuickRow] = &[QuickRow::ThemeWarm];
 
     pub const SHELF: [QuickRow; 2] = [QuickRow::ShelfLook, QuickRow::ShelfKeys];
 
-    pub const SHELF_LOOK: [QuickRow; 3] = [
-        QuickRow::RomTitle,
-        QuickRow::FallbackCover,
-        QuickRow::Recents,
-    ];
+    pub const SHELF_LOOK: [QuickRow; 2] = [QuickRow::RomTitle, QuickRow::Recents];
 
     pub const BUTTON_SETTINGS: [QuickRow; 4] = [
         QuickRow::Shortcuts,
@@ -391,6 +429,14 @@ impl QuickRow {
         slot_i18n::t(lang, Self::PAGE_KEYS[index])
     }
 
+    /// Number of rows on page `index`; the header prints this as `SETTINGS / 06`.
+    pub fn page_len_at(index: usize) -> usize {
+        QuickRow::ALL
+            .iter()
+            .find(|row| row.page_index() == index)
+            .map_or(0, |row| row.page().len())
+    }
+
     pub fn index(self) -> usize {
         self as usize
     }
@@ -400,7 +446,8 @@ impl QuickRow {
             QuickRow::DisplayPanel
             | QuickRow::DisplayEffects
             | QuickRow::Masks
-            | QuickRow::Theme => &QuickRow::DISPLAY,
+            | QuickRow::Theme
+            | QuickRow::ThemeWeb => &QuickRow::DISPLAY,
             QuickRow::Brightness | QuickRow::BlueLight => &QuickRow::DISPLAY_PANEL,
             QuickRow::GbaShader
             | QuickRow::GbShader
@@ -410,7 +457,7 @@ impl QuickRow {
                 &QuickRow::MASKS
             }
             QuickRow::ShelfLook | QuickRow::ShelfKeys => &QuickRow::SHELF,
-            QuickRow::ThemeDefault | QuickRow::ThemeWeb | QuickRow::ThemeWarm => &QuickRow::THEMES,
+            QuickRow::ThemeDefault | QuickRow::ThemeWarm => &QuickRow::THEMES,
             QuickRow::RomTitle | QuickRow::FallbackCover | QuickRow::Recents => {
                 &QuickRow::SHELF_LOOK
             }
@@ -490,7 +537,7 @@ impl QuickRow {
             QuickRow::GbaShader => 3,
             QuickRow::FcMask => 4,
             QuickRow::ShelfLook => 5,
-            QuickRow::ThemeDefault => 15,
+            QuickRow::ThemeDefault | QuickRow::ThemeWarm => 15,
             QuickRow::RomTitle => 6,
             QuickRow::ShelfPrev => 7,
             QuickRow::FastForward => 8,
@@ -504,414 +551,88 @@ impl QuickRow {
         }
     }
 
-    /// Short label for the fallback icon tile when the symbol font has no
-    /// glyph for `glyph()`.
-    ///
-    /// Takes the language because a single Chinese character is meaningless in
-    /// an English menu; WP1 widens this to two-letter English initials, WP0 only
-    /// needs the language row itself to read correctly.
-    /// Short label for the fallback icon tile when the symbol font has no
-    /// glyph for `glyph()`.
-    ///
-    /// One character per language, so the tile keeps the same weight: a single
-    /// Chinese character is meaningless in an English menu, and a full English
-    /// word would not fit the tile.
-    pub fn icon_text(self, lang: Language) -> &'static str {
-        match lang {
-            Language::ZhCn => self.icon_text_zh(),
-            Language::EnUs => self.icon_text_en(),
-        }
-    }
-
-    fn icon_text_zh(self) -> &'static str {
+    fn menu_icon(self) -> MenuIcon {
         match self {
-            QuickRow::Language => "语",
-            QuickRow::FastForward => "快",
-            QuickRow::FastForwardSound => "音",
-            QuickRow::Screen => "画",
-            QuickRow::Shelf => "架",
-            QuickRow::ShelfLook => "看",
-            QuickRow::DisplayPanel => "亮",
-            QuickRow::DisplayEffects => "效",
-            QuickRow::Rumble => "震",
-            QuickRow::DateTime => "时",
-            QuickRow::Mods => "M",
-            QuickRow::ButtonSettings => "键",
-            QuickRow::SystemSettings => "系",
-            QuickRow::About => "i",
-            QuickRow::SystemUpgrade => "升",
-            QuickRow::GbaShader => "色",
-            QuickRow::GbShader => "色",
-            QuickRow::ColourCorrection => "校",
-            QuickRow::Brightness => "亮",
-            QuickRow::BlueLight => "蓝",
-            QuickRow::Game => "游",
-            QuickRow::SaveSettings => "存",
-                QuickRow::DefaultLoad => "读",
-            QuickRow::LoadGba => "读",
-            QuickRow::LoadGb => "读",
-            QuickRow::LoadGbc => "读",
-            QuickRow::DefaultSave => "存",
-            QuickRow::FcMask => "遮",
-            QuickRow::GbMask => "遮",
-            QuickRow::GbcMask => "遮",
-            QuickRow::SfcMask => "遮",
-            QuickRow::Masks => "罩",
-            QuickRow::SaveGba => "存",
-            QuickRow::SaveGb => "存",
-            QuickRow::SaveGbc => "存",
-            QuickRow::Recents => "近",
-            QuickRow::Turbo => "连",
-            QuickRow::Rewind => "倒",
-            QuickRow::GbPalettes => "调",
-            QuickRow::ButtonLayout => "键",
-            QuickRow::RomTitle => "题",
-            QuickRow::FallbackCover => "图",
-            QuickRow::LidTimeout => "盖",
-            QuickRow::Shortcuts => "捷",
-            QuickRow::Network => "网",
-            QuickRow::Wifi => "W",
-            QuickRow::Web => "服",
-            QuickRow::SyncStorage => "同",
-            QuickRow::SyncContent => "云",
-            QuickRow::CartTransfer => "传",
-            QuickRow::HotspotBand => "段",
-            QuickRow::SplitLink => "联",
-            QuickRow::Theme => "主",
-            QuickRow::ThemeDefault => "色",
-            QuickRow::ThemeWeb => "色",
-            QuickRow::ThemeWarm => "色",
-            QuickRow::ShelfKeys => "架",
-            QuickRow::ShelfPrev => "前",
-            QuickRow::ShelfNext => "后",
-            QuickRow::ShelfFav => "藏",
-            QuickRow::ShortcutMap => "映",
-            QuickRow::ShortcutReset => "重",
-            QuickRow::ShortcutSaveState => "存",
-            QuickRow::ShortcutLoadState => "读",
-            QuickRow::ShortcutBrightnessUp => "亮",
-            QuickRow::ShortcutBrightnessDown => "暗",
-            QuickRow::ShortcutBlueLightDown => "蓝",
-            QuickRow::ShortcutBlueLightUp => "蓝",
-            QuickRow::ShortcutColorCorrection => "校",
-            QuickRow::ShortcutPaletteBack => "调",
-            QuickRow::ShortcutPaletteNext => "调",
-            QuickRow::ShortcutShaderNext => "着",
-            QuickRow::ShortcutShaderBack => "着",
-            QuickRow::ShortcutFastForward => "快",
-            QuickRow::ShortcutRewind => "倒",
-            QuickRow::ControlUp => "上",
-            QuickRow::ControlDown => "下",
-            QuickRow::ControlLeft => "左",
-            QuickRow::ControlRight => "右",
-            QuickRow::ControlA => "A",
-            QuickRow::ControlB => "B",
-            QuickRow::ControlSelect => "S",
-            QuickRow::ControlStart => "T",
-            QuickRow::ControlL => "L",
-            QuickRow::ControlR => "R",
-            QuickRow::ControlTurboA => "X",
-            QuickRow::ControlTurboB => "Y",
-            QuickRow::ControlPreset => "肩",
-        }
-    }
-
-    fn icon_text_en(self) -> &'static str {
-        match self {
-            QuickRow::Language => "L",
-            QuickRow::FastForward => "F",
-            QuickRow::FastForwardSound => "S",
-            QuickRow::Screen => "D",
-            QuickRow::Shelf => "C",
-            QuickRow::ShelfLook => "L",
-            QuickRow::DisplayPanel => "B",
-            QuickRow::DisplayEffects => "E",
-            QuickRow::Rumble => "R",
-            QuickRow::DateTime => "T",
-            QuickRow::Mods => "M",
-            QuickRow::ButtonSettings => "K",
-            QuickRow::SystemSettings => "S",
-            QuickRow::About => "i",
-            QuickRow::SystemUpgrade => "U",
-            QuickRow::GbaShader => "S",
-            QuickRow::GbShader => "S",
-            QuickRow::ColourCorrection => "C",
-            QuickRow::Brightness => "B",
-            QuickRow::BlueLight => "B",
-            QuickRow::Game => "G",
-            QuickRow::SaveSettings => "S",
-                QuickRow::DefaultLoad => "L",
-            QuickRow::LoadGba => "L",
-            QuickRow::LoadGb => "L",
-            QuickRow::LoadGbc => "L",
-            QuickRow::DefaultSave => "S",
-            QuickRow::FcMask => "M",
-            QuickRow::GbMask => "M",
-            QuickRow::GbcMask => "M",
-            QuickRow::SfcMask => "M",
-            QuickRow::Masks => "M",
-            QuickRow::SaveGba => "S",
-            QuickRow::SaveGb => "S",
-            QuickRow::SaveGbc => "S",
-            QuickRow::Recents => "R",
-            QuickRow::Turbo => "T",
-            QuickRow::Rewind => "R",
-            QuickRow::GbPalettes => "P",
-            QuickRow::ButtonLayout => "B",
-            QuickRow::RomTitle => "T",
-            QuickRow::FallbackCover => "I",
-            QuickRow::LidTimeout => "L",
-            QuickRow::Shortcuts => "K",
-            QuickRow::Network => "N",
-            QuickRow::Wifi => "W",
-            QuickRow::Web => "S",
-            QuickRow::SyncStorage => "M",
-            QuickRow::SyncContent => "C",
-            QuickRow::CartTransfer => "T",
-            QuickRow::HotspotBand => "B",
-            QuickRow::SplitLink => "L",
-            QuickRow::Theme => "T",
-            QuickRow::ThemeDefault => "P",
-            QuickRow::ThemeWeb => "P",
-            QuickRow::ThemeWarm => "P",
-            QuickRow::ShelfKeys => "K",
-            QuickRow::ShelfPrev => "<",
-            QuickRow::ShelfNext => ">",
-            QuickRow::ShelfFav => "F",
-            QuickRow::ShortcutMap => "M",
-            QuickRow::ShortcutReset => "R",
-            QuickRow::ShortcutSaveState => "S",
-            QuickRow::ShortcutLoadState => "L",
-            QuickRow::ShortcutBrightnessUp => "+",
-            QuickRow::ShortcutBrightnessDown => "-",
-            QuickRow::ShortcutBlueLightDown => "-",
-            QuickRow::ShortcutBlueLightUp => "+",
-            QuickRow::ShortcutColorCorrection => "C",
-            QuickRow::ShortcutPaletteBack => "P",
-            QuickRow::ShortcutPaletteNext => "P",
-            QuickRow::ShortcutShaderNext => "S",
-            QuickRow::ShortcutShaderBack => "S",
-            QuickRow::ShortcutFastForward => "F",
-            QuickRow::ShortcutRewind => "R",
-            QuickRow::ControlUp => "U",
-            QuickRow::ControlDown => "D",
-            QuickRow::ControlLeft => "L",
-            QuickRow::ControlRight => "R",
-            QuickRow::ControlA => "A",
-            QuickRow::ControlB => "B",
-            QuickRow::ControlSelect => "S",
-            QuickRow::ControlStart => "T",
-            QuickRow::ControlL => "L",
-            QuickRow::ControlR => "R",
-            QuickRow::ControlTurboA => "X",
-            QuickRow::ControlTurboB => "Y",
-            QuickRow::ControlPreset => "S",
-        }
-    }
-
-    /// Nerd Font glyph used by the Switch-style icon tile. A neutral circle is
-    /// substituted by the face builder when a font lacks the glyph.
-    pub fn glyph(self) -> char {
-        match self {
-            QuickRow::FastForward | QuickRow::FastForwardSound => '\u{f04e}',
-            QuickRow::Screen => '\u{f108}',
-            QuickRow::Shelf => '\u{f07b}',
-            QuickRow::ShelfLook => '\u{f03e}',
-            QuickRow::DisplayPanel => '\u{f185}',
-            QuickRow::DisplayEffects => '\u{f1fc}',
-            QuickRow::Rumble => '\u{f0f3}',
-            QuickRow::DateTime => '\u{f017}',
-            QuickRow::Mods => '\u{f085}',
-            QuickRow::ButtonSettings => '\u{f11c}',
-            QuickRow::SystemSettings => '\u{f013}',
-            QuickRow::About => '\u{f05a}',
-            QuickRow::SystemUpgrade => '\u{f019}',
-            QuickRow::GbaShader | QuickRow::GbShader | QuickRow::ColourCorrection => '\u{f1de}',
-            QuickRow::Brightness => '\u{f185}',
-            QuickRow::BlueLight => '\u{f0eb}',
-            QuickRow::Game => '\u{f11b}',
-                QuickRow::SaveSettings
+            QuickRow::FastForward | QuickRow::ShortcutFastForward => MenuIcon::FastForward,
+            QuickRow::FastForwardSound => MenuIcon::Speaker,
+            QuickRow::Screen | QuickRow::DisplayPanel => MenuIcon::Monitor,
+            QuickRow::Rumble => MenuIcon::Rumble,
+            QuickRow::DateTime | QuickRow::Recents => MenuIcon::Clock,
+            QuickRow::Mods => MenuIcon::Grid,
+            QuickRow::About => MenuIcon::Info,
+            QuickRow::SystemUpgrade => MenuIcon::Update,
+            QuickRow::GbaShader
+            | QuickRow::GbShader
+            | QuickRow::GbPalettes
+            | QuickRow::ColourCorrection
+            | QuickRow::DisplayEffects
+            | QuickRow::ShortcutColorCorrection
+            | QuickRow::ShortcutPaletteBack
+            | QuickRow::ShortcutPaletteNext
+            | QuickRow::ShortcutShaderNext
+            | QuickRow::ShortcutShaderBack => MenuIcon::Palette,
+            QuickRow::Masks
+            | QuickRow::FcMask
+            | QuickRow::GbMask
+            | QuickRow::GbcMask
+            | QuickRow::SfcMask => MenuIcon::Mask,
+            QuickRow::Brightness | QuickRow::ShortcutBrightnessUp | QuickRow::ShortcutBrightnessDown => {
+                MenuIcon::Sun
+            }
+            QuickRow::BlueLight
+            | QuickRow::ShortcutBlueLightDown
+            | QuickRow::ShortcutBlueLightUp => MenuIcon::Moon,
+            QuickRow::Game
+            | QuickRow::ButtonSettings
+            | QuickRow::ControlA
+            | QuickRow::ControlB
+            | QuickRow::ControlSelect
+            | QuickRow::ControlStart => MenuIcon::Gamepad,
+            QuickRow::SaveSettings
             | QuickRow::SaveGba
             | QuickRow::SaveGb
-            | QuickRow::SaveGbc => '\u{f0c7}',
-            QuickRow::DefaultLoad | QuickRow::LoadGba | QuickRow::LoadGb | QuickRow::LoadGbc => '\u{f115}',
-            QuickRow::DefaultSave => '\u{f0c7}',
-            QuickRow::FcMask | QuickRow::GbMask | QuickRow::GbcMask | QuickRow::SfcMask => {
-                '\u{f2d0}'
-            }
-            QuickRow::Masks => '\u{f0e0}',
-            QuickRow::Recents => '\u{f1da}',
-            QuickRow::Turbo => '\u{f0e7}',
-            QuickRow::Rewind => '\u{f04a}',
-            QuickRow::GbPalettes => '\u{f53f}',
-            QuickRow::ButtonLayout => '\u{f11c}',
-            QuickRow::RomTitle => '\u{f031}',
-            QuickRow::FallbackCover => '\u{f03e}',
-            QuickRow::LidTimeout => '\u{f186}',
-            QuickRow::Shortcuts => '\u{f11c}',
-            QuickRow::Network | QuickRow::Wifi => '\u{f1eb}',
-            QuickRow::Web => '\u{f0ac}',
-            QuickRow::SyncStorage => '\u{f0c2}',
-            QuickRow::SyncContent => '\u{f0c2}',
-            QuickRow::CartTransfer => '\u{f0c7}',
-            QuickRow::HotspotBand => '\u{f1eb}',
-            QuickRow::SplitLink => '\u{f0c1}',
+            | QuickRow::SaveGbc
+            | QuickRow::DefaultSave
+            | QuickRow::ShortcutSaveState => MenuIcon::Save,
+            QuickRow::LoadGba
+            | QuickRow::LoadGb
+            | QuickRow::LoadGbc
+            | QuickRow::DefaultLoad
+            | QuickRow::ShortcutLoadState => MenuIcon::Load,
+            QuickRow::Turbo | QuickRow::ControlTurboA | QuickRow::ControlTurboB => MenuIcon::Turbo,
+            QuickRow::Rewind | QuickRow::ShortcutRewind => MenuIcon::Rewind,
+            QuickRow::ButtonLayout | QuickRow::ControlPreset => MenuIcon::Layout,
+            QuickRow::RomTitle => MenuIcon::Text,
+            QuickRow::FallbackCover | QuickRow::ShelfLook => MenuIcon::Cover,
+            QuickRow::LidTimeout => MenuIcon::Calendar,
+            QuickRow::SystemSettings => MenuIcon::Gear,
+            QuickRow::Shortcuts => MenuIcon::Keyboard,
+            QuickRow::Network | QuickRow::Wifi => MenuIcon::Wifi,
+            QuickRow::Web => MenuIcon::Web,
+            QuickRow::SyncStorage | QuickRow::SyncContent => MenuIcon::Cloud,
+            QuickRow::ShelfKeys => MenuIcon::Arrows,
+            QuickRow::ShelfPrev => MenuIcon::Prev,
+            QuickRow::ShelfNext => MenuIcon::Next,
+            QuickRow::ShelfFav => MenuIcon::Star,
+            QuickRow::ShortcutMap => MenuIcon::Map,
+            QuickRow::ShortcutReset => MenuIcon::Reset,
+            QuickRow::ControlUp
+            | QuickRow::ControlDown
+            | QuickRow::ControlLeft
+            | QuickRow::ControlRight => MenuIcon::DPad,
+            QuickRow::ControlL | QuickRow::ControlR => MenuIcon::Shoulder,
+            QuickRow::CartTransfer => MenuIcon::Transfer,
             QuickRow::Theme
             | QuickRow::ThemeDefault
             | QuickRow::ThemeWeb
-            | QuickRow::ThemeWarm => '\u{f1fc}',
-            // fa-language; the tile fallback above covers a font without it.
-            QuickRow::Language => '\u{f1ab}',
-            QuickRow::ShelfKeys | QuickRow::ShelfPrev | QuickRow::ShelfNext | QuickRow::ShelfFav => {
-                '\u{f11c}'
-            }
-            QuickRow::ShortcutReset => '\u{f021}',
-            QuickRow::ShortcutMap
-            | QuickRow::ShortcutSaveState
-            | QuickRow::ShortcutLoadState
-            | QuickRow::ShortcutBrightnessUp
-            | QuickRow::ShortcutBrightnessDown
-            | QuickRow::ShortcutBlueLightDown
-            | QuickRow::ShortcutBlueLightUp
-            | QuickRow::ShortcutColorCorrection
-            | QuickRow::ShortcutPaletteBack
-            | QuickRow::ShortcutPaletteNext
-            | QuickRow::ShortcutShaderNext
-            | QuickRow::ShortcutShaderBack
-            | QuickRow::ShortcutFastForward
-            | QuickRow::ShortcutRewind => '\u{f11c}',
-            QuickRow::ControlUp
-            | QuickRow::ControlDown
-            | QuickRow::ControlLeft
-            | QuickRow::ControlRight
-            | QuickRow::ControlA
-            | QuickRow::ControlB
-            | QuickRow::ControlSelect
-            | QuickRow::ControlStart
-            | QuickRow::ControlL
-            | QuickRow::ControlR
-            | QuickRow::ControlTurboA
-            | QuickRow::ControlTurboB => '\u{f11c}',
-            QuickRow::ControlPreset => '\u{f11c}',
+            | QuickRow::ThemeWarm => MenuIcon::Theme,
+            QuickRow::Shelf => MenuIcon::Cart,
+            QuickRow::HotspotBand => MenuIcon::Hotspot,
+            QuickRow::Language => MenuIcon::Globe,
+            QuickRow::SplitLink => MenuIcon::Link,
         }
     }
 
-    pub fn parent(self) -> Option<QuickRow> {
-        match self {
-            QuickRow::DisplayPanel
-            | QuickRow::DisplayEffects
-            | QuickRow::Masks
-            | QuickRow::Theme => Some(QuickRow::Screen),
-            QuickRow::Brightness | QuickRow::BlueLight => Some(QuickRow::DisplayPanel),
-            QuickRow::GbaShader
-            | QuickRow::GbShader
-            | QuickRow::ColourCorrection
-            | QuickRow::GbPalettes => Some(QuickRow::DisplayEffects),
-            QuickRow::FcMask | QuickRow::GbMask | QuickRow::GbcMask | QuickRow::SfcMask => {
-                Some(QuickRow::Masks)
-            }
-            QuickRow::ShelfLook | QuickRow::ShelfKeys => Some(QuickRow::Shelf),
-            QuickRow::ThemeDefault | QuickRow::ThemeWeb | QuickRow::ThemeWarm => {
-                Some(QuickRow::Theme)
-            }
-            QuickRow::RomTitle | QuickRow::FallbackCover | QuickRow::Recents => {
-                Some(QuickRow::ShelfLook)
-            }
-            QuickRow::ShelfPrev | QuickRow::ShelfNext | QuickRow::ShelfFav => {
-                Some(QuickRow::ShelfKeys)
-            }
-            QuickRow::FastForward
-            | QuickRow::FastForwardSound
-            | QuickRow::Rewind
-            | QuickRow::Rumble
-            | QuickRow::SaveSettings
-            => Some(QuickRow::Game),
-            QuickRow::DefaultLoad
-            | QuickRow::DefaultSave
-            | QuickRow::LoadGba
-            | QuickRow::SaveGba
-            | QuickRow::LoadGb
-            | QuickRow::SaveGb
-            | QuickRow::LoadGbc
-            | QuickRow::SaveGbc => Some(QuickRow::SaveSettings),
-            QuickRow::Shortcuts
-            | QuickRow::ShortcutMap
-            | QuickRow::ButtonLayout
-            | QuickRow::Turbo => Some(QuickRow::ButtonSettings),
-            QuickRow::ShortcutSaveState
-            | QuickRow::ShortcutLoadState
-            | QuickRow::ShortcutBrightnessUp
-            | QuickRow::ShortcutBrightnessDown
-            | QuickRow::ShortcutBlueLightDown
-            | QuickRow::ShortcutBlueLightUp
-            | QuickRow::ShortcutColorCorrection
-            | QuickRow::ShortcutPaletteBack
-            | QuickRow::ShortcutPaletteNext
-            | QuickRow::ShortcutShaderNext
-            | QuickRow::ShortcutShaderBack
-            | QuickRow::ShortcutFastForward
-            | QuickRow::ShortcutRewind
-            | QuickRow::ShortcutReset => Some(QuickRow::ShortcutMap),
-            QuickRow::ControlUp
-            | QuickRow::ControlDown
-            | QuickRow::ControlLeft
-            | QuickRow::ControlRight
-            | QuickRow::ControlA
-            | QuickRow::ControlB
-            | QuickRow::ControlSelect
-            | QuickRow::ControlStart
-            | QuickRow::ControlL
-            | QuickRow::ControlR
-            | QuickRow::ControlTurboA
-            | QuickRow::ControlTurboB
-            | QuickRow::ControlPreset => Some(QuickRow::ButtonLayout),
-            QuickRow::Wifi
-            | QuickRow::Web
-            | QuickRow::SyncStorage
-            | QuickRow::SyncContent
-            | QuickRow::CartTransfer
-            | QuickRow::HotspotBand
-            | QuickRow::SplitLink => Some(QuickRow::Network),
-            QuickRow::DateTime
-            | QuickRow::Language
-            | QuickRow::LidTimeout
-            | QuickRow::Mods
-            | QuickRow::SystemUpgrade
-            | QuickRow::About => Some(QuickRow::SystemSettings),
-            _ => None,
-        }
-    }
-
-    pub fn child(self) -> Option<QuickRow> {
-        match self {
-            QuickRow::Screen => Some(QuickRow::DISPLAY[0]),
-            QuickRow::DisplayPanel => Some(QuickRow::DISPLAY_PANEL[0]),
-            QuickRow::DisplayEffects => Some(QuickRow::DISPLAY_EFFECTS[0]),
-            QuickRow::Masks => Some(QuickRow::MASKS[0]),
-            QuickRow::Shelf => Some(QuickRow::SHELF[0]),
-            QuickRow::ShelfLook => Some(QuickRow::SHELF_LOOK[0]),
-            QuickRow::Theme => Some(QuickRow::THEMES[0]),
-            QuickRow::Game => Some(QuickRow::GAME[0]),
-            QuickRow::Network => Some(QuickRow::NETWORK[0]),
-            QuickRow::ShelfKeys => Some(QuickRow::SHELF_KEYS[0]),
-            QuickRow::ShortcutMap => Some(QuickRow::SHORTCUTS[0]),
-            QuickRow::ButtonLayout => Some(QuickRow::CONTROLS[0]),
-            QuickRow::ButtonSettings => Some(QuickRow::BUTTON_SETTINGS[0]),
-            QuickRow::SystemSettings => Some(QuickRow::SYSTEM_SETTINGS[0]),
-            QuickRow::SaveSettings => Some(QuickRow::SAVES[0]),
-            _ => None,
-        }
-    }
-
-    pub fn position(self) -> usize {
-        self.page().iter().position(|r| *r == self).unwrap_or(0)
-    }
-
-    /// The translation key for this row's label.
-    ///
-    /// One match instead of a literal per language: `label` is then a single
-    /// lookup, and the parity test in `slot-i18n` guarantees both files carry
-    /// every key this table can return.
     pub fn key(self) -> &'static str {
         match self {
             QuickRow::FastForward => "device.quick.label.fast_forward",
@@ -1038,6 +759,117 @@ impl QuickRow {
                 | QuickRow::SyncStorage
                 | QuickRow::CartTransfer
         )
+    }
+
+    pub fn parent(self) -> Option<QuickRow> {
+        match self {
+            QuickRow::DisplayPanel
+            | QuickRow::DisplayEffects
+            | QuickRow::Masks
+            | QuickRow::Theme => Some(QuickRow::Screen),
+            QuickRow::Brightness | QuickRow::BlueLight => Some(QuickRow::DisplayPanel),
+            QuickRow::GbaShader
+            | QuickRow::GbShader
+            | QuickRow::ColourCorrection
+            | QuickRow::GbPalettes => Some(QuickRow::DisplayEffects),
+            QuickRow::FcMask | QuickRow::GbMask | QuickRow::GbcMask | QuickRow::SfcMask => {
+                Some(QuickRow::Masks)
+            }
+            QuickRow::ShelfLook | QuickRow::ShelfKeys => Some(QuickRow::Shelf),
+            QuickRow::ThemeDefault | QuickRow::ThemeWeb | QuickRow::ThemeWarm => {
+                Some(QuickRow::Theme)
+            }
+            QuickRow::RomTitle | QuickRow::FallbackCover | QuickRow::Recents => {
+                Some(QuickRow::ShelfLook)
+            }
+            QuickRow::ShelfPrev | QuickRow::ShelfNext | QuickRow::ShelfFav => {
+                Some(QuickRow::ShelfKeys)
+            }
+            QuickRow::FastForward
+            | QuickRow::FastForwardSound
+            | QuickRow::Rewind
+            | QuickRow::Rumble
+            | QuickRow::SaveSettings => Some(QuickRow::Game),
+            QuickRow::DefaultLoad
+            | QuickRow::DefaultSave
+            | QuickRow::LoadGba
+            | QuickRow::SaveGba
+            | QuickRow::LoadGb
+            | QuickRow::SaveGb
+            | QuickRow::LoadGbc
+            | QuickRow::SaveGbc => Some(QuickRow::SaveSettings),
+            QuickRow::Shortcuts
+            | QuickRow::ShortcutMap
+            | QuickRow::ButtonLayout
+            | QuickRow::Turbo => Some(QuickRow::ButtonSettings),
+            QuickRow::ShortcutSaveState
+            | QuickRow::ShortcutLoadState
+            | QuickRow::ShortcutBrightnessUp
+            | QuickRow::ShortcutBrightnessDown
+            | QuickRow::ShortcutBlueLightDown
+            | QuickRow::ShortcutBlueLightUp
+            | QuickRow::ShortcutColorCorrection
+            | QuickRow::ShortcutPaletteBack
+            | QuickRow::ShortcutPaletteNext
+            | QuickRow::ShortcutShaderNext
+            | QuickRow::ShortcutShaderBack
+            | QuickRow::ShortcutFastForward
+            | QuickRow::ShortcutRewind
+            | QuickRow::ShortcutReset => Some(QuickRow::ShortcutMap),
+            QuickRow::ControlUp
+            | QuickRow::ControlDown
+            | QuickRow::ControlLeft
+            | QuickRow::ControlRight
+            | QuickRow::ControlA
+            | QuickRow::ControlB
+            | QuickRow::ControlSelect
+            | QuickRow::ControlStart
+            | QuickRow::ControlL
+            | QuickRow::ControlR
+            | QuickRow::ControlTurboA
+            | QuickRow::ControlTurboB
+            | QuickRow::ControlPreset => Some(QuickRow::ButtonLayout),
+            QuickRow::Wifi
+            | QuickRow::Web
+            | QuickRow::SyncStorage
+            | QuickRow::SyncContent
+            | QuickRow::CartTransfer
+            | QuickRow::HotspotBand
+            | QuickRow::SplitLink => Some(QuickRow::Network),
+            QuickRow::DateTime
+            | QuickRow::Language
+            | QuickRow::LidTimeout
+            | QuickRow::Mods
+            | QuickRow::SystemUpgrade
+            | QuickRow::About => Some(QuickRow::SystemSettings),
+            _ => None,
+        }
+    }
+
+    pub fn child(self) -> Option<QuickRow> {
+        match self {
+            QuickRow::Screen => Some(QuickRow::DISPLAY[0]),
+            QuickRow::DisplayPanel => Some(QuickRow::DISPLAY_PANEL[0]),
+            QuickRow::DisplayEffects => Some(QuickRow::DISPLAY_EFFECTS[0]),
+            QuickRow::Masks => Some(QuickRow::MASKS[0]),
+            QuickRow::Shelf => Some(QuickRow::SHELF[0]),
+            QuickRow::ShelfLook => Some(QuickRow::SHELF_LOOK[0]),
+            QuickRow::Theme => Some(QuickRow::THEMES[0]),
+            QuickRow::Game => Some(QuickRow::GAME[0]),
+            QuickRow::Network => Some(QuickRow::NETWORK[0]),
+            QuickRow::ShelfKeys => Some(QuickRow::SHELF_KEYS[0]),
+            QuickRow::ShortcutMap => Some(QuickRow::SHORTCUTS[0]),
+            QuickRow::ButtonLayout => Some(QuickRow::CONTROLS[0]),
+            QuickRow::ButtonSettings => Some(QuickRow::BUTTON_SETTINGS[0]),
+            QuickRow::SystemSettings => Some(QuickRow::SYSTEM_SETTINGS[0]),
+            QuickRow::SaveSettings => Some(QuickRow::SAVES[0]),
+            _ => None,
+        }
+    }
+
+    pub fn position(self) -> usize {
+        let page = self.page();
+        page.iter().position(|row| *row == self).unwrap_or(0)
     }
 
     pub fn up(self) -> QuickRow {
@@ -1353,91 +1185,452 @@ fn shortcut_chord(device: Device) -> &'static str {
     }
 }
 
-pub const QUICK_PITCH: f32 = 48.0;
-pub const QUICK_TOP: f32 = 88.0;
-pub const QUICK_EDGE: f32 = 48.0;
-pub const QUICK_CARD_W: u32 = 624;
-pub const QUICK_CARD_H: u32 = 42;
-const CARD_Y: f32 = 88.0;
-const ICON_PX: f32 = 24.0;
-const ICON_X: f32 = 64.0;
-const LABEL_X: f32 = 104.0;
-const RIGHT_PAD: f32 = 24.0;
-const CARET_GAP: f32 = 14.0;
-const CARET_PX: f32 = 24.0;
-const LEGEND_Y: f32 = 430.0;
-const HEADER_Y: f32 = 22.0;
-const HEADER_H: f32 = 30.0;
+pub const QUICK_PITCH: f32 = 54.0;
+pub const QUICK_TOP: f32 = 96.0;
+pub const QUICK_EDGE: f32 = 24.0;
+pub const QUICK_CARD_W: u32 = 672;
+pub const QUICK_CARD_H: u32 = 48;
+const CARD_Y: f32 = 96.0;
+const ICON_BOX: f32 = 22.0;
+const ICON_X: f32 = 40.0;
+const LABEL_X: f32 = 75.0;
+const RIGHT_PAD: f32 = 16.0;
+const CARET_PX: f32 = 12.0;
+const LEGEND_Y: f32 = 440.0;
 pub const QUICK_SPLIT: f32 = LEGEND_Y - 2.0;
+
+/// Console Flat menu: only the selected row has a face.  Unselected rows are
+/// the flat page background; the face stays transparent.
+pub fn quick_card_face(selected: bool) -> UndoFace {
+    if selected {
+        switch_style::rounded_face(
+            QUICK_CARD_W,
+            QUICK_CARD_H,
+            11.0,
+            [0xF6, 0xF6, 0xF3, 255],
+            None,
+        )
+    } else {
+        UndoFace {
+            rgba: vec![0u8; (QUICK_CARD_W * QUICK_CARD_H * 4) as usize],
+            w: QUICK_CARD_W,
+            h: QUICK_CARD_H,
+        }
+    }
+}
 
 pub fn quick_label_face(row: QuickRow, lang: Language) -> UndoFace {
     quick_label_face_state(row, false, lang)
 }
 
 pub fn quick_label_face_state(row: QuickRow, lit: bool, lang: Language) -> UndoFace {
-    quick_text_face(
+    quick_text_face_at(
         row.label(lang),
         if lit {
-            switch_style::ink_selected()
+            [0x1B, 0x1B, 0x1E]
         } else {
             switch_style::ink()
         },
+        13.0,
+        10.0,
     )
 }
 
 /// `text` is already resolved: the clock, a mask file name and a menu value all
 /// arrive as strings, so this builder takes the string rather than a value.
 pub fn quick_value_face(text: &str, lit: bool) -> UndoFace {
-    quick_text_face(
+    quick_text_face_at(
         text,
         if lit {
-            switch_style::ink_selected()
+            [0x6C, 0x6C, 0x72]
         } else {
-            switch_style::ink_dim()
+            [0xA6, 0xA6, 0xAD]
         },
+        10.0,
+        8.0,
     )
 }
 
 /// The page header, drawn from the page's index rather than a title string so
 /// the language decides the text.
 pub fn quick_title_face(index: usize, lang: Language) -> UndoFace {
-    switch_style::title_face(QuickRow::page_title_at(index, lang), 30.0)
+    quick_text_face_at(
+        QuickRow::page_title_at(index, lang),
+        switch_style::ink(),
+        26.0,
+        14.0,
+    )
 }
 
-pub fn quick_icon_face(row: QuickRow, lit: bool, lang: Language) -> crate::cart::CartFace {
-    let colour = if lit {
-        switch_style::accent()
-    } else {
-        switch_style::ink()
+/// Right-aligned page coordinate, e.g. `SETTINGS / 06`.
+pub fn quick_page_meta_face(count: usize) -> UndoFace {
+    quick_text_face_at(
+        &format!("SETTINGS / {:02}", count),
+        [0x74, 0x74, 0x7C],
+        9.0,
+        8.0,
+    )
+}
+
+/// The old menu has no printed row number.
+pub fn quick_number_face(number: usize) -> UndoFace {
+    let _ = number;
+    UndoFace {
+        rgba: Vec::new(),
+        w: 0,
+        h: 0,
+    }
+}
+
+pub fn quick_icon_face(row: QuickRow, lit: bool, _lang: Language) -> crate::cart::CartFace {
+    let size = ICON_BOX as u32;
+    let ink = if lit { [0x1B, 0x1B, 0x1E] } else { switch_style::ink() };
+    let mut tile = UndoFace {
+        rgba: vec![0u8; (size * size * 4) as usize],
+        w: size,
+        h: size,
     };
-    let face = crate::icon::glyph_face(row.glyph(), ICON_PX, colour);
-    if face.w > 0 {
-        face
-    } else {
-        let fill = if lit {
-            [
-                switch_style::accent()[0],
-                switch_style::accent()[1],
-                switch_style::accent()[2],
-                255,
-            ]
-        } else {
-            switch_style::surface_border()
-        };
-        let face = switch_style::tile_face(row.icon_text(lang), fill, switch_style::ink(), 28);
-        crate::cart::CartFace {
-            rgba: face.rgba,
-            w: face.w,
-            h: face.h,
+    draw_menu_icon(&mut tile, row.menu_icon(), ink);
+    crate::cart::CartFace {
+        rgba: tile.rgba,
+        w: tile.w,
+        h: tile.h,
+    }
+}
+
+fn draw_menu_icon(tile: &mut UndoFace, icon: MenuIcon, ink: [u8; 3]) {
+    let side = tile.w as i32;
+    let mut pen = |x: i32, y: i32| {
+        if (0..side).contains(&x) && (0..side).contains(&y) {
+            let at = ((y as u32 * tile.w + x as u32) * 4) as usize;
+            tile.rgba[at..at + 3].copy_from_slice(&ink);
+            tile.rgba[at + 3] = 255;
+        }
+    };
+    let line = |pen: &mut dyn FnMut(i32, i32), x0: i32, y0: i32, x1: i32, y1: i32| {
+        let dx = (x1 - x0).abs();
+        let dy = -(y1 - y0).abs();
+        let sx = if x0 < x1 { 1 } else { -1 };
+        let sy = if y0 < y1 { 1 } else { -1 };
+        let mut err = dx + dy;
+        let (mut x, mut y) = (x0, y0);
+        loop {
+            pen(x, y);
+            if x == x1 && y == y1 {
+                break;
+            }
+            let e2 = 2 * err;
+            if e2 >= dy {
+                err += dy;
+                x += sx;
+            }
+            if e2 <= dx {
+                err += dx;
+                y += sy;
+            }
+        }
+    };
+    let arc = |pen: &mut dyn FnMut(i32, i32), cx: i32, cy: i32, r: i32, from: i32, to: i32| {
+        let steps = (to - from).abs().max(1);
+        for step in 0..=steps {
+            let angle = (from + (to - from) * step / steps) as f32 * std::f32::consts::PI / 180.0;
+            pen(
+                cx + (angle.cos() * r as f32).round() as i32,
+                cy + (angle.sin() * r as f32).round() as i32,
+            );
+        }
+    };
+    let poly = |pen: &mut dyn FnMut(i32, i32), pts: &[(i32, i32)]| {
+        for pair in pts.windows(2) {
+            line(pen, pair[0].0, pair[0].1, pair[1].0, pair[1].1);
+        }
+    };
+    match icon {
+        MenuIcon::Clock => {
+            circle(&mut pen, 11, 11, 7);
+            line(&mut pen, 11, 11, 11, 7);
+            line(&mut pen, 11, 11, 14, 13);
+        }
+        MenuIcon::Globe => {
+            circle(&mut pen, 11, 11, 7);
+            line(&mut pen, 4, 11, 18, 11);
+            line(&mut pen, 11, 4, 11, 18);
+            arc(&mut pen, 11, 11, 7, 40, 140);
+            arc(&mut pen, 11, 11, 7, 220, 320);
+        }
+        MenuIcon::Calendar => {
+            rounded_rect(&mut pen, 4, 6, 14, 12);
+            line(&mut pen, 4, 9, 18, 9);
+            line(&mut pen, 7, 4, 7, 7);
+            line(&mut pen, 15, 4, 15, 7);
+        }
+        MenuIcon::Grid => {
+            for (x, y) in [(4, 4), (12, 4), (4, 12), (12, 12)] {
+                rect(&mut pen, x, y, 5, 5);
+            }
+        }
+        MenuIcon::Update => {
+            line(&mut pen, 11, 4, 11, 14);
+            line(&mut pen, 7, 10, 11, 14);
+            line(&mut pen, 15, 10, 11, 14);
+            line(&mut pen, 5, 18, 17, 18);
+        }
+        MenuIcon::Info => {
+            circle(&mut pen, 11, 11, 7);
+            line(&mut pen, 11, 10, 11, 15);
+            line(&mut pen, 11, 7, 11, 7);
+        }
+        MenuIcon::Monitor => {
+            rounded_rect(&mut pen, 3, 5, 16, 11);
+            line(&mut pen, 8, 19, 14, 19);
+            line(&mut pen, 11, 16, 11, 19);
+        }
+        MenuIcon::Palette => {
+            circle(&mut pen, 11, 11, 7);
+            arc(&mut pen, 11, 11, 4, 300, 40);
+            for (x, y) in [(8, 8), (12, 7), (15, 10)] {
+                line(&mut pen, x, y, x, y);
+            }
+        }
+        MenuIcon::Mask => {
+            rounded_rect(&mut pen, 3, 6, 16, 10);
+            line(&mut pen, 6, 10, 9, 10);
+            line(&mut pen, 13, 10, 16, 10);
+            line(&mut pen, 8, 14, 14, 14);
+        }
+        MenuIcon::Theme => {
+            circle(&mut pen, 11, 11, 7);
+            line(&mut pen, 11, 4, 11, 18);
+            arc(&mut pen, 11, 11, 4, 90, 270);
+        }
+        MenuIcon::FastForward => {
+            poly(&mut pen, &[(4, 5), (10, 11), (4, 17), (4, 5)]);
+            poly(&mut pen, &[(11, 5), (17, 11), (11, 17), (11, 5)]);
+        }
+        MenuIcon::Rewind => {
+            poly(&mut pen, &[(18, 5), (12, 11), (18, 17), (18, 5)]);
+            poly(&mut pen, &[(11, 5), (5, 11), (11, 17), (11, 5)]);
+        }
+        MenuIcon::Speaker => {
+            poly(&mut pen, &[(3, 9), (7, 9), (11, 5), (11, 17), (7, 13), (3, 13), (3, 9)]);
+            arc(&mut pen, 12, 11, 3, -60, 60);
+            arc(&mut pen, 13, 11, 6, -55, 55);
+        }
+        MenuIcon::Rumble => {
+            rounded_rect(&mut pen, 6, 3, 10, 16);
+            line(&mut pen, 9, 7, 9, 10);
+            line(&mut pen, 13, 7, 13, 10);
+            line(&mut pen, 9, 12, 9, 15);
+            line(&mut pen, 13, 12, 13, 15);
+        }
+        MenuIcon::Save => {
+            rounded_rect(&mut pen, 4, 3, 14, 16);
+            line(&mut pen, 7, 3, 7, 8);
+            line(&mut pen, 7, 8, 14, 8);
+            line(&mut pen, 14, 3, 14, 8);
+            line(&mut pen, 7, 15, 15, 15);
+        }
+        MenuIcon::Load => {
+            rounded_rect(&mut pen, 4, 3, 14, 16);
+            line(&mut pen, 7, 3, 7, 8);
+            line(&mut pen, 7, 8, 14, 8);
+            line(&mut pen, 11, 10, 11, 16);
+            line(&mut pen, 8, 13, 11, 16);
+            line(&mut pen, 14, 13, 11, 16);
+        }
+        MenuIcon::Keyboard => {
+            rounded_rect(&mut pen, 2, 5, 18, 12);
+            for x in [5, 8, 11, 14, 17] {
+                line(&mut pen, x, 8, x, 8);
+            }
+            for x in [5, 8, 11, 14, 17] {
+                line(&mut pen, x, 11, x, 11);
+            }
+            line(&mut pen, 7, 14, 15, 14);
+        }
+        MenuIcon::Map => {
+            poly(&mut pen, &[(3, 6), (8, 4), (14, 6), (19, 4), (19, 18), (14, 16), (8, 18), (3, 16), (3, 6)]);
+            line(&mut pen, 8, 4, 8, 18);
+            line(&mut pen, 14, 6, 14, 20);
+        }
+        MenuIcon::Layout => {
+            rounded_rect(&mut pen, 2, 5, 18, 12);
+            line(&mut pen, 8, 5, 8, 17);
+            line(&mut pen, 14, 5, 14, 17);
+        }
+        MenuIcon::Turbo => {
+            line(&mut pen, 3, 6, 12, 6);
+            line(&mut pen, 3, 11, 15, 11);
+            line(&mut pen, 3, 16, 12, 16);
+            line(&mut pen, 14, 8, 18, 11);
+            line(&mut pen, 14, 14, 18, 11);
+        }
+        MenuIcon::Wifi => {
+            arc(&mut pen, 11, 15, 9, 215, 325);
+            arc(&mut pen, 11, 15, 6, 215, 325);
+            arc(&mut pen, 11, 15, 3, 215, 325);
+            line(&mut pen, 11, 17, 11, 17);
+        }
+        MenuIcon::Web => {
+            circle(&mut pen, 11, 11, 7);
+            line(&mut pen, 4, 11, 18, 11);
+            line(&mut pen, 11, 4, 11, 18);
+            arc(&mut pen, 11, 11, 7, 40, 140);
+            arc(&mut pen, 11, 11, 7, 220, 320);
+        }
+        MenuIcon::Cloud => {
+            arc(&mut pen, 8, 11, 4, 180, 360);
+            arc(&mut pen, 14, 11, 5, 0, 180);
+            line(&mut pen, 4, 11, 4, 15);
+            line(&mut pen, 19, 15, 19, 11);
+            line(&mut pen, 4, 15, 8, 18);
+            line(&mut pen, 8, 18, 16, 18);
+            line(&mut pen, 16, 18, 19, 15);
+            line(&mut pen, 11, 12, 11, 18);
+            line(&mut pen, 8, 15, 11, 18);
+            line(&mut pen, 14, 15, 11, 18);
+        }
+        MenuIcon::Transfer => {
+            line(&mut pen, 3, 7, 18, 7);
+            line(&mut pen, 15, 4, 18, 7);
+            line(&mut pen, 15, 10, 18, 7);
+            line(&mut pen, 19, 15, 4, 15);
+            line(&mut pen, 7, 12, 4, 15);
+            line(&mut pen, 7, 18, 4, 15);
+        }
+        MenuIcon::Hotspot => {
+            circle(&mut pen, 11, 12, 2);
+            arc(&mut pen, 11, 12, 5, 210, 330);
+            arc(&mut pen, 11, 12, 8, 210, 330);
+            arc(&mut pen, 11, 12, 5, 30, 150);
+            arc(&mut pen, 11, 12, 8, 30, 150);
+        }
+        MenuIcon::Star => {
+            poly(&mut pen, &[(11, 3), (13, 8), (18, 9), (14, 12), (15, 18), (11, 15), (7, 18), (8, 12), (4, 9), (9, 8), (11, 3)]);
+        }
+        MenuIcon::Prev => {
+            line(&mut pen, 14, 4, 7, 11);
+            line(&mut pen, 7, 11, 14, 18);
+        }
+        MenuIcon::Next => {
+            line(&mut pen, 7, 4, 14, 11);
+            line(&mut pen, 14, 11, 7, 18);
+        }
+        MenuIcon::Reset => {
+            arc(&mut pen, 11, 11, 7, 40, 320);
+            line(&mut pen, 4, 8, 4, 12);
+            line(&mut pen, 4, 12, 8, 12);
+        }
+        MenuIcon::Text => {
+            line(&mut pen, 4, 5, 18, 5);
+            line(&mut pen, 11, 5, 11, 18);
+            line(&mut pen, 8, 18, 14, 18);
+        }
+        MenuIcon::Cover => {
+            rounded_rect(&mut pen, 3, 4, 16, 14);
+            line(&mut pen, 3, 14, 8, 10);
+            line(&mut pen, 8, 10, 12, 13);
+            line(&mut pen, 12, 13, 15, 11);
+            line(&mut pen, 15, 11, 19, 15);
+        }
+        MenuIcon::Arrows => {
+            line(&mut pen, 3, 8, 19, 8);
+            line(&mut pen, 6, 5, 3, 8);
+            line(&mut pen, 6, 11, 3, 8);
+            line(&mut pen, 19, 15, 3, 15);
+            line(&mut pen, 16, 12, 19, 15);
+            line(&mut pen, 16, 18, 19, 15);
+        }
+        MenuIcon::Cart => {
+            rounded_rect(&mut pen, 4, 3, 14, 16);
+            line(&mut pen, 7, 6, 15, 6);
+            line(&mut pen, 7, 9, 15, 9);
+            line(&mut pen, 7, 15, 15, 15);
+        }
+        MenuIcon::Gamepad => {
+            poly(&mut pen, &[(6, 6), (16, 6), (20, 11), (18, 17), (14, 17), (12, 14), (10, 14), (8, 17), (4, 17), (2, 11), (6, 6)]);
+            line(&mut pen, 6, 10, 6, 13);
+            line(&mut pen, 4, 11, 8, 11);
+            line(&mut pen, 15, 10, 15, 10);
+            line(&mut pen, 17, 12, 17, 12);
+        }
+        MenuIcon::DPad => {
+            poly(&mut pen, &[(9, 3), (13, 3), (13, 9), (19, 9), (19, 13), (13, 13), (13, 19), (9, 19), (9, 13), (3, 13), (3, 9), (9, 9), (9, 3)]);
+        }
+        MenuIcon::Shoulder => {
+            poly(&mut pen, &[(3, 11), (5, 6), (9, 4), (15, 4), (19, 6), (20, 12), (20, 18), (15, 18), (15, 12), (7, 12), (7, 18), (3, 18), (3, 11)]);
+        }
+        MenuIcon::Gear => {
+            circle(&mut pen, 11, 11, 3);
+            for (dx, dy) in [(0, -8), (0, 8), (-8, 0), (8, 0), (-6, -6), (6, 6), (6, -6), (-6, 6)] {
+                line(&mut pen, 11 + dx * 3 / 4, 11 + dy * 3 / 4, 11 + dx, 11 + dy);
+            }
+        }
+        MenuIcon::Sun => {
+            circle(&mut pen, 11, 11, 3);
+            for (dx, dy) in [(0, -8), (0, 8), (-8, 0), (8, 0), (-6, -6), (6, 6), (6, -6), (-6, 6)] {
+                line(&mut pen, 11 + dx * 3 / 4, 11 + dy * 3 / 4, 11 + dx, 11 + dy);
+            }
+        }
+        MenuIcon::Moon => {
+            arc(&mut pen, 13, 11, 7, 45, 270);
+            arc(&mut pen, 17, 7, 6, 90, 260);
+        }
+        MenuIcon::Link => {
+            line(&mut pen, 8, 13, 13, 8);
+            poly(&mut pen, &[(5, 10), (3, 12), (3, 16), (6, 19), (10, 19), (12, 17)]);
+            poly(&mut pen, &[(17, 12), (19, 10), (19, 6), (16, 3), (12, 3), (10, 5)]);
         }
     }
 }
 
-/// Smallest label size `text::fit` may fall back to when a translation is
-/// wider than the card.
-const LABEL_MIN_PX: f32 = 18.0;
+fn rect(pen: &mut dyn FnMut(i32, i32), x: i32, y: i32, w: i32, h: i32) {
+    for yy in y..y + h {
+        for xx in x..x + w {
+            pen(xx, yy);
+        }
+    }
+}
 
-fn quick_text_face(label: &str, colour: [u8; 3]) -> UndoFace {
+fn rounded_rect(pen: &mut dyn FnMut(i32, i32), x: i32, y: i32, w: i32, h: i32) {
+    for xx in x + 2..x + w - 2 {
+        pen(xx, y);
+        pen(xx, y + h - 1);
+    }
+    for yy in y + 2..y + h - 2 {
+        pen(x, yy);
+        pen(x + w - 1, yy);
+    }
+}
+
+fn circle(pen: &mut dyn FnMut(i32, i32), cx: i32, cy: i32, r: i32) {
+    let mut x = r;
+    let mut y = 0;
+    let mut err = 1 - r;
+    while x >= y {
+        for (dx, dy) in [
+            (x, y),
+            (y, x),
+            (-y, x),
+            (-x, y),
+            (-x, -y),
+            (-y, -x),
+            (y, -x),
+            (x, -y),
+        ] {
+            pen(cx + dx, cy + dy);
+        }
+        y += 1;
+        if err < 0 {
+            err += 2 * y + 1;
+        } else {
+            x -= 1;
+            err += 2 * (y - x) + 1;
+        }
+    }
+}
+
+fn quick_text_face_at(label: &str, colour: [u8; 3], px: f32, min_px: f32) -> UndoFace {
     let Some(font) = text::label_font() else {
         return UndoFace {
             rgba: Vec::new(),
@@ -1447,8 +1640,7 @@ fn quick_text_face(label: &str, colour: [u8; 3]) -> UndoFace {
     };
     // Long labels shrink instead of being special-cased per language: English
     // strings are routinely wider than the Chinese they replace.
-    let px = MENU_PX;
-    let layout = text::fit(font, label, OUT_W as f32, 1, px, LABEL_MIN_PX);
+    let layout = text::fit(font, label, OUT_W as f32, 1, px, min_px);
     let set = layout
         .lines
         .iter()
@@ -1467,9 +1659,9 @@ pub fn quick_caret_face(right: bool) -> UndoFace {
 pub fn quick_caret_face_state(right: bool, lit: bool) -> UndoFace {
     let glyph = if right { '\u{f0da}' } else { '\u{f0d9}' };
     let ink = if lit {
-        switch_style::ink_selected()
+        [0x6C, 0x6C, 0x72]
     } else {
-        switch_style::ink()
+        [0xA6, 0xA6, 0xAD]
     };
     let (Some(symbols), Some(label)) = (crate::icon::symbols_font(), text::label_font()) else {
         return UndoFace {
@@ -1506,12 +1698,32 @@ pub fn quick_caret_face_state(right: bool, lit: bool) -> UndoFace {
 pub fn quick_legend_faces(lang: Language) -> [UndoFace; 3] {
     [
         hint_face("B", slot_i18n::t(lang, "device.quick.legend.back")),
-        arrows_hint_face(slot_i18n::t(lang, "device.quick.legend.adjust")),
-        hint_face("A", slot_i18n::t(lang, "device.quick.legend.open")),
+        hint_face("A", slot_i18n::t(lang, "device.quick.legend.open_adjust")),
+        hint_face_ink(
+            "M",
+            slot_i18n::t(lang, "device.quick.legend.close"),
+            [0x2A, 0x24, 0x20],
+            [0xF2, 0xEC, 0xE2],
+            [0xB3, 0xA5, 0x96],
+        ),
     ]
 }
 
+/// Old warm menu ground: warm charcoal top fading into a darker foot.
+pub fn quick_background_face() -> UndoFace {
+    let mut face = UndoFace {
+        rgba: vec![0u8; (OUT_W * OUT_H * 4) as usize],
+        w: OUT_W,
+        h: OUT_H,
+    };
+    for px in face.rgba.chunks_exact_mut(4) {
+        px.copy_from_slice(&[0x1B, 0x1B, 0x1E, 0xFF]);
+    }
+    face
+}
+
 pub struct QuickMenuFaces {
+    pub background: (TexId, u32, u32),
     pub cards: [(TexId, u32, u32); 2],
     pub labels: Vec<[(TexId, u32, u32); 2]>,
     pub values: Vec<[(TexId, u32, u32); 2]>,
@@ -1520,6 +1732,10 @@ pub struct QuickMenuFaces {
     pub icons: Vec<[(TexId, u32, u32); 2]>,
     /// One title per page, indexed by `QuickRow::page_index`.
     pub titles: [(TexId, u32, u32); QuickRow::QUICK_PAGES],
+    /// Per-page `SETTINGS / NN` coordinate.
+    pub page_metas: [(TexId, u32, u32); QuickRow::QUICK_PAGES],
+    /// 01–07 row index faces.
+    pub numbers: Vec<(TexId, u32, u32)>,
     pub legend: [(TexId, u32); 3],
 }
 
@@ -1532,6 +1748,8 @@ pub struct QuickMenu<'a> {
     pub gb_mask_value: Option<(TexId, u32, u32)>,
     pub gbc_mask_value: Option<(TexId, u32, u32)>,
     pub sfc_mask_value: Option<(TexId, u32, u32)>,
+    pub mods_value: Option<[(TexId, u32, u32); 2]>,
+    pub version_value: Option<[(TexId, u32, u32); 2]>,
     pub faces: Option<&'a QuickMenuFaces>,
 }
 
@@ -1544,43 +1762,34 @@ impl QuickMenu<'_> {
             h: OUT_H as f32,
             colour: colour(switch_style::bg()),
         });
+        if let Some(faces) = self.faces {
+            let (bg_tex, bg_w, bg_h) = faces.background;
+            push(out, bg_tex, 0.0, 0.0, bg_w, bg_h);
+        }
         out.push(Draw::Rect {
-            x: 0.0,
-            y: 0.0,
-            w: OUT_W as f32,
-            h: 96.0,
-            colour: colour(switch_style::bg_top()),
-        });
-        out.push(Draw::Rect {
-            x: QUICK_EDGE,
-            y: HEADER_Y,
-            w: 5.0,
-            h: HEADER_H,
-            colour: colour([switch_style::accent()[0], switch_style::accent()[1], switch_style::accent()[2], 255]),
+            x: 28.0,
+            y: 40.0,
+            w: OUT_W as f32 - 56.0,
+            h: 1.0,
+            colour: colour([0x3A, 0x3A, 0x42, 255]),
         });
         let Some(faces) = self.faces else {
             return;
         };
         let page = self.row.page_index();
         if let Some(&(tex, w, h)) = faces.titles.get(page) {
-            push(out, tex, 64.0, 18.0, w, h);
+            push(out, tex, 14.0, 42.0, w, h);
         }
-        let dot_x = OUT_W as f32 - QUICK_EDGE - (faces.titles.len() as f32 - 1.0) * 14.0;
-        for i in 0..faces.titles.len() {
-            let on = i == page;
-            out.push(Draw::Rect {
-                x: dot_x + i as f32 * 14.0,
-                y: 34.0,
-                w: 6.0,
-                h: 6.0,
-                colour: if on {
-                    colour([switch_style::accent()[0], switch_style::accent()[1], switch_style::accent()[2], 255])
-                } else {
-                    [0.36, 0.36, 0.4, 1.0]
-                },
-            });
-        }
-        let card_x = (OUT_W as f32 - faces.cards[0].1 as f32) / 2.0;
+        let (meta_tex, meta_w, meta_h) = faces.page_metas[page];
+        push(
+            out,
+            meta_tex,
+            OUT_W as f32 - 32.0 - meta_w as f32,
+            43.0,
+            meta_w,
+            meta_h,
+        );
+        let card_x = QUICK_EDGE;
         let card_right = card_x + faces.cards[0].1 as f32;
         let page = self.row.page();
         let (offset, take) = page_window(page, self.row.position());
@@ -1589,8 +1798,18 @@ impl QuickMenu<'_> {
             let lit = row == self.row;
             let state = lit as usize;
             let (card_tex, card_w, card_h) = faces.cards[state];
-            push(out, card_tex, card_x, y, card_w, card_h);
+            if lit {
+                push(out, card_tex, card_x, y, card_w, card_h);
+                out.push(Draw::Rect {
+                    x: card_x - 8.0,
+                    y: y + 12.0,
+                    w: 3.0,
+                    h: 24.0,
+                    colour: colour([0xC4, 0x3B, 0x32, 255]),
+                });
+            }
             if let Some(&(tex, w, h)) = faces.icons.get(row.index()).map(|f| &f[state]) {
+                let _ = ICON_BOX;
                 push(out, tex, ICON_X, y + (card_h as f32 - h as f32) / 2.0, w, h);
             }
             if let Some(&(tex, w, h)) = faces.labels.get(row.index()).map(|f| &f[state]) {
@@ -1602,49 +1821,54 @@ impl QuickMenu<'_> {
                 QuickRow::GbMask => self.gb_mask_value,
                 QuickRow::GbcMask => self.gbc_mask_value,
                 QuickRow::SfcMask => self.sfc_mask_value,
+                QuickRow::Mods => self.mods_value.map(|v| v[state]),
+                QuickRow::SystemUpgrade => self.version_value.map(|v| v[state]),
                 _ => self.values[row.index()]
                     .and_then(|v| faces.values.get(v.index()))
                     .map(|v| v[state]),
             };
-            if row.opens() {
-                let (chevron_tex, cw, ch) = faces.carets[1][state];
-                let cx = card_right - RIGHT_PAD - cw as f32;
-                if let Some((tex, w, h)) = value {
-                    push(
-                        out,
-                        tex,
-                        cx - 8.0 - w as f32,
-                        y + (card_h as f32 - h as f32) / 2.0,
-                        w,
-                        h,
-                    );
-                }
+            let (chevron_tex, cw, ch) = faces.carets[1][state];
+            let cx = card_right - RIGHT_PAD - cw as f32;
+            if let Some((tex, w, h)) = value {
                 push(
                     out,
-                    chevron_tex,
-                    cx,
-                    y + (card_h as f32 - ch as f32) / 2.0,
-                    cw,
-                    ch,
+                    tex,
+                    cx - 8.0 - w as f32,
+                    y + (card_h as f32 - h as f32) / 2.0,
+                    w,
+                    h,
                 );
-                continue;
             }
-            let Some((tex, w, h)) = value else {
-                continue;
-            };
-            let ty = y + (card_h as f32 - h as f32) / 2.0;
-            if !lit {
-                push(out, tex, card_right - RIGHT_PAD - w as f32, ty, w, h);
-                continue;
-            }
-            let (right_tex, rw, rh) = faces.carets[1][state];
-            let rx = card_right - RIGHT_PAD - rw as f32;
-            push(out, right_tex, rx, ty, rw, rh);
-            let vx = rx - CARET_GAP + MENU_PAD as f32 - w as f32;
-            push(out, tex, vx, ty, w, h);
-            let (left_tex, lw, lh) = faces.carets[0][state];
-            push(out, left_tex, vx + MENU_PAD as f32 - CARET_GAP - lw as f32, ty, lw, lh);
+            push(
+                out,
+                chevron_tex,
+                cx,
+                y + (card_h as f32 - ch as f32) / 2.0,
+                cw,
+                ch,
+            );
         }
+
+        // Old warm menu keybar: B 返回 / A 打开·调整 on the left, M 关闭 on
+        // the right.  The faces still contain the keycap.
+        let legend_y = LEGEND_Y;
+        let mut x = 28.0;
+        for i in 0..2 {
+            let (tex, w) = faces.legend[i];
+            let scaled_w = (w as f32 * 0.72) as u32;
+            push(out, tex, x, legend_y, scaled_w, 20);
+            x += scaled_w.saturating_sub(2) as f32 + 12.0;
+        }
+        let (close_tex, close_w) = faces.legend[2];
+        let close_w = (close_w as f32 * 0.72) as u32;
+        push(
+            out,
+            close_tex,
+            OUT_W as f32 - 28.0 - close_w as f32,
+            legend_y,
+            close_w,
+            20,
+        );
     }
 }
 
@@ -1661,7 +1885,7 @@ pub fn row_top(row: QuickRow) -> f32 {
     CARD_Y + QUICK_PITCH * row.position() as f32
 }
 
-const MAX_ROWS: usize = 8;
+const MAX_ROWS: usize = 6;
 
 fn page_window(page: &[QuickRow], selected: usize) -> (usize, usize) {
     let take = page.len().min(MAX_ROWS);
@@ -1680,10 +1904,10 @@ mod tests {
 
     #[test]
     fn a_thirteen_row_page_scrolls_to_keep_the_selection_on_screen() {
-        assert_eq!(page_window(&QuickRow::SHORTCUTS, 0), (0, 8));
-        assert_eq!(page_window(&QuickRow::SHORTCUTS, 7), (0, 8));
-        assert_eq!(page_window(&QuickRow::SHORTCUTS, 8), (1, 8));
-        assert_eq!(page_window(&QuickRow::SHORTCUTS, 12), (5, 8));
+        assert_eq!(page_window(&QuickRow::SHORTCUTS, 0), (0, 6));
+        assert_eq!(page_window(&QuickRow::SHORTCUTS, 7), (2, 6));
+        assert_eq!(page_window(&QuickRow::SHORTCUTS, 8), (3, 6));
+        assert_eq!(page_window(&QuickRow::SHORTCUTS, 12), (7, 6));
     }
 
     #[test]

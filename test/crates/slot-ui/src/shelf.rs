@@ -31,6 +31,16 @@ pub fn playtime_plate(cart: (f32, f32, f32, f32), face: (u32, u32)) -> (f32, f32
 const SIDE_SCALE: f32 = 0.78;
 const SIDE_ALPHA: f32 = 0.55;
 
+/// Kept for callers/tests that describe the shelf's resting foot.  The shelf
+/// itself uses `foot_y`; this is the no-slack GBA foot.
+pub const SHELF_CART_FOOT: f32 = (OUT_H as f32 + CART_H as f32) / 2.0;
+
+/// Compatibility wrapper for the v1.0.50 `display_box` spelling.
+pub fn display_box(platform: slot_store::Platform) -> (f32, f32) {
+    let (w, h) = cart_box(platform);
+    (w as f32, h as f32)
+}
+
 static SLACK: AtomicU32 = AtomicU32::new(0);
 
 pub fn set_shelf_slack(px: f32) {
@@ -57,6 +67,17 @@ pub fn rest_y(h: f32) -> f32 {
 pub fn foot_y(h: f32) -> f32 {
     rest_y(h) + h
 }
+
+/// How far the row must drop so a full-size cartridge of `platform` has its
+/// top at or below `clear_y`.  Zero when the cartridge already clears.
+///
+/// The transfer room keeps its header over the shelf; tall cassettes (GB,
+/// FC, SFC, MD) otherwise rise into the card and its game chip.
+pub fn drop_to_clear(platform: slot_store::Platform, clear_y: f32) -> f32 {
+    let (_, h) = cart_box(platform);
+    (clear_y - rest_y(h as f32)).max(0.0)
+}
+
 const OMEGA: f32 = 16.0;
 const PART: f32 = 130.0;
 
@@ -330,12 +351,17 @@ impl Shelf {
     /// Current selected cartridge's on-screen box, including the shelf's
     /// in-flight scroll.  Overlays use this to pin badges to the cartridge.
     pub fn selected_rect(&self) -> Option<(f32, f32, f32, f32)> {
+        self.selected_rect_lifted(0.0)
+    }
+
+    /// [`selected_rect`] with the transfer room's downward shelf lift.
+    pub fn selected_rect_lifted(&self, lift: f32) -> Option<(f32, f32, f32, f32)> {
         let cart = self.carts.get(self.index)?;
         let (cw, ch) = cart_box(cart.platform);
         let (x, scale) = self.selected_at();
         let w = cw as f32 * scale;
         let h = ch as f32 * scale;
-        Some((x, foot_y(ch as f32) - h, w, h))
+        Some((x, foot_y(ch as f32) - h + lift, w, h))
     }
 
     pub fn selected_at(&self) -> (f32, f32) {
@@ -391,6 +417,21 @@ impl Shelf {
         dim: f32,
         out: &mut Vec<Draw>,
     ) {
+        self.draw_row_lifted(hidden, shake, recede, dim, 0.0, out);
+    }
+
+    /// [`draw_row`] shifted down by `lift` pixels.  The transfer room uses this
+    /// to keep tall cartridges clear of the room header; every other screen
+    /// draws the row at its resting height.
+    pub fn draw_row_lifted(
+        &self,
+        hidden: Option<&str>,
+        shake: f32,
+        recede: f32,
+        dim: f32,
+        lift: f32,
+        out: &mut Vec<Draw>,
+    ) {
         let recede = recede.clamp(0.0, 1.0);
         let dim = dim.clamp(0.0, 1.0);
         let target = self.scroll_target();
@@ -425,7 +466,7 @@ impl Shelf {
                 continue;
             }
             let x = x + shake;
-            let y = foot_y(ch as f32) - h;
+            let y = foot_y(ch as f32) - h + lift;
             if alpha < 1.0 {
                 let backing = match self.shells.get(i).copied().flatten() {
                     None => self.shadow,

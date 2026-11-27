@@ -35,11 +35,10 @@ pub struct ModsMenuView<'a> {
     pub error: Option<&'a str>,
 }
 
-const HEADER_H: f32 = 88.0;
-const SIDE: f32 = 48.0;
+const SIDE: f32 = 24.0;
 const CARD_W: f32 = OUT_W as f32 - 2.0 * SIDE;
 const LIST_TOP: f32 = 96.0;
-const ROW_H: f32 = 54.0;
+const ROW_H: f32 = 48.0;
 const ROW_GAP: f32 = 6.0;
 const MAX_ROWS: usize = 5;
 const ERROR_TOP: f32 = 398.0;
@@ -118,17 +117,16 @@ pub fn mods_menu(view: &ModsMenuView<'_>, lang: Language) -> UndoFace {
 }
 
 fn heading(face: &mut UndoFace, count: usize, lang: Language) {
-    kb::fill(face, 0.0, 0.0, OUT_W as f32, HEADER_H, sw::bg_top());
-    kb::fill(face, SIDE, 16.0, 5.0, 30.0, accent());
-    kb::draw_box(
+    kb::fill(face, 28.0, 40.0, OUT_W as f32 - 56.0, 1.0, sw::surface_border());
+    kb::draw_left(
         face,
         slot_i18n::t(lang, "device.app.mods.settings"),
-        28.0,
+        26.0,
         15.0,
-        64.0,
-        12.0,
-        OUT_W as f32 - 200.0,
-        40.0,
+        420.0,
+        32.0,
+        48.0,
+        34.0,
         sw::ink(),
     );
     let count_text = slot_i18n::t_args(
@@ -139,12 +137,12 @@ fn heading(face: &mut UndoFace, count: usize, lang: Language) {
     kb::draw_left(
         face,
         &count_text,
-        16.0,
         11.0,
+        10.0,
         120.0,
-        OUT_W as f32 - SIDE - 120.0,
-        20.0,
-        40.0,
+        OUT_W as f32 - 32.0 - 120.0,
+        52.0,
+        24.0,
         sw::ink_dim(),
     );
 }
@@ -164,21 +162,10 @@ fn hint(face: &mut UndoFace, lang: Language) {
 }
 
 fn card_at(face: &mut UndoFace, x: f32, y: f32, w: f32, h: f32, selected: bool) {
-    let (rim, fill) = if selected {
-        (sw::selected_border(), sw::selected())
-    } else {
-        (sw::surface_border(), sw::surface())
-    };
-    sw::fill_round(face, x, y, w, h, sw::CARD_RADIUS, rim);
-    sw::fill_round(
-        face,
-        x + 1.0,
-        y + 1.0,
-        w - 2.0,
-        h - 2.0,
-        (sw::CARD_RADIUS - 1.0).max(0.0),
-        fill,
-    );
+    if selected {
+        sw::fill_round(face, x, y, w, h, 11.0, sw::selected());
+        sw::fill_round(face, x - 8.0, y + 12.0, 3.0, 24.0, 2.0, accent());
+    }
 }
 
 fn mod_row(face: &mut UndoFace, y: f32, row: &ModsMenuRow<'_>, selected: bool, lang: Language) {
@@ -193,11 +180,11 @@ fn mod_row(face: &mut UndoFace, y: f32, row: &ModsMenuRow<'_>, selected: bool, l
         face,
         row.name,
         18.0,
-        12.0,
+        13.0,
         CARD_W - 160.0,
-        SIDE + 24.0,
-        y + 4.0,
-        30.0,
+        SIDE + 16.0,
+        y,
+        28.0,
         ink,
     );
     let status = match row.error {
@@ -217,11 +204,11 @@ fn mod_row(face: &mut UndoFace, y: f32, row: &ModsMenuRow<'_>, selected: bool, l
         face,
         &status,
         12.0,
-        9.0,
+        11.0,
         CARD_W - 160.0,
-        SIDE + 24.0,
-        y + 30.0,
-        18.0,
+        SIDE + 16.0,
+        y + 28.0,
+        16.0,
         status_colour,
     );
 

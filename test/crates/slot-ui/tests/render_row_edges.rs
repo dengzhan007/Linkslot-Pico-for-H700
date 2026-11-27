@@ -179,6 +179,7 @@ fn the_slot_takes_over_the_cart_where_the_row_had_it() {
         face: Some(faces[s.index]),
         rest,
         scale,
+        lift: 0.0,
         seat: 0.0,
         alert: None,
         dim: 0.0,

@@ -2,49 +2,47 @@ use std::path::Path;
 
 pub const THEME_FILE: &str = "theme.txt";
 
-/// Three built-in palettes.  The old four slot colours are still accepted as
-/// per-file overrides for compatibility.
+/// The two built-in cabinets.  Old theme files are still accepted through
+/// [`ThemePreset::parse`]; their colours are remapped onto one of these.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum ThemePreset {
+    /// Warm charcoal, paper cards, brass accents.  The only shipped theme.
     #[default]
-    Default,
-    Web,
     Warm,
+    /// Kept as a data fallback for old theme files; mapped to Warm.
+    Paper,
 }
 
 impl ThemePreset {
-    pub const ALL: [ThemePreset; 3] = [Self::Default, Self::Web, Self::Warm];
+    pub const ALL: [ThemePreset; 2] = [Self::Warm, Self::Paper];
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Default => "默认深色",
-            Self::Web => "网络青",
-            Self::Warm => "复古暖色",
+            Self::Warm => "掌机平面",
+            Self::Paper => "纸本",
         }
     }
 
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Default => "default",
-            Self::Web => "web",
             Self::Warm => "warm",
+            Self::Paper => "paper",
         }
     }
 
     pub fn parse(value: &str) -> Option<Self> {
         match value.trim().to_ascii_lowercase().as_str() {
-            "default" | "dark" => Some(Self::Default),
-            "web" | "teal" | "cyan" => Some(Self::Web),
-            "warm" | "retro" | "amber" => Some(Self::Warm),
+            // One shipped theme: every historic name lands on Warm.
+            "paper" | "ivory" | "light" | "default" | "web" | "teal" | "cyan"
+            | "warm" | "dark" | "retro" | "amber" => Some(Self::Warm),
             _ => None,
         }
     }
 
     pub fn index(self) -> usize {
         match self {
-            Self::Default => 0,
-            Self::Web => 1,
-            Self::Warm => 2,
+            Self::Warm => 0,
+            Self::Paper => 1,
         }
     }
 
@@ -64,12 +62,12 @@ impl ThemePreset {
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct Theme {
     pub preset: ThemePreset,
-    // The cartridge slot / chassis (existing fields).
+    // The cartridge slot / chassis.
     pub housing: [u8; 3],
     pub recess: [u8; 3],
     pub opening: [u8; 3],
     pub edge: [u8; 3],
-    // Shared UI palette (v0.6.13).
+    // Shared UI palette.
     pub bg: [u8; 4],
     pub bg_top: [u8; 4],
     pub surface: [u8; 4],
@@ -81,70 +79,83 @@ pub struct Theme {
     pub ink_dim: [u8; 3],
     pub accent: [u8; 3],
     pub accent_dim: [u8; 3],
+    // Document layer: the same paper in both cabinets, with a red stamp that
+    // is deliberately not the primary brand colour.
+    pub paper: [u8; 4],
+    pub paper_ink: [u8; 3],
+    pub paper_muted: [u8; 3],
+    pub paper_edge: [u8; 4],
+    pub stamp: [u8; 3],
+    /// Metallic highlight for stars and small marks.  On paper this is the
+    /// darker brass that stays readable; on warm ink it is the bright brass.
+    pub gold: [u8; 3],
+    pub bar: [u8; 4],
+    pub bar_edge: [u8; 4],
 }
 
 impl Default for Theme {
     fn default() -> Self {
-        Self::preset(ThemePreset::Default)
+        Self::preset(ThemePreset::default())
     }
 }
 
 impl Theme {
     pub fn preset(preset: ThemePreset) -> Self {
         match preset {
-            ThemePreset::Default => Theme {
-                preset,
-                housing: [0x24, 0x24, 0x29],
-                recess: [0x1a, 0x1a, 0x1d],
-                opening: [0x05, 0x05, 0x08],
-                edge: [0x4d, 0x4d, 0x57],
-                bg: [0x1b, 0x1b, 0x1f, 0xff],
-                bg_top: [0x24, 0x24, 0x29, 0xff],
-                surface: [0x2d, 0x2d, 0x33, 0xff],
-                surface_border: [0x4a, 0x4a, 0x54, 0xff],
-                selected: [0xf2, 0xf2, 0xf2, 0xff],
-                selected_border: [0xff, 0xff, 0xff, 0xff],
-                ink: [0xf4, 0xf4, 0xf4],
-                ink_selected: [0x1a, 0x1a, 0x1a],
-                ink_dim: [0x9a, 0x9a, 0xa4],
-                accent: [0xe6, 0x00, 0x12],
-                accent_dim: [0x8a, 0x12, 0x1a],
-            },
-            ThemePreset::Web => Theme {
-                preset,
-                housing: [0x24, 0x24, 0x38],
-                recess: [0x1a, 0x1a, 0x2e],
-                opening: [0x0b, 0x0b, 0x18],
-                edge: [0x00, 0x8f, 0x7a],
-                bg: [0x1a, 0x1a, 0x2e, 0xff],
-                bg_top: [0x24, 0x24, 0x38, 0xff],
-                surface: [0x2a, 0x2a, 0x40, 0xff],
-                surface_border: [0x3a, 0x3a, 0x55, 0xff],
-                selected: [0x00, 0xd4, 0xaa, 0xff],
-                selected_border: [0x78, 0xff, 0xe6, 0xff],
-                ink: [0xe8, 0xe8, 0xf0],
-                ink_selected: [0x10, 0x1c, 0x26],
-                ink_dim: [0x88, 0x88, 0xa8],
-                accent: [0x00, 0xd4, 0xaa],
-                accent_dim: [0x00, 0x8f, 0x7a],
-            },
             ThemePreset::Warm => Theme {
                 preset,
-                housing: [0x3b, 0x2b, 0x20],
-                recess: [0x24, 0x18, 0x0f],
-                opening: [0x0a, 0x06, 0x03],
-                edge: [0x9a, 0x73, 0x52],
-                bg: [0x1f, 0x17, 0x12, 0xff],
-                bg_top: [0x2b, 0x21, 0x19, 0xff],
-                surface: [0x34, 0x27, 0x1d, 0xff],
-                surface_border: [0x5d, 0x49, 0x37, 0xff],
-                selected: [0xf4, 0xe5, 0xd2, 0xff],
-                selected_border: [0xff, 0xf1, 0xdc, 0xff],
-                ink: [0xf6, 0xea, 0xd9],
-                ink_selected: [0x26, 0x18, 0x0f],
-                ink_dim: [0xb3, 0x9a, 0x80],
-                accent: [0xe0, 0x8a, 0x4a],
-                accent_dim: [0x8a, 0x4c, 0x2d],
+                housing: [0x16, 0x16, 0x19],
+                recess: [0x26, 0x26, 0x2b],
+                opening: [0x08, 0x08, 0x0a],
+                edge: [0x3a, 0x3a, 0x42],
+                bg: [0x1b, 0x1b, 0x1e, 0xff],
+                bg_top: [0x1b, 0x1b, 0x1e, 0xff],
+                surface: [0x26, 0x26, 0x2b, 0xff],
+                surface_border: [0x3a, 0x3a, 0x42, 0xff],
+                // A warm off-white rather than pure white: the selected capsule
+                // is on screen for long stretches, so it is deliberately
+                // softened to avoid glare without losing the selected state.
+                selected: [0xcb, 0xc9, 0xc3, 0xff],
+                selected_border: [0xcb, 0xc9, 0xc3, 0xff],
+                ink: [0xf4, 0xf4, 0xf1],
+                ink_selected: [0x1b, 0x1b, 0x1e],
+                ink_dim: [0xa6, 0xa6, 0xad],
+                accent: [0xc4, 0x3b, 0x32],
+                accent_dim: [0x8c, 0x2a, 0x24],
+                paper: [0xf0, 0xe8, 0xdb, 0xff],
+                paper_ink: [0x1f, 0x1f, 0x22],
+                paper_muted: [0x7a, 0x6a, 0x5a],
+                paper_edge: [0xd8, 0xc9, 0xb5, 0xff],
+                stamp: [0xc4, 0x3b, 0x32],
+                gold: [0xc4, 0x3b, 0x32],
+                bar: [0x1b, 0x1b, 0x1e, 0xff],
+                bar_edge: [0x3a, 0x3a, 0x42, 0xff],
+            },
+            ThemePreset::Paper => Theme {
+                preset,
+                housing: [0x2a, 0x20, 0x18],
+                recess: [0x1b, 0x15, 0x10],
+                opening: [0x0c, 0x0a, 0x08],
+                edge: [0xb9, 0xa9, 0x8e],
+                bg: [0xef, 0xe9, 0xdc, 0xff],
+                bg_top: [0xf8, 0xf3, 0xe7, 0xff],
+                surface: [0xf8, 0xf3, 0xe7, 0xff],
+                surface_border: [0xd3, 0xc6, 0xb0, 0xff],
+                selected: [0x24, 0x1f, 0x1a, 0xff],
+                selected_border: [0x3a, 0x2e, 0x24, 0xff],
+                ink: [0x24, 0x1f, 0x1a],
+                ink_selected: [0xf8, 0xf3, 0xe7],
+                ink_dim: [0x6e, 0x63, 0x54],
+                accent: [0x7a, 0x56, 0x20],
+                accent_dim: [0x5e, 0x42, 0x18],
+                paper: [0xf8, 0xf3, 0xe7, 0xff],
+                paper_ink: [0x24, 0x1f, 0x1a],
+                paper_muted: [0x6e, 0x63, 0x54],
+                paper_edge: [0xd3, 0xc6, 0xb0, 0xff],
+                stamp: [0xa8, 0x34, 0x2f],
+                gold: [0x9a, 0x74, 0x34],
+                bar: [0xef, 0xe9, 0xdc, 0xf2],
+                bar_edge: [0xd3, 0xc6, 0xb0, 0xff],
             },
         }
     }
@@ -166,7 +177,7 @@ impl Theme {
     }
 
     pub fn parse(text: &str) -> Self {
-        let mut preset = ThemePreset::Default;
+        let mut preset = ThemePreset::default();
         for line in text.lines() {
             let line = line.trim();
             if line.starts_with('#') {
@@ -215,6 +226,14 @@ impl Theme {
                 "ink_dim" => theme.ink_dim = rgb,
                 "accent" => theme.accent = rgb,
                 "accent_dim" => theme.accent_dim = rgb,
+                "paper" => theme.paper = rgba(rgb),
+                "paper_ink" => theme.paper_ink = rgb,
+                "paper_muted" => theme.paper_muted = rgb,
+                "paper_edge" => theme.paper_edge = rgba(rgb),
+                "stamp" => theme.stamp = rgb,
+                "gold" => theme.gold = rgb,
+                "bar" => theme.bar = rgba(rgb),
+                "bar_edge" => theme.bar_edge = rgba(rgb),
                 _ => {}
             }
         }

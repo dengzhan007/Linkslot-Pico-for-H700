@@ -138,25 +138,18 @@ fn a_long_title_stays_inside_the_label() {
         let d = tmp_root();
         std::fs::write(d.path().join(format!("Games/GBA/{stem}.gba")), [0u8; 8]).unwrap();
         let face = cart_face(&scan(d.path()).unwrap()[0]);
-        let bg = label_colour(stem);
-        let margin = 5;
+        assert_eq!((face.w, face.h), (CART_W, CART_H));
+        let mut blue = 0;
+        let mut warm = 0;
         for y in 0..LABEL_H {
             for x in 0..LABEL_W {
-                let edge =
-                    x < margin || y < margin || x >= LABEL_W - margin || y >= LABEL_H - margin;
-                if edge {
-                    assert_eq!(
-                        label_pixel(&face, x, y),
-                        bg,
-                        "{stem}: text spills into the border at {x},{y}"
-                    );
-                }
+                let ink = label_pixel(&face, x, y);
+                blue += usize::from(ink[2] as i32 > ink[0] as i32 + 16);
+                warm += usize::from(ink[0] > 170 && ink[1] > 130 && ink[2] < 190);
             }
         }
-        assert!(
-            (0..LABEL_H * LABEL_W).any(|i| label_pixel(&face, i % LABEL_W, i / LABEL_W) != bg),
-            "{stem}: no text was drawn"
-        );
+        assert!(blue > LABEL_W as usize * 4, "{stem}: the default cover has no blue field");
+        assert!(warm > 40, "{stem}: the default cover has no warm sun");
     }
 }
 
@@ -519,28 +512,19 @@ fn a_game_boy_title_stays_inside_its_near_square_label() {
         let d = tmp_root();
         write_gb_rom(&d, "GB", &format!("{stem}.gb"), 0x00);
         let face = cart_face(&scan(d.path()).unwrap()[0]);
-        let bg = label_colour(stem);
+        assert_eq!((face.w, face.h), (GB_CART_W, GB_CART_H));
         let at = |x: u32, y: u32| pixel(&face, GB_LABEL_X + x, GB_LABEL_Y + y);
-        let margin = 5;
+        let mut blue = 0;
+        let mut warm = 0;
         for y in 0..GB_LABEL_H {
             for x in 0..GB_LABEL_W {
-                let edge = x < margin
-                    || y < margin
-                    || x >= GB_LABEL_W - margin
-                    || y >= GB_LABEL_H - margin;
-                if edge {
-                    assert_eq!(
-                        at(x, y),
-                        bg,
-                        "{stem}: text spills into the border at {x},{y}"
-                    );
-                }
+                let ink = at(x, y);
+                blue += usize::from(ink[2] as i32 > ink[0] as i32 + 16);
+                warm += usize::from(ink[0] > 170 && ink[1] > 130 && ink[2] < 190);
             }
         }
-        assert!(
-            (0..GB_LABEL_H * GB_LABEL_W).any(|i| at(i % GB_LABEL_W, i / GB_LABEL_W) != bg),
-            "{stem}: no text was drawn"
-        );
+        assert!(blue > GB_LABEL_W as usize * 4, "{stem}: the default cover has no blue field");
+        assert!(warm > 40, "{stem}: the default cover has no warm sun");
     }
 }
 

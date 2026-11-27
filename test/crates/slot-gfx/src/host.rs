@@ -13,8 +13,11 @@ use std::num::NonZeroU32;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::Window;
 
-const DEFAULT_W: u32 = 1440;
-const DEFAULT_H: u32 = 960;
+/// Native handheld panel: 720×480.  Desktop opens at 1× so the window reads
+/// as a handheld screen instead of a 2× desktop canvas.  `SLOT_WINDOW` still
+/// overrides this for screenshots / high-density displays.
+const DEFAULT_W: u32 = 720;
+const DEFAULT_H: u32 = 480;
 
 pub struct HostSurface {
     window: Window,

@@ -35,6 +35,20 @@ const CACHE_CONTROL: &str = "no-store";
 /// it for a day so a second visit does not re-download a megabyte.
 const CORE_CACHE_CONTROL: &str = "private, max-age=86400";
 
+/// Serve the manager page.  The Web UI keeps the original cyan SaveContinue
+/// style; the device's paper/warm preset only affects the handheld UI.
+pub fn route_with_theme(path: &str, _theme: &str) -> Response {
+    if path != "/" && path != "/index.html" {
+        return route(path);
+    }
+    Response::new(
+        200,
+        "text/html; charset=utf-8",
+        INDEX_HTML.as_bytes().to_vec(),
+    )
+    .with_header("Cache-Control", CACHE_CONTROL)
+}
+
 pub fn route(path: &str) -> Response {
     let response = match path {
         "/" | "/index.html" => text("text/html; charset=utf-8", INDEX_HTML),
@@ -93,6 +107,16 @@ mod tests {
 
     /// The page has to be able to translate itself: a dictionary loader, the
     /// four tagging attributes and the function that applies them.
+    #[test]
+    fn the_manager_page_keeps_the_original_cyan_theme() {
+        let body = route_with_theme("/", "paper");
+        let body = String::from_utf8_lossy(&body.body);
+        assert!(body.contains("data-theme=\"cyan\""));
+        assert!(body.contains("content=\"#1a1a2e\""));
+        assert!(!body.contains("data-theme=\"paper\""));
+        assert!(!body.contains("data-theme=\"warm\""));
+    }
+
     #[test]
     fn the_page_carries_its_own_i18n_layer() {
         for needle in [

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! The three-page sync-conflict screen (v0.0.10 project book §7): an opaque
 //! Switch-style surface with a page tab bar, the per-unit version cards, the
 //! direction choice and the locked/syncing states.
@@ -13,10 +14,10 @@ use crate::keyboard as kb;
 use crate::plate::UndoFace;
 use crate::switch_style as sw;
 
-/// Green-cyan accent of the battery (`.sav`) conflict page.
-pub const SAV_ACCENT: [u8; 4] = [0x00, 0xd4, 0xaa, 0xff];
+/// Console Flat conflict accent; no second green state colour.
+pub const SAV_ACCENT: [u8; 4] = [0xc4, 0x3b, 0x32, 0xff];
 /// Red accent of the instant-save (state) conflict page.
-pub const STATE_ACCENT: [u8; 4] = [0xe6, 0x00, 0x12, 0xff];
+pub const STATE_ACCENT: [u8; 4] = [0xc4, 0x3b, 0x32, 0xff];
 
 /// One conflict page.  `All` is the unified two-unit page shown only when both
 /// units conflict.
@@ -168,10 +169,6 @@ pub const TITLE_Y: f32 = 64.0;
 pub const CONTENT_Y: f32 = 118.0;
 pub const CARD_X: f32 = 36.0;
 pub const CARD_W: f32 = OUT_W as f32 - 2.0 * CARD_X;
-pub const DIRECTION_Y: f32 = 402.0;
-pub const DIRECTION_H: f32 = 36.0;
-pub const DIRECTION_CHIP_W: f32 = 132.0;
-const DIRECTION_GAP: f32 = 16.0;
 /// Mixed-direction hint, always visible on the "全部" page (§7.7).
 pub fn mixed_hint(lang: Language) -> &'static str {
     slot_i18n::t(lang, "device.quick.conflict.mixed_hint")
@@ -188,56 +185,206 @@ const SIDE: f32 = CARD_X;
 /// must never show through a conflict page.
 pub fn conflict_face(view: &ConflictView, lang: Language) -> UndoFace {
     let mut face = kb::blank(OUT_W, OUT_H, sw::bg());
+    kb::fill(&mut face, 0.0, 0.0, OUT_W as f32, OUT_H as f32, [0x0d, 0x0d, 0x0f, 255]);
+    let x = 80.0;
+    let y = 64.0;
+    let w = 560.0;
+    let h = 352.0;
+    sw::fill_round(&mut face, x, y, w, h, 12.0, sw::surface_border());
+    sw::fill_round(&mut face, x + 1.0, y + 1.0, w - 2.0, h - 2.0, 11.0, sw::surface());
+    kb::draw_left(
+        &mut face,
+        "SYNC / CONFLICT",
+        9.0,
+        8.0,
+        220.0,
+        x + 24.0,
+        y + 16.0,
+        14.0,
+        accent_rgb(),
+    );
+    kb::draw_left(
+        &mut face,
+        view.page.title(lang),
+        26.0,
+        16.0,
+        w - 48.0,
+        x + 24.0,
+        y + 28.0,
+        34.0,
+        sw::ink(),
+    );
     if view.tabbed() {
-        draw_tabs(&mut face, view, lang);
+        let mut tx = x + 24.0;
+        for page in &view.pages {
+            let colour = if *page == view.page { sw::ink() } else { sw::ink_dim() };
+            let label = page.tab(lang);
+            let tw = kb::ink_width(label, 9.0) + 16.0;
+            kb::draw_left(&mut face, label, 10.0, 9.0, tw, tx, y + 62.0, 18.0, colour);
+            if *page == view.page {
+                sw::fill_round(&mut face, tx, y + 78.0, tw - 8.0, 2.0, 1.0, accent_ink());
+            }
+            tx += tw + 6.0;
+        }
     }
-    draw_title(&mut face, view, lang);
+    let mut top = y + 98.0;
+    if let Some(error) = view.error.as_deref() {
+        kb::draw_left(&mut face, error, 10.0, 9.0, w - 48.0, x + 24.0, top, 16.0, accent_rgb());
+        top += 24.0;
+    }
     if matches!(view.page, ConflictPage::All) {
-        draw_all_page(&mut face, view, lang);
-    } else if matches!(view.page, ConflictPage::State) {
-        draw_state_page(&mut face, view, lang);
-    } else {
-        draw_sav_page(&mut face, view, lang);
+        for page in [ConflictPage::State, ConflictPage::Sav] {
+            if let Some(unit) = view.unit(page) {
+                modal_unit_row(&mut face, x + 24.0, top, w - 48.0, 58.0, page.tab(lang), unit);
+                top += 64.0;
+            }
+        }
+    } else if let Some(unit) = view.page_unit() {
+        modal_unit_row(&mut face, x + 24.0, top, w - 48.0, 78.0, view.page.title(lang), unit);
     }
-    let locked = view.page_locked();
-    if locked {
-        let bottom = if matches!(view.page, ConflictPage::All) {
-            CONTENT_Y + 250.0
-        } else {
-            CONTENT_Y + 196.0
-        };
-        veil(&mut face, SIDE, CONTENT_Y, CARD_W, bottom - CONTENT_Y);
-        let panel_w = 246.0;
-        let panel_h = 50.0;
-        let panel_x = (OUT_W as f32 - panel_w) / 2.0;
-        let panel_y = CONTENT_Y + (bottom - CONTENT_Y - panel_h) / 2.0;
-        sw::fill_round(
-            &mut face,
-            panel_x,
-            panel_y,
-            panel_w,
-            panel_h,
-            11.0,
-            [0x18, 0x18, 0x1d, 0xff],
-        );
-        check_mark(&mut face, panel_x + 32.0, panel_y + 15.0, 20.0, sw::ink());
-        kb::draw_left(
+    if let Some(notice) = view.notice.as_deref() {
+        kb::draw_left(&mut face, notice, 10.0, 9.0, w - 48.0, x + 24.0, y + h - 92.0, 16.0, sw::ink_dim());
+    }
+    draw_direction_choices(&mut face, view, x + 24.0, y + h - 58.0, w - 48.0, 40.0, lang);
+    if view.page_locked() {
+        veil(&mut face, x + 1.0, y + 1.0, w - 2.0, h - 2.0);
+        kb::draw_box(
             &mut face,
             locked_label(lang),
-            20.0,
-            13.0,
-            160.0,
-            panel_x + 64.0,
-            panel_y,
-            panel_h,
+            16.0,
+            12.0,
+            x + 24.0,
+            y + h / 2.0 - 24.0,
+            w - 48.0,
+            40.0,
             sw::ink(),
         );
     }
-    draw_message(&mut face, view, lang);
-    draw_direction_row(&mut face, view, lang);
     draw_hint(&mut face, view, lang);
     face
 }
+
+/// Both conflict outcomes stay visible at all times.  Up/Down only moves the
+/// white selection capsule; A commits the highlighted side.
+fn draw_direction_choices(
+    face: &mut UndoFace,
+    view: &ConflictView,
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+    lang: Language,
+) {
+    let gap = 16.0;
+    let chip_w = (width - gap) / 2.0;
+    let busy = view.syncing;
+    for (index, direction) in [
+        ConflictDirection::Download,
+        ConflictDirection::Upload,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let cx = x + index as f32 * (chip_w + gap);
+        let selected = view.direction == direction;
+        if selected && !busy {
+            sw::fill_round(face, cx, y, chip_w, height, 10.0, sw::selected());
+            sw::fill_round(
+                face,
+                cx - 8.0,
+                y + 8.0,
+                3.0,
+                24.0,
+                2.0,
+                accent_ink(),
+            );
+            kb::draw_box(
+                face,
+                direction.label(lang),
+                18.0,
+                12.0,
+                cx,
+                y,
+                chip_w,
+                height,
+                sw::ink_selected(),
+            );
+        } else {
+            sw::fill_round(
+                face,
+                cx,
+                y,
+                chip_w,
+                height,
+                10.0,
+                sw::surface_border(),
+            );
+            sw::fill_round(
+                face,
+                cx + 1.0,
+                y + 1.0,
+                chip_w - 2.0,
+                height - 2.0,
+                9.0,
+                if selected && busy {
+                    [0x3a, 0x3a, 0x42, 0xff]
+                } else {
+                    sw::surface()
+                },
+            );
+            kb::draw_box(
+                face,
+                direction.label(lang),
+                18.0,
+                12.0,
+                cx,
+                y,
+                chip_w,
+                height,
+                sw::ink_dim(),
+            );
+        }
+    }
+    if busy {
+        kb::draw_box(
+            face,
+            slot_i18n::t(lang, "device.quick.conflict.syncing"),
+            10.0,
+            9.0,
+            x,
+            y - 24.0,
+            width,
+            20.0,
+            sw::ink_dim(),
+        );
+    }
+}
+
+fn accent_ink() -> [u8; 4] {
+    SAV_ACCENT
+}
+
+fn accent_rgb() -> [u8; 3] {
+    [SAV_ACCENT[0], SAV_ACCENT[1], SAV_ACCENT[2]]
+}
+
+fn modal_unit_row(
+    face: &mut UndoFace,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    label: &str,
+    unit: &ConflictUnitView,
+) {
+    sw::fill_round(face, x, y, w, h, 10.0, sw::surface_border());
+    sw::fill_round(face, x + 1.0, y + 1.0, w - 2.0, h - 2.0, 9.0, [0x1d, 0x1d, 0x22, 0xff]);
+    sw::fill_round(face, x + 8.0, y + 12.0, 3.0, 24.0, 2.0, accent_ink());
+    kb::draw_left(face, label, 12.0, 10.0, 110.0, x + 20.0, y, h, sw::ink());
+    kb::draw_left(face, &unit.local_line, 10.0, 9.0, w - 128.0, x + 136.0, y + 8.0, 18.0, sw::ink());
+    kb::draw_left(face, &unit.cloud_line, 10.0, 9.0, w - 128.0, x + 136.0, y + 28.0, 16.0, sw::ink_dim());
+}
+
 
 // ---------------------------------------------------------------------------
 // Chrome
@@ -619,137 +766,8 @@ fn draw_sav_icon(face: &mut UndoFace, x: f32, y: f32) {
 }
 
 // ---------------------------------------------------------------------------
-// Message area, direction row and hint
+// Direction hint
 // ---------------------------------------------------------------------------
-
-fn draw_message(face: &mut UndoFace, view: &ConflictView, lang: Language) {
-    // §7.7: the mixed-direction warning is permanent on every conflict page.
-    let hint_top = DIRECTION_Y - 20.0;
-    kb::draw_left(
-        face,
-        mixed_hint(lang),
-        13.0,
-        10.0,
-        CARD_W,
-        SIDE,
-        hint_top,
-        20.0,
-        sw::ink_dim(),
-    );
-    if view.syncing {
-        kb::draw_box(
-            face,
-            slot_i18n::t(lang, "device.quick.conflict.syncing"),
-            16.0,
-            12.0,
-            SIDE,
-            DIRECTION_Y - 52.0,
-            CARD_W,
-            24.0,
-            sw::ink(),
-        );
-        return;
-    }
-    let (text, colour) = if let Some(error) = &view.error {
-        (error.as_str(), [0xff, 0x6b, 0x6b])
-    } else if let Some(notice) = &view.notice {
-        (notice.as_str(), sw::ink())
-    } else {
-        return;
-    };
-    if matches!(view.page, ConflictPage::All) {
-        // The two-unit cards end at 368; a single truncated line sits between
-        // them and the permanent hint.
-        kb::draw_left(
-            face,
-            text,
-            12.0,
-            10.0,
-            CARD_W,
-            SIDE,
-            CONTENT_Y + 250.0 + 2.0,
-            18.0,
-            colour,
-        );
-    } else {
-        let top = CONTENT_Y + 202.0;
-        let height = (hint_top - 2.0 - top).max(14.0);
-        kb::draw_wrapped(
-            face,
-            text,
-            13.0,
-            10.0,
-            SIDE,
-            top,
-            CARD_W,
-            height,
-            2,
-            colour,
-        );
-    }
-}
-
-fn draw_direction_row(face: &mut UndoFace, view: &ConflictView, lang: Language) {
-    let locked = view.page_locked();
-    let mut x = SIDE;
-    for direction in [ConflictDirection::Download, ConflictDirection::Upload] {
-        let selected = view.direction == direction;
-        if selected && !locked {
-            sw::fill_round(
-                face,
-                x,
-                DIRECTION_Y,
-                DIRECTION_CHIP_W,
-                DIRECTION_H,
-                9.0,
-                sw::selected(),
-            );
-            kb::draw_box(
-                face,
-                direction.label(lang),
-                18.0,
-                12.0,
-                x,
-                DIRECTION_Y,
-                DIRECTION_CHIP_W,
-                DIRECTION_H,
-                sw::ink_selected(),
-            );
-        } else {
-            let fill = if selected {
-                [0x3a, 0x3a, 0x42, 0xff]
-            } else {
-                sw::surface()
-            };
-            sw::fill_round(
-                face,
-                x,
-                DIRECTION_Y,
-                DIRECTION_CHIP_W,
-                DIRECTION_H,
-                9.0,
-                fill,
-            );
-            let ink = if selected && !locked {
-                sw::ink()
-            } else {
-                sw::ink_dim()
-            };
-            kb::draw_box(
-                face,
-                direction.label(lang),
-                18.0,
-                12.0,
-                x,
-                DIRECTION_Y,
-                DIRECTION_CHIP_W,
-                DIRECTION_H,
-                ink,
-            );
-        }
-        x += DIRECTION_CHIP_W + DIRECTION_GAP;
-    }
-}
 
 fn draw_hint(face: &mut UndoFace, view: &ConflictView, lang: Language) {
     let hint = if view.tabbed() {

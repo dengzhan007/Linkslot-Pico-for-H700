@@ -1,4 +1,5 @@
 use crate::draw::{Draw, TexId, OUT_W};
+use crate::switch_style;
 use crate::text;
 
 pub const HINT_H: u32 = 24;
@@ -27,6 +28,26 @@ pub struct UndoFace {
     pub rgba: Vec<u8>,
     pub w: u32,
     pub h: u32,
+}
+
+/// Nearest-neighbour enlargement for pixel-art glyphs.  Drawing the original
+/// 22px glyph into a 30px tile and sampling the source keeps line art sharp;
+/// scaling every plotted point instead would punch gaps into diagonals.
+pub fn upscale_nearest(src: &UndoFace, w: u32, h: u32) -> UndoFace {
+    let mut rgba = vec![0u8; (w * h * 4) as usize];
+    if src.w == 0 || src.h == 0 {
+        return UndoFace { rgba, w, h };
+    }
+    for y in 0..h {
+        let sy = (y * src.h / h).min(src.h - 1);
+        for x in 0..w {
+            let sx = (x * src.w / w).min(src.w - 1);
+            let from = ((sy * src.w + sx) * 4) as usize;
+            let to = ((y * w + x) * 4) as usize;
+            rgba[to..to + 4].copy_from_slice(&src.rgba[from..from + 4]);
+        }
+    }
+    UndoFace { rgba, w, h }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -79,15 +100,33 @@ pub fn hint_face_ink(
     let mut rgba = vec![0u8; (w * HINT_H * 4) as usize];
 
     let cap_w = cap_width(key);
-    let mut cap = Vec::with_capacity((cap_w * CAP * 4) as usize);
-    for _ in 0..cap_w * CAP {
-        cap.extend_from_slice(&[cap_fill[0], cap_fill[1], cap_fill[2], 255]);
-    }
+    let mut cap_face = UndoFace {
+        rgba: vec![0u8; (cap_w * CAP * 4) as usize],
+        w: cap_w,
+        h: CAP,
+    };
+    switch_style::fill_round(
+        &mut cap_face,
+        0.0,
+        0.0,
+        cap_w as f32,
+        CAP as f32,
+        5.0,
+        [cap_fill[0], cap_fill[1], cap_fill[2], 255],
+    );
     if let Some(font) = text::label_font() {
         let layout = text::fit(font, key, cap_w as f32, 1, KEY_PX, KEY_PX);
-        text::draw_centred(&mut cap, cap_w, CAP, &layout, cap_ink);
+        text::draw_centred(&mut cap_face.rgba, cap_w, CAP, &layout, cap_ink);
     }
-    blit(&mut rgba, w, &cap, cap_w, CAP, 0, (HINT_H - CAP) / 2);
+    blit(
+        &mut rgba,
+        w,
+        &cap_face.rgba,
+        cap_w,
+        CAP,
+        0,
+        (HINT_H - CAP) / 2,
+    );
 
     let text_w = band_width(label);
     let mut band = vec![0u8; (text_w * HINT_H * 4) as usize];
@@ -127,6 +166,17 @@ pub fn slot_name_face(text: &str, ink: [u8; 3]) -> UndoFace {
         w,
         h: SLOT_NAME_H,
     }
+}
+
+/// Small status-bar text (clock and battery percent) with its own type size.
+pub fn status_face(text: &str, px: f32, ink: [u8; 3]) -> UndoFace {
+    let w = (px * 0.62 * text.chars().count() as f32).ceil() as u32 + 4;
+    let mut rgba = vec![0u8; (w * HINT_H * 4) as usize];
+    if let Some(font) = text::label_font() {
+        let layout = text::fit(font, text, w as f32, 1, px, px.min(8.0));
+        text::draw_centred(&mut rgba, w, HINT_H, &layout, ink);
+    }
+    UndoFace { rgba, w, h: HINT_H }
 }
 
 pub fn word_face_ink(text: &str, ink: [u8; 3]) -> UndoFace {

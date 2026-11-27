@@ -38,24 +38,23 @@ const PAGE_PX: f32 = 14.0;
 const PAGE_MAX_W: f32 = 56.0;
 const ELLIPSIS: &str = "…";
 
-const HEADER_H: f32 = 88.0;
-const SIDE: f32 = 48.0;
-const TITLE_PX: f32 = 28.0;
-const QUERY_PX: f32 = 16.0;
+const SIDE: f32 = 24.0;
+const TITLE_PX: f32 = 26.0;
+const QUERY_PX: f32 = 13.0;
 const LIST_TOP: f32 = 96.0;
-const ROW_X: f32 = 50.0;
-const ROW_W: f32 = 620.0;
+const ROW_X: f32 = 24.0;
+const ROW_W: f32 = 672.0;
 const ROW_H: f32 = 42.0;
 const ROW_PITCH: f32 = 48.0;
 const ROWS: usize = 7;
-const ROW_NAME_PX: f32 = 19.0;
-const ROW_MIN_PX: f32 = 12.0;
-const TAG_PX: f32 = 13.0;
-const TAG_MIN_PX: f32 = 9.0;
+const ROW_NAME_PX: f32 = 18.0;
+const ROW_MIN_PX: f32 = 13.0;
+const TAG_PX: f32 = 12.0;
+const TAG_MIN_PX: f32 = 10.0;
 const TAG_MAX_W: f32 = 70.0;
-const TAG_H: f32 = 22.0;
+const TAG_H: f32 = 20.0;
 const HINT_Y: f32 = 440.0;
-const HINT_H: f32 = 28.0;
+const HINT_H: f32 = 24.0;
 
 /// The translucent candidate strip shown under the keyboard input card.
 ///
@@ -75,13 +74,8 @@ pub fn candidate_bar(
         BAR_W,
         BAR_H,
         10.0,
-        [sw::bg()[0], sw::bg()[1], sw::bg()[2], 0xe6],
-        Some([
-            sw::surface_border()[0],
-            sw::surface_border()[1],
-            sw::surface_border()[2],
-            0xd0,
-        ]),
+        sw::surface(),
+        Some(sw::surface_border()),
     );
     let centre = BAR_H as f32 / 2.0;
 
@@ -208,16 +202,16 @@ pub fn candidate_bar(
                 chip_w,
                 CHIP_H,
                 CHIP_RADIUS,
-                accent(),
+                sw::selected(),
             );
             sw::fill_round(
                 &mut face,
-                chip_x + 2.0,
-                value_y + 2.0,
-                chip_w - 4.0,
-                CHIP_H - 4.0,
-                (CHIP_RADIUS - 2.0).max(0.0),
-                sw::selected(),
+                chip_x - 8.0,
+                value_y + 4.0,
+                3.0,
+                CHIP_H - 8.0,
+                2.0,
+                accent(),
             );
             kb::draw_left(
                 &mut face,
@@ -321,17 +315,16 @@ pub fn results_face(
     lang: Language,
 ) -> UndoFace {
     let mut face = kb::blank(OUT_W, OUT_H, sw::bg());
-    kb::fill(&mut face, 0.0, 0.0, OUT_W as f32, HEADER_H, sw::bg_top());
-    kb::fill(&mut face, SIDE, 16.0, 5.0, 30.0, accent());
-    kb::draw_box(
+    kb::fill(&mut face, 28.0, 40.0, OUT_W as f32 - 56.0, 1.0, sw::surface_border());
+    kb::draw_left(
         &mut face,
         slot_i18n::t(lang, "device.app.search.results_title"),
         TITLE_PX,
         15.0,
-        64.0,
-        8.0,
-        OUT_W as f32 - 2.0 * 64.0,
-        44.0,
+        320.0,
+        32.0,
+        48.0,
+        34.0,
         sw::ink(),
     );
 
@@ -356,7 +349,7 @@ pub fn results_face(
         query_px,
         query_px,
         430.0,
-        64.0,
+        32.0,
         52.0,
         24.0,
         sw::ink_dim(),
@@ -380,8 +373,8 @@ pub fn results_face(
                     ("pages", pages.to_string().as_str()),
                 ],
             ),
-            14.0,
-            OUT_W as f32 - SIDE,
+            9.0,
+            OUT_W as f32 - 32.0,
             52.0,
             24.0,
             sw::ink_dim(),
@@ -415,8 +408,8 @@ pub fn results_face(
     kb::draw_box(
         &mut face,
         slot_i18n::t(lang, "device.app.search.results_hint"),
-        16.0,
-        11.0,
+        12.0,
+        10.0,
         SIDE,
         HINT_Y,
         OUT_W as f32 - 2.0 * SIDE,
@@ -481,21 +474,10 @@ fn accent() -> [u8; 4] {
 
 /// A Switch-style rounded card: white when selected, charcoal surface when not.
 fn card_at(face: &mut UndoFace, x: f32, y: f32, w: f32, h: f32, selected: bool) {
-    let (rim, fill) = if selected {
-        (sw::selected_border(), sw::selected())
-    } else {
-        (sw::surface_border(), sw::surface())
-    };
-    sw::fill_round(face, x, y, w, h, sw::CARD_RADIUS, rim);
-    sw::fill_round(
-        face,
-        x + 1.0,
-        y + 1.0,
-        w - 2.0,
-        h - 2.0,
-        (sw::CARD_RADIUS - 1.0).max(0.0),
-        fill,
-    );
+    if selected {
+        sw::fill_round(face, x, y, w, h, 11.0, sw::selected());
+        sw::fill_round(face, x - 8.0, y + 12.0, 3.0, 24.0, 2.0, accent());
+    }
 }
 
 /// Draw one fitted line right-aligned to `right`.
@@ -508,7 +490,7 @@ fn right_text(
     h: f32,
     colour: [u8; 3],
 ) {
-    let (line, px) = kb::fit_line(text, PAGE_MAX_W.max(64.0), px, 8.0);
+    let (line, px) = kb::fit_line(text, PAGE_MAX_W.max(64.0), px, 10.0);
     let ink = kb::ink_width(&line, px);
     kb::draw_left(
         face,

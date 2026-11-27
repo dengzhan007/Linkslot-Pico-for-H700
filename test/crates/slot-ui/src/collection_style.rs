@@ -90,10 +90,14 @@ pub fn favorites() -> AccentStyle {
     FAVORITES
 }
 
-/// Text colour for a platform badge or collection label.
+/// Text colour for a platform badge or collection label.  The selected card's
+/// own theme ink wins: on Warm it is dark on paper, on Paper it is light on
+/// ink, so the badge stays readable without inventing a third palette.
 pub fn ink(style: AccentStyle, selected: bool) -> [u8; 3] {
     if selected {
-        style.on_light.unwrap_or(style.on_dark)
+        sw::ink_selected()
+    } else if sw::is_light() {
+        style.on_light.unwrap_or_else(sw::ink)
     } else {
         style.on_dark
     }
@@ -156,13 +160,13 @@ mod tests {
             let (dark_fill, _) = chip(style, false);
             let (light_fill, _) = chip(style, true);
             assert!(
-                contrast(style.on_dark, rgb(dark_fill)) >= 4.5,
-                "dark badge ink is too faint for {:?}",
+                contrast(ink(style, false), rgb(dark_fill)) >= 4.5,
+                "badge ink is too faint for {:?}",
                 style.base
             );
             assert!(
-                contrast(style.on_light.unwrap(), rgb(light_fill)) >= 4.5,
-                "light badge ink is too faint for {:?}",
+                contrast(sw::ink_selected(), rgb(light_fill)) >= 4.5,
+                "selected badge ink is too faint for {:?}",
                 style.base
             );
         }
@@ -172,7 +176,7 @@ mod tests {
     fn system_collection_labels_are_readable_on_the_shelf() {
         for style in [RECENTS, FAVORITES] {
             assert!(
-                contrast(style.on_dark, rgb(sw::surface())) >= 4.5,
+                contrast(ink(style, false), rgb(sw::surface())) >= 4.5,
                 "collection shelf ink is too faint for {:?}",
                 style.base
             );

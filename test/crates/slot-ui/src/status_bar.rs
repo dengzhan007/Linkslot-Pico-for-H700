@@ -25,8 +25,8 @@ pub const WIFI_PX: f32 = 22.0;
 /// A dimmed Wi-Fi icon means "not associated".
 const WIFI_OFF_ALPHA: f32 = 0.28;
 
-const BAR: [f32; 4] = [0.02, 0.02, 0.03, 0.38];
-const BAR_EDGE: [f32; 4] = [1.0, 1.0, 1.0, 0.05];
+const BAR: [f32; 4] = [0x16 as f32 / 255.0, 0x16 as f32 / 255.0, 0x19 as f32 / 255.0, 1.0];
+const BAR_EDGE: [f32; 4] = [0x3a as f32 / 255.0, 0x3a as f32 / 255.0, 0x42 as f32 / 255.0, 1.0];
 
 /// The faces the header needs, owned by the caller (the `slot` app).
 #[derive(Clone, Copy, Debug, Default)]
@@ -40,6 +40,34 @@ pub struct StatusBar {
 }
 
 impl StatusBar {
+    /// Compact status for the system menu: no header band, smaller clock.
+    pub fn draw_compact(&self, out: &mut Vec<Draw>) {
+        let y = 10.0;
+        if let Some(tex) = self.clock.face {
+            out.push(Draw::Tex {
+                x: STATUS_MARGIN,
+                y,
+                w: self.clock.w as f32 * 0.8,
+                h: self.clock.h as f32 * 0.8,
+                tex,
+                alpha: 1.0,
+            });
+        }
+        let gauge = gauge_width(self.percent);
+        let battery_x = OUT_W as f32 - STATUS_MARGIN - gauge;
+        draw_gauge(battery_x, y + 7.0, self.battery, self.percent, self.bolt, out);
+        if let Some((tex, w, h)) = self.wifi {
+            out.push(Draw::Tex {
+                x: battery_x - 12.0 - w as f32,
+                y: y + 4.0,
+                w: w as f32,
+                h: h as f32,
+                tex,
+                alpha: if self.wifi_on { 1.0 } else { WIFI_OFF_ALPHA },
+            });
+        }
+    }
+
     pub fn draw(&self, out: &mut Vec<Draw>) {
         out.push(Draw::Rect {
             x: 0.0,

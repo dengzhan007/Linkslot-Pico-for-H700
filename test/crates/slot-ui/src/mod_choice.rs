@@ -14,8 +14,8 @@ use crate::switch_style as sw;
 
 const DIALOG_W: f32 = 620.0;
 const DIALOG_H: f32 = 380.0;
-const ROW_H: f32 = 40.0;
-const ROW_GAP: f32 = 5.0;
+const ROW_H: f32 = 48.0;
+const ROW_GAP: f32 = 6.0;
 const OPTION_TOP: f32 = 150.0;
 
 /// Everything the modal prints.  The app/frontend use equality as the
@@ -55,14 +55,6 @@ pub fn mod_choice_face(view: &ModChoiceView, lang: Language) -> UndoFace {
 
     let x = ((OUT_W as f32 - DIALOG_W) / 2.0).round();
     let y = ((OUT_H as f32 - DIALOG_H) / 2.0).round();
-    kb::fill(
-        &mut face,
-        x + 8.0,
-        y + 10.0,
-        DIALOG_W,
-        DIALOG_H,
-        [0, 0, 0, 96],
-    );
     sw::fill_round(
         &mut face,
         x,
@@ -81,8 +73,6 @@ pub fn mod_choice_face(view: &ModChoiceView, lang: Language) -> UndoFace {
         (sw::DIALOG_RADIUS - 1.0).max(0.0),
         sw::surface(),
     );
-    kb::fill(&mut face, x + 32.0, y + 26.0, 5.0, 28.0, accent());
-
     let title = if view.title.is_empty() {
         slot_i18n::t(lang, "device.app.mod_choice.choose")
     } else {
@@ -93,8 +83,8 @@ pub fn mod_choice_face(view: &ModChoiceView, lang: Language) -> UndoFace {
         title,
         26.0,
         14.0,
-        DIALOG_W - 96.0,
-        x + 48.0,
+        DIALOG_W - 64.0,
+        x + 32.0,
         y + 18.0,
         44.0,
         sw::ink(),
@@ -118,43 +108,35 @@ pub fn mod_choice_face(view: &ModChoiceView, lang: Language) -> UndoFace {
         if index == selected {
             sw::fill_round(
                 &mut face,
-                x + 40.0,
+                x + 32.0,
                 top,
-                DIALOG_W - 80.0,
+                DIALOG_W - 64.0,
                 ROW_H,
-                8.0,
+                11.0,
                 sw::selected(),
             );
+            sw::fill_round(&mut face, x + 24.0, top + 12.0, 3.0, 24.0, 2.0, accent());
             kb::draw_left(
                 &mut face,
                 label,
-                18.0,
-                12.0,
-                DIALOG_W - 128.0,
-                x + 62.0,
-                top + 8.0,
-                30.0,
+                13.0,
+                10.0,
+                DIALOG_W - 112.0,
+                x + 53.0,
+                top,
+                ROW_H,
                 sw::ink_selected(),
             );
         } else {
-            sw::fill_round(
-                &mut face,
-                x + 40.0,
-                top,
-                DIALOG_W - 80.0,
-                ROW_H,
-                8.0,
-                sw::surface_border(),
-            );
             kb::draw_left(
                 &mut face,
                 label,
-                18.0,
-                12.0,
-                DIALOG_W - 128.0,
-                x + 62.0,
-                top + 8.0,
-                30.0,
+                13.0,
+                10.0,
+                DIALOG_W - 112.0,
+                x + 53.0,
+                top,
+                ROW_H,
                 sw::ink(),
             );
         }

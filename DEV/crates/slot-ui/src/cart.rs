@@ -459,7 +459,7 @@ fn labelled_face(
         Some(CartSticker::Text) => generated_sticker(s, label, true),
         Some(CartSticker::TextOnly) => generated_sticker(s, label, false),
         Some(CartSticker::Art { rgba, w, h }) => sticker_art(s, rgba, w, h),
-        None => generated_label(s, label),
+        None => generated_label(s, label, platform.unwrap_or(Platform::Gba)),
     };
     if let Some(platform) = platform {
         if reference_art(platform).is_some() {
@@ -770,7 +770,7 @@ pub fn cart_face_with(cart: &Cart, art: Option<Vec<u8>>) -> CartFace {
     reference_spec_model(&mut s, cart.platform, cart.model);
     let label = match art {
         Some(rgba) => rgba,
-        None => generated_label(&s, &label_text(cart)),
+        None => generated_label(&s, &label_text(cart), cart.platform),
     };
     let mut face = if reference_art_model(cart.platform, cart.model).is_some() {
         // Follow the cartridge's actual/default shell colour, not the fixed
@@ -1307,36 +1307,281 @@ fn sticker_art(s: &Spec, src: &[u8], aw: u32, ah: u32) -> Vec<u8> {
     face.rgba
 }
 
-fn generated_label(s: &Spec, title: &str) -> Vec<u8> {
+fn generated_label(s: &Spec, title: &str, platform: Platform) -> Vec<u8> {
     let (_, _, lw, lh) = s.label;
-    let bg = label_colour(title);
-    let mut rgba = Vec::with_capacity((lw * lh * 4) as usize);
-    for _ in 0..lw * lh {
-        rgba.extend_from_slice(&[bg[0], bg[1], bg[2], 255]);
+    let mut rgba = vec![0u8; (lw * lh * 4) as usize];
+    paint_warm_cover(&mut rgba, lw, lh, platform);
+    let Some(font) = text::label_font() else {
+        return rgba;
+    };
+
+    let narrow = lw < 140;
+    let portrait = matches!(platform, Platform::Gb | Platform::Gbc) || narrow;
+    let title_px = if narrow {
+        11.0
+    } else {
+        match platform {
+            Platform::Gba => 18.0,
+            Platform::Gb | Platform::Gbc => 17.0,
+            Platform::Fc => 20.0,
+            Platform::Sfc => 15.0,
+            Platform::Md => 19.0,
+            Platform::Arcade | Platform::Neogeo => 16.0,
+        }
+    };
+    let title_w = if narrow {
+        lw as f32 * 0.88
+    } else {
+        match platform {
+            Platform::Gba => lw as f32 * 0.62,
+            Platform::Gb | Platform::Gbc => lw as f32 * 0.78,
+            Platform::Fc => lw as f32 * 0.62,
+            Platform::Sfc => lw as f32 * 0.56,
+            Platform::Md => lw as f32 * 0.60,
+            Platform::Arcade | Platform::Neogeo => lw as f32 * 0.62,
+        }
+    };
+    let title_h = if portrait { lh as f32 * 0.40 } else { lh as f32 * 0.48 };
+    let title = text::fit_box(font, title, title_w, title_h, 2, title_px, 8.0);
+    let line_h = text::line_height(title.px);
+    let block_h = line_h * title.lines.len() as f32;
+
+    let cream = [0xff, 0xf4, 0xd9];
+    let muted = [0xd8, 0xcb, 0xb4];
+    let code = platform_code(platform);
+    let code_layout = text::fit(font, code, lw as f32 * 0.28, 1, 6.0, 5.0);
+    paint_text(&mut rgba, lw, lh, &code_layout, cream, 13.0, 17.0);
+    if !narrow {
+        let no_cover = text::fit(font, "NO COVER", lw as f32 * 0.30, 1, 5.0, 4.0);
+        let text_w = no_cover
+            .lines
+            .first()
+            .map_or(0.0, |line| text::line_width(font, line, no_cover.px, no_cover.tracking));
+        paint_text(
+            &mut rgba,
+            lw,
+            lh,
+            &no_cover,
+            [0xd8, 0xcb, 0xb4],
+            (lw as f32 - 9.0 - text_w).max(8.0),
+            16.0,
+        );
     }
 
-    if let Some(font) = text::label_font() {
-        let layout = text::fit_box(
-            font,
-            title,
-            (lw - 2 * PAD) as f32,
-            s.max_h,
-            MAX_LINES,
-            s.max_px,
-            MIN_PX,
+    if portrait {
+        let top = 30.0;
+        paint_text(&mut rgba, lw, lh, &title, cream, 13.0, top + line_height_offset(title.px));
+        if !narrow {
+            let sub = text::fit(font, "GAME TITLE", title_w, 1, 6.0, 5.0);
+            paint_text(&mut rgba, lw, lh, &sub, muted, 13.0, top + block_h + 14.0);
+        }
+    } else {
+        let title_top = (lh as f32 - 30.0 - block_h).max(20.0);
+        paint_text(
+            &mut rgba,
+            lw,
+            lh,
+            &title,
+            cream,
+            13.0,
+            title_top + line_height_offset(title.px),
         );
-        text::draw_centred(&mut rgba, lw, lh, &layout, ink(bg));
+        let sub = text::fit(font, "GAME TITLE · PLACEHOLDER", lw as f32 * 0.70, 1, 6.0, 5.0);
+        paint_text(&mut rgba, lw, lh, &sub, muted, 13.0, lh as f32 - 12.0);
     }
     rgba
 }
 
-fn ink(bg: [u8; 3]) -> [u8; 3] {
-    let luma = 0.2126 * bg[0] as f32 + 0.7152 * bg[1] as f32 + 0.0722 * bg[2] as f32;
-    if luma > 140.0 {
-        [0x1a, 0x18, 0x16]
-    } else {
-        [0xf4, 0xf1, 0xea]
+fn line_height_offset(px: f32) -> f32 {
+    text::line_height(px) * 0.78
+}
+
+fn platform_code(platform: Platform) -> &'static str {
+    match platform {
+        Platform::Gba => "GBA",
+        Platform::Gb => "GB",
+        Platform::Gbc => "GBC",
+        Platform::Fc => "FC",
+        Platform::Sfc => "SFC",
+        Platform::Md => "MD",
+        Platform::Arcade => "ARC",
+        Platform::Neogeo => "NEO",
     }
+}
+
+fn paint_text(
+    dst: &mut [u8],
+    dw: u32,
+    dh: u32,
+    layout: &text::Layout,
+    colour: [u8; 3],
+    left: f32,
+    baseline: f32,
+) {
+    let Some(font) = text::label_font() else {
+        return;
+    };
+    let Some(vm) = font.horizontal_line_metrics(layout.px) else {
+        return;
+    };
+    let line_h = vm.new_line_size;
+    let mut baseline = baseline;
+    for line in &layout.lines {
+        let mut pen = left;
+        for ch in line.chars() {
+            let (m, cov) = font.rasterize(ch, layout.px);
+            let gx = (pen + m.xmin as f32).round() as i32;
+            let gy = (baseline - (m.height as f32 + m.ymin as f32)).round() as i32;
+            for y in 0..m.height as i32 {
+                for x in 0..m.width as i32 {
+                    let a = cov[(y * m.width as i32 + x) as usize];
+                    if a == 0 {
+                        continue;
+                    }
+                    let px = gx + x;
+                    let py = gy + y;
+                    if px < 0 || py < 0 || px as u32 >= dw || py as u32 >= dh {
+                        continue;
+                    }
+                    let at = ((py as u32 * dw + px as u32) * 4) as usize;
+                    blend_rgb(dst, at, a, colour);
+                }
+            }
+            pen += m.advance_width + layout.tracking;
+        }
+        baseline += line_h;
+    }
+}
+
+fn blend_rgb(dst: &mut [u8], at: usize, alpha: u8, colour: [u8; 3]) {
+    let a = alpha as u32;
+    let inv = 255 - a;
+    for c in 0..3 {
+        dst[at + c] = ((colour[c] as u32 * a + dst[at + c] as u32 * inv + 127) / 255) as u8;
+    }
+    dst[at + 3] = 255;
+}
+
+fn paint_warm_cover(dst: &mut [u8], w: u32, h: u32, platform: Platform) {
+    let narrow = w < 140;
+    let portrait = matches!(platform, Platform::Gb | Platform::Gbc) || narrow;
+    let top = [0x16, 0x46, 0x6f];
+    let bottom = [0x07, 0x1a, 0x30];
+    let sun_rx = if portrait { w as f32 * 0.56 } else { w as f32 * 0.29 };
+    let sun_ry = if portrait { h as f32 * 0.46 } else { h as f32 * 0.62 };
+    let sun_cx = if portrait { w as f32 * 0.64 } else { w as f32 * 0.78 };
+    let sun_cy = if portrait { h as f32 * 1.05 } else { h as f32 * 0.92 };
+    for y in 0..h {
+        for x in 0..w {
+            let t = (x as f32 / w.max(1) as f32 * 0.25 + y as f32 / h.max(1) as f32 * 0.75)
+                .clamp(0.0, 1.0);
+            let mut c = [
+                mix(top[0], bottom[0], t),
+                mix(top[1], bottom[1], t),
+                mix(top[2], bottom[2], t),
+            ];
+            let dx = (x as f32 - sun_cx) / sun_rx;
+            let dy = (y as f32 - sun_cy) / sun_ry;
+            let d = dx * dx + dy * dy;
+            if d < 1.0 {
+                let sy = ((y as f32 - (sun_cy - sun_ry)) / (2.0 * sun_ry)).clamp(0.0, 1.0);
+                let sun = if sy < 0.28 {
+                    [0xff, 0xe9, 0xa6]
+                } else if sy < 0.72 {
+                    [0xf2, 0xc8, 0x5b]
+                } else {
+                    [0xd1, 0x8d, 0x2f]
+                };
+                c = sun;
+            } else if d < 2.2 {
+                let glow = (1.0 - (d - 1.0) / 1.2).max(0.0) * 0.35;
+                c = [
+                    mix(c[0], 0xf2, glow),
+                    mix(c[1], 0xc8, glow),
+                    mix(c[2], 0x5b, glow),
+                ];
+            }
+            let at = ((y * w + x) * 4) as usize;
+            dst[at..at + 3].copy_from_slice(&c);
+            dst[at + 3] = 255;
+        }
+    }
+
+    let ground_h = if portrait { (h as f32 * 0.15) as u32 } else { (h as f32 * 0.23) as u32 };
+    let ground_top = h - ground_h;
+    for y in ground_top..h {
+        for x in 0..w {
+            let t = (y - ground_top) as f32 / ground_h.max(1) as f32;
+            let c = [
+                mix(0x2c, 0x14, t),
+                mix(0x7f, 0x50, t),
+                mix(0xa5, 0x6f, t),
+            ];
+            let at = ((y * w + x) * 4) as usize;
+            dst[at..at + 3].copy_from_slice(&c);
+        }
+    }
+    if ground_top < h {
+        for x in 0..w {
+            let at = ((ground_top * w + x) * 4) as usize;
+            let c = [0x9a, 0xc4, 0xcf];
+            dst[at..at + 3].copy_from_slice(&c);
+        }
+    }
+
+    // Sparse printed stars, deterministic so every rebuild is identical.
+    for i in 0..8 {
+        let x = (i as u32 * 47 + 19) % w;
+        let y = (i as u32 * 31 + 13) % (h / 2).max(1);
+        let at = ((y * w + x) * 4) as usize;
+        dst[at..at + 3].copy_from_slice(&[0xd8, 0xcb, 0xb4]);
+    }
+
+    // A quiet double arc in the upper right.
+    let cx = (w as f32 * 0.78) as i32;
+    let cy = (h as f32 * 0.30) as i32;
+    for r in [w as i32 / 4, w as i32 / 3] {
+        let mut x = r;
+        let mut y = 0;
+        let mut err = 1 - r;
+        while x >= y {
+            for (dx, dy) in [(x, y), (y, x), (-y, x), (-x, y), (-x, -y), (-y, -x), (y, -x), (x, -y)] {
+                let px = cx + dx;
+                let py = cy + dy;
+                if px >= 0 && py >= 0 && (px as u32) < w && (py as u32) < h {
+                    let at = ((py as u32 * w + px as u32) * 4) as usize;
+                    let c = [0x6b, 0x8e, 0xa5];
+                    dst[at..at + 3].copy_from_slice(&c);
+                }
+            }
+            y += 1;
+            if err < 0 {
+                err += 2 * y + 1;
+            } else {
+                x -= 1;
+                err += 2 * (y - x) + 1;
+            }
+        }
+    }
+
+    // Left/bottom darkening keeps the title readable over the picture.
+    for y in 0..h {
+        for x in 0..w {
+            let left = (1.0 - x as f32 / (w as f32 * 0.62)).max(0.0);
+            let low = (y as f32 / h as f32 - 0.55).max(0.0) * 1.4;
+            let shade = (left * 0.16 + low * 0.26).min(0.36);
+            if shade > 0.0 {
+                let at = ((y * w + x) * 4) as usize;
+                for c in 0..3 {
+                    dst[at + c] = (dst[at + c] as f32 * (1.0 - shade)) as u8;
+                }
+            }
+        }
+    }
+}
+
+fn mix(a: u8, b: u8, t: f32) -> u8 {
+    (a as f32 + (b as f32 - a as f32) * t.clamp(0.0, 1.0)).round() as u8
 }
 
 fn hsv_to_rgb(h: f32, s: f32, v: f32) -> [u8; 3] {

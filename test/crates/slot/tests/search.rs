@@ -141,3 +141,27 @@ fn search_results_wrap_through_the_keyboard_without_db_panics() {
     a.apply(Action::GbaDown(Btn::A));
     assert!(a.search_results.is_some(), "empty results must not select");
 }
+
+/// The shelf backing plates are boot textures, not part of the search UI:
+/// opening and closing the search must leave them on the shelf.
+#[test]
+fn the_shelf_shadow_survives_a_search_round_trip() {
+    let d = tmp_root_with_carts(&["Aaa", "Bbb", "Ccc", "Ddd"]);
+    let mut a = boot(d.path());
+    let shadow = slot_ui::TexId::from_raw(0x5157);
+    a.set_cart_shadow(shadow);
+    let drawn = |a: &mut App| {
+        let mut out = Vec::new();
+        a.draw(&mut out);
+        out.iter()
+            .any(|d| matches!(*d, slot_ui::Draw::Tex { tex, .. } if tex == shadow))
+    };
+    assert!(drawn(&mut a), "the shelf had no shadow at boot");
+    open_search(&mut a);
+    a.apply(Action::GbaDown(Btn::X));
+    assert!(a.keyboard.is_none() && a.search_index.is_none());
+    assert!(
+        drawn(&mut a),
+        "the shelf lost its shadow after a search round trip"
+    );
+}

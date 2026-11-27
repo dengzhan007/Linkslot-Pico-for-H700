@@ -18,8 +18,9 @@ use slot_store::{
     ThemePreset, BLUE_LIGHT_MAX, BRIGHTNESS_MAX, FF_SPEEDS, RING_MAX, VOLUME_MAX,
 };
 use slot_ui::{
-    board_from_for, board_zoom, draw_backdrop, draw_empty_slot_with, draw_shelf_legend, draw_slot_name,
-    draw_about, ease, grown, lid_at, lid_from_for, lift_of, on_board_for, shelf_cart_at, ClockPicker,
+    board_from_for, board_zoom, draw_backdrop, draw_empty_slot_with, draw_shelf_legend,
+    draw_about, draw_slot_name, ease, grown, lid_at, lid_from_for, lift_of, on_board_for,
+    shelf_cart_at, ClockPicker,
     Draw, FfState, GbShell, Hud, HudKind, Icon, LinkBadge, Millis, Placed, Polaroids, PowerChoice,
     QuickMenu, QuickMenuFaces, QuickRow, QuickValue, Refusal, Shelf, SlotChrome, StatusBar, TexId,
     Toast, BOARD_W, BOARD_X, CART_W, CHIP_H, CHIP_U, CHIP_V, CHIP_W, HINT_EDGE, HINT_H, HOP_LIFT,
@@ -133,6 +134,25 @@ pub const TRANSFER_MIN_VISIBLE_MS: Millis = 1_000;
 pub const HEADER_SLIDE_PX: f32 = 90.0;
 const HEADER_SLIDE_MS: Millis = 450;
 
+/// Where the frontend rests the transfer-room card (just below the 36 px
+/// clock/battery strip).  Its height comes from the shared face size.
+pub const TRANSFER_HEADER_Y: f32 = 40.0;
+/// Air kept between that card and a full-size cartridge in the room.
+const TRANSFER_HEADER_GAP: f32 = 8.0;
+/// Air between the rows of the top notification stack.
+const TOP_STACK_GAP: f32 = 8.0;
+
+/// Vertical slots of the top notification stack, top to bottom: the storage
+/// alarm, the notice/achievement card, the toast, then the volume/brightness/
+/// rewind bar.  Every row is optional; the stack closes the gaps.
+#[derive(Clone, Copy, Debug, Default)]
+struct TopStack {
+    alarm: Option<f32>,
+    notice: Option<f32>,
+    toast: Option<f32>,
+    bar: Option<f32>,
+}
+
 const EJECT_HOLD_S: f32 = 0.35;
 
 const POWER_ON_S: f32 = 0.22;
@@ -194,17 +214,17 @@ const INTRO_CLOSE_MS: Millis = 420;
 const INTRO_PLATE_W: f32 = 640.0;
 const INTRO_PLATE_H: f32 = 420.0;
 /// One paper colour for the back label, the paper tab and the card itself.
-pub const INTRO_PAPER: [u8; 4] = [234, 229, 215, 255];
-pub const INTRO_PAPER_BORDER: [u8; 4] = [201, 195, 180, 255];
+pub const INTRO_PAPER: [u8; 4] = [240, 232, 219, 255];
+pub const INTRO_PAPER_BORDER: [u8; 4] = [212, 186, 159, 255];
 /// Ink on that paper; kept for the small cartridge-label art.
-pub const INTRO_INK: [u8; 3] = [58, 60, 66];
+pub const INTRO_INK: [u8; 3] = [56, 28, 20];
 /// Dark dossier surface for the detail card.
-pub const INTRO_PANEL: [u8; 4] = [25, 26, 37, 255];
-pub const INTRO_PANEL_EDGE: [u8; 4] = [52, 54, 74, 255];
-pub const INTRO_TEXT: [u8; 3] = [233, 235, 242];
-pub const INTRO_MUTED: [u8; 3] = [158, 164, 184];
-pub const INTRO_DIM: [u8; 3] = [110, 116, 136];
-pub const INTRO_TRACK: [u8; 3] = [48, 50, 66];
+pub const INTRO_PANEL: [u8; 4] = [0x26, 0x26, 0x2b, 255];
+pub const INTRO_PANEL_EDGE: [u8; 4] = [0x3a, 0x3a, 0x42, 255];
+pub const INTRO_TEXT: [u8; 3] = [0xf4, 0xf4, 0xf1];
+pub const INTRO_MUTED: [u8; 3] = [0xa6, 0xa6, 0xad];
+pub const INTRO_DIM: [u8; 3] = [0x74, 0x74, 0x7c];
+pub const INTRO_TRACK: [u8; 3] = [0x3a, 0x3a, 0x42];
 
 /// The small label on the back of each cartridge, in cart pixels.  It is much
 /// smaller than the front label: the shell around it is what makes the object
@@ -331,39 +351,12 @@ const SYNC_SETTLE_MS: Millis = 1_100;
 const SYNC_HOLD_BAR_W: f32 = 120.0;
 const SYNC_HOLD_BAR_H: f32 = 6.0;
 const SYNC_CYAN: [f32; 4] = [0.34, 0.89, 0.95, 1.0];
-const SYNC_PLACEHOLDER: [f32; 4] = [0.12, 0.12, 0.16, 1.0];
 
 /// The dimmed shelf behind the sync sheet.  The screen is deliberately still
 /// semi-transparent: the player can see the cartridge shelf they came from.
-const SYNC_PAGE_BG: [f32; 4] = [8.0 / 255.0, 8.0 / 255.0, 11.0 / 255.0, 0.66];
-/// The sheet's top-left corner; its face is baked at this size.
-const SYNC_SHEET_AT: (f32, f32) = (32.0, 20.0);
-/// The fixed footprint of the source cartridge on the stage.  Cards keep their
-/// own aspect inside this box and their foot stays on the dock's lip.
+const SYNC_PAGE_BG: [f32; 4] = [13.0 / 255.0, 13.0 / 255.0, 15.0 / 255.0, 0.72];
+#[allow(dead_code)]
 const SYNC_STAGE_BOX: (f32, f32, f32, f32) = (102.0, 180.0, 196.0, 110.0);
-const SYNC_DOCK_AT: (f32, f32) = (84.0, 286.0);
-const SYNC_CLOUD_CARD_AT: (f32, f32) = (444.0, 180.0);
-const SYNC_LANE_AT: (f32, f32) = (302.0, 230.0);
-const SYNC_LANE_W: f32 = 142.0;
-const SYNC_LANE_Y: f32 = 235.0;
-const SYNC_DIRECTION_CENTRE: (f32, f32) = (373.0, 235.0);
-const SYNC_NODE_X: [f32; 5] = [100.0, 230.0, 360.0, 490.0, 620.0];
-const SYNC_RAIL_Y: f32 = 342.0;
-const SYNC_RAIL_LABEL_Y: f32 = 352.0;
-const SYNC_PAPER_RECT: (f32, f32, f32, f32) = (456.0, 209.0, 148.0, 52.0);
-const SYNC_CLOUD_LABEL_AT: (f32, f32) = (510.0, 219.0);
-const SYNC_TARGET_LABEL_Y: f32 = 260.0;
-const SYNC_SIDE_LABEL_Y: f32 = 156.0;
-const SYNC_TITLE_AT: (f32, f32) = (76.0, 34.0);
-const SYNC_SUBTITLE_AT: (f32, f32) = (78.0, 74.0);
-const SYNC_BANNER_Y: f32 = 106.0;
-const SYNC_PERCENT_CHIP_AT: (f32, f32) = (592.0, 40.0);
-const SYNC_FOOTER_Y: f32 = 418.0;
-const SYNC_STAMP_CENTRE: (f32, f32) = (598.0, 260.0);
-/// The cartridge drops this far while the screen opens, like the picker's
-/// insert beat.
-const SYNC_CART_DROP: f32 = 14.0;
-const SYNC_CARD_SLIDE: f32 = 10.0;
 
 const SHUTDOWN_SHOW_MS: Millis = 250;
 
@@ -375,7 +368,7 @@ const SLOT_NAME_OUT_MS: Millis = 800;
 const SLOT_NAME_ALPHA: f32 = 0.82;
 const CORE_PICKER_DIM: f32 = 0.614;
 const CORE_LEGEND_Y: f32 = 386.0;
-const LINK_TEXT_Y: f32 = 44.0;
+const LINK_TEXT_Y: f32 = 51.0;
 const LINK_LEGEND_Y: f32 = 422.0;
 const LINK_LEGEND_GAP: f32 = 40.0;
 const LID_SHADOW_W: f32 = 168.0;
@@ -459,16 +452,19 @@ pub struct SyncFaces {
     pub title: Option<SyncFace>,
     pub subtitle: Option<SyncFace>,
     pub banner: Option<SyncFace>,
-    /// The larger face used by the result banner after the sheet closes.
+    /// The 378x40 small result line (check + text) after the sheet closes.
     pub result: Option<SyncFace>,
-    pub side_local: Option<SyncFace>,
-    pub side_remote: Option<SyncFace>,
-    pub cloud_label: Option<SyncFace>,
-    pub target_label: Option<SyncFace>,
+    /// The 378x40 persistent status line while a manual mod runs.
+    pub status: Option<SyncFace>,
     pub rail_labels: [Option<SyncFace>; 5],
     pub progress_left: Option<SyncFace>,
+    /// The manual mod's real percentage, when it reports one.
     pub progress_right: Option<SyncFace>,
+    /// The `A 完成` hint in the settled state.
     pub completion_hint: Option<SyncFace>,
+    /// The `B 返回` hint in the settled "already up to date" state.
+    pub return_hint: Option<SyncFace>,
+    /// The `B 取消` hint while the sync runs.
     pub cancel_hint: Option<SyncFace>,
 }
 
@@ -478,39 +474,32 @@ pub struct SyncFaces {
 pub struct SyncTexts {
     /// Heading above the animation; empty while no animation owns the screen.
     pub title: String,
-    /// `《游戏名》` or `《游戏名》 · 手动同步`.
+    /// `《游戏名》`, with the direction or the completion suffix.
     pub subtitle: String,
     /// The current stage or result line.
     pub banner: String,
-    pub side_local: String,
-    pub side_remote: String,
-    pub cloud_label: String,
-    pub target_label: String,
-    /// Stage-rail captions (network / cloud or link / transfer / verify / done).
+    /// Stage labels (network / cloud or link / transfer / verify / done).
     pub rail: [String; 5],
     pub progress_left: String,
     pub progress_right: String,
+    /// The settled state's action: `完成` (shown as `A 完成`).
     pub completion_hint: String,
 }
 
 /// The static artwork the frontend uploads once at boot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SyncArt {
-    pub sheet: SyncFace,
-    pub dock: SyncFace,
-    pub cloud_card: SyncFace,
-    pub target_card: SyncFace,
-    pub shadow: SyncFace,
-    pub lane: SyncFace,
-    pub packet: SyncFace,
-    pub stamp: SyncFace,
-    pub dot_done: SyncFace,
-    pub dot_active: SyncFace,
-    pub dot_pending: SyncFace,
-    pub dir_left: SyncFace,
-    pub dir_right: SyncFace,
-    pub dir_wait: SyncFace,
-    pub chip: SyncFace,
+    pub card: SyncFace,
+    /// `ring[n]` is the ring with `n` completed stages; `[5]` is closed.
+    pub ring: [SyncFace; 6],
+    pub cloud: SyncFace,
+    pub target: SyncFace,
+    pub check: SyncFace,
+    pub arrow_up: SyncFace,
+    pub arrow_down: SyncFace,
+    pub seal: SyncFace,
+    pub head: SyncFace,
+    pub scan: SyncFace,
 }
 
 /// A screen rectangle: left, top, width, height.
@@ -1176,9 +1165,10 @@ pub struct TransferFaces {
 /// The static transfer-docket artwork uploaded once at boot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TransferArt {
-    pub stamp: SyncFace,
     pub check: SyncFace,
-    pub shadow: SyncFace,
+    pub badge: SyncFace,
+    pub arrow_right: SyncFace,
+    pub arrow_left: SyncFace,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1851,8 +1841,6 @@ pub struct App {
     pub wifi_ui: Option<WifiUi>,
     pub sync_ui: Option<SyncUi>,
     upgrade_ui: Option<UpgradeUi>,
-    /// Rebuild fallback covers once the eject animation returns to the shelf.
-    fallback_refresh_after_eject: bool,
     sync_refresh_at: Millis,
     pub mods_ui: Option<ModsUi>,
     pub keyboard: Option<KeyboardState>,
@@ -1897,6 +1885,12 @@ pub struct App {
     folder_anim: Option<FolderAnim>,
     invalidated_faces: Vec<TexId>,
     face_generation: u64,
+    /// The backing plates behind the shelf's side cartridges, uploaded once at
+    /// boot.  A shelf rebuilt by `restock` or `reload_shelves` starts without
+    /// them, so the ids live here and are re-applied to every new shelf.
+    cart_shadow_face: Option<TexId>,
+    gb_shadow_face: Option<TexId>,
+    gbc_shadow_face: Option<TexId>,
     carousel: CarouselKeys,
     shortcuts: ShortcutKeys,
     controls: Controls,
@@ -1915,6 +1909,7 @@ pub struct App {
     power_labels: Vec<[(TexId, u32, u32); 2]>,
     power_icons: Vec<[(TexId, u32, u32); 2]>,
     power_title: Option<(TexId, u32, u32)>,
+    power_panel: Option<(TexId, u32, u32)>,
     core_picker: Option<CorePicker>,
     core_board_face: Option<TexId>,
     core_lid_face: Option<TexId>,
@@ -1935,6 +1930,7 @@ pub struct App {
     front_deck: Option<FrontDeck>,
     front_deck_texs: Vec<(TexId, u32, u32)>,
     front_deck_title: Option<(TexId, u32, u32)>,
+    core_picker_title: Option<(TexId, u32, u32)>,
     front_deck_controls: Vec<(TexId, u32)>,
     front_deck_names: Vec<(TexId, u32, u32)>,
     front_deck_counter: Option<(TexId, u32, u32)>,
@@ -1960,6 +1956,7 @@ pub struct App {
     link_band: linkcfg::LinkBand,
     five_ghz_supported: bool,
     link_band_faces: Vec<(TexId, u32, u32)>,
+    link_band_blocks: Vec<(TexId, u32, u32)>,
     /// Prompt stack position while asking the player to join a Wi-Fi.
     last_role: LinkRow,
     link_choices: HashMap<String, LinkKind>,
@@ -2052,6 +2049,8 @@ pub struct App {
     clock_faces: Option<(TexId, TexId)>,
     quick_menu_faces: Option<QuickMenuFaces>,
     quick_clock_faces: Option<[(TexId, u32, u32); 2]>,
+    quick_mods_faces: Option<[(TexId, u32, u32); 2]>,
+    quick_version_faces: Option<[(TexId, u32, u32); 2]>,
     about_face: Option<TexId>,
     wallpaper: Option<TexId>,
     /// The active machine's screen overlay, once the frontend has uploaded
@@ -2085,6 +2084,8 @@ pub struct App {
     bolt: Option<TexId>,
     shelf_platform: slot_ui::Printed,
     shelf_playtime_text: String,
+    /// Prefix-free duration used by the shelf v2 title meta line.
+    shelf_playtime_compact: String,
     shelf_playtime_key: Option<(String, Platform)>,
     shelf_playtime_face: Option<(TexId, u32, u32)>,
     name_pending: bool,
@@ -2150,8 +2151,6 @@ pub struct App {
     sync_open_at: Option<Millis>,
     /// Power-off fade once the sync result is ready.
     sync_close_at: Option<Millis>,
-    /// Result banner fades in from black after the sync screen closes.
-    sync_result_at: Option<Millis>,
     /// The static cloud network cartridge used when no manual mod is installed.
     auto_cloud_card: Option<(TexId, u32, u32)>,
     /// The card being swapped out from behind the game card.
@@ -2352,6 +2351,11 @@ const FAVORITES_AT: usize = 1;
 /// then panicked with an out-of-bounds index instead of reaching the shelf.
 const COLLECTION_KINDS: usize = slot_ui::CollectionKind::ALL.len();
 
+/// Every rack's shelf, empty where a platform has no cartridges.
+///
+/// A fresh [`Shelf`] starts with no backing plate: `App` keeps the boot shadow
+/// ids and re-applies them with `apply_shelf_shadows` after every rebuild, so
+/// a new construction path must go through that helper too.
 fn shelves_of(carts: Vec<Cart>, state: &SlotState) -> Vec<(Rack, Shelf)> {
     let mut rows: Vec<(Rack, Vec<Cart>)> = vec![
         (Rack::Recents, Vec::new()),
@@ -2417,7 +2421,6 @@ impl App {
             sync_pending: None,
             sync_open_at: None,
             sync_close_at: None,
-            sync_result_at: None,
             auto_cloud_card: None,
             sync_swap_card: None,
             sync_card: None,
@@ -2428,7 +2431,7 @@ impl App {
             boot_mods: None,
             boot_job: None,
             utility: None, guide: None,
-            theme_preset: ThemePreset::Default,
+            theme_preset: ThemePreset::Warm,
             language: Language::default(),
             language_checked_at: 0,
             cheat_rows: Vec::new(), cheat_key: String::new(), cheat_pending: None,
@@ -2436,7 +2439,6 @@ impl App {
             wifi_ui: None,
             sync_ui: None,
             upgrade_ui: None,
-            fallback_refresh_after_eject: false,
             sync_refresh_at: 0,
             mods_ui: None,
             keyboard: None,
@@ -2472,6 +2474,9 @@ impl App {
             folder_anim: None,
             invalidated_faces: Vec::new(),
             face_generation: 0,
+            cart_shadow_face: None,
+            gb_shadow_face: None,
+            gbc_shadow_face: None,
             carousel,
             shortcuts: ShortcutKeys::default(),
             controls: Controls::default(),
@@ -2489,6 +2494,7 @@ impl App {
             power_labels: Vec::new(),
             power_icons: Vec::new(),
             power_title: None,
+            power_panel: None,
             core_picker: None,
             core_board_face: None,
             core_lid_face: None,
@@ -2506,6 +2512,7 @@ impl App {
             front_deck: None,
             front_deck_texs: Vec::new(),
             front_deck_title: None,
+            core_picker_title: None,
             front_deck_controls: Vec::new(),
             front_deck_names: Vec::new(),
             front_deck_counter: None,
@@ -2534,6 +2541,7 @@ impl App {
             link_band: linkcfg::LinkBand::default(),
             five_ghz_supported: true,
             link_band_faces: Vec::new(),
+            link_band_blocks: Vec::new(),
             last_role: LinkRow::Host,
             link_choices: HashMap::new(),
             link_loaded: None,
@@ -2598,6 +2606,8 @@ impl App {
             clock_faces: None,
             quick_menu_faces: None,
             quick_clock_faces: None,
+            quick_mods_faces: None,
+            quick_version_faces: None,
             about_face: None,
             wallpaper: None,
             fc_mask_face: None,
@@ -2622,6 +2632,7 @@ impl App {
             bolt: None,
             shelf_platform: slot_ui::Printed::default(),
             shelf_playtime_text: String::new(),
+            shelf_playtime_compact: String::new(),
             shelf_playtime_key: None,
             shelf_playtime_face: None,
             name_pending: false,
@@ -3311,6 +3322,7 @@ impl App {
             group_index,
             shelf,
         });
+        self.apply_shelf_shadows();
         true
     }
 
@@ -3531,22 +3543,6 @@ impl App {
         self.name_pending = true;
     }
 
-    fn slot_name_alpha(&self) -> f32 {
-        let Some(at) = self.shelf_named else {
-            return 0.0;
-        };
-        let t = self.now().saturating_sub(at);
-        let level = if t < SLOT_NAME_IN_MS {
-            t as f32 / SLOT_NAME_IN_MS as f32
-        } else if t < SLOT_NAME_IN_MS + SLOT_NAME_HOLD_MS {
-            1.0
-        } else {
-            let out = t - SLOT_NAME_IN_MS - SLOT_NAME_HOLD_MS;
-            1.0 - (out as f32 / SLOT_NAME_OUT_MS as f32).min(1.0)
-        };
-        SLOT_NAME_ALPHA * ease(level)
-    }
-
     fn next_shelf(&self, by: i32) -> Option<usize> {
         let n = self.shelves.len() as i32;
         (1..n)
@@ -3556,6 +3552,7 @@ impl App {
 
     fn restock(&mut self, at: usize, carts: Vec<Cart>) {
         let _old = std::mem::replace(&mut self.shelves[at].1, Shelf::new(carts));
+        self.apply_shelf_shadows();
         if self.shelf_at == at {
             if self.shelves[at].1.carts.is_empty() {
                 self.shelf_at = self.next_shelf(1).unwrap_or(0);
@@ -4071,8 +4068,11 @@ impl App {
             QuickRow::BlueLight => Some(QuickValue::level(self.state.blue_light)),
             QuickRow::Recents => Some(QuickValue::flag(self.state.show_recents)),
             QuickRow::Theme => None,
-            QuickRow::ThemeDefault => Some(self.theme_value(ThemePreset::Default)),
-            QuickRow::ThemeWeb => Some(self.theme_value(ThemePreset::Web)),
+            // Technical compatibility slots: the first is Paper (device
+            // default), the last is Warm.  ThemeWeb stays for QuickRow index
+            // stability but is no longer shown.
+            QuickRow::ThemeDefault => Some(self.theme_value(ThemePreset::Warm)),
+            QuickRow::ThemeWeb => Some(self.theme_value(ThemePreset::Warm)),
             QuickRow::ThemeWarm => Some(self.theme_value(ThemePreset::Warm)),
             QuickRow::RomTitle => Some(QuickValue::flag(self.state.show_rom_title)),
             QuickRow::FallbackCover => Some(QuickValue::flag(self.state.fallback_cover)),
@@ -4104,6 +4104,22 @@ impl App {
 
     pub fn set_quick_menu_faces(&mut self, faces: QuickMenuFaces) {
         self.quick_menu_faces = Some(faces);
+    }
+
+    pub fn set_quick_special_values(
+        &mut self,
+        mods: [(TexId, u32, u32); 2],
+        version: [(TexId, u32, u32); 2],
+    ) {
+        self.quick_mods_faces = Some(mods);
+        self.quick_version_faces = Some(version);
+    }
+
+    pub fn quick_mods_count(&self) -> usize {
+        self.root
+            .as_deref()
+            .and_then(|root| slot_mods::list(root).ok())
+            .map_or(0, |rows| rows.len())
     }
 
     /// The language the UI should be drawn in.
@@ -4187,15 +4203,42 @@ impl App {
     }
 
     pub fn set_cart_shadow(&mut self, face: TexId) {
-        for (_, shelf) in &mut self.shelves {
-            shelf.set_shadow(face);
-        }
+        self.cart_shadow_face = Some(face);
+        self.apply_shelf_shadows();
     }
 
     pub fn set_gb_cart_shadows(&mut self, notched: TexId, rounded: TexId) {
+        self.gb_shadow_face = Some(notched);
+        self.gbc_shadow_face = Some(rounded);
+        self.apply_shelf_shadows();
+    }
+
+    /// Re-apply the boot backing plates to every shelf.  `restock` and
+    /// `reload_shelves` replace shelves wholesale, and a fresh `Shelf` starts
+    /// with no shadow: without this the side cartridges lose their backing
+    /// plate after a favourite, a play, a Web refresh or a delete.
+    fn apply_shelf_shadows(&mut self) {
+        let (cart, notched, rounded) = (
+            self.cart_shadow_face,
+            self.gb_shadow_face,
+            self.gbc_shadow_face,
+        );
+        let apply = |shelf: &mut Shelf| {
+            if let Some(face) = cart {
+                shelf.set_shadow(face);
+            }
+            if let Some(face) = notched {
+                shelf.set_gb_shadow(GbShell::Notched, face);
+            }
+            if let Some(face) = rounded {
+                shelf.set_gb_shadow(GbShell::Rounded, face);
+            }
+        };
         for (_, shelf) in &mut self.shelves {
-            shelf.set_gb_shadow(GbShell::Notched, notched);
-            shelf.set_gb_shadow(GbShell::Rounded, rounded);
+            apply(shelf);
+        }
+        if let Some(view) = &mut self.folder_view {
+            apply(&mut view.shelf);
         }
     }
 
@@ -4439,8 +4482,81 @@ impl App {
         }
     }
 
+    /// Legacy warm shelf header: active platform, `游戏库` and the item count.
+    pub fn shelf_header_text(&self) -> Option<(String, String, String)> {
+        let (platform, _) = self.shelf_plate_text()?;
+        let count = self.carts().count();
+        Some((
+            platform,
+            slot_i18n::t(self.language, "device.app.shelf.game_library").to_string(),
+            slot_i18n::t_args(
+                self.language,
+                "device.app.shelf.count",
+                &[("count", &count.to_string())],
+            )
+            .to_string(),
+        ))
+    }
+
+    /// Plate under the shelf slot: short code plus the full machine name.
+    pub fn shelf_plate_text(&self) -> Option<(String, String)> {
+        let code = self.slot_text()?;
+        let name = match code.as_str() {
+            "GBA" => "GAME BOY ADVANCE",
+            "GB" => "GAME BOY",
+            "GBC" => "GAME BOY COLOR",
+            "FC" => "FAMICOM",
+            "SFC" => "SUPER FAMICOM",
+            "MD" => "MEGA DRIVE",
+            _ => "LINKSLOT LIBRARY",
+        };
+        Some((code, name.to_string()))
+    }
+
     pub fn shelf_platform_name(&self) -> Option<&'static str> {
         Some(self.shelves[self.shelf_at].0.name(self.language))
+    }
+
+    pub fn shelf_game_title_text(&self) -> Option<String> {
+        if !self.navigation_visible() || !self.state.show_rom_title {
+            return None;
+        }
+        self.shelf()
+            .carts
+            .get(self.shelf().index)
+            .map(slot_ui::label_text)
+    }
+
+    /// Taller cartridges (GB/GBC/SFC/MD/FC) leave less than a full 58px title
+    /// band above the cart, so they use the compact one-line title instead of
+    /// painting the title over the cartridge shell.
+    pub fn shelf_title_compact(&self) -> bool {
+        self.shelf()
+            .carts
+            .get(self.shelf().index)
+            .is_some_and(|cart| !matches!(cart.platform, Platform::Gba))
+    }
+
+    pub fn shelf_meta_text(&self) -> String {
+        if self.shelf_game_title_text().is_none() {
+            return String::new();
+        }
+        let Some(cart) = self.shelf().carts.get(self.shelf().index) else {
+            return String::new();
+        };
+        let platform = match cart.platform {
+            Platform::Gba => slot_i18n::t(self.language, "device.app.platform.gba"),
+            Platform::Gb => slot_i18n::t(self.language, "device.app.platform.gb"),
+            Platform::Gbc => slot_i18n::t(self.language, "device.app.platform.gbc"),
+            Platform::Fc => slot_i18n::t(self.language, "device.app.platform.fc"),
+            Platform::Sfc => slot_i18n::t(self.language, "device.app.platform.sfc"),
+            Platform::Md => slot_i18n::t(self.language, "device.app.platform.md"),
+        };
+        if self.shelf_playtime_compact.is_empty() {
+            platform.to_string()
+        } else {
+            format!("{} · {}", platform, self.shelf_playtime_compact)
+        }
     }
 
     /// Colour of the shelf's platform / collection name.  A one-letter jump
@@ -4582,10 +4698,6 @@ impl App {
     /// browse sets, not only the cart labels.
     fn refresh_library_after_web(&mut self) {
         self.reload_shelves();
-    }
-
-    pub(crate) fn fallback_cover_enabled(&self) -> bool {
-        self.state.fallback_cover
     }
 
     pub fn face_cart(&self, shelf: usize, index: usize) -> Option<&Cart> {
@@ -4766,6 +4878,14 @@ impl App {
     /// masks.
     pub fn single_machine_link(&self) -> bool {
         matches!(self.platform, Platform::Fc | Platform::Sfc | Platform::Md)
+    }
+
+    pub fn link_kind(&self) -> LinkKind {
+        self.link_hardware
+    }
+
+    pub fn link_transport(&self) -> LinkTransport {
+        self.link_network
     }
 
     /// Whether this link is a cable session (one socket, many carts) rather
@@ -7924,6 +8044,7 @@ impl App {
         self.folder_mode = false;
         self.folder_anim = None;
         self.shelves = shelves_of(carts, &self.state);
+        self.apply_shelf_shadows();
         self.folder_catalog = folder_catalog;
         self.shelf_at = self
             .shelves
@@ -8019,6 +8140,7 @@ impl App {
             face: self.transfer_blank_face.map(|(tex, _, _)| tex),
             rest,
             scale,
+            lift: self.transfer_preview_lift(cart.platform),
             seat,
             alert: None,
             dim: seat,
@@ -8029,27 +8151,10 @@ impl App {
         .draw(out);
     }
 
-    /// The seat card's face for the docket's product photo: the real shelf card
-    /// while sending (and after a received cart is reloaded), the generated
-    /// preview face while the receiver is still receiving.
-    fn transfer_docket_card(&self) -> Option<TexId> {
-        let receiving = self
-            .transfer
-            .as_ref()
-            .is_some_and(|transfer| transfer.stage == TransferStage::Receiving);
-        if receiving {
-            if let Some((tex, _, _)) = self.transfer_blank_face {
-                return Some(tex);
-            }
-        }
-        if let Some(stem) = self.transfer_insert_stem.as_deref() {
-            if let Some((_, Some(tex))) = self.shelf().find(stem) {
-                return Some(tex);
-            }
-        }
-        self.transfer_blank_face.map(|(tex, _, _)| tex)
-    }
 
+    /// The transfer card: a flat 560×344 sheet with a two-device link, the real
+    /// bytes and the per-item checks. The card keeps the room dimmed and the
+    /// cartridge in the slot.
     fn draw_cart_transfer(&self, out: &mut Vec<Draw>) {
         let Some(transfer) = &self.transfer else {
             return;
@@ -8064,7 +8169,6 @@ impl App {
             return;
         }
         if self.transfer_insert_at.is_some() {
-            // Let the normal insert animation own the screen first.
             return;
         }
         let Some(faces) = self.transfer_faces.as_ref() else {
@@ -8084,22 +8188,10 @@ impl App {
             (now.saturating_sub(start) as f32 / 160.0).clamp(0.0, 1.0)
         });
         let alpha = (slot_ui::ease(open) * (1.0 - slot_ui::ease(close))).clamp(0.0, 1.0);
-        let dy = 12.0 * (1.0 - slot_ui::ease(open)) + 8.0 * slot_ui::ease(close);
+        let dy = 10.0 * (1.0 - slot_ui::ease(open)) + 8.0 * slot_ui::ease(close);
         let (dx, top) = slot_ui::transfer_docket::DOCKET_AT;
         let top = top + dy;
 
-        if let Some(art) = self.transfer_art.as_ref() {
-            if art.shadow.w > 0 {
-                out.push(Draw::Tex {
-                    x: dx - 4.0,
-                    y: top + 4.0,
-                    w: art.shadow.w as f32,
-                    h: art.shadow.h as f32,
-                    tex: art.shadow.tex,
-                    alpha: 0.55 * alpha,
-                });
-            }
-        }
         out.push(Draw::Tex {
             x: dx,
             y: top,
@@ -8109,14 +8201,13 @@ impl App {
             alpha,
         });
 
-        // Product photo.  Fit the card's own aspect inside the paper frame.
-        if let Some(tex) = self.transfer_docket_card() {
-            let (cw, ch) = slot_ui::cart_box(view.platform);
-            let scale = (84.0 / cw as f32).min(47.0 / ch as f32);
-            let (w, h) = (cw as f32 * scale, ch as f32 * scale);
+        // The cartridge thumbnail: the incoming preview while receiving, the
+        // local source face while sending.  The frame itself is baked.
+        if let Some(tex) = self.transfer_thumb_face() {
+            let (x, y, w, h) = slot_ui::transfer_docket::CARD_INNER;
             out.push(Draw::Tex {
-                x: 99.0 + (84.0 - w) / 2.0,
-                y: 165.0 + (47.0 - h) / 2.0 + dy,
+                x,
+                y: y + dy,
                 w,
                 h,
                 tex,
@@ -8124,7 +8215,23 @@ impl App {
             });
         }
 
-        if !matches!(view.flow, TransferFlow::Waiting) {
+        let accent = slot_ui::switch_style::accent();
+        let accent = [
+            accent[0] as f32 / 255.0,
+            accent[1] as f32 / 255.0,
+            accent[2] as f32 / 255.0,
+            alpha,
+        ];
+        let edge = slot_ui::transfer_docket::PAPER_EDGE;
+        let edge = [
+            edge[0] as f32 / 255.0,
+            edge[1] as f32 / 255.0,
+            edge[2] as f32 / 255.0,
+            alpha,
+        ];
+        let waiting = matches!(view.flow, TransferFlow::Waiting);
+
+        if !waiting {
             if let Some(percent) = faces.percent.filter(|face| face.w > 0 && face.h > 0) {
                 out.push(Draw::Tex {
                     x: slot_ui::transfer_docket::PERCENT_AT.0,
@@ -8146,13 +8253,6 @@ impl App {
                 });
             }
             let (bx, by, bw, bh) = slot_ui::transfer_docket::BAR;
-            let accent = slot_ui::switch_style::accent();
-            let accent = [
-                accent[0] as f32 / 255.0,
-                accent[1] as f32 / 255.0,
-                accent[2] as f32 / 255.0,
-                alpha,
-            ];
             let filled = bw * view.percent.min(100) as f32 / 100.0;
             if filled > 0.0 {
                 out.push(Draw::Rect {
@@ -8162,39 +8262,60 @@ impl App {
                     h: bh,
                     colour: accent,
                 });
-                out.push(Draw::Rect {
-                    x: bx + 2.0,
-                    y: by + 1.0 + dy,
-                    w: (filled - 4.0).max(0.0),
-                    h: 1.0,
-                    colour: [0.96, 0.54, 0.57, 0.55 * alpha],
-                });
             }
         }
 
-        // Per-item check boxes and the current item's own progress.  The paper
-        // already carries the labels and sizes; this layer only changes state.
-        let accent = slot_ui::switch_style::accent();
-        let accent = [
-            accent[0] as f32 / 255.0,
-            accent[1] as f32 / 255.0,
-            accent[2] as f32 / 255.0,
-            alpha,
-        ];
-        let edge = slot_ui::transfer_docket::PAPER_EDGE;
-        let edge = [
-            edge[0] as f32 / 255.0,
-            edge[1] as f32 / 255.0,
-            edge[2] as f32 / 255.0,
-            alpha,
-        ];
-        let faint = slot_ui::transfer_docket::PAPER_FAINT;
-        let faint = [
-            faint[0] as f32 / 255.0,
-            faint[1] as f32 / 255.0,
-            faint[2] as f32 / 255.0,
-            alpha,
-        ];
+        // The link: a red direction arrow and one moving data dot.
+        if !waiting {
+            if let Some(art) = self.transfer_art {
+                let arrow = if view.reverse {
+                    art.arrow_left
+                } else {
+                    art.arrow_right
+                };
+                if arrow.w > 0 && arrow.h > 0 {
+                    out.push(Draw::Tex {
+                        x: slot_ui::transfer_docket::ARROW_CENTRE.0 - arrow.w as f32 / 2.0,
+                        y: slot_ui::transfer_docket::ARROW_CENTRE.1 - arrow.h as f32 / 2.0 + dy,
+                        w: arrow.w as f32,
+                        h: arrow.h as f32,
+                        tex: arrow.tex,
+                        alpha,
+                    });
+                }
+                if !matches!(view.flow, TransferFlow::Done) {
+                    let phase = (now % 1_200) as f32 / 1_200.0;
+                    let (x0, x1) = (
+                        slot_ui::transfer_docket::LINK_X0,
+                        slot_ui::transfer_docket::LINK_X1,
+                    );
+                    let x = if view.reverse {
+                        x1 - (x1 - x0) * phase
+                    } else {
+                        x0 + (x1 - x0) * phase
+                    };
+                    let trail = if view.reverse { 4.0 } else { -4.0 };
+                    let y = slot_ui::transfer_docket::LINK_Y;
+                    out.push(Draw::Rect {
+                        x: x + trail - 1.0,
+                        y: y + dy - 0.5,
+                        w: 2.0,
+                        h: 1.0,
+                        colour: [1.0, 1.0, 1.0, 0.35 * alpha],
+                    });
+                    out.push(Draw::Rect {
+                        x: x - 2.0,
+                        y: y + dy - 2.0,
+                        w: 4.0,
+                        h: 4.0,
+                        colour: accent,
+                    });
+                }
+            }
+        }
+
+        // Per-item checks / current dot / pending ring, plus the current item's
+        // own 2 px progress bar.  The labels and sizes are baked in the card.
         let check = self.transfer_art.map(|art| art.check);
         let mut rows = [0usize; 2];
         for asset in &view.assets {
@@ -8218,7 +8339,8 @@ impl App {
                     slot_ui::transfer_docket::COL_R_RIGHT,
                 )
             };
-            let y = slot_ui::transfer_docket::ROW_Y[index] + slot_ui::transfer_docket::CHECK_DY
+            let y = slot_ui::transfer_docket::ROW_Y[index]
+                + slot_ui::transfer_docket::CHECK_DY
                 + dy;
             if asset.progress >= 1000 {
                 if let Some(check) = check.filter(|face| face.w > 0) {
@@ -8231,92 +8353,93 @@ impl App {
                         alpha,
                     });
                 }
-            } else {
-                let colour = if asset.progress > 0 { accent } else { faint };
+                continue;
+            }
+            // A 10 px 1 px ring for both the current and the pending row.
+            out.push(Draw::Rect {
+                x,
+                y,
+                w: 10.0,
+                h: 1.0,
+                colour: edge,
+            });
+            out.push(Draw::Rect {
+                x,
+                y: y + 9.0,
+                w: 10.0,
+                h: 1.0,
+                colour: edge,
+            });
+            out.push(Draw::Rect {
+                x,
+                y: y + 1.0,
+                w: 1.0,
+                h: 8.0,
+                colour: edge,
+            });
+            out.push(Draw::Rect {
+                x: x + 9.0,
+                y: y + 1.0,
+                w: 1.0,
+                h: 8.0,
+                colour: edge,
+            });
+            if asset.progress > 0 {
                 out.push(Draw::Rect {
-                    x,
-                    y,
-                    w: 10.0,
-                    h: 1.0,
-                    colour,
+                    x: x + 3.0,
+                    y: y + 3.0,
+                    w: 4.0,
+                    h: 4.0,
+                    colour: accent,
+                });
+                let track_x = x + 16.0;
+                let track_w = (right - track_x - slot_ui::transfer_docket::MINI_BAR_RIGHT)
+                    .max(2.0);
+                let track_y = y + slot_ui::transfer_docket::MINI_BAR_DY;
+                out.push(Draw::Rect {
+                    x: track_x,
+                    y: track_y,
+                    w: track_w,
+                    h: 2.0,
+                    colour: edge,
                 });
                 out.push(Draw::Rect {
-                    x,
-                    y: y + 9.0,
-                    w: 10.0,
-                    h: 1.0,
-                    colour,
+                    x: track_x,
+                    y: track_y,
+                    w: (track_w * asset.progress as f32 / 1000.0).max(2.0),
+                    h: 2.0,
+                    colour: accent,
                 });
-                out.push(Draw::Rect {
-                    x,
-                    y: y + 1.0,
-                    w: 1.0,
-                    h: 8.0,
-                    colour,
-                });
-                out.push(Draw::Rect {
-                    x: x + 9.0,
-                    y: y + 1.0,
-                    w: 1.0,
-                    h: 8.0,
-                    colour,
-                });
-                if asset.progress > 0 {
-                    out.push(Draw::Rect {
-                        x: x + 3.0,
-                        y: y + 4.0,
-                        w: 4.0,
-                        h: 4.0,
-                        colour: accent,
-                    });
-                    let track_x = x + 16.0;
-                    let track_w = (right - track_x - slot_ui::transfer_docket::MINI_BAR_RIGHT)
-                        .max(2.0);
-                    let track_y =
-                        slot_ui::transfer_docket::ROW_Y[index] + slot_ui::transfer_docket::MINI_BAR_DY
-                            + dy;
-                    out.push(Draw::Rect {
-                        x: track_x,
-                        y: track_y,
-                        w: track_w,
-                        h: 2.0,
-                        colour: edge,
-                    });
-                    out.push(Draw::Rect {
-                        x: track_x,
-                        y: track_y,
-                        w: (track_w * asset.progress as f32 / 1000.0).max(2.0),
-                        h: 2.0,
-                        colour: accent,
-                    });
-                }
             }
         }
 
+        // Completion badge in the status row, to the right of the text.
         if matches!(view.flow, TransferFlow::Done) {
-            if let Some(art) = self.transfer_art.as_ref() {
-                if art.stamp.w > 0 {
-                    let t = self.transfer_done_at.map_or(1.0, |start| {
-                        (now.saturating_sub(start) as f32 / 180.0).clamp(0.0, 1.0)
-                    });
-                    // 0.6 → 1.05 at three quarters, then settle back to 1.0.
-                    let scale = if t < 0.75 {
-                        0.6 + 0.45 * (t / 0.75)
-                    } else {
-                        1.05 - 0.05 * ((t - 0.75) / 0.25)
-                    };
-                    let size = art.stamp.w as f32 * scale;
+            if let Some(art) = self.transfer_art {
+                let badge = art.badge;
+                if badge.w > 0 && badge.h > 0 {
                     out.push(Draw::Tex {
-                        x: slot_ui::transfer_docket::STAMP_CENTRE.0 - size / 2.0,
-                        y: slot_ui::transfer_docket::STAMP_CENTRE.1 - size / 2.0 + dy,
-                        w: size,
-                        h: size,
-                        tex: art.stamp.tex,
+                        x: slot_ui::transfer_docket::BADGE_CENTRE.0 - badge.w as f32 / 2.0,
+                        y: slot_ui::transfer_docket::BADGE_CENTRE.1 - badge.h as f32 / 2.0 + dy,
+                        w: badge.w as f32,
+                        h: badge.h as f32,
+                        tex: badge.tex,
                         alpha,
                     });
                 }
             }
         }
+    }
+
+    /// The face of the cartridge shown in the transfer card: the incoming
+    /// preview while receiving, otherwise the source cartridge on the shelf.
+    fn transfer_thumb_face(&self) -> Option<TexId> {
+        if let Some((tex, _, _)) = self.transfer_blank_face {
+            return Some(tex);
+        }
+        let stem = self.transfer_insert_stem.as_deref()?;
+        let (_, face) = self.shelf().find(stem)?;
+        face
     }
 
     /// Build the achievement list for the cart currently under the cursor and
@@ -10281,8 +10404,8 @@ impl App {
 
     fn theme_choice(row: QuickRow) -> Option<ThemePreset> {
         match row {
-            QuickRow::ThemeDefault => Some(ThemePreset::Default),
-            QuickRow::ThemeWeb => Some(ThemePreset::Web),
+            QuickRow::ThemeDefault => Some(ThemePreset::Warm),
+            QuickRow::ThemeWeb => Some(ThemePreset::Warm),
             QuickRow::ThemeWarm => Some(ThemePreset::Warm),
             _ => None,
         }
@@ -10354,11 +10477,8 @@ impl App {
             return;
         }
         if row == QuickRow::FallbackCover {
-            self.state.fallback_cover = !self.state.fallback_cover;
-            self.persist();
-            // Existing face textures must be rebuilt with or without the
-            // state screenshot fallback.
-            self.invalidate_cart_faces();
+            // Kept as a compatibility row only; the shelf no longer uses
+            // state screenshots as covers.
             return;
         }
         let s = &mut self.state;
@@ -10870,11 +10990,9 @@ impl App {
             let returned_to_shelf =
                 matches!(self.phase, Phase::Ejecting { .. }) && matches!(phase, Phase::Shelf);
             self.phase = phase;
-            if returned_to_shelf && std::mem::take(&mut self.fallback_refresh_after_eject) {
-                // The cover is virtual: Labels/ is never touched, so the next
-                // generation still sees label.is_none() and may pick the newest
-                // state screenshot.
-                self.invalidate_cart_faces();
+            if returned_to_shelf {
+                // No fallback-cover refresh is needed; the default label is
+                // independent of the exit screenshot.
             }
             self.refused_from = None;
             let seated = match &self.phase {
@@ -11483,16 +11601,19 @@ impl App {
     fn refresh_shelf_playtime(&mut self) {
         if !matches!(self.phase, Phase::Shelf) {
             self.shelf_playtime_text.clear();
+            self.shelf_playtime_compact.clear();
             self.shelf_playtime_key = None;
             return;
         }
         let Some(stem) = self.selected_stem().map(str::to_string) else {
             self.shelf_playtime_text.clear();
+            self.shelf_playtime_compact.clear();
             self.shelf_playtime_key = None;
             return;
         };
         let Some(platform) = self.shelf().carts.get(self.shelf().index).map(|c| c.platform) else {
             self.shelf_playtime_text.clear();
+            self.shelf_playtime_compact.clear();
             self.shelf_playtime_key = None;
             return;
         };
@@ -11515,6 +11636,7 @@ impl App {
                 playtime.total_seconds.max(playtime.seconds)
             })
             .unwrap_or(0);
+        self.shelf_playtime_compact = crate::playtime::format_duration(seconds).unwrap_or_default();
         self.shelf_playtime_text = crate::playtime::format_duration(seconds)
             .map(|duration| {
                 slot_i18n::t_args(
@@ -11671,7 +11793,7 @@ impl App {
             // Keep transient feedback (for example a failed delete) visible on
             // the intro, where the general HUD pass below is not reached.
             if self.hud.toast_visible(self.now()) {
-                self.hud.draw(self.now(), out);
+                self.hud.draw(out);
             }
             // The confirmation lives above the intro, and the intro branch
             // returns before the general overlay section below.
@@ -11721,35 +11843,50 @@ impl App {
                 picker.draw(line, hint, back, self.language, out);
                 return;
             }
-            Phase::QuickMenu { row } => QuickMenu {
-                row: *row,
-                values: QuickRow::ALL.map(|r| self.quick_value(r)),
-                clock: self.quick_clock_faces,
-                fc_mask_value: self.fc_mask_value,
-                gb_mask_value: self.gb_mask_value,
-                gbc_mask_value: self.gbc_mask_value,
-                sfc_mask_value: self.sfc_mask_value,
-                faces: self.quick_menu_faces.as_ref(),
+            Phase::QuickMenu { row } => {
+                QuickMenu {
+                    row: *row,
+                    values: QuickRow::ALL.map(|r| self.quick_value(r)),
+                    clock: self.quick_clock_faces,
+                    fc_mask_value: self.fc_mask_value,
+                    gb_mask_value: self.gb_mask_value,
+                    gbc_mask_value: self.gbc_mask_value,
+                    sfc_mask_value: self.sfc_mask_value,
+                    mods_value: self.quick_mods_faces,
+                    version_value: self.quick_version_faces,
+                    faces: self.quick_menu_faces.as_ref(),
+                }
+                .draw(out);
+                StatusBar {
+                    clock: self.shelf_clock,
+                    battery: self.battery,
+                    percent: self.battery_percent,
+                    bolt: self.bolt,
+                    wifi: self.wifi_face,
+                    wifi_on: self.wifi_connected,
+                }
+                .draw_compact(out);
             }
-            .draw(out),
             Phase::Shelf => {
-                let accent = self.shelves[self.shelf_at].0.accent();
                 let kind = self.shelves[self.shelf_at].0.collection_kind();
                 let plate = self.collection_slot_back(kind);
-                draw_backdrop(
-                    self.collection_backdrop(kind),
-                    self.shelf_backdrop,
-                    accent,
-                    kind,
-                    self.collection_overlay(kind),
-                    out,
-                );
+                // The transfer room keeps its card over the shelf; the whole
+                // row drops below it so a tall FC/GB/SFC/MD cartridge cannot
+                // rise into the card or its game chip.
+                let room_lift = self.transfer_shelf_lift();
+                self.draw_flat_shelf_ground(out);
                 match (self.core_picker_shown(), self.selected_stem()) {
                     (Some(picker), Some(stem)) => {
                         let open = ease(picker.openness(self.now()));
                         let dim = 1.0 + (CORE_PICKER_DIM - 1.0) * open;
-                        self.shelf()
-                            .draw_row(Some(stem), 0.0, CORE_PICKER_RECEDE * open, dim, out);
+                        self.shelf().draw_row_lifted(
+                            Some(stem),
+                            0.0,
+                            CORE_PICKER_RECEDE * open,
+                            dim,
+                            room_lift,
+                            out,
+                        );
                         draw_empty_slot_with(plate, out);
                     }
                     _ if self.transfer_seated => {
@@ -11782,7 +11919,8 @@ impl App {
                             .as_deref()
                             .filter(|stem| self.shelf().find(stem).is_some())
                         {
-                            self.shelf().draw_row(Some(stem), 0.0, seat, 0.55, out);
+                            self.shelf()
+                                .draw_row_lifted(Some(stem), 0.0, seat, 0.55, room_lift, out);
                             self.chrome_at(stem, seat, seat, out);
                         } else {
                             self.draw_transfer_preview(seat, out);
@@ -11822,8 +11960,14 @@ impl App {
                         } else {
                             1.0
                         };
-                        self.shelf()
-                            .draw_row(hidden, self.shelf_shake(), 0.0, shelf_dim, out);
+                        self.shelf().draw_row_lifted(
+                            hidden,
+                            self.shelf_shake(),
+                            0.0,
+                            shelf_dim,
+                            room_lift,
+                            out,
+                        );
                         if hidden.is_none() {
                             self.draw_favorite_star(out);
                         }
@@ -11838,12 +11982,16 @@ impl App {
                             slot_ui::draw_slot_front_layer(out);
                         } else {
                             draw_empty_slot_with(plate, out);
-                        }
-                        // A nameplate carries the rack's name itself (built-in
-                        // plates and upstream's slot_back art both do); fall
-                        // back to the printed name only when there is none.
-                        if plate.is_none() {
-                            draw_slot_name(self.shelf_platform, self.slot_name_alpha(), out);
+                            // A nameplate carries the rack's name itself
+                            // (built-in plates and upstream's slot_back art
+                            // both do); fall back to printed text without one.
+                            if plate.is_none() {
+                                draw_slot_name(
+                                    self.shelf_platform,
+                                    self.slot_name_alpha(),
+                                    out,
+                                );
+                            }
                         }
                     }
                 }
@@ -11879,7 +12027,11 @@ impl App {
                     || self.transfer_view().is_some()
                     || !matches!(self.shelf_sync, ShelfSync::Idle);
                 if !covered {
-                    self.draw_shelf_playtime(out);
+                    // In the transfer room the row sits low enough to meet the
+                    // slot; its playtime plate would land on the cartridge.
+                    if self.transfer.is_none() {
+                        self.draw_shelf_playtime(out);
+                    }
                     // The room has its own keys: A sends the selected cart and
                     // M leaves.  The shelf's Y/X/B hints would be dead there.
                     let legend = if self.transfer.is_some() {
@@ -11892,7 +12044,7 @@ impl App {
             }
             Phase::About => {
                 draw_about(self.about_face, out);
-                self.hud.draw(self.now(), out);
+                self.hud.draw(out);
                 return;
             }
             Phase::Inserting { cart, resumed, .. } => {
@@ -11962,7 +12114,7 @@ impl App {
             self.draw_game_menu(menu, out);
         }
         self.draw_cart_transfer(out);
-        self.hud.draw(self.now(), out);
+        self.hud.draw(out);
         if self.link_popup_open() {
             if let Some((tex, _, _)) = self.link_confirm_face {
                 out.push(Draw::Tex {
@@ -12051,6 +12203,7 @@ impl App {
             face,
             rest,
             scale,
+            lift: self.transfer_shelf_lift(),
             seat,
             alert: self.alert_face.filter(|_| alpha > 0.0).map(|t| (t, alpha)),
             dim,
@@ -12096,6 +12249,14 @@ impl App {
         self.power_labels = labels;
         self.power_icons = icons;
         self.power_title = Some(title);
+    }
+
+    pub fn set_power_panel_face(&mut self, panel: (TexId, u32, u32)) {
+        self.power_panel = Some(panel);
+    }
+
+    pub fn set_core_picker_title(&mut self, tex: TexId, w: u32, h: u32) {
+        self.core_picker_title = Some((tex, w, h));
     }
 
     pub fn set_core_board_faces(&mut self, board: TexId, lid: TexId) {
@@ -12162,10 +12323,31 @@ impl App {
         }
     }
 
-    /// True while the result screen is painted from black.  The eject path
-    /// leaves this off so the shelf never flashes.
-    pub fn sync_result_fade_active(&self) -> bool {
-        self.sync_result_at.is_some()
+    /// The manual mod path has no cloud card; its running state is the
+    /// persistent 378x40 small status row in the top stack.
+    pub fn mods_running_active(&self) -> bool {
+        matches!(
+            &self.shelf_sync,
+            ShelfSync::Running { request, .. }
+                if request.mode != SyncRequestMode::Cloud && request.ui.is_none()
+        )
+    }
+
+    /// The settled 378x40 small result line.
+    pub fn sync_result_active(&self) -> bool {
+        matches!(self.shelf_sync, ShelfSync::Result { .. })
+    }
+
+    pub fn sync_small_active(&self) -> bool {
+        self.sync_result_active() || self.mods_running_active()
+    }
+
+    pub fn sync_result_face(&self) -> Option<SyncFace> {
+        self.sync_faces.result
+    }
+
+    pub fn sync_status_face(&self) -> Option<SyncFace> {
+        self.sync_faces.status
     }
 
     pub fn sync_picker_open(&self) -> bool {
@@ -12264,6 +12446,10 @@ impl App {
 
     pub fn set_link_band_faces(&mut self, faces: Vec<(TexId, u32, u32)>) {
         self.link_band_faces = faces;
+    }
+
+    pub fn set_link_band_blocks(&mut self, faces: Vec<(TexId, u32, u32)>) {
+        self.link_band_blocks = faces;
     }
 
     pub fn set_link_linked_face(&mut self, face: (TexId, u32, u32)) {
@@ -12397,20 +12583,17 @@ impl App {
         self.link_sprites.is_some()
     }
 
+    pub fn link_sprites(&self) -> Option<&crate::link_screen::LinkSprites> {
+        self.link_sprites.as_ref()
+    }
+
     /// The shelf behind the intro: the selected cart is hidden and drawn by
     /// the animation itself, so the rack must stay on screen underneath it.
     fn draw_intro_scene(&self, out: &mut Vec<Draw>) {
         let accent = self.shelves[self.shelf_at].0.accent();
         let kind = self.shelves[self.shelf_at].0.collection_kind();
         let plate = self.collection_slot_back(kind);
-        draw_backdrop(
-            self.collection_backdrop(kind),
-            self.shelf_backdrop,
-            accent,
-            kind,
-            self.collection_overlay(kind),
-            out,
-        );
+        self.draw_flat_shelf_ground(out);
         let Some(intro) = &self.game_intro else {
             return;
         };
@@ -12642,13 +12825,6 @@ impl App {
         let plate_x = (OUT_W as f32 - INTRO_PLATE_W) / 2.0;
         let plate_y = (OUT_H as f32 - INTRO_PLATE_H) / 2.0;
         let (plate, pw, ph) = faces.plate;
-        out.push(Draw::Rect {
-            x: plate_x + 7.0,
-            y: plate_y + 12.0,
-            w: pw as f32,
-            h: ph as f32,
-            colour: [0.0, 0.0, 0.0, 0.35],
-        });
         out.push(Draw::Tex {
             x: plate_x,
             y: plate_y,
@@ -12671,7 +12847,7 @@ impl App {
             x: plate_x + 32.0,
             y: plate_y + 56.0,
             w: INTRO_PLATE_W - 64.0,
-            h: 2.0,
+            h: 1.0,
             colour: [
                 INTRO_PANEL_EDGE[0] as f32 / 255.0,
                 INTRO_PANEL_EDGE[1] as f32 / 255.0,
@@ -12968,25 +13144,25 @@ impl App {
             x: 0.0,
             y: 0.0,
             w: OUT_W as f32,
-            h: 96.0,
-            colour: switch_colour(slot_ui::switch_style::bg_top()),
+            h: OUT_H as f32,
+            colour: [0.0, 0.0, 0.0, 0.44],
         });
-        out.push(Draw::Rect {
-            x: 48.0,
-            y: 22.0,
-            w: 5.0,
-            h: 30.0,
-            colour: switch_colour([
-                slot_ui::switch_style::accent()[0],
-                slot_ui::switch_style::accent()[1],
-                slot_ui::switch_style::accent()[2],
-                255,
-            ]),
-        });
+        let panel_x = (OUT_W as f32 - slot_ui::POWER_PANEL_W as f32) / 2.0;
+        let panel_y = 92.0;
+        if let Some((tex, w, h)) = self.power_panel {
+            out.push(Draw::Tex {
+                x: panel_x,
+                y: panel_y,
+                w: w as f32,
+                h: h as f32,
+                tex,
+                alpha: 1.0,
+            });
+        }
         if let Some((tex, w, h)) = self.power_title {
             out.push(Draw::Tex {
-                x: 64.0,
-                y: 18.0,
+                x: panel_x + 24.0,
+                y: 108.0,
                 w: w as f32,
                 h: h as f32,
                 tex,
@@ -13001,15 +13177,29 @@ impl App {
         for choice in PowerChoice::ALL {
             let selected = choice.index() == index;
             let (tex, w, h) = cards[selected as usize];
-            let y = 176.0 + 68.0 * choice.index() as f32;
-            out.push(Draw::Tex {
-                x: card_x,
-                y,
-                w: w as f32,
-                h: h as f32,
-                tex,
-                alpha: 1.0,
-            });
+            let y = 168.0 + 55.0 * choice.index() as f32;
+            if selected {
+                out.push(Draw::Tex {
+                    x: card_x,
+                    y,
+                    w: w as f32,
+                    h: h as f32,
+                    tex,
+                    alpha: 1.0,
+                });
+                out.push(Draw::Rect {
+                    x: card_x - 8.0,
+                    y: y + 12.0,
+                    w: 3.0,
+                    h: 24.0,
+                    colour: switch_colour([
+                        slot_ui::switch_style::accent()[0],
+                        slot_ui::switch_style::accent()[1],
+                        slot_ui::switch_style::accent()[2],
+                        255,
+                    ]),
+                });
+            }
             if let Some(&(icon, iw, ih)) = self.power_icons.get(choice.index()).map(|f| &f[selected as usize]) {
                 out.push(Draw::Tex {
                     x: card_x + 24.0,
@@ -13048,23 +13238,17 @@ impl App {
             h: OUT_H as f32,
             colour: [0.0, 0.0, 0.0, 190.0 / 255.0],
         });
-        let accent = slot_ui::switch_style::accent();
-        let accent = [
-            accent[0] as f32 / 255.0,
-            accent[1] as f32 / 255.0,
-            accent[2] as f32 / 255.0,
-        ];
+        out.push(Draw::Rect {
+            x: 28.0,
+            y: 40.0,
+            w: OUT_W as f32 - 56.0,
+            h: 1.0,
+            colour: switch_colour(slot_ui::switch_style::surface_border()),
+        });
         if let Some((tex, w, h)) = self.front_deck_title {
-            out.push(Draw::Rect {
-                x: 48.0,
-                y: 22.0,
-                w: 5.0,
-                h: 34.0,
-                colour: [accent[0], accent[1], accent[2], 1.0],
-            });
             out.push(Draw::Tex {
-                x: 64.0,
-                y: 16.0,
+                x: 32.0,
+                y: 48.0,
                 w: w as f32,
                 h: h as f32,
                 tex,
@@ -13073,8 +13257,8 @@ impl App {
         }
         if let Some((tex, w, h)) = self.front_deck_counter {
             out.push(Draw::Tex {
-                x: OUT_W as f32 - 48.0 - w as f32,
-                y: 24.0,
+                x: OUT_W as f32 - 32.0 - w as f32,
+                y: 54.0,
                 w: w as f32,
                 h: h as f32,
                 tex,
@@ -13156,7 +13340,7 @@ impl App {
                     w: width,
                     h: 6.0,
                     colour: if active {
-                        [accent[0], accent[1], accent[2], 1.0]
+                        [0.96, 0.96, 0.95, 1.0]
                     } else {
                         [0.36, 0.36, 0.40, 1.0]
                     },
@@ -13165,23 +13349,8 @@ impl App {
             }
         }
 
-        // The controls are the visual anchor at the bottom, like the shelf
-        // legend, but with larger keycaps and more breathing room.
-        let bar_y = OUT_H as f32 - 62.0;
-        out.push(Draw::Rect {
-            x: 40.0,
-            y: bar_y,
-            w: OUT_W as f32 - 80.0,
-            h: 50.0,
-            colour: [0.02, 0.02, 0.03, 0.72],
-        });
-        out.push(Draw::Rect {
-            x: 40.0,
-            y: bar_y,
-            w: OUT_W as f32 - 80.0,
-            h: 1.0,
-            colour: [1.0, 1.0, 1.0, 0.08],
-        });
+        // The controls sit directly on the dimmed shelf; no old black plate.
+        let bar_y = OUT_H as f32 - 50.0;
         if !self.front_deck_controls.is_empty() {
             let scale = 1.45;
             let gap = 14.0;
@@ -13383,24 +13552,22 @@ impl App {
             colour: switch_colour(slot_ui::switch_style::bg()),
         });
         out.push(Draw::Rect {
-            x: 0.0,
-            y: 0.0,
-            w: OUT_W as f32,
-            h: 96.0,
-            colour: switch_colour(slot_ui::switch_style::bg_top()),
+            x: 28.0,
+            y: 40.0,
+            w: OUT_W as f32 - 56.0,
+            h: 1.0,
+            colour: switch_colour(slot_ui::switch_style::surface_border()),
         });
-        out.push(Draw::Rect {
-            x: 48.0,
-            y: 22.0,
-            w: 5.0,
-            h: 30.0,
-            colour: switch_colour([
-                slot_ui::switch_style::accent()[0],
-                slot_ui::switch_style::accent()[1],
-                slot_ui::switch_style::accent()[2],
-                255,
-            ]),
-        });
+        if let Some((tex, w, h)) = self.core_picker_title {
+            out.push(Draw::Tex {
+                x: 32.0,
+                y: 48.0,
+                w: w as f32,
+                h: h as f32,
+                tex,
+                alpha: 1.0,
+            });
+        }
         let platform = self
             .shelf()
             .carts
@@ -13938,7 +14105,6 @@ impl App {
             ]),
         });
         // A short mode chip at the top-left, just right of the accent bar.
-        let single_machine = self.single_machine_link();
         let mode_index = if self.platform == Platform::Gba {
             match self.link_hardware {
                 LinkKind::Cable => Some(2),
@@ -13973,12 +14139,18 @@ impl App {
                         if band_h > 0 {
                             let bw = band_w as f32 * label_h / band_h as f32;
                             let x = 64.0 + label_w + 14.0;
-                            let colour = if band_index == 0 {
-                                [79.0 / 255.0, 195.0 / 255.0, 247.0 / 255.0, 1.0]
-                            } else {
-                                [242.0 / 255.0, 184.0 / 255.0, 75.0 / 255.0, 1.0]
-                            };
-                            out.push(Draw::Rect { x, y: 22.0, w: bw + 16.0, h: 30.0, colour });
+                            if let Some((block, block_w, block_h)) =
+                                self.link_band_blocks.get(band_index).copied()
+                            {
+                                out.push(Draw::Tex {
+                                    x,
+                                    y: 22.0,
+                                    w: block_w as f32,
+                                    h: block_h as f32,
+                                    tex: block,
+                                    alpha: 1.0,
+                                });
+                            }
                             out.push(Draw::Tex { x: x + 8.0, y: 22.0, w: bw, h: 30.0, tex: band_tex, alpha: 1.0 });
                         }
                     }
@@ -14011,7 +14183,8 @@ impl App {
         if let Some((tex, w, h)) = line {
             out.push(Draw::Tex {
                 x: ((OUT_W as f32 - w as f32) / 2.0).round(),
-                y: if single_machine { 40.0 } else { LINK_TEXT_Y },
+                // Centre the 24px line face on the 22px arrow pair.
+                y: LINK_TEXT_Y,
                 w: w as f32,
                 h: h as f32,
                 tex,
@@ -14190,16 +14363,8 @@ impl App {
         // its clean flag into the next cartridge.
         self.restart_clean = false;
         self.restart_pending = false;
-        // Remember that this cart had no real cover before it leaves the screen.
-        // The actual face rebuild waits for the eject animation to finish so the
-        // current cart does not turn blank during the animation.
-        self.fallback_refresh_after_eject = self.state.fallback_cover
-            && self
-                .shelf()
-                .carts
-                .iter()
-                .find(|candidate| candidate.stem == cart)
-                .is_some_and(|candidate| candidate.label.is_none());
+        // The old fallback-cover refresh is gone; the default label is baked
+        // into the cart face and does not depend on the exit screenshot.
         // A host room lives with the current game.  A follow switch is the one
         // eject that keeps it: the peer is deliberately moving this side into
         // the host's next cart.
@@ -14943,24 +15108,22 @@ impl App {
         ) {
             return SyncTexts::default();
         }
-        let side_local = slot_i18n::t(lang, "device.app.sync.side_this").to_string();
-        let side_cloud = slot_i18n::t(lang, "device.app.sync.side_cloud").to_string();
-        let side_target = slot_i18n::t(lang, "device.app.sync.side_target").to_string();
-        let cloud_label = slot_i18n::t(lang, "device.app.sync.cloud_label").to_string();
-        let target_label = slot_i18n::t(lang, "device.app.sync.target").to_string();
         match &self.shelf_sync {
             ShelfSync::Running {
                 stage,
                 request,
                 progress,
                 progress_label,
+                direction,
                 ..
             } => {
                 let manual = request.mode == SyncRequestMode::Mods;
                 let show_cloud = request.ui.as_ref().map_or(true, |ui| ui.show_cloud);
+                let subtitle_direction =
+                    (*direction).or_else(|| Self::ui_direction(request.ui.as_ref()));
                 SyncTexts {
                     title: Self::sync_title(lang, request.ui.as_ref()),
-                    subtitle: self.sync_subtitle(lang, manual),
+                    subtitle: self.sync_subtitle(lang, manual, subtitle_direction, false),
                     banner: stage.map_or_else(
                         || {
                             if manual {
@@ -14971,14 +15134,6 @@ impl App {
                         },
                         |stage| stage.line().to_string(),
                     ),
-                    side_local: side_local.clone(),
-                    side_remote: if show_cloud {
-                        side_cloud.clone()
-                    } else {
-                        side_target.clone()
-                    },
-                    cloud_label: cloud_label.clone(),
-                    target_label: target_label.clone(),
                     rail: Self::sync_rail_labels(lang, show_cloud),
                     progress_left: if manual {
                         progress_label
@@ -15013,26 +15168,25 @@ impl App {
                 text,
                 ui,
                 manual,
+                direction,
+                noop,
                 ..
             } => {
                 let show_cloud = ui.as_ref().map_or(true, |ui| ui.show_cloud);
+                let subtitle_direction =
+                    direction.or_else(|| Self::ui_direction(ui.as_ref()));
                 SyncTexts {
                     title: Self::sync_title(lang, ui.as_ref()),
-                    subtitle: self.sync_subtitle(lang, *manual),
+                    subtitle: self.sync_subtitle(lang, *manual, subtitle_direction, true),
                     banner: text.clone(),
-                    side_local,
-                    side_remote: if show_cloud {
-                        side_cloud
-                    } else {
-                        side_target
-                    },
-                    cloud_label,
-                    target_label,
                     rail: Self::sync_rail_labels(lang, show_cloud),
-                    progress_left: Self::sync_stage_counter(lang, 5),
+                    progress_left: if *noop {
+                        slot_i18n::t(lang, "device.app.sync.latest").to_string()
+                    } else {
+                        Self::sync_stage_counter(lang, 5)
+                    },
                     progress_right: String::new(),
-                    completion_hint: slot_i18n::t(lang, "device.app.sync.return_soon")
-                        .to_string(),
+                    completion_hint: slot_i18n::t(lang, "device.app.sync.rail.done").to_string(),
                 }
             }
             ShelfSync::Result { text, .. } => SyncTexts {
@@ -15041,13 +15195,10 @@ impl App {
             },
             ShelfSync::Connecting { .. } => SyncTexts {
                 title: slot_i18n::t(lang, "device.app.sync.title").to_string(),
-                subtitle: self.sync_subtitle(lang, false),
+                subtitle: self.sync_subtitle(lang, false, None, false),
                 banner: slot_i18n::t(lang, "device.app.sync.connecting").to_string(),
-                side_local,
-                side_remote: side_cloud,
-                cloud_label,
-                target_label,
                 rail: Self::sync_rail_labels(lang, true),
+                progress_left: Self::sync_stage_counter(lang, 1),
                 ..SyncTexts::default()
             },
             ShelfSync::Ejecting { text, .. } => SyncTexts {
@@ -15062,6 +15213,12 @@ impl App {
             | ShelfSync::Swapping { .. }
             | ShelfSync::Choice { .. } => SyncTexts::default(),
         }
+    }
+
+    /// The direction a manual mod declared, used until the CLI reports one.
+    fn ui_direction(ui: Option<&slot_mods::ActionUi>) -> Option<Direction> {
+        ui.and_then(|ui| ui.direction.as_deref())
+            .and_then(Direction::parse)
     }
 
     /// The sheet's title: the mod's declare title, or the built-in cloud title.
@@ -15079,8 +15236,14 @@ impl App {
         }
     }
 
-    /// `《游戏名》` or `《游戏名》 · 手动同步`.
-    fn sync_subtitle(&self, lang: Language, manual: bool) -> String {
+    /// `《游戏名》`, plus the direction or the completion suffix when known.
+    fn sync_subtitle(
+        &self,
+        lang: Language,
+        manual: bool,
+        direction: Option<Direction>,
+        settled: bool,
+    ) -> String {
         let Some(cart) = self.shelf().carts.get(self.shelf().index) else {
             return String::new();
         };
@@ -15094,7 +15257,23 @@ impl App {
         } else {
             "device.app.sync.subtitle"
         };
-        slot_i18n::t_args(lang, key, &[("game", game)])
+        let base = slot_i18n::t_args(lang, key, &[("game", game)]);
+        let suffix = if settled {
+            Some(slot_i18n::t(lang, "device.app.sync.rail.done").to_string())
+        } else {
+            direction.map(|direction| match direction {
+                Direction::Upload => {
+                    slot_i18n::t(lang, "device.app.sync.direction_upload").to_string()
+                }
+                Direction::Download => {
+                    slot_i18n::t(lang, "device.app.sync.direction_download").to_string()
+                }
+            })
+        };
+        match suffix {
+            Some(suffix) if !suffix.is_empty() => format!("{base} · {suffix}"),
+            _ => base,
+        }
     }
 
     fn sync_rail_labels(lang: Language, show_cloud: bool) -> [String; 5] {
@@ -15147,7 +15326,6 @@ impl App {
         self.play_held = None;
         self.sync_open_at = None;
         self.sync_close_at = None;
-        self.sync_result_at = None;
         self.sync_swap_card = None;
         self.sync_card = None;
         self.shelf_sync = ShelfSync::Holding {
@@ -15308,7 +15486,7 @@ impl App {
         self.sync_pop_at = None;
         if let Some(reason) = self.sync_refusal() {
             self.wifi_activity_finished();
-            self.show_sync_result(reason, now);
+            self.show_sync_failure(reason);
             return;
         }
         let run = self.sync_launcher.launch(request.clone());
@@ -15472,11 +15650,9 @@ impl App {
         if remaining.is_empty() {
             self.shelf_sync = ShelfSync::Idle;
         } else {
-            let now = self.now();
             let items = remaining.join("、");
-            self.show_sync_result(
+            self.show_sync_failure(
                 slot_i18n::t_args(lang, "device.app.sync.item_failed", &[("item", items.as_str())]),
-                now,
             );
         }
     }
@@ -15573,12 +15749,12 @@ impl App {
         let now = self.now();
         let Some((root, stem, platform, emulator)) = self.sync_target() else {
             self.refuse();
-            self.show_sync_result(slot_i18n::t(lang, "device.app.sync.no_card"), now);
+            self.show_sync_failure(slot_i18n::t(lang, "device.app.sync.no_card"));
             return;
         };
         if let Some(reason) = self.sync_refusal() {
             self.refuse();
-            self.show_sync_result(reason, now);
+            self.show_sync_failure(reason);
             return;
         }
         // A conflict resolution always means the cloud; normal long-presses
@@ -15729,9 +15905,82 @@ impl App {
         self.hud.toast_visible(self.now())
     }
 
+    /// The toast currently on screen and its fade alpha.  The frontend draws it
+    /// in the top notification layer, over the shelf/room headings.
+    pub fn hud_toast_view(&self) -> Option<(Toast, f32)> {
+        self.hud.toast_view(self.now())
+    }
+
+    /// The uploaded face for a toast, if the boot face pass supplied it.
+    pub fn hud_toast_face(&self, toast: Toast) -> Option<TexId> {
+        self.hud.toast_face(toast)
+    }
+
+    /// Layout of the top notification stack.  Every notification/HUD row shares
+    /// the same top area; the priority order is alarm, notice/achievement,
+    /// toast, then the volume/brightness/rewind bar.
+    fn top_stack(&self) -> TopStack {
+        let now = self.now();
+        let mut y = slot_ui::TOAST_TOP;
+        let mut stack = TopStack::default();
+        if self.hud.alarmed() {
+            stack.alarm = Some(y);
+            y += slot_ui::notice::NOTICE_H + TOP_STACK_GAP;
+        }
+        if self.notice_view().is_some() {
+            stack.notice = Some(y);
+            y += slot_ui::notice::NOTICE_H + TOP_STACK_GAP;
+        }
+        if self.hud.toast_view(now).is_some() || self.sync_small_active() {
+            stack.toast = Some(y);
+            y += slot_ui::toast_box(Toast::StateSaved).1 as f32 + TOP_STACK_GAP;
+        }
+        if self.hud.bar_alpha(now).is_some() {
+            stack.bar = Some(y);
+        }
+        stack
+    }
+
+    /// Top edge of the notice/achievement card, when one is on screen.
+    pub fn notice_top(&self) -> Option<f32> {
+        self.top_stack().notice
+    }
+
+    /// Top edge of the transient toast, when one is on screen.
+    pub fn toast_top(&self) -> Option<f32> {
+        self.top_stack().toast
+    }
+
+    /// True while any row of the top notification stack is on screen.  The
+    /// shelf/folder/room headings step aside so their edges cannot peek out
+    /// around the stack.
+    pub fn top_notification_up(&self) -> bool {
+        let stack = self.top_stack();
+        stack.alarm.is_some()
+            || stack.notice.is_some()
+            || stack.toast.is_some()
+            || stack.bar.is_some()
+    }
+
+    /// Blit the app-owned rows (alarm, control bar) of the top stack.  The
+    /// frontend calls this right after the notice/toast so all four rows share
+    /// one layer above the headings and menus.
+    pub fn draw_top_hud(&self, out: &mut Vec<Draw>) {
+        let stack = self.top_stack();
+        let now = self.now();
+        if let Some(y) = stack.alarm {
+            self.hud.draw_alarm_at(y, out);
+        }
+        if let Some(y) = stack.bar {
+            if let Some(alpha) = self.hud.bar_alpha(now) {
+                self.hud.draw_bar_at(alpha, y, out);
+            }
+        }
+    }
+
     /// The room header's vertical offset: negative while it drops in from
     /// above or lifts back out, zero at rest.  The frontend adds it to the
-    /// header's normal y (`14`).
+    /// header's normal y ([`TRANSFER_HEADER_Y`]).
     pub fn transfer_header_offset(&self) -> f32 {
         if let Some(at) = self.transfer_leaving_at {
             let t = (self.now().saturating_sub(at) as f32 / HEADER_SLIDE_MS as f32)
@@ -15746,6 +15995,57 @@ impl App {
         -(1.0 - ease(t)) * HEADER_SLIDE_PX
     }
 
+    /// How much of the room's shelf drop has landed.  The shelf follows the
+    /// header's own slide: zero while the card is still off-screen (or a toast
+    /// covers it), one at rest, and back to zero as the card lifts out.
+    fn transfer_header_reveal(&self) -> f32 {
+        let Some(at) = self.transfer_header_at else {
+            return 0.0;
+        };
+        let now = self.now();
+        let span = HEADER_SLIDE_MS as f32;
+        let enter = ease(((now.saturating_sub(at)) as f32 / span).clamp(0.0, 1.0));
+        let leave = self.transfer_leaving_at.map_or(0.0, |left| {
+            ease(((now.saturating_sub(left)) as f32 / span).clamp(0.0, 1.0))
+        });
+        enter * (1.0 - leave)
+    }
+
+    /// The screen height the room card needs above a full-size cartridge.
+    fn transfer_header_clear(&self) -> f32 {
+        TRANSFER_HEADER_Y + slot_ui::navigation::TRANSFER_HEADER_H + TRANSFER_HEADER_GAP
+    }
+
+    /// How far the room's shelf row sits below its normal resting pose.  Tall
+    /// cassettes (GB, FC, SFC, MD) are centred high enough to meet the room card
+    /// and its game chip; dropping the whole row keeps every platform clear and
+    /// keeps the row's own alignment.  A mixed rack (recents / favourites) uses
+    /// the tallest cassette's drop so scrolling never moves the row.
+    fn transfer_shelf_lift(&self) -> f32 {
+        if !matches!(self.phase, Phase::Shelf) || self.transfer.is_none() {
+            return 0.0;
+        }
+        let clear = self.transfer_header_clear();
+        let drop = match self.shelves[self.shelf_at].0.platform() {
+            Some(platform) => slot_ui::drop_to_clear(platform, clear),
+            None => Platform::ALL
+                .iter()
+                .map(|platform| slot_ui::drop_to_clear(*platform, clear))
+                .fold(0.0_f32, f32::max),
+        };
+        drop * self.transfer_header_reveal()
+    }
+
+    /// The lift for a cartridge that is not on the shelf row (the receiving
+    /// side's blank preview): it follows the offer's own platform.
+    fn transfer_preview_lift(&self, platform: Platform) -> f32 {
+        if !matches!(self.phase, Phase::Shelf) || self.transfer.is_none() {
+            return 0.0;
+        }
+        slot_ui::drop_to_clear(platform, self.transfer_header_clear())
+            * self.transfer_header_reveal()
+    }
+
     /// Arm the room header's drop-in once it is actually drawable (after any
     /// "connected" toast), and finish an exit slide when its beat is over.
     fn poll_transfer_header_anim(&mut self) {
@@ -15753,10 +16053,10 @@ impl App {
         if self.transfer.is_none() {
             // The room is gone; the next one starts its own drop-in.
             self.transfer_header_at = None;
-        } else if self.transfer_header().is_some() && !self.hud.toast_visible(now) {
-            // A panel or the progress screen may cover the header for a
-            // while; keep the original stamp so it does not re-slide after
-            // every cartridge.
+        } else if self.transfer_header().is_some() && !self.top_notification_up() {
+            // A panel, the progress screen or a top notification row may cover
+            // the header for a while; keep the original stamp so it does not
+            // re-slide after every cartridge.
             self.transfer_header_at.get_or_insert(now);
         }
         if let Some(at) = self.transfer_leaving_at {
@@ -16165,7 +16465,6 @@ impl App {
             self.sync_open_at = Some(now);
         }
         self.sync_close_at = None;
-        self.sync_result_at = None;
         let run = self.sync_launcher.launch(request.clone());
         self.shelf_mut().release_hold();
         self.play_held = None;
@@ -16226,21 +16525,29 @@ impl App {
     }
 
     fn show_sync_result(&mut self, text: impl Into<String>, now: Millis) {
-        self.show_sync_result_with(text, now, true);
+        self.show_sync_result_with(text, now);
     }
 
-    /// `fade` paints the screen black for one beat and fades the shelf in.
-    /// After a cartridge has ejected the shelf is already on screen, so the
-    /// fade would read as a flash; that path passes `false`.
-    fn show_sync_result_with(&mut self, text: impl Into<String>, now: Millis, fade: bool) {
+    fn show_sync_result_with(&mut self, text: impl Into<String>, now: Millis) {
         self.sync_card = None;
         self.sync_open_at = None;
         self.sync_close_at = None;
-        self.sync_result_at = fade.then_some(now);
         self.shelf_sync = ShelfSync::Result {
             text: text.into(),
             until: now + SYNC_RESULT_MS,
         };
+    }
+
+    /// A failed sync is an error: it takes the large 480x82 Info/error card,
+    /// not the small 378x40 result line. The shelf is left clean.
+    fn show_sync_failure(&mut self, reason: impl Into<String>) {
+        self.sync_card = None;
+        self.sync_open_at = None;
+        self.sync_close_at = None;
+        let lang = self.language;
+        self.say_notice(slot_i18n::t(lang, "device.app.sync.failed"), reason);
+        self.shelf_sync = ShelfSync::Idle;
+        self.wifi_activity_finished();
     }
 
     /// B: stop the CLI and leave a short slot_i18n::t(lang, "device.app.common.cancelled") banner (§6.5).
@@ -16464,12 +16771,11 @@ impl App {
                     _ => String::new(),
                 };
                 self.sync_card = None;
-                self.show_sync_result_with(text, now, false);
+                self.show_sync_result_with(text, now);
                 return;
             }
             ShelfSync::Result { until, .. } if now >= *until => {
                 self.shelf_sync = ShelfSync::Idle;
-                self.sync_result_at = None;
                 return;
             }
             ShelfSync::Running { .. } => {}
@@ -16516,11 +16822,10 @@ impl App {
             if let ShelfSync::Running { run, .. } = &mut self.shelf_sync {
                 run.cancel();
             }
-            self.wifi_activity_finished();
-            self.show_sync_result(slot_i18n::t(lang, "device.app.sync.timeout"), now);
+            self.show_sync_failure(slot_i18n::t(lang, "device.app.sync.timeout"));
         } else if exited {
             self.wifi_activity_finished();
-            self.show_sync_result(slot_i18n::t(lang, "device.app.sync.exited"), now);
+            self.show_sync_failure(slot_i18n::t(lang, "device.app.sync.exited"));
         } else if let Some(outcome) = finished {
             self.finish_shelf_sync(outcome, now);
         }
@@ -16618,11 +16923,11 @@ impl App {
             SyncResult::Choice => {
                 let (Some(request), Some(mut choice)) = (previous_request, outcome.choice.clone())
                 else {
-                    self.show_sync_result(slot_i18n::t(lang, "device.app.sync.bad_choice"), now);
+                    self.show_sync_failure(slot_i18n::t(lang, "device.app.sync.bad_choice"));
                     return;
                 };
                 if request.mode != SyncRequestMode::Mods {
-                    self.show_sync_result(slot_i18n::t(lang, "device.app.sync.unexpected_choice"), now);
+                    self.show_sync_failure(slot_i18n::t(lang, "device.app.sync.unexpected_choice"));
                     return;
                 }
                 // Name the mod in the title: with two bridges installed, a bare
@@ -16734,7 +17039,7 @@ impl App {
                         _ => outcome.error_line().unwrap_or(slot_i18n::t(lang, "device.app.sync.failed")).to_string(),
                     }
                 };
-                self.show_sync_result(text, now);
+                self.show_sync_failure(text);
             }
         }
         if mods_wrote {
@@ -16748,10 +17053,8 @@ impl App {
     /// The selected cart's screen rectangle, matching `Shelf::draw_row`.
     fn selected_cart_rect(&self) -> Option<(usize, Platform, SyncRect)> {
         let cart = self.shelf().carts.get(self.shelf().index)?;
-        let (x, scale) = self.shelf().selected_at();
-        let (cw, ch) = slot_ui::cart_box(cart.platform);
-        let (w, h) = (cw as f32 * scale, ch as f32 * scale);
-        let y = slot_ui::rest_y(ch as f32) + ch as f32 - h;
+        let lift = self.transfer_shelf_lift();
+        let (x, y, w, h) = self.shelf().selected_rect_lifted(lift)?;
         Some((self.shelf().index, cart.platform, (x, y, w, h)))
     }
 
@@ -16828,6 +17131,33 @@ impl App {
         });
     }
 
+    #[allow(dead_code)]
+    fn draw_flat_shelf_ground(&self, out: &mut Vec<Draw>) {
+        let bg = [0x1b as f32 / 255.0, 0x1b as f32 / 255.0, 0x1e as f32 / 255.0, 1.0];
+        let stage = [0x20 as f32 / 255.0, 0x20 as f32 / 255.0, 0x24 as f32 / 255.0, 1.0];
+        let line = [0x2a as f32 / 255.0, 0x2a as f32 / 255.0, 0x30 as f32 / 255.0, 1.0];
+        out.push(Draw::Rect { x: 0.0, y: 0.0, w: OUT_W as f32, h: OUT_H as f32, colour: bg });
+        out.push(Draw::Rect { x: 0.0, y: 92.0, w: OUT_W as f32, h: 273.0, colour: stage });
+        out.push(Draw::Rect { x: 0.0, y: 92.0, w: OUT_W as f32, h: 1.0, colour: line });
+        out.push(Draw::Rect { x: 0.0, y: 364.0, w: OUT_W as f32, h: 1.0, colour: line });
+    }
+
+    fn slot_name_alpha(&self) -> f32 {
+        let Some(at) = self.shelf_named else {
+            return 0.0;
+        };
+        let t = self.now().saturating_sub(at);
+        let level = if t < SLOT_NAME_IN_MS {
+            t as f32 / SLOT_NAME_IN_MS as f32
+        } else if t < SLOT_NAME_IN_MS + SLOT_NAME_HOLD_MS {
+            1.0
+        } else {
+            let out = t - SLOT_NAME_IN_MS - SLOT_NAME_HOLD_MS;
+            1.0 - (out as f32 / SLOT_NAME_OUT_MS as f32).min(1.0)
+        };
+        SLOT_NAME_ALPHA * ease(level)
+    }
+
     fn draw_shelf_playtime(&self, out: &mut Vec<Draw>) {
         let Some((_, _, (cart_x, cart_y, cart_w, cart_h))) = self.selected_cart_rect() else {
             return;
@@ -16842,20 +17172,6 @@ impl App {
             (cart_x, cart_y, cart_w, cart_h),
             (face_w, face_h),
         );
-        out.push(Draw::Rect {
-            x,
-            y,
-            w,
-            h,
-            colour: [0.0, 0.0, 0.0, 0.66],
-        });
-        out.push(Draw::Rect {
-            x,
-            y,
-            w,
-            h: 1.0,
-            colour: [1.0, 1.0, 1.0, 0.10],
-        });
         out.push(Draw::Tex {
             x: x + (w - face_w as f32) / 2.0,
             y: y + (h - face_h as f32) / 2.0,
@@ -16914,9 +17230,9 @@ impl App {
                 )
             }
             // Mods report their own stages and have no cloud direction or save
-            // units. Keep the old quiet waiting screen rather than claiming
-            // they are a cloud save.
-            ShelfSync::Running { .. } => self.draw_mods_running(out),
+            // units.  Their status is the persistent 378x40 small row in the
+            // top notification stack, so the shelf itself is not dimmed.
+            ShelfSync::Running { .. } => {}
             ShelfSync::Settling {
                 direction,
                 noop,
@@ -16935,26 +17251,10 @@ impl App {
                 out,
             ),
             ShelfSync::Ejecting { since, .. } => self.draw_sync_eject(*since, out),
-            ShelfSync::Result { .. } => {
-                self.draw_sync_banner(out);
-                self.draw_sync_result_fade(out);
-            }
+            // The result is a 378x40 small notification drawn by the frontend
+            // in the top stack; the shelf below is left clean.
+            ShelfSync::Result { .. } => {}
         }
-    }
-
-    /// A manual mod's quiet running state: dim the shelf and leave the stage
-    /// line visible. The cloud animation's units and rail would be misleading
-    /// for GBAStation/SaveDeck-style mods.
-    fn draw_mods_running(&self, out: &mut Vec<Draw>) {
-        out.push(Draw::Rect {
-            x: 0.0,
-            y: 0.0,
-            w: OUT_W as f32,
-            h: OUT_H as f32,
-            colour: [0.0, 0.0, 0.0, 0.42],
-        });
-        self.draw_sync_banner(out);
-        self.draw_sync_open_fade(out);
     }
 
     /// The selected game card recedes and the cloud card comes forward.
@@ -17308,8 +17608,14 @@ impl App {
         ui: Option<&slot_mods::ActionUi>,
         out: &mut Vec<Draw>,
     ) {
+        // The settle beat starts one `SYNC_SETTLE_MS` before its deadline;
+        // that gives the ring-closing / check / seal animation its own clock.
+        let started = match &self.shelf_sync {
+            ShelfSync::Settling { until, .. } => until.saturating_sub(SYNC_SETTLE_MS),
+            _ => self.now(),
+        };
         self.draw_sync_anim(
-            self.now(),
+            started,
             direction,
             Some(SyncStage::Commit),
             ui,
@@ -17322,6 +17628,7 @@ impl App {
     /// The source cartridge's box on the sync stage.  The box is a GBA-shaped
     /// footprint; every platform keeps its own aspect inside it and its foot
     /// stays on the dock's lip instead of being stretched.
+    #[allow(dead_code)]
     fn sync_stage_cart(aspect: f32) -> (f32, f32, f32, f32) {
         let (x0, y0, w0, h0) = SYNC_STAGE_BOX;
         let h = (w0 / aspect.max(0.01)).min(h0);
@@ -17333,6 +17640,10 @@ impl App {
     /// sticker card, a short transfer lane and the stage rail.  The old
     /// neon-grid stage lived in its own visual world; this one uses the same
     /// charcoal / paper / red-accent vocabulary as the rest of the menus.
+    /// Sync Ring: a centred card, a five-stage ring around the cloud, one
+    /// status line, five stage labels and a single key hint.  The ring is the
+    /// only progress indicator; red marks the current segment, the direction
+    /// arrow and the completion seal.
     fn draw_sync_anim(
         &self,
         started: Millis,
@@ -17352,628 +17663,299 @@ impl App {
             colour: SYNC_PAGE_BG,
         });
         let Some(art) = self.sync_art.as_ref() else {
-            self.draw_sync_banner(out);
             return;
         };
         let faces = &self.sync_faces;
-
-        // The sheet opens with the CRT window; the parts settle in with it.
         let open = self.sync_open_at.map_or(1.0, |start| {
             (now.saturating_sub(start) as f32 / (SYNC_FADE_S * 1000.0)).clamp(0.0, 1.0)
         });
         let open_e = slot_ui::ease(open);
-
-        let (sx, sy) = SYNC_SHEET_AT;
+        let accent = slot_ui::switch_style::accent();
+        let edge = slot_ui::switch_style::surface_border();
+        // The stage that is live now: 0..=4 while running, 5 once settled.
+        let step = sync_stage_step(stage).unwrap_or(0).min(5) as usize;
+        let completed = if settled { 5 } else { step.saturating_sub(1) };
+        let settle_e = if settled {
+            slot_ui::ease(((now.saturating_sub(started) as f32) / 420.0).clamp(0.0, 1.0))
+        } else {
+            0.0
+        };
         out.push(Draw::Tex {
-            x: sx,
-            y: sy,
-            w: art.sheet.w as f32,
-            h: art.sheet.h as f32,
-            tex: art.sheet.tex,
-            alpha: 1.0,
+            x: 100.0,
+            y: 40.0,
+            w: art.card.w as f32,
+            h: art.card.h as f32,
+            tex: art.card.tex,
+            alpha: open_e,
         });
-
-        if let Some(title) = faces.title.filter(|face| face.w > 0 && face.h > 0) {
+        // The project's red header spine and a 1 px divider.
+        out.push(Draw::Rect {
+            x: 124.0,
+            y: 60.0,
+            w: 3.0,
+            h: 22.0,
+            colour: [
+                accent[0] as f32 / 255.0,
+                accent[1] as f32 / 255.0,
+                accent[2] as f32 / 255.0,
+                open_e,
+            ],
+        });
+        out.push(Draw::Rect {
+            x: 124.0,
+            y: 110.0,
+            w: 472.0,
+            h: 1.0,
+            colour: [
+                edge[0] as f32 / 255.0,
+                edge[1] as f32 / 255.0,
+                edge[2] as f32 / 255.0,
+                0.9 * open_e,
+            ],
+        });
+        if let Some(face) = faces.title.filter(|f| f.w > 0 && f.h > 0) {
             out.push(Draw::Tex {
-                x: SYNC_TITLE_AT.0,
-                y: SYNC_TITLE_AT.1,
-                w: title.w as f32,
-                h: title.h as f32,
-                tex: title.tex,
-                alpha: 1.0,
+                x: 136.0,
+                y: 54.0,
+                w: face.w as f32,
+                h: face.h as f32,
+                tex: face.tex,
+                alpha: open_e,
             });
         }
-        if let Some(subtitle) = faces.subtitle.filter(|face| face.w > 0 && face.h > 0) {
+        if let Some(face) = faces.subtitle.filter(|f| f.w > 0 && f.h > 0) {
             out.push(Draw::Tex {
-                x: SYNC_SUBTITLE_AT.0,
-                y: SYNC_SUBTITLE_AT.1,
-                w: subtitle.w as f32,
-                h: subtitle.h as f32,
-                tex: subtitle.tex,
-                alpha: 0.68,
+                x: 137.0,
+                y: 84.0,
+                w: face.w as f32,
+                h: face.h as f32,
+                tex: face.tex,
+                alpha: 0.68 * open_e,
             });
         }
-        if let Some(banner) = faces.banner.filter(|face| face.w > 0 && face.h > 0) {
-            out.push(Draw::Tex {
-                x: (OUT_W as f32 - banner.w as f32) / 2.0,
-                y: SYNC_BANNER_Y,
-                w: banner.w as f32,
-                h: banner.h as f32,
-                tex: banner.tex,
-                alpha: 1.0,
-            });
-        }
-        if let Some(percent) = faces.progress_right.filter(|face| face.w > 0 && face.h > 0) {
-            if art.chip.w > 0 && art.chip.h > 0 {
+        // The five-stage ring.  Completion closes it into one white circle:
+        // the last segmented face fades out under the closed face.
+        let ring = art.ring[completed.min(5)];
+        if settled {
+            let close = slot_ui::ease((settle_e / 0.55).min(1.0));
+            if close < 0.999 {
+                let open_ring = art.ring[4];
+                if open_ring.w > 0 {
+                    out.push(Draw::Tex {
+                        x: 360.0 - open_ring.w as f32 / 2.0,
+                        y: 216.0 - open_ring.h as f32 / 2.0,
+                        w: open_ring.w as f32,
+                        h: open_ring.h as f32,
+                        tex: open_ring.tex,
+                        alpha: (1.0 - close) * open_e,
+                    });
+                }
+            }
+            if ring.w > 0 && ring.h > 0 {
                 out.push(Draw::Tex {
-                    x: SYNC_PERCENT_CHIP_AT.0,
-                    y: SYNC_PERCENT_CHIP_AT.1,
-                    w: art.chip.w as f32,
-                    h: art.chip.h as f32,
-                    tex: art.chip.tex,
-                    alpha: 1.0,
+                    x: 360.0 - ring.w as f32 / 2.0,
+                    y: 216.0 - ring.h as f32 / 2.0,
+                    w: ring.w as f32,
+                    h: ring.h as f32,
+                    tex: ring.tex,
+                    alpha: close * open_e,
                 });
+            }
+        } else if ring.w > 0 && ring.h > 0 {
+            out.push(Draw::Tex {
+                x: 360.0 - ring.w as f32 / 2.0,
+                y: 216.0 - ring.h as f32 / 2.0,
+                w: ring.w as f32,
+                h: ring.h as f32,
+                tex: ring.tex,
+                alpha: open_e,
+            });
+        }
+        // The red head dot travels inside the current segment; on Verify it
+        // waits at the end so the scan has a clear target.
+        if !settled && completed < 5 {
+            let phase = if matches!(stage, Some(SyncStage::Verify)) {
+                0.8
+            } else {
+                let t = (now.saturating_sub(started) % 1_200) as f32 / 1_200.0;
+                0.5 + 0.3 * (t * std::f32::consts::TAU).sin()
+            };
+            let start = 270.0 + completed as f32 * 72.0 + 3.0;
+            let end = 270.0 + (completed as f32 + 1.0) * 72.0 - 3.0;
+            let angle = (start + (end - start) * phase).to_radians();
+            let x = 360.0 + 88.0 * angle.cos();
+            let y = 216.0 + 88.0 * angle.sin();
+            if art.head.w > 0 && art.head.h > 0 {
                 out.push(Draw::Tex {
-                    x: SYNC_PERCENT_CHIP_AT.0 + (art.chip.w as f32 - percent.w as f32) / 2.0,
-                    y: SYNC_PERCENT_CHIP_AT.1 + (art.chip.h as f32 - percent.h as f32) / 2.0,
-                    w: percent.w as f32,
-                    h: percent.h as f32,
-                    tex: percent.tex,
-                    alpha: 1.0,
+                    x: x - art.head.w as f32 / 2.0,
+                    y: y - art.head.h as f32 / 2.0,
+                    w: art.head.w as f32,
+                    h: art.head.h as f32,
+                    tex: art.head.tex,
+                    alpha: open_e,
                 });
             }
         }
-
+        // Cloud (or the manual mod's target), then the completion check.
         let show_cloud = ui.map_or(true, |ui| ui.show_cloud);
-        if let Some(side) = faces.side_local.filter(|face| face.w > 0 && face.h > 0) {
-            out.push(Draw::Tex {
-                x: 102.0,
-                y: SYNC_SIDE_LABEL_Y,
-                w: side.w as f32,
-                h: side.h as f32,
-                tex: side.tex,
-                alpha: 0.62,
-            });
-        }
-        if let Some(side) = faces.side_remote.filter(|face| face.w > 0 && face.h > 0) {
-            out.push(Draw::Tex {
-                x: 616.0 - side.w as f32,
-                y: SYNC_SIDE_LABEL_Y,
-                w: side.w as f32,
-                h: side.h as f32,
-                tex: side.tex,
-                alpha: 0.62,
-            });
-        }
-
-        // The cartridge and its dock.
-        let (platform, face) = match self.selected_cart_rect() {
-            Some((index, platform, _)) => (platform, self.shelf().face(index)),
-            None => (self.platform, None),
-        };
-        let (cw, ch) = slot_ui::cart_box(platform);
-        let aspect = if ch == 0 {
-            1.78
-        } else {
-            cw as f32 / ch as f32
-        };
-        let (cart_x, cart_y, cart_w, cart_h) = Self::sync_stage_cart(aspect);
-        let drop = SYNC_CART_DROP * (1.0 - open_e);
-        if art.shadow.w > 0 && art.shadow.h > 0 {
-            let shadow_w = cart_w + 14.0;
-            out.push(Draw::Tex {
-                x: cart_x - 7.0,
-                y: 284.0,
-                w: shadow_w,
-                h: art.shadow.h as f32,
-                tex: art.shadow.tex,
-                alpha: 0.55 * open_e,
-            });
-        }
-        match face {
-            Some(tex) => out.push(Draw::Tex {
-                x: cart_x,
-                y: cart_y - drop,
-                w: cart_w,
-                h: cart_h,
-                tex,
-                alpha: if settled { 0.9 } else { 1.0 },
-            }),
-            None => out.push(Draw::Rect {
-                x: cart_x,
-                y: cart_y - drop,
-                w: cart_w,
-                h: cart_h,
-                colour: with_alpha(SYNC_PLACEHOLDER, 0.95),
-            }),
-        }
-        if art.dock.w > 0 && art.dock.h > 0 {
-            out.push(Draw::Tex {
-                x: SYNC_DOCK_AT.0,
-                y: SYNC_DOCK_AT.1,
-                w: art.dock.w as f32,
-                h: art.dock.h as f32,
-                tex: art.dock.tex,
-                alpha: 1.0,
-            });
-        }
-
-        // The cloud sticker card (or the neutral target card for a mod).
-        let card_dx = SYNC_CARD_SLIDE * (1.0 - open_e);
-        let card_alpha = if settled {
+        let glyph = if show_cloud { art.cloud } else { art.target };
+        // The cloud breathes a little while the sync is live; the completion
+        // crossfade owns the alpha once the settle beat starts.
+        let breath = if settled {
             1.0
         } else {
-            0.62 + 0.38 * open_e
+            let t = (now.saturating_sub(started) as f32 / 1_200.0) * std::f32::consts::TAU;
+            0.9 + 0.1 * (t.sin() * 0.5 + 0.5)
         };
-        let (card_x, card_y) = SYNC_CLOUD_CARD_AT;
-        if show_cloud {
-            if art.cloud_card.w > 0 && art.cloud_card.h > 0 {
-                out.push(Draw::Tex {
-                    x: card_x + card_dx,
-                    y: card_y,
-                    w: art.cloud_card.w as f32,
-                    h: art.cloud_card.h as f32,
-                    tex: art.cloud_card.tex,
-                    alpha: card_alpha,
-                });
-            }
-            if let Some(label) = faces.cloud_label.filter(|face| face.w > 0 && face.h > 0) {
-                out.push(Draw::Tex {
-                    x: SYNC_CLOUD_LABEL_AT.0 + card_dx,
-                    y: SYNC_CLOUD_LABEL_AT.1,
-                    w: label.w as f32,
-                    h: label.h as f32,
-                    tex: label.tex,
-                    alpha: card_alpha,
-                });
-            }
-        } else {
-            if art.target_card.w > 0 && art.target_card.h > 0 {
-                out.push(Draw::Tex {
-                    x: card_x + card_dx,
-                    y: card_y,
-                    w: art.target_card.w as f32,
-                    h: art.target_card.h as f32,
-                    tex: art.target_card.tex,
-                    alpha: card_alpha,
-                });
-            }
-            if let Some(label) = faces.target_label.filter(|face| face.w > 0 && face.h > 0) {
-                out.push(Draw::Tex {
-                    x: card_x + card_dx + (art.target_card.w as f32 - label.w as f32) / 2.0,
-                    y: SYNC_TARGET_LABEL_Y,
-                    w: label.w as f32,
-                    h: label.h as f32,
-                    tex: label.tex,
-                    alpha: card_alpha,
-                });
-            }
+        let cloud_alpha = (1.0 - settle_e) * open_e * breath;
+        if cloud_alpha > 0.001 && glyph.w > 0 && glyph.h > 0 {
+            out.push(Draw::Tex {
+                x: 360.0 - glyph.w as f32 / 2.0,
+                y: 216.0 - glyph.h as f32 / 2.0,
+                w: glyph.w as f32,
+                h: glyph.h as f32,
+                tex: glyph.tex,
+                alpha: cloud_alpha,
+            });
         }
-
-        // The lane: slots and packets while running, a plain white cable when done.
-        let direction = ui
-            .and_then(|ui| match ui.direction.as_deref() {
-                Some("upload") => Some(Direction::Upload),
-                Some("download") => Some(Direction::Download),
-                _ => None,
-            })
-            .or(direction);
-        let active = if settled {
-            6
-        } else {
-            sync_stage_step(stage).map_or(0, u8::from)
-        };
         if settled {
-            out.push(Draw::Rect {
-                x: 302.0,
-                y: SYNC_LANE_Y - 1.0,
-                w: SYNC_LANE_W,
-                h: 2.0,
-                colour: [1.0, 1.0, 1.0, 1.0],
-            });
-            for x in [300.0, 442.0] {
-                out.push(Draw::Rect {
-                    x,
-                    y: SYNC_LANE_Y - 2.0,
-                    w: 4.0,
-                    h: 4.0,
-                    colour: [1.0, 1.0, 1.0, 1.0],
-                });
-            }
-        } else {
-            if art.lane.w > 0 && art.lane.h > 0 {
+            if settle_e > 0.001 && art.check.w > 0 {
                 out.push(Draw::Tex {
-                    x: SYNC_LANE_AT.0,
-                    y: SYNC_LANE_AT.1,
-                    w: art.lane.w as f32,
-                    h: art.lane.h as f32,
-                    tex: art.lane.tex,
-                    alpha: 1.0,
+                    x: 360.0 - art.check.w as f32 / 2.0,
+                    y: 216.0 - art.check.h as f32 / 2.0,
+                    w: art.check.w as f32,
+                    h: art.check.h as f32,
+                    tex: art.check.tex,
+                    alpha: settle_e * open_e,
                 });
             }
-            match stage {
-                Some(SyncStage::Upload) | Some(SyncStage::Download) => {
-                    if let Some(dir) = direction {
-                        let right = dir == Direction::Upload;
-                        let phase = ((now.saturating_sub(started) as f32) / 1000.0).rem_euclid(1.0);
-                        for packet in 0..3 {
-                            let mut t = (packet as f32 / 3.0 + phase).rem_euclid(1.0);
-                            if !right {
-                                t = 1.0 - t;
-                            }
-                            let fade = (t / 0.12).min((1.0 - t) / 0.12).clamp(0.0, 1.0);
-                            if art.packet.w > 0 && art.packet.h > 0 {
-                                out.push(Draw::Tex {
-                                    x: 308.0 + t * 130.0 - 4.5,
-                                    y: SYNC_LANE_Y - 6.5,
-                                    w: art.packet.w as f32,
-                                    h: art.packet.h as f32,
-                                    tex: art.packet.tex,
-                                    alpha: fade,
-                                });
-                            }
-                        }
-                        let face = if right { art.dir_right } else { art.dir_left };
-                        if face.w > 0 {
-                            out.push(Draw::Tex {
-                                x: SYNC_DIRECTION_CENTRE.0 - face.w as f32 / 2.0,
-                                y: SYNC_DIRECTION_CENTRE.1 - face.h as f32 / 2.0,
-                                w: face.w as f32,
-                                h: face.h as f32,
-                                tex: face.tex,
-                                alpha: 1.0,
-                            });
-                        }
-                    } else if art.dir_wait.w > 0 {
-                        out.push(Draw::Tex {
-                            x: SYNC_DIRECTION_CENTRE.0 - art.dir_wait.w as f32 / 2.0,
-                            y: SYNC_DIRECTION_CENTRE.1 - art.dir_wait.h as f32 / 2.0,
-                            w: art.dir_wait.w as f32,
-                            h: art.dir_wait.h as f32,
-                            tex: art.dir_wait.tex,
-                            alpha: 1.0,
-                        });
-                    }
-                }
-                Some(SyncStage::Verify) => {
-                    let phase = ((now.saturating_sub(started) as f32) / 800.0).rem_euclid(1.0);
-                    let scan = 438.0 - phase * 130.0;
-                    for (offset, alpha) in [(-6.0, 0.08), (-2.0, 0.16), (2.0, 0.08)] {
-                        out.push(Draw::Rect {
-                            x: scan + offset,
-                            y: SYNC_LANE_Y - 3.0,
-                            w: 4.0,
-                            h: 6.0,
-                            colour: [1.0, 1.0, 1.0, alpha],
-                        });
-                    }
-                    out.push(Draw::Rect {
-                        x: scan,
-                        y: SYNC_LANE_Y - 11.0,
-                        w: 1.5,
-                        h: 22.0,
-                        colour: [0.92, 0.92, 0.94, 0.9],
+            if !noop {
+                let seal_e = slot_ui::ease(((settle_e - 0.35) / 0.65).clamp(0.0, 1.0));
+                if seal_e > 0.001 && art.seal.w > 0 {
+                    let scale = 1.2 - 0.2 * seal_e;
+                    let w = art.seal.w as f32 * scale;
+                    let h = art.seal.h as f32 * scale;
+                    out.push(Draw::Tex {
+                        x: 440.0 - w / 2.0,
+                        y: 162.0 - h / 2.0,
+                        w,
+                        h,
+                        tex: art.seal.tex,
+                        alpha: seal_e * open_e,
                     });
-                    let face = match direction {
-                        Some(Direction::Upload) => art.dir_right,
-                        Some(Direction::Download) => art.dir_left,
-                        None => art.dir_wait,
-                    };
-                    if face.w > 0 {
-                        out.push(Draw::Tex {
-                            x: SYNC_DIRECTION_CENTRE.0 - face.w as f32 / 2.0,
-                            y: SYNC_DIRECTION_CENTRE.1 - face.h as f32 / 2.0,
-                            w: face.w as f32,
-                            h: face.h as f32,
-                            tex: face.tex,
-                            alpha: 1.0,
-                        });
-                    }
                 }
-                Some(SyncStage::Commit) => {
-                    let face = match direction {
-                        Some(Direction::Upload) => art.dir_right,
-                        Some(Direction::Download) => art.dir_left,
-                        None => art.dir_wait,
+            }
+        }
+        // Direction: one arrow by the cloud, only once the direction is known.
+        if !settled {
+            if let Some(direction) = direction {
+                if matches!(
+                    stage,
+                    Some(SyncStage::Upload | SyncStage::Download | SyncStage::Verify)
+                ) {
+                    let (arrow, arrow_y) = match direction {
+                        Direction::Upload => (art.arrow_up, 178.0),
+                        Direction::Download => (art.arrow_down, 254.0),
                     };
-                    if face.w > 0 {
+                    if arrow.w > 0 && arrow.h > 0 {
                         out.push(Draw::Tex {
-                            x: SYNC_DIRECTION_CENTRE.0 - face.w as f32 / 2.0,
-                            y: SYNC_DIRECTION_CENTRE.1 - face.h as f32 / 2.0,
-                            w: face.w as f32,
-                            h: face.h as f32,
-                            tex: face.tex,
-                            alpha: 1.0,
-                        });
-                    }
-                }
-                _ => {
-                    if art.dir_wait.w > 0 {
-                        out.push(Draw::Tex {
-                            x: SYNC_DIRECTION_CENTRE.0 - art.dir_wait.w as f32 / 2.0,
-                            y: SYNC_DIRECTION_CENTRE.1 - art.dir_wait.h as f32 / 2.0,
-                            w: art.dir_wait.w as f32,
-                            h: art.dir_wait.h as f32,
-                            tex: art.dir_wait.tex,
-                            alpha: 1.0,
+                            x: 360.0 - arrow.w as f32 / 2.0,
+                            y: arrow_y - arrow.h as f32 / 2.0,
+                            w: arrow.w as f32,
+                            h: arrow.h as f32,
+                            tex: arrow.tex,
+                            alpha: 0.9 * open_e,
                         });
                     }
                 }
             }
         }
-
-        // The five-stage rail.  It reports stages, not bytes; a real percentage
-        // is only drawn when a manual mod supplies one.  The dots fade in one
-        // after another while the sheet opens.
-        let rail_alpha = if settled { 1.0 } else { open_e };
-        out.push(Draw::Rect {
-            x: SYNC_NODE_X[0],
-            y: SYNC_RAIL_Y - 1.0,
-            w: SYNC_NODE_X[4] - SYNC_NODE_X[0],
-            h: 2.0,
-            colour: [0.227, 0.227, 0.267, rail_alpha],
-        });
-        if active > 1 {
-            let end = if settled {
-                SYNC_NODE_X[4]
-            } else {
-                SYNC_NODE_X[(active - 1) as usize]
-            };
-            out.push(Draw::Rect {
-                x: SYNC_NODE_X[0],
-                y: SYNC_RAIL_Y - 1.0,
-                w: end - SYNC_NODE_X[0],
-                h: 2.0,
-                colour: [1.0, 1.0, 1.0, rail_alpha],
+        // The verify scan pulses in place; it is one 1 px radial line.
+        if !settled && matches!(stage, Some(SyncStage::Verify)) && art.scan.w > 0 {
+            let t = (now.saturating_sub(started) % 600) as f32 / 600.0;
+            let pulse = 0.35 + 0.65 * (1.0 - (t * 2.0 - 1.0).abs());
+            out.push(Draw::Tex {
+                x: 360.0 - art.scan.w as f32 / 2.0,
+                y: 216.0 - art.scan.h as f32 / 2.0,
+                w: art.scan.w as f32,
+                h: art.scan.h as f32,
+                tex: art.scan.tex,
+                alpha: pulse * open_e,
             });
         }
-        for (i, cx) in SYNC_NODE_X.iter().enumerate() {
-            let n = i as u8 + 1;
-            let node_alpha = (open_e * 5.0 - i as f32).clamp(0.0, 1.0);
-            let (face, x, y) = if settled || (active > 0 && n < active) {
-                (art.dot_done, cx - 5.0, SYNC_RAIL_Y - 5.0)
-            } else if active == n {
-                (art.dot_active, cx - 9.5, SYNC_RAIL_Y - 9.5)
+        // The single status line, centred under the ring.
+        if let Some(face) = faces.banner.filter(|f| f.w > 0 && f.h > 0) {
+            out.push(Draw::Tex {
+                x: 360.0 - face.w as f32 / 2.0,
+                y: 314.0 - face.h as f32 / 2.0,
+                w: face.w as f32,
+                h: face.h as f32,
+                tex: face.tex,
+                alpha: open_e,
+            });
+        }
+        // The five stage labels: done dim, current white, later faint.
+        let labels_x = [208.0, 284.0, 360.0, 436.0, 512.0];
+        for (index, x) in labels_x.iter().enumerate() {
+            let alpha = if settled || index < completed {
+                0.6
+            } else if index == completed {
+                1.0
             } else {
-                (art.dot_pending, cx - 4.5, SYNC_RAIL_Y - 4.5)
+                0.36
             };
-            if face.w > 0 {
+            if let Some(face) = faces.rail_labels[index].filter(|f| f.w > 0 && f.h > 0) {
                 out.push(Draw::Tex {
-                    x,
-                    y,
+                    x: x - face.w as f32 / 2.0,
+                    y: 356.0 - face.h as f32 / 2.0,
                     w: face.w as f32,
                     h: face.h as f32,
                     tex: face.tex,
-                    alpha: node_alpha,
-                });
-            }
-            if let Some(label) = faces.rail_labels[i].filter(|face| face.w > 0 && face.h > 0) {
-                let alpha = if settled || (active > 0 && n <= active) {
-                    1.0
-                } else {
-                    0.58
-                };
-                out.push(Draw::Tex {
-                    x: cx - label.w as f32 / 2.0,
-                    y: SYNC_RAIL_LABEL_Y,
-                    w: label.w as f32,
-                    h: label.h as f32,
-                    tex: label.tex,
-                    alpha: alpha * node_alpha,
+                    alpha: alpha * open_e,
                 });
             }
         }
-
-        if let Some(left) = faces.progress_left.filter(|face| face.w > 0 && face.h > 0) {
+        // Footer: the stage counter or a manual mod's file count on the left,
+        // the one key hint that can actually do something on the right.
+        if let Some(face) = faces.progress_left.filter(|f| f.w > 0 && f.h > 0) {
             out.push(Draw::Tex {
-                x: 56.0,
-                y: SYNC_FOOTER_Y,
-                w: left.w as f32,
-                h: left.h as f32,
-                tex: left.tex,
-                alpha: 0.62,
+                x: 124.0,
+                y: 400.0,
+                w: face.w as f32,
+                h: face.h as f32,
+                tex: face.tex,
+                alpha: 0.6 * open_e,
             });
         }
-        if settled {
-            if let Some(hint) = faces.completion_hint.filter(|face| face.w > 0 && face.h > 0) {
-                out.push(Draw::Tex {
-                    x: 664.0 - hint.w as f32,
-                    y: SYNC_FOOTER_Y,
-                    w: hint.w as f32,
-                    h: hint.h as f32,
-                    tex: hint.tex,
-                    alpha: 0.5,
-                });
-            }
-        } else if let Some(cancel) = faces.cancel_hint.filter(|face| face.w > 0 && face.h > 0) {
+        if let Some(face) = faces.progress_right.filter(|f| f.w > 0 && f.h > 0) {
             out.push(Draw::Tex {
-                x: 664.0 - cancel.w as f32,
-                y: 414.0,
-                w: cancel.w as f32,
-                h: cancel.h as f32,
-                tex: cancel.tex,
-                alpha: 0.82,
+                x: 540.0 - face.w as f32,
+                y: 400.0,
+                w: face.w as f32,
+                h: face.h as f32,
+                tex: face.tex,
+                alpha: 0.7 * open_e,
             });
         }
-
-        if settled && !noop {
-            let started = self.sync_close_at.unwrap_or(now);
-            let t = ((now.saturating_sub(started) as f32) / 180.0).clamp(0.0, 1.0);
-            let scale = 0.6 + 0.4 * slot_ui::ease(t);
-            let size = art.stamp.w as f32 * scale;
-            if art.stamp.w > 0 && art.stamp.h > 0 {
-                out.push(Draw::Tex {
-                    x: SYNC_STAMP_CENTRE.0 - size / 2.0,
-                    y: SYNC_STAMP_CENTRE.1 - size / 2.0,
-                    w: size,
-                    h: size,
-                    tex: art.stamp.tex,
-                    alpha: 1.0,
-                });
+        let hint = if settled {
+            if noop {
+                faces.return_hint
+            } else {
+                faces.completion_hint
             }
-        }
-        if settled && noop {
-            let started = self.sync_close_at.unwrap_or(now);
-            let t = ((now.saturating_sub(started) as f32) / 120.0).clamp(0.0, 1.0);
-            if t < 1.0 {
-                let alpha = 0.45 * (1.0 - t);
-                let (px, py, pw, ph) = if show_cloud {
-                    SYNC_PAPER_RECT
-                } else {
-                    (
-                        SYNC_CLOUD_CARD_AT.0,
-                        SYNC_CLOUD_CARD_AT.1,
-                        art.target_card.w as f32,
-                        art.target_card.h as f32,
-                    )
-                };
-                out.push(Draw::Rect {
-                    x: px,
-                    y: py,
-                    w: pw,
-                    h: 1.0,
-                    colour: [1.0, 1.0, 1.0, alpha],
-                });
-                out.push(Draw::Rect {
-                    x: px,
-                    y: py + ph - 1.0,
-                    w: pw,
-                    h: 1.0,
-                    colour: [1.0, 1.0, 1.0, alpha],
-                });
-                out.push(Draw::Rect {
-                    x: px,
-                    y: py,
-                    w: 1.0,
-                    h: ph,
-                    colour: [1.0, 1.0, 1.0, alpha],
-                });
-                out.push(Draw::Rect {
-                    x: px + pw - 1.0,
-                    y: py,
-                    w: 1.0,
-                    h: ph,
-                    colour: [1.0, 1.0, 1.0, alpha],
-                });
-            }
-        }
-
-        self.draw_sync_open_fade(out);
-        if settled {
-            self.draw_sync_close_fade(out);
-        }
-    }
-
-    fn sync_open_rect(t: f32) -> (f32, f32, f32, f32) {
-    let t = t.clamp(0.0, 1.0);
-    let w = OUT_W as f32 * slot_gfx::screen_width(t);
-    let h = OUT_H as f32 * slot_gfx::screen_scale(t);
-    ((OUT_W as f32 - w) / 2.0, (OUT_H as f32 - h) / 2.0, w, h)
-}
-
-    /// The sync screen opening over the shelf, with the same grammar as a
-    /// cartridge powering a game on: a 2 px line widens first, then the picture
-    /// splits open from the middle up and down, with the same brightness flash.
-    ///
-    /// `t` is linear progress, exactly like the game's `screen` value; the
-    /// curves live in [`slot_gfx::power`] and are shared, not re-derived here.
-    fn draw_sync_window(&self, t: f32, out: &mut Vec<Draw>) {
-        let t = t.clamp(0.0, 1.0);
-        if t >= 0.999 {
-            return;
-        }
-        let (x, y, w, h) = Self::sync_open_rect(t);
-        let black = [0.0, 0.0, 0.0, 1.0];
-        out.push(Draw::Rect { x: 0.0, y: 0.0, w: OUT_W as f32, h: y, colour: black });
-        out.push(Draw::Rect { x: 0.0, y: y + h, w: OUT_W as f32, h: OUT_H as f32 - y - h, colour: black });
-        out.push(Draw::Rect { x: 0.0, y, w: x, h, colour: black });
-        out.push(Draw::Rect { x: x + w, y, w: OUT_W as f32 - x - w, h, colour: black });
-        // The picture comes up bright and settles, the way a CRT does.
-        let flash = (slot_gfx::screen_brightness(t) - 1.0).max(0.0);
-        if flash > 0.001 && w >= 1.0 && h >= 1.0 {
-            out.push(Draw::Rect {
-                x,
-                y,
-                w,
-                h,
-                colour: [1.0, 1.0, 1.0, flash * 0.25],
+        } else {
+            faces.cancel_hint
+        };
+        if let Some(face) = hint.filter(|f| f.w > 0 && f.h > 0) {
+            out.push(Draw::Tex {
+                x: 620.0 - 24.0 - face.w as f32,
+                y: 392.0,
+                w: face.w as f32,
+                h: face.h as f32,
+                tex: face.tex,
+                alpha: open_e,
             });
         }
-    }
-
-    fn draw_sync_open_fade(&self, out: &mut Vec<Draw>) {
-        let Some(started) = self.sync_open_at else {
-            return;
-        };
-        let t = (self.now().saturating_sub(started) as f32 / (SYNC_FADE_S * 1000.0))
-            .clamp(0.0, 1.0);
-        self.draw_sync_window(t, out);
-    }
-
-    fn draw_sync_close_fade(&self, out: &mut Vec<Draw>) {
-        let Some(started) = self.sync_close_at else {
-            return;
-        };
-        let elapsed = self.now().saturating_sub(started) as f32 / 1000.0;
-        // The shrink is the game's power-off beat, not the opening one: a
-        // cartridge screen breathes out faster than it comes up.
-        let fade_start = (SYNC_SETTLE_MS as f32 / 1000.0 - POWER_OFF_S).max(0.0);
-        let t = ((elapsed - fade_start) / POWER_OFF_S).clamp(0.0, 1.0);
-        self.draw_sync_window(1.0 - t, out);
-    }
-
-    fn draw_sync_result_fade(&self, out: &mut Vec<Draw>) {
-        // After a network cartridge has ejected, the shelf is already visible;
-        // do not flash it back to black.
-        if self.sync_card.is_some() {
-            return;
-        }
-        let Some(started) = self.sync_result_at else {
-            return;
-        };
-        let t = (self.now().saturating_sub(started) as f32 / (SYNC_FADE_S * 1000.0))
-            .clamp(0.0, 1.0);
-        let alpha = 1.0 - ease(t);
-        if alpha > 0.001 {
-            out.push(Draw::Rect {
-                x: 0.0,
-                y: 0.0,
-                w: OUT_W as f32,
-                h: OUT_H as f32,
-                colour: [0.0, 0.0, 0.0, alpha],
-            });
-        }
-    }
-
-    fn draw_sync_banner(&self, out: &mut Vec<Draw>) {
-        let Some(face) = self.sync_faces.result.or(self.sync_faces.banner) else {
-            return;
-        };
-        let y = (OUT_H as f32 - 58.0 - 12.0 - face.h as f32).round();
-        self.draw_sync_banner_at(y, out);
-    }
-
-    fn draw_sync_banner_at(&self, y: f32, out: &mut Vec<Draw>) {
-        let Some(face) = self.sync_faces.result.or(self.sync_faces.banner) else {
-            return;
-        };
-        let (w, h) = (face.w as f32, face.h as f32);
-        let x = ((OUT_W as f32 - w) / 2.0).round();
-        out.push(Draw::Rect {
-            x: x - 12.0,
-            y: y - 5.0,
-            w: w + 24.0,
-            h: h + 10.0,
-            colour: [0.0, 0.0, 0.0, 0.55],
-        });
-        out.push(Draw::Tex {
-            x,
-            y,
-            w,
-            h,
-            tex: face.tex,
-            alpha: 1.0,
-        });
     }
 
     fn link_popup_input(&mut self, action: Action) {
@@ -18788,6 +18770,23 @@ impl App {
         self.hud.set_toasts(faces);
     }
 
+    pub fn set_hud_panel_face(&mut self, tex: TexId) {
+        self.hud.set_panel(tex);
+    }
+
+    /// The four control-bar labels and the 0..=100 value faces.
+    pub fn set_hud_labels(&mut self, labels: Vec<(TexId, u32, u32)>) {
+        self.hud.set_labels(labels);
+    }
+
+    pub fn set_hud_value_faces(&mut self, values: Vec<(TexId, u32, u32)>) {
+        self.hud.set_value_faces(values);
+    }
+
+    pub fn set_hud_alarm_face(&mut self, tex: TexId) {
+        self.hud.set_alarm_face(tex);
+    }
+
     pub fn toast(&self) -> Option<Toast> {
         self.hud.said(self.now())
     }
@@ -19126,10 +19125,6 @@ fn keep_search_result_visible(results: &mut SearchResults) {
     if results.selected >= results.offset + SEARCH_ROWS {
         results.offset = results.selected + 1 - SEARCH_ROWS;
     }
-}
-
-fn with_alpha(colour: [f32; 4], alpha: f32) -> [f32; 4] {
-    [colour[0], colour[1], colour[2], colour[3] * alpha]
 }
 
 /// Human byte size for the transfer docket.
@@ -19654,31 +19649,9 @@ mod sync_stage_tests {
 }
 
 #[cfg(test)]
-mod sync_open_tests {
-    use super::*;
-
-    /// The first frames must be a bright line, not a small square: that is the
-    /// whole difference the player sees between the two openings.
-    #[test]
-    fn the_sync_window_opens_like_a_cartridge_powering_a_game() {
-        // A thin dash that keeps widening: at the very start it is a line, not
-        // a small rectangle.
-        let (_, _, early_w, early_h) = App::sync_open_rect(0.02);
-        assert!(early_h < 30.0, "the picture opened too early: {early_h}");
-        assert!(
-            early_w > early_h * 3.0,
-            "the first frame was not line-shaped: {early_w}x{early_h}"
-        );
-
-        let (x, y, mid_w, mid_h) = App::sync_open_rect(0.5);
-        assert!(mid_w >= OUT_W as f32 - 1.0, "the width was still growing");
-        assert!(mid_h > 200.0 && mid_h < OUT_H as f32, "the split stalled");
-        assert!((x - 0.0).abs() < 1.0 && y > 0.0, "the split was not vertical");
-
-        let (_, _, full_w, full_h) = App::sync_open_rect(1.0);
-        assert_eq!((full_w, full_h), (OUT_W as f32, OUT_H as f32));
-    }
-
+mod power_curve_tests {
+    /// The shared power-on curve: the picture starts over-bright and settles
+    /// exactly on the canvas.
     #[test]
     fn the_flash_settles_before_the_window_is_full() {
         assert!(slot_gfx::screen_brightness(0.0) > 1.4);
@@ -20442,6 +20415,72 @@ mod transfer_header_tests {
         app.tick_ms(left.saturating_add(HEADER_SLIDE_MS + 50));
         assert!(app.transfer.is_none(), "the room never closed");
     }
+
+    fn fc_cart() -> Cart {
+        Cart {
+            platform: Platform::Fc,
+            stem: "Mario".into(),
+            rom: "Games/FC/Mario.nes".into(),
+            label: None,
+            code: String::new(),
+            shell: None,
+            title: "MARIO".into(),
+            model: Default::default(),
+            front: None,
+        }
+    }
+
+    #[test]
+    fn a_transfer_room_drops_the_tall_carts_below_its_header() {
+        let mut app = App::new(vec![fc_cart()]);
+        app.phase = Phase::Shelf;
+        app.transfer = Some(Transfer::stub(true, TransferStage::Shelf));
+        let now = app.now();
+        app.tick_ms(now);
+        assert_eq!(
+            app.transfer_shelf_lift(),
+            0.0,
+            "the row dropped before the room header came down"
+        );
+
+        app.tick_ms(now.saturating_add(HEADER_SLIDE_MS + 50));
+        let lift = app.transfer_shelf_lift();
+        assert!(lift > 0.0, "the room kept the FC cassette in its header");
+        let (_, _, (_, top, _, _)) = app.selected_cart_rect().expect("no selected cart");
+        let header_bottom = TRANSFER_HEADER_Y + slot_ui::navigation::TRANSFER_HEADER_H;
+        assert!(
+            top >= header_bottom,
+            "the FC cassette at {top} still meets the header ending at {header_bottom}"
+        );
+    }
+
+    #[test]
+    fn the_room_shelf_rises_when_the_header_lifts_out() {
+        let mut app = App::new(vec![fc_cart()]);
+        app.phase = Phase::Shelf;
+        app.transfer = Some(Transfer::stub(true, TransferStage::Shelf));
+        let now = app.now();
+        app.tick_ms(now);
+        app.tick_ms(now.saturating_add(HEADER_SLIDE_MS + 50));
+        let landed = app.transfer_shelf_lift();
+        assert!(landed > 0.0, "the room never dropped its shelf");
+
+        app.close_cart_transfer();
+        let left = app.now();
+        app.tick_ms(left.saturating_add(HEADER_SLIDE_MS / 2));
+        let rising = app.transfer_shelf_lift();
+        assert!(
+            rising < landed && rising > 0.0,
+            "the shelf jumped instead of following the lifting header: {rising} against {landed}"
+        );
+        app.tick_ms(left.saturating_add(HEADER_SLIDE_MS + 50));
+        assert!(app.transfer.is_none(), "the room never closed");
+        assert_eq!(
+            app.transfer_shelf_lift(),
+            0.0,
+            "the shelf stayed down after the room closed"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -20584,5 +20623,70 @@ mod favorite_star_tests {
         )
         .expect("no half-size star");
         assert!((full - 2.0 * half).abs() < 0.01);
+    }
+}
+
+#[cfg(test)]
+mod notification_stack_tests {
+    use super::*;
+
+    fn stacked_app() -> App {
+        let mut app = App::new(Vec::new());
+        app.phase = Phase::Shelf;
+        let now = app.now();
+        app.hud.set_alarm(true, now);
+        app.say_notice("同步完成", "已拉取版本 7");
+        app.hud.toast(Toast::StateSaved, now);
+        app.hud.show(HudKind::Volume, 50, false, now);
+        app
+    }
+
+    #[test]
+    fn the_top_stack_orders_alarm_notice_toast_bar() {
+        let app = stacked_app();
+        let alarm_h = slot_ui::notice::NOTICE_H;
+        let notice_h = slot_ui::notice::NOTICE_H;
+        let toast_h = slot_ui::toast_box(Toast::StateSaved).1 as f32;
+        let alarm_y = slot_ui::TOAST_TOP;
+        let notice_y = alarm_y + alarm_h + 8.0;
+        let toast_y = notice_y + notice_h + 8.0;
+        let bar_y = toast_y + toast_h + 8.0;
+
+        assert_eq!(app.notice_top(), Some(notice_y));
+        assert_eq!(app.toast_top(), Some(toast_y));
+        assert!(app.top_notification_up());
+
+        let mut out = Vec::new();
+        app.draw_top_hud(&mut out);
+        assert!(
+            out.iter()
+                .any(|d| matches!(*d, Draw::Rect { y, .. } if (y - alarm_y).abs() < 0.01)),
+            "the alarm is not in the top row"
+        );
+        assert!(
+            out.iter()
+                .any(|d| matches!(*d, Draw::Rect { y, .. } if (y - bar_y).abs() < 0.01)),
+            "the control bar is not under the toast row"
+        );
+    }
+
+    #[test]
+    fn a_lone_toast_starts_at_the_top() {
+        let mut app = App::new(Vec::new());
+        app.phase = Phase::Shelf;
+        let now = app.now();
+        app.hud.toast(Toast::StateSaved, now);
+        assert_eq!(app.toast_top(), Some(slot_ui::TOAST_TOP));
+        assert_eq!(app.notice_top(), None);
+        assert!(app.top_notification_up());
+    }
+
+    #[test]
+    fn a_plain_shelf_has_no_top_stack() {
+        let mut app = App::new(Vec::new());
+        app.phase = Phase::Shelf;
+        assert!(!app.top_notification_up());
+        assert_eq!(app.notice_top(), None);
+        assert_eq!(app.toast_top(), None);
     }
 }
