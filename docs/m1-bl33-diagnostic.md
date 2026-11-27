@@ -23,6 +23,34 @@
 
 **M1 首选资格化方向：PI12 工作灯；UART0 不再是前置条件。** PI12 必须有精确 RG34XX 非 SP DTS/source 依据，明确 pin mux、APB1/PIO clock 与 BL33 访问权限，限定寄存器位域，保留 PI11，并具备确定的异常 fail-stop 路径。PI12 可从机身外观察，不需要 UART 焊盘；但 BL33 handoff 时访问权限、abort 处理和实际极性尚未通过。
 
+### Boot0/SPL capsule safety gate (2026-11-27)
+
+The pinned BaseOS native v2 raw-capsule path is **not yet approved for M1**.
+Its outer capsule writes RTC GP14/GP15 attempt state and arms the H700
+watchdog; the AArch64 SPL then adopts the outer-owned attempt. The reference
+capsule contract still lists physical watchdog retention across the BL31
+RMR3 reset and early refusal recovery as unresolved. This project has not
+qualified those hardware behaviors, and M1 does not implicitly authorize
+new RTC/watchdog MMIO writes.
+
+The existing BaseOS `native/capsule/build-diagnostic.py` is not an M1
+shortcut: it produces an outer protocol control with a non-adopting old inner
+solely to test the outer commit path. It does not produce a capsule that
+launches this A32 LK payload.
+
+Before M1-T3, one of the following must be designed and independently
+reviewed:
+
+- a dedicated M1 one-shot Boot0/SPL handoff capsule with no RTC attempt-pair
+  writes, no watchdog programming, no hidden durable media writes, and a
+  documented manual recovery by power-off plus original-card swap; or
+- a separately approved and hardware-qualified v2 RTC/watchdog adoption
+  protocol, including WDT survival across BL31 RMR3 and refusal recovery.
+
+Until then, do not use the normal release capsule, raw-capsule v2, or the
+diagnostic outer-protocol control to boot M1 on hardware. A disposable TF card
+does not remove RTC/watchdog state or electrical risks.
+
 ### Packaging input contract and native pairing (2026-11-27)
 
 There are two distinct host-side paths and their inputs are **not
