@@ -104,7 +104,7 @@ def main() -> int:
     # Alternate ADRP page + SUB computes the same global slot address.
     alternate_page_chain = struct.pack(
         "<IIIII",
-        0xB02400B4,  # adrp x20, 0x48015000
+        0xB00000B4,  # adrp x20, 0x48015000 (linked at BASE)
         0xD1266294,  # sub x20, x20, #0x998 -> 0x48014668
         0xF9400280,  # ldr x0, [x20]
         0xB900A401,  # str w1, [x0, #0xa4]
@@ -118,7 +118,7 @@ def main() -> int:
     # ADRP + shifted ADD + ADD reaches the slot without naming its page directly.
     shifted_add_chain = struct.pack(
         "<IIIIII",
-        0xF0240094,  # adrp x20, 0x48013000
+        0xF0000094,  # adrp x20, 0x48013000 (linked at BASE)
         0x91400694,  # add x20, x20, #1, lsl #12
         0x9119A294,  # add x20, x20, #0x668
         0xF9400280,  # ldr x0, [x20]
