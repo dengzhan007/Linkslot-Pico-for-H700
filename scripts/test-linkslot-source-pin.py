@@ -53,6 +53,11 @@ def main() -> int:
     if "linkslot-1.0.45-h700-overlay.patch" in feasibility:
         fail("stale 1.0.45 overlay artifact name remains")
 
+    if "snapshot commit %s." not in feasibility:
+        fail("overlay README must derive its base commit from the checked snapshot")
+    if pin in feasibility:
+        fail("overlay workflow must not duplicate the snapshot SHA literal")
+
     for relative in (WORKFLOW, RUNTIME_WORKFLOW):
         workflow = (ROOT / relative).read_text(encoding="utf-8")
         if workflow.count("scripts/test-linkslot-source-pin.py") < 3:
