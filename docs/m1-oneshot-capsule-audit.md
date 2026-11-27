@@ -220,6 +220,35 @@ SHA-256
 No real capsule/SPL was built, no test card was written, and no payload was
 executed.
 
+### 4.2 Freestanding AArch32 selector ABI fixture (2026-11-28)
+
+A separate target-ISA fixture now compiles the existing policy model and a
+dummy capsule-facing C ABI entry as **freestanding Cortex-A53 AArch32 ARM-state
+ELF32**. The fixture is intentionally not part of the Boot0 capsule, SPL, or
+LK production object lists.
+
+- `scripts/test-m1-oneshot-capsule-a32.py` compiles
+  `platform/h700/boot/m1_oneshot_selection_model.c` together with
+  `tests/m1_oneshot_capsule_a32_fixture.c` using `clang --target=arm-none-eabi`,
+  `-mcpu=cortex-a53`, `-marm`, `-ffreestanding`, strict warnings and LLD.
+- It checks ELF32 / ARM machine identity, requires the public selector and
+  dummy dispatch entry symbols, and rejects any unresolved runtime symbol.
+  The internal FNV helper is allowed to inline under `-O2`.
+- CI [#937](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46035530557)
+  completed this new step successfully. The same run also passed the linked
+  GammaOS LK H700 BL33 CRT0/exception-vector build step.
+- The runner installed LLVM/LLD from Ubuntu packages after the workflow
+  disabled the unrelated Microsoft apt feed that had previously returned 403.
+
+**Scope boundary:** this proves the selector C policy is accepted by the
+AArch32 compiler/linker and exports the expected fixture ABI. It does not
+execute the ELF, check eGON checksum/entry semantics, perform the SRAM copy
+stub at `0x50000` / `0x20000`, connect the selector to `capsule_main()`, build
+an M1 SPL, regenerate the matched firmware/SPL/capsule generation, or touch a
+test card. The outer capsule still needs a separately reviewed no-RTC/no-WDT
+dispatcher and copy/handoff path. No hardware I/O or payload execution was
+performed; `hardware_applied=0`.
+
 ## 5. Host-only verification required before producing an M1 artifact
 
 The M1 builder must emit a manifest with at least:
