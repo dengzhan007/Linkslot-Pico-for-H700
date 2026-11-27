@@ -17,7 +17,7 @@
 
 ## 2026-11-28 最新续接：活动启动链、TF 启动介质与 CI 对齐
 
-**本轮核对 HEAD：** `15d431936247b24430adc912c553eedee24fb6a9`（[commit](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/15d431936247b24430adc912c553eedee24fb6a9)）；reports 分支在本轮核对时 HEAD 为 `701167dcd8db1eac9baedde00e84c56c46e36ead`。新增只读启动链报告：[rg34xx-active-loader-provenance.md](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-active-loader-provenance.md)。该报告依据 2026-11-22 只读库存及固定 BaseOS source pin，属于设备既有库存的离线/静态来源复核，不是 2026-11-28 新实机测试。
+**复核起始代码 HEAD：** `15d431936247b24430adc912c553eedee24fb6a9`（[commit](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/15d431936247b24430adc912c553eedee24fb6a9)）；reports 分支修正前 HEAD 为 `701167dcd8db1eac9baedde00e84c56c46e36ead`，本轮介质纠错提交为 `fcaab72524c473a06235376221bbed8ddb34d50b`。本轮状态/路线图同步提交包括 `8a16da65732ed21d5a59086eb9802bb4812a5cbe` 与 `de7a63e31855eff7affcc305c69ebc38567dc9c4`。新增只读启动链报告：[rg34xx-active-loader-provenance.md](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-active-loader-provenance.md)。该报告依据 2026-11-22 只读库存及固定 BaseOS source pin，属于设备既有库存的离线/静态来源复核，不是 2026-11-28 新实机测试。
 
 **活动启动路径已纠正为：** Boot ROM 从可移动 TF 启动介质加载 128 KiB BaseOS Boot0-primary 外层 capsule；外层 capsule 在活动路径选择 AArch64 native SPL；随后为 vendor BL31 → AArch32 SVC BL33 loader（`0x4a000000`）→ p4+48 MiB BOL4/LZ4 image → AArch64 Linux。嵌入 capsule 的 64 KiB stock eGON Boot0 是 fallback，不是活动 native-SPL 路径上先行的 DRAM-training 阶段。stock TOC1 U-Boot 没有证据表明在当前捕获启动中执行；它仍是兼容/回退材料。
 
@@ -26,7 +26,7 @@
 **M1 目标边界进一步明确：** 当前交付不是从 stock TOC1 U-Boot 开始另造启动链，而是在已运行的 BaseOS native-SPL/BL31 路径中，准备受控替换活动 A32 BL33 loader 的最小诊断 payload。活动 p4+40 MiB firmware package 含 monitor/DTBO/DTB/A32 loader；p4+48 MiB 是 native SPL 实际读取的 BOL4 image。更换 32 KiB loader 后必须重建 firmware size/FNV、匹配 AArch64 SPL 与 Boot0-primary capsule，禁止新旧代混配。loader 使用的 `0x8000ff04` 是现有 Linux kernel-entry SMC，不是通用裸机跳转 ABI，M1 不得把它当作 payload entry service。
 
 **CI 核对（2026-11-28）：**
-- 当前 HEAD `15d4319` 的 H700 boot audit workflow run [46033210075](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46033210075) 成功：Linux `host-tools` 与 Windows `windows-powershell` 两个 job 均通过。
+- 复核起始 HEAD `15d4319` 的 H700 boot audit workflow run [46033210075](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46033210075) 成功：Linux `host-tools` 与 Windows `windows-powershell` 两个 job 均通过。
 - 最近完整 Linkslot/LK feasibility [#931](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46031541947) 为 84/84 steps 成功、0 failures、0 skipped，但它对应父提交 `f83f5f0a3eb8d523f8637569f16f9121f60047a8`，并非当前文档 HEAD。当前提交改动的是文档；feasibility workflow 的 push path filter 不含本状态文件，因此没有因该文档提交重跑完整 feasibility。
 - AArch32/AArch64 compile [#668](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46031162588) 与 H700 boot audit [#1564](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46031009923) 均成功，仍属于 host/cross-build/audit。
 
