@@ -12,8 +12,8 @@ from pathlib import Path
 IMAGE_BASE = 0x4A000000
 HEADER_END = 0x640
 VECTOR_OFFSET = 0x1000
-MAX_IMAGE_BYTES = 0xE0000
-REFERENCE_LOADER_BYTES = 0x8000
+ACTIVE_LOADER_EXTENT_BYTES = 0x8000
+REFERENCE_LOADER_BYTES = ACTIVE_LOADER_EXTENT_BYTES
 REFERENCE_LOADER_SHA256 = "48b2a837ac5d8daad8f524c976f2b3911d26a838f8b68fa695e3283412dd8590"
 HEADER_MAGIC = b"uboot"
 
@@ -53,9 +53,9 @@ def package_image(
 
     if len(lk_raw) < VECTOR_OFFSET + 8 * 4:
         raise ValueError("raw LK image is too small to contain the fixed A32 vector table")
-    if len(lk_raw) > MAX_IMAGE_BYTES:
+    if len(lk_raw) > ACTIVE_LOADER_EXTENT_BYTES:
         raise ValueError(
-            f"raw LK image exceeds the native BL33 limit {MAX_IMAGE_BYTES:#x}"
+            f"raw LK image exceeds the active native loader extent {ACTIVE_LOADER_EXTENT_BYTES:#x}"
         )
     if any(lk_raw[4:HEADER_END]):
         raise ValueError(
@@ -78,9 +78,9 @@ def package_image(
     output = bytearray(lk_raw)
     output[4:HEADER_END] = reference_loader[4:HEADER_END]
     output.extend(bytes(-len(output) % 512))
-    if len(output) > MAX_IMAGE_BYTES:
+    if len(output) > ACTIVE_LOADER_EXTENT_BYTES:
         raise ValueError(
-            f"512-byte padded BL33 image exceeds the native limit {MAX_IMAGE_BYTES:#x}"
+            f"512-byte padded BL33 image exceeds the active native loader extent {ACTIVE_LOADER_EXTENT_BYTES:#x}"
         )
     if bytes(output[:4]) != lk_raw[:4]:
         raise AssertionError("packaging changed the LK entry branch")
@@ -102,6 +102,8 @@ def package_image(
         "vector_table_offset": hex(VECTOR_OFFSET),
         "vector_branch_targets": [hex(item) for item in vector_targets],
         "reference_loader_bytes": len(reference_loader),
+        "active_loader_extent_bytes": ACTIVE_LOADER_EXTENT_BYTES,
+        "fits_active_loader_extent": len(output) <= ACTIVE_LOADER_EXTENT_BYTES,
         "reference_loader_sha256": reference_sha,
         "copied_header_range": ["0x4", hex(HEADER_END)],
         "header_magic": HEADER_MAGIC.decode("ascii"),
