@@ -32,6 +32,8 @@
 
 **已关闭的 source/ELF 子项：** pinned LK Data Abort vector 在建帧前屏蔽 IRQ/FIQ、保留 68-byte fault frame、对 C handler 临时栈做 8-byte 对齐；overlay 只允许精确 SYS_CFG VER_REG 只读 probe 命中后恢复。PI12 的 Data Abort 不属于该恢复白名单，任何不匹配故障（包括 PI12 读/写 abort）保留 fatal handler 并进入非返回 WFI fail-stop。该路径已有 host/source guard 与 linked A32 ELF 检查，详见 [H700 LK Data Abort recovery audit](h700-lk-data-abort-recovery-audit.md)；最近完整 feasibility #931 的 “Compile/link actual GammaOS LK H700 BL33 overlay CRT0 and exception vectors” step 成功。**边界：** 这关闭的是源代码/链接产物层的安全控制流审查，不是 Cortex-A53 实机故障注入、PIO 总线权限或 abort 硬件行为验证；PI12 没有通用恢复能力。
 
+**M1 A32 selector ABI 新增验证（2026-11-28）：** 新增独立 dummy ABI fixture，使用 `clang --target=arm-none-eabi -mcpu=cortex-a53 -marm -ffreestanding` 将 `m1_oneshot_selection_model.c` 编译并链接为 ELF32/ARM；检查公开 selector/fixture symbols 和 `nm -u` 零 unresolved symbols。CI [#937](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46035530557) 第 15 步通过；同 run 第 17 步真实 pinned GammaOS LK H700 BL33 CRT0/exception-vector link 亦通过。当前该 run 已完成前 43 项、无失败，仍在进行第 44 项 static mGBA selection 测试，**不是最终全量 CI 结论**。本 fixture 不执行、也未接入 Boot0 capsule/SPL，不做 SRAM copy，不验证 eGON checksum/entry，不生成配对 firmware/SPL/capsule；它只证明选择策略的 AArch32 ABI 可编译链接。详见 [M1 one-shot capsule audit](m1-oneshot-capsule-audit.md) §4.2。
+
 **下一步（保持硬件 fail-closed）：** 不重复堆叠 Data Abort scanner；继续审查 BL31/Boot0 对活动 BL33 slot 的物理生命周期与候选 stack/BSS/page-table 冲突，并确认 CPU1–CPU3 的 reset/hold-off/RVBAR。APB1/PIO 时钟状态、SPC decode-port/fuse 条件及 BL33-entry Non-secure access 仍未证明。生产 PI12 MMIO wrapper 继续 default-off；在这些硬件 gate 关闭前，不执行物理 GPIO 读写、不启用灯、不写测试卡、不执行 payload。
 
 **硬件总闸不变：** `H700_MEMORY_LAYOUT_APPROVED=false`、`hardware_applied=0`；G1/G2/G3/G6 维持 OPEN。上述报告和 CI 均不构成实机 BL33 启动、DRAM ownership、CPU1–CPU3 hold-off、PIO 权限或 LED 极性验收。
