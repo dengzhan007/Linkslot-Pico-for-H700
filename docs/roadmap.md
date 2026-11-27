@@ -1009,6 +1009,16 @@ Hard size boundary: this first integration path is only for a small diagnostic p
 - Hardware unchanged: `hardware_applied=0`; no MMIO, PSCI SMC or payload execution.
 
 
+## 2026-11-27 — RTC soft-entry TWI descriptor tracing
+
+- [x] Trace the RTC soft-entry continuation `0x48012670 → 0x48012070`, context selector `+0xa4`, and controller initialization/transfer functions `0x480129f0 → 0x48013ac8 → 0x48013a48 / 0x48013b98`.
+- [x] Identify the runtime table lookup at `0x48014628 + selector*8` and object-pointer publication to `0x48015548`.
+- [x] Compare code pointer use with raw monitor data: `0x48014628` initial qwords are numeric pairs, while `0x48014668` and `0x48015548` initially contain `2`. The latter slot is explicitly replaced by the selected object pointer in `0x48013b14`.
+- [x] Add the detailed [RTC soft-entry TWI static audit](rg34xx-rtc-soft-entry-twi-audit.md); explicitly record that a live FDT AXP2202 / H616 R-TWI0 match does not prove the selected controller.
+- [ ] Identify the runtime writer/loader patch/relocation that populates `0x48014628` and `0x48014668`; direct static address references do not expose a direct store, and indirect/external initialization remains possible.
+- [ ] Obtain an authoritative initialized descriptor table or trusted read-only runtime capture to resolve context `+0xa4` to a controller object. Do not infer bus index, object address, slave address or command sequence from the raw uninitialized file.
+- Hardware remains untouched: no SMC/MMIO, I2C/TWI transaction, suspend/wake, storage write, flash or payload execution; `hardware_applied=0`.
+
 ## 2026-11-27 — BL31 audit #94 / Boot0 CPU hold-off / retention PFN checkpoint
 
 - [x] Exact-matched BL31 static audit [#94](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45956263984) passed all 24 steps on `8477f41a1bce996d36e240e041723cc877962223`; archived [audit output](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45956263984/artifacts/15178254258) and [Boot0/monitor input capture](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45956263984/artifacts/15178074907).
