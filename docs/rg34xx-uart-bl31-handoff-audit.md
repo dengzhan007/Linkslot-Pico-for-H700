@@ -168,6 +168,35 @@ The target path later prepares the AArch32 SVC BL33 entry at
 `0x4a000000` with SPSR `0x1d3`. The security sequence's placement in that
 preparation path is strong static ordering evidence, not an execution trace.
 
+## RG34XX non-SP physical-board equivalence and UART pad evidence
+
+A manufacturer/lab model-difference statement was found in the 2026-06-15
+FCC Part 15.247 report CTA26060900901 (FCC ID `2AJU8-RG34XXSP`): the test
+sample is RG34XXSP, the listed models include `RG 34XX`, and page 2 states
+that the listed models share the same PCB, circuit, structure and internals,
+differing only by model number and colour. The report's test-sample hardware
+version is RG34XXSP V1.0. See the
+[40-page test report](https://device.report/m/01bdfd2898f5171e5885aa83c80a2fc5bfaf6bff027ac94b28bdfdfef077e12d.pdf)
+and the [FCC filing with exhibit index](https://fccid.io/2AJU8RG34XXSP).
+
+The FCC filing separately lists a 4-page `Internal Photos` exhibit
+(document 9400823, SHA-256
+`3ff489bb32e9b47a56097c164a191453e16561d76c4ca3a50ebe3ddfc3cab1d2`).
+The test report's internal-photo section (pages 37–40) shows the H700 board
+removed from the RG34XXSP housing. This supports a manufacturer-declared
+common PCB family, but the public photos do **not** identify PH0/PH1 test
+pads, TX/RX labels, ground points, net names or a PCB revision that can be
+matched to the user's non-SP unit. The FCC listing exposes its schematic as
+metadata-only, not a downloadable schematic/boardview.
+
+**Evidence classification:** a manufacturer/lab assertion of model-level PCB
+commonality plus reference photos of an RG34XXSP sample. It is not direct
+inspection of the specific non-SP board and does not identify a safe solder
+point. Do not import test-pad locations from the SP community `device-facts.md`
+or infer that a photographed via is UART0. The physical UART0 path remains
+unqualified until the target non-SP PCB revision and a labelled/traceable
+PH0/PH1-to-pad mapping are established.
+
 ## 5. What is now established, and what remains open
 
 **Established by pinned source / exact binary:**

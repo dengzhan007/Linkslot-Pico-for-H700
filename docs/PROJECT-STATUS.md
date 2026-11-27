@@ -56,6 +56,8 @@ M1 先完成规格、proof-of-life 信号资格审查和 host-only 产物验证�
 
 **M1-S1 更新（2026-11-27）：** UART0 已取得从 H616 SPL 到 exact vendor BL31 的静态初始化/复用路径，以及 BL31 SPC/CCU/PRCM/DMA security setup 调用路径。此项将 UART0 从“仅 Linux post-boot 有证据”升级为“boot-chain source/binary 静态路径已定位”，但 target fuse/SPC 有效权限、BL33 入口 live register、PCB test-pad 与电气路径均未确认，故 M1-S1 仍 **OPEN / NOT APPROVED**。不能据此开始新增 UART write、PIO 改动或诊断 payload。详见 [UART handoff audit](rg34xx-uart-bl31-handoff-audit.md)。
 
+**物理板级证据补充（2026-11-27）：** 2026-06 FCC 报告 CTA26060900901 将 RG34XX 列为 RG34XXSP 的同 PCB/电路/内部衍生型号，并附 SP 样机内部照片；这提升了共板的可信度，但没有 PH0/PH1 test-pad/net 对照，也没有当前非 SP 实机 PCB revision 的直接识别。因此物理 UART 焊盘仍是 M1-S1 的未闭合项；不能直接套用 SP 的焊点说明。详见 [UART handoff audit](rg34xx-uart-bl31-handoff-audit.md)。
+
 ### 冻结项与审计停止规则
 
 - **120 Hz：** 移入 deferred。60 Hz 是当前唯一合格模式；只有取得实际 LCD 模组料号/Revision 与对应 datasheet，才重新开启 panel qualification。
