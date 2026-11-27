@@ -13,7 +13,7 @@ import subprocess
 from pathlib import Path
 
 
-EXPECTED_SOURCE = "241e7c1974926fa22552b200852914ceaccbfd42"
+EXPECTED_SOURCE = "6122c8f2357ecae43295fdb1a158ff5ef7488325"
 
 
 def run_git(source: Path, *args: str) -> str:
