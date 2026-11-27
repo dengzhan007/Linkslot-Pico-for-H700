@@ -401,3 +401,40 @@ thermal, regulator, clock or NVMEM sysfs controls.
 The read-only analyzer and regression tests were added to `tools/analyze_h700_opp_candidates.py` and `tools/test_analyze_h700_opp_candidates.py`. It models absent/empty `opp-supported-hw`, one-cell mask intersection and selected voltage suffix/base fallback, and compares candidate OPP frequency sets with the actual runtime list.
 
 The analyzer was expanded to all 32 mask bits, alternative version cells and exact set-cover witness search; the corrected implementation commit is [`da41806e47dbd2e0d57e23e9ff6ff405a5514e29`](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/da41806e47dbd2e0d57e23e9ff6ff405a5514e29). H700 compile/host regression [#45537478198](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45537478198) and Linux/Windows boot audit [#45537478202](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45537478202) passed. Running it against v3 produces one exact `no-mask + b1` match and no exact one-cell mask witness. This is an OPP-selection fingerprint only; it does not identify the shipping driver, decode SID or approve writes.
+
+## 6. CPU reset/RVBAR at initial BL33 handoff (2026-11-28)
+
+The 2026-11-26 read-only probe in
+[reports/rg34xx-rvbar-selector-20261126](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-rvbar-selector-20261126)
+did not read back the selector. Root ADB worked, but both a bounded
+32-bit pread(/dev/mem, 0x03000024) and an independent dd read failed
+with EFAULT / Bad address; the probe produced zero bytes, no JSON file,
+and no selector value. No kernel module, debugfs mount, boot argument,
+security relaxation, or MMIO write was attempted.
+
+A separate static audit of the matched 128 KiB Boot0 primary image, pinned
+BaseOS native SPL and matched vendor BL31 now narrows the interpretation:
+
+- Boot0's helper calls only for CPU2 and CPU3, conditional on bit 29 of
+  0x03006248; the helper writes C0_RST_CTRL & ~(1 << core), which keeps
+  the chosen reset bit asserted under H616 reference semantics.
+- CPU1 is not passed to the helper. The H616 reference reset default
+  0x13ff0101 leaves CPU0 deasserted and CPU1–CPU3 asserted. The SPL source
+  only writes the primary RVBAR pair; the matched BL31 direct-MMIO scan
+  recovers CPU0 mode setup but no direct secondary reset/RVBAR writes.
+- This supports a probable, not proven, CPU0-only initial BL33 handoff.
+  H700 C0_RST_CTRL equivalence, bit-29 meaning/value, ROM/secure/indirect
+  paths, and live C0_RST_CTRL/RVBAR values remain unknown. The unusual
+  Boot0 write to 0x09010044 is not resolved and must not be modified.
+- The 2026-11-27 Linux runtime snapshot showing possible/present/online
+  CPUs 0-3 is after the kernel has started; it does not establish initial
+  BL31→BL33 state. The matched BL31 has a CPU_ON callback path, but does not
+  prove that CPU_ON is automatically called at initial handoff.
+
+The static audit is being rerun with an explicit reset-bit unit test in the
+[BL31 static audit workflow](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/workflows/h700-bl31-memory-audit.yml).
+Do not repeat /dev/mem attempts on this image. Next evidence must come from
+a trusted early-boot capture or a bounded read through an already-mapped
+kernel resource. Until such readback exists, keep Linkslot/LK CPU0-only,
+do not call PSCI CPU_ON, and keep all hardware gates closed.
+
