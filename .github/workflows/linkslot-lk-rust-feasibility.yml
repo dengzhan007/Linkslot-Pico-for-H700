@@ -424,10 +424,8 @@ jobs:
           git -C "$verify" init -q
           git -C "$verify" apply --check "$GITHUB_WORKSPACE/$out/linkslot-1.0.49-h700-overlay.patch"
 
-          cat > "$out/README.md" <<'EOF'
-          # Linkslot 1.0.49 H700 integration patch
-
-          Base: immutable user-supplied snapshot commit 6122c8f2357ecae43295fdb1a158ff5ef7488325.
+          printf '# Linkslot 1.0.49 H700 integration patch\n\nBase: immutable user-supplied snapshot commit \`%s\`.\n\n' "$snapshot" > "$out/README.md"
+          cat >> "$out/README.md" <<'EOF'
           Patch covers the tested slot-retro Libretro VFS v3 bridge, static Libretro API seam,
           namespaced mGBA Rust binding and built-in static mGBA selection in slot.
 
