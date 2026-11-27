@@ -33,6 +33,7 @@ WINDOWS = (
 EXPECTED = {
     0x48012520: ("ldr", "w0, [x0, #0xa4]"),
     0x48012524: ("bl", ""),
+    0x480125d4: ("ldr", "w1, [x0, #0xa4]"),
     0x48012694: ("ldr", "w1, [x0, #0xa4]"),
     0x480126a0: ("bl", ""),
     0x480126d4: ("ldr", "w0, [x0, #0xa4]"),
@@ -366,7 +367,7 @@ def main() -> int:
         },
         "rtc_soft_entry": {
             "context_selector_offset": "0xa4",
-            "selector_load_sites": ["0x48012520", "0x48012694", "0x480126d4"],
+            "selector_load_sites": ["0x48012520", "0x480125d4", "0x48012694", "0x480126d4"],
             "continuation": "0x48012670",
             "helper": "0x48012070",
             "controller_initializer": "0x48013ac8",
@@ -419,7 +420,7 @@ def main() -> int:
         "# RG34XX BL31 RTC soft-entry TWI descriptor audit",
         "",
         "- Monitor: %d bytes, SHA-256 `%s`." % (len(blob), digest),
-        "- RTC context selector: offset `+0xa4`; code loads it at `0x48012520`, `0x48012694`, and `0x480126d4`.",
+        "- RTC context selector: offset `+0xa4`; code loads it at `0x48012520`, `0x480125d4`, `0x48012694`, and `0x480126d4`.",
         "- RTC continuation/helper: `0x48012670 → 0x48012070`; controller initialization `0x480129f0 → 0x48013ac8`.",
         "- The initializer performs `LDR X1, [X1, W0, SXTW #3]` from lookup origin `0x48014628`: W0 is a signed 32-bit index scaled by 8, and the unknown value may address before or after that origin. The loaded value is then published to `0x48015548` at `0x48013b14`.",
         "- The raw initial qword at slot `0x48014668` (loaded as a context pointer by reviewed paths) is `0x%016x`; the controller-object global slot `0x48015548` initially contains `0x%016x`." % (global_context_slot, global_controller_slot),
