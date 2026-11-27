@@ -10,7 +10,7 @@ import struct
 from pathlib import Path
 
 from capstone import CS_ARCH_ARM64, CS_MODE_ARM, Cs
-from capstone.arm64 import ARM64_OP_IMM, ARM64_OP_MEM
+from capstone.arm64 import ARM64_OP_IMM, ARM64_OP_MEM, ARM64_OP_REG
 
 BASE = 0x48000000
 SIZE = 107216
@@ -154,7 +154,7 @@ def scan_direct_context_writes(blob: bytes) -> dict:
         # +0xa0 and +0xa4. Record it separately as a possible selector writer.
         if mnemonic in ("stp", "stnp") and 0xA0 in mem_ops and ins.operands:
             first = ins.operands[0]
-            if first.type == 1 and ins.reg_name(first.reg).startswith("w"):
+            if first.type == ARM64_OP_REG and ins.reg_name(first.reg).startswith("w"):
                 selector_pair_stores.append({
                     "pc": "0x%08x" % ins.address,
                     "mnemonic": mnemonic,
