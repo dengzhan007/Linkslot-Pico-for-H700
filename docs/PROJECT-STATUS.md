@@ -30,13 +30,13 @@
 用户确认 RG34XX 没有板载 eMMC 系统盘，系统由 TF 卡启动。项目不再把拆机找 UART 焊盘作为首次实机验证前提：保留原系统卡，只用另一张独立 TF1 测试卡验证启动。无 eMMC 表示测试卡上的引导内容可通过更换介质恢复；不代表电气操作、SoC fuse/OTP、PMIC、错误电压或任意 MMIO 没有风险。
 
 - **首发 proof-of-life：PI12 工作灯优先，UART0 降为备用。** RG34XX 非 SP boot DTS 将 PMU work_led 映射到 bank I / PI12、low_pwr_led 映射到 PI11；仓库已有 PI12 服务与 fake-register tests，read-modify-write 保留 PI11 和其他位。生产物理 wrapper 仍 default-off；BL33-time APB1/PIO 权限、异常 fail-stop 路径及实际 LED 极性仍 OPEN。
-- **M1-S1 改为 PI12 资格化，不再等待 UART 焊盘。** 不拆机、不焊线、不连接 UART。LCD/framebuffer 延后，因其 ownership 尚未批准。
+- **M1-S1 改为 PI12 资格化，不再等待 UART 焊盘。** 不拆机、不焊线、不连接 UART。BL31 的 pre-BL33 security routine 静态上尝试开放 SPC decode ports 与 CCU/R_PRCM Non-secure access，但 H616 TF-A 参考警告 fuse 条件可能使 SPC 写入不生效；目标 fuse、PIO decode-port 对应、APB1 clock 和有效权限仍未知。LCD/framebuffer 延后，因其 ownership 尚未批准。
 - **M1 设备试验采用 BL33-slot-only + CPU0-only 边界。** Loader 输入 extent 为 32 KiB；#921 map 已测得 8 KiB early stack `[0x4a004000,0x4a006000)`、8 KiB gap、16 KiB 页表 `[0x4a008000,0x4a00c000)`、`_end=0x4a00c024`，CI 已验证栈/页表不重叠。它不代表 BL31/Boot0 所有权已批准。首轮不使用外部应用 DRAM、heap、DMA、GIC/timer/IRQ、SMP、SD controller、PMIC/TWI 或 CPU PLL。
 - 全局 H700_MEMORY_LAYOUT_APPROVED=false 与通用 H700_MEMBASE/H700_MEMSIZE gate 保持不变；M1 局部 slot profile 不批准完整 1 GiB DRAM 或 Linkslot/mGBA arena。
 - 仅允许向独立可擦写 TF1 测试卡写入经 hash/manifest/extent/分区/sector-range 检查的 M1-TEST-TF1-ONLY 配对镜像；原系统卡不写。失败后关机换回原卡。SoC fuse/OTP、PMIC/TWI、电压/CPU PLL 和未知外设访问仍禁止。
 - 完整方案：[no-disassembly-tf-bringup-plan.md](no-disassembly-tf-bringup-plan.md)。当前 M1-T0 的代码布局子项已在 host map/CI 层通过；剩余重点是 PI12 handoff clock/security/firewall、LED 极性、BL31/Boot0 的 slot/lifetime 交叉审计和 CPU1–CPU3 初始状态。不是直接启用生产 PIO wrapper。
 
-**最近完整 CI：** Linkslot/LK feasibility #921 75/75 成功（[run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46018337655)，artifact [15207317115](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46018337655/artifacts/15207317115)）；AArch32/AArch64 compile #664 成功（[run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46018337660)）。#921 已自动断言实际 LK early stack 为 `[0x4a004000,0x4a006000)`、页表为 `[0x4a008000,0x4a00c000)`、两者不重叠；这些仍是 host-side 证据，不代表实机启动或 BL31/Boot0 内存所有权获批。
+**最近完整 CI：** Linkslot/LK feasibility #924 **75/75 成功，0 failures / 0 skipped**（[run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46021131707)，artifact [15208527176](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46021131707/artifacts/15208527176)，约 388 MB）；AArch32/AArch64 compile #666 成功（[run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46020916242)）；boot audit #1535 Linux/Windows 成功（[run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46021729599)）。#924 的实际 map 断言 early stack `[0x4a004000,0x4a006000)`（8 KiB）、页表 `[0x4a008000,0x4a00c000)`（16 KiB）、8 KiB gap 且不重叠；这些仍是 host-side 证据，不代表实机启动或 BL31/Boot0 内存所有权获批。
 
 ### 当前验收门槛台账
 
