@@ -115,6 +115,47 @@ def branch_target(ins) -> int:
     return int(ins.operands[0].imm)
 
 
+def register_bytes(ins, operand_index: int) -> int:
+    if operand_index >= len(ins.operands):
+        return 0
+    operand = ins.operands[operand_index]
+    if operand.type != ARM64_OP_REG:
+        return 0
+    name = ins.reg_name(operand.reg).lower()
+    if name.startswith(("b",)):
+        return 1
+    if name.startswith(("h",)):
+        return 2
+    if name.startswith(("w", "s")):
+        return 4
+    if name.startswith(("x", "d")):
+        return 8
+    if name.startswith(("q", "v")):
+        return 16
+    return 0
+
+
+def store_overlaps(ins, target_start: int, target_size: int) -> bool:
+    """Whether a direct STR/STP-style instruction overlaps a target byte range."""
+    mnemonic = ins.mnemonic.lower()
+    store_prefixes = ("str", "stp", "stnp", "stur", "sturb", "sturh", "sttr")
+    if not mnemonic.startswith(store_prefixes):
+        return False
+    mem_ops = [op.mem.disp for op in ins.operands if op.type == ARM64_OP_MEM]
+    if not mem_ops:
+        return False
+    start = mem_ops[0]
+    if mnemonic in ("stp", "stnp"):
+        width = register_bytes(ins, 0)
+        ranges = ((start, width), (start + width, width))
+    else:
+        width = register_bytes(ins, 0)
+        ranges = ((start, width),)
+    target_end = target_start + target_size
+    return any(width > 0 and begin < target_end and begin + width > target_start
+               for begin, width in ranges)
+
+
 def scan_direct_context_writes(blob: bytes) -> dict:
     """Linear-sweep candidate scan for immediate stores to context +0xa4/global +0x668.
 
@@ -127,7 +168,9 @@ def scan_direct_context_writes(blob: bytes) -> dict:
     selector_reads = []
     selector_stores = []
     selector_pair_stores = []
+    selector_overlapping_stores = []
     global_slot_stores = []
+    global_slot_overlapping_stores = []
     global_slot_loads = []
     store_prefixes = ("str", "stp", "stnp", "stur", "sturb", "sturh", "sttr")
 
@@ -156,6 +199,12 @@ def scan_direct_context_writes(blob: bytes) -> dict:
                 "mnemonic": mnemonic,
                 "operands": ins.op_str,
             })
+        if store_overlaps(ins, 0xA4, 4):
+            selector_overlapping_stores.append({
+                "pc": "0x%08x" % ins.address,
+                "mnemonic": mnemonic,
+                "operands": ins.op_str,
+            })
         # A pair of 32-bit W registers stored at +0xa0 writes words at
         # +0xa0 and +0xa4. Record it separately as a possible selector writer.
         if mnemonic in ("stp", "stnp") and 0xA0 in mem_ops and ins.operands:
@@ -178,6 +227,12 @@ def scan_direct_context_writes(blob: bytes) -> dict:
                 "mnemonic": mnemonic,
                 "operands": ins.op_str,
             })
+        if store_overlaps(ins, 0x668, 8):
+            global_slot_overlapping_stores.append({
+                "pc": "0x%08x" % ins.address,
+                "mnemonic": mnemonic,
+                "operands": ins.op_str,
+            })
 
     return {
         "method": "4-byte aligned Capstone linear sweep over the complete payload; data may decode as instruction-shaped words",
@@ -186,8 +241,10 @@ def scan_direct_context_writes(blob: bytes) -> dict:
         "context_plus_a4_direct_load_candidates": selector_reads,
         "context_plus_a4_direct_store_candidates": selector_stores,
         "context_plus_a4_stp_w_pair_candidates_at_plus_a0": selector_pair_stores,
+        "context_plus_a4_overlapping_store_candidates": selector_overlapping_stores,
         "global_slot_plus_668_load_candidates": global_slot_loads,
         "global_slot_plus_668_store_candidates": global_slot_stores,
+        "global_slot_plus_668_overlapping_store_candidates": global_slot_overlapping_stores,
         "limitations": [
             "Linear sweep does not distinguish executable code from embedded data; every candidate must be reviewed against CFG/function boundaries.",
             "The offset-only scan does not prove that a matching base register is the RTC context/global pointer unless the surrounding dataflow is established.",
@@ -361,7 +418,7 @@ def main() -> int:
         "",
         "## Interpretation",
         "",
-        "The full-payload linear sweep found %d direct immediate-offset load candidates from context +0xa4, no direct immediate-offset store candidates to +0xa4, no W-pair store candidate at +0xa0, and %d immediate-offset loads / %d stores at global-slot offset +0x668. These are instruction-shaped byte matches; review the listed PCs against function boundaries before treating them as code. This does not exclude indirect/helper copies or external initialization." % (len(writer_scan["context_plus_a4_direct_load_candidates"]), len(writer_scan["global_slot_plus_668_load_candidates"]), len(writer_scan["global_slot_plus_668_store_candidates"])),
+        "The full-payload aligned-word sweep found %d direct load candidates at context +0xa4, %d store instructions whose immediate memory ranges overlap context +0xa4, %d load candidates at global-slot offset +0x668, and %d store instructions whose immediate memory ranges overlap the global slot. These are instruction-shaped byte matches; review any PC against function boundaries and base-register dataflow. The scan does not detect stores through precomputed pointers, helper copies, register-indexed addresses, or external initialization." % (len(writer_scan["context_plus_a4_direct_load_candidates"]), len(writer_scan["context_plus_a4_overlapping_store_candidates"]), len(writer_scan["global_slot_plus_668_load_candidates"]), len(writer_scan["global_slot_plus_668_overlapping_store_candidates"])),
         "",
         "The code treats the value selected by a signed, 8-byte-scaled index from lookup origin `0x48014628` as a controller MMIO base. A bounded scan finds six consecutive qwords at signed indices 68–73 matching the H616-family TWI0–TWI4 and R-TWI0 base-address sequence. In particular, index 73 contains `0x07081400` (R-TWI0); it is selected only if the runtime context `+0xa4` value is 73. The actual selector is unknown. The first eight qwords at offsets +0x00..+0x38 are adjacent scalar/encoded-looking data, not the six controller bases. The static value at `0x48014668` is `2`, even though multiple paths load it as a context pointer. The pinned BaseOS native SPL does not patch either location; it only patches `+0x24`, `+0x30`, and `+0xb0`.",
         "",
