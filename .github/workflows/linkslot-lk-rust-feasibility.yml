@@ -16,6 +16,7 @@ on:
       - "scripts/apply-linkslot-render-core.py"
       - "scripts/apply-linkslot-h700-frontend-core.py"
       - "scripts/apply-linkslot-app-router.py"
+      - "scripts/test-linkslot-source-pin.py"
       - "scripts/test-linkslot-app-router-integration.py"
       - "integration/linkslot/h700-frontend-core/**"
       - "integration/linkslot/h700-render-core/**"
@@ -119,6 +120,7 @@ on:
       - "scripts/apply-linkslot-render-core.py"
       - "scripts/apply-linkslot-h700-frontend-core.py"
       - "scripts/apply-linkslot-app-router.py"
+      - "scripts/test-linkslot-source-pin.py"
       - "scripts/test-linkslot-app-router-integration.py"
       - "scripts/test-h700-input-service-abi.py"
       - "scripts/test-h700-input-queue.py"
@@ -145,6 +147,9 @@ jobs:
     steps:
       - name: Checkout feasibility branch
         uses: actions/checkout@v4
+
+      - name: Verify centralized Linkslot source identity
+        run: python3 scripts/test-linkslot-source-pin.py
 
       - name: Checkout immutable Linkslot 1.0.49 snapshot
         uses: actions/checkout@v4
@@ -391,7 +396,8 @@ jobs:
           mkdir -p "$out"
 
           snapshot="$(git -C "$source" rev-parse HEAD)"
-          test "$snapshot" = "6122c8f2357ecae43295fdb1a158ff5ef7488325"
+          expected_snapshot="$(tr -d '\r\n' < integration/linkslot/upstream-snapshot.sha)"
+          test "$snapshot" = "$expected_snapshot"
           grep -q 'version = "1.0.49"' "$source/Cargo.toml"
 
           # Include the VFS and mGBA bridge files created by the preceding
