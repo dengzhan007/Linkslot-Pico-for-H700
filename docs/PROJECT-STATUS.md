@@ -2,7 +2,7 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-27。当前工作分支 `porting/linkslot-1.0.45-feasibility` 的最新审计代码 HEAD 为 `cb2b836e8fcf70e4a482ce922cfc0a850c927a58`。BL31 静态审计 [#51](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45917139830) 在该 HEAD 上 **20/20 steps 成功**，产物 [15162412897](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45917139830/artifacts/15162412897)。#45–#47 完成了 SRAM standby image、缓存维护和唤醒返回链的分段审计；#48–#50 是补齐常量/修正 AArch64 分支解码期间的失败重试，最终由 #51 全量通过。当前变更仅扩展 BL31 静态审计与 host regression，没有修改 Linkslot 产品运行时代码。最近一次完整 Linkslot/LK feasibility [#882](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45908364955) 为 **81/81**，H700 boot-audit [#1427](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45908364973) 的 Linux/Windows jobs 均通过；两者运行于 `29fd0578`，审计脚本之后的提交不改变产品源码。**本文 2026-11-27 PSCI 深度待机续接条目为当前状态；更早历史记录按各自 HEAD/run ID 理解。**
+**最后核对时间：** 2026-11-27。当前工作分支 `porting/linkslot-1.0.45-feasibility` 的最新 BL31 审计代码 HEAD 为 `6037e706313bd45b8f1ad86129a320bc6411a2bf`。审计 [#59](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45919948625) 在该 HEAD 上 **20/20 steps 成功**，产物 [15164072253](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45919948625/artifacts/15164072253)。#58 与 #59 均通过；#55–#57 在新增 wake-source/mode-2 检查器完善期间因测试字典缺项、Python 布尔常量和指令偏移录入问题失败，均已修正后通过 #58/#59。当前变更仅扩展 BL31 静态审计和 host regression，未改 Linkslot 产品运行时代码。最近一次完整 Linkslot/LK feasibility [#883](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45917475592) 为 **81/81**，H700 boot-audit [#1428](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45917475595) 的 Linux/Windows jobs 均成功；二者运行于 `5f24a0ad`。**本文 2026-11-27 PSCI 深度待机续接条目为当前状态；更早记录按各自 HEAD/run ID 理解。**
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
@@ -10,8 +10,8 @@
 
 ## 2026-11-27 续接：BL31 legacy PSCI、SYSTEM_SUSPEND 深度待机与唤醒链已静态识别
 
-**当前审计代码 HEAD：** `cb2b836e8fcf70e4a482ce922cfc0a850c927a58`。  
-**最新 BL31 静态审计：** [#51](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45917139830)，20/20 steps 成功；[审计产物](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45917139830/artifacts/15162412897)。分段验证 #45 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45911111746)、#46 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45911779151)、#47 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45912040298) 均 20/20；#48–#50 因检查器常量/分支编码预期问题失败，已在 #51 修复并全量通过。  
+**当前审计代码 HEAD：** `6037e706313bd45b8f1ad86129a320bc6411a2bf`。  
+**最新 BL31 静态审计：** [#59](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45919948625)，20/20 steps 成功；[审计产物](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45919948625/artifacts/15164072253)。#58 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45919756355) 与 #59 均 20/20。#55–#57 的失败均为新增检查器的常量表/编码录入问题，修正后由 #58/#59 复验；没有发现匹配 monitor 的指令目标不符。  
 **匹配 monitor：** 107,216 bytes；SHA-256 `676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31`；该 payload 与采集到的原生 firmware/TOC1 monitor 匹配。
 
 ### PSCI 操作表与槽位映射
@@ -50,19 +50,26 @@
 - return continuation `0x48015d14` 恢复/配置 `SCTLR_EL3`，将 `VBAR_EL3` 指向 `0x48019000`，执行 `DAIFClr #4`、切换 `SPSel`，恢复 CPU/PSCI 上下文，最后 branch 到 `0x480158c8`。
 - suspend/resume 两侧都读写 `0x03001500`（H616 reference map 中对应 CPUX_AXI_CFG_REG）：standby 用 `AND #0xfcffffff` 清 bits 25:24，resume 用 `ORR #0x03000000` 置回 bits 25:24；两边都调用 `0x48011ff8`。H616 `CLK_SRC_SEL` 字段定义覆盖 bits 26:24，但此代码保留 bit 26，因此确切 mux source/value 未知。此操作不是 CPU DVFS 证据。
 - `0x48011ff8` 执行 `LSL W0,W0,#2` 后 branch 到 `0x48014078`；后者为 `SUBS X0,X0,#1; B.HI 0x48014078; RET`。两处调用者均传入 10，因此每次执行 40 次递减迭代；这是无时基校准的 busy-wait，不能换算成微秒。
+- clock-save helper `0x48011ba8` 将五组 CCU 字段保存到 PSCI context：`0x03001500` CPUX_AXI_CFG (`0x303`)、`0x03001510` PSI_AHB1_AHB2_CFG (`0x3031f`)、`0x0300151c` AHB3_CFG (`0x3031f`)、`0x03001520` APB1_CFG (`0x303`)、`0x03001524` APB2_CFG (`0x303`)。这些名称/offset 与 H616/sun50iw9 家族 CCU 头文件对应；不表示 RG34XX live register values 已读回。
+- 同一 helper 保存 PLL_CPUX factor bits（mask `0x0003ff03`），待机前清 PLL enable bit31 与 lock-enable bit29；resume helper `0x48011df8` 恢复 factor fields，置回 bit31/bit29，并在 `0x48011e7c` 轮询 lock bit28，再恢复保存的 CCU fields。该链是 suspend/resume 的时钟上下文维护，不是前端 DVFS API。
+- `0x07010244` = R_PRCM base `0x07010000` + offset `0x244`。匹配 BL31 待机路径向其高字节写入 `0xA7`，resume 清除高字节；同家族 [SenkOS sun50iw9/H616 suspend 笔记](https://github.com/HookedBehemoth/SenkOS/blob/802be0c07939ab4f729f901d3c275101754e9e34/docs/suspend.md) 将 R_PRCM+0x244 识别为 PLL LDO key。此为同家族交叉识别，不是出厂 TF-A 源码证明或实机读回。
+- saved mode==2 分支在 `0x03001510`、`0x07010000`、`0x07010010` 上将 bits25:24 设为 `10b`，并在 `0x07000160` 置 bit31、清 bit1。sun50iw9 RTC CCU 头文件将 offset `0x160` 命名为 `XO_CTRL_REG`；同家族 suspend 笔记记录了相同 bit31/bit1 操作。参见 [RTC CCU header](https://github.com/radxa/allwinner-bsp/blob/2045a3ca2a01f088c0314dc924bda59d154e363e/drivers/clk/sunxi-ng/ccu-sun50iw9-rtc.h)。这只识别寄存器族与代码动作，不推断当前硬件时钟/晶振状态。
+- wake-source aggregate `0x48013ee8` 包含四类静态路径：GIC pending 查询 `0x48013190`（读取 GICD_ISPENDR，基址 `0x03021200`）；IR RX FIFO/status drain `0x480131b8`（`0x07040020/0x07040030`，写入 standby context queue）；GPIO 名称解析/电平读取 `0x48013588/0x480135d8`（normal PIO `0x0300b000` / R_PIO `0x07022000`）；GPIO pad config helper `0x48013620`（含 CFG/DAT/drive/pull 写路径，输入来自 context pin-config tuples）。这些 helper 的存在不证明 wake source 实际工作；未执行寄存器访问或 pin 配置。
+- 机器报告和 host regression 已锁定上述 PLL/R_PRCM/XO_CTRL 字段、GIC/IR/GPIO 指令字和调用边；BL31 audit #59 通过 20/20。
+
 
 ### 证据边界与下一步
 
-- `scripts/audit-rg34xx-bl31-psci-cpu-on.py` 与 host test 现锁定：9 项 legacy platform-ops；affinity callback map；`-4→0x48001a04` 特殊入口；SCTLR/cache-maintenance；SRAM code/context staging；RTC flag/soft-entry；CPUX_AXI 位操作；count-based wait loop；以及 wake-return continuation。#51 通过 20/20，仍是匹配 binary 的静态证据。
+- `scripts/audit-rg34xx-bl31-psci-cpu-on.py` 与 host test 现锁定：9 项 legacy platform-ops；affinity callback map；`-4→0x48001a04` 特殊入口；SCTLR/cache-maintenance；SRAM code/context staging；RTC flag/soft-entry；五组 CCU 保存/恢复、PLL_CPUX enable/lock、R_PRCM PLL LDO key、RTC XO_CTRL mode-2 分支；GIC pending、IR FIFO 和 GPIO wake-source helpers。#59 通过 20/20；所有结论仍是匹配 binary 的静态证据。
 - 关键指令级断言：slot 0 `+0x00` / `0x48009688 → 0x48009690`；slot 1 `+0x08` / `0x48008608 → 0x48008640`；slot 2 `+0x10` / `0x480080f8 → 0x48008118`；slot 3 `+0x18` / `0x48008a84 → 0x48008a90`；slot 4 `+0x20` / `0x4800854c → 0x48008560`；slot 5 `+0x28` / `0x48008918 → 0x4800893c`。slot 6 `system_off` 从 `0x480025a8` 调用 `0x48001ed8`；slot 7 `system_reset` 从 `0x48002588` 调用 `0x48001ec8`，并有 `Sunxi System Reset` 字符串证据。
 - slot 8 `get_sys_suspend_power_state` 位于 `0x48002544`，执行 `mov w0, #0x02010000; ret`。SYSTEM_SUSPEND caller `0x480096f8` 从表偏移 `+0x40` 加载并在 `0x48009744` 间接调用，随后在 `0x4800975c` 调用 transition function `0x48008d98`。
-- `0x48008d98` 的 affinity-level 迭代、三个 wrapper 和 slot-3 调用关系已静态恢复；专用 standby image 复制、RTC resume entry 和 BL31 continuation 也已映射。当前下一步转为只读核对 `0x48011b40/0x48011ba8/0x48011df8/0x48011b58` 等外围 PM helper、SRAM C 生命周期/时钟控制、RTC wake source 和 CPUX_AXI live field；未闭合前不触发 suspend。
+- `0x48008d98` affinity 调度、standby image 搬运、RTC wake continuation、PLL CPUX save/relock、R_PRCM PLL LDO key、RTC XO_CTRL 与 GIC/IR/GPIO wake helper 均已静态映射。当前继续分析 context checksum/辅助校验 helper（`0x48011b78`、`0x48011920`、`0x48011b38/0x48011b10/0x48011b30`），并关闭 SRAM C 生命周期/时钟、RTC wake source 与 CPUX_AXI bit26 live 值；未闭合前不触发 suspend。
 - 上述结果是**匹配 BL31 二进制的静态 ABI/控制流证据**，不是设备已成功休眠、唤醒或执行 CPU_ON 的证明。没有执行 PSCI SMC，没有采集运行时 trace，也没有进行 MMIO 读写；没有对 SRAM、RTC、PMIC 或 CCU 做 runtime probe。
 - 精确的 Allwinner/vendor TF-A 源码 commit 仍未恢复；目前识别的是二进制有效成员顺序与语义，不声称已经找到出厂构建的逐字源码。
 - CPU_ON 回调存在不等于初始 BL31→BL33 handoff 自动启动了 CPU1–CPU3；secondary A53 的 reset/hold-off 状态仍需独立只读验证。
 - SYSTEM_SUSPEND getter 返回有效 power-state 也不等于整套 DRAM self-refresh、唤醒源、时钟恢复与 Linux suspend/resume 已在 RG34XX 实机验证。
 - CCU helper 属于 suspend/resume 上下文保存候选，不构成 CPU DVFS 接口，也不证明 BL33 启动阶段发生 PLL 切换。
-- **下一步：** 深入分析 standby/restore 外围 helper 与 SRAM C 的确切分区/归属；收集可用的 RTC/PMIC wake-source 和 CPUX_AXI 实机只读证据；同步关闭 BL31/Boot0 RAM ownership、32 KiB loader extent、secondary A53 hold-off 和 timer-PPI handoff。只有在可回滚诊断镜像、内存布局批准和 wake path prerequisites 全部满足后，才考虑 device execution。
+- **下一步：** 反汇编 context checksum/辅助校验链，确定 `0x48011b78` 处理的覆盖区间是否用于 standby/restore 数据完整性；继续核对 SRAM C 的保留/门控、RTC wake-source 配置，以及 CPUX_AXI bit26 live read-only evidence。并行关闭 BL31/Boot0 RAM ownership、32 KiB diagnostic loader extent、secondary A53 hold-off 和 timer-PPI handoff。只有内存布局批准、可回滚诊断镜像和 wake prerequisites 均满足后才考虑实机执行。
 - 全程未执行实机 MMIO、存储写入、刷写或 payload；`hardware_applied=0`。PI12 production MMIO 仍 default-off，`H700_MEMORY_LAYOUT_APPROVED` 仍 unset。
 
 

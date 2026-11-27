@@ -965,3 +965,24 @@ Hard size boundary: this first integration path is only for a small diagnostic p
   secondary-A53 reset/hold-off and timer-PPI handoff before any runtime test.
 - Hardware unchanged: `hardware_applied=0`; no MMIO, PSCI SMC, suspend,
   storage write, flashing or payload execution.
+
+## 2026-11-27 — BL31 PLL/CCU restore, AON key and wake-source helpers mapped
+
+- [x] Map standby clock-save context for CPUX_AXI, PSI_AHB1_AHB2, AHB3,
+  APB1 and APB2 CCU registers, including their field masks.
+- [x] Trace PLL_CPUX factor save/restore, standby disable of enable/lock-enable,
+  resume re-enable and LOCK bit28 polling.
+- [x] Cross-identify R_PRCM+0x244 (`0x07010244`) as the family-reference
+  PLL LDO key with standby high byte `0xA7`; identify RTC `0x07000160` as
+  `XO_CTRL_REG` and verify mode-2 bit31/bit1 operations.
+- [x] Map GICD_ISPENDR pending query, IR RX FIFO/status drain, GPIO
+  name/read helpers and context-fed GPIO pad-config path.
+- [x] BL31 audit #59 [passed 20/20](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45919948625);
+  artifact [15164072253](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45919948625/artifacts/15164072253).
+- [ ] Trace context sum/check helpers `0x48011b78`, `0x48011920`,
+  `0x48011b38`, `0x48011b10` and `0x48011b30`; verify data coverage and
+  failure behavior of saved standby state.
+- [ ] Establish SRAM C ownership/retention/clocking and trusted read-only
+  RTC/PMIC wake-source state before any device suspend attempt.
+- [ ] Close BL31/Boot0 RAM ownership, loader extent, secondary-A53 hold-off
+  and timer-PPI handoff; `hardware_applied=0` remains unchanged.

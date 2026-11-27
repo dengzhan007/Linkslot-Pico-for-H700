@@ -384,3 +384,92 @@ secondary A53 hold-off and timer-PPI prerequisites before any reversible
 runtime test.
 
 `hardware_applied=0` remains unchanged.
+
+## PLL/CCU save-restore, AON standby key and wake-source helpers (2026-11-27)
+
+BL31 static audit [#59](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45919948625)
+passed 20/20 on code HEAD `6037e706313bd45b8f1ad86129a320bc6411a2bf`.
+Artifact [15164072253](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45919948625/artifacts/15164072253)
+contains the full callback disassembly and machine report. The matched monitor
+identity remains 107,216 bytes, SHA-256
+`676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31`.
+
+### CCU context and PLL_CPUX transition
+
+Helper `0x48011ba8` saves masked fields from:
+
+| Register | H616/sun50iw9 family name | Saved mask |
+|---|---|---:|
+| `0x03001500` | CPUX_AXI_CFG_REG | `0x00000303` |
+| `0x03001510` | PSI_AHB1_AHB2_CFG | `0x0003031f` |
+| `0x0300151c` | AHB3_CFG | `0x0003031f` |
+| `0x03001520` | APB1_CFG | `0x00000303` |
+| `0x03001524` | APB2_CFG | `0x00000303` |
+
+The values are staged into PSCI context beginning near `0x48015414`.
+The helper also snapshots PLL_CPUX factor fields from `0x03001000` with
+mask `0x0003ff03`, clears PLL enable bit31 and lock-enable bit29 before
+standby, and sets the high byte of `0x07010244` to `0xa7`.
+
+The resume helper `0x48011df8` clears the high byte at `0x07010244`,
+restores PLL_CPUX factor fields, sets enable bit31 and lock-enable bit29,
+then polls lock-status bit28 at `0x48011e7c`. After lock, it restores the
+saved CCU register fields. This is a suspend/resume clock transition and does
+not expose a front-end CPU DVFS profile/API.
+
+### R_PRCM PLL LDO key and RTC XO_CTRL cross references
+
+The static code constructs address `0x07010244` as R_PRCM base
+`0x07010000` + offset `0x244`, writes high byte `0xa7` on standby and
+clears that high byte on resume. A same-family sun50iw9/H616 suspend analysis
+identifies R_PRCM+0x244 as the PLL LDO key:
+
+- [HookedBehemoth/SenkOS suspend notes, pinned commit](https://github.com/HookedBehemoth/SenkOS/blob/802be0c07939ab4f729f901d3c275101754e9e34/docs/suspend.md)
+
+For saved mode word == 2, matched BL31 sets bits25:24 to `10b` in
+`0x03001510`, `0x07010000` and `0x07010010`; it also sets bit31 and
+clears bit1 at `0x07000160`. The RTC CCU header names offset +0x160
+`XO_CTRL_REG`, and the same-family suspend notes document the bit31/bit1
+operation:
+
+- [sun50iw9 RTC CCU header, pinned commit](https://github.com/radxa/allwinner-bsp/blob/2045a3ca2a01f088c0314dc924bda59d154e363e/drivers/clk/sunxi-ng/ccu-sun50iw9-rtc.h)
+- [H616/sun50iw9 CCU register map](https://github.com/rustsbi/allwinner-hal/blob/d90687bdf2012b251062db77a779350f801c3753/allwinner-hal/src/ccu/register/h616.rs)
+
+These are same-family register-name/sequence cross references. They do not
+establish the exact OEM TF-A source commit or live RG34XX register values.
+The source does not identify the selected CPUX_AXI mux without bit26 readback;
+do not infer a PLL parent, OPP or DVFS capability from the masks alone.
+
+### Wake-source helper chain
+
+The aggregate helper `0x48013ee8` statically calls these subpaths:
+
+| Helper | Behavior established by instruction body | Register/region |
+|---|---|---|
+| `0x48013190` | Computes word index `irq >> 5`, bit `irq & 31`, reads pending status | GICD_ISPENDR at `0x03021200` |
+| `0x480131b8` | Reads IR status, acknowledges low status byte, drains RX FIFO into standby context queue | IR status `0x07040030`, FIFO `0x07040020` |
+| `0x48013588` | Parses ASCII GPIO names into bank/pin encoding | GPIO name/context strings |
+| `0x480135d8` | Reads PIO DAT bit for requested bank/pin | PIO `0x0300b000`, R_PIO `0x07022000` |
+| `0x48013620` | Applies context-supplied mux/pull/drive/data configuration | PIO CFG/DAT/drive/pull register families |
+
+This proves firmware contains wake-source preparation/polling logic, not that
+the RG34XX has successfully armed or triggered those sources. No GIC pending
+register, IR FIFO, GPIO DAT or pinmux/pinconf register was accessed on target;
+the GPIO helper contains write instructions but was not executed.
+
+### Remaining work and evidence boundary
+
+BL31 audit #59 asserts the instruction words, address construction, mode-2
+RTC/XO operations, PLL enable/LOCK sequence, wake-source call edges and helper
+windows against the exact monitor payload. This remains static evidence only.
+No PSCI SMC, MMIO, RTC/PMIC access, cache operation, storage write, flash or
+payload execution was performed.
+
+Next inspect checksum/context helpers `0x48011b78`, `0x48011920`,
+`0x48011b38`, `0x48011b10` and `0x48011b30`; determine data coverage,
+return conditions and failure path. Separately establish SRAM C ownership,
+clock/retention prerequisites, wake-source state, BL31/Boot0 memory ownership,
+secondary A53 hold-off and timer-PPI handoff before considering any reversible
+runtime diagnostic.
+
+`hardware_applied=0` remains unchanged.
