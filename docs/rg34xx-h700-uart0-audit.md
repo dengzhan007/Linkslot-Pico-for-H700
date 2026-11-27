@@ -302,14 +302,35 @@ However, separate the levels of evidence:
   devices. Therefore the non-SP `rg34xx` profile has prepared/host evidence,
   not equivalent live hardware qualification in that experiment.
 - The deployed non-SP active path itself is established by
-  [the read-only active-loader provenance report](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-active-loader-provenance.md):
-  p4+40 MiB contains the native firmware package, p4+48 MiB the BOL4 image,
-  and the native A32 loader replaces the stock U-Boot slot. The report pins
-  the deployed package fingerprint and exact loader/image behavior, but the
-  raw build-time inventory prefix and Boot0 inputs needed to reproduce the
-  32-byte generation are not published; the current device's TOC1/Boot0
-  fingerprints differ from the pinned prepared-source inputs. Exact
-  source-to-deployed-generation provenance is consequently still OPEN.
+  [the read-only active-loader provenance report](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-active-loader-provenance.md).
+  Its exact build provenance is now also closed at host level by BaseOS
+  [RG34XX native generation reproduction #45301188593](https://github.com/dengzhan007/BaseOS-MultiFrontend/actions/runs/45301188593).
+  That workflow checks out the exact builder pin `cbe253a43f46cf551cc9a6c79a84015bde3686cf`,
+  restores the prepared source bundle and verifies the 222,298,112-byte
+  `boot-prefix.img` (SHA-256 `fb75bc4c835fa74ff41c0a1fdbe79b8871a960fc249716847fb7be529835c3c3`),
+  then reconstructs the inventory slice, stock Boot0 and env with their
+  pinned SHA-256 values. It rebuilds generation
+  `022f0d8816c861ebbec05f0d0d7f513d6b974d9930661d20fa8ad51b7b4c0fee`,
+  A32 loader, firmware and active image with exact hashes, and rebuilds a
+  49,152-byte AArch64 SPL. The resulting 128 KiB capsule is byte-exact with
+  the deployed RG34XX reference capsule in commit
+  `339e1cd5f84a6178c496257f835beb3388b8d9f9` (zero differing bytes).
+  The raw capsule host tests pass 36 cases and entry tests pass 2 cases.
+  The workflow's manifest explicitly retains `hardware_qualified=false`
+  and `durable_install_eligible=false`; it proves deterministic source/build
+  provenance, not device qualification.
+- The earlier 2026-11-22 16-combination generation attempt and the 2026-11-24
+  note that the prepared prefix/Boot0 were unavailable are superseded by the
+  later dedicated reproduction workflow. Do not treat the A/B test image's
+  first 222,298,112 bytes as the prepared prefix: the exact prefix is restored
+  from the pinned prepared bundle via `fetch-prepared.sh`, whose bundle SHA
+  is `86a0186b5ac8ab907dc1d5c24220c9fcd94f38dd9dc3fddb7fb5cf59d4c7719f`.
+  The current device's 128 KiB Boot0 primary capture is the complete capsule
+  (`bf886995…`); the embedded 64 KiB stock Boot0 source is
+  `b6edbf39…`. Likewise `56371d98…` is the TOC1 source package while
+  `e6c20e3a…` is the separate recovery TOC. These are distinct artifacts,
+  not unexplained build-input mismatches.
+
 
 The same SPL README documents the monitor reference contract: monitor at
 `0x48000000`, next stage AArch32 SVC at `0x4a000000` with SPSR `0x1d3`,

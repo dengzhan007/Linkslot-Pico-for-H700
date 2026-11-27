@@ -160,12 +160,27 @@ RG34XX profile 是 1 GiB LPDDR4。不要因 RG34XX SP 实验也使用 LPDDR4，�
 
 仍未关闭：
 
-- deployed native SPL 的精确构建输入/32-byte generation 尚不能完全从已上传仓库重建；当前 provenance 报告指出 build-time inventory prefix 与 Boot0 bytes 缺失。
+- **native SPL 构建来源 / 32-byte generation：host reproduction 已闭合，不再是 OPEN 阻塞。** BaseOS workflow #45301188593 固定 source pin `cbe253a`，从校验过的 prepared bundle 恢复 exact prefix/Boot0/env，重新构建 native generation 与 AArch64 SPL；generation、loader、firmware、image 均精确匹配，128 KiB capsule 与 commit `339e1cd` 的 RG34XX reference capsule 逐字节一致。该证据限 host，manifest 明确 `hardware_qualified=false`、`durable_install_eligible=false`。详细哈希、输入和比较见 [native generation provenance](rg34xx-native-generation-provenance.md)。
 - vendor monitor 的 `0x8000ff04` 只证明既有 Linux-start 用法，不证明它接受任意 `r1` A64 入口。
 - `[0x7ec00000,0x7fc00000)`、RAM 顶部碎片、secure/DRM/DMA 和其他未标名 reservation 的 owner 仍未知。
 - 本项目没有完成 GammaOS LK 完整 target link、实机 BL33 替换、冷启动与恢复验收。
 - Linkslot UI/runtime 与 mGBA 尚未在目标设备执行。
 
+
+## 7.1 2026-11-24 native generation / capsule 精确重建（host-only）
+
+BaseOS-MultiFrontend 的 [RG34XX native generation reproduction #45301188593](https://github.com/dengzhan007/BaseOS-MultiFrontend/actions/runs/45301188593) 已完成端到端重建。它固定 checkout source `cbe253a43f46cf551cc9a6c79a84015bde3686cf`，从 `fetch-prepared.sh rg34xx` 恢复 prepared input，并验证：
+
+- 完整 `boot-prefix.img`：222,298,112 B，SHA-256 `fb75bc4c835fa74ff41c0a1fdbe79b8871a960fc249716847fb7be529835c3c3`；native builder 使用的前 73,728 sectors（37,748,736 B）`inventory/prefix.bin` SHA-256 `725f8a1552b90659da9dee5e71ef02a3d914ef7f8b5e433584b85829df65b650`。
+- 64 KiB prepared stock Boot0 SHA-256 `b6edbf39af0bf1f35a7e2fd991c8966b04d061e247c81985d2516f695464049b`；128 KiB env SHA-256 `d1a0856a8fb4c6f3b785943929a59206424a189f92efcbea48c26b31f472a396`。
+- TOC1 source package SHA-256 `56371d984e29e74db63009ce27f829eb0a55ce9007ee5e40c52479b22418af3d`；boot.img SHA-256 `5b1e30930a9b0e7642da39ce5c699cfdb03970346c6f2757dcfb063bfc8a0b51`；U-Boot v2026.10 archive SHA-256 `f943a88389c8fd70a6b0d061a88267465e143c7ca6ea2b75837ab20f5b60c739`。
+- 重新构建 generation `022f0d8816c861ebbec05f0d0d7f513d6b974d9930661d20fa8ad51b7b4c0fee`、loader 32,768 B SHA-256 `48b2a837ac5d8daad8f524c976f2b3911d26a838f8b68fa695e3283412dd8590`、firmware 287,232 B SHA-256 `dc9dc3ae66b30244911e7054ca66136991626cabb0d59c796c4b253a126f28e9`、image 8,556,544 B SHA-256 `d71e5bd87b23fb409d7a837cf90d153ae117af518fe6ee330a96d2c7a5f76fc3`。
+- raw-capsule SPL 49,152 B SHA-256 `cdfc6d480a257c5ccc3f5826c4e6cbcf499163c57119390e8bebeba6964a8570`；36 个 capsule verification cases 与 2 个 entry verification cases 通过。
+- 128 KiB capsule SHA-256 `bf886995745a0eb9b5030296f9f6163035e164b3a82183716e67ff876319289f` 与 commit `339e1cd5f84a6178c496257f835beb3388b8d9f9` 的 `manifest/native/rg34xx/capsule.bin` **byte-exact**，不同字节数为 0。
+
+该结果同时解释此前的 hash 表面差异：`56371d98…` 是 native builder 的 TOC1 source package，`e6c20e3a…` 是输出的 recovery TOC；`b6edbf39…` 是 capsule 内的 64 KiB stock Boot0，`bf886995…` 是 128 KiB 完整 capsule，亦与目标机 11 月 27 日的 Boot0 primary capture 完全匹配。它们并非同一层级的文件，不应互相替代。
+
+**边界：** reproduction workflow 与 comparison 均为 host-only。CI manifest 明确 `hardware_qualified=false` 与 `durable_install_eligible=false`；这证明来源可重建和二进制匹配，不证明 cold boot、UART 可用性、DRAM ownership 或 BL33 运行时状态。
 
 ## 8. 对 Linkslot Pico 的实施建议
 
