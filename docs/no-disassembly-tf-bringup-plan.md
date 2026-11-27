@@ -49,6 +49,32 @@ UART0 降级为可选备用。已有 PH0/PH1 静态配置和 SPL/BL31 handoff �
 
 全局 H700_MEMORY_LAYOUT_APPROVED=false 必须保持不变；不得提供通用 H700_MEMBASE/H700_MEMSIZE。M1 只可建立一个独立的 BL33-slot-only 局部布局审计，不能替代完整 LK、Linkslot、heap、mGBA 或 DMA 的内存批准。
 
+### 已测量的 host-only BL33 内部布局（2026-11-27）
+
+Full feasibility #921 passed 75/75 and its actual LK early-MMU/PI12 link map
+records the following current layout:
+
+| Region | Interval | Size |
+|---|---|---:|
+| LK early/abort stack | `[0x4a004000,0x4a006000)` | 8 KiB |
+| Initial stack top | `0x4a006000` | aligned |
+| Gap | `[0x4a006000,0x4a008000)` | 8 KiB |
+| AArch32 section table | `[0x4a008000,0x4a00c000)` | 16 KiB |
+| Remaining linked BSS | ends at `0x4a00c024` | `_end=0x4a00c024` |
+
+The raw ELF is 7,940 bytes, while its runtime span through `_end` is
+`0xc024` bytes. CI now reads the actual `abort_stack`,
+`abort_stack_top`, and `tt` symbols, validates the pinned 8 KiB stack
+size, stack alignment, stack/table containment and disjointness. This removes
+an implicit layout assumption from the host test.
+
+**Important limit:** these intervals are inside the candidate BL33 address
+window, but static linking cannot establish that opaque Boot0/BL31 code,
+secure services or DMA never use them. The check does not approve the
+physical region and does not close the global memory gate. It only proves
+that the current pinned LK objects do not overlap each other in this
+specific host-linked layout.
+
 ## 4. 独立 TF1 测试卡流程
 
 ### 写卡前
