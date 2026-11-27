@@ -658,8 +658,9 @@ def main() -> int:
     assert window_map["system_suspend_retention_helper_48011710"][1] >= 0x210
     assert window_map["retention_bank_selector_helper"][0] == 0x4800C730
     assert window_map["retention_bank_selector_helper"][1] >= 0x70
-    assert window_map["retention_rtc_fallback_setup_helper"][0] == 0x4800C7A8
-    assert window_map["retention_rtc_fallback_setup_helper"][1] >= 0x88
+    assert window_map["retention_msi_ctrl_setup_fallback_helper"][0] == 0x4800C7A8
+    assert window_map["retention_msi_ctrl_setup_fallback_helper"][1] >= 0x25C
+    assert module.WORDS[0x480119D0] == 0x36D80880
     assert window_map["retention_restore_gate_helper"][0] == 0x48011320
     assert window_map["retention_restore_gate_helper"][1] >= 0x40
     assert window_map["retention_restore_dram_clock_helper"][0] == 0x480111A0
