@@ -178,12 +178,12 @@ def main() -> int:
         },
         "raw_static_data": {
             "adjacent_qwords_after_lookup_origin": adjacent_qwords,
-            "context_pointer_global": {
+            "slot_loaded_as_context_pointer": {
                 "address": "0x48014668",
                 "raw_qword": "0x%016x" % global_context_slot,
                 "classification": classify_pointer(global_context_slot),
             },
-            "controller_pointer_global": {
+            "controller_object_global_slot": {
                 "address": "0x48015548",
                 "raw_qword": "0x%016x" % global_controller_slot,
                 "classification": classify_pointer(global_controller_slot),
@@ -219,7 +219,7 @@ def main() -> int:
         "- RTC context selector: offset `+0xa4`; code loads it at `0x48012520`, `0x48012694`, and `0x480126d4`.",
         "- RTC continuation/helper: `0x48012670 → 0x48012070`; controller initialization `0x480129f0 → 0x48013ac8`.",
         "- The initializer performs `LDR X1, [X1, W0, SXTW #3]` from lookup origin `0x48014628`: W0 is a signed 32-bit index scaled by 8, and the unknown value may address before or after that origin. The loaded value is then published to `0x48015548` at `0x48013b14`.",
-        "- The raw initial qword at `0x48014668` is `0x%016x`; the raw initial qword at `0x48015548` is `0x%016x`." % (global_context_slot, global_controller_slot),
+        "- The raw initial qword at slot `0x48014668` (loaded as a context pointer by reviewed paths) is `0x%016x`; the controller-object global slot `0x48015548` initially contains `0x%016x`." % (global_context_slot, global_controller_slot),
         "- Pinned BaseOS native SPL only patches monitor offsets: %s." % ", ".join("`+%s`" % ("%x" % x) for x in patch_offsets),
         "",
         "## Adjacent qwords after lookup origin (not proven selected entries)",
