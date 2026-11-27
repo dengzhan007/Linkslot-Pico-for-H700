@@ -13,7 +13,8 @@ import subprocess
 from pathlib import Path
 
 
-EXPECTED_SOURCE = "6122c8f2357ecae43295fdb1a158ff5ef7488325"
+SNAPSHOT_PIN_FILE = Path(__file__).resolve().parents[1] / "integration/linkslot/upstream-snapshot.sha"
+EXPECTED_SOURCE = SNAPSHOT_PIN_FILE.read_text(encoding="ascii").strip()
 
 
 def run_git(source: Path, *args: str) -> str:
