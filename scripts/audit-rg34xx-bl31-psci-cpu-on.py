@@ -856,6 +856,42 @@ def main() -> int:
     for address, expected in checksum_words.items():
         if read_word(raw, address) != expected:
             raise RuntimeError("standby checksum instruction changed at 0x%08x" % address)
+
+    # The standby context's +0xb0/+0xb4/+0xc0 fields are copied from this
+    # embedded descriptor. Keep payload literals separate from instruction
+    # words so the test distinguishes data identity from code-flow evidence.
+    checksum_config = (
+        read_word(raw, SUSPEND_CHECKSUM_CONFIG_BASE_ADDR),
+        read_word(raw, SUSPEND_CHECKSUM_CONFIG_LENGTH_ADDR),
+        read_word(raw, SUSPEND_CHECKSUM_CONFIG_ENABLE_ADDR),
+    )
+    if checksum_config != (
+        SUSPEND_CHECKSUM_INITIAL_BASE,
+        SUSPEND_CHECKSUM_INITIAL_LENGTH,
+        SUSPEND_CHECKSUM_INITIAL_ENABLE,
+    ):
+        raise RuntimeError("standby checksum descriptor payload values changed")
+    label_offset = SUSPEND_CHECKSUM_CONFIG_LABEL_ADDR - BASE
+    if raw[label_offset:label_offset + 7] != b"chipid\\x00":
+        raise RuntimeError("standby checksum descriptor adjacent label changed")
+    if SUSPEND_CHECKSUM_INITIAL_LENGTH % 4:
+        raise RuntimeError("standby checksum range is not word aligned")
+
+    if decode_bl_target(0x48001c3c, read_word(raw, 0x48001c3c)) != 0x48001a04:
+        raise RuntimeError("secondary SYSTEM_SUSPEND power-entry callsite changed")
+    if decode_bl_target(0x48002440, read_word(raw, 0x48002440)) != 0x48001b74:
+        raise RuntimeError("suspend setup helper caller changed")
+    if decode_bl_target(0x48011928, read_word(raw, 0x48011928)) != 0x48011710:
+        raise RuntimeError("suspend retention wrapper target changed")
+    if decode_bl_target(0x48011b48, read_word(raw, 0x48011b48)) != 0x48011b38:
+        raise RuntimeError("suspend helper no-op edge changed")
+    if decode_b_target(0x48011b50, read_word(raw, 0x48011b50)) != 0x48011920:
+        raise RuntimeError("suspend helper tail branch changed")
+    if decode_bl_target(0x48011b60, read_word(raw, 0x48011b60)) != 0x48011b10:
+        raise RuntimeError("suspend helper memory operation edge changed")
+    if decode_bl_target(0x48011b64, read_word(raw, 0x48011b64)) != 0x48011b30:
+        raise RuntimeError("suspend helper trailing edge changed")
+
     if decode_bl_target(0x4800c448, read_word(raw, 0x4800c448)) != 0x48011b78:
         raise RuntimeError("standby pre-entry checksum call changed")
     if decode_bl_target(0x4800c6c4, read_word(raw, 0x4800c6c4)) != 0x48011b78:
@@ -1209,6 +1245,25 @@ def main() -> int:
                         "algorithm": "32-bit additive sum over 32-bit words; pointer increments by 4",
                         "range_descriptor": "context +0xb0 = start pointer; context +0xb4 = byte length",
                         "enable_flag": "context +0xc0",
+                        "initial_descriptor": {
+                            "payload_address": "0x4801a000",
+                            "base_address": "0x40000000",
+                            "length_bytes": 256,
+                            "end_exclusive": "0x40000100",
+                            "enabled": True,
+                            "adjacent_string": "chipid",
+                            "base_load_pc": "0x48001a68",
+                            "base_context_store_pc": "0x48001a6c",
+                            "length_load_pc": "0x48001a74",
+                            "length_context_store_pc": "0x48001a78",
+                            "enable_load_pc": "0x48001a5c",
+                            "enable_context_store_pc": "0x48001a60",
+                            "word_count": 64,
+                            "payload_values_are_initial_literals": True,
+                            "runtime_mutation_before_use": "not established",
+                        },
+                        "checked_range_bytes": 256,
+                        "checked_range_word_count": 64,
                         "initial_call_pc": "0x4800c448",
                         "saved_sum_field": "context +0xb8",
                         "resume_call_pc": "0x4800c6c4",
@@ -1219,7 +1274,7 @@ def main() -> int:
                         "failure_write_pc": "0x4800c6e8",
                         "failure_write_register": "RTC/system scratch at address held in x20 (base 0x07000108 in this path)",
                         "failure_path": "unconditional branch to self at 0x4800c6ec; fail-stop",
-                        "range_identity_limit": "the exact start/length values are stored in context; this check proves the configured range, not automatically the whole 0x9410-byte copy",
+                        "range_identity_limit": "the matched payload's initial descriptor is [0x40000000,0x40000100) (256 bytes, 64 words), adjacent to the string 'chipid'; the power-entry code copies these values into the standby context. Any runtime mutation before use and the live DRAM contents remain unmeasured. This is not the full 0x9410-byte SRAM standby image.",
                     },
                     "wake_source_helpers": {
                         "aggregate_function": "0x48013ee8",
@@ -1381,7 +1436,7 @@ def main() -> int:
         "- Transition `0x48008d98` iterates affinity levels from start to end through callback map `0x48017d70`; the three wrappers `0x48008b84/0x48008ab8/0x48008a00` dispatch platform slot 3 `affinst_suspend`.",
         "- For system state `0x02010000`, slot 3's CCU-save branch returns `-4`; caller checks that sentinel and invokes power-entry target `0x48001a04` at `0x48009774`.",
         "- Ordinary suspend uses `0x48015d70`: `DSB SY` → `WFI` → branch back to WFI.",
-        "- The special handler `0x48001a04` copies the 0x9410-byte standby image from `[0x4800c220,0x48015630)` to SRAM `[0x20000,0x29410)`, plus auxiliary/context blocks at SRAM offsets `0x80`, `0xd4`, and `0x134` (the latter two are conditional).",
+        "- The special handler `0x48001a04` copies the 0x9410-byte standby image from `[0x4800c220,0x48015630)` to SRAM `[0x20000,0x29410)`, plus auxiliary/context blocks at SRAM offsets `0x80`, `0xd4`, and `0x134` (the latter two are conditional). Its optional integrity checksum is separate: the matched payload's initial descriptor configures a 256-byte range at `[0x40000000,0x40000100)`, adjacent to the string `chipid`.",
         "- The copied image entry at source `0x4800c3d8` maps exactly to branch target `0x201b8`; copied helper `0x480140a0` maps to `0x27e80` and loads SP `0x57ff0`.",
         "- The relocated entry zeros its in-image scratch range `[0x291f0,0x29349)`, records wake-return address `0x48015d14` at context offset `0xc4`, and the copied RTC path writes flag `0x10000` to `0x070001f8` plus the saved return address to `0x070001fc`.",
         "- The main copy spans the SRAM A1 range and extends into SRAM C; the SP is also in SRAM C. This is a static copy/map reconstruction, not a live SRAM ownership or wakeup measurement.",
@@ -1392,7 +1447,7 @@ def main() -> int:
         "- Resume restores PLL_CPUX factors, sets enable bit31 and lock-enable bit29, polls lock bit28, then restores saved CCU fields. A mode==2 branch also touches `0x07010000`, `0x07010010` and `0x07000160`; the latter's exact standby role remains unknown.",
         "- Wake-source aggregation statically calls IR receive FIFO/status drain `0x480131b8`, GPIO name/read helpers `0x48013588/0x480135d8`, GPIO pad-config helper `0x48013620`, and GIC pending helper `0x48013190`. The latter reads GICD_ISPENDR at `0x03021200`, not an enable register. IR offsets `0x07040020/0x07040030` are in the H616 IR block; GPIO read/config use PIO `0x0300b000` or R_PIO `0x07022000`.",
         "- These are matched-binary wake-source preparation/polling paths; no pending interrupt, IR FIFO, GPIO level or pin configuration was probed or written on hardware.",
-        "- Integrity helper `0x48011b78` calculates a 32-bit additive sum over the 32-bit words in the caller-selected range described by context `+0xb0` (start pointer) and `+0xb4` (byte length). If context `+0xc0` enables it, standby saves the sum at `+0xb8`; resume recalculates and compares at `0x4800c6d8`. On mismatch, firmware writes fail code `0x88000001` to the RTC/system scratch address held in x20 (this path builds base `0x07000108`) and branches to a self-loop. The range's actual configured start/length are not inferred to equal the entire SRAM copy until their assignments are traced.",
+        "- Integrity helper `0x48011b78` calculates a wrapping 32-bit additive sum over caller-selected 32-bit words (pointer increments by 4). The special power-entry at `0x48001a04` copies the matched payload's initial descriptor at `0x4801a000` into context: start `0x40000000`, length `0x100`, enable `1`; the adjacent embedded string is `chipid`. Thus the initial configured range is `[0x40000000,0x40000100)` (256 bytes / 64 words), not the full `0x9410`-byte SRAM standby image. Runtime mutation of the descriptor before use and live DRAM contents remain unmeasured.",
         "- The RTC soft-entry stores saved return PC `0x48015d14`; resume code loads it from context `+0xc4` and indirect-branches through x22 at `0x4800c6a8`. The return continuation restores SCTLR_EL3, VBAR_EL3, DAIF and stack selection before returning into BL31.",
         "- The effective ABI is the legacy Allwinner `plat_pm_ops_t` order with a vendor getter extension; the exact source commit is not identified.",
 
@@ -1414,7 +1469,7 @@ def main() -> int:
         "- No hardware MMIO, flash, boot-media write or payload execution occurred.", "",
     ]
     (args.out.parent / "PSCI-CPU-ON.md").write_text("\n".join(markdown), encoding="utf-8")
-    print("PASS: PSCI standby integrity checksum, PLL/XO clock restore and wake-source helpers")
+    print("PASS: PSCI checksum descriptor/range, helper edges, PLL/XO restore and wake-source audit")
     print("  table[1] = 0x%08x -> low-level 0x48002d78" % table[1])
     print("  callback disassembly = %s" % disassembly_path)
     print("  monitor SHA-256 = %s" % digest)

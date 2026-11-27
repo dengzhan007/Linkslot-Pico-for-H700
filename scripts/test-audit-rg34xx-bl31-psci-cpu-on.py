@@ -208,6 +208,34 @@ def main() -> int:
     assert module.decode_imm19_branch_target(0x4800C440,0x34000080) == 0x4800C450
     assert module.decode_cond_branch_target(0x4800C6DC,0x54FFFCC0) == 0x4800C674
     assert module.decode_b_target(0x4800C6EC,0x14000000) == 0x4800C6EC
+    # The checksum descriptor is separate from the SRAM standby image.
+    assert module.SUSPEND_CHECKSUM_CONFIG_BASE_ADDR == 0x4801A000
+    assert module.SUSPEND_CHECKSUM_CONFIG_LENGTH_ADDR == 0x4801A004
+    assert module.SUSPEND_CHECKSUM_CONFIG_ENABLE_ADDR == 0x4801A008
+    assert module.SUSPEND_CHECKSUM_CONFIG_LABEL_ADDR == 0x4801A010
+    assert module.SUSPEND_CHECKSUM_INITIAL_BASE == 0x40000000
+    assert module.SUSPEND_CHECKSUM_INITIAL_LENGTH == 0x100
+    assert module.SUSPEND_CHECKSUM_INITIAL_ENABLE == 1
+    assert module.SUSPEND_CHECKSUM_INITIAL_END == 0x40000100
+    assert module.SUSPEND_CHECKSUM_INITIAL_WORD_COUNT == 64
+    checksum_config_load_store = {
+        0x48001A58: 0xB00000C0, 0x48001A5C: 0x39402000,
+        0x48001A60: 0xB900C260, 0x48001A64: 0xB00000C0,
+        0x48001A68: 0xB9400000, 0x48001A6C: 0xB900B260,
+        0x48001A70: 0xB00000C0, 0x48001A74: 0xB9400400,
+        0x48001A78: 0xB900B660,
+    }
+    for address, expected in checksum_config_load_store.items():
+        assert module.WORDS[address] == expected
+    assert module.decode_bl_target(0x48001C3C,module.WORDS[0x48001C3C]) == 0x48001A04
+    assert module.decode_bl_target(0x48002440,module.WORDS[0x48002440]) == 0x48001B74
+    assert module.decode_bl_target(0x48011928,module.WORDS[0x48011928]) == 0x48011710
+    assert module.WORDS[0x48011B30] == 0xD65F03C0
+    assert module.WORDS[0x48011B38] == 0xD65F03C0
+    assert module.decode_bl_target(0x48011B48,module.WORDS[0x48011B48]) == 0x48011B38
+    assert module.decode_b_target(0x48011B50,module.WORDS[0x48011B50]) == 0x48011920
+    assert module.decode_bl_target(0x48011B60,module.WORDS[0x48011B60]) == 0x48011B10
+    assert module.decode_bl_target(0x48011B64,module.WORDS[0x48011B64]) == 0x48011B30
     suspend_clock_expected = {
         0x48011BB0: 0xF2A06005, 0x48011BC4: 0xB94000A7,
         0x48011BD4: 0x0A0100E1, 0x48011BE0: 0xB9041441,
@@ -406,6 +434,10 @@ def main() -> int:
     assert window_map["system_suspend_cache_teardown_and_trampoline"][0] == 0x48015FB8
     assert window_map["system_suspend_cache_teardown_and_trampoline"][1] >= 0x270
     assert window_map["system_suspend_caller_full"][0] == 0x480096F8
+    assert window_map["system_suspend_setup_caller"][0] == 0x48002400
+    assert window_map["system_suspend_descriptor_handoff"][0] == 0x48002284
+    assert window_map["system_suspend_descriptor_consumer"][0] == 0x48003374
+    assert window_map["system_suspend_retention_helper_48011710"][0] == 0x48011710
     assert "ops_slot_3_raw" in window_map
     assert window_map["ops_slot_3_raw"][0] <= 0x48002998 < window_map["ops_slot_3_raw"][0] + window_map["ops_slot_3_raw"][1]
     assert window_map["ops_slot_5_raw"][0] <= 0x48002858 < window_map["ops_slot_5_raw"][0] + window_map["ops_slot_5_raw"][1]
