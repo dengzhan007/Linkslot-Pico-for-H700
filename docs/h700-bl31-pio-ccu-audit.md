@@ -664,6 +664,55 @@ power/reset/firewall state in the exact deployed H700 implementation, SPC
 fuse effect, and effective Non-secure PIO access. PI12 remains default-off.
 
 
+## 2026-11-27 exact sun50iw9p1 pinctrl/clock binding cross-reference
+
+A second, closer reference is available in the pinned
+[qiaoweibiao/T507_Kernel](https://github.com/qiaoweibiao/T507_Kernel)
+source tree at commit
+`98fcc7d3f112e51b0edfb71536da89cb2115106f` (2021-06-03). Unlike the H616
+reference, this tree contains the exact pinctrl compatible used in the
+RG34XX non-SP live FDT:
+
+- Its `arch/arm64/boot/dts/sunxi/sun50iw9p1-pinctrl.dtsi` declares
+  `pio: pinctrl@0300b000`, compatible
+  `allwinner,sun50iw9p1-pinctrl`, register window
+  `0x0300b000/0x400`, and clocks `<&clk_pio>, <&clk_losc>, <&clk_hosc>`.
+- Its `drivers/pinctrl/sunxi/pinctrl-sun50iw9p1.c` matches the same
+  compatible string. The generic `pinctrl-sunxi.c` obtains the first clock
+  with `devm_clk_get(..., NULL)` and calls `clk_prepare_enable()` for it.
+- The same tree's `drivers/clk/sunxi/clk-sun50iw9.c` maps the `pio` clock
+  to `apb1mod_parents`; that parent list contains only `apb1`. The `pio`
+  clock provider instance has no direct mux/divider/gate/reset register
+  arguments.
+- Its `clk-sun50iw9.h` defines `APB1_CFG=0x0520`; its
+  `sun50iw9p1-clk.dtsi` maps the CCU resource at `0x03001000`. The
+  resulting APB1 candidate register remains `0x03001520`.
+
+Pinned links:
+
+- [sun50iw9p1 PIO node and clock list](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/arch/arm64/boot/dts/sunxi/sun50iw9p1-pinctrl.dtsi)
+- [sun50iw9p1 pinctrl driver match](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/pinctrl/sunxi/pinctrl-sun50iw9p1.c#L1104-L1110)
+- [pinctrl bus-clock acquisition and enable](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/pinctrl/sunxi/pinctrl-sunxi.c#L2549-L2557)
+- [PIO clock parent registration](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/clk/sunxi/clk-sun50iw9.c#L439-L451)
+- [APB1 and PIO clock provider instances](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/clk/sunxi/clk-sun50iw9.c#L496-L502) and [PIO registration](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/clk/sunxi/clk-sun50iw9.c#L701-L706)
+- [APB1 offset](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/clk/sunxi/clk-sun50iw9.h#L57-L64)
+- [CCU base in clock DTSI](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/arch/arm64/boot/dts/sunxi/sun50iw9p1-clk.dtsi#L1-L12)
+
+The live RG34XX inventory's GPIO-controller record uses the exact same
+`allwinner,sun50iw9p1-pinctrl` compatible and the same
+`0x0300b000/0x400` register aperture. This makes the PIO-to-APB1 topology
+more specific than the H616-only comparison. It remains a cross-reference
+from a 2021 family source tree, **not proof that this exact source revision
+built the shipping Linux 4.9.170 kernel**. The report does not yet provide
+the live PIO node's clock phandle tuple or an APB1 readback at BL33 entry.
+
+**Updated working model:** PIO is expected to consume the APB1 parent clock
+through a logical `pio` clock; this driver does not declare a separate PIO
+module gate/reset. The unknown is now the inherited APB1 configuration and
+the effective security/firewall permission at the earliest BL33 point—not a
+generic need to invent a separate PIO clock-gate write. Keep PI12 default-off;
+do not write APB1 or attempt clock reparenting.
+
 ### APB1 initialization boundary in the same vendor clock source
 
 A further review of `arch/arm/mach-sunxi/clock_sun50iw9.c` at the same
