@@ -257,7 +257,7 @@ def scan_context_pointer_alias_writes(blob: bytes) -> dict:
                 if base_alias:
                     kind, value = base_alias
                     if kind == "rtc-context":
-                        if store_overlaps(ins, 0xA4 - value - int(mem.disp), 4):
+                        if store_overlaps(ins, 0xA4 - value, 4):
                             context_selector_alias_stores.append({
                                 "pc": pc,
                                 "mnemonic": mnemonic,
@@ -267,7 +267,7 @@ def scan_context_pointer_alias_writes(blob: bytes) -> dict:
                                 "alias_chain": origins_before.get(base_key, []),
                             })
                     elif kind == "absolute":
-                        if store_overlaps(ins, 0x48014668 - value - int(mem.disp), 8):
+                        if store_overlaps(ins, 0x48014668 - value, 8):
                             global_slot_alias_stores.append({
                                 "pc": pc,
                                 "mnemonic": mnemonic,
