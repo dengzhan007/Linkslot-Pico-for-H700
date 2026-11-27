@@ -505,8 +505,8 @@ DISASSEMBLY_WINDOWS = (
     ("retention_bank_selector_helper", 0x4800c730, 0x70),
     ("retention_rtc_fallback_setup_helper", 0x4800c7a8, 0x88),
     ("retention_restore_gate_helper", 0x48011320, 0x40),
-    ("retention_restore_probe_480111a0", 0x480111a0, 0x100),
-    ("retention_restore_probe_480115c0", 0x480115c0, 0x100),
+    ("retention_restore_probe_480111a0", 0x480111a0, 0x180),
+    ("retention_restore_probe_480115c0", 0x480115c0, 0x150),
 
     ("ccu_save_helper", 0x48001790, 0x100),
     ("ccu_restore_helper", 0x480018d8, 0x100),

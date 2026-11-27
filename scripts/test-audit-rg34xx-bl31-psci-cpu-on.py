@@ -585,9 +585,9 @@ def main() -> int:
     assert window_map["retention_restore_gate_helper"][0] == 0x48011320
     assert window_map["retention_restore_gate_helper"][1] >= 0x40
     assert window_map["retention_restore_probe_480111a0"][0] == 0x480111A0
-    assert window_map["retention_restore_probe_480111a0"][1] >= 0x100
+    assert window_map["retention_restore_probe_480111a0"][1] >= 0x180
     assert window_map["retention_restore_probe_480115c0"][0] == 0x480115C0
-    assert window_map["retention_restore_probe_480115c0"][1] >= 0x100
+    assert window_map["retention_restore_probe_480115c0"][1] >= 0x150
     assert window_map["system_suspend_helper_48011920_complete"][0] == 0x48011920
     assert window_map["system_suspend_helper_48011920_complete"][1] >= 0x220
     assert "ops_slot_3_raw" in window_map
