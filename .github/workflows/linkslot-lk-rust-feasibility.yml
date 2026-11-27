@@ -215,9 +215,6 @@ jobs:
       - name: Test host-only M1 one-shot capsule pre-entry selection model
         run: python3 scripts/test-m1-oneshot-capsule-selection.py
 
-      - name: Build AArch32 M1 selector ELF fixture (not a Boot0 capsule)
-        run: python3 scripts/test-m1-oneshot-capsule-a32.py --clang clang --readelf readelf --nm nm
-
       - name: Generate H700 BL33 source overlay from pinned GammaOS LK
         run: |
           python3 scripts/apply-h700-lk-overlay.py \
@@ -233,6 +230,16 @@ jobs:
       - name: Install LLVM cross-link tools
         run: |
           export DEBIAN_FRONTEND=noninteractive
+          # The hosted image may expose Microsoft's unrelated feed as 403.
+          # All toolchain packages below are available from Ubuntu repositories.
+          for source in /etc/apt/sources.list /etc/apt/sources.list.d/*; do
+            if [ -f "$source" ] && grep -qF 'packages.microsoft.com/ubuntu/24.04/prod' "$source"; then
+              case "$source" in
+                *.sources) sudo mv "$source" "$source.disabled" ;;
+                *) sudo sed -i '\|packages.microsoft.com/ubuntu/24.04/prod|d' "$source" ;;
+              esac
+            fi
+          done
           sudo timeout --signal=TERM --kill-after=30s 300s env DEBIAN_FRONTEND=noninteractive \
             apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=45 -o Acquire::https::Timeout=45 update
           sudo timeout --signal=TERM --kill-after=30s 1800s env DEBIAN_FRONTEND=noninteractive \
@@ -244,6 +251,9 @@ jobs:
           for tool in clang ld.lld llvm-nm llvm-objcopy arm-none-eabi-gcc arm-linux-gnueabi-gcc mkfs.fat mcopy mkfs.exfat; do
             command -v "$tool" >/dev/null || { echo "Missing required tool: $tool"; exit 1; }
           done
+
+      - name: Build AArch32 M1 selector ELF fixture (not a Boot0 capsule)
+        run: python3 scripts/test-m1-oneshot-capsule-a32.py --clang clang --readelf readelf --nm nm
 
       - name: Verify armGBA committed-frame layout across H700 ABIs
         run: |
