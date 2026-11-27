@@ -196,6 +196,10 @@ def main() -> int:
     assert module.decode_imm19_branch_target(0x4800C56C,module.WORDS[0x4800C56C]) == 0x4800C540
     assert module.decode_b_target(0x4800C5FC,module.WORDS[0x4800C5FC]) == 0x48012670
     assert module.decode_b_target(0x4800C610,module.WORDS[0x4800C610]) == 0x48014078
+    assert module.WORDS[0x480126A0] == 0x97FFFE74
+    assert module.WORDS[0x480126A4] == 0x14000000
+    assert module.decode_bl_target(0x480126A0,module.WORDS[0x480126A0]) == 0x48012070
+    assert module.decode_b_target(0x480126A4,module.WORDS[0x480126A4]) == 0x480126A4
     assert module.WORDS[0x4801612C] == 0xD53E1000
     assert module.WORDS[0x48016130] == 0x8A210000
     assert module.WORDS[0x48016134] == 0xD51E1000
