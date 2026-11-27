@@ -612,3 +612,53 @@ SPC/firewall at the moment it needs PI12.
 for PIO from the H616 family, with candidate register `0x03001520`. Its
 handoff value and effective PIO accessibility remain unknown. PI12 stays
 default-off.
+
+
+## 2026-11-27 sun50iw9p1 vendor clock-source cross-reference
+
+A closer source-family match than H616 is available in the public
+`chainsx/u-boot-sun55i-vendor` tree, pinned at commit
+`a0723c51581c90bc4f060e9f251afff2ce76453f`. This tree contains explicit
+`sun50iw9p1` clock and SoC files:
+
+- `arch/arm/include/asm/arch-sunxi/clock_sun50iw9.h` defines
+  `struct sunxi_ccm_reg::apb1_cfg` at CCU offset `0x520`.
+- `arch/arm/include/asm/arch-sunxi/cpu_ncat.h` defines
+  `SUNXI_CCM_BASE=0x03001000` for this non-IW11/IW12 family branch.
+  Together these give candidate APB1 register address
+  `0x03001520`.
+- The same clock header defines `CCM_APB1_DEFAULT=0x03000102`.
+  `arch/arm/mach-sunxi/clock_sun50iw9.c::clock_get_apb1()` reads the
+  APB1 register, extracts M/N/source fields, and computes the selected rate.
+- `drivers/clk/sunxi/clk-sun50iw9.c` declares APB1 parents as
+  `hosc, losc, psi, pll_periph0`; declares the APB1 module parent list as
+  `apb1`; and registers PIO using that APB1 module parent.
+- Its `SUNXI_CLK_PERIPH(pio, ...)` instance has zeroed mux/divider/gate/reset
+  register arguments, i.e. this driver source does not declare a separate PIO
+  module gate/reset register for the PIO clock provider.
+
+Pinned source links:
+
+- [sun50iw9 APB1 register and default fields](https://github.com/chainsx/u-boot-sun55i-vendor/blob/a0723c51581c90bc4f060e9f251afff2ce76453f/arch/arm/include/asm/arch-sunxi/clock_sun50iw9.h#L80-L90)
+- [sun50iw9 APB1 bitfield defaults](https://github.com/chainsx/u-boot-sun55i-vendor/blob/a0723c51581c90bc4f060e9f251afff2ce76453f/arch/arm/include/asm/arch-sunxi/clock_sun50iw9.h#L263-L280)
+- [CCM base selection](https://github.com/chainsx/u-boot-sun55i-vendor/blob/a0723c51581c90bc4f060e9f251afff2ce76453f/arch/arm/include/asm/arch-sunxi/cpu_ncat.h#L18-L24)
+- [APB1 runtime rate decoder](https://github.com/chainsx/u-boot-sun55i-vendor/blob/a0723c51581c90bc4f060e9f251afff2ce76453f/arch/arm/mach-sunxi/clock_sun50iw9.c#L232-L255)
+- [APB1 and PIO clock-parent definitions](https://github.com/chainsx/u-boot-sun55i-vendor/blob/a0723c51581c90bc4f060e9f251afff2ce76453f/drivers/clk/sunxi/clk-sun50iw9.c#L420-L442)
+- [PIO provider registration](https://github.com/chainsx/u-boot-sun55i-vendor/blob/a0723c51581c90bc4f060e9f251afff2ce76453f/drivers/clk/sunxi/clk-sun50iw9.c#L576-L601)
+
+**Evidence quality and limits:** this is source for the `sun50iw9p1`
+family, improving the APB1-to-PIO clock-parent evidence beyond the H616
+reference. It does not prove this exact commit is the source used to build the
+RG34XX's deployed vendor components. The associated `sun50iw9p1-soc-system.dts`
+also labels its PIO node with a `sun50iw12p1-pinctrl` compatible, so it must
+not be treated as the target's authoritative live DTS. The source driver's
+zero PIO gate/reset fields mean only that no separate PIO module gate/reset
+is declared there; they do not prove the underlying hardware has no hidden
+reset or that clock/security state is valid at BL33 entry.
+
+The best-supported working model is therefore: APB1 at candidate
+`0x03001520` is the PIO bus parent on the sun50iw9p1 vendor-source path, and
+the PIO provider exposes no separate module gate/reset in that driver.
+**Still unproven:** APB1 register value at BL33 entry, any independent PIO
+power/reset/firewall state in the exact deployed H700 implementation, SPC
+fuse effect, and effective Non-secure PIO access. PI12 remains default-off.
