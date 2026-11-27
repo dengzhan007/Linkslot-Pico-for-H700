@@ -1707,6 +1707,7 @@ def main() -> int:
         "- Low-level routine writes a per-core RVBAR and contains a CPU power/reset sequence; one SoC-selected variant uses `0x09010000`, `0x09010010`, `0x07000440`, `0x07000444` and `0x090100c0`.",
         "- RVBAR selector cross-check: BL31 uses VER_REG low3==0 for base 0x09010040, otherwise 0x08100040; pinned native SPL uses low3==2 for the alternate bank. Both agree only for selector values 0 and 2; the target value must be read.",
         "",
+        "- Power-entry stores the scratch-buffer pointer 0x4801b400 in RTC GP_DATA1 0x07000104. Before SRAM entry, the matched BL31 copies 160 words (0x280 bytes) from two 0x140-byte address windows into this buffer; after resume, a companion helper copies them back. The fixed address window begins at 0x40000000; the second bank is selected from context +0x1c. context +0x4 == 4 selects alternate strided-copy branches. These are address-level DRAM candidates, not approved memory ownership; the buffer is outside the matched monitor file payload and its live contents/owner are unverified.",
         "## Interpretation", "",
         "- The effective callback ABI is the legacy Allwinner `plat_pm_ops_t` order plus the vendor `get_sys_suspend_power_state` extension; do not apply modern `plat_psci_ops_t` slot offsets.",
         "- Callback semantics are mapped from binary table entries, dispatcher byte offsets, indirect calls, embedded strings and helper behavior; the exact vendor source commit remains unknown.",

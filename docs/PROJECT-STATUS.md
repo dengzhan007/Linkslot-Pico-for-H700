@@ -2,7 +2,7 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-27。当前工作分支 `porting/linkslot-1.0.45-feasibility` 的最新 BL31 审计代码 HEAD 为 `0981c2a5ab3c0e14e20362578b075686ebf1554a`。审计 [#66](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45925450827) 在该 HEAD 上 **20/20 steps 成功**，产物 [15165639322](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45925450827/artifacts/15165639322)。#63、#64、#66 均通过；#61、#62、#65 的失败来自新增 host regression/字节串断言录入问题，已按 CI 日志修复并由后续 run 复验。当前变更仅扩展 BL31 静态审计与 host regression，没有修改 Linkslot 产品运行时代码。最近一次完整 Linkslot/LK feasibility [#884](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45920262116) 在 `91a07300` 上运行，尚未据此宣称当前 HEAD 全量通过；H700 boot-audit [#1429](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45920262120) 成功。**本文 2026-11-27 PSCI 深度待机续接条目为当前状态；更早记录按各自 HEAD/run ID 理解。**
+**最后核对时间：** 2026-11-27。当前工作分支 `porting/linkslot-1.0.45-feasibility` 的最新 BL31 审计代码 HEAD 为 `95773e9d27281f4692478b6d441bde056a7a4092`。审计 [#69](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45926679076) 在该 HEAD 上 **20/20 steps 成功**，产物 [15167165432](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45926679076/artifacts/15167165432)。#66 与 #69 均通过；#67–#68 在新增 retention helper 指令字加入测试字典期间因字典漏项失败，已按日志修复并由 #69 复验。当前变更只扩展匹配 BL31 的静态审计、host regression 和交接文档，没有修改 Linkslot 产品运行时代码。最近一次完整 Linkslot/LK feasibility [#884](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45920262116) 在 `91a07300` 上运行，尚未据此宣称当前 HEAD 全量通过；H700 boot-audit [#1429](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45920262120) 成功。**本文 2026-11-27 PSCI 深度待机续接条目为当前状态；更早记录按各自 HEAD/run ID 理解。**
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
@@ -10,8 +10,8 @@
 
 ## 2026-11-27 续接：BL31 legacy PSCI、SYSTEM_SUSPEND 深度待机与唤醒链已静态识别
 
-**当前审计代码 HEAD：** `74151f7e5347c23b06b82afc09e041266606dd8c`。  
-**最新 BL31 静态审计：** [#60](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45920492462)，20/20 steps 成功；[审计产物](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45920492462/artifacts/15164342241)。#59 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45919948625) 也为 20/20。#55–#57 的失败均为检查器缺项/常量或分支编码录入问题，已修正并由 #58–#60 复验；未发现匹配 monitor 的指令目标不符。  
+**当前审计代码 HEAD：** `95773e9d27281f4692478b6d441bde056a7a4092`。  
+**最新 BL31 静态审计：** [#69](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45926679076)，20/20 steps 成功；[审计产物](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45926679076/artifacts/15167165432)。#66 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45925450827) 也为 20/20。#67–#68 在新增 retention helper host assertions 时因 WORDS 字典漏项失败；已按日志补齐并由 #69 复验。  
 **匹配 monitor：** 107,216 bytes；SHA-256 `676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31`；该 payload 与采集到的原生 firmware/TOC1 monitor 匹配。
 
 ### PSCI 操作表与槽位映射
@@ -68,9 +68,20 @@
 - **运行时边界：** 目前没有 RG34XX 的 EL3 SMC trace、调用计数或 descriptor live readback，不能声称设备实际调用过这两个 FID，也不能声称默认 256-byte 范围就是某次待机实际使用的范围。公开检索到的较早 H6 `sunxi-smc.h` 使用另一组 `0xFFFF0000` 系列旧命令；这不是当前 RG34XX 4.9.170 内核未调用上述 FID 的证明。没有执行 SMC、MMIO 读写或待机。
 - 新增 host assertions 锁定 handler 记录指针、`arm_svc` 名称、两个 FID 的分支目标、参数转发与 writer store。BL31 audit [#63](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45924971769)、[#64](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45925098616) 与最终 [#66](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45925450827) 均通过 20/20；#65 的 `arm_svc` 字节串断言误将 NUL 终止符写成转义文本，已修复并由 #66 复验。
 
+
+### DRAM retention snapshot / restore：RTC GP_DATA1 指针与双窗口搬运（2026-11-27）
+
+- SYSTEM_SUSPEND power-entry `0x48001a04` 在 `0x48001aac–0x48001abc` 计算并写入 RTC GP_DATA1 `0x07000104` 的值 `0x4801b400`。该值随后由 helper `0x48011710` 与恢复 helper `0x48011938` 从 GP_DATA1 读出，作为保留区 buffer 指针。
+- standby 调用链：`0x4800c490 → 0x48011b40 → 0x48011920 → 0x48011710`。普通路径总计搬运 160 个 32-bit word（`0x280` / 640 bytes）：固定窗口 `[0x40000000,0x40000140)` 保存到 buffer `[0x4801b400,0x4801b540)`；第二窗口从动态 bank base `0x40000000 + (((context[0x1c] >> 17) << 20))` 开始，长度 `0x140`，保存到 `[0x4801b540,0x4801b680)`。
+- resume 恢复链：`0x4800c658 → 0x48011b58 → 0x48011b10 → 0x48011938`，normal path 反向写回上述两个 DRAM 地址窗口。保存 helper 在 context `+0x1c` bit0 为 1 时跳过 normal copy；若 context `+0x4 == 4`，会走 `0x480118d0/0x480118f8` 或恢复侧 `0x48011a80/0x48011aa8` 的 alternate strided addressing 分支，不能概括为连续 memcpy。
+- buffer 区间 `[0x4801b400,0x4801b680)` 位于匹配 monitor file payload 结束地址 `0x4801a2d0` 之外。RTC GP_DATA1 位于 RTC base `0x07000000` + offset `0x104`；Linux 同系列 `rtc-sun6i.c` 将 GP_DATA 区域映射为 battery-backed NVMEM（[source](https://github.com/torvalds/linux/blob/master/drivers/rtc/rtc-sun6i.c)）。这是同系列寄存器定义交叉参考，不是 RG34XX 实机 GP_DATA1 readback，也不代表 buffer 的 runtime ownership 已获批准。
+- checksum 的静态默认范围 `[0x40000000,0x40000100)` 位于第一段 `0x140` 快照窗口内；这只是地址重叠，不能据此推断固件设计意图，尤其 checksum descriptor 可由 `arm_svc` SMC 覆盖。
+- CI #69 新增了 buffer pointer、两组 0x140-byte 窗口、selector 算术、160-word loop、alternate stride branch 和 resume reverse-copy 的 host assertions，并扩大 pre-copy disassembly window 覆盖 `0x48011710–0x48011920`。#69 通过 20/20；结论依旧是匹配 BL31 的静态 control-flow 证据。
+- **边界：** 未读取设备 RTC GP_DATA1、context `+0x1c/+0x4`、`0x4801b400` 内容或 DRAM 窗口；未发起 PSCI SMC、未读写 MMIO、未执行待机/唤醒。内存所有权、RTC backup 实际供电状态与正常路径是否在目标机被选中仍未证明。
+
 ### 证据边界与下一步
 
-- `scripts/audit-rg34xx-bl31-psci-cpu-on.py` 与 host test 现锁定：9 项 legacy platform-ops；affinity callback map；`-4→0x48001a04` 特殊入口；SCTLR/cache-maintenance；SRAM code/context staging；RTC flag/soft-entry；五组 CCU 保存/恢复、PLL_CPUX enable/lock、R_PRCM PLL LDO key、RTC XO_CTRL mode-2 分支；GIC pending、IR FIFO、GPIO wake-source helpers，以及 checksum descriptor 的默认值与 `arm_svc` SMC 覆盖入口。BL31 audit #63、#64、#66 均通过 20/20；所有结论仍是匹配 binary 的静态证据。
+- `scripts/audit-rg34xx-bl31-psci-cpu-on.py` 与 host test 现锁定：9 项 legacy platform-ops；affinity callback map；`-4→0x48001a04` 特殊入口；SCTLR/cache-maintenance；SRAM code/context staging；RTC flag/soft-entry；五组 CCU 保存/恢复、PLL_CPUX enable/lock、R_PRCM PLL LDO key、RTC XO_CTRL mode-2 分支；GIC pending、IR FIFO、GPIO wake-source helpers，以及 checksum descriptor 的默认值与 `arm_svc` SMC 覆盖入口、RTC GP_DATA1 retention scratch pointer、双 0x140-byte memory-window snapshot/restore 与 alternate strided branch。BL31 audit #66、#69 均通过 20/20；所有结论仍是匹配 binary 的静态证据。
 - 关键指令级断言：slot 0 `+0x00` / `0x48009688 → 0x48009690`；slot 1 `+0x08` / `0x48008608 → 0x48008640`；slot 2 `+0x10` / `0x480080f8 → 0x48008118`；slot 3 `+0x18` / `0x48008a84 → 0x48008a90`；slot 4 `+0x20` / `0x4800854c → 0x48008560`；slot 5 `+0x28` / `0x48008918 → 0x4800893c`。slot 6 `system_off` 从 `0x480025a8` 调用 `0x48001ed8`；slot 7 `system_reset` 从 `0x48002588` 调用 `0x48001ec8`，并有 `Sunxi System Reset` 字符串证据。
 - slot 8 `get_sys_suspend_power_state` 位于 `0x48002544`，执行 `mov w0, #0x02010000; ret`。SYSTEM_SUSPEND caller `0x480096f8` 从表偏移 `+0x40` 加载并在 `0x48009744` 间接调用，随后在 `0x4800975c` 调用 transition function `0x48008d98`。
 - `0x48008d98` affinity 调度、standby image 搬运、RTC wake continuation、PLL CPUX save/relock、R_PRCM PLL LDO key、RTC XO_CTRL 与 GIC/IR/GPIO wake helper 均已静态映射。checksum 算法、默认 descriptor 和 SMC override 分发入口已闭合到匹配 binary 的静态指令级证据；但运行时 FID 是否被调用、最终 descriptor 值和受校验 DRAM 内容仍未知。下一阶段重点转向 SRAM C 生命周期/时钟门控、RTC wake source、CPUX_AXI bit26 live read-only evidence，以及可否只读追踪设备现有 SMC 调用；未满足前不触发 suspend。
@@ -79,7 +90,7 @@
 - CPU_ON 回调存在不等于初始 BL31→BL33 handoff 自动启动了 CPU1–CPU3；secondary A53 的 reset/hold-off 状态仍需独立只读验证。
 - SYSTEM_SUSPEND getter 返回有效 power-state 也不等于整套 DRAM self-refresh、唤醒源、时钟恢复与 Linux suspend/resume 已在 RG34XX 实机验证。
 - CCU helper 属于 suspend/resume 上下文保存候选，不构成 CPU DVFS 接口，也不证明 BL33 启动阶段发生 PLL 切换。
-- **下一步：** 在不发出 SMC 的前提下，先检查设备已有的只读 trace/日志来源能否观测 `0x80000064` / `0xc0000064` 调用或 descriptor 最终值；若没有现成安全观测面，就不新增会影响启动的运行时代码。继续核对 SRAM C 保留/门控、RTC wake-source 配置、CPUX_AXI bit26 live read-only evidence，并行关闭 BL31/Boot0 RAM ownership、32 KiB diagnostic loader extent、secondary A53 hold-off 与 timer-PPI handoff。只有内存布局批准、可回滚诊断镜像和 wake prerequisites 均满足后才考虑实机执行。
+- **下一步：** 在不发出 SMC 的前提下，先检查设备已有的只读 trace/日志来源能否观测 `0x80000064` / `0xc0000064` 调用或 descriptor 最终值；若没有现成安全观测面，就不新增会影响启动的运行时代码。继续核对 RTC GP_DATA1 是否实际保留 buffer pointer、0x4801b400 runtime buffer 的 memory ownership、context selector 实际值、SRAM C 保留/门控、RTC wake-source 配置、CPUX_AXI bit26 live read-only evidence；并行关闭 BL31/Boot0 RAM ownership、32 KiB diagnostic loader extent、secondary A53 hold-off 与 timer-PPI handoff。只有内存布局批准、可回滚诊断镜像和 wake prerequisites 均满足后才考虑实机执行。
 - 全程未执行实机 MMIO、存储写入、刷写或 payload；`hardware_applied=0`。PI12 production MMIO 仍 default-off，`H700_MEMORY_LAYOUT_APPROVED` 仍 unset。
 
 
