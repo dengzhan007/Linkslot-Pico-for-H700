@@ -738,8 +738,18 @@ SECTIONS
     if abort_at < 0:
         raise RuntimeError("PI12 diagnostic Data Abort fail-stop handler is missing from linked disassembly")
     abort_block = early_disasm[abort_at:abort_at + 700]
-    if "h700_data_abort_try_recover" not in abort_block or "wfi" not in abort_block:
-        raise RuntimeError("unmatched PI12 Data Abort must enter the explicit non-returning WFI fail-stop")
+    if "h700_data_abort_try_recover" not in abort_block:
+        raise RuntimeError("PI12 diagnostic Data Abort handler must call the exact scoped recovery matcher")
+    # LLVM may disassemble Thumb-2 WFI (0xBF30) as "<unknown>" for this
+    # target configuration. Verify the architectural encoding plus an
+    # unconditional branch back to the same instruction, not its mnemonic.
+    wfi_loop = re.search(
+        r"(?m)^\\s*([0-9a-fA-F]+):\\s+bf30\\b[^\\n]*\\n"
+        r"\\s*([0-9a-fA-F]+):\\s+[0-9a-fA-F]{4}\\s+b\\s+0x([0-9a-fA-F]+)",
+        abort_block,
+    )
+    if wfi_loop is None or int(wfi_loop.group(1), 16) != int(wfi_loop.group(3), 16):
+        raise RuntimeError("unmatched PI12 Data Abort must enter a WFI instruction with a branch back to itself")
     kmain_at = early_disasm.find("<kmain>:")
     if kmain_at < 0:
         raise RuntimeError("early-MMU/PI12 diagnostic kmain is missing from disassembly")
