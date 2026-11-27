@@ -11,10 +11,13 @@
 #define SOC_MMIO_BASE      0x03000000u
 #define SYS_CFG_VER_REG    0x03000024u
 #define RG34XX_PIO_BASE    0x0300b000u
+#define UART0_MMIO_BASE    0x05000000u
+#define UART0_BASE         0x05000000u
+#define UART0_SIZE         0x00000400u
 
 static unsigned int g_call;
 static unsigned int g_dram_maps;
-static unsigned int g_pio_maps;
+static unsigned int g_device_maps;
 static unsigned int g_enabled;
 static unsigned int g_first_dram;
 static unsigned int g_last_dram;
@@ -42,17 +45,17 @@ void arm_mmu_map_section(addr_t paddr, addr_t vaddr, unsigned int flags)
         return;
     }
 
-    assert(paddr == SOC_MMIO_BASE);
     assert(flags == (MMU_MEMORY_TYPE_DEVICE_SHARED |
                      MMU_MEMORY_AP_READ_WRITE | MMU_MEMORY_XN));
-    g_pio_maps++;
+    assert(paddr == SOC_MMIO_BASE || paddr == UART0_MMIO_BASE);
+    g_device_maps++;
 }
 
 void arch_enable_mmu(void)
 {
     assert(g_call == 1u);
     assert(g_dram_maps == 1024u);
-    assert(g_pio_maps == 1u);
+    assert(g_device_maps == 2u);
     assert(g_first_dram == EXPECTED_DRAM_BASE);
     assert(g_last_dram == EXPECTED_DRAM_END - SECTION_SIZE);
     g_call = 2u;
@@ -61,17 +64,21 @@ void arch_enable_mmu(void)
 
 int main(void)
 {
-    /* Both addresses must remain within the one mapped 1 MiB Device section. */
+    /* SYS_CFG and PIO share the first Device section. */
     assert(SYS_CFG_VER_REG >= SOC_MMIO_BASE);
     assert(SYS_CFG_VER_REG < SOC_MMIO_BASE + SECTION_SIZE);
     assert(RG34XX_PIO_BASE >= SOC_MMIO_BASE);
     assert(RG34XX_PIO_BASE < SOC_MMIO_BASE + SECTION_SIZE);
 
+    /* UART0's register aperture fits inside its own 1 MiB Device section. */
+    assert((UART0_BASE & ~(SECTION_SIZE - 1u)) == UART0_MMIO_BASE);
+    assert(UART0_BASE + UART0_SIZE <= UART0_MMIO_BASE + SECTION_SIZE);
+
     platform_init_mmu_mappings();
     assert(g_call == 2u);
     assert(g_enabled == 1u);
     assert(g_dram_maps == 1024u);
-    assert(g_pio_maps == 1u);
-    puts("RG34XX MMU: 1GiB DRAM WB + SYS_CFG/PIO/CCU Device section -> MMU enable: PASS");
+    assert(g_device_maps == 2u);
+    puts("RG34XX MMU: 1GiB DRAM WB + SYS_CFG/PIO/CCU + UART0 Device sections -> MMU enable: PASS");
     return 0;
 }

@@ -235,9 +235,13 @@ MMU. The RG34XX implementation now follows that order:
 2. The observed RG34XX DRAM range `[0x40000000, 0x80000000)` is remapped as
    normal write-back, read/write memory (1024 one-MiB sections).
 3. `[0x03000000, 0x03100000)` is remapped as shared Device, read/write,
-   execute-never memory for H700 SoC MMIO: SYS_CFG/VER_REG at `0x03000024`, PIO at `0x0300b000`, and CCU.
-4. `arch_enable_mmu()` enables translation only after all descriptors are set.
-5. LK then proceeds to cache setup and `target_early_init()`, where PI12 is
+   execute-never memory for SYS_CFG/VER_REG, PIO, CCU, GIC and timer register windows.
+4. `[0x05000000, 0x05100000)` is remapped as shared Device, read/write,
+   execute-never memory for the UART0 register aperture at `0x05000000/0x400`.
+   The 1 MiB section-table granularity also maps adjacent peripheral address
+   space; no adjacent peripheral is initialized or accessed by this mapping.
+5. `arch_enable_mmu()` enables translation only after all descriptors are set.
+6. LK then proceeds to cache setup and `target_early_init()`, where PI12 is
    configured and turned on.
 
 `DRAM_PHY_ADDR=0x40000000` is supplied to LK's architecture code because
@@ -248,9 +252,12 @@ secure/monitor, framebuffer, CMA, unknown-reserved and current-loader
 lifetimes remain separate memory-safety gates.
 
 A fake-MMU host regression verifies the call order and descriptor attributes:
-one table initialization, 1024 DRAM sections, one shared SYS_CFG/PIO/CCU Device section, then
-one MMU enable. H700 AArch64, AArch32 ARM and AArch32 Thumb-2 object builds
-also compile this hook. Neither proves a full LK target link or a hardware boot.
+one table initialization, 1024 DRAM sections, the SYS_CFG/PIO/CCU Device
+section plus the UART0 Device section, then one MMU enable. The UART mapping
+is translation-only and does not initialize the UART or prove the physical
+clock, pinmux, bus/firewall permission or test-pad wiring. H700 AArch64,
+AArch32 ARM and AArch32 Thumb-2 object builds also compile this hook. Neither
+proves a full LK target link or a hardware boot.
 See `platform/h700/arch/h700_pio_mmu_mapping.c` and
 `scripts/test-h700-pio-mmu-mapping.sh`.
 

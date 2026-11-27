@@ -9,8 +9,9 @@
  *
  *   1. initialize the LK section translation table;
  *   2. map the verified RG34XX 1 GiB DRAM range as normal write-back memory;
- *   3. map the H700 SoC MMIO 1 MiB window (SYS_CFG, PIO, CCU) as shared Device memory;
- *   4. enable the MMU only after all identity mappings are installed.
+ *   3. map the H700 SYS_CFG/PIO/CCU window as shared Device memory;
+ *   4. map the UART0 peripheral section as shared Device memory;
+ *   5. enable the MMU only after all identity mappings are installed.
  *
  * DRAM base/size are the live RG34XX inventory values. These mappings do
  * not allocate or reserve memory and do not authorize any BL33 heap/stack,
@@ -30,12 +31,22 @@
 #define H700_SYS_CFG_VER_REG 0x03000024u
 #define H700_RG34XX_PIO_BASE 0x0300b000u
 
+#define H700_UART0_MMIO_WINDOW_BASE 0x05000000u
+#define H700_UART0_BASE 0x05000000u
+#define H700_UART0_SIZE 0x00000400u
+
 _Static_assert((H700_SYS_CFG_VER_REG & ~(H700_MMU_SECTION_SIZE - 1u)) ==
                    H700_SOC_MMIO_WINDOW_BASE,
                "SYS_CFG VER_REG must remain inside the mapped SoC MMIO section");
 _Static_assert((H700_RG34XX_PIO_BASE & ~(H700_MMU_SECTION_SIZE - 1u)) ==
                    H700_SOC_MMIO_WINDOW_BASE,
                "RG34XX PIO must remain inside the mapped SoC MMIO section");
+_Static_assert((H700_UART0_BASE & ~(H700_MMU_SECTION_SIZE - 1u)) ==
+                   H700_UART0_MMIO_WINDOW_BASE,
+               "UART0 must remain inside its mapped Device section");
+_Static_assert(H700_UART0_BASE + H700_UART0_SIZE <=
+                   H700_UART0_MMIO_WINDOW_BASE + H700_MMU_SECTION_SIZE,
+               "UART0 register window must fit inside its mapped Device section");
 
 void platform_init_mmu_mappings(void)
 {
@@ -55,10 +66,23 @@ void platform_init_mmu_mappings(void)
                 MMU_MEMORY_AP_READ_WRITE);
     }
 
-    /* This Device section covers SYS_CFG/VER_REG, PIO and CCU. */
+    /* SYS_CFG/VER_REG, PIO, CCU, GIC and timer translation window. */
     arm_mmu_map_section(
         H700_SOC_MMIO_WINDOW_BASE,
         H700_SOC_MMIO_WINDOW_BASE,
+        MMU_MEMORY_TYPE_DEVICE_SHARED |
+            MMU_MEMORY_AP_READ_WRITE |
+            MMU_MEMORY_XN);
+
+    /*
+     * UART0 lives at 0x05000000. LK uses a 1 MiB section table, so this maps
+     * the containing peripheral aperture (including adjacent blocks) as
+     * Device/XN. This changes address translation only: it does not touch
+     * UART registers, clocks, reset, pinmux or security/firewall policy.
+     */
+    arm_mmu_map_section(
+        H700_UART0_MMIO_WINDOW_BASE,
+        H700_UART0_MMIO_WINDOW_BASE,
         MMU_MEMORY_TYPE_DEVICE_SHARED |
             MMU_MEMORY_AP_READ_WRITE |
             MMU_MEMORY_XN);

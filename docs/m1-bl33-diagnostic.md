@@ -33,8 +33,8 @@
 
 **当前明确的阻塞：**
 
-- 现有 `platform/h700/arch/h700_pio_mmu_mapping.c` 只建立 `[0x03000000,0x03100000)` 的 SoC Device section；UART0 的 `0x05000000` 不在该映射内。若 LK 在 MMU enable 后输出 UART，需要先完成该 1 MiB Device mapping 的代码审查与 host descriptor 回归；增加 translation mapping 本身也不代表总线访问权限已获准。
-- 当前 GammaOS LK H700 项目没有 UART console/driver；匹配 BaseOS native SPL 入口文件没有 UART 初始化调用。Boot0/BL31 曾经输出串口日志，不能单独证明 BL31→BL33 时 UART clock、reset、security/firewall 权限保持不变。
+- H700 MMU hook 已 host-test 增加第二个 shared Device/XN section `[0x05000000,0x05100000)`，覆盖 UART0 register aperture `0x05000000/0x400`。这只是 ARM translation descriptor，不会访问 UART、启用 clock、改变 reset/pinmux，也不赋予 security/firewall 权限；section-table 粒度同时映射相邻 peripheral address space，但没有驱动会访问它们。
+- 当前 GammaOS LK H700 项目仍没有 UART console/driver；匹配 BaseOS native SPL 入口文件没有 UART 初始化调用。Boot0/BL31 曾经输出串口日志，不能单独证明替换链在 BL31→BL33 时 UART clock、reset、security/firewall 权限保持不变。
 - 尚无当前测试机板号/revision 对应的原理图或 test-pad 资料，尚未确认 PH0/PH1 在本机的可接触焊盘及电平/接线。
 
 因此 UART0 目前是**优先资格化的候选**，不是已批准的 proof-of-life。资格关闭前，不得向 `0x05000000` 写寄存器，不得改变 PH0/PH1 pinmux/clock，也不得将 UART 输出写入诊断 payload。若 UART0 最终不可用，应重新审查替代方案，不能自动改用 PI12、LCD 或 SD。
