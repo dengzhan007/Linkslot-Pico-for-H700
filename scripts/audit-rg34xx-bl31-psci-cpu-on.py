@@ -641,6 +641,36 @@ def read_word(raw: bytes, address: int) -> int:
         raise RuntimeError("address outside payload: 0x%08x" % address)
     return struct.unpack_from("<I", raw, offset)[0]
 
+def bl31_cpu_on_rvbar_base(selector_low3: int) -> int:
+    """Return matched BL31 CPU_ON helper RVBAR base for VER_REG[2:0]."""
+    if isinstance(selector_low3, bool) or not isinstance(selector_low3, int):
+        raise ValueError("selector_low3 must be an integer")
+    if not 0 <= selector_low3 <= 7:
+        raise ValueError("selector_low3 must be in the range 0..7")
+    return 0x09010040 if selector_low3 == 0 else 0x08100040
+
+
+def native_spl_primary_rvbar_base(selector_low3: int) -> int:
+    """Return pinned native SPL primary RVBAR base for VER_REG[2:0]."""
+    if isinstance(selector_low3, bool) or not isinstance(selector_low3, int):
+        raise ValueError("selector_low3 must be an integer")
+    if not 0 <= selector_low3 <= 7:
+        raise ValueError("selector_low3 must be in the range 0..7")
+    return 0x08100040 if selector_low3 == 2 else 0x09010040
+
+
+def rvbar_selector_parity() -> dict[str, list[int]]:
+    """Classify all VER_REG low-three-bit values using both pinned rules."""
+    matching = []
+    mismatching = []
+    for value in range(8):
+        if bl31_cpu_on_rvbar_base(value) == native_spl_primary_rvbar_base(value):
+            matching.append(value)
+        else:
+            mismatching.append(value)
+    return {"matching": matching, "mismatching": mismatching}
+
+
 def decode_bl_target(pc: int, instruction: int) -> int:
     if (instruction & 0xfc000000) != 0x94000000:
         raise RuntimeError("expected AArch64 BL at 0x%08x" % pc)
@@ -1391,10 +1421,11 @@ def main() -> int:
     alternate_bank = (0x01020008 << 3) & 0xffffffff
     if primary_bank != 0x09010040 or alternate_bank != 0x08100040:
         raise RuntimeError("decoded BL31 per-core RVBAR bank arithmetic changed")
-    bl31_bank = {value: (primary_bank if value == 0 else alternate_bank) for value in range(8)}
-    spl_bank = {value: (alternate_bank if value == 2 else primary_bank) for value in range(8)}
-    matching_selector_values = [value for value in range(8) if bl31_bank[value] == spl_bank[value]]
-    mismatching_selector_values = [value for value in range(8) if bl31_bank[value] != spl_bank[value]]
+    bl31_bank = {value: bl31_cpu_on_rvbar_base(value) for value in range(8)}
+    spl_bank = {value: native_spl_primary_rvbar_base(value) for value in range(8)}
+    parity = rvbar_selector_parity()
+    matching_selector_values = parity["matching"]
+    mismatching_selector_values = parity["mismatching"]
     if matching_selector_values != [0, 2] or mismatching_selector_values != [1, 3, 4, 5, 6, 7]:
         raise RuntimeError("BL31/SPL RVBAR selector parity classification changed unexpectedly")
 
@@ -2062,7 +2093,9 @@ def main() -> int:
                 "native_spl_rule": "low3 == 2 -> 0x08100040; otherwise -> 0x09010040",
                 "matching_low3_values": matching_selector_values,
                 "mismatching_low3_values": mismatching_selector_values,
-                "device_low3_value": "UNKNOWN; requires read-only target sampling",
+                "compatibility_status": "UNRESOLVED_UNTIL_SELECTOR_READBACK",
+                "mismatch_implication": "For low3 values 1,3,4,5,6,7, the native SPL primary RVBAR base differs from the BL31 later CPU_ON helper base; this is a potential cross-stage incompatibility, not proof that the tested device has one of these values.",
+                "device_low3_value": "UNKNOWN; userspace /dev/mem read failed with EFAULT; requires a trusted read-only path",
                 "native_spl_source_commit": "cbe253a43f46cf551cc9a6c79a84015bde3686cf",
             },
             "registers": {
@@ -2091,7 +2124,8 @@ def main() -> int:
             "The ninth entry is the vendor get_sys_suspend_power_state extension: the exact member string is present, SYSTEM_SUSPEND loads table byte offset +0x40 and indirectly calls the function at 0x48002544.",
             "The getter returns encoded power state 0x02010000 and its caller passes that value to transition function 0x48008d98.",
             "Slots 0-5 are independently selected by matching table byte offsets and indirect call sites; slot 7 references Sunxi System Reset messages and calls reset helper 0x48001ec8, while slot 6 calls power-off helper 0x48001ed8.",
-            "Slot 1 affinst_on reaches CPU_ON helper 0x48002d78, but initial BL31-to-BL33 core release is not established.",
+            "Slot 1 affinst_on reaches CPU_ON helper 0x48002d78; that later callback path is not evidence of automatic secondary release at initial BL31-to-BL33 handoff.",
+            "The pinned SPL and BL31 CPU_ON helper RVBAR selector rules agree only for VER_REG[2:0] values 0 and 2; values 1,3,4,5,6,7 select different RVBAR banks. The live selector is unknown, so target compatibility remains unresolved.",
             "Slot 3 affinst_suspend contains the conditional CCU/AON save helper; slot 5 affinst_suspend_finish contains the conditional restore helper and tail-branches to slot 4 affinst_on_finish.",
             "These are static binary ABI/control-flow findings. They do not prove suspend/resume, CPU_ON, system-off or system-reset execution on the tested device.",
             "CCU save/restore helpers do not establish a BL33 startup PLL transition or an exposed CPU DVFS API.",
