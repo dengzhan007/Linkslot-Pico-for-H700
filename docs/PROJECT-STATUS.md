@@ -10,8 +10,53 @@
 
 独立硬件门槛不变：#94 静态 Boot0 分析显示 CPU1–CPU3 hold-off 仍未取得 H700 实机 reset/RVBAR readback；DRAM retention PFN `0x40000` 是 `LINUX_ACTIVE_ANON_MAPPED_PAGE`，不能视为自由 scratch；BL33 runtime/BSS/page-table/stack 所有权、APB1/PIO permission 与 timer/PPI continuity 仍未闭合。上述结果全是匹配二进制/原始 DTB 的 host/static 审计，不是实机 suspend/wake 或 TWI transaction。继续保持 `H700_MEMORY_LAYOUT_APPROVED=false`、`hardware_applied=0`；未执行设备 SMC/MMIO、TWI transaction、DRAM 内容读写、待机/唤醒、Boot0/TOC1 写入、刷写或 payload execution。
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
-**当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
+**当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 分别实测约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。60 Hz 是唯一合格模式。120 Hz 已移入 deferred：没有面板完整料号/Revision 与对应 datasheet 前不再投入主线，不做 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist。当前唯一近期交付目标改为 M1：受控的 AArch32 BL33 诊断启动准备；详细门槛见下方“项目主线纠偏与验收门槛”。`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
+
+## 2026-11-27 项目主线纠偏与验收门槛（优先级高于下方专项审计日志）
+
+**审查依据：** reports 分支最新报告 [project-goal-alignment-review-20261127](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/project-goal-alignment-review-20261127)，reports HEAD `1c4c00722096ad3f22cf3d888f0ea69ca7ad9a0a)，审查工作分支 HEAD `afdf9c24fd659d179e64a8afdd72f3a43663cadc`。这是只读计划/历史审查，不是设备验收。
+**当前 CI：** Linkslot/LK feasibility #893（[run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45977712810)，HEAD `afdf9c2`）74/74 主步骤成功；H700 boot-audit #1484（[run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45977712819)）Linux/Windows jobs 均成功。二者均为 host/cross-build。BL31 audit #132（[run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45977266644)）是静态审计成功，不代表设备 suspend/TWI 已运行。
+**基线事实源：** 当前唯一稳定 Linkslot 源码基线为 main 1.0.49；`porting/linkslot-1.0.45-feasibility` 是历史工作分支名，不表示源码仍 pin 在 1.0.45。版本依据见 [upstream-baselines.md](upstream-baselines.md)。
+
+### 当前验收门槛台账
+
+| ID | 验收项 | 状态 | 当前证据 / 阻塞 |
+|---|---|---|---|
+| G1 | 完整 H700 LK target 与可验证的 BL33 启动链 | **OPEN** | 仅有 CRT0/异常/MMU 等 host layout/link probes；没有完整 LK 实机启动。32 KiB native-loader patcher 通过 host 测试，但诊断 payload 尚未产出。 |
+| G2 | BL33 image/BSS/stack/heap/page-table 与应用 DRAM 所有权 | **OPEN — fail-closed** | BL31/Boot0 生命周期、未知保留区与 cache/DMA 所有权未闭合；不得设置 `H700_MEMORY_LAYOUT_APPROVED`、`H700_MEMBASE` 或 `H700_MEMSIZE`。 |
+| G3 | BL31→BL33 时 CPU1–CPU3 reset/hold-off 与 RVBAR 状态 | **OPEN** | 目前只有 Boot0/BL31 静态证据；没有目标设备 pre-BL33 live readback。PSCI CPU_ON callback 存在不代表初始交接已启动或停驻多核。 |
+| G4 | BL33 自有显示 scanout/framebuffer 与面板点亮 | **PARTIAL** | Linux 运行态 60 Hz 有只读证据；BL33 framebuffer ownership、scanout 初始化和实机画面尚未验收。 |
+| G5 | 物理按键到 H700 HAL 输入事件 | **PARTIAL** | Linux evdev/gpiolib 17/17 键映射已验证；裸机 PIO/IRQ 输入驱动与 Linkslot 接线未完成。 |
+| G6 | BL33 GIC/timer/PPI handoff 与 IRQ 调度 | **OPEN** | GIC/timer 静态映射及 host tests 不证明安全态、Group ownership、PPI handoff 或 timer 连续性。 |
+| G7 | PCM DMA 音频 | **NOT STARTED** | 尚无 H700 裸机音频 DMA 路径。 |
+| G8 | 裸机 SD 读写及断电一致性 | **PARTIAL** | CMD17→GPT→FAT/VFS 为 host-tested；设备侧控制器初始化、实际读写、flush/barrier 与断电一致性未验收。 |
+| G9 | PMIC 完全关机（ADR-003） | **DEFERRED / OPEN** | BL31 suspend/TWI 静态链不是设备 transaction；PMIC 命令与完整关机动作未知。按路线图放在基本启动/功能之后。 |
+| G10 | 温度传感器校准与可信 thermal input | **OPEN** | AVCC/温度校准未闭合。 |
+| G11 | 板级批准的 OPP/电压频率表 | **OPEN** | 不将 Linux DT OPP 或 host CPU policy 当作可安全执行的板级 OPP。 |
+
+**硬件总闸保持：** `H700_MEMORY_LAYOUT_APPROVED=false`，`hardware_applied=0`。未授权任何设备 MMIO/SMC、TWI transaction、DRAM 内容访问、Boot0/TOC1/SD 写入、固件刷写或 payload execution。
+
+### 唯一近期主线：M1 — 小型 AArch32 BL33 诊断启动准备
+
+M1 先完成规格、proof-of-life 信号资格审查和 host-only 产物验证。32 KiB 是 loader 输入文件上限，不是运行时 BSS/stack/heap/page-table 的内存许可。M1 不包含完整 Linkslot/mGBA，不允许通过临时设置内存总闸来“先跑起来”。详见 [M1 BL33 diagnostic specification](m1-bl33-diagnostic.md)。
+
+1. **M1-S0（本轮）：** 固定诊断范围、入口快照、信号资格、构建边界和禁止事项。
+2. **M1-S1：** 仅凭匹配 RG34XX 板型的原理图/boot source/只读证据，确认确定性的 proof-of-life 路径。UART0 目前只是候选；不得根据 Linux bootargs 或其他 RG34XX 变体资料直接写 UART/PIO。PI12、LCD 与 SD 也不是默认安全替代方案。
+3. **M1-S2：** 信号路径审查通过后，生成最小 A32 诊断 payload，复用现有 BL33 entry snapshot；执行 A32 编译、ELF/map/BSS/stack/layout 和 raw-size 检查。所有结果限 host。
+4. **M1-S3：** 在隔离的 pinned BaseOS checkout 中构建匹配 native SPL/firmware/capsule，核验 loader extent/header/FNV/文件长度和来源；输出明确标记为 `NON-INSTALLABLE / NOT FOR DEVICE`。不得写入 SD 或设备。
+5. **M1-S4：** 设备运行不是本轮授权事项。只有 G2/G3 与相关 handoff/恢复门槛经证据审查关闭、proof-of-life 信号经过实机接口资格确认，并获得项目所有者对本次具体测试的明确授权后，才可单独规划。
+
+### 冻结项与审计停止规则
+
+- **120 Hz：** 移入 deferred。60 Hz 是当前唯一合格模式；只有取得实际 LCD 模组料号/Revision 与对应 datasheet，才重新开启 panel qualification。
+- **BL31 PSCI suspend/TWI / PMIC 命令链：** 保留 #132 已取得的静态结论，不继续无期限增加 scanner。待基本 BL33 启动和可观测性建立后，再按 ADR-003 恢复。
+- **CPU OPP/DVFS、完整音频 DMA、上层无 I/O 业务扩展：** 暂停新增功能；保留现有 host-tested 代码，不把其 CI 通过计入硬件阶段验收。
+- **静态审计停止规则：** 同一未解决子问题连续 3 轮审计没有新增原始证据、没有改变任何 G 门槛状态时，标记为 `DEFERRED / NOT OBSERVABLE`；不得仅为增加命中数而新建 scanner。只有能解除某一明确 gate 的审计才继续。
+- **阶段推进规则：** 每轮以一个可验收的垂直切片为单位。纯 host/tooling/documentation 轮次标记为 `audit-only`，不得宣称硬件 bring-up 前进；不为满足提交数量而制造 platform/target 变更。
+
+本节优先级高于下方按日期排列的审计续接日志；后续日志只追加证据，不自动改变 G 门槛或解冻 deferred 项。
+
 
 
 ## 2026-11-27 最新续接：RTC selector producer 与 SRAM relocation 已闭合（BL31 audit #132）
@@ -937,7 +982,7 @@ UI presents、armGBA committed frames、LCD IRQ 继续作为三个独立速率�
 - [Slot 上游 issue #147](https://github.com/BrandonKowalski/slot/issues/147) 中维护者解释，相关面板略低于 60 Hz，120-Hz tweak 是把 display driver 运行到 120 Hz；同一讨论后来因 stutter reports 和实现复杂度决定跳过该 hack。此为维护者/社区背景，不是针对本机模组的 datasheet 或电气验证。
 - 本机 live identity 为 `rg34xx_v1 + lcd_type=old`，与 pvaibhav writer 精确 gate 的 `fog_fj035fhd05_v1` 不同。公开的 FOG FJ035FHD05 硬件实测资料对应的是 RG34XX-SP（compatible `anbernic,rg34xx-sp-panel`），不是本项目的非 SP RG34XX；不能把 SP 面板型号迁移到本机。不得改名、放宽 allowlist 或移植其 writer。
 
-**当前唯一有意义的下一步：**查明测试机实际 LCD 模组供应商、完整料号及 revision，并取得同一 revision 的 datasheet 或厂商确认，确认 pixel-clock、HT/VT、porches、refresh/overclock 限值。若无法获得可追溯的模组身份与规格，则保持 60 Hz 作为唯一已资格化的模式。之后才可能定义 120-Hz profile 与 VBlank/TE、buffer/cache、clock/TCON、readback、timeout、rollback 的硬件验证计划。
+**此前显示专项下一步（现已降级为 deferred）：**查明测试机实际 LCD 模组供应商、完整料号及 revision 并取得对应 datasheet；在此证据出现前维持 60 Hz，不推进 120-Hz profile 或任何 PLL/TCON 写入。
 
 原 FPS 数据不变：预游戏 presents 59.503/s、游戏态 presents 59.561/s、armGBA committed frames 59.722/s、IRQ293 59.590/s。全体刷新率 writer 继续禁用，`hardware_applied=0`。
 

@@ -4,6 +4,49 @@
 
 本项目采用可验证的垂直切片推进。每一阶段都必须产出可重复构建的测试对象和明确的验收记录；不以“编译通过”代替设备验证。
 
+
+## 2026-11-27 主线优先级重置：先完成首次 BL33 诊断启动准备
+
+本节是当前执行优先级的唯一事实源，覆盖本路线图下方历史条目中的“下一步”建议；历史结果保留，不代表 deferred 项仍在执行。
+
+**目标顺序：** 先打通最小 AArch32 BL33 的可验证启动链，再逐层接入 H700 HAL、Linkslot UI 与模拟器；最后再做 PMIC 完全关机和发行验收。当前稳定上游基线为 Linkslot main **1.0.49**（见 [upstream-baselines.md](upstream-baselines.md)）。工作分支名含 `1.0.45` 是历史名称，不是实际源码 pin。
+
+### 当前唯一近期交付物 M1
+
+按 [M1 BL33 diagnostic specification](m1-bl33-diagnostic.md) 执行：
+
+- M1-S0：固定最小诊断 payload 规格、成功信号资格标准、host-only 构建边界和禁止事项。
+- M1-S1：确认 RG34XX 当前目标板真实可用且 BL33 可访问的 proof-of-life 接口。UART0 只能作为待验证候选；不得只凭 Linux bootargs、通用 H700 文档或其他机型 pinout 推定 UART/PIO 可用。
+- M1-S2：信号资格通过后，复用已存在的 BL33 first-entry snapshot ABI，构建不超过活动 native loader 0x8000-byte extent 的 AArch32 诊断 payload，并完成 ELF/map/BSS/stack/入口契约 host 检查。
+- M1-S3：只在隔离的 pinned BaseOS source checkout 中生成配对 native SPL/firmware/capsule；检查 header/FNV/extent/padding 与源树恢复。输出必须标记 `NON-INSTALLABLE / NOT FOR DEVICE`。
+- M1-S4：设备执行/刷写不属于自动流程。G2/G3、handoff 与恢复门槛未关闭，或没有针对本次设备测试的明确授权时，禁止执行。
+
+**硬件安全闸：** `H700_MEMORY_LAYOUT_APPROVED=false`；不得设置 `H700_MEMBASE/H700_MEMSIZE`，不得执行 SMC/MMIO、TWI transaction、DRAM 内容读写、Boot0/TOC1/SD 写入、刷写或 payload execution。32 KiB 仅为 raw loader file extent，不代表 BSS、stack、heap、page table 或外部应用内存已获批准。
+
+### Gate ledger（当前状态）
+
+| Gate | 当前结论 | 下一项可验收证据 |
+|---|---|---|
+| G1 BL33 启动 | OPEN | 最小 A32 诊断镜像经批准路径启动并能产生确定信号 |
+| G2 内存所有权 | OPEN | 从 Boot0/BL31 到 BL33 的运行时生命周期、镜像/BSS/栈/页表/heap/DMA 边界完整闭合 |
+| G3 多核交接 | OPEN | pre-BL33 可信读取 CPU1–CPU3 reset/status/RVBAR；确认单核入口 |
+| G4 显示 | PARTIAL | BL33 自有 framebuffer/scanout ownership 与真实面板输出 |
+| G5 输入 | PARTIAL | PIO/IRQ→H700 HAL→Linkslot 端到端验证 |
+| G6 GIC/timer | OPEN | BL33 安全态、GIC group/PPI、CNTFRQ/CNTVCT 与 IRQ handoff 验证 |
+| G7 音频 | NOT STARTED | H700 PCM/DMA 端到端输出 |
+| G8 存储 | PARTIAL | 真机 CMD17/FAT 读取后再验证受控写入、flush 与断电一致性 |
+| G9 完全关机 | DEFERRED / OPEN | 未来单独审查 PMIC command/action 与保存语义 |
+| G10 thermal | OPEN | 可信 sensor/AVCC 校准 |
+| G11 OPP | OPEN | 经板级证据批准的频率/电压表 |
+
+### 冻结项与静态审计停止规则
+
+- 120 Hz 暂停；当前只承认已验证的 60 Hz。取得精确 LCD 模组料号/Revision 和对应 datasheet 后才重启资格审查。
+- BL31 PSCI suspend/TWI/PMIC 命令链暂停扩展；#132 的 selector=5 → R-TWI0 是静态结论，不是实际 suspend 或 TWI transaction。待 BL33 基本启动及现场观测能力建立后再恢复。
+- CPU OPP/DVFS、上层无 I/O crate 扩展、PCM DMA 与 Linkslot UI 进一步接线暂缓；保留已有实现，不将 host CI 成功算作硬件验收。
+- 同一问题连续 3 轮审计没有增加原始证据或改变任一 gate 状态，即标记为 deferred/not-observable；停止继续堆叠 scanner。只有直接解除一个 gate 的工作才可重新打开。
+- 每轮以可验收垂直切片为准。纯静态分析/host tooling/文档更新需明确标记 audit-only，不计为设备 bring-up 进展。
+
 ## M0：项目基线
 
 - [x] 建立独立仓库。
