@@ -16,6 +16,8 @@ on:
       - "scripts/test-audit-rg34xx-dram-window-ownership.py"
       - "scripts/audit-rg34xx-dram-pfn-metadata.py"
       - "scripts/test-audit-rg34xx-dram-pfn-metadata.py"
+      - "scripts/audit-rg34xx-bl31-twi-descriptors.py"
+      - "scripts/test-audit-rg34xx-bl31-twi-descriptors.py"
       - ".github/workflows/h700-bl31-memory-audit.yml"
   workflow_dispatch:
 
@@ -113,6 +115,17 @@ jobs:
             --baseos-root .ci/baseos-native \
             --out build/rg34xx-bl31-static-audit/psci-cpu-on-report.json
 
+      - name: Test RTC soft-entry TWI descriptor audit
+        run: |
+          python3 scripts/test-audit-rg34xx-bl31-twi-descriptors.py
+
+      - name: Audit RTC soft-entry TWI descriptor initialization boundary
+        run: |
+          python3 scripts/audit-rg34xx-bl31-twi-descriptors.py \
+            --monitor .ci/reports/reports/rg34xx-inventory-20261126-timer/toc1-extracted/items/monitor.bin \
+            --baseos-source .ci/baseos-native/experiments/h700-boot-speed/spl/native-boot.c \
+            --out-dir build/rg34xx-bl31-static-audit
+
       - name: Publish audit report
         if: always()
         run: |
@@ -136,6 +149,9 @@ jobs:
           fi
           if [ -f build/rg34xx-bl31-static-audit/DRAM-PFN-METADATA.md ]; then
             cat build/rg34xx-bl31-static-audit/DRAM-PFN-METADATA.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f build/rg34xx-bl31-static-audit/TWI-DESCRIPTOR.md ]; then
+            cat build/rg34xx-bl31-static-audit/TWI-DESCRIPTOR.md >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Upload captured Boot0 binaries for read-only host CPU-start audit
