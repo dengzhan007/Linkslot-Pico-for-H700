@@ -176,10 +176,26 @@ def main() -> int:
     assert module.WORDS[0x48015D48] == 0x97FFD930
     assert module.WORDS[0x48015D68] == 0x97FFCDD9
     assert module.WORDS[0x48015D6C] == 0x17FFFED7
+    assert module.WORDS[0x4800C4EC] == 0x36000220
+    assert module.WORDS[0x4800C4F4] == 0x35000860
+    assert module.WORDS[0x4800C530] == 0x37080280
     assert module.WORDS[0x4800C50C] == 0xD503207F
     assert module.WORDS[0x4800C550] == 0xD503207F
+    assert module.WORDS[0x4800C56C] == 0x34FFFEA0
+    assert module.WORDS[0x4800C5FC] == 0x1400181D
+    assert module.WORDS[0x4800C610] == 0x14001E9A
+    assert module.decode_test_branch_target(0x4800C4EC,module.WORDS[0x4800C4EC]) == 0x4800C530
+    assert module.decode_test_branch_bit(module.WORDS[0x4800C4EC]) == 0
+    assert not module.decode_test_branch_nonzero(module.WORDS[0x4800C4EC])
+    assert module.decode_imm19_branch_target(0x4800C4F4,module.WORDS[0x4800C4F4]) == 0x4800C600
+    assert module.decode_test_branch_target(0x4800C530,module.WORDS[0x4800C530]) == 0x4800C580
+    assert module.decode_test_branch_bit(module.WORDS[0x4800C530]) == 1
+    assert module.decode_test_branch_nonzero(module.WORDS[0x4800C530])
     assert module.decode_bl_target(0x4800C53C,0x94001E2D) == 0x48013DF0
     assert module.decode_bl_target(0x4800C568,0x94001E60) == 0x48013EE8
+    assert module.decode_imm19_branch_target(0x4800C56C,module.WORDS[0x4800C56C]) == 0x4800C540
+    assert module.decode_b_target(0x4800C5FC,module.WORDS[0x4800C5FC]) == 0x48012670
+    assert module.decode_b_target(0x4800C610,module.WORDS[0x4800C610]) == 0x48014078
     assert module.WORDS[0x4801612C] == 0xD53E1000
     assert module.WORDS[0x48016130] == 0x8A210000
     assert module.WORDS[0x48016134] == 0xD51E1000

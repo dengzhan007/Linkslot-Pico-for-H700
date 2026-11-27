@@ -329,8 +329,11 @@ WORDS = {
     0x48011b90: 0xb8404422, 0x48011b94: 0xeb01007f,
     0x48011b98: 0x0b020000, 0x48011b9c: 0x54ffffa8,
     0x48011ba0: 0xd65f03c0, 0x48011ba4: 0xd65f03c0,
-    0x4800c50c: 0xd503207f, 0x4800c550: 0xd503207f,
-    0x4800c53c: 0x94001e2d, 0x4800c568: 0x94001e60,
+    0x4800c4ec: 0x36000220, 0x4800c4f4: 0x35000860,
+    0x4800c530: 0x37080280, 0x4800c50c: 0xd503207f,
+    0x4800c550: 0xd503207f, 0x4800c53c: 0x94001e2d,
+    0x4800c56c: 0x34fffea0, 0x4800c568: 0x94001e60,
+    0x4800c5fc: 0x1400181d, 0x4800c610: 0x14001e9a,
     0x4800c460: 0xd282a002, 0x4800c468: 0xf2a06002,
     0x4800c470: 0xb9400041, 0x4800c474: 0x12067421,
     0x4800c478: 0xb9000041, 0x4800c47c: 0x940016df,
@@ -645,6 +648,28 @@ def decode_cond_branch_target(pc: int, instruction: int) -> int:
     return (pc + (immediate << 2)) & 0xFFFFFFFF
 
 
+def decode_test_branch_target(pc: int, instruction: int) -> int:
+    # TBZ/TBNZ share this class mask; bit 24 distinguishes nonzero.
+    if (instruction & 0x7E000000) != 0x36000000:
+        raise RuntimeError("instruction at 0x%08x is not TBZ/TBNZ" % pc)
+    immediate = (instruction >> 5) & 0x3FFF
+    if immediate & (1 << 13):
+        immediate -= 1 << 14
+    return pc + (immediate << 2)
+
+
+def decode_test_branch_bit(instruction: int) -> int:
+    if (instruction & 0x7E000000) != 0x36000000:
+        raise RuntimeError("instruction is not TBZ/TBNZ")
+    return (instruction >> 19) & 0x3F
+
+
+def decode_test_branch_nonzero(instruction: int) -> bool:
+    if (instruction & 0x7E000000) != 0x36000000:
+        raise RuntimeError("instruction is not TBZ/TBNZ")
+    return bool(instruction & (1 << 24))
+
+
 def decode_b_target(pc: int, instruction: int) -> int:
     if (instruction & 0xfc000000) != 0x14000000:
         raise RuntimeError("expected AArch64 B at 0x%08x" % pc)
@@ -826,6 +851,27 @@ def main() -> int:
         raise RuntimeError("SRAM secondary WFI path helper changed")
     if decode_bl_target(0x4800c568, read_word(raw, 0x4800c568)) != 0x48013ee8:
         raise RuntimeError("SRAM WFI return-check helper changed")
+
+    # Decode the exact runtime sleep-mode selector; values are read from the
+    # BL31 context but are intentionally not sampled from hardware here.
+    flags_branch = read_word(raw, 0x4800c4ec)
+    if decode_test_branch_target(0x4800c4ec, flags_branch) != 0x4800c530:
+        raise RuntimeError("sleep flags bit0 dispatch branch changed")
+    if decode_test_branch_bit(flags_branch) != 0 or decode_test_branch_nonzero(flags_branch):
+        raise RuntimeError("sleep flags first dispatch is no longer TBZ bit0")
+    if decode_imm19_branch_target(0x4800c4f4, read_word(raw, 0x4800c4f4)) != 0x4800c600:
+        raise RuntimeError("context+0xc8 nonzero branch changed")
+    second_flags_branch = read_word(raw, 0x4800c530)
+    if decode_test_branch_target(0x4800c530, second_flags_branch) != 0x4800c580:
+        raise RuntimeError("sleep flags bit1 RTC soft-entry branch changed")
+    if decode_test_branch_bit(second_flags_branch) != 1 or not decode_test_branch_nonzero(second_flags_branch):
+        raise RuntimeError("sleep flags second dispatch is no longer TBNZ bit1")
+    if decode_imm19_branch_target(0x4800c56c, read_word(raw, 0x4800c56c)) != 0x4800c540:
+        raise RuntimeError("wake polling zero-result loop changed")
+    if decode_b_target(0x4800c5fc, read_word(raw, 0x4800c5fc)) != 0x48012670:
+        raise RuntimeError("RTC soft-entry continuation changed")
+    if decode_b_target(0x4800c610, read_word(raw, 0x4800c610)) != 0x48014078:
+        raise RuntimeError("context+0xc8 counted-delay loop target changed")
     # The H616 reference manual names 0x03001500 CPUX_AXI_CFG_REG,
     # with CLK_SRC_SEL at bits 26:24. This image modifies only bits 25:24.
     cpux_axi_reg = (0x300 << 16) | 0x1500
@@ -1593,6 +1639,66 @@ def main() -> int:
                     "dram_retention_snapshot_copy": {
                         "rtc_pointer_register": "0x07000104 (RTC GP_DATA1; same-family RTC GP_DATA register window begins at +0x100)",
                         "rtc_pointer_store_pc": "0x48001abc",
+                        "sleep_path_selection": {
+                            "context_pointer_slot": "0x48014668",
+                            "flags_word_offset": "0xcc",
+                            "count_word_offset": "0xc8",
+                            "flag_bit0_dispatch": {
+                                "pc": "0x4800c4ec",
+                                "instruction": "TBZ W0,#0,0x4800c530",
+                                "bit0_clear": "continue to bit1 dispatch",
+                                "bit0_set": "read context+0xc8 and select direct WFI-or-counted-delay path"
+                            },
+                            "bit0_clear_modes": {
+                                "bit1_clear": {
+                                    "mode": "ordinary_wfi_wake_poll",
+                                    "wake_setup_call_pc": "0x4800c53c",
+                                    "wake_setup_helper": "0x48013df0",
+                                    "scr_el3_write_pc": "0x4800c544",
+                                    "wfi_pc": "0x4800c550",
+                                    "wake_poll_call_pc": "0x4800c568",
+                                    "wake_poll_helper": "0x48013ee8",
+                                    "repeat_when": "poll helper returns W0=0; CBZ at 0x4800c56c returns to WFI at 0x4800c540",
+                                    "exit_when": "poll helper returns nonzero",
+                                    "runtime_selection": "not observed"
+                                },
+                                "bit1_set": {
+                                    "mode": "rtc_soft_entry",
+                                    "dispatch_pc": "0x4800c530",
+                                    "rtc_standby_flag_address": "0x070001f8",
+                                    "rtc_standby_flag_value": "0x00010000",
+                                    "rtc_standby_flag_store_pc": "0x4800c598",
+                                    "return_pc_source": "context+0xc4",
+                                    "rtc_return_pc_address": "0x070001fc",
+                                    "rtc_return_pc_store_pc": "0x4800c5b8",
+                                    "additional_rtc_context_addresses": ["0x07000100", "0x0700010c", "0x07000118", "0x0700011c"],
+                                    "continuation_branch_pc": "0x4800c5fc",
+                                    "continuation_target": "0x48012670",
+                                    "runtime_selection": "not observed"
+                                }
+                            },
+                            "bit0_set_modes": {
+                                "count_zero": {
+                                    "mode": "single_wfi_then_return",
+                                    "count_source": "context+0xc8",
+                                    "scr_el3_write_pc": "0x4800c500",
+                                    "wfi_pc": "0x4800c50c",
+                                    "return_pc": "0x4800c528",
+                                    "runtime_selection": "not observed"
+                                },
+                                "count_nonzero": {
+                                    "mode": "counted_delay_then_return_without_wfi",
+                                    "count_source": "context+0xc8",
+                                    "scale": 16,
+                                    "scale_instruction_pc": "0x4800c604",
+                                    "loop_branch_pc": "0x4800c610",
+                                    "loop_target": "0x48014078",
+                                    "loop_body": "subs x0,x0,#1; b.hi",
+                                    "runtime_selection": "not observed"
+                                }
+                            },
+                            "runtime_context_values": "not sampled; no SMC/MMIO/runtime trace issued"
+                        },
                         "buffer_address": "0x4801b400",
                         "buffer_interval": "[0x4801b400,0x4801b680)",
                         "buffer_bytes": 640,
@@ -1954,6 +2060,7 @@ def main() -> int:
         "- Ordinary suspend uses `0x48015d70`: `DSB SY` → `WFI` → branch back to WFI.",
         "- The special handler `0x48001a04` copies the 0x9410-byte standby image from `[0x4800c220,0x48015630)` to SRAM `[0x20000,0x29410)`, plus auxiliary/context blocks at SRAM offsets `0x80`, `0xd4`, and `0x134` (the latter two are conditional). Its optional integrity checksum is separate: the static default descriptor is a 256-byte range at `[0x40000000,0x40000100)`, adjacent to the string `chipid`; arm_svc SMC FIDs `0x80000064` / `0xc0000064` can override its enable/start/length before use.",
         "- The copied image entry at source `0x4800c3d8` maps exactly to branch target `0x201b8`; copied helper `0x480140a0` maps to `0x27e80` and loads SP `0x57ff0`.",
+        "- The SRAM sleep dispatcher at `0x4800c4d0` selects modes from context `+0xcc`: bit0=0/bit1=0 configures wake sources and loops WFI→wake-poll (zero poll result repeats); bit0=0/bit1=1 enters RTC soft-entry, stores standby flag `0x10000` at `0x070001f8`, saves context `+0xc4` to `0x070001fc`, and branches to `0x48012670`; bit0=1 with context `+0xc8=0` performs one WFI; bit0=1 with `+0xc8!=0` executes a `+0xc8 × 16` counted busy loop without WFI. The runtime context values and selected branch remain unknown.",
         "- The relocated entry zeros its in-image scratch range `[0x291f0,0x29349)`, records wake-return address `0x48015d14` at context offset `0xc4`, and the copied RTC path writes flag `0x10000` to `0x070001f8` plus the saved return address to `0x070001fc`.",
         "- The main copy spans the SRAM A1 range and extends into SRAM C; the SP is also in SRAM C. This is a static copy/map reconstruction, not a live SRAM ownership or wakeup measurement.",
         "- The copied code changes `0x03001500` around standby/resume: it clears bits 25:24 with `0xfcffffff` before standby and sets `0x03000000` on resume, calling helper `0x48011ff8` on both paths. The H616 reference map describes offset `0x500` as CPUX_AXI_CFG_REG and CLK_SRC_SEL bits 26:24; bit 26 is preserved here, so the actual mux source remains unknown without live readback.",
