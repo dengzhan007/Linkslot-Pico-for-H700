@@ -10,7 +10,7 @@ import struct
 from pathlib import Path
 
 from capstone import CS_ARCH_ARM64, CS_MODE_ARM, Cs
-from capstone.arm64 import ARM64_OP_IMM
+from capstone.arm64 import ARM64_OP_IMM, ARM64_OP_MEM
 
 BASE = 0x48000000
 SIZE = 107216
@@ -115,6 +115,80 @@ def branch_target(ins) -> int:
     return int(ins.operands[0].imm)
 
 
+def scan_direct_context_writes(blob: bytes) -> dict:
+    """Linear-sweep candidate scan for immediate stores to context +0xa4/global +0x668.
+
+    This deliberately reports instruction-shaped byte sequences without claiming
+    every decoded word is executable code. Hits require manual control-flow review.
+    """
+    md = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
+    md.detail = True
+    decoded_count = 0
+    selector_reads = []
+    selector_stores = []
+    selector_pair_stores = []
+    global_slot_stores = []
+    global_slot_loads = []
+    store_prefixes = ("str", "stp", "stnp", "stur", "sturb", "sturh", "sttr")
+
+    for ins in md.disasm(blob, BASE):
+        decoded_count += 1
+        mnemonic = ins.mnemonic.lower()
+        mem_ops = [
+            op.mem.disp for op in ins.operands
+            if op.type == ARM64_OP_MEM
+        ]
+        if 0xA4 in mem_ops and mnemonic.startswith("ldr"):
+            selector_reads.append({
+                "pc": "0x%08x" % ins.address,
+                "mnemonic": mnemonic,
+                "operands": ins.op_str,
+            })
+        if 0xA4 in mem_ops and mnemonic.startswith(store_prefixes):
+            selector_stores.append({
+                "pc": "0x%08x" % ins.address,
+                "mnemonic": mnemonic,
+                "operands": ins.op_str,
+            })
+        # A pair of 32-bit W registers stored at +0xa0 writes words at
+        # +0xa0 and +0xa4. Record it separately as a possible selector writer.
+        if mnemonic in ("stp", "stnp") and 0xA0 in mem_ops and ins.operands:
+            first = ins.operands[0]
+            if first.type == 1 and ins.reg_name(first.reg).startswith("w"):
+                selector_pair_stores.append({
+                    "pc": "0x%08x" % ins.address,
+                    "mnemonic": mnemonic,
+                    "operands": ins.op_str,
+                })
+        if 0x668 in mem_ops and mnemonic.startswith("ldr"):
+            global_slot_loads.append({
+                "pc": "0x%08x" % ins.address,
+                "mnemonic": mnemonic,
+                "operands": ins.op_str,
+            })
+        if 0x668 in mem_ops and mnemonic.startswith(store_prefixes):
+            global_slot_stores.append({
+                "pc": "0x%08x" % ins.address,
+                "mnemonic": mnemonic,
+                "operands": ins.op_str,
+            })
+
+    return {
+        "method": "4-byte aligned Capstone linear sweep over the complete payload; data may decode as instruction-shaped words",
+        "decoded_instruction_words": decoded_count,
+        "context_plus_a4_direct_load_candidates": selector_reads,
+        "context_plus_a4_direct_store_candidates": selector_stores,
+        "context_plus_a4_stp_w_pair_candidates_at_plus_a0": selector_pair_stores,
+        "global_slot_plus_668_load_candidates": global_slot_loads,
+        "global_slot_plus_668_store_candidates": global_slot_stores,
+        "limitations": [
+            "Linear sweep does not distinguish executable code from embedded data; every candidate must be reviewed against CFG/function boundaries.",
+            "The offset-only scan does not prove that a matching base register is the RTC context/global pointer unless the surrounding dataflow is established.",
+            "It does not detect stores through precomputed pointers, memcpy/helper copies, register-indexed addresses, or runtime writes by another component.",
+        ],
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--monitor", type=Path, required=True)
@@ -176,6 +250,8 @@ def main() -> int:
     global_context_slot = read_u64(blob, 0x48014668)
     global_controller_slot = read_u64(blob, 0x48015548)
 
+    writer_scan = scan_direct_context_writes(blob)
+
     # The reviewed direct references to the context global are loads. The
     # table lookup is indexed, and its selected value is then published to
     # 0x48015548. This is intentionally not a claim about indirect writers,
@@ -225,6 +301,7 @@ def main() -> int:
             "interpretation": "Only header DRAM parameters (+0x30), board data (+0x24), and DTB pointer (+0xb0) are directly patched by the pinned native-boot.c source.",
         },
         "reviewed_context_global_load_sites": ["0x%08x" % x for x in context_pointer_load_sites],
+        "full_payload_offset_writer_scan": writer_scan,
         "limitations": [
             "The eight reported qwords are only bytes at relative offsets +0x00 through +0x38 from lookup origin 0x48014628; they are not asserted to be the selected entries. The SXTW index is signed, so an unknown negative context +0xa4 value may select memory before the lookup origin.",
             "The raw qword at 0x48014668 is 2, although reviewed code loads this slot as a context pointer. No BaseOS native SPL patch targets this slot.",
@@ -252,6 +329,7 @@ def main() -> int:
         "- The initializer performs `LDR X1, [X1, W0, SXTW #3]` from lookup origin `0x48014628`: W0 is a signed 32-bit index scaled by 8, and the unknown value may address before or after that origin. The loaded value is then published to `0x48015548` at `0x48013b14`.",
         "- The raw initial qword at slot `0x48014668` (loaded as a context pointer by reviewed paths) is `0x%016x`; the controller-object global slot `0x48015548` initially contains `0x%016x`." % (global_context_slot, global_controller_slot),
         "- Pinned BaseOS native SPL only patches monitor offsets: %s." % ", ".join("`+%s`" % ("%x" % x) for x in patch_offsets),
+        "- Full-payload linear-sweep selector writer scan: %d decoded words, %d direct +0xa4 stores, %d W-pair +0xa0 stores, %d +0x668 slot stores." % (writer_scan["decoded_instruction_words"], len(writer_scan["context_plus_a4_direct_store_candidates"]), len(writer_scan["context_plus_a4_stp_w_pair_candidates_at_plus_a0"]), len(writer_scan["global_slot_plus_668_store_candidates"])),
         "",
         "- H616-family TWI/R-TWI-like qwords in the bounded lookup-origin +0x500 data window: %s." % (", ".join("`index %d → %s (%s)`" % (x["signed_lookup_index_if_selected"], x["raw_qword"], x["h616_family_twi_label"] or "other MMIO candidate") for x in nearby_mmio_candidates) or "none"),
         "",
@@ -275,6 +353,8 @@ def main() -> int:
         "These are data candidates only. The sequence at relative indices 68–73 is `0x05002000`, `0x05002400`, `0x05002800`, `0x05002c00`, `0x05003000`, `0x07081400`, which matches H616 TWI0–TWI4 and R-TWI0 base addresses. The R-TWI0 value at relative index 73 would be selected only if the actual context `+0xa4` were 73; the runtime selector has not been captured.",
         "",
         "## Interpretation",
+        "",
+        "The full-payload linear sweep found %d direct immediate-offset load candidates from context +0xa4, no direct immediate-offset store candidates to +0xa4, no W-pair store candidate at +0xa0, and %d immediate-offset loads / %d stores at global-slot offset +0x668. These are instruction-shaped byte matches; review the listed PCs against function boundaries before treating them as code. This does not exclude indirect/helper copies or external initialization." % (len(writer_scan["context_plus_a4_direct_load_candidates"]), len(writer_scan["global_slot_plus_668_load_candidates"]), len(writer_scan["global_slot_plus_668_store_candidates"])),
         "",
         "The code treats the value selected by a signed, 8-byte-scaled index from lookup origin `0x48014628` as a controller MMIO base. A bounded scan finds six consecutive qwords at signed indices 68–73 matching the H616-family TWI0–TWI4 and R-TWI0 base-address sequence. In particular, index 73 contains `0x07081400` (R-TWI0); it is selected only if the runtime context `+0xa4` value is 73. The actual selector is unknown. The first eight qwords at offsets +0x00..+0x38 are adjacent scalar/encoded-looking data, not the six controller bases. The static value at `0x48014668` is `2`, even though multiple paths load it as a context pointer. The pinned BaseOS native SPL does not patch either location; it only patches `+0x24`, `+0x30`, and `+0xb0`.",
         "",
