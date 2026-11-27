@@ -35,6 +35,11 @@ SUSPEND_CHECKSUM_INITIAL_LENGTH = 0x100
 SUSPEND_CHECKSUM_INITIAL_ENABLE = 1
 SUSPEND_CHECKSUM_INITIAL_END = SUSPEND_CHECKSUM_INITIAL_BASE + SUSPEND_CHECKSUM_INITIAL_LENGTH
 SUSPEND_CHECKSUM_INITIAL_WORD_COUNT = SUSPEND_CHECKSUM_INITIAL_LENGTH // 4
+ARM_SVC_HANDLER_ADDRESS = 0x480035d0
+ARM_SVC_HANDLER_RECORD_ADDRESS = 0x48018ca8
+ARM_SVC_NAME_POINTER_ADDRESS = 0x48018c98
+ARM_SVC_NAME_ADDRESS = 0x48016ad9
+ARM_SVC_CHECKSUM_FIDS = (0x80000064, 0xc0000064)
 WORDS = {
     0x480029bc: 0xa9bf7bfd, 0x480029c0: 0x900000a1,
     0x480029c4: 0x9117e021, 0x480029cc: 0xf9000001,
@@ -123,6 +128,15 @@ WORDS = {
     0x48001b44: 0x394db000, 0x48001b48: 0x340000a0,
     0x48001b4c: 0xd2a00041, 0x48001b50: 0xb940cc20,
     0x48001b54: 0x321e0000, 0x48001b58: 0xb900cc20,
+    # EL3 arm_svc command dispatcher and checksum descriptor mutation.
+    0x480035dc: 0xaa0103f4, 0x480035ec: 0xaa0203f5,
+    0x480035f0: 0xaa0303e2,
+    0x48003720: 0x52800c81, 0x48003724: 0x72b00001,
+    0x48003728: 0x6b01001f, 0x4800372c: 0x54002300,
+    0x480039f8: 0x52800c81, 0x480039fc: 0x72b80001,
+    0x48003a00: 0x6b01001f, 0x48003a04: 0x54000c40,
+    0x48003b8c: 0x2a1503e1, 0x48003b90: 0x2a1403e0,
+    0x48018c98: 0x48016ad9, 0x48018ca8: 0x480035d0,
     # Checksum descriptor writer and direct callers.
     0x48001c3c: 0x97ffff72, 0x48002440: 0x97fffdcd,
     0x480022fc: 0x900000c3, 0x48002300: 0x39002060,
@@ -403,10 +417,10 @@ DISASSEMBLY_WINDOWS = (
     ("system_suspend_cache_teardown_and_trampoline", 0x48015fb8, 0x270),
     ("system_suspend_caller_full", 0x480096f8, 0xa0),
     ("system_suspend_descriptor_writer", 0x480022fc, 0x20),
-    ("system_suspend_descriptor_writer_caller", 0x48003b50, 0x100),
+    ("arm_svc_checksum_descriptor_handler", 0x480035d0, 0x6b0),
     ("system_suspend_setup_caller", 0x48002400, 0x80),
     ("system_suspend_descriptor_handoff", 0x48002284, 0x40),
-    ("system_suspend_descriptor_consumer", 0x48003374, 0x940),
+    ("bl31_boot_memory_map_setup", 0x48003374, 0xb0),
     ("system_suspend_retention_helper_48011710", 0x48011710, 0x100),
 
     ("ccu_save_helper", 0x48001790, 0x100),
@@ -902,6 +916,20 @@ def main() -> int:
         raise RuntimeError("standby checksum descriptor adjacent label changed")
     if SUSPEND_CHECKSUM_INITIAL_LENGTH % 4:
         raise RuntimeError("standby checksum range is not word aligned")
+    if read_word(raw, ARM_SVC_NAME_POINTER_ADDRESS) != ARM_SVC_NAME_ADDRESS:
+        raise RuntimeError("arm_svc runtime-service name pointer changed")
+    if read_word(raw, ARM_SVC_HANDLER_RECORD_ADDRESS) != ARM_SVC_HANDLER_ADDRESS:
+        raise RuntimeError("arm_svc runtime-service handler pointer changed")
+    arm_svc_name_offset = ARM_SVC_NAME_ADDRESS - BASE
+    if raw[arm_svc_name_offset:arm_svc_name_offset + 8] != b"arm_svc\\x00":
+        raise RuntimeError("arm_svc runtime-service name string changed")
+
+    if decode_cond_branch_target(0x4800372c, read_word(raw, 0x4800372c)) != 0x48003b8c:
+        raise RuntimeError("SMC32 arm_svc checksum command dispatch changed")
+    if decode_cond_branch_target(0x48003a04, read_word(raw, 0x48003a04)) != 0x48003b8c:
+        raise RuntimeError("SMC64 arm_svc checksum command dispatch changed")
+    if decode_bl_target(0x48003b94, read_word(raw, 0x48003b94)) != 0x480022fc:
+        raise RuntimeError("arm_svc checksum descriptor writer call changed")
 
     if decode_bl_target(0x48001c3c, read_word(raw, 0x48001c3c)) != 0x48001a04:
         raise RuntimeError("secondary SYSTEM_SUSPEND power-entry callsite changed")
@@ -1290,6 +1318,23 @@ def main() -> int:
                         },
                         "checked_range_bytes": 256,
                         "checked_range_word_count": 64,
+                        "runtime_descriptor_writer": {
+                            "service_name": "arm_svc",
+                            "service_name_address": "0x48016ad9",
+                            "handler_record_address": "0x48018ca8",
+                            "handler_address": "0x480035d0",
+                            "writer_address": "0x480022fc",
+                            "writer_call_pc": "0x48003b94",
+                            "smc_function_ids": ["0x80000064", "0xc0000064"],
+                            "smc32_dispatch_compare_branch_pc": "0x4800372c",
+                            "smc64_dispatch_compare_branch_pc": "0x48003a04",
+                            "writer_argument_mapping": {
+                                "smc_arg1": "enable byte at descriptor +0x8",
+                                "smc_arg2": "checksum start address at descriptor +0x0",
+                                "smc_arg3": "checksum length in bytes at descriptor +0x4",
+                            },
+                            "runtime_invocation_on_target": "not established; no EL3 SMC trace collected",
+                        },
                         "initial_call_pc": "0x4800c448",
                         "saved_sum_field": "context +0xb8",
                         "resume_call_pc": "0x4800c6c4",
@@ -1300,7 +1345,7 @@ def main() -> int:
                         "failure_write_pc": "0x4800c6e8",
                         "failure_write_register": "RTC/system scratch at address held in x20 (base 0x07000108 in this path)",
                         "failure_path": "unconditional branch to self at 0x4800c6ec; fail-stop",
-                        "range_identity_limit": "the matched payload's initial descriptor is [0x40000000,0x40000100) (256 bytes, 64 words), adjacent to the string 'chipid'; the power-entry code copies these values into the standby context. Any runtime mutation before use and the live DRAM contents remain unmeasured. This is not the full 0x9410-byte SRAM standby image.",
+                        "range_identity_limit": "the matched payload's initial descriptor is [0x40000000,0x40000100) (256 bytes, 64 words), adjacent to the string 'chipid'. The arm_svc handler exposes writer FIDs 0x80000064 and 0xc0000064 with arguments (enable, start, length), so this descriptor can be changed before SYSTEM_SUSPEND copies it into context. Actual call occurrence, final values and live DRAM contents are unmeasured. This is not the full 0x9410-byte SRAM standby image.",
                     },
                     "wake_source_helpers": {
                         "aggregate_function": "0x48013ee8",
@@ -1462,7 +1507,7 @@ def main() -> int:
         "- Transition `0x48008d98` iterates affinity levels from start to end through callback map `0x48017d70`; the three wrappers `0x48008b84/0x48008ab8/0x48008a00` dispatch platform slot 3 `affinst_suspend`.",
         "- For system state `0x02010000`, slot 3's CCU-save branch returns `-4`; caller checks that sentinel and invokes power-entry target `0x48001a04` at `0x48009774`.",
         "- Ordinary suspend uses `0x48015d70`: `DSB SY` → `WFI` → branch back to WFI.",
-        "- The special handler `0x48001a04` copies the 0x9410-byte standby image from `[0x4800c220,0x48015630)` to SRAM `[0x20000,0x29410)`, plus auxiliary/context blocks at SRAM offsets `0x80`, `0xd4`, and `0x134` (the latter two are conditional). Its optional integrity checksum is separate: the matched payload's initial descriptor configures a 256-byte range at `[0x40000000,0x40000100)`, adjacent to the string `chipid`.",
+        "- The special handler `0x48001a04` copies the 0x9410-byte standby image from `[0x4800c220,0x48015630)` to SRAM `[0x20000,0x29410)`, plus auxiliary/context blocks at SRAM offsets `0x80`, `0xd4`, and `0x134` (the latter two are conditional). Its optional integrity checksum is separate: the static default descriptor is a 256-byte range at `[0x40000000,0x40000100)`, adjacent to the string `chipid`; arm_svc SMC FIDs `0x80000064` / `0xc0000064` can override its enable/start/length before use.",
         "- The copied image entry at source `0x4800c3d8` maps exactly to branch target `0x201b8`; copied helper `0x480140a0` maps to `0x27e80` and loads SP `0x57ff0`.",
         "- The relocated entry zeros its in-image scratch range `[0x291f0,0x29349)`, records wake-return address `0x48015d14` at context offset `0xc4`, and the copied RTC path writes flag `0x10000` to `0x070001f8` plus the saved return address to `0x070001fc`.",
         "- The main copy spans the SRAM A1 range and extends into SRAM C; the SP is also in SRAM C. This is a static copy/map reconstruction, not a live SRAM ownership or wakeup measurement.",
@@ -1473,7 +1518,7 @@ def main() -> int:
         "- Resume restores PLL_CPUX factors, sets enable bit31 and lock-enable bit29, polls lock bit28, then restores saved CCU fields. A mode==2 branch also touches `0x07010000`, `0x07010010` and `0x07000160`; the latter's exact standby role remains unknown.",
         "- Wake-source aggregation statically calls IR receive FIFO/status drain `0x480131b8`, GPIO name/read helpers `0x48013588/0x480135d8`, GPIO pad-config helper `0x48013620`, and GIC pending helper `0x48013190`. The latter reads GICD_ISPENDR at `0x03021200`, not an enable register. IR offsets `0x07040020/0x07040030` are in the H616 IR block; GPIO read/config use PIO `0x0300b000` or R_PIO `0x07022000`.",
         "- These are matched-binary wake-source preparation/polling paths; no pending interrupt, IR FIFO, GPIO level or pin configuration was probed or written on hardware.",
-        "- Integrity helper `0x48011b78` calculates a wrapping 32-bit additive sum over caller-selected 32-bit words (pointer increments by 4). The special power-entry at `0x48001a04` copies the matched payload's initial descriptor at `0x4801a000` into context: start `0x40000000`, length `0x100`, enable `1`; the adjacent embedded string is `chipid`. Thus the initial configured range is `[0x40000000,0x40000100)` (256 bytes / 64 words), not the full `0x9410`-byte SRAM standby image. Runtime mutation of the descriptor before use and live DRAM contents remain unmeasured.",
+        "- Integrity helper `0x48011b78` calculates a wrapping 32-bit additive sum over caller-selected 32-bit words (pointer increments by 4). The static default descriptor at `0x4801a000` is start `0x40000000`, length `0x100`, enable `1`; the adjacent embedded string is `chipid`. An arm_svc-named handler at `0x480035d0` dispatches both SMC FIDs `0x80000064` and `0xc0000064` to writer `0x480022fc`, which stores SMC arguments 1/2/3 as enable/start/length. The special power-entry `0x48001a04` reads the descriptor into context before checksum. Consequently the 256-byte interval is only the static default; the final range can be overridden through SMC. No runtime SMC invocation or final target value has been captured. This checksum remains separate from the full `0x9410`-byte SRAM standby image.",
         "- The RTC soft-entry stores saved return PC `0x48015d14`; resume code loads it from context `+0xc4` and indirect-branches through x22 at `0x4800c6a8`. The return continuation restores SCTLR_EL3, VBAR_EL3, DAIF and stack selection before returning into BL31.",
         "- The effective ABI is the legacy Allwinner `plat_pm_ops_t` order with a vendor getter extension; the exact source commit is not identified.",
 
@@ -1495,7 +1540,7 @@ def main() -> int:
         "- No hardware MMIO, flash, boot-media write or payload execution occurred.", "",
     ]
     (args.out.parent / "PSCI-CPU-ON.md").write_text("\n".join(markdown), encoding="utf-8")
-    print("PASS: PSCI checksum descriptor/range, helper edges, PLL/XO restore and wake-source audit")
+    print("PASS: PSCI checksum default/SMC override, helper edges, PLL/XO restore and wake-source audit")
     print("  table[1] = 0x%08x -> low-level 0x48002d78" % table[1])
     print("  callback disassembly = %s" % disassembly_path)
     print("  monitor SHA-256 = %s" % digest)

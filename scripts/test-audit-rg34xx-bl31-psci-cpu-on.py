@@ -218,6 +218,11 @@ def main() -> int:
     assert module.SUSPEND_CHECKSUM_INITIAL_ENABLE == 1
     assert module.SUSPEND_CHECKSUM_INITIAL_END == 0x40000100
     assert module.SUSPEND_CHECKSUM_INITIAL_WORD_COUNT == 64
+    assert module.ARM_SVC_HANDLER_ADDRESS == 0x480035D0
+    assert module.ARM_SVC_HANDLER_RECORD_ADDRESS == 0x48018CA8
+    assert module.ARM_SVC_NAME_POINTER_ADDRESS == 0x48018C98
+    assert module.ARM_SVC_NAME_ADDRESS == 0x48016AD9
+    assert module.ARM_SVC_CHECKSUM_FIDS == (0x80000064, 0xC0000064)
     checksum_config_load_store = {
         0x48001A58: 0xB00000C0, 0x48001A5C: 0x39402000,
         0x48001A60: 0xB900C260, 0x48001A64: 0xB00000C0,
@@ -230,6 +235,17 @@ def main() -> int:
     assert module.decode_bl_target(0x48001C3C,module.WORDS[0x48001C3C]) == 0x48001A04
     assert module.decode_bl_target(0x48002440,module.WORDS[0x48002440]) == 0x48001B74
     assert module.decode_bl_target(0x48003B94,module.WORDS[0x48003B94]) == 0x480022FC
+    assert module.decode_cond_branch_target(0x4800372C,0x54002300) == 0x48003B8C
+    assert module.decode_cond_branch_target(0x48003A04,0x54000C40) == 0x48003B8C
+    assert module.WORDS[0x480035DC] == 0xAA0103F4
+    assert module.WORDS[0x480035EC] == 0xAA0203F5
+    assert module.WORDS[0x480035F0] == 0xAA0303E2
+    assert module.WORDS[0x48003720] == 0x52800C81
+    assert module.WORDS[0x48003724] == 0x72B00001
+    assert module.WORDS[0x480039F8] == 0x52800C81
+    assert module.WORDS[0x480039FC] == 0x72B80001
+    assert module.WORDS[0x48018C98] == 0x48016AD9
+    assert module.WORDS[0x48018CA8] == 0x480035D0
     descriptor_writer_words = {
         0x480022FC: 0x900000C3, 0x48002300: 0x39002060,
         0x48002304: 0x900000C0, 0x48002308: 0xB9000001,
@@ -444,11 +460,11 @@ def main() -> int:
     assert window_map["system_suspend_cache_teardown_and_trampoline"][1] >= 0x270
     assert window_map["system_suspend_caller_full"][0] == 0x480096F8
     assert window_map["system_suspend_descriptor_writer"][0] == 0x480022FC
-    assert window_map["system_suspend_descriptor_writer_caller"][0] == 0x48003B50
+    assert window_map["arm_svc_checksum_descriptor_handler"][0] == 0x480035D0
     assert window_map["system_suspend_setup_caller"][0] == 0x48002400
     assert window_map["system_suspend_descriptor_handoff"][0] == 0x48002284
-    assert window_map["system_suspend_descriptor_consumer"][0] == 0x48003374
-    assert window_map["system_suspend_descriptor_consumer"][1] >= 0x900
+    assert window_map["bl31_boot_memory_map_setup"][0] == 0x48003374
+    assert window_map["bl31_boot_memory_map_setup"][1] == 0xB0
     assert window_map["system_suspend_retention_helper_48011710"][0] == 0x48011710
     assert "ops_slot_3_raw" in window_map
     assert window_map["ops_slot_3_raw"][0] <= 0x48002998 < window_map["ops_slot_3_raw"][0] + window_map["ops_slot_3_raw"][1]
