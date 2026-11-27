@@ -2,7 +2,7 @@
 
 Date: 2026-11-27
 
-Status: **The signed-index lookup has a static H616-family TWI0–TWI4/R-TWI0 base-map correlation. R-TWI0 is a strong conditional candidate (index 73), but the actual runtime selector is not captured; PMIC command and final platform action remain unresolved.**
+Status: **The selector is statically resolved to index 5 (twi5), which selects H616-family R-TWI0 base 0x07081400 in the relocated standby image. This is exact matched-BL31 plus original-TOC1-DTB host evidence, not a live TWI trace; PMIC command and final platform action remain unresolved.**
 
 This is a read-only host disassembly review of the exact monitor payload captured from the RG34XX non-SP inventory. It does not issue SMC, MMIO, I2C/TWI transactions, or suspend requests.
 
@@ -222,6 +222,87 @@ For the actual matched 107,216-byte monitor, the expanded CFG report remains:
 Thus the new MOVZ/MOVK/literal-pool coverage does not change the real-monitor result; it closes additional synthetic-model gaps and confirms those specific construction idioms are absent as qualifying seeds in the current payload. More complex MOVN/bitfield synthesis, spill/reload, indirect calls, helper copies, register-indexed writes, and external initialization remain outside the model.
 
 
+## 4F. Exact selector producer and copied-SRAM address rebasing (2026-11-27)
+
+This section supersedes the earlier provisional interpretation in 4A–4E that the selector and table runtime values were unknown. Those scans treated ADRP-derived link-time addresses as if the code were still executing at its linked monitor VA. The PSCI standby program is copied to SRAM, so the ADRP page-relative address must be rebased along with its instruction PC.
+
+### 4F.1 The selector producer is on the PSCI suspend callback path
+
+The matched BL31 has these direct call edges:
+
+- 0x48002998 -> 0x48001790: the first call is inside the previously identified PSCI suspend callback code path.
+- 0x48001790 loads a cached pointer from global slot 0x4803cbc0 using ADRP X0, 0x4803c000 and LDR X19, [X0, #0xbc0], then calls 0x480012cc at 0x480017b8.
+- 0x480012cc constructs the FDT property/key references and derives the controller selector:
+  - 0x480012d0/0x480012d4 form string address 0x480163ee, whose bytes are pmu0.
+  - 0x480012ec calls alias lookup helper 0x48000b98.
+  - 0x480012fc calls node traversal helper 0x48000cb8, moving from the PMU node to its parent controller node.
+  - 0x48001304/0x48001310 form property key device_type at 0x480163f3.
+  - 0x4800131c calls FDT property lookup 0x48000974.
+  - 0x4800132c/0x48001330 form/compare the twi prefix.
+  - 0x48001318 establishes page 0x4803c000; 0x48001338 adds 0xb90, yielding external context base 0x4803cb90.
+  - 0x48001348–0x48001354 obtain the property string length, address its final character before NUL (LDURB W0, [X0, #-2]), and subtract ASCII 0x30.
+  - 0x48001358 executes STR W0, [X1, #0x24], writing the numeric selector to 0x4803cbb4.
+
+The original TOC1 DTB used by the native SPL is pinned at SHA-256
+c28c87380ffab00148bf4dc457e70b8c6c576470dcfbc53df64addddf89603a1
+(144,384 bytes). Its FDT properties are:
+
+- /aliases/pmu0 = "/soc@03000000/twi@0x07081400/pmu"
+- /soc@03000000/twi@0x07081400/pmu has compatible = "x-powers,axp2202"
+- Its parent /soc@03000000/twi@0x07081400 has device_type = "twi5"
+
+The selector producer therefore computes 5, not an unknown placeholder. The pinned BaseOS native SPL source sets the monitor header DTB pointer at monitor + 0xb0 to 0x4a200000, and the same source's monitor patch contract is checked by the new audit. This ties the selector derivation to the TOC1 DTB supplied to the matched monitor. The precise runtime execution of the PSCI suspend path is still not observed on hardware.
+
+### 4F.2 The standby copy changes the active table address
+
+The monitor copies standby source range [0x4800c220, 0x48015630) (0x9410 bytes) to SRAM [0x20000, 0x29410).
+
+The table-lookup code at linked PC 0x48013ac8 is copied to runtime PC:
+
+0x20000 + (0x48013ac8 - 0x4800c220) = 0x278a8
+
+At linked address 0x48013ac8, ADRP X1 targets linked page 0x48014000, which is +0x1000 from the source PC page 0x48013000. After relocation, the same page delta from runtime page 0x27000 targets 0x28000. The following ADD X1, X1, #0x628 therefore forms runtime table base 0x28628.
+
+Converting that SRAM address back to its source-equivalent location in the copied monitor gives:
+
+0x4800c220 + (0x28628 - 0x20000) = 0x48014848
+
+The six qwords at that source-equivalent address are the H616-family controller map:
+
+| Signed index | Source-equivalent qword | Controller base | H616-family label |
+|---:|---:|---:|---|
+| 0 | 0x48014848 | 0x05002000 | TWI0 |
+| 1 | 0x48014850 | 0x05002400 | TWI1 |
+| 2 | 0x48014858 | 0x05002800 | TWI2 |
+| 3 | 0x48014860 | 0x05002c00 | TWI3 |
+| 4 | 0x48014868 | 0x05003000 | TWI4 |
+| 5 | 0x48014870 | 0x07081400 | R-TWI0 |
+
+The actual selector from the FDT producer is 5. The indexed instruction LDR X1, [X1, W0, SXTW #3] thus selects runtime entry 0x28650, whose source-equivalent qword is 0x48014870, value 0x07081400 (R-TWI0).
+
+### 4F.3 The copied context pointer and selector staging agree
+
+The copied code at linked PC 0x4800c430 executes at SRAM PC 0x20210. Its ADRP X20 page delta is +0x8000; LDR X19, [X20, #0x668] therefore reads runtime slot 0x28668. The source-equivalent qword is 0x48014888, and its value is 0x00020000, the SRAM context base.
+
+The separate 0x30-byte context staging copy at 0x48001a34–0x48001a48 copies from external context 0x4803cb90 to SRAM 0x20080. The selector field at external +0x24 (0x4803cbb4) consequently lands at 0x200a4, which is exactly SRAM context base 0x20000 + 0xa4.
+
+Thus the producer, staging copy, copied context pointer and relocated table lookup agree on a single data flow:
+
+original TOC1 FDT pmu0 -> parent device_type twi5 -> external context[+0x24]=5 -> SRAM context[+0xa4]=5 -> TWI lookup[5] -> 0x07081400
+
+### 4F.4 Correction and remaining limits
+
+The earlier interpretation of 0x48014628 as the active table base and 0x48014668 as a separate context-pointer global was not relocation-aware. For the copied standby code, the active source-equivalent locations are 0x48014848 (table) and 0x48014888 (context-pointer slot). The raw qword at 0x48014668 is not the relevant runtime context pointer for this copied path.
+
+Updated static conclusion: on the matched BL31 suspend callback path, the original TOC1 DTB's twi5 property drives selector 5, and the relocated standby table resolves selector 5 to R-TWI0 at 0x07081400. This establishes the static controller selection more strongly than the prior conditional index-73 candidate.
+
+Still not established: whether this code path executes on a particular device suspend, the TWI transaction bytes, PMIC slave address, PMIC register/command sequence, GP_DATA2 phase-marker consumer, or final power action. No TWI transaction or hardware register access was performed.
+
+The reproducible host audit is:
+- scripts/audit-rg34xx-bl31-twi-relocation.py
+- scripts/test-audit-rg34xx-bl31-twi-relocation.py
+- CI integration in .github/workflows/h700-bl31-memory-audit.yml; the audit consumes the pinned monitor and original TOC1 dtb.bin, and emits TWI-SELECTOR-RELOCATION.md plus a JSON report.
+
 ## 5. Relationship to the live FDT
 
 The uploaded live-FDT inventory reports an AXP2202 PMIC node beneath an H700 R-TWI-like node at `0x07081400`, compatible `x-powers,axp2202`. The H616 family reference maps R-TWI0 at `0x07081400`, and H616 DTS sources associate R-PIO PL0/PL1 with `s_i2c`.
@@ -232,19 +313,20 @@ The live FDT AXP2202 node agrees with the static H616-family lookup candidate at
 
 Confirmed statically:
 
-- RTC soft-entry continuation `0x48012670` calls `0x48012070`; a return reaches `0x480126a4` self-loop.
-- The continuation carries context `+0xa4` into the TWI-like controller initialization path.
-- `0x48013ac8` performs a signed selector-indexed 64-bit load from lookup origin `0x48014628`, uses the loaded value as the controller MMIO base, and saves it to `0x48015548`.
-- Monitor qwords at signed indices 68–73 correlate with H616 family TWI0–TWI4 and R-TWI0 base addresses; the R-TWI0 qword at index 73 is `0x07081400` and agrees with the live-FDT AXP2202 parent node. This is a conditional static map, not a captured runtime selection.
-- `0x48013a48` and `0x48013b98` implement controller setup and transfer/status handling.
+- RTC soft-entry continuation 0x48012670 calls 0x48012070; a return reaches 0x480126a4 self-loop.
+- The selector producer is reached from the PSCI suspend callback path: 0x48002998 -> 0x48001790 -> 0x480012cc.
+- The producer resolves original TOC1 FDT alias pmu0, reads parent controller device_type=twi5, and stores selector 5 to external context 0x4803cbb4.
+- The 0x30-byte external context copy maps 0x4803cbb4 to SRAM context +0xa4 at 0x200a4.
+- Copy-relative ADRP rebasing maps the runtime lookup to source-equivalent table 0x48014848; selector 5 selects qword 0x48014870, value 0x07081400 (R-TWI0).
+- The relocated context pointer slot is source-equivalent 0x48014888, containing SRAM context base 0x20000.
+- 0x48013a48 and 0x48013b98 implement controller setup and transfer/status handling.
 
 Unresolved:
 
-1. Who initializes or relocates the context pointer at `0x48014668`?
-2. What signed value does context `+0xa4` carry on the actual RG34XX suspend path (in particular, is it 73), and therefore which statically mapped TWI0–TWI4/R-TWI0 base is selected?
-3. What PMIC slave address and command sequence are used?
-4. What final PMIC/RTC/power action follows the transfer, and what consumes the GP_DATA2 phase markers?
+1. Whether the PSCI suspend/RTC soft-entry path executes on a specific RG34XX suspend event; no device runtime trace has been captured.
+2. The PMIC slave address, transaction bytes, command/register sequence, and the consumer/meaning of GP_DATA2 phase markers.
+3. The final PMIC/RTC/power action after the TWI transfer, including whether it leads to rail-off, reset, or a separate wake/boot protocol.
 
-Next work should remain host/static: trace the source/producer of context `+0xa4` and its signed value through the RTC soft-entry caller, or identify a trustworthy pre-suspend read-only capture. The static base mapping is already constrained; the missing fact is the runtime selector. Do not infer that selector from the FDT, do not guess a PMIC slave address, and do not issue a TWI transaction.
+Next work should remain host/static: map the TWI transfer caller parameters and status branches to identify candidate protocol bytes and follow the post-transfer return/fail-stop path. Do not send a TWI transaction, infer undocumented PMIC semantics from guessed addresses, or treat this audit as a suspend/wake test.
 
-No hardware access or modification was performed. `H700_MEMORY_LAYOUT_APPROVED` remains unset and `hardware_applied=0`.
+No hardware access or modification was performed. H700_MEMORY_LAYOUT_APPROVED remains unset and hardware_applied=0.
