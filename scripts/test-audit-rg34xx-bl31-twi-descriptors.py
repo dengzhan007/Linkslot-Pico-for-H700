@@ -53,6 +53,22 @@ def main() -> int:
     assert len(writer_scan["global_slot_plus_668_overlapping_store_candidates"]) == 1
     assert 0x4801571C in MODULE.REVIEWED_NON_RTC_SELECTOR_OVERLAPS
 
+    # Alias chain: ADRP x20,0x48014000 -> LDR x0,[x20,#0x668]
+    # (context pointer) -> STR w1,[x0,#0xa4]; followed by a global-slot
+    # store through the absolute ADRP-derived address.
+    alias_chain = struct.pack(
+        "<IIIII",
+        0x900000B4,
+        0xF9433680,
+        0xB900A401,
+        0xF9033680,
+        0xD65F03C0,
+    )
+    alias_scan = MODULE.scan_context_pointer_alias_writes(alias_chain)
+    assert len(alias_scan["global_slot_pointer_load_aliases"]) == 1
+    assert len(alias_scan["context_plus_a4_alias_store_candidates"]) == 1
+    assert len(alias_scan["global_slot_plus_668_alias_store_candidates"]) == 1
+
     source = """
       memcpy(monitor + 0x30, params, 128);
       memcpy(monitor + 0x24, board, 8);
