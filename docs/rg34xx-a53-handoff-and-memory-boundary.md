@@ -118,6 +118,29 @@ Do not invoke this path from LK/Linkslot for M1. Keep the runtime CPU0-only
 until initial hold-off and non-secure PSCI semantics are independently
 verified, and until an SMP-capable runtime is used. The unresolved active
 CPU_ON variant and reset/RVBAR values remain hardware gates.
+## 1.3 SPL / BL31 RVBAR selector parity is unresolved
+
+The pinned native SPL and matched BL31 CPU_ON helper use different predicates:
+
+| `VER_REG[2:0]` | Native SPL primary RVBAR base | BL31 later CPU_ON RVBAR base |
+|---:|---:|---:|
+| 0 | `0x09010040` | `0x09010040` (match) |
+| 1 | `0x09010040` | `0x08100040` (mismatch) |
+| 2 | `0x08100040` | `0x08100040` (match) |
+| 3–7 | `0x09010040` | `0x08100040` (mismatch) |
+
+The SPL chooses the alternate bank only when `low3 == 2`; the BL31 CPU_ON
+helper chooses the primary bank only when `low3 == 0`. The predicates agree
+only for 0 and 2. Values 1, 3, 4, 5, 6 and 7 would cause a later CPU_ON
+request to program a different per-core RVBAR bank from the SPL primary
+selection. This is a potential compatibility hazard, not proof the tested
+RG34XX has a mismatching selector.
+
+Audit #136 tests all eight values and emits
+`UNRESOLVED_UNTIL_SELECTOR_READBACK`. The target value at `0x03000024` is
+unknown because bounded `/dev/mem` read returned EFAULT. Do not invoke
+PSCI CPU_ON or release secondaries until a trusted early-boot capture or
+reviewed mapped read-only kernel path confirms the selector.
 ## 2. What remains unknown
 
 1. Whether CPUs 1–3 are still held in reset, parked in a vendor holding pen, executing secure firmware, or released when BL31 enters the current A32 BL33.
