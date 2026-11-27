@@ -23,6 +23,24 @@
 
 **M1 首选资格化方向：PI12 工作灯；UART0 不再是前置条件。** PI12 必须有精确 RG34XX 非 SP DTS/source 依据，明确 pin mux、APB1/PIO clock 与 BL33 访问权限，限定寄存器位域，保留 PI11，并具备确定的异常 fail-stop 路径。PI12 可从机身外观察，不需要 UART 焊盘；但 BL33 handoff 时访问权限、abort 处理和实际极性尚未通过。
 
+### PI12 access-gate evidence refinement (2026-11-27)
+
+The exact target BL31 binary has a statically identified pre-BL33 security
+setup routine that writes SPC decode-port set registers 0–13 to
+`0xffffffff`, the CCU security switch at `0x03001f00`, the R_PRCM
+security switch at `0x07010290`, and a DMA security mask. Pinned H616 TF-A
+source describes the same family routine as preparing Non-secure peripheral
+access, but warns that SPC changes may not take effect unless a fuse is
+programmed. The target-specific write at `0x030080e0` remains unexplained.
+
+This is positive static ordering evidence that BL31 attempts to prepare
+Non-secure peripheral access before BL33. It does not identify the applicable
+SPC decode port for PIO, prove the fuse condition, or establish APB1/PIO clock
+and access state at BL33 entry. The latest device inventory did not capture
+the relevant fuse. PI12 therefore remains default-off; no unverified SID
+offset may be read. Details and pinned references are in
+[h700-bl31-pio-ccu-audit.md](h700-bl31-pio-ccu-audit.md).
+
 ### 备用候选：UART0（静态证据较多，但不作为首启依赖）
 
 **已取得的正向证据：**
