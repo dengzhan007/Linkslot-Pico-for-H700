@@ -473,3 +473,42 @@ secondary A53 hold-off and timer-PPI handoff before considering any reversible
 runtime diagnostic.
 
 `hardware_applied=0` remains unchanged.
+
+## Standby SRAM additive integrity checksum and fail-stop path (2026-11-27)
+
+BL31 audit [#60](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45920492462)
+passed 20/20 on code HEAD `74151f7e5347c23b06b82afc09e041266606dd8c`.
+Artifact [15164342241](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45920492462/artifacts/15164342241)
+contains the expanded disassembly and machine assertions.
+
+The checksum helper at `0x48011b78` loads start pointer and byte length from
+context `+0xb0/+0xb4`, initializes a 32-bit sum to zero, adds each 32-bit word
+while advancing by four bytes, and returns the wrapped 32-bit additive sum.
+It is not CRC or a cryptographic hash.
+
+Standby/resume call flow:
+
+| Stage | PC / field | Behavior |
+|---|---|---|
+| Optional enable | `0x4800c43c` | Reads context `+0xc0`; zero skips initial checksum |
+| Standby checksum | `0x4800c448` | Calls `0x48011b78` |
+| Save | `0x4800c44c` | Writes sum to context `+0xb8` |
+| Resume checksum | `0x4800c6c4` | Recomputes using context start/length |
+| Compare | `0x4800c6d8` | Compares saved `+0xb8` against resumed `+0xbc` |
+| Success | `0x4800c6dc` | Branches to resume continuation |
+| Failure | `0x4800c6e0–0x4800c6ec` | Builds `0x88000001`, writes via x20 (this path constructs base `0x07000108`), then self-loops |
+
+The mismatch branch is explicit fail-stop behavior: it does not continue
+normal resume/restore after a checksum mismatch.
+
+**Range limitation:** helper uses caller-provided context `+0xb0/+0xb4`;
+current evidence has not located assignments to those two fields. Therefore
+the checked range is configurable and must not yet be described as the full
+`0x9410`-byte copied SRAM image. Context `+0xc0` is an enable flag; its
+assignment and mode semantics also remain under analysis.
+
+CI #60 pins helper-loop words, both calls, context fields, compare branch,
+fail-code construction and fail-stop loop. No hardware checksum execution,
+MMIO, PSCI SMC, storage write or suspend/resume test was performed.
+
+`hardware_applied=0` remains unchanged.

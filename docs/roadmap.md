@@ -979,10 +979,31 @@ Hard size boundary: this first integration path is only for a small diagnostic p
   name/read helpers and context-fed GPIO pad-config path.
 - [x] BL31 audit #59 [passed 20/20](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45919948625);
   artifact [15164072253](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45919948625/artifacts/15164072253).
-- [ ] Trace context sum/check helpers `0x48011b78`, `0x48011920`,
-  `0x48011b38`, `0x48011b10` and `0x48011b30`; verify data coverage and
-  failure behavior of saved standby state.
+- [x] Identify `0x48011b78` as a 32-bit word-wise additive checksum over
+  the caller-provided range in context `+0xb0/+0xb4`; verify optional enable
+  `+0xc0`, standby save `+0xb8`, resume compare `+0xbc` and fail-stop code
+  `0x88000001` / self-loop. BL31 audit #60 passed 20/20.
+- [ ] Trace assignments to context `+0xb0/+0xb4/+0xc0`; determine the
+  actual checksum start/length. Do not assume it covers the entire SRAM image.
+- [ ] Continue the separate `0x48011920`, `0x48011b38`, `0x48011b10` and
+  `0x48011b30` helpers and verify their semantics.
 - [ ] Establish SRAM C ownership/retention/clocking and trusted read-only
   RTC/PMIC wake-source state before any device suspend attempt.
 - [ ] Close BL31/Boot0 RAM ownership, loader extent, secondary-A53 hold-off
   and timer-PPI handoff; `hardware_applied=0` remains unchanged.
+
+## 2026-11-27 — Standby SRAM integrity checksum verified
+
+- [x] Identify `0x48011b78` as a 32-bit word-wise additive checksum over
+  the caller-provided range described by context `+0xb0/+0xb4`.
+- [x] Verify optional enable `+0xc0`, standby checksum call `0x4800c448`,
+  saved value `+0xb8`, resume call `0x4800c6c4`, compare `0x4800c6d8`.
+- [x] Verify mismatch fail code `0x88000001` is written and execution
+  self-loops at `0x4800c6ec` instead of continuing resume.
+- [x] BL31 audit #60 [passed 20/20](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45920492462);
+  artifact [15164342241](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45920492462/artifacts/15164342241).
+- [ ] Trace where context `+0xb0/+0xb4` start/length and `+0xc0` enable
+  are populated; the protected range is not yet known to equal the entire
+  `0x9410`-byte SRAM copy.
+- [ ] Continue analysis of separate context helpers and their return/failure paths.
+- Hardware unchanged: `hardware_applied=0`; no MMIO, PSCI SMC or payload execution.
