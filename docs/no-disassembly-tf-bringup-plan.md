@@ -78,6 +78,13 @@ specific host-linked layout.
 
 Pinned-source audit: [M1 one-shot capsule/SPL side-effect audit](m1-oneshot-capsule-audit.md). It records the ordinary and raw-capsule write sets and the required separate no-RTC/no-watchdog/no-media-write build mode. This remains a design only; no M1 SPL/capsule is built.
 
+APB1 source refinement: the public `sun50iw9p1` vendor clock source
+at pinned commit `a0723c51581c90bc4f060e9f251afff2ce76453f` binds its PIO
+provider to APB1 and places the APB1 register at candidate `0x03001520`.
+It defines no separate PIO gate/reset fields in that provider. This is
+source-family evidence only, not the deployed target's BL33-entry register
+value or an effective-access proof; keep the PI12 gate closed.
+
 ### Boot0/SPL capsule mode remains a separate M1 gate
 
 The current BaseOS v2 raw-capsule protocol is **not** the M1 test capsule.
@@ -102,7 +109,7 @@ The two BL33 packaging paths serve different inputs:
 - The BaseOS override path consumes the **unwrapped raw** `lk-no-mtk-header.bin` with bytes `[+4,+0x640)` reserved/zero. The pinned native builder inserts its own package-matched header bytes, hashes the raw as a generation input, and preserves the exact 32 KiB loader extent. Its input is not the standalone wrapped output.
 - After loader replacement, the builder regenerates firmware length/FNV metadata. The AArch64 SPL embedding those constants must also be rebuilt and paired with the correct Boot0 capsule. Old SPL + new firmware is not an acceptable test pair.
 
-Full host CI #926 passed 75/75 and now covers the standalone 32 KiB exact/overflow boundary. It still does not run the real target native builder against an M1 payload. The prepared input bundle is SHA-pinned, but it has not yet been materialized in this runtime, so the matching firmware/SPL/capsule and TF1 image remain unbuilt.
+Full host CI [#927](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46027513613) passed 75/75 and covers the standalone 32 KiB exact/overflow boundary plus the fixed-BaseOS one-shot source side-effect audit. It still does not run the real target native builder against an M1 payload. The prepared input bundle is SHA-pinned, but it has not yet been materialized in this runtime, so the matching firmware/SPL/capsule and TF1 image remain unbuilt.
 
 ## 4. 独立 TF1 测试卡流程
 
