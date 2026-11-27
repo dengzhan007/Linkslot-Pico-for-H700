@@ -2,15 +2,31 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-27。最新 BL31 static memory audit **#128** 在审计脚本 HEAD `02c751e9e4ccfb11a5c25022fa3bd45824494044` 上完整成功（[run #128](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45973433905)，产物 [15185733602](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45973433905/artifacts/15185733602)）。#128 修正了生成报告的 seed 计数标签，并复验全部 host/static audit。H700 boot audit #1476/#1477 对状态/路线图提交的 Linux host-tools 与 Windows PowerShell 均成功（[#1476](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45973233483)、[#1477](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45973261020)）；最新 TWI 专项文档提交会触发后续 boot audit。完整 Linkslot/LK feasibility **#891** 仍运行中（[run #891](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45973261101)）；此前 #889 在 `309be4ae...` 上成功（[run #889](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45969487923)）。自 #889 后只改静态审计脚本、host tests、CI 与文档，没有改动 Linkslot 产品运行时代码。
-匹配 BL31 的 RTC TWI 路径使用 `LDR X1,[X1,W0,SXTW #3]`，以 context `+0xa4` 的**有符号 32 位值**作为 8-byte-scaled index，从 lookup origin `0x48014628` 取 controller MMIO base。signed indices 68–73 的静态 qword 对应 H616-family TWI0–TWI4/R-TWI0 基址；index 73=`0x07081400` 与 live-FDT AXP2202 parent 匹配，但实际 selector `context +0xa4` 未捕获。
-最新 bounded CFG/alias scan 的真实 monitor 结果由 #128 再次完整复验：79 个 ADRP seeds、ADR=0、MOV-immediate=0、literal-load=0；处理 38,676 个状态、83 条 context-like slot load path hits（22 个唯一指令 PC），没有识别到经已建模别名链写入 `context +0xa4` 或 context-like slot 的候选。四处 selector 读取为 `0x48012520`、`0x480125d4`、`0x48012694`、`0x480126d4`。
-地址语义：`0x48014668` raw qword 为 `2`，并且恰好是 lookup origin `0x48014628 + 0x40`（signed index 8）；应称为**context-like pointer slot / lookup-data overlap**，不能当作已证明独立的 global variable。运行时初始化或别名写入来源依旧未知。详细覆盖和盲区见 [RTC/TWI 专项审计](rg34xx-rtc-soft-entry-twi-audit.md)。
-#94 的 Boot0 静态分析仍显示 helper 条件调用 core2/core3，CPU1 未经过该 helper；H700 reset/SID live state 未读回，CPU1–CPU3 hold-off 仍仅为 **PROBABLE**。DRAM retention PFN `0x40000` 仍是 `LINUX_ACTIVE_ANON_MAPPED_PAGE`（kpageflags `0x5868`、mapcount 1），不能当作空闲 scratch。
-所有以上结果都是匹配二进制的 host/static audit，不是 RG34XX 实机启动或 PSCI 运行时验证。当前仍保持 `H700_MEMORY_LAYOUT_APPROVED=false`、`hardware_applied=0`；没有执行设备 SMC/MMIO、I2C/TWI transaction、DRAM 内容读写、待机/唤醒、Boot0/TOC1 写入、刷写或 payload execution。
+**最后核对时间：** 2026-11-27。最新 BL31 static memory audit **#132** 在审计脚本 HEAD `e93235b3ae7a49a3b980b63b920e71a0ee079865` 上完整成功（[run #132](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45977266644)，artifact [15187681890](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45977266644/artifacts/15187681890)）。#132 不仅通过 synthetic FDT/ADRP/relocation host tests，还对匹配的 107,216-byte BL31 和原始 TOC1 DTB 执行真实审计；报告静态解析出 `/aliases/pmu0 → .../twi@0x07081400/pmu`、parent `device_type=twi5`、selector 5，并通过 standby SRAM copy rebasing 确认 lookup table source-equivalent `0x48014848`，index 5 qword `0x48014870 = 0x07081400`（R-TWI0）。artifact 中的 `TWI-SELECTOR-RELOCATION.md` 与 JSON 已核对。此前 #129 因合成 FDT NUL literal 错误失败，#130/#131 因测试引用旧 helper 名失败；均为新增 host test harness 问题，#132 修复后完整通过，并非固件运行时回归。
+
+**重要地址更正：** 以前将 copied suspend code 的 link-time ADRP 目标直接当作运行时 monitor VA，误把 `0x48014628` / `0x48014668` 当作活动 table/context slot。该代码实际从 `[0x4800c220,0x48015630)` 复制至 SRAM `0x20000`；重定位后 active table / context-pointer source-equivalent 地址分别是 `0x48014848` / `0x48014888`。selector producer 路径为 `0x48002998 → 0x48001790 → 0x480012cc)：根据原始 TOC1 DTB 的 `pmu0` alias 读取 parent `device_type=twi5`，写 selector 5 到 external context `0x4803cbb4`；0x30-byte context staging copy 将其映射到 SRAM `0x200a4 = context +0xa4`。因此静态代码路径已确定选择 R-TWI0，而不是“index 73 条件候选”。仍未证明某次真实 suspend 执行了该路径；PMIC slave address、事务/命令字节与最终 power action 仍未知。详见 [RTC/TWI 专项审计](rg34xx-rtc-soft-entry-twi-audit.md)。
+
+此前 full monitor alias/CFG 审计 #128 的 79 ADRP seeds、38,676 CFG states、83 context-like slot load path hits，以及在其已建模范围内 zero selector/slot stores 仍是准确记录；它没有建模此处通过 FDT alias/parent property 生成 external context、再 staging 到 copied SRAM context 的完整跨区域数据流，不能用其零命中否定本次 producer 链。H700 boot audit #1480 对前次状态/路线图修改成功；本次 TWI 专项与状态更新已触发后续 boot-audit run。完整 Linkslot/LK feasibility **#892** 在较早文档 HEAD `59c7aa9d...` 上成功（[run #892](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45973668270)）；#891 后续已取消，不作为失败构建结论。
+
+独立硬件门槛不变：#94 静态 Boot0 分析显示 CPU1–CPU3 hold-off 仍未取得 H700 实机 reset/RVBAR readback；DRAM retention PFN `0x40000` 是 `LINUX_ACTIVE_ANON_MAPPED_PAGE`，不能视为自由 scratch；BL33 runtime/BSS/page-table/stack 所有权、APB1/PIO permission 与 timer/PPI continuity 仍未闭合。上述结果全是匹配二进制/原始 DTB 的 host/static 审计，不是实机 suspend/wake 或 TWI transaction。继续保持 `H700_MEMORY_LAYOUT_APPROVED=false`、`hardware_applied=0`；未执行设备 SMC/MMIO、TWI transaction、DRAM 内容读写、待机/唤醒、Boot0/TOC1 写入、刷写或 payload execution。
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
+
+
+## 2026-11-27 最新续接：RTC selector producer 与 SRAM relocation 已闭合（BL31 audit #132）
+
+- [x] 建立 `scripts/audit-rg34xx-bl31-twi-relocation.py`：固定 monitor SHA `676bc020...` 与原始 TOC1 DTB SHA `c28c8738...`，解析 FDT alias、parent device_type、producer code、context staging 与 relocated table.
+- [x] 建立 host test 覆盖 FDT parser、twi5 selector、AArch64 ADRP/ADD/BL 解码、standby copy relocation 和 table/context source-equivalent 地址。
+- [x] 将测试与真实审计接入 `.github/workflows/h700-bl31-memory-audit.yml`；#132 的两个新 TWI 步骤均成功，完整 BL31 audit job 全通过；artifact [15187681890](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45977266644/artifacts/15187681890)。
+- [x] 在精确匹配的原始 TOC1 DTB 中确认 `pmu0` alias 指向 AXP2202 子节点，父控制器 `device_type=twi5`；BL31 selector producer 将末尾数字转换为 5。
+- [x] 证明 selector 的生产与复制：PSCI suspend callback `0x48002998 → 0x48001790 → 0x480012cc` 写 external context `0x4803cbb4`；0x30-byte staging copy `0x4803cb90 → 0x20080` 将其复制到 `0x200a4 = SRAM context +0xa4`。
+- [x] 正确处理 standby code copy 的 ADRP rebasing：source `0x4800c220..0x48015630` → SRAM `0x20000`；runtime lookup table `0x28628` 对应 source `0x48014848`；index 5 qword `0x48014870` 为 `0x07081400` (R-TWI0)。context pointer slot runtime `0x28668` 对应 source `0x48014888`，其值为 `0x20000`。
+- [x] 修正以前把 link-time 0x48014628/0x48014668 当成 copied code 活动地址的错误解释；具体更正见 [RTC/TWI 专项审计](rg34xx-rtc-soft-entry-twi-audit.md) 4F。
+- [ ] 静态追踪 R-TWI0 transfer caller 的参数/状态分支，定位 PMIC slave address 与命令字节；继续追踪传输后返回/自循环与 GP_DATA2 consumer。只做静态分析，不发起 TWI transaction。
+- [ ] 对 suspend callback 的条件执行、实际 context 运行时值和硬件 suspend/wake 保持未验证标记；不得将静态 selector 当作现场 transaction trace。
+
+`H700_MEMORY_LAYOUT_APPROVED=false`、`hardware_applied=0`；没有执行实机 SMC/MMIO、I2C/TWI transaction、DRAM 内容读写、待机/唤醒或固件刷写。
 
 
 ## 2026-11-27 最新续接：MOVZ/MOVK 与 literal-pool 地址构造覆盖（BL31 audit #126–#127）
