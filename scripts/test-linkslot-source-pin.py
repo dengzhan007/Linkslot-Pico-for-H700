@@ -39,8 +39,9 @@ def main() -> int:
             fail(f"{relative} does not load the shared snapshot pin exactly once")
         if 'read_text(encoding="ascii").strip()' not in text:
             fail(f"{relative} does not read the shared pin as ASCII")
-        if pin not in text:
-            fail(f"{relative} does not use the loaded pin in its source guard")
+        guard_variable = "EXPECTED_SOURCE" if "render-core" in relative else "PINNED_SNAPSHOT"
+        if f"!= {guard_variable}" not in text:
+            fail(f"{relative} does not compare the checkout against the loaded pin")
 
     feasibility = (ROOT / WORKFLOW).read_text(encoding="utf-8")
     if 'expected_snapshot="$(tr -d \'\\r\\n\' < integration/linkslot/upstream-snapshot.sha)"' not in feasibility:
