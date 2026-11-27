@@ -1,0 +1,30 @@
+RG34XX fixed DRAM-source PFN metadata probe
+kernel_release=4.9.170
+physical_source_window=[0x40000000,0x40000140)
+target_page=[0x40000000,0x40001000)
+target_pfn=0x40000 decimal=262144
+entry_bytes=8
+note=raw metadata only; no DRAM contents, SMC, MMIO, or suspend operation
+uid=0
+page_size_bytes=4096
+target_page_start=0x40000000
+kpage_metadata_file_offset_bytes=2097152
+[kpageflags]
+path=/proc/kpageflags
+status=READ_OK
+raw_8_bytes_hex=6858000000000000
+decode=deferred_until_matching_kernel_4.9.170_flag_definitions_are_checked
+[kpagecount]
+path=/proc/kpagecount
+status=READ_OK
+raw_8_bytes_hex=0100000000000000
+decode=deferred_until_matching_kernel_4.9.170_flag_definitions_are_checked
+[page_owner_availability]
+status=NOT_PRESENT
+page_owner_stacks=NOT_PRESENT_OR_NOT_READABLE
+[kernel_config]
+config_source=/proc/config.gz
+CONFIG_PROC_PAGE_MONITOR=y
+CONFIG_DEBUG_VM=y
+probe_status=COMPLETE_READ_ONLY_METADATA_ONLY
+safety=H700_MEMORY_LAYOUT_APPROVED remains unset; no ownership approval implied
