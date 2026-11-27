@@ -265,6 +265,14 @@ def main() -> int:
     for address, expected in descriptor_writer_words.items():
         assert module.WORDS[address] == expected
     assert module.decode_bl_target(0x48011928,module.WORDS[0x48011928]) == 0x48011710
+    assert module.decode_bl_target(0x48011330,module.WORDS[0x48011330]) == 0x480111A0
+    assert module.decode_bl_target(0x48011338,module.WORDS[0x48011338]) == 0x480115C0
+    assert module.decode_bl_target(0x48011974,module.WORDS[0x48011974]) == 0x48011320
+    assert module.decode_imm19_branch_target(0x4801197C,module.WORDS[0x4801197C]) == 0x48011A70
+    assert module.decode_bl_target(0x48011990,module.WORDS[0x48011990]) == 0x4800C730
+    assert module.decode_cond_branch_target(0x480119AC,module.WORDS[0x480119AC]) == 0x48011AD0
+    assert module.decode_cond_branch_target(0x480119BC,module.WORDS[0x480119BC]) == 0x48011AD0
+    assert module.decode_bl_target(0x48011AE0,module.WORDS[0x48011AE0]) == 0x4800C7A8
     assert module.WORDS[0x48011B30] == 0xD65F03C0
     assert module.WORDS[0x48011B38] == 0xD65F03C0
     assert module.decode_bl_target(0x48011B48,module.WORDS[0x48011B48]) == 0x48011B38
@@ -571,9 +579,15 @@ def main() -> int:
     assert window_map["system_suspend_retention_helper_48011710"][0] == 0x48011710
     assert window_map["system_suspend_retention_helper_48011710"][1] >= 0x210
     assert window_map["retention_bank_selector_helper"][0] == 0x4800C730
-    assert window_map["retention_bank_selector_helper"][1] >= 0x100
-    assert window_map["retention_writeback_predicate_helper"][0] == 0x48011320
-    assert window_map["retention_writeback_predicate_helper"][1] >= 0x100
+    assert window_map["retention_bank_selector_helper"][1] >= 0x70
+    assert window_map["retention_rtc_fallback_setup_helper"][0] == 0x4800C7A8
+    assert window_map["retention_rtc_fallback_setup_helper"][1] >= 0x88
+    assert window_map["retention_restore_gate_helper"][0] == 0x48011320
+    assert window_map["retention_restore_gate_helper"][1] >= 0x40
+    assert window_map["retention_restore_probe_480111a0"][0] == 0x480111A0
+    assert window_map["retention_restore_probe_480111a0"][1] >= 0x100
+    assert window_map["retention_restore_probe_480115c0"][0] == 0x480115C0
+    assert window_map["retention_restore_probe_480115c0"][1] >= 0x100
     assert window_map["system_suspend_helper_48011920_complete"][0] == 0x48011920
     assert window_map["system_suspend_helper_48011920_complete"][1] >= 0x220
     assert "ops_slot_3_raw" in window_map

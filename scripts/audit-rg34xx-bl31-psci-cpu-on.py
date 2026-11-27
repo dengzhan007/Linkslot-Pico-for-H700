@@ -155,6 +155,8 @@ WORDS = {
     0x48002314: 0x52800000, 0x48002318: 0xd65f03c0,
     0x48003b94: 0x97fff9da,
     0x48011928: 0x97ffff7a,
+    0x48011330: 0x97ffff9c,
+    0x48011338: 0x940000a2,
     0x4800c490: 0x940015ac, 0x4800c658: 0x94001540,
     0x48011710: 0xd2802082, 0x48011714: 0xb9401c01,
     0x48011718: 0xf2a0e002, 0x4801171c: 0xb9400045,
@@ -500,8 +502,11 @@ DISASSEMBLY_WINDOWS = (
     ("system_suspend_descriptor_handoff", 0x48002284, 0x40),
     ("bl31_boot_memory_map_setup", 0x48003374, 0xb0),
     ("system_suspend_retention_helper_48011710", 0x48011710, 0x210),
-    ("retention_bank_selector_helper", 0x4800c730, 0x100),
-    ("retention_writeback_predicate_helper", 0x48011320, 0x100),
+    ("retention_bank_selector_helper", 0x4800c730, 0x70),
+    ("retention_rtc_fallback_setup_helper", 0x4800c7a8, 0x88),
+    ("retention_restore_gate_helper", 0x48011320, 0x40),
+    ("retention_restore_probe_480111a0", 0x480111a0, 0x100),
+    ("retention_restore_probe_480115c0", 0x480115c0, 0x100),
 
     ("ccu_save_helper", 0x48001790, 0x100),
     ("ccu_restore_helper", 0x480018d8, 0x100),
@@ -1498,6 +1503,31 @@ def main() -> int:
                             "fixed_dram_segment": "[0x40000000,0x40000140)",
                             "fixed_segment_saved_to": "[0x4801b400,0x4801b540)",
                             "dynamic_bank_base": "0x40000000 + (((context[0x1c] >> 17) << 20))",
+                            "selector_derivation": {
+                                "helper": "0x4800c730",
+                                "call_pc": "0x48011990",
+                                "precomputed_override": "context +0x1c bit31 set bypasses helper",
+                                "inputs": {
+                                    "context_word_0x18": {
+                                        "bits_4_11": "add to exponent",
+                                        "bits_12_13": "add to exponent",
+                                        "bits_14_15": "add to exponent",
+                                        "bits_0_3": "add to exponent"
+                                    },
+                                    "context_word_0x1c": {
+                                        "bits_12_15": "add to exponent",
+                                        "bits_0_3_zero": "select exponent bias 0x12; nonzero selects 0x13"
+                                    },
+                                    "context_halfword_0x7a": "low three bits gate a 3/4 scaling adjustment unless context+0x1c bits31:30 encode 2",
+                                    "output": "DRAM geometry/capacity selector; caller stores it in context+0x1c bits16..30"
+                                },
+                                "controller_exception": {
+                                    "register": "0x03006200",
+                                    "low16_values": ["0x5c00", "0x5d00"],
+                                    "size_threshold": "0x800",
+                                    "behavior": "for these two controller IDs, a selector result greater than 0x800 skips rewriting context+0x1c"
+                                }
+                            },
                             "dynamic_segment_bytes": 320,
                             "dynamic_segment_saved_to": "[0x4801b540,0x4801b680)",
                             "copy_direction": "DRAM -> RTC-GP_DATA1-addressed scratch buffer",
@@ -1515,6 +1545,19 @@ def main() -> int:
                             ],
                             "worker": "0x48011938",
                             "rtc_pointer_load": "0x07000104",
+                            "restore_gate": {
+                                "helper": "0x48011320",
+                                "call_pc": "0x48011974",
+                                "branch_pc": "0x4801197c",
+                                "skip_copy_when": "helper returns zero; CBZ branches to 0x48011a70",
+                                "helper_calls": [
+                                    {"pc":"0x48011330","target":"0x480111a0"},
+                                    {"pc":"0x48011338","target":"0x480115c0"}
+                                ],
+                                "return_value": "the second helper's W0 result for context+0x4 != 4; otherwise the first 32-bit word at DRAM 0x40000000",
+                                "alternate_layout_probe": "context+0x4 == 4 causes helper to load [0x40000000] and use that value as the copy-enable predicate",
+                                "runtime_gate_result": "not observed"
+                            },
                             "copy_direction": "scratch buffer -> DRAM",
                             "fixed_dram_segment": "[0x40000000,0x40000140)",
                             "dynamic_bank_base": "0x40000000 + (((context[0x1c] >> 17) << 20))",
@@ -1710,6 +1753,7 @@ def main() -> int:
         "- RVBAR selector cross-check: BL31 uses VER_REG low3==0 for base 0x09010040, otherwise 0x08100040; pinned native SPL uses low3==2 for the alternate bank. Both agree only for selector values 0 and 2; the target value must be read.",
         "",
         "- Power-entry stores the scratch-buffer pointer 0x4801b400 in RTC GP_DATA1 0x07000104. Before SRAM entry, the matched BL31 copies 160 words (0x280 bytes) from two 0x140-byte address windows into this buffer; after resume, a companion helper copies them back. The fixed address window begins at 0x40000000; the second bank is selected from context +0x1c. context +0x4 == 4 selects alternate strided-copy branches. These are address-level DRAM candidates, not approved memory ownership; the buffer is outside the matched monitor file payload and its live contents/owner are unverified.",
+        "- The second DRAM window is not selected from a literal bank ID: unless context +0x1c bit31 is preset, caller 0x48011938 invokes geometry helper 0x4800c730 at 0x48011990. The helper derives a power-of-two-like selector from context DRAM-geometry fields (context words +0x18/+0x1c and halfword +0x7a), which the caller stores in context +0x1c bits16..30. Controller IDs 0x5c00/0x5d00 read from 0x03006200 add a 0x800 threshold exception. Resume is gated by 0x48011320: zero skips copy; it calls helpers 0x480111a0 and 0x480115c0, but the live result is unknown. For context +0x4 == 4, the gate instead reads [0x40000000] as the copy-enable predicate; the copy workers use alternate strided paths. Both gate outcomes and selector inputs remain runtime-unknown.",
         "## Interpretation", "",
         "- The effective callback ABI is the legacy Allwinner `plat_pm_ops_t` order plus the vendor `get_sys_suspend_power_state` extension; do not apply modern `plat_psci_ops_t` slot offsets.",
         "- Callback semantics are mapped from binary table entries, dispatcher byte offsets, indirect calls, embedded strings and helper behavior; the exact vendor source commit remains unknown.",
