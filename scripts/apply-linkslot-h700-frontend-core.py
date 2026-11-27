@@ -7,7 +7,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
-PINNED_SNAPSHOT = "6122c8f2357ecae43295fdb1a158ff5ef7488325"
+SNAPSHOT_PIN_FILE = Path(__file__).resolve().parents[1] / "integration/linkslot/upstream-snapshot.sha"
+PINNED_SNAPSHOT = SNAPSHOT_PIN_FILE.read_text(encoding="ascii").strip()
 UPSTREAM_CRATES = ("slot-input", "slot-model", "slot-i18n")
 
 
