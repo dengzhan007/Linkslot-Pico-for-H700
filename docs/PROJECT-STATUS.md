@@ -2,7 +2,7 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-27。当前最新审计代码 revision 为 `3fb7ea778e65ae7ddb967d3691e7f5145372f150`；BL31 静态审计 [#82](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45931525770) 在该 revision 上 **20/20 steps 成功**，产物 [15168753211](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45931525770/artifacts/15168753211)。#82 锁定 MSI_CTRL fallback 函数精确窗口 `[0x4800c7a8,0x4800c964)`；#81 将 DRAM_CTRL/PHY_CTRL mode-setup helpers 加入独立反汇编窗口并通过 20/20；#79 已通过 20/20 验证 fallback 条件与 MSI_CTRL 报告分类。#80 曾因新增 Markdown 数组字符串漏结束引号而在 Python import 阶段失败，已由 #81 修复；#82 又将 fallback 窗口从过长范围收紧到包含 `0x4800c960 RET` 的精确 extent。当前变更仅扩展匹配 BL31 的静态审计、host regression 和交接文档，没有修改 Linkslot 产品运行时代码；未进行实机 SMC、MMIO、DRAM 读写或待机/唤醒。最近一次完整 Linkslot/LK feasibility [#884](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45920262116) 在 `91a07300` 上运行，尚未据此宣称当前代码 revision 全量通过。**本文 2026-11-27 PSCI 深度待机续接条目为当前状态；更早记录按各自 HEAD/run ID 理解。**
+**最后核对时间：** 2026-11-27。开始本轮工作时分支 HEAD 为 `b13bcc355e73a940b4a5a87ce0205694e02e79f1`；最近一次 BL31 static audit #83 在 `ae49671695819b8930cce7955af8f0aa26824d7e` 上 **20/20 steps 成功**（[run #83](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45932690509)），当前 HEAD 的 H700 boot audit #1438 两个 job 均成功（[run #1438](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45933498036)）。#83 之后至该 HEAD 的 3 个提交只改动本文档，未改 BL31 audit 代码；本轮新增 memblock page classifier 后将由工作流重新验证。此前 #82 对 MSI_CTRL fallback 函数精确窗口 `[0x4800c7a8,0x4800c964)`；#81 将 DRAM_CTRL/PHY_CTRL mode-setup helpers 加入独立反汇编窗口并通过 20/20；#79 已通过 20/20 验证 fallback 条件与 MSI_CTRL 报告分类。#80 曾因新增 Markdown 数组字符串漏结束引号而在 Python import 阶段失败，已由 #81 修复；#82 又将 fallback 窗口从过长范围收紧到包含 `0x4800c960 RET` 的精确 extent。当前变更仅扩展匹配 BL31 的静态审计、host regression 和交接文档，没有修改 Linkslot 产品运行时代码；未进行实机 SMC、MMIO、DRAM 读写或待机/唤醒。最近一次完整 Linkslot/LK feasibility [#884](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45920262116) 在 `91a07300` 上运行，尚未据此宣称当前代码 revision 全量通过。**本文 2026-11-27 PSCI 深度待机续接条目为当前状态；更早记录按各自 HEAD/run ID 理解。**
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
@@ -118,6 +118,15 @@
 - **严格解释：** reserved-list miss 不是 PageBuddy 状态，不能据此断言页面已分配、空闲或 Non-secure 可访问；memblock 也不能证明 Secure/Non-secure firewall 或 BL31 ownership。当前 reports 没有 PFN `0x40000` 的 `/proc/kpageflags`、`/proc/kpagecount`、PageBuddy/page-owner 样本，也没有 runtime `context+0x1c` selector。该缺口属于 **UNRESOLVED_CRITICAL**；必须保持 `H700_MEMORY_LAYOUT_APPROVED` unset，不执行 SYSTEM_SUSPEND，不将该固定窗口列入 Linkslot 可分配 RAM。
 - 下一只读证据：尝试确认目标 kernel 是否暴露 `/proc/kpageflags`、`/proc/kpagecount`、page_owner/page_ext 或可用的 page allocator debug view；只读取 PFN `0x40000` 对应页面，不触发 SMC、不读写 MMIO、不运行 suspend。若接口不可用，记录缺失并继续从 pinned kernel #19 的 boot-time memblock/reserved-memory 初始化源码寻找 secure carveout handoff；不得用未经验证的保留假设覆盖冲突。
 - 目前仅完成跨批次报告交叉检查与区间运算；尚未新增 CI memblock classifier（上轮尝试接入 workflow 未成功，未产生 GitHub commit），所以不能把该发现标为自动化 gate。`hardware_applied=0`。
+
+### DRAM retention fixed-page memblock classifier（2026-11-27）
+
+- 新增 `scripts/audit-rg34xx-dram-window-ownership.py`：将 stock BL31 固定源窗口 `[0x40000000,0x40000140)` 扩展到完整 containing page，再按半开区间 union coverage 检查 `memblock.memory` 与 `memblock.reserved`；不会将字节级子区间误当成整页保护。
+- 新增 `scripts/test-audit-rg34xx-dram-window-ownership.py` host regression，覆盖当前未保留样本、完整保留、部分保留、相邻 reservation union、CMA-only 不能替代 reserved、超出 memblock.memory 与缺少 memblock 数据。
+- `h700-bl31-memory-audit.yml` 增加上述测试及 reports 分支 memory-map JSON 分类步骤；生成 `DRAM-WINDOW-OWNERSHIP.json/.md` 并纳入 job summary 与审计 artifact。发现当前风险不会被包装成硬件通过，也不修改运行时代码。
+- 当前样本预期：PFN `0x40000` 对应页 `[0x40000000,0x40001000)` 完全位于 `memblock.memory`，但 `memblock.reserved` 覆盖为 0/4096 bytes，分类 `UNRESERVED_SYSTEM_RAM` / `BLOCKED_SOURCE_PAGE_NOT_RESERVED`。报告的 CMA debugfs 为 `not_present`；`CmaTotal=64 MiB` 不是物理 CMA 区间，不能据此声称 PFN 属于 CMA。
+- 即使未来 classifier 显示整页 reserved，也只解除“Linux memblock 未保留”这一项疑点；仍不能证明 PFN allocator/page-owner、Secure/Non-secure firewall、BL31 访问权限、DRAM controller 状态或运行时 selector。始终保持 `H700_MEMORY_LAYOUT_APPROVED=false`，直至独立证据闭合。
+- 本 revision 的 CI 结果待 workflow 执行后补记；无实机采集、SMC、MMIO、DRAM 读写、suspend/resume 或刷写，`hardware_applied=0`。
 
 ### 证据边界与下一步
 

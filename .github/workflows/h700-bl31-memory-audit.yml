@@ -11,7 +11,7 @@ on:
       - "scripts/audit-rg34xx-bl31-full-image-cpu-mmio.py"
       - "scripts/test-audit-rg34xx-bl31-full-image-cpu-mmio.py"
       - "scripts/audit-rg34xx-bl31-psci-cpu-on.py"
-      - "scripts/test-audit-rg34xx-bl31-psci-cpu-on.py"
+      - "scripts/test-audit-rg34xx-bl31-psci-cpu-on.py"\n      - "scripts/audit-rg34xx-dram-window-ownership.py"\n      - "scripts/test-audit-rg34xx-dram-window-ownership.py"
       - ".github/workflows/h700-bl31-memory-audit.yml"
   workflow_dispatch:
 
@@ -78,6 +78,16 @@ jobs:
             --reports-root .ci/reports/reports \
             --out build/rg34xx-bl31-static-audit
 
+      - name: Test DRAM retention source-page ownership classifier
+        run: |
+          python3 scripts/test-audit-rg34xx-dram-window-ownership.py
+
+      - name: Classify fixed BL31 DRAM retention source page (report only; fail-closed)
+        run: |
+          python3 scripts/audit-rg34xx-dram-window-ownership.py \
+            --input .ci/reports/reports/rg34xx-inventory-20261126-timer/memory-map-report.json \
+            --out-dir build/rg34xx-bl31-static-audit
+
       - name: Test matched BL31 PSCI CPU_ON verifier
         run: |
           python3 scripts/test-audit-rg34xx-bl31-psci-cpu-on.py
@@ -106,6 +116,9 @@ jobs:
           fi
           if [ -f build/rg34xx-bl31-static-audit/PSCI-CPU-ON.md ]; then
             cat build/rg34xx-bl31-static-audit/PSCI-CPU-ON.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f build/rg34xx-bl31-static-audit/DRAM-WINDOW-OWNERSHIP.md ]; then
+            cat build/rg34xx-bl31-static-audit/DRAM-WINDOW-OWNERSHIP.md >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Upload captured Boot0 binaries for read-only host CPU-start audit
