@@ -125,6 +125,36 @@ Until then:
 - do not assume that the Knulli DTS is the active BaseOS runtime FDT;
 - do not add a UART driver to platform/h700 yet.
 
+## 2026-11-27 LK translation-only UART0 aperture and runtime collector
+
+The H700 AArch32 MMU hook now maps the 1 MiB section
+`[0x05000000, 0x05100000)` as shared Device, read/write and XN, covering
+UART0's `0x05000000/0x400` register aperture. This is only an address-
+translation descriptor; it does not read or write UART registers, enable
+the UART clock, alter reset or PH0/PH1 mux, or grant bus/security-firewall
+permission. The section granularity also maps adjacent peripheral addresses,
+but no driver is permitted to access them. Host regression requires both the
+existing SYS_CFG/PIO/CCU section and the UART0 section before MMU enable.
+
+The read-only inventory collector now emits `uart-runtime.txt` containing:
+- only `console=`, `earlycon=` and `earlyprintk=` boot arguments (not the
+  full cmdline or device serial number);
+- `/proc/tty/driver/serial` and ttyS sysfs device links;
+- PH0/PH1 matches from already-mounted pinctrl debugfs views;
+- UART0/APB2 clock-summary matches from already-mounted clk debugfs;
+- narrowly filtered UART0/ttyS kernel log lines.
+
+The collector does not mount debugfs, open `/dev/mem`, access UART/CCU
+registers, or change clock/reset/pinmux state. The resulting file is strictly
+**Linux post-boot evidence**: it can identify which UART and pins Linux
+currently claims, but it cannot establish the earlier BL31-to-BL33 state.
+A missing debugfs view is reported as unavailable rather than worked around.
+
+Next M1-S1 evidence should come from a fresh inventory run on the actual
+RG34XX test unit. Compare the live PH0/PH1 owner and UART0/APB2 clock summary
+with the board DTS. Do not convert Linux runtime state into BL33 handoff
+proof; no UART driver or output path is enabled by this change.
+
 ## Sources
 
 - [RG34XX live inventory (reports branch)](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/docs/rg34xx-live-inventory-2026-11-22.md)

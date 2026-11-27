@@ -48,7 +48,7 @@ M1 先完成规格、proof-of-life 信号资格审查和 host-only 产物验证�
 5. **M1-S4：** 设备运行不是本轮授权事项。只有 G2/G3 与相关 handoff/恢复门槛经证据审查关闭、proof-of-life 信号经过实机接口资格确认，并获得项目所有者对本次具体测试的明确授权后，才可单独规划。
 
 
-**M1-S1 UART0 候选证据更新（未过门）：** KNULLI 的精确 RG34XX boot DTS 固定于 `57afa662009641d181f57241bcc480119b131530`，配置 `uart@05000000`、clock phandle `0x29`、PH0/PH1 default muxsel 2；独立 RG34XX bootlog/pinctrl capture 显示 Boot0/BL31/U-Boot 可输出串口且 PH0/PH1 由 uart0 claim。H700 MMU hook 已增加 `[0x05000000,0x05100000)` shared Device/XN translation section，并加入 host descriptor 回归；这不等于 UART 初始化、总线访问或 security/firewall 授权。LK 仍无 UART driver，当前测试机物理 test-pad、BL33 时 clock/reset/security access 与 pinmux retention 未确认，故 UART0 仍是首选研究候选，不是批准的输出；不得 MMIO 写入或改变 pinmux。
+**M1-S1 UART0 候选证据更新（未过门）：** KNULLI 的精确 RG34XX boot DTS 固定于 `57afa662009641d181f57241bcc480119b131530`，配置 `uart@05000000`、clock phandle `0x29`、PH0/PH1 default muxsel 2；独立 RG34XX bootlog/pinctrl capture 显示 Boot0/BL31/U-Boot 可输出串口且 PH0/PH1 由 uart0 claim。H700 MMU hook 已增加 `[0x05000000,0x05100000)` shared Device/XN translation section，并加入 host descriptor 回归；这不等于 UART 初始化、总线访问或 security/firewall 授权。inventory collector 已增加只读 `uart-runtime.txt`，下一步需在当前实机重新采集 PH0/PH1 pinctrl、UART0/APB2 clock 和 ttyS 状态；采集结果只代表 Linux post-boot。LK 仍无 UART driver，当前测试机物理 test-pad、BL33 时 clock/reset/security access 与 pinmux retention 未确认，故 UART0 仍是首选研究候选，不是批准的输出；不得 MMIO 写入或改变 pinmux。
 
 ### 冻结项与审计停止规则
 

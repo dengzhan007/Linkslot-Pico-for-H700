@@ -353,6 +353,92 @@ fi
     fi
 } > "$OUTDIR/tee-ion-runtime.txt"
 
+# Capture a focused, read-only post-boot UART0 snapshot. This is Linux runtime
+# evidence only; it does not represent BL31->BL33 handoff state. Do not mount
+# debugfs, open /dev/mem, touch UART/CCU registers, or change pinmux/clocks.
+{
+    echo "collector=rg34xx-uart0-runtime-readonly-v1"
+    echo "captured_at=$(date 2>/dev/null || echo unknown)"
+    echo "kernel=$(uname -a 2>&1 || echo unknown)"
+    echo "evidence_scope=Linux post-boot runtime only; not BL33-entry state"
+    echo "access=read-only procfs/sysfs and already-mounted debugfs text views"
+    echo "no_devmem=1"
+    echo "no_mmio_reads_or_writes=1"
+    echo "no_uart_ccu_reset_or_pinmux_writes=1"
+    echo "no_debugfs_mount=1"
+    echo
+    echo "== active Linux serial console arguments only =="
+    if [ -r /proc/cmdline ]; then
+        tr ' ' '\n' < /proc/cmdline | while IFS= read -r arg; do
+            case "$arg" in
+                console=*|earlycon=*|earlyprintk=*)
+                    printf '%s\n' "$arg"
+                    ;;
+            esac
+        done
+    else
+        echo "NOT_PRESENT: /proc/cmdline"
+    fi
+
+    echo
+    echo "== serial driver runtime view =="
+    if [ -r /proc/tty/driver/serial ]; then
+        cat /proc/tty/driver/serial
+    else
+        echo "NOT_READABLE_OR_ABSENT: /proc/tty/driver/serial"
+    fi
+
+    echo
+    echo "== ttyS device links (read-only sysfs) =="
+    TTY_COUNT=0
+    for node in /sys/class/tty/ttyS*; do
+        [ -e "$node" ] || [ -L "$node" ] || continue
+        TTY_COUNT=$((TTY_COUNT + 1))
+        echo "-- $node --"
+        if [ -L "$node/device" ] && command -v readlink >/dev/null 2>&1; then
+            readlink -f "$node/device" 2>&1 || true
+        fi
+        if [ -r "$node/dev" ]; then
+            printf 'dev='
+            cat "$node/dev"
+        fi
+    done
+    [ "$TTY_COUNT" -gt 0 ] || echo "NOT_PRESENT: no /sys/class/tty/ttyS* nodes"
+
+    echo
+    echo "== PH0/PH1 pinmux and pinconf (existing debugfs only) =="
+    PINCTRL_COUNT=0
+    for file in /sys/kernel/debug/pinctrl/*/pinmux-pins \
+                /sys/kernel/debug/pinctrl/*/pinconf-pins; do
+        [ -r "$file" ] || continue
+        PINCTRL_COUNT=$((PINCTRL_COUNT + 1))
+        echo "-- $file --"
+        if ! grep -E '(^|[^[:alnum:]_])PH0([^[:alnum:]_]|$)|(^|[^[:alnum:]_])PH1([^[:alnum:]_]|$)' "$file"; then
+            echo "NO_PH0_PH1_MATCH"
+        fi
+    done
+    [ "$PINCTRL_COUNT" -gt 0 ] || echo "NOT_PRESENT_OR_READABLE: existing pinctrl debugfs views"
+
+    echo
+    echo "== UART0 / APB2 clock summary (existing debugfs only) =="
+    CLOCK_SUMMARY="/sys/kernel/debug/clk/clk_summary"
+    if [ -r "$CLOCK_SUMMARY" ]; then
+        if ! grep -iE 'uart0|apb2' "$CLOCK_SUMMARY"; then
+            echo "NO_UART0_APB2_CLOCK_MATCH"
+        fi
+    else
+        echo "NOT_READABLE_OR_ABSENT: $CLOCK_SUMMARY (collector did not mount debugfs)"
+    fi
+
+    echo
+    echo "== UART0-related kernel log lines (filtered; no full cmdline or serial IDs) =="
+    if command -v dmesg >/dev/null 2>&1; then
+        dmesg 2>/dev/null | grep -iE 'uart0|ttyS[0-9]|sunxi[-_ ]uart' || true
+    else
+        echo "NOT_PRESENT: dmesg utility"
+    fi
+} > "$OUTDIR/uart-runtime.txt"
+
 # Capture a bounded kernel/build and cpufreq driver provenance snapshot.
 # It reads only kernel metadata, sysfs links, config text and filtered symbol
 # names. Kallsyms addresses are intentionally discarded; no vendor ioctl/SMC,
