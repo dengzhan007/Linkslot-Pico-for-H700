@@ -272,6 +272,7 @@ def scan_direct_context_writes(blob: bytes) -> dict:
             item for item in selector_overlapping_stores
             if int(item["pc"], 16) not in REVIEWED_NON_RTC_SELECTOR_OVERLAPS
         ],
+        "confirmed_rtc_context_plus_a4_writer_candidates": [],
         "global_slot_plus_668_load_candidates": global_slot_loads,
         "global_slot_plus_668_store_candidates": global_slot_stores,
         "global_slot_plus_668_overlapping_store_candidates": global_slot_overlapping_stores,
@@ -437,6 +438,19 @@ def main() -> int:
             item["relative_byte_offset"], item["address"], item["raw_qword"], item["classification_if_pointer"]
         ))
     lines += [
+        "",
+        "## Candidate stores whose immediate byte ranges overlap context +0xa4",
+        "",
+        "| PC | Instruction | Manual base/region review |",
+        "|---:|---|---|",
+    ]
+    for item in writer_scan["context_plus_a4_overlapping_store_candidates"]:
+        lines.append("| `%s` | `%s %s` | %s |" % (
+            item["pc"], item["mnemonic"], item["operands"], item["manual_review"]
+        ))
+    lines += [
+        "",
+        "All five raw overlap hits are reviewed as non-RTC objects: two current function stack-frame locals, one CPU architectural-context save block, and two exception-entry stack saves. No confirmed RTC context +0xa4 writer was found by this immediate-offset scan. This does not exclude indirect pointer stores, helper copies, register-indexed writes, or writes from outside this monitor.",
         "",
         "## Conditional H616-family TWI/R-TWI controller-base candidates",
         "",
