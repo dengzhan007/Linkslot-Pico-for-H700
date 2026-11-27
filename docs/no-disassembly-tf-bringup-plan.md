@@ -76,6 +76,22 @@ physical region and does not close the global memory gate. It only proves
 that the current pinned LK objects do not overlap each other in this
 specific host-linked layout.
 
+### Boot0/SPL capsule mode remains a separate M1 gate
+
+The current BaseOS v2 raw-capsule protocol is **not** the M1 test capsule.
+The outer capsule writes RTC GP14/GP15 attempt state and arms the H700
+watchdog; its SPL inner adopts that attempt. The pinned contract still lists
+watchdog retention across the BL31 RMR3 transition and early refusal recovery
+as unqualified. M1 does not authorize RTC/watchdog writes just because the
+test uses a replaceable TF card.
+
+The existing diagnostic capsule builder only validates the outer protocol
+using an old, non-adopting inner; it does not launch the new A32 LK payload.
+M1-T3 therefore needs either (a) a dedicated one-shot Boot0/SPL wrapper that
+does not access RTC/watchdog or make hidden durable media writes and relies
+on manual power-off/card-swap recovery, or (b) a separately reviewed and
+hardware-qualified v2 watchdog/RTC handoff. Do not conflate the two.
+
 ### Native package pairing contract
 
 The two BL33 packaging paths serve different inputs:
