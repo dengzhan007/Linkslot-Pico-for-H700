@@ -192,7 +192,7 @@ def main() -> int:
     assert module.WORDS[0x48014080] == 0xD65F03C0
     assert module.decode_b_target(0x48011FFC,0x1400081F) == 0x48014078
     assert module.decode_cond_branch_target(0x4801407C,0x54FFFFE8) == 0x48014078
-    assert module.WORDS[0x4800C464] == 0xD2800140
+    assert module.WORDS[0x4800C464] == 0x52800140
     assert module.WORDS[0x4800C688] == 0x52800140
     assert module.WORDS[0x480160A8] == 0xD5390029
     assert module.WORDS[0x48015FB8] == 0xB40003E3

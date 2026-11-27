@@ -153,7 +153,7 @@ WORDS = {
     0x48015d6c: 0x17fffed7,
     # Copied code installs its SRAM-C stack.
     0x48011ff8: 0x531e7400, 0x48011ffc: 0x1400081f,
-    0x4800c464: 0xd2800140, 0x4800c688: 0x52800140,
+    0x4800c464: 0x52800140, 0x4800c688: 0x52800140,
     0x48014078: 0xf1000400, 0x4801407c: 0x54ffffe8,
     0x48014080: 0xd65f03c0,
     0x480140a0: 0x58000081, 0x480140a4: 0x9100003f,
@@ -507,7 +507,7 @@ def main() -> int:
         raise RuntimeError("CPUX_AXI wait wrapper target changed")
     if decode_b_target(0x4801407c, read_word(raw, 0x4801407c)) != 0x48014078:
         raise RuntimeError("CPUX_AXI wait loop branch target changed")
-    if read_word(raw, 0x4800c464) != 0xd2800140:
+    if read_word(raw, 0x4800c464) != 0x52800140:
         raise RuntimeError("CPUX_AXI standby wait argument changed")
     if read_word(raw, 0x4800c688) != 0x52800140:
         raise RuntimeError("CPUX_AXI resume wait argument changed")
