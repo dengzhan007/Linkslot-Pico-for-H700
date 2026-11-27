@@ -11,7 +11,8 @@
 - The stock vendor monitor in the current device TOC1 has the same SHA-256 as the monitor pinned by the BaseOS RG34XX evidence. The binary contains Allwinner sun50iw9p1 / H616 platform strings, BL31 context-management paths, and strings naming PSCI CPU_ON, CPU_OFF, and CPU_SUSPEND handlers.
 - Those strings prove that code paths/names exist in the binary, not that the corresponding service is registered, working, or invoked on this boot. The handoff report also records the literal diagnostic string "WARNING: Unimplemented PSCI Call"; it must not be treated as a captured runtime log.
 - The measured BaseOS native chain is: AArch64 EL3 SPL → vendor BL31 at 0x48000000 → AArch32 SVC BL33 at 0x4a000000, with SPSR=0x1d3. The native SPL prepares the monitor header/DRAM parameters, programs RVBAR=0x48000000, and requests an EL3 reset through RMR_EL3; BL31 then returns to the A32 loader.
-- The reports do not establish the secondary-CPU reset/hold state at BL31→BL33. They also do not establish that GammaOS LK can safely bring up the other A53s.
+- The live secondary-CPU reset/hold state at BL31→BL33 is still unverified. A matched Boot0/SPL/BL31 static audit makes CPU1–CPU3 hold-off probable, not proven: Boot0's helper only targets CPU2/CPU3 and only clears their reset bits (an assert-reset operation under H616 reference semantics); CPU1 is not passed to that helper; the H616 family reset default asserts CPU1–CPU3; pinned native SPL writes only the primary RVBAR pair; and the matched BL31 direct-MMIO scan recovered CPU0 mode setup but no direct secondary reset/RVBAR writes. H700 register equivalence, the helper's SID bit-29 condition, and live C0_RST_CTRL/RVBAR values remain unknown. See [Boot0 CPU reset static audit](../scripts/audit-rg34xx-boot0-cpu-reset.py) and [H700 BL31 audit workflow](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/workflows/h700-bl31-memory-audit.yml).
+- The matched BL31 also contains a legacy PSCI platform-ops table whose affinst_on slot reaches a CPU_ON helper. This proves a later CPU_ON-capable path exists in the binary, not that the monitor releases CPU1–CPU3 automatically at initial BL33 handoff or that the path is available to the non-secure caller.
 
 ### Runtime DRAM and reservations
 
@@ -43,6 +44,49 @@ The captured Linux memblock snapshot reports these ranges:
 The framebuffer range is independently derived from the live boot_fb0 node (720×480, 32 bpp, stride 2880) and matches the disp_reserve=1382400,0x7bf24800 boot argument.
 
 The active BaseOS chain places its A32 BL33 loader at 0x4a000000 in a 1 MiB boot-chain arena; the current loader's SP is 0x4a0f0000, and its 16 KiB translation table begins at 0x4a0f8000. These are observed BaseOS allocation/lifetime facts, not grants to reuse that arena for a replacement LK image, heap, stack, BSS, or Linkslot core.
+
+## 1.1 Boot0 / BL31 secondary-core static evidence (2026-11-28)
+
+The pinned read-only static audit inspects the captured 128 KiB primary Boot0
+(SHA-256 bf886995745a0eb9b5030296f9f6163035e164b3a82183716e67ff876319289f),
+the exact pinned native SPL source, and the matched BL31 CPU/MMIO scan.
+
+- Boot0's reset helper at 0x231e0 is called for core IDs 2 and 3 only when
+  bit 29 of 0x03006248 is set. The helper clears DBG_REG1.C_DBGPWRUPREQ[core],
+  ORs a one-hot mask into 0x09010044, then stores C0_RST_CTRL & ~(1 << core).
+  Under the H616 reference convention (zero asserts reset), that final
+  operation asserts / keeps the selected core in reset; it never deasserts
+  the reset bit. CPU1 is not passed to the helper.
+- H616 User Manual v1.0 gives C0_RST_CTRL reset default 0x13ff0101: CPU0 bit
+  0 is deasserted, CPU1–CPU3 bits 1–3 are asserted. This is a same-family
+  reference only; H700 equivalence and the live H700 value are not established.
+- The 0x03006248 bit-29 field is not defined in the public H616 register
+  table; its H700 meaning/value is unknown. The 0x09010044 write is also
+  unresolved because the H616 manual names it CPU0 RVBARADDR0_H, while this
+  helper ORs CPU2/CPU3 one-hot masks into it. Do not modify either register
+  based on this inference.
+- Pinned native SPL writes the primary RVBAR low/high pair only and does not
+  directly write per-core reset or secondary RVBAR offsets. The matched BL31
+  scan recovers CPU0 mode setup at 0x09010010, but no direct C0_RST_CTRL,
+  DBG_REG1 or CPU1–CPU3 RVBAR MMIO writes. The BL31 PSCI table has a CPU_ON
+  callback path, but its presence is not proof of an initial-handoff release.
+- Assessment: PROBABLE_NOT_DEVICE_VERIFIED. ROM/secure/indirect paths and
+  actual register state at BL33 entry remain outside the static proof.
+
+The 2026-11-26 read-only RVBAR-selector probe did not read back the selector.
+It tried only a bounded 32-bit read of /dev/mem at 0x03000024 and failed with
+EFAULT (zero bytes; no JSON report). A separate dd attempt at the same
+address also returned Bad address. No register was read, no protection was
+bypassed, and no write was attempted. The 2026-11-27 Linux inventory showing
+CPU0–CPU3 online is a post-kernel observation and cannot reconstruct the
+earlier BL31→BL33 reset state.
+
+Do not repeat userspace /dev/mem probing on this build. The next valid
+evidence path is either (a) an early Boot0/BL31 trace/capture of CPUCFG reset
+and RVBAR state using a reviewed read-only path, or (b) a read-only kernel
+driver path through an already-mapped resource with explicit bounds and
+permission review. Until then, keep the LK runtime single-core-only and do
+not invoke CPU_ON or release secondary cores.
 
 ## 2. What remains unknown
 
