@@ -181,7 +181,7 @@ def canonical_register(name: str) -> str | None:
         return "sp"
     if name in ("xzr", "wzr"):
         return None
-    match = re.fullmatch(r"[xw](\\d+)", name)
+    match = re.fullmatch(r"[xw](\d+)", name)
     if match:
         return "x" + match.group(1)
     return None
