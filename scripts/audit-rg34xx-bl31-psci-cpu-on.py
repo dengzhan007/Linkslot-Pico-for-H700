@@ -577,7 +577,7 @@ DISASSEMBLY_WINDOWS = (
     ("bl31_boot_memory_map_setup", 0x48003374, 0xb0),
     ("system_suspend_retention_helper_48011710", 0x48011710, 0x210),
     ("retention_bank_selector_helper", 0x4800c730, 0x70),
-    ("retention_msi_ctrl_setup_fallback_helper", 0x4800c7a8, 0x25c),
+    ("retention_msi_ctrl_setup_fallback_helper", 0x4800c7a8, 0x1bc),
     ("retention_dram_ctrl_mode_setup_helper", 0x4800c9e8, 0x514),
     ("retention_dram_phy_mode_setup_helper", 0x4800dfe8, 0x2f8),
     ("retention_restore_gate_helper", 0x48011320, 0x40),
