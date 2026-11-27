@@ -662,3 +662,25 @@ the PIO provider exposes no separate module gate/reset in that driver.
 **Still unproven:** APB1 register value at BL33 entry, any independent PIO
 power/reset/firewall state in the exact deployed H700 implementation, SPC
 fuse effect, and effective Non-secure PIO access. PI12 remains default-off.
+
+
+### APB1 initialization boundary in the same vendor clock source
+
+A further review of `arch/arm/mach-sunxi/clock_sun50iw9.c` at the same
+pin found:
+
+- `clock_get_apb1()` reads `ccm->apb1_cfg` and computes the current APB1
+  rate; it does not write the register.
+- `clock_init_uart()` writes `apb2_cfg` to the 24 MHz UART source and
+  modifies UART gate/reset bits, but does not touch `apb1_cfg`.
+- Repository code search for `CCM_APB1_DEFAULT` found its definition in
+  `clock_sun50iw9.h`, but no corresponding use in the `sun50iw9p1`
+  source set reviewed here.
+
+This does not prove that no earlier Boot0 stage or another unreviewed
+component programs APB1. It does mean this particular U-Boot clock source
+does not establish an APB1 initialization write before BL33. The APB1 value
+at handoff must remain unknown until the exact Boot0/SPL/monitor chain is
+matched or a trustworthy earliest read-only capture is available. Do not
+assume the header's `CCM_APB1_DEFAULT` constant is applied.
+
