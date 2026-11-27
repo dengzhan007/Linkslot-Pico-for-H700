@@ -260,6 +260,42 @@ published materials. Consequently this review cannot establish UART clock,
 reset, pinmux or security/firewall state at BL33 entry and does not change
 M1-S1 status.
 
+
+## 2026-11-27 exact target TOC1 and pinned BaseOS source boundary
+
+The latest physical RG34XX **non-SP** capture pins the TOC1 package at SHA-256
+`e6c20e3a54c51b9336c798e3a4fa1ca6c45b28c6f70456e2db9c252aa4ba4604`.
+Its extracted `u-boot` item is 1,048,576 bytes with SHA-256
+`4d60a22ff13eac00dba89e0ee7df52a49852c0d9d856bec545ce40126191d127`;
+the monitor item is 107,216 bytes with SHA-256
+`676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31`.
+The captured live FDT `/chosen/uboot_message` reports
+`2018.05(05/26/2026-13:55:09)`. This pins the package bytes and the firmware's
+reported build string, but not a U-Boot source commit, defconfig or reproducible
+build recipe.
+
+Do not treat the current pinned BaseOS-MultiFrontend H700 experiment as the
+matching build source for this target. At source pin
+`cbe253a43f46cf551cc9a6c79a84015bde3686cf`,
+`experiments/h700-boot-speed/spl/README.md` identifies official upstream
+U-Boot v2026.10 (archive SHA-256
+`f943a88389c8fd70a6b0d061a88267465e143c7ca6ea2b75837ab20f5b60c739`).
+Its `lab_devices.py` identifies only RG34XX SP and RG40XX V, with their own
+package hashes; the active handoff records RGSP as a separate per-device
+release. It contains no RG34XX non-SP target profile. The source audit of
+`native/entry32.S`, `native/loader.c`, `spl/native-boot.c`,
+`spl/vendor-handoff.c` and `spl/handoff32.S` therefore remains a bounded
+review of that experiment, not an audit of the exact deployed non-SP U-Boot/SPL.
+
+The same SPL README documents a vendor-monitor reference contract: monitor at
+`0x48000000`, next stage AArch32 SVC at `0x4a000000` with SPSR `0x1d3`,
+Boot0 DRAM parameters copied to monitor +`0x30` and an eight-byte board block
+to +`0x24`. This is useful family-level context for the M1 entry design, but
+must not be promoted to a target-specific handoff proof until matched to the
+captured non-SP monitor and deployed SPL. The target-specific U-Boot source and
+its pre-BL33 UART clock/pinmux handling remain unverified.
+
+
 ## Sources
 
 - [RG34XX live inventory (reports branch)](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/docs/rg34xx-live-inventory-2026-11-22.md)
