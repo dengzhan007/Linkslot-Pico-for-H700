@@ -15,6 +15,25 @@
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 分别实测约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。60 Hz 是唯一合格模式。120 Hz 已移入 deferred：没有面板完整料号/Revision 与对应 datasheet 前不再投入主线，不做 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist。当前唯一近期交付目标改为 M1：受控的 AArch32 BL33 诊断启动准备；详细门槛见下方“项目主线纠偏与验收门槛”。`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
 
+## 2026-11-28 最新续接：活动启动链、TF 启动介质与 CI 对齐
+
+**本轮核对 HEAD：** `15d431936247b24430adc912c553eedee24fb6a9`（[commit](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/15d431936247b24430adc912c553eedee24fb6a9)）；reports 分支在本轮核对时 HEAD 为 `701167dcd8db1eac9baedde00e84c56c46e36ead`。新增只读启动链报告：[rg34xx-active-loader-provenance.md](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-active-loader-provenance.md)。该报告依据 2026-11-22 只读库存及固定 BaseOS source pin，属于设备既有库存的离线/静态来源复核，不是 2026-11-28 新实机测试。
+
+**活动启动路径已纠正为：** Boot ROM 从可移动 TF 启动介质加载 128 KiB BaseOS Boot0-primary 外层 capsule；外层 capsule 在活动路径选择 AArch64 native SPL；随后为 vendor BL31 → AArch32 SVC BL33 loader（`0x4a000000`）→ p4+48 MiB BOL4/LZ4 image → AArch64 Linux。嵌入 capsule 的 64 KiB stock eGON Boot0 是 fallback，不是活动 native-SPL 路径上先行的 DRAM-training 阶段。stock TOC1 U-Boot 没有证据表明在当前捕获启动中执行；它仍是兼容/回退材料。
+
+**介质表述纠错：** RG34XX 没有板载 eMMC，系统由 TF 卡启动。reports 报告原示意图中的 “on eMMC boot0 area” 已更正为 TF 启动介质；精确 Boot ROM lookup sector/LBA 与分区选择方式尚未由该报告证明，不能猜测或写成已知事实。
+
+**M1 目标边界进一步明确：** 当前交付不是从 stock TOC1 U-Boot 开始另造启动链，而是在已运行的 BaseOS native-SPL/BL31 路径中，准备受控替换活动 A32 BL33 loader 的最小诊断 payload。活动 p4+40 MiB firmware package 含 monitor/DTBO/DTB/A32 loader；p4+48 MiB 是 native SPL 实际读取的 BOL4 image。更换 32 KiB loader 后必须重建 firmware size/FNV、匹配 AArch64 SPL 与 Boot0-primary capsule，禁止新旧代混配。loader 使用的 `0x8000ff04` 是现有 Linux kernel-entry SMC，不是通用裸机跳转 ABI，M1 不得把它当作 payload entry service。
+
+**CI 核对（2026-11-28）：**
+- 当前 HEAD `15d4319` 的 H700 boot audit workflow run [46033210075](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46033210075) 成功：Linux `host-tools` 与 Windows `windows-powershell` 两个 job 均通过。
+- 最近完整 Linkslot/LK feasibility [#931](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46031541947) 为 84/84 steps 成功、0 failures、0 skipped，但它对应父提交 `f83f5f0a3eb8d523f8637569f16f9121f60047a8`，并非当前文档 HEAD。当前提交改动的是文档；feasibility workflow 的 push path filter 不含本状态文件，因此没有因该文档提交重跑完整 feasibility。
+- AArch32/AArch64 compile [#668](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46031162588) 与 H700 boot audit [#1564](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46031009923) 均成功，仍属于 host/cross-build/audit。
+
+**下一步（保持硬件 fail-closed）：** 继续完成 M1-T0 的 source/ELF 资格审查：确认 PI12 访问若发生 synchronous Data Abort 时，异常入口、frame layout、恢复拒绝分支和最终 fatal/fail-stop 路径确实闭合；并逐项审查 BL31/Boot0 对 BL33 slot 的生命周期边界。当前既有 Data Abort helper 只允许精确 SYS_CFG 只读探测恢复，不能据此宣称 PI12 访问已具备通用 abort recovery。生产 PI12 MMIO wrapper 继续 default-off；在 APB1/PIO 时钟、SPC/fuse 权限和 BL33-entry access 未证实前，不执行物理 GPIO 读写、不启用灯、不写测试卡、不执行 payload。
+
+**硬件总闸不变：** `H700_MEMORY_LAYOUT_APPROVED=false`、`hardware_applied=0`；G1/G2/G3/G6 维持 OPEN。上述报告和 CI 均不构成实机 BL33 启动、DRAM ownership、CPU1–CPU3 hold-off、PIO 权限或 LED 极性验收。
+
 ## 2026-11-27 项目主线纠偏与验收门槛（优先级高于下方专项审计日志）
 
 **审查依据：** reports 分支最新报告 [project-goal-alignment-review-20261127](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/project-goal-alignment-review-20261127)，reports HEAD `1c4c00722096ad3f22cf3d888f0ea69ca7ad9a0a)，审查工作分支 HEAD `afdf9c24fd659d179e64a8afdd72f3a43663cadc`。这是只读计划/历史审查，不是设备验收。
