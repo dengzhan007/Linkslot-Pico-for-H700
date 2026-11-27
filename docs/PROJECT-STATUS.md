@@ -31,6 +31,7 @@
 
 - **首发 proof-of-life：PI12 工作灯优先，UART0 降为备用。** RG34XX 非 SP boot DTS 将 PMU work_led 映射到 bank I / PI12、low_pwr_led 映射到 PI11；仓库已有 PI12 服务与 fake-register tests，read-modify-write 保留 PI11 和其他位。生产物理 wrapper 仍 default-off；BL33-time APB1/PIO 权限、异常 fail-stop 路径及实际 LED 极性仍 OPEN。
 - **M1-S1 改为 PI12 资格化，不再等待 UART 焊盘。** 不拆机、不焊线、不连接 UART。BL31 的 pre-BL33 security routine 静态上尝试开放 SPC decode ports 与 CCU/R_PRCM Non-secure access，但 H616 TF-A 参考警告 fuse 条件可能使 SPC 写入不生效；目标 fuse、PIO decode-port 对应、APB1 clock 和有效权限仍未知。LCD/framebuffer 延后，因其 ownership 尚未批准。
+- **M1 capsule 独立闸门仍 OPEN。** BaseOS raw-capsule v2 会写 RTC GP14/GP15 并启动 watchdog，watchdog 跨 BL31 RMR3 的有效性及早期 refusal recovery 尚未实机资格化；现有 diagnostic capsule 只验证旧 inner 的外层协议，不是 M1 LK 启动镜像。M1 不默认授权 RTC/WDT 写入，需设计无 RTC/WDT 的专用 one-shot capsule（手动换卡恢复），或另行资格化 v2 协议。
 - **M1 设备试验采用 BL33-slot-only + CPU0-only 边界。** Loader 输入 extent 为 32 KiB；#921 map 已测得 8 KiB early stack `[0x4a004000,0x4a006000)`、8 KiB gap、16 KiB 页表 `[0x4a008000,0x4a00c000)`、`_end=0x4a00c024`，CI 已验证栈/页表不重叠。它不代表 BL31/Boot0 所有权已批准。首轮不使用外部应用 DRAM、heap、DMA、GIC/timer/IRQ、SMP、SD controller、PMIC/TWI 或 CPU PLL。
 - 全局 H700_MEMORY_LAYOUT_APPROVED=false 与通用 H700_MEMBASE/H700_MEMSIZE gate 保持不变；M1 局部 slot profile 不批准完整 1 GiB DRAM 或 Linkslot/mGBA arena。
 - 仅允许向独立可擦写 TF1 测试卡写入经 hash/manifest/extent/分区/sector-range 检查的 M1-TEST-TF1-ONLY 配对镜像；原系统卡不写。失败后关机换回原卡。SoC fuse/OTP、PMIC/TWI、电压/CPU PLL 和未知外设访问仍禁止。
