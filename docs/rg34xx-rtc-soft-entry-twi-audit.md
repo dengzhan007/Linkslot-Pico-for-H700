@@ -143,7 +143,7 @@ There were no direct immediate-offset stores to exactly `[base,#0xa4]`. A width-
 
 The two instruction-shaped `STRH` matches in the embedded EL3 diagnostic string area disappeared after the scanner was corrected to use the actual two-byte access width rather than the source W-register width. This is important: the audit now models the byte range written, not merely the register width.
 
-The separate global context-like slot at `0x48014668` has 22 direct load candidates and zero immediate-offset stores whose byte ranges overlap the slot `[+0x668,+0x670)`. Its raw file qword is still `2`, and the runtime producer/initializer is not identified.
+The context-like pointer slot at `0x48014668` has 22 distinct direct-load PCs and zero immediate-offset stores whose byte ranges overlap `[0x48014668,0x48014670)`. Its raw file qword is `2`. Importantly, this address is also `lookup origin 0x48014628 + 0x40`, i.e. signed lookup index 8: it is not a separately proven global object outside the TWI lookup data region. Runtime mutation/reuse of this overlapping qword remains unresolved.
 
 Latest full-scan and base-review regression:
 - [BL31 audit #111](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45968594594) passed after adding overlapping STR/STP tests; artifact [15183738708](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45968594594/artifacts/15183738708).
@@ -151,7 +151,44 @@ Latest full-scan and base-review regression:
 - [BL31 audit #113](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45969019644) passed after correcting the generated scan summary; artifact [15184232541](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45969019644/artifacts/15184232541).
 - [BL31 audit #114](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45969225655) passed after adding an explicit host assertion and report entry for all four selector-read PCs; artifact [15183309990](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45969225655/artifacts/15183309990). Its generated report explicitly lists `0x48012520`, `0x480125d4`, `0x48012694`, and `0x480126d4`.
 
-**Result:** no confirmed write to the RTC selector `context +0xa4` was found in this aligned-word/immediate-offset scan. All five raw byte-overlap hits are non-RTC writes. This does not prove that no writer exists: stores through precomputed pointers, helper/memcpy copies, register-indexed addressing, or another firmware component are outside this scan. The source of the runtime context pointer at `0x48014668` and the selector value at `+0xa4` remain unresolved.
+**Result:** no confirmed write to the RTC selector `context +0xa4` was found in this aligned-word/immediate-offset scan. All five raw byte-overlap hits are non-RTC writes. This does not prove that no writer exists: stores through precomputed pointers, helper/memcpy copies, register-indexed addressing, or another firmware component are outside this scan. The runtime interpretation/producer of the overlapping qword at `0x48014668` and the selector value at `context +0xa4` remain unresolved.
+
+
+
+## 4D. Bounded CFG and alias-aware context-slot scan (2026-11-27)
+
+A wider alias scan was added after the immediate-offset scan proved insufficient to follow register-held context pointers. Two levels are now reported:
+
+1. **Linear alias propagation** tracks `ADRP/ADD/SUB/MOV/LDR` on the fall-through path. It found 15 context-like pointer load PCs, with no selector or slot writes.
+2. **Bounded CFG alias scan** seeds every aligned `ADRP` whose target page lies in `[0x48013000, 0x48015000]`, then follows both conditional-branch edges and direct `BL` targets. It carries `x0–x7` argument aliases and `x19–x29` callee-saved aliases, supports shifted `ADD/SUB` immediates, and tracks loads from the address `0x48014668`.
+
+Latest matched-monitor results from [BL31 audit #125](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45971835320), artifact [15184548909](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45971835320/artifacts/15184548909):
+
+- 79 ADRP page seeds.
+- 38,676 bounded CFG states processed.
+- 83 path/seed-specific loads from the context-like slot, corresponding to **22 unique instruction PCs**.
+- Zero candidate stores through a derived RTC-context pointer to `context +0xa4`.
+- Zero candidate stores overlapping the context-like slot address `0x48014668`.
+
+The CFG scan additionally recovers conditional-target load sites `0x48013e44` and `0x48013f5c`, which the earlier linear fall-through alias scan did not enumerate. The four direct selector reads remain `0x48012520`, `0x480125d4`, `0x48012694`, and `0x480126d4`.
+
+### Address overlap at 0x48014668
+
+The raw qword at `0x48014668` is `2`. This is exactly `0x48014628 + 0x40`, the qword at signed lookup index 8 from the TWI lookup origin. It must therefore be described as a **context-like pointer slot overlapping the lookup data region**, not as a separately proven global variable outside that region. The controller-base candidates at indices 68–73 lie later in the same data window. Whether index 8 is a reserved/special entry, a runtime-overwritten slot, or a location whose meaning changes after firmware initialization is not established by the raw file.
+
+The pinned BaseOS native SPL patch audit found only monitor offsets `+0x24`, `+0x30`, and `+0xb0`; it does not explain the qword at `0x48014668`. The bounded CFG scan did not find an in-monitor writer through the modeled ADRP/ADD/SUB/MOV/LDR/direct-BL paths.
+
+### CI and limitations
+
+- [#121](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45970984518) passed the first bounded alias/CFG implementation.
+- [#122](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45971150288) passed the direct-BL argument propagation regression.
+- [#123](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45971482861) passed the expanded ADRP seed range and produced the 79-seed / 22-unique-load-PC report.
+- [#124](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45971516613) failed only because two synthetic ADRP words were encoded for link address zero while the fixture was scanned at `0x48000000`. The fixture was corrected to use monitor-base-relative encodings.
+- [#125](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45971835320) passed the corrected alternate-page and shifted-immediate ADRP regressions and the complete BL31 audit.
+
+This scan remains bounded, not a full formal CFG/interprocedural proof. It does not model `BLR` targets, return-state merging, stack spill/reload, all literal-pool forms, memcpy/helper-copy semantics, register-indexed address formation, every MOVZ/MOVK construction, or initialization by another firmware component. A zero hit is not proof that no runtime writer exists.
+
+**Updated result:** the current matched-BL31 static analysis still finds no confirmed writer for `context +0xa4`. The runtime signed selector is unknown; index 73 remains a strong conditional R-TWI0 candidate only. The overlapping slot at `0x48014668` remains an unexplained context-like pointer/data slot.
 
 
 ## 5. Relationship to the live FDT
