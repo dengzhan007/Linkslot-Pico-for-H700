@@ -223,6 +223,16 @@ def main() -> int:
     assert module.ARM_SVC_NAME_POINTER_ADDRESS == 0x48018C98
     assert module.ARM_SVC_NAME_ADDRESS == 0x48016AD9
     assert module.ARM_SVC_CHECKSUM_FIDS == (0x80000064, 0xC0000064)
+    assert module.RTC_GP_DATA1_ADDRESS == 0x07000104
+    assert module.RETENTION_BUFFER_ADDRESS == 0x4801B400
+    assert module.RETENTION_BUFFER_BYTES == 0x280
+    assert module.RETENTION_BUFFER_END == 0x4801B680
+    assert module.RETENTION_WORD_COUNT == 0xA0
+    assert module.RETENTION_SEGMENT_BYTES == 0x140
+    assert module.RETENTION_SEGMENT_WORDS == 0x50
+    assert module.RETENTION_FIXED_DRAM_BASE == 0x40000000
+    assert module.RETENTION_SELECTOR_SHIFT == 17
+    assert module.RETENTION_BANK_STRIDE_SHIFT == 20
     checksum_config_load_store = {
         0x48001A58: 0xB00000C0, 0x48001A5C: 0x39402000,
         0x48001A60: 0xB900C260, 0x48001A64: 0xB00000C0,
@@ -261,6 +271,99 @@ def main() -> int:
     assert module.decode_b_target(0x48011B50,module.WORDS[0x48011B50]) == 0x48011920
     assert module.decode_bl_target(0x48011B60,module.WORDS[0x48011B60]) == 0x48011B10
     assert module.decode_bl_target(0x48011B64,module.WORDS[0x48011B64]) == 0x48011B30
+    retention_expected = {
+        0x48001AAC: 0xD2802081, 0x48001AB0: 0xD00000C0,
+        0x48001AB4: 0xF2A0E001, 0x48001AB8: 0x91100000,
+        0x48001ABC: 0xB9000020,
+        0x4800C490: 0x940015AC, 0x4800C658: 0x94001540,
+        0x48011710: 0xD2802082, 0x48011714: 0xB9401C01,
+        0x48011718: 0xF2A0E002, 0x4801171C: 0xB9400045,
+        0x48011720: 0x37000421, 0x48011724: 0x52A80007,
+        0x48011728: 0x53117C21, 0x4801172C: 0x2A0703E8,
+        0x48011730: 0x128009E3, 0x48011734: 0x0B0150E7,
+        0x48011738: 0x52800001, 0x4801173C: 0x1400000D,
+        0x48011740: 0xB9400406, 0x48011744: 0x531E7422,
+        0x48011748: 0x0B080044, 0x4801174C: 0x0B0200A2,
+        0x48011750: 0x710010DF, 0x48011754: 0x54000BE0,
+        0x48011758: 0xB9400084, 0x4801175C: 0xB9000044,
+        0x48011760: 0x11000421, 0x48011764: 0x11000463,
+        0x48011768: 0x7102803F, 0x4801176C: 0x540001C0,
+        0x48011770: 0x71013C3F, 0x48011774: 0x54FFFE69,
+        0x48011778: 0xB9400404, 0x4801177C: 0x0B0308E2,
+        0x48011780: 0x0B0108A6, 0x48011784: 0x7100109F,
+        0x48011788: 0x54000B80, 0x4801178C: 0xB9400042,
+        0x48011790: 0x11000421, 0x48011794: 0x7102803F,
+        0x48011798: 0x11000463, 0x4801179C: 0xB90000C2,
+        0x480117A0: 0x54FFFE81, 0x480117A4: 0xD2940405,
+        0x480118D0: 0x53037C24, 0x480118D4: 0x531E0829,
+        0x480118D8: 0x531B0082, 0x480118DC: 0x0B0108A6,
+        0x480118E0: 0x0B041924, 0x480118E4: 0x0B080042,
+        0x480118E8: 0x0B020082, 0x480118EC: 0xB9400044,
+        0x480118F0: 0xB90000C4, 0x480118F4: 0x17FFFF9B,
+        0x480118F8: 0x53037C64, 0x480118FC: 0x531E0822,
+        0x48011900: 0x531B0089, 0x48011904: 0x0B070042,
+        0x48011908: 0x0B0108A6, 0x4801190C: 0x0B041924,
+        0x48011910: 0x0B020082, 0x48011914: 0xB9400044,
+        0x48011918: 0xB90000C4, 0x4801191C: 0x17FFFF91,
+        0x48011938: 0xD2806203, 0x48011940: 0xF2A0E023,
+        0x48011944: 0xAA0103E0, 0x48011954: 0xB9400061,
+        0x48011960: 0x32180021, 0x48011964: 0xB9000061,
+        0x48011968: 0xB9400041, 0x4801196C: 0x121A6421,
+        0x48011970: 0xB9000041, 0x48011974: 0x97FFFE6B,
+        0x48011978: 0x52800001, 0x4801197C: 0x340007A0,
+        0x48011980: 0xB9401E67, 0x48011984: 0xD35078EA,
+        0x48011988: 0x37F80227, 0x48011990: 0x97FFEB68,
+        0x480119AC: 0x54000920, 0x480119BC: 0x540008A0,
+        0x480119D0: 0x36D80880, 0x480119D4: 0xD2802081,
+        0x480119D8: 0xB9401E60, 0x480119DC: 0xF2A0E001,
+        0x480119E0: 0xB9400026, 0x480119E4: 0x37000440,
+        0x480119E8: 0x52A80001, 0x480119EC: 0x53117C00,
+        0x480119F0: 0x2A0103E7, 0x480119F4: 0x128009E4,
+        0x480119F8: 0x0B005020, 0x480119FC: 0x52800002,
+        0x48011A00: 0x1400000E, 0x48011A08: 0xB9400661,
+        0x48011A0C: 0x531E7443, 0x48011A10: 0x0B070065,
+        0x48011A14: 0x0B0300C3, 0x48011A18: 0x7100103F,
+        0x48011A1C: 0x54000320, 0x48011A20: 0xB9400061,
+        0x48011A24: 0xB90000A1, 0x48011A28: 0x11000442,
+        0x48011A2C: 0x11000484, 0x48011A30: 0x7102805F,
+        0x48011A34: 0x540001C0, 0x48011A38: 0x71013C5F,
+        0x48011A3C: 0x54FFFE69, 0x48011A40: 0xB9400661,
+        0x48011A44: 0x0B040803, 0x48011A48: 0x0B0208C5,
+        0x48011A4C: 0x7100103F, 0x48011A50: 0x540002C0,
+        0x48011A54: 0xB94000A1, 0x48011A58: 0x11000442,
+        0x48011A5C: 0x7102805F, 0x48011A60: 0x11000484,
+        0x48011A64: 0xB9000061, 0x48011A68: 0x54FFFE81,
+        0x48011AE0: 0x97FFEB32,
+        0x48011B10: 0xA9BF7BFD, 0x48011B14: 0xAA0003E1,
+        0x48011B18: 0x52800000, 0x48011B1C: 0x910003FD,
+        0x48011B20: 0x97FFFF86, 0x48011B24: 0x52800000,
+        0x48011B28: 0xA8C17BFD, 0x48011B2C: 0xD65F03C0,
+        0x48011B40: 0xA9BF7BFD, 0x48011B44: 0x910003FD,
+        0x48011B4C: 0xA8C17BFD, 0x48011B58: 0xA9BF7BFD,
+        0x48011B5C: 0x910003FD, 0x48011B68: 0x52800000,
+        0x48011B6C: 0xA8C17BFD,
+    }
+    for address, expected in retention_expected.items():
+        assert module.WORDS[address] == expected
+    assert module.decode_bl_target(0x4800C490,module.WORDS[0x4800C490]) == 0x48011B40
+    assert module.decode_bl_target(0x48011B48,module.WORDS[0x48011B48]) == 0x48011B38
+    assert module.decode_b_target(0x48011B50,module.WORDS[0x48011B50]) == 0x48011920
+    assert module.decode_bl_target(0x48011928,module.WORDS[0x48011928]) == 0x48011710
+    assert module.decode_bl_target(0x4800C658,module.WORDS[0x4800C658]) == 0x48011B58
+    assert module.decode_bl_target(0x48011B60,module.WORDS[0x48011B60]) == 0x48011B10
+    assert module.decode_bl_target(0x48011B20,module.WORDS[0x48011B20]) == 0x48011938
+    assert module.decode_bl_target(0x48011974,module.WORDS[0x48011974]) == 0x48011320
+    assert module.decode_bl_target(0x48011990,module.WORDS[0x48011990]) == 0x4800C730
+    assert module.decode_cond_branch_target(0x48011754,module.WORDS[0x48011754]) == 0x480118D0
+    assert module.decode_cond_branch_target(0x48011788,module.WORDS[0x48011788]) == 0x480118F8
+    assert module.decode_cond_branch_target(0x4801176C,module.WORDS[0x4801176C]) == 0x480117A4
+    assert module.decode_cond_branch_target(0x48011774,module.WORDS[0x48011774]) == 0x48011740
+    assert module.decode_cond_branch_target(0x480117A0,module.WORDS[0x480117A0]) == 0x48011770
+    assert module.decode_imm19_branch_target(0x4801197C,module.WORDS[0x4801197C]) == 0x48011A70
+    assert module.decode_cond_branch_target(0x48011A1C,module.WORDS[0x48011A1C]) == 0x48011A80
+    assert module.decode_cond_branch_target(0x48011A50,module.WORDS[0x48011A50]) == 0x48011AA8
+    assert module.decode_cond_branch_target(0x48011A3C,module.WORDS[0x48011A3C]) == 0x48011A08
+    assert module.decode_cond_branch_target(0x48011A68,module.WORDS[0x48011A68]) == 0x48011A38
     suspend_clock_expected = {
         0x48011BB0: 0xF2A06005, 0x48011BC4: 0xB94000A7,
         0x48011BD4: 0x0A0100E1, 0x48011BE0: 0xB9041441,
@@ -466,6 +569,9 @@ def main() -> int:
     assert window_map["bl31_boot_memory_map_setup"][0] == 0x48003374
     assert window_map["bl31_boot_memory_map_setup"][1] == 0xB0
     assert window_map["system_suspend_retention_helper_48011710"][0] == 0x48011710
+    assert window_map["system_suspend_retention_helper_48011710"][1] >= 0x210
+    assert window_map["system_suspend_helper_48011920_complete"][0] == 0x48011920
+    assert window_map["system_suspend_helper_48011920_complete"][1] >= 0x220
     assert "ops_slot_3_raw" in window_map
     assert window_map["ops_slot_3_raw"][0] <= 0x48002998 < window_map["ops_slot_3_raw"][0] + window_map["ops_slot_3_raw"][1]
     assert window_map["ops_slot_5_raw"][0] <= 0x48002858 < window_map["ops_slot_5_raw"][0] + window_map["ops_slot_5_raw"][1]

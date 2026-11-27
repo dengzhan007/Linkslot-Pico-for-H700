@@ -40,6 +40,16 @@ ARM_SVC_HANDLER_RECORD_ADDRESS = 0x48018ca8
 ARM_SVC_NAME_POINTER_ADDRESS = 0x48018c98
 ARM_SVC_NAME_ADDRESS = 0x48016ad9
 ARM_SVC_CHECKSUM_FIDS = (0x80000064, 0xc0000064)
+RTC_GP_DATA1_ADDRESS = 0x07000104
+RETENTION_BUFFER_ADDRESS = 0x4801b400
+RETENTION_BUFFER_BYTES = 0x280
+RETENTION_BUFFER_END = RETENTION_BUFFER_ADDRESS + RETENTION_BUFFER_BYTES
+RETENTION_WORD_COUNT = RETENTION_BUFFER_BYTES // 4
+RETENTION_SEGMENT_BYTES = 0x140
+RETENTION_SEGMENT_WORDS = RETENTION_SEGMENT_BYTES // 4
+RETENTION_FIXED_DRAM_BASE = 0x40000000
+RETENTION_SELECTOR_SHIFT = 17
+RETENTION_BANK_STRIDE_SHIFT = 20
 WORDS = {
     0x480029bc: 0xa9bf7bfd, 0x480029c0: 0x900000a1,
     0x480029c4: 0x9117e021, 0x480029cc: 0xf9000001,
@@ -145,9 +155,74 @@ WORDS = {
     0x48002314: 0x52800000, 0x48002318: 0xd65f03c0,
     0x48003b94: 0x97fff9da,
     0x48011928: 0x97ffff7a,
-    0x48011b30: 0xd65f03c0, 0x48011b38: 0xd65f03c0,
-    0x48011b48: 0x97fffffc, 0x48011b50: 0x17ffff74,
-    0x48011b60: 0x97ffffec, 0x48011b64: 0x97fffff3,
+    0x4800c490: 0x940015ac, 0x4800c658: 0x94001540,
+    0x48011710: 0xd2802082, 0x48011714: 0xb9401c01,
+    0x48011718: 0xf2a0e002, 0x4801171c: 0xb9400045,
+    0x48011720: 0x37000421, 0x48011724: 0x52a80007,
+    0x48011728: 0x53117c21, 0x4801172c: 0x2a0703e8,
+    0x48011730: 0x128009e3, 0x48011734: 0x0b0150e7,
+    0x48011738: 0x52800001, 0x4801173c: 0x1400000d,
+    0x48011740: 0xb9400406, 0x48011744: 0x531e7422,
+    0x48011748: 0x0b080044, 0x4801174c: 0x0b0200a2,
+    0x48011750: 0x710010df, 0x48011754: 0x54000be0,
+    0x48011758: 0xb9400084, 0x4801175c: 0xb9000044,
+    0x48011760: 0x11000421, 0x48011764: 0x11000463,
+    0x48011768: 0x7102803f, 0x4801176c: 0x540001c0,
+    0x48011770: 0x71013c3f, 0x48011774: 0x54fffe69,
+    0x48011778: 0xb9400404, 0x4801177c: 0x0b0308e2,
+    0x48011780: 0x0b0108a6, 0x48011784: 0x7100109f,
+    0x48011788: 0x54000b80, 0x4801178c: 0xb9400042,
+    0x48011790: 0x11000421, 0x48011794: 0x7102803f,
+    0x48011798: 0x11000463, 0x4801179c: 0xb90000c2,
+    0x480117a0: 0x54fffe81, 0x480117a4: 0xd2940405,
+    0x480118d0: 0x53037c24, 0x480118d4: 0x531e0829,
+    0x480118d8: 0x531b0082, 0x480118dc: 0x0b0108a6,
+    0x480118e0: 0x0b041924, 0x480118e4: 0x0b080042,
+    0x480118e8: 0x0b020082, 0x480118ec: 0xb9400044,
+    0x480118f0: 0xb90000c4, 0x480118f4: 0x17ffff9b,
+    0x480118f8: 0x53037c64, 0x480118fc: 0x531e0822,
+    0x48011900: 0x531b0089, 0x48011904: 0x0b070042,
+    0x48011908: 0x0b0108a6, 0x4801190c: 0x0b041924,
+    0x48011910: 0x0b020082, 0x48011914: 0xb9400044,
+    0x48011918: 0xb90000c4, 0x4801191c: 0x17ffff91,
+    0x48011938: 0xd2806203, 0x48011940: 0xf2a0e023,
+    0x48011944: 0xaa0103e0, 0x48011954: 0xb9400061,
+    0x48011960: 0x32180021, 0x48011964: 0xb9000061,
+    0x48011968: 0xb9400041, 0x4801196c: 0x121a6421,
+    0x48011970: 0xb9000041, 0x48011974: 0x97fffe6b,
+    0x48011978: 0x52800001, 0x4801197c: 0x340007a0,
+    0x48011980: 0xb9401e67, 0x48011984: 0xd35078ea,
+    0x48011988: 0x37f80227, 0x48011990: 0x97ffeb68,
+    0x480119ac: 0x54000920, 0x480119bc: 0x540008a0,
+    0x480119d0: 0x36d80880, 0x480119d4: 0xd2802081,
+    0x480119d8: 0xb9401e60, 0x480119dc: 0xf2a0e001,
+    0x480119e0: 0xb9400026, 0x480119e4: 0x37000440,
+    0x480119e8: 0x52a80001, 0x480119ec: 0x53117c00,
+    0x480119f0: 0x2a0103e7, 0x480119f4: 0x128009e4,
+    0x480119f8: 0x0b005020, 0x480119fc: 0x52800002,
+    0x48011a00: 0x1400000e, 0x48011a08: 0xb9400661,
+    0x48011a0c: 0x531e7443, 0x48011a10: 0x0b070065,
+    0x48011a14: 0x0b0300c3, 0x48011a18: 0x7100103f,
+    0x48011a1c: 0x54000320, 0x48011a20: 0xb9400061,
+    0x48011a24: 0xb90000a1, 0x48011a28: 0x11000442,
+    0x48011a2c: 0x11000484, 0x48011a30: 0x7102805f,
+    0x48011a34: 0x540001c0, 0x48011a38: 0x71013c5f,
+    0x48011a3c: 0x54fffe69, 0x48011a40: 0xb9400661,
+    0x48011a44: 0x0b040803, 0x48011a48: 0x0b0208c5,
+    0x48011a4c: 0x7100103f, 0x48011a50: 0x540002c0,
+    0x48011a54: 0xb94000a1, 0x48011a58: 0x11000442,
+    0x48011a5c: 0x7102805f, 0x48011a60: 0x11000484,
+    0x48011a64: 0xb9000061, 0x48011a68: 0x54fffe81,
+    0x48011ae0: 0x97ffeb32,
+    0x48011b10: 0xa9bf7bfd, 0x48011b14: 0xaa0003e1,
+    0x48011b18: 0x52800000, 0x48011b1c: 0x910003fd,
+    0x48011b20: 0x97ffff86, 0x48011b24: 0x52800000,
+    0x48011b28: 0xa8c17bfd, 0x48011b2c: 0xd65f03c0,
+    0x48011b40: 0xa9bf7bfd, 0x48011b44: 0x910003fd,
+    0x48011b4c: 0xa8c17bfd, 0x48011b58: 0xa9bf7bfd,
+    0x48011b5c: 0x910003fd, 0x48011b68: 0x52800000,
+    0x48011b6c: 0xa8c17bfd,
+    # Retained DRAM snapshot and inverse restore helpers.
     # Relocated standby entry, in-image scratch/BSS and copied helper calls.
     0x4800aa80: 0xd2800003, 0x4800aa84: 0xeb03005f,
     0x4800aa88: 0x540000a0, 0x4800aa8c: 0x38636824,
@@ -421,7 +496,7 @@ DISASSEMBLY_WINDOWS = (
     ("system_suspend_setup_caller", 0x48002400, 0x80),
     ("system_suspend_descriptor_handoff", 0x48002284, 0x40),
     ("bl31_boot_memory_map_setup", 0x48003374, 0xb0),
-    ("system_suspend_retention_helper_48011710", 0x48011710, 0x100),
+    ("system_suspend_retention_helper_48011710", 0x48011710, 0x210),
 
     ("ccu_save_helper", 0x48001790, 0x100),
     ("ccu_restore_helper", 0x480018d8, 0x100),
@@ -931,6 +1006,56 @@ def main() -> int:
     if decode_bl_target(0x48003b94, read_word(raw, 0x48003b94)) != 0x480022fc:
         raise RuntimeError("arm_svc checksum descriptor writer call changed")
 
+    # The standby entry stores a runtime scratch pointer in RTC GP_DATA1.
+    if read_word(raw, 0x48001abc) != 0xb9000020:
+        raise RuntimeError("RTC GP_DATA1 retention-buffer pointer store changed")
+    if RETENTION_BUFFER_ADDRESS != 0x4801b400 or RETENTION_BUFFER_END != 0x4801b680:
+        raise RuntimeError("retention scratch-buffer bounds changed")
+    if not (RETENTION_BUFFER_ADDRESS >= BASE + len(raw) and RETENTION_BUFFER_END > RETENTION_BUFFER_ADDRESS):
+        raise RuntimeError("retention scratch buffer unexpectedly overlaps monitor file payload")
+    if RETENTION_WORD_COUNT != 0xa0 or RETENTION_SEGMENT_WORDS != 0x50:
+        raise RuntimeError("retention snapshot word counts changed")
+    if decode_bl_target(0x4800c490, read_word(raw, 0x4800c490)) != 0x48011b40:
+        raise RuntimeError("pre-suspend retention snapshot callsite changed")
+    if decode_bl_target(0x48011b48, read_word(raw, 0x48011b48)) != 0x48011b38:
+        raise RuntimeError("pre-suspend retention wrapper call changed")
+    if decode_b_target(0x48011b50, read_word(raw, 0x48011b50)) != 0x48011920:
+        raise RuntimeError("pre-suspend retention wrapper tail branch changed")
+    if decode_bl_target(0x48011928, read_word(raw, 0x48011928)) != 0x48011710:
+        raise RuntimeError("pre-suspend retention worker call changed")
+    if decode_bl_target(0x4800c658, read_word(raw, 0x4800c658)) != 0x48011b58:
+        raise RuntimeError("post-resume retention restore callsite changed")
+    if decode_bl_target(0x48011b60, read_word(raw, 0x48011b60)) != 0x48011b10:
+        raise RuntimeError("post-resume retention wrapper call changed")
+    if decode_bl_target(0x48011b20, read_word(raw, 0x48011b20)) != 0x48011938:
+        raise RuntimeError("post-resume retention worker call changed")
+    if decode_bl_target(0x48011974, read_word(raw, 0x48011974)) != 0x48011320:
+        raise RuntimeError("post-resume retention preparation helper changed")
+    if decode_bl_target(0x48011990, read_word(raw, 0x48011990)) != 0x4800c730:
+        raise RuntimeError("post-resume retention selector helper changed")
+    if decode_bl_target(0x48011ae0, read_word(raw, 0x48011ae0)) != 0x4800c7a8:
+        raise RuntimeError("post-resume retention fallback helper changed")
+    if decode_cond_branch_target(0x48011754, read_word(raw, 0x48011754)) != 0x480118d0:
+        raise RuntimeError("pre-copy alternate first-segment branch changed")
+    if decode_cond_branch_target(0x48011788, read_word(raw, 0x48011788)) != 0x480118f8:
+        raise RuntimeError("pre-copy alternate second-segment branch changed")
+    if decode_cond_branch_target(0x4801176c, read_word(raw, 0x4801176c)) != 0x480117a4:
+        raise RuntimeError("pre-copy 0xa0-word loop exit changed")
+    if decode_cond_branch_target(0x48011774, read_word(raw, 0x48011774)) != 0x48011740:
+        raise RuntimeError("pre-copy first-segment loop changed")
+    if decode_cond_branch_target(0x480117a0, read_word(raw, 0x480117a0)) != 0x48011770:
+        raise RuntimeError("pre-copy second-segment loop changed")
+    if decode_imm19_branch_target(0x4801197c, read_word(raw, 0x4801197c)) != 0x48011a70:
+        raise RuntimeError("post-resume retention preparation skip branch changed")
+    if decode_cond_branch_target(0x48011a1c, read_word(raw, 0x48011a1c)) != 0x48011a80:
+        raise RuntimeError("post-copy alternate first-segment branch changed")
+    if decode_cond_branch_target(0x48011a50, read_word(raw, 0x48011a50)) != 0x48011aa8:
+        raise RuntimeError("post-copy alternate second-segment branch changed")
+    if decode_cond_branch_target(0x48011a3c, read_word(raw, 0x48011a3c)) != 0x48011a08:
+        raise RuntimeError("post-copy first-segment loop changed")
+    if decode_cond_branch_target(0x48011a68, read_word(raw, 0x48011a68)) != 0x48011a38:
+        raise RuntimeError("post-copy second-segment loop changed")
+
     if decode_bl_target(0x48001c3c, read_word(raw, 0x48001c3c)) != 0x48001a04:
         raise RuntimeError("secondary SYSTEM_SUSPEND power-entry callsite changed")
     if decode_bl_target(0x48002440, read_word(raw, 0x48002440)) != 0x48001b74:
@@ -1346,6 +1471,55 @@ def main() -> int:
                         "failure_write_register": "RTC/system scratch at address held in x20 (base 0x07000108 in this path)",
                         "failure_path": "unconditional branch to self at 0x4800c6ec; fail-stop",
                         "range_identity_limit": "the matched payload's initial descriptor is [0x40000000,0x40000100) (256 bytes, 64 words), adjacent to the string 'chipid'. The arm_svc handler exposes writer FIDs 0x80000064 and 0xc0000064 with arguments (enable, start, length), so this descriptor can be changed before SYSTEM_SUSPEND copies it into context. Actual call occurrence, final values and live DRAM contents are unmeasured. This is not the full 0x9410-byte SRAM standby image.",
+                    },
+                    "dram_retention_snapshot_copy": {
+                        "rtc_pointer_register": "0x07000104 (RTC GP_DATA1; same-family RTC GP_DATA register window begins at +0x100)",
+                        "rtc_pointer_store_pc": "0x48001abc",
+                        "buffer_address": "0x4801b400",
+                        "buffer_interval": "[0x4801b400,0x4801b680)",
+                        "buffer_bytes": 640,
+                        "buffer_words": 160,
+                        "matched_monitor_payload_end": "0x%08x" % (BASE + len(raw)),
+                        "buffer_outside_matched_monitor_file_payload": True,
+                        "standby_snapshot": {
+                            "call_chain": [
+                                "0x4800c490 -> 0x48011b40",
+                                "0x48011b50 -> 0x48011920",
+                                "0x48011928 -> 0x48011710"
+                            ],
+                            "worker": "0x48011710",
+                            "selector_context_offset": "0x1c",
+                            "skip_when": "context +0x1c bit0 is set",
+                            "fixed_dram_segment": "[0x40000000,0x40000140)",
+                            "fixed_segment_saved_to": "[0x4801b400,0x4801b540)",
+                            "dynamic_bank_base": "0x40000000 + (((context[0x1c] >> 17) << 20))",
+                            "dynamic_segment_bytes": 320,
+                            "dynamic_segment_saved_to": "[0x4801b540,0x4801b680)",
+                            "copy_direction": "DRAM -> RTC-GP_DATA1-addressed scratch buffer",
+                            "normal_path_words": 160,
+                            "normal_path_total_bytes": 640,
+                            "alternate_layout_condition": "context +0x4 == 4",
+                            "alternate_layout_branch_targets": ["0x480118d0", "0x480118f8"],
+                            "alternate_layout": "strided addressing path; not normalized as a contiguous memcpy"
+                        },
+                        "resume_restore": {
+                            "call_chain": [
+                                "0x4800c658 -> 0x48011b58",
+                                "0x48011b60 -> 0x48011b10",
+                                "0x48011b20 -> 0x48011938"
+                            ],
+                            "worker": "0x48011938",
+                            "rtc_pointer_load": "0x07000104",
+                            "copy_direction": "scratch buffer -> DRAM",
+                            "fixed_dram_segment": "[0x40000000,0x40000140)",
+                            "dynamic_bank_base": "0x40000000 + (((context[0x1c] >> 17) << 20))",
+                            "dynamic_segment_bytes": 320,
+                            "normal_path_total_bytes": 640,
+                            "alternate_layout_condition": "context +0x4 == 4",
+                            "alternate_layout_branch_targets": ["0x48011a80", "0x48011aa8"]
+                        },
+                        "relationship_to_default_checksum": "default checksum interval [0x40000000,0x40000100) lies within the first 0x140-byte snapshot segment; this overlap does not establish firmware design intent or the final SMC-overridden checksum range",
+                        "runtime_limits": "RTC GP_DATA1 live value, dynamic selector, scratch-buffer ownership/content and actual pre/post-suspend execution are not measured; no SMC or MMIO was issued"
                     },
                     "wake_source_helpers": {
                         "aggregate_function": "0x48013ee8",
