@@ -362,7 +362,7 @@ def scan_context_pointer_alias_writes(blob: bytes) -> dict:
         "other_tracked_pointer_store_candidates": unhandled_pointer_stores,
         "limitations": [
             "This is linear, not CFG/path-sensitive analysis; instruction-shaped data may seed aliases. Conditional branch target paths are not followed; only fall-through state is preserved.",
-            "Only ADRP, ADD/SUB immediate, MOV register copy, and LDR through an absolute alias are propagated.",
+            "The alias model propagates ADRP/ADR, selected MOVZ/MOV immediate fragments, MOVK halfword updates, ADD/SUB immediate, MOV register copy, and LDR through absolute aliases; other immediate-construction idioms may remain.",
             "It does not model BL callee return values, stack spills/reloads, table-driven pointer arithmetic, literal-pool indirection, helper/memcpy copies, register-indexed addressing, or external initialization.",
             "A reported alias store is a candidate requiring manual function/base-register review; absence of a hit is not proof that no runtime writer exists.",
         ],
@@ -413,11 +413,38 @@ def scan_context_pointer_alias_cfg_writes(blob: bytes) -> dict:
             queue.append((addr, state, seed_pc, steps))
 
     seed_instructions = []
+    seed_kind_counts = {"adrp": 0, "adr": 0, "mov-immediate": 0, "literal-load": 0}
+
+    def add_seed(ins, target_value, kind):
+        seed_instructions.append((ins, int(target_value), kind))
+        seed_kind_counts[kind] += 1
+
     for ins in instructions.values():
-        if ins.mnemonic.lower() == "adrp" and len(ins.operands) >= 2:
+        mnemonic = ins.mnemonic.lower()
+        if mnemonic == "adrp" and len(ins.operands) >= 2:
             dst, imm = ins.operands[0], ins.operands[1]
             if dst.type == ARM64_OP_REG and imm.type == ARM64_OP_IMM and 0x48013000 <= int(imm.imm) <= 0x48015000:
-                seed_instructions.append(ins)
+                add_seed(ins, int(imm.imm), "adrp")
+        elif mnemonic == "adr" and len(ins.operands) >= 2:
+            dst, imm = ins.operands[0], ins.operands[1]
+            if dst.type == ARM64_OP_REG and imm.type == ARM64_OP_IMM and 0x48013000 <= int(imm.imm) <= 0x48015000:
+                add_seed(ins, int(imm.imm), "adr")
+        elif mnemonic in ("mov", "movz") and len(ins.operands) >= 2:
+            dst, imm = ins.operands[0], ins.operands[1]
+            if dst.type == ARM64_OP_REG and imm.type == ARM64_OP_IMM:
+                shift = getattr(getattr(imm, "shift", None), "value", 0) or 0
+                value = int(imm.imm) << int(shift)
+                # 0x4668 is the low half of 0x48014668; 0x4801 is its high half.
+                if 0x48013000 <= value <= 0x48015000 or value in (0x4668, 0x4801, 0x48010000, 0x48014668):
+                    add_seed(ins, value, "mov-immediate")
+        elif mnemonic.startswith("ldr") and len(ins.operands) >= 2:
+            dst, literal = ins.operands[0], ins.operands[1]
+            if dst.type == ARM64_OP_REG and literal.type == ARM64_OP_IMM:
+                literal_address = int(literal.imm)
+                if BASE <= literal_address <= BASE + len(blob) - 8:
+                    value = read_u64(blob, literal_address)
+                    if 0x48013000 <= value <= 0x48015000 or value == 0x48014668:
+                        add_seed(ins, value, "literal-load")
 
     global_slot_loads = []
     context_selector_stores = []
@@ -437,14 +464,14 @@ def scan_context_pointer_alias_cfg_writes(blob: bytes) -> dict:
         if not any(tuple(old.get(k) for k in key_fields) == key for old in rows):
             rows.append(item)
 
-    for seed in seed_instructions:
+    for seed, seed_value, seed_kind in seed_instructions:
         dst = seed.operands[0]
         seed_reg = get_reg_key(dst.reg)
         if not seed_reg:
             continue
         seed_pc = seed.address
         seed_aliases = {
-            seed_reg: ("absolute", int(seed.operands[1].imm), (seed_pc,))
+            seed_reg: ("absolute", int(seed_value), (seed_pc,))
         }
         queue = deque()
         enqueue(queue, seed_pc + 4, seed_aliases, seed_pc, 1)
@@ -520,7 +547,18 @@ def scan_context_pointer_alias_cfg_writes(blob: bytes) -> dict:
                         if dst_key:
                             aliases[dst_key] = (kind, value + delta, chain + (pc,))
 
-            elif mnemonic == "mov" and len(ins.operands) >= 2:
+            elif mnemonic == "movk" and len(ins.operands) >= 2:
+                dst, imm = ins.operands[0], ins.operands[1]
+                if dst.type == ARM64_OP_REG and imm.type == ARM64_OP_IMM:
+                    dst_key = get_reg_key(dst.reg)
+                    prior = before.get(dst_key) if dst_key else None
+                    if prior and prior[0] == "absolute":
+                        shift = getattr(getattr(imm, "shift", None), "value", 0) or 0
+                        lane_mask = 0xffff << int(shift)
+                        value = (prior[1] & ~lane_mask) | ((int(imm.imm) & 0xffff) << int(shift))
+                        aliases[dst_key] = ("absolute", value, prior[2] + (pc,))
+
+            elif mnemonic in ("mov", "movz") and len(ins.operands) >= 2:
                 dst, src = ins.operands[0], ins.operands[1]
                 if dst.type == ARM64_OP_REG and src.type == ARM64_OP_REG:
                     src_key = get_reg_key(src.reg)
@@ -529,6 +567,13 @@ def scan_context_pointer_alias_cfg_writes(blob: bytes) -> dict:
                     if src_alias and dst_key:
                         kind, value, chain = src_alias
                         aliases[dst_key] = (kind, value, chain + (pc,))
+                elif dst.type == ARM64_OP_REG and src.type == ARM64_OP_IMM:
+                    shift = getattr(getattr(src, "shift", None), "value", 0) or 0
+                    value = int(src.imm) << int(shift)
+                    if 0x48013000 <= value <= 0x48015000 or value in (0x4668, 0x4801, 0x48010000, 0x48014668):
+                        dst_key = get_reg_key(dst.reg)
+                        if dst_key:
+                            aliases[dst_key] = ("absolute", value, (pc,))
 
             elif mnemonic.startswith("ldr") and len(ins.operands) >= 2:
                 dst, memop = ins.operands[0], ins.operands[1]
@@ -585,8 +630,9 @@ def scan_context_pointer_alias_cfg_writes(blob: bytes) -> dict:
                 enqueue(queue, next_pc, aliases, origin_seed, steps + 1)
 
     return {
-        "method": "bounded CFG walk seeded by ADRP references to pages 0x48013000..0x48015000; supports shifted ADD/SUB immediates, LDR/LDUR, conditional edges, and direct BL targets with x0-x7 plus callee-saved aliases",
+        "method": "bounded CFG walk seeded by ADRP/ADR, MOVZ/MOV-immediate address fragments, and literal loads; tracks MOVK lane updates, shifted ADD/SUB, LDR, conditional edges, and direct BL targets with x0-x7 plus callee-saved aliases",
         "seed_count": len(seed_instructions),
+        "seed_kind_counts": seed_kind_counts,
         "processed_states": processed,
         "global_slot_pointer_load_aliases": global_slot_loads,
         "context_plus_a4_alias_store_candidates": context_selector_stores,
