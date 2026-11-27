@@ -52,6 +52,7 @@ class MonitorAuditTests(unittest.TestCase):
         self.assertEqual(report["bl33_preparation_calls"]["security_setup"], "0x2c78")
         self.assertEqual(report["bl33_preparation_calls"]["uart_gate_selector"], "0xc0d4")
         self.assertEqual(report["uart"]["gate_register"], "0x0300190c")
+        self.assertEqual(report["uart"]["fallback_path"]["uart0_base"], "0x05000000")
         self.assertEqual(report["uart"]["fallback_path"]["default_clock_hz"], 24_000_000)
         self.assertEqual(report["uart"]["fallback_path"]["baud_rate"], 115200)
         self.assertEqual(report["security_setup"]["spc_decode_port_count"], 14)

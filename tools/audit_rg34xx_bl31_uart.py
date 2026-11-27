@@ -101,6 +101,19 @@ def decode_cbz_target(word: int, pc: int) -> int:
     return pc + (imm19 << 2)
 
 
+def decode_movz(word: int) -> int:
+    """Decode an AArch64 MOVZ immediate, preserving its encoded halfword shift."""
+    if word & 0x7F800000 != 0x52800000:
+        raise ValueError(f"0x{word:08x} is not MOVZ")
+    imm16 = (word >> 5) & 0xFFFF
+    hw = (word >> 21) & 3
+    sf = (word >> 31) & 1
+    width = 64 if sf else 32
+    if width == 32 and hw > 1:
+        raise ValueError("invalid 32-bit MOVZ shift")
+    return imm16 << (16 * hw)
+
+
 def decode_movz_movk_pair(data: bytes, movz_offset: int, movk_offset: int) -> int:
     """Decode a MOVZ followed by MOVK into the same W/X register."""
     movz = _u32(data, movz_offset)
@@ -162,7 +175,7 @@ def audit_monitor(data: bytes, *, require_identity: bool = True) -> dict[str, An
         "additional_spc_register": decode_movz_movk_pair(data, 0x2CC4, 0x2CC8),
         "uart_gate_reset": decode_movz_movk_pair(data, 0xC0D4, 0xC0DC),
         "uart_apb2_clock": decode_movz_movk_pair(data, 0xC000, 0xC008),
-        "uart0_base": _u32(data, 0xC04C) & 0xFFFFFFFF,
+        "uart0_base": decode_movz(_u32(data, 0xC04C)),
     }
     expected_addresses = {
         "spc_decode_port_set_first": 0x03008004,
