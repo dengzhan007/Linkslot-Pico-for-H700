@@ -175,6 +175,199 @@ REVIEWED_NON_RTC_SELECTOR_OVERLAPS = {
 }
 
 
+def canonical_register(name: str) -> str | None:
+    name = name.lower()
+    if name in ("sp", "wsp"):
+        return "sp"
+    if name in ("xzr", "wzr"):
+        return None
+    match = re.fullmatch(r"[xw](\\d+)", name)
+    if match:
+        return "x" + match.group(1)
+    return None
+
+
+def scan_context_pointer_alias_writes(blob: bytes) -> dict:
+    """Conservative linear data-flow scan for ADRP/LDR-derived RTC context aliases.
+
+    Tracks:
+      ADRP -> absolute page
+      ADD/SUB immediate -> absolute address or context-pointer offset
+      LDR from absolute 0x48014668 -> RTC-context pointer alias
+      MOV register copy -> alias propagation
+      STR/STP-style writes through a tracked RTC-context alias -> +0xa4 candidate
+
+    Register state is invalidated at undecodable words and control-flow changes.
+    This is not full CFG/interprocedural analysis and intentionally reports
+    candidates rather than asserting runtime reachability.
+    """
+    md = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
+    md.detail = True
+    aliases: dict[str, tuple[str, int]] = {}
+    decoded_words = 0
+    global_slot_pointer_loads = []
+    context_selector_alias_stores = []
+    global_slot_alias_stores = []
+    unhandled_pointer_stores = []
+    last_alias_origin: dict[str, list[str]] = {}
+
+    def get_alias(reg_id: int):
+        name = md.reg_name(reg_id)
+        key = canonical_register(name)
+        return aliases.get(key) if key else None
+
+    def set_alias(reg_id: int, value, origin_pc: str):
+        key = canonical_register(md.reg_name(reg_id))
+        if key:
+            aliases[key] = value
+            last_alias_origin[key] = [origin_pc]
+
+    for offset in range(0, len(blob) - 3, 4):
+        address = BASE + offset
+        ins = next(md.disasm(blob[offset:offset + 4], address, count=1), None)
+        if ins is None:
+            aliases.clear()
+            last_alias_origin.clear()
+            continue
+        decoded_words += 1
+        mnemonic = ins.mnemonic.lower()
+        pc = "0x%08x" % ins.address
+        before = dict(aliases)
+        origins_before = {k: list(v) for k, v in last_alias_origin.items()}
+
+        # Determine written registers before applying the instruction transfer.
+        try:
+            _, written_ids = ins.regs_access()
+        except Exception:
+            written_ids = []
+            if ins.operands and ins.operands[0].type == ARM64_OP_REG:
+                written_ids = [ins.operands[0].reg]
+        written_keys = {
+            canonical_register(md.reg_name(reg_id))
+            for reg_id in written_ids
+        }
+        written_keys.discard(None)
+
+        # Stores are evaluated against the pre-instruction symbolic base.
+        if mnemonic.startswith(("str", "stp", "stnp", "stur", "sturb", "sturh", "sttr")):
+            mem = next((op.mem for op in ins.operands if op.type == ARM64_OP_MEM), None)
+            if mem is not None and mem.index == 0:
+                base_key = canonical_register(md.reg_name(mem.base))
+                base_alias = before.get(base_key) if base_key else None
+                if base_alias:
+                    kind, value = base_alias
+                    if kind == "rtc-context":
+                        if store_overlaps(ins, 0xA4 - value - int(mem.disp), 4):
+                            context_selector_alias_stores.append({
+                                "pc": pc,
+                                "mnemonic": mnemonic,
+                                "operands": ins.op_str,
+                                "base_register": md.reg_name(mem.base),
+                                "context_pointer_delta": "0x%x" % value,
+                                "alias_chain": origins_before.get(base_key, []),
+                            })
+                    elif kind == "absolute":
+                        if store_overlaps(ins, 0x48014668 - value - int(mem.disp), 8):
+                            global_slot_alias_stores.append({
+                                "pc": pc,
+                                "mnemonic": mnemonic,
+                                "operands": ins.op_str,
+                                "base_register": md.reg_name(mem.base),
+                                "absolute_base": "0x%08x" % value,
+                                "alias_chain": origins_before.get(base_key, []),
+                            })
+                    else:
+                        unhandled_pointer_stores.append({
+                            "pc": pc, "kind": kind, "operands": ins.op_str
+                        })
+
+        # Kill every register the instruction writes, then apply simple transfers.
+        for key in written_keys:
+            aliases.pop(key, None)
+            last_alias_origin.pop(key, None)
+
+        if mnemonic == "adrp" and len(ins.operands) >= 2:
+            dst, imm = ins.operands[0], ins.operands[1]
+            if dst.type == ARM64_OP_REG and imm.type == ARM64_OP_IMM:
+                set_alias(dst.reg, ("absolute", int(imm.imm)), pc)
+
+        elif mnemonic in ("add", "sub") and len(ins.operands) >= 3:
+            dst, src, imm = ins.operands[0], ins.operands[1], ins.operands[2]
+            if dst.type == ARM64_OP_REG and src.type == ARM64_OP_REG and imm.type == ARM64_OP_IMM:
+                src_key = canonical_register(md.reg_name(src.reg))
+                src_alias = before.get(src_key) if src_key else None
+                if src_alias:
+                    kind, value = src_alias
+                    delta = int(imm.imm) * (1 if mnemonic == "add" else -1)
+                    set_alias(dst.reg, (kind, value + delta), pc)
+                    dst_key = canonical_register(md.reg_name(dst.reg))
+                    if dst_key:
+                        last_alias_origin[dst_key] = (origins_before.get(src_key, []) + [pc])[-8:]
+
+        elif mnemonic == "mov" and len(ins.operands) >= 2:
+            dst, src = ins.operands[0], ins.operands[1]
+            if dst.type == ARM64_OP_REG and src.type == ARM64_OP_REG:
+                src_key = canonical_register(md.reg_name(src.reg))
+                src_alias = before.get(src_key) if src_key else None
+                if src_alias:
+                    set_alias(dst.reg, src_alias, pc)
+                    dst_key = canonical_register(md.reg_name(dst.reg))
+                    if dst_key:
+                        last_alias_origin[dst_key] = (origins_before.get(src_key, []) + [pc])[-8:]
+
+        elif mnemonic.startswith("ldr") and len(ins.operands) >= 2:
+            dst, memop = ins.operands[0], ins.operands[1]
+            if dst.type == ARM64_OP_REG and memop.type == ARM64_OP_MEM and memop.mem.index == 0:
+                base_key = canonical_register(md.reg_name(memop.mem.base))
+                base_alias = before.get(base_key) if base_key else None
+                if base_alias:
+                    kind, value = base_alias
+                    effective = value + int(memop.mem.disp)
+                    if kind == "absolute" and effective == 0x48014668:
+                        set_alias(dst.reg, ("rtc-context", 0), pc)
+                        dst_key = canonical_register(md.reg_name(dst.reg))
+                        if dst_key:
+                            last_alias_origin[dst_key] = (origins_before.get(base_key, []) + [pc])[-8:]
+                        global_slot_pointer_loads.append({
+                            "pc": pc,
+                            "operands": ins.op_str,
+                            "destination": md.reg_name(dst.reg),
+                            "alias_chain": origins_before.get(base_key, []) + [pc],
+                        })
+                    elif kind == "rtc-context":
+                        # Unknown contents loaded from the context are not pointer aliases.
+                        pass
+
+        # Control-flow boundaries invalidate alias assumptions. BL preserves
+        # callee-saved x19-x29, but drops caller-saved aliases; other branches
+        # clear all aliases to avoid following a linear-sweep fall-through.
+        if mnemonic in ("bl", "blr"):
+            for i in range(19):
+                key = "x%d" % i
+                aliases.pop(key, None)
+                last_alias_origin.pop(key, None)
+        elif mnemonic in ("b", "br", "ret", "eret") or mnemonic.startswith(
+            ("b.", "cbz", "cbnz", "tbz", "tbnz")
+        ):
+            aliases.clear()
+            last_alias_origin.clear()
+
+    return {
+        "method": "aligned-word linear sweep with ADRP/ADD/SUB/MOV/LDR alias propagation; base aliases invalidated at branch and calls",
+        "decoded_instruction_words": decoded_words,
+        "global_slot_pointer_load_aliases": global_slot_pointer_loads,
+        "context_plus_a4_alias_store_candidates": context_selector_alias_stores,
+        "global_slot_plus_668_alias_store_candidates": global_slot_alias_stores,
+        "other_tracked_pointer_store_candidates": unhandled_pointer_stores,
+        "limitations": [
+            "This is linear, not CFG/path-sensitive analysis; instruction-shaped data may seed aliases.",
+            "Only ADRP, ADD/SUB immediate, MOV register copy, and LDR through an absolute alias are propagated.",
+            "It does not model BL callee return values, stack spills/reloads, table-driven pointer arithmetic, literal-pool indirection, helper/memcpy copies, register-indexed addressing, or external initialization.",
+            "A reported alias store is a candidate requiring manual function/base-register review; absence of a hit is not proof that no runtime writer exists.",
+        ],
+    }
+
+
 def scan_direct_context_writes(blob: bytes) -> dict:
     """Linear-sweep candidate scan for immediate stores to context +0xa4/global +0x668.
 
@@ -348,6 +541,8 @@ def main() -> int:
 
     writer_scan = scan_direct_context_writes(blob)
 
+    alias_writer_scan = scan_context_pointer_alias_writes(blob)
+
     # The reviewed direct references to the context global are loads. The
     # table lookup is indexed, and its selected value is then published to
     # 0x48015548. This is intentionally not a claim about indirect writers,
@@ -398,6 +593,7 @@ def main() -> int:
         },
         "reviewed_context_global_load_sites": ["0x%08x" % x for x in context_pointer_load_sites],
         "full_payload_offset_writer_scan": writer_scan,
+        "full_payload_alias_writer_scan": alias_writer_scan,
         "limitations": [
             "The eight reported qwords are only bytes at relative offsets +0x00 through +0x38 from lookup origin 0x48014628; they are not asserted to be the selected entries. The SXTW index is signed, so an unknown negative context +0xa4 value may select memory before the lookup origin.",
             "The raw qword at 0x48014668 is 2, although reviewed code loads this slot as a context pointer. No BaseOS native SPL patch targets this slot.",
@@ -426,6 +622,7 @@ def main() -> int:
         "- The raw initial qword at slot `0x48014668` (loaded as a context pointer by reviewed paths) is `0x%016x`; the controller-object global slot `0x48015548` initially contains `0x%016x`." % (global_context_slot, global_controller_slot),
         "- Pinned BaseOS native SPL only patches monitor offsets: %s." % ", ".join("`+%s`" % ("%x" % x) for x in patch_offsets),
         "- Full-payload aligned-word scan: %d/%d words decoded; 4 direct +0xa4 reads; %d raw store-offset overlaps at +0xa4, of which %d are reviewed non-RTC and %d remain unreviewed; 22 +0x668 reads and %d +0x668 store overlaps." % (writer_scan["decoded_instruction_words"], writer_scan["scanned_aligned_word_slots"], len(writer_scan["context_plus_a4_overlapping_store_candidates"]), len(writer_scan["reviewed_non_rtc_selector_overlap_hits"]), len(writer_scan["unreviewed_context_plus_a4_overlap_hits"]), len(writer_scan["global_slot_plus_668_overlapping_store_candidates"])),
+        "- Alias-aware scan: %d load(s) from global context slot, %d store candidate(s) through derived RTC-context pointers, %d store candidate(s) to the global context slot." % (len(alias_writer_scan["global_slot_pointer_load_aliases"]), len(alias_writer_scan["context_plus_a4_alias_store_candidates"]), len(alias_writer_scan["global_slot_plus_668_alias_store_candidates"])),
         "",
         "- H616-family TWI/R-TWI-like qwords in the bounded lookup-origin +0x500 data window: %s." % (", ".join("`index %d → %s (%s)`" % (x["signed_lookup_index_if_selected"], x["raw_qword"], x["h616_family_twi_label"] or "other MMIO candidate") for x in nearby_mmio_candidates) or "none"),
         "",
@@ -462,6 +659,8 @@ def main() -> int:
         "These are data candidates only. The sequence at relative indices 68–73 is `0x05002000`, `0x05002400`, `0x05002800`, `0x05002c00`, `0x05003000`, `0x07081400`, which matches H616 TWI0–TWI4 and R-TWI0 base addresses. The R-TWI0 value at relative index 73 would be selected only if the actual context `+0xa4` were 73; the runtime selector has not been captured.",
         "",
         "## Interpretation",
+        "",
+        "The alias-aware linear scan found %d load(s) from absolute slot 0x48014668, %d store candidate(s) through the resulting RTC-context pointer, and %d store candidate(s) overlapping the global slot. It propagates only ADRP/ADD/SUB/MOV/LDR aliases and is not path-sensitive or interprocedural." % (len(alias_writer_scan["global_slot_pointer_load_aliases"]), len(alias_writer_scan["context_plus_a4_alias_store_candidates"]), len(alias_writer_scan["global_slot_plus_668_alias_store_candidates"])),
         "",
         "The full-payload aligned-word sweep decoded %d of %d aligned word slots. It found %d direct loads at context offset +0xa4 and %d raw store instructions whose immediate memory ranges overlap that offset. Manual base-register/region review classifies %d overlap hits as non-RTC writes (two stack-frame locals, one CPU architectural-context save, and two exception-entry stack saves), leaving %d unreviewed. It found %d loads and %d stores overlapping the +0x668 global-slot displacement. This offset-only scan does not detect stores through precomputed pointers, helper copies, register-indexed addresses, or external initialization." % (writer_scan["decoded_instruction_words"], writer_scan["scanned_aligned_word_slots"], len(writer_scan["context_plus_a4_direct_load_candidates"]), len(writer_scan["context_plus_a4_overlapping_store_candidates"]), len(writer_scan["reviewed_non_rtc_selector_overlap_hits"]), len(writer_scan["unreviewed_context_plus_a4_overlap_hits"]), len(writer_scan["global_slot_plus_668_load_candidates"]), len(writer_scan["global_slot_plus_668_overlapping_store_candidates"])),
         "",
