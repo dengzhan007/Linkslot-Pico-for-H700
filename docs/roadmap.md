@@ -27,11 +27,14 @@ RG34XX 没有板载 eMMC，系统从可移动 TF 启动。报告中的 eMMC boot
 one-shot 选择策略与 dummy capsule ABI 编译/链接为 freestanding Cortex-A53 AArch32 ELF32。
 该 fixture 没有接入 Boot0 capsule/SPL，也不执行 SRAM copy stub；它只证明 selector 的目标
 ISA/ABI 可链接。完整 Linkslot/LK feasibility [#937](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46035530557)
-在代码 HEAD `f3a815e16658533227e0907c8b4079185153ba9a` 上成功，`cross-compile` job 85/85
-recorded steps success，0 failures / 0 skipped / 0 cancelled。A32 selector fixture、实际 pinned
-GammaOS LK CRT0/exception-vector link、BL33 header/memory guard、no_std Frontend、Libretro/mGBA
-static/newlib links、SD/GPT/FAT/exFAT host regressions 全部通过。完整构建产物 [15215748657]
-(387,993,785 bytes) 含 map/ELF/log/report。报告仅证明 host/cross-build；不是可启动镜像或设备启动。
+、[#938](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46036640672) 与
+[#939](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46038164016) 均完整成功；#939
+在 HEAD `35b830c` 上 `cross-compile` job 85/85 recorded steps success，0 failures / 0 skipped，
+artifact [15217948756](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46038164016/artifacts/15217948756)
+(387,984,337 bytes) 含 map/ELF/log/report。#939 的 A32 selector fixture、pinned GammaOS LK
+CRT0/exception-vector link、BL33 header/memory guard、no_std Frontend、Libretro/mGBA static/newlib
+links、真实 VDir/newlib adapters、SD/GPT/FAT/exFAT host regressions 均通过。报告仅证明
+host/cross-build；不是可启动镜像或设备启动。
 
 **新增单核约束：** artifact 中的 pinned LK layout audit 显示该 LK 参考仍是 UP scheduler：单一
 `current_thread`、单套 run queues 和全局 critical-section nesting counter；IRQ mask 是本核局部，
@@ -51,7 +54,7 @@ CPU_ON helper `0x48002d78`，可按 per-core 计算地址设置 RVBAR 并进行 
 
 按 [M1 BL33 diagnostic specification](m1-bl33-diagnostic.md) 与 [无拆机 TF bring-up 方案](no-disassembly-tf-bringup-plan.md) 执行：
 
-- M1-T0：PI12 的 Data Abort **source/linked-ELF fail-stop 子项已通过**；M1 selector 另已通过 freestanding Cortex-A53 AArch32 ELF32 compile/link fixture，完整 feasibility #937 85/85 recorded steps success。两项都是 host/source/link 证据，不是 A53 故障注入或 BL33 启动。pinned LK 当前是 UP scheduler，必须先关闭 CPU1–CPU3 reset/hold-off 状态未知这一阻塞；BL31/Boot0 对 BL33 slot 的生命周期与物理内存所有权、APB1/PIO 时钟、SPC/fuse/Non-secure access 仍 OPEN。
+- M1-T0：PI12 的 Data Abort **source/linked-ELF fail-stop 子项已通过**；M1 selector 的 freestanding Cortex-A53 AArch32 ELF32 fixture 通过，完整 feasibility #939 85/85 recorded steps success。两项都是 host/source/link 证据，不是 A53 故障注入或 BL33 启动。Boot0/SPL 静态证据使初始 CPU1–CPU3 hold-off **PROBABLE_NOT_DEVICE_VERIFIED**；H700 live reset/status/RVBAR 与 `VER_REG 0x03000024 & 7` 尚未读取。匹配 BL31 另有后续 PSCI `affinst_on`→CPU_ON helper `0x48002d78`，具备 per-core RVBAR/power/reset 序列，但不是初始 handoff 自动释放证据，M1/LK 不得调用。pinned LK 是 UP scheduler，必须保持 CPU0-only；BL31/Boot0 对 BL33 slot 的生命周期与物理内存所有权、APB1/PIO 时钟、SPC/fuse/Non-secure access 仍 OPEN。
 - M1-T1：构建极小 CPU0-only A32 BL33 诊断 payload，raw ≤ 32 KiB；代码、向量、BSS、stack、页表和异常路径必须有 ELF/map 报告，所有运行时范围限于审查过的 BL33 slot。
 - M1-T2：用 pinned BaseOS builder 生成同一代 payload/native firmware/SPL/capsule/TF 镜像；核验 header、FNV、generation、extent、padding、分区和所有 hash。
 - M1-T3：仅将标记为 M1-TEST-TF1-ONLY 的配对镜像写入独立 TF1 测试卡；RG34XX 不拆机、不焊接、不连接 UART；观察 PI12 成功信号。失败后关机换回原系统卡。
