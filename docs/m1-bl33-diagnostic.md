@@ -23,6 +23,41 @@
 
 **M1 首选资格化方向：PI12 工作灯；UART0 不再是前置条件。** PI12 必须有精确 RG34XX 非 SP DTS/source 依据，明确 pin mux、APB1/PIO clock 与 BL33 访问权限，限定寄存器位域，保留 PI11，并具备确定的异常 fail-stop 路径。PI12 可从机身外观察，不需要 UART 焊盘；但 BL33 handoff 时访问权限、abort 处理和实际极性尚未通过。
 
+### Packaging input contract and native pairing (2026-11-27)
+
+There are two distinct host-side paths and their inputs are **not
+interchangeable**:
+
+1. `scripts/package-h700-bl33.py` accepts an unwrapped A32 raw image whose
+   bytes `[+4,+0x640)` are zero. It copies the header bytes from the
+   SHA-pinned deployed 32 KiB loader template, checks entry/vector branches,
+   pads to a 512-byte boundary and rejects any raw or wrapped output above
+   `0x8000`. This standalone wrapped file is still
+   `not_installable=true`; it is not the input expected by the BaseOS native
+   override patcher.
+2. `scripts/patch-baseos-native-lk-override.py` sets
+   `BASEOS_LK_BL33_RAW` for the pinned BaseOS native builder. That builder
+   also requires the raw header reservation `[+4,+0x640)` to be zero, then
+   inserts the header bytes from the current native package template itself.
+   The raw bytes are included in the builder generation/hash inputs, and the
+   loader extent is kept exactly 32 KiB. Do **not** feed the output of
+   `package-h700-bl33.py` back as `BASEOS_LK_BL33_RAW`.
+
+The native builder then regenerates the p4+40 MiB firmware package and
+`native-generated.h` firmware size/FNV constants. The matching AArch64 SPL
+must be rebuilt from those constants and paired with the correct Boot0
+capsule before a TF image can be assembled. Replacing only the 32 KiB loader
+file while retaining the old firmware FNV/SPL is not a valid boot package.
+
+The packager upper-bound regression is now part of full feasibility CI:
+[#926](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46023266326)
+passed 75/75; artifact
+[15212390740](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46023266326/artifacts/15212390740).
+The packager accepts exactly 32,768 bytes and rejects 32,769 bytes. This
+validates the host-side tool contract only; no M1 raw payload was packaged
+through the real BaseOS builder, no matching SPL/capsule was generated, and
+no TF card was written.
+
 ### PI12 access-gate evidence refinement (2026-11-27)
 
 The exact target BL31 binary has a statically identified pre-BL33 security
