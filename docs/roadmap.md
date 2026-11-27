@@ -1088,3 +1088,18 @@ Hard size boundary: this first integration path is only for a small diagnostic p
 - [x] H700 boot audit #1476/#1477 passed Linux host-tools and Windows PowerShell after PROJECT-STATUS / roadmap updates.
 - [ ] Continue beyond current alias model: MOVN/bitfield immediate synthesis, stack spill/reload, BLR indirect calls, helper-copy semantics and external loader initialization.
 - Hardware remains unchanged: `H700_MEMORY_LAYOUT_APPROVED=false`, `hardware_applied=0`; no SMC/MMIO, DRAM content access, I2C/TWI transaction, suspend/wake, Boot0/TOC1 write, flashing or payload execution.
+## 2026-11-27 — RTC TWI selector producer and SRAM relocation resolved (BL31 audit #132)
+
+- [x] Add a reproducible matched-monitor audit that parses the original TOC1 DTB, follows the PSCI suspend callback into the FDT selector producer, verifies the 0x30-byte context staging copy, and rebases the copied standby code's ADRP page deltas.
+- [x] Original TOC1 DTB is pinned at 144,384 bytes / SHA-256 \`c28c87380ffab00148bf4dc457e70b8c6c576470dcfbc53df64addddf89603a1\`; its \`/aliases/pmu0\` resolves to the AXP2202 child below controller \`device_type=twi5\`.
+- [x] Trace the producer call chain \`0x48002998 → 0x48001790 → 0x480012cc\`; the FDT parser converts the final digit in \`twi5\` to selector **5** and stores it at external context \`0x4803cbb4\`.
+- [x] Verify the 0x30-byte staging copy from external context \`0x4803cb90\` to SRAM \`0x20080\`; selector field \`0x4803cbb4\` therefore maps to SRAM context \`0x200a4\` (\`context+0xa4\`).
+- [x] Rebase the copied standby lookup at source PC \`0x48013ac8\` to runtime SRAM PC \`0x278a8\`; ADRP page delta +0x1000 plus ADD #0x628 forms runtime table \`0x28628\`, source-equivalent \`0x48014848\`.
+- [x] The copied context pointer slot is runtime \`0x28668\`, source-equivalent \`0x48014888\`, containing SRAM context base \`0x20000\`.
+- [x] Selector 5 selects runtime table entry \`0x28650\`, source-equivalent qword \`0x48014870\`, value \`0x07081400\` (**R-TWI0**). This supersedes the prior conditional index-73 candidate and corrects the unrelocated \`0x48014628/0x48014668\` interpretation.
+- [x] BL31 audit #132 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45977266644) passed the complete job, including synthetic FDT/relocation regressions and the actual monitor + original TOC1 DTB audit; artifact [15187681890](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45977266644/artifacts/15187681890).
+- [x] H700 boot audit #1481–#1483 all passed Linux host-tools and Windows PowerShell after the workflow and documentation updates.
+- [ ] Continue static analysis of \`0x48013b98\` transfer callers, arguments, status branches and post-transfer control flow to identify any PMIC slave/command bytes. Do not infer a slave address or issue a TWI transaction.
+- [ ] Determine whether the PSCI suspend path actually executes on target and capture no live state unless a trusted read-only route is established; static selector resolution is not a runtime transaction trace.
+- Hardware remains untouched: \`H700_MEMORY_LAYOUT_APPROVED=false\`, \`hardware_applied=0\`; no device SMC/MMIO, TWI transaction, DRAM content access, suspend/wake, storage write, flashing or payload execution.
+
