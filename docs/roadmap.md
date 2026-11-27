@@ -1032,3 +1032,15 @@ Hard size boundary: this first integration path is only for a small diagnostic p
 - [ ] Prove retention-buffer ownership and exact preservation/recovery for the active PFN, including CPU/DMA/cache quiescence and Linux continuation ordering. No suspend/wake experiment until closed.
 - [ ] Close BL33 runtime/BSS/page-table/stack ownership, APB1/PIO permissions, timer-PPI continuity and 32 KiB diagnostic package/rollback gates.
 - Current result is host/static evidence only. `H700_MEMORY_LAYOUT_APPROVED=false`, `hardware_applied=0`; no device SMC/MMIO, memory content access, suspend/wake, storage write, flashing or payload execution. The latest full Linkslot/LK feasibility run #884 is an older revision and does not certify this HEAD.
+
+## 2026-11-27 — H616 TWI0–TWI4/R-TWI0 lookup map statically correlated
+
+- [x] Decode the matched BL31 RTC controller lookup instruction `LDR X1, [X1, W0, SXTW #3]`; preserve the signed-index semantics and keep the runtime value of context `+0xa4` unknown.
+- [x] Scan the exact monitor data window and identify the consecutive signed lookup indices 68–73 as H616-family TWI0–TWI4 and R-TWI0 base qwords: `0x05002000`, `0x05002400`, `0x05002800`, `0x05002c00`, `0x05003000`, `0x07081400`.
+- [x] Correlate `0x07081400` / index 73 with the target live-FDT AXP2202 PMU parent and H616 R-TWI0 device-tree/manual base address. This establishes a strong **conditional** R-TWI0 candidate, not the runtime-selected bus.
+- [x] Match BL31-used controller offsets `+0x08/+0x0c/+0x10/+0x14/+0x18/+0x1c/+0x20` to H616 family DATA/CNTR/STAT/CCR/SRST/EFR/LCR offsets.
+- [x] Add exact six-address H616 base-map regression to `scripts/test-audit-rg34xx-bl31-twi-descriptors.py`; BL31 audit #100 and #101 passed, with the latest six-entry host regression #103 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45966678309), artifact [15182837507](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45966678309/artifacts/15182837507).
+- [x] Update [RTC/TWI static audit](rg34xx-rtc-soft-entry-twi-audit.md) and this status/roadmap record. No product runtime code or device firmware was changed.
+- [ ] Determine the actual signed context `+0xa4` value on the RG34XX RTC soft-entry path, preferably by tracing its producer/initializer in BL31 and caller setup or by a trusted read-only capture. Do not infer index 73 from the FDT alone.
+- [ ] Resolve PMIC slave address, command/register sequence, GP_DATA2 marker consumer and final power action from matched-binary control/data flow. No TWI transaction.
+- Hardware remains unchanged: `H700_MEMORY_LAYOUT_APPROVED=false`, `hardware_applied=0`; no SMC/MMIO, DRAM content access, suspend/wake, Boot0/TOC1 write, flashing or payload execution.
