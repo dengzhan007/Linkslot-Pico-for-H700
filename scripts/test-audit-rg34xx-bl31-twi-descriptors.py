@@ -33,13 +33,15 @@ def main() -> int:
     # LDR/STR X0,[X0,#0x668], respectively.
     import struct
     synthetic = struct.pack(
-        "<IIII",
+        "<IIIII",
         0xB940A400,
+        0xFFFFFFFF,  # invalid/unallocated word must not stop the scan
         0xB900A400,
         0xF9433400,
         0xF9033400,
     )
     writer_scan = MODULE.scan_direct_context_writes(synthetic)
+    assert writer_scan["scanned_aligned_word_slots"] == 5
     assert len(writer_scan["context_plus_a4_direct_load_candidates"]) == 1
     assert len(writer_scan["context_plus_a4_direct_store_candidates"]) == 1
     assert len(writer_scan["global_slot_plus_668_load_candidates"]) == 1
