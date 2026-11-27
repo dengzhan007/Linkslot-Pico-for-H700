@@ -25,6 +25,8 @@ on:
       - "scripts/audit-lk-bl33-layout.py"
       - "scripts/audit-m1-oneshot-baseos-source.py"
       - "scripts/test-m1-oneshot-capsule-selection.py"
+      - "scripts/test-m1-oneshot-capsule-a32.py"
+      - "tests/m1_oneshot_capsule_a32_fixture.c"
       - "tests/test_m1_oneshot_selection_model.c"
       - "scripts/audit-h700-lk-timer-prerequisites.py"
       - "scripts/apply-h700-lk-overlay.py"
@@ -68,6 +70,8 @@ on:
       - "scripts/audit-lk-bl33-layout.py"
       - "scripts/audit-m1-oneshot-baseos-source.py"
       - "scripts/test-m1-oneshot-capsule-selection.py"
+      - "scripts/test-m1-oneshot-capsule-a32.py"
+      - "tests/m1_oneshot_capsule_a32_fixture.c"
       - "tests/test_m1_oneshot_selection_model.c"
       - "scripts/audit-h700-lk-timer-prerequisites.py"
       - "scripts/apply-h700-lk-overlay.py"
@@ -210,6 +214,9 @@ jobs:
 
       - name: Test host-only M1 one-shot capsule pre-entry selection model
         run: python3 scripts/test-m1-oneshot-capsule-selection.py
+
+      - name: Build AArch32 M1 selector ELF fixture (not a Boot0 capsule)
+        run: python3 scripts/test-m1-oneshot-capsule-a32.py --clang clang --readelf readelf --nm nm
 
       - name: Generate H700 BL33 source overlay from pinned GammaOS LK
         run: |
