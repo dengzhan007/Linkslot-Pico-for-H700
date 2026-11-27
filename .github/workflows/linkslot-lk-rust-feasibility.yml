@@ -24,6 +24,8 @@ on:
       - "scripts/audit-linkslot-nostd.py"
       - "scripts/audit-lk-bl33-layout.py"
       - "scripts/audit-m1-oneshot-baseos-source.py"
+      - "scripts/test-m1-oneshot-capsule-selection.py"
+      - "tests/test_m1_oneshot_selection_model.c"
       - "scripts/audit-h700-lk-timer-prerequisites.py"
       - "scripts/apply-h700-lk-overlay.py"
       - "scripts/test-h700-lk-overlay.py"
@@ -65,6 +67,8 @@ on:
       - "scripts/audit-linkslot-nostd.py"
       - "scripts/audit-lk-bl33-layout.py"
       - "scripts/audit-m1-oneshot-baseos-source.py"
+      - "scripts/test-m1-oneshot-capsule-selection.py"
+      - "tests/test_m1_oneshot_selection_model.c"
       - "scripts/audit-h700-lk-timer-prerequisites.py"
       - "scripts/apply-h700-lk-overlay.py"
       - "scripts/test-h700-lk-overlay.py"
@@ -203,6 +207,9 @@ jobs:
 
       - name: Audit pinned BaseOS M1 one-shot source side effects
         run: python3 scripts/audit-m1-oneshot-baseos-source.py --baseos-root .ci/baseos-native
+
+      - name: Test host-only M1 one-shot capsule pre-entry selection model
+        run: python3 scripts/test-m1-oneshot-capsule-selection.py
 
       - name: Generate H700 BL33 source overlay from pinned GammaOS LK
         run: |
