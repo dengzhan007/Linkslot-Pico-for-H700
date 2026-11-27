@@ -119,6 +119,39 @@ Cross-reference sources:
 
 BL31 audits [#100](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45966317624) and [#101](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45966329671) both passed after the controller-base scan and H616 label classification were added. #101 artifact: [15182284425](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45966329671/artifacts/15182284425).
 
+
+## 4C. Full-monitor selector/context writer scan (2026-11-27)
+
+A full-payload 4-byte-aligned Capstone scan was added to the host audit. It decodes each aligned word independently so an invalid/data word cannot stop scanning the rest of the monitor. The scan covers all **26,804 aligned word slots**, of which **24,943** decode as AArch64 instruction words. It found exactly four direct selector reads:
+
+| PC | Instruction |
+|---:|---|
+| `0x48012520` | `ldr w0, [x0, #0xa4]` |
+| `0x480125d4` | `ldr w1, [x0, #0xa4]` |
+| `0x48012694` | `ldr w1, [x0, #0xa4]` |
+| `0x480126d4` | `ldr w0, [x0, #0xa4]` |
+
+There were no direct immediate-offset stores to exactly `[base,#0xa4]`. A width-aware byte-range scan also found five instruction-shaped stores whose immediate memory ranges overlap bytes `[+0xa4,+0xa8)`; each was reviewed against the surrounding function and base register:
+
+| PC | Instruction | Why it is not the RTC selector |
+|---:|---|---|
+| `0x4800fce4` | `str x1, [x29, #0xa0]` | The enclosing function sets `x29=sp`; this writes a local stack-frame field |
+| `0x48010704` | `str x1, [x29, #0xa0]` | Same local stack frame |
+| `0x4801571c` | `stp x11, x12, [x0, #0xa0]` | CPU architectural-context save helper; these registers are `DACR32_EL2` and `IFSR32_EL2`, not the RTC context |
+| `0x48015858` | `stp x20, x21, [sp, #0xa0]` | Exception-entry stack save |
+| `0x48015930` | `stp x20, x21, [sp, #0xa0]` | Exception-entry stack save |
+
+The two instruction-shaped `STRH` matches in the embedded EL3 diagnostic string area disappeared after the scanner was corrected to use the actual two-byte access width rather than the source W-register width. This is important: the audit now models the byte range written, not merely the register width.
+
+The separate global context-like slot at `0x48014668` has 22 direct load candidates and zero immediate-offset stores whose byte ranges overlap the slot `[+0x668,+0x670)`. Its raw file qword is still `2`, and the runtime producer/initializer is not identified.
+
+Latest full-scan and base-review regression:
+- [BL31 audit #111](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45968594594) passed after adding overlapping STR/STP tests; artifact [15183738708](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45968594594/artifacts/15183738708).
+- [BL31 audit #112](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45968869354) passed with base/region classifications embedded in the generated report; artifact [15183549413](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45968869354/artifacts/15183549413).
+
+**Result:** no confirmed write to the RTC selector `context +0xa4` was found in this aligned-word/immediate-offset scan. All five raw byte-overlap hits are non-RTC writes. This does not prove that no writer exists: stores through precomputed pointers, helper/memcpy copies, register-indexed addressing, or another firmware component are outside this scan. The source of the runtime context pointer at `0x48014668` and the selector value at `+0xa4` remain unresolved.
+
+
 ## 5. Relationship to the live FDT
 
 The uploaded live-FDT inventory reports an AXP2202 PMIC node beneath an H700 R-TWI-like node at `0x07081400`, compatible `x-powers,axp2202`. The H616 family reference maps R-TWI0 at `0x07081400`, and H616 DTS sources associate R-PIO PL0/PL1 with `s_i2c`.
