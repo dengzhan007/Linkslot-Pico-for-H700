@@ -23,11 +23,21 @@
 
 **当前没有获准的硬件输出接口。** 选择输出之前必须同时满足：对应精确 RG34XX 非 SP 板型的可信原理图/PCB test-pad 资料或同版本启动源代码；明确 pin mux、clock/reset、供电域与 BL33 入口时访问权限；不覆盖 Boot0/SPL/BL31 必需功能；输出不依赖未批准的 DRAM、framebuffer、GIC、timer、DMA、PMIC 或存储控制器；信号实现和恢复方案经项目所有者审查。
 
-### 当前候选：UART0（未批准、不可写）
+### 当前候选：UART0（有板级配置旁证，仍未批准、不可写）
 
-reports 中的活动 Linux bootargs 包含 `earlyprintk=sunxi-uart,0x05000000` 与 `console=ttyS0,115200`。目标 Linux dmesg 对 pinctrl 的报告包含 `uart0_jtag` 与 `uart0` mux 状态，不能据此推断 BL33 入口的 PH0/PH1 mux、UART clock 或寄存器访问状态。其他 RG34XX 资料中的 UART0/PH0/PH1 仅是交叉线索，不能替代本机板级资料与入口状态证据。
+**已取得的正向证据：**
 
-UART0 资格关闭前，不得向 `0x05000000` 写寄存器，不得改变 PH0/PH1 pinmux/clock，也不得将 UART 输出写入诊断 payload。若 UART0 最终不可用，应重新审查替代方案，不能自动改用 PI12、LCD 或 SD。
+- reports 分支当前设备的 Linux bootargs 包含 `earlyprintk=sunxi-uart,0x05000000` 与 `console=ttyS0,115200`；当前 dmesg 中 pinctrl 对 `uart0_jtag` / `uart0` mux 有状态报告。
+- 匹配 RG34XX（非 SP）路径的 KNULLI boot DTS（固定 commit [`57afa662009641d181f57241bcc480119b131530`](https://github.com/knulli-cfw/knulli-linux/blob/57afa662009641d181f57241bcc480119b131530/package/boot/uboot-h700/rg34xx/boot_package/rg34xx.dts)）声明 `uart@05000000` 为 `okay`，寄存器窗口 `0x05000000/0x400`、UART0 clock phandle `0x29`、default pinctrl phandle `0x1a0`。该 pin group 将 PH0/PH1 配置为 `uart0_tx/uart0_rx`、muxsel 2；sleep pinctrl 则使用 muxsel 7。该 DTS 还将 UART3（`0x05000c00`）设为 disabled。
+- 独立 RG34XX [bootlog/pinctrl capture](https://gist.github.com/macromorgan/3e12146a63b53c5b61e4e3c7d4547a0e) 中有 Boot0、BL31、U-Boot 的串口输出；启动后的 pinmux snapshot 显示 PH0/PH1 由 uart0 claim。这支持 UART0 在至少一台 RG34XX 上曾作为实际调试控制台工作，不等于当前测试机的 PCB 焊盘位置或 BL33 可访问性已经验证。
+
+**当前明确的阻塞：**
+
+- 现有 `platform/h700/arch/h700_pio_mmu_mapping.c` 只建立 `[0x03000000,0x03100000)` 的 SoC Device section；UART0 的 `0x05000000` 不在该映射内。若 LK 在 MMU enable 后输出 UART，需要先完成该 1 MiB Device mapping 的代码审查与 host descriptor 回归；增加 translation mapping 本身也不代表总线访问权限已获准。
+- 当前 GammaOS LK H700 项目没有 UART console/driver；匹配 BaseOS native SPL 入口文件没有 UART 初始化调用。Boot0/BL31 曾经输出串口日志，不能单独证明 BL31→BL33 时 UART clock、reset、security/firewall 权限保持不变。
+- 尚无当前测试机板号/revision 对应的原理图或 test-pad 资料，尚未确认 PH0/PH1 在本机的可接触焊盘及电平/接线。
+
+因此 UART0 目前是**优先资格化的候选**，不是已批准的 proof-of-life。资格关闭前，不得向 `0x05000000` 写寄存器，不得改变 PH0/PH1 pinmux/clock，也不得将 UART 输出写入诊断 payload。若 UART0 最终不可用，应重新审查替代方案，不能自动改用 PI12、LCD 或 SD。
 
 ### 当前不选择的输出
 

@@ -47,6 +47,9 @@ M1 先完成规格、proof-of-life 信号资格审查和 host-only 产物验证�
 4. **M1-S3：** 在隔离的 pinned BaseOS checkout 中构建匹配 native SPL/firmware/capsule，核验 loader extent/header/FNV/文件长度和来源；输出明确标记为 `NON-INSTALLABLE / NOT FOR DEVICE`。不得写入 SD 或设备。
 5. **M1-S4：** 设备运行不是本轮授权事项。只有 G2/G3 与相关 handoff/恢复门槛经证据审查关闭、proof-of-life 信号经过实机接口资格确认，并获得项目所有者对本次具体测试的明确授权后，才可单独规划。
 
+
+**M1-S1 UART0 候选证据更新（未过门）：** KNULLI 的精确 RG34XX boot DTS 固定于 `57afa662009641d181f57241bcc480119b131530`，配置 `uart@05000000`、clock phandle `0x29)、PH0/PH1 default muxsel 2；独立 RG34XX bootlog/pinctrl capture 显示 Boot0/BL31/U-Boot 可输出串口且 PH0/PH1 由 uart0 claim。**新发现的 LK 阻塞：** 当前 H700 MMU hook 只映射 `[0x03000000,0x03100000)`，未映射 UART0 `0x05000000`；LK 也尚无 UART driver。当前板物理 test-pad、BL33 时 clock/security access 与 pinmux retention 未确认，故 UART0 仍是首选研究候选，不是批准的输出；不得 MMIO 写入或改变 pinmux。
+
 ### 冻结项与审计停止规则
 
 - **120 Hz：** 移入 deferred。60 Hz 是当前唯一合格模式；只有取得实际 LCD 模组料号/Revision 与对应 datasheet，才重新开启 panel qualification。
