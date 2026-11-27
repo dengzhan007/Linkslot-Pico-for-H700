@@ -500,6 +500,8 @@ DISASSEMBLY_WINDOWS = (
     ("system_suspend_descriptor_handoff", 0x48002284, 0x40),
     ("bl31_boot_memory_map_setup", 0x48003374, 0xb0),
     ("system_suspend_retention_helper_48011710", 0x48011710, 0x210),
+    ("retention_bank_selector_helper", 0x4800c730, 0x100),
+    ("retention_writeback_predicate_helper", 0x48011320, 0x100),
 
     ("ccu_save_helper", 0x48001790, 0x100),
     ("ccu_restore_helper", 0x480018d8, 0x100),

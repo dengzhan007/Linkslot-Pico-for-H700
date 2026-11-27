@@ -570,6 +570,10 @@ def main() -> int:
     assert window_map["bl31_boot_memory_map_setup"][1] == 0xB0
     assert window_map["system_suspend_retention_helper_48011710"][0] == 0x48011710
     assert window_map["system_suspend_retention_helper_48011710"][1] >= 0x210
+    assert window_map["retention_bank_selector_helper"][0] == 0x4800C730
+    assert window_map["retention_bank_selector_helper"][1] >= 0x100
+    assert window_map["retention_writeback_predicate_helper"][0] == 0x48011320
+    assert window_map["retention_writeback_predicate_helper"][1] >= 0x100
     assert window_map["system_suspend_helper_48011920_complete"][0] == 0x48011920
     assert window_map["system_suspend_helper_48011920_complete"][1] >= 0x220
     assert "ops_slot_3_raw" in window_map
