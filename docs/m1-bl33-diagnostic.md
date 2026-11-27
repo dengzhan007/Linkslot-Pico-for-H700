@@ -100,6 +100,14 @@ access. See [BL31 PIO/CCU audit](h700-bl31-pio-ccu-audit.md).
 
 ### PI12 access-gate evidence refinement (2026-11-27)
 
+The pinned `sun50iw9p1` vendor clock implementation adds a further
+initialization limit: its `clock_get_apb1()` only reads `apb1_cfg`;
+`clock_init_uart()` configures APB2/UART, not APB1. No use of the
+`CCM_APB1_DEFAULT` constant was found in the reviewed source set. Thus this
+source identifies the APB1 register and PIO parent, but does not establish
+that APB1 is initialized by this U-Boot clock path before BL33. Earlier
+Boot0-stage setup and the exact deployed firmware remain unproven.
+
 The exact target BL31 binary has a statically identified pre-BL33 security
 setup routine that writes SPC decode-port set registers 0–13 to
 `0xffffffff`, the CCU security switch at `0x03001f00`, the R_PRCM
