@@ -214,6 +214,15 @@ but neither side has PH0/PH1 test-pad, TX/RX, GND or net labels. The FCC
 filing exposes its schematic as metadata-only, not as a downloadable
 schematic/boardview.
 
+### Independent community cross-check of the SP-side UART mapping (2026-11-27)
+
+A read-only review of [fotlim/android_device_anbernic_rg34xxsp_h700_lineage](https://github.com/fotlim/android_device_anbernic_rg34xxsp_h700_lineage/tree/fa90b3a30f3d75bc9239609276b3bfa9e122788f) found a separate SP-device hardware record:
+
+- `docs/HARDWARE.md` at blob `c0df1dcffa686ece164f62140195027240058636` records the debug port as UART0 on PH pins, 115200 8N1, based on that SP unit's stock firmware.
+- `kernel/dtb/rocknix-rg34xx-sp-reference.dts` at blob `ca6b6c2db84f8a46e7711fb76381ea600f42943e` decodes `uart0-ph-pins` as `PH0\0PH1` with function `uart0`, maps `serial0` to `/soc/serial@5000000`, and sets `stdout-path = "serial0:115200n8"`.
+
+This independently corroborates the H700-family PH0/PH1 ↔ UART0 function mapping and console rate on an RG34XX-SP software/board reference. It does **not** identify a test pad, TX/RX/GND solder point, pad voltage, or a traceable PH0/PH1-to-pad route. The repository is specifically for the SP model and is not a physical inspection of the target RG34XX non-SP board. It therefore adds pin/function corroboration only; it does not change M1-S1 qualification or authorize UART writes.
+
 **Evidence classification:** a manufacturer/lab assertion of model-level PCB
 commonality plus reference photos of an RG34XXSP sample. It is not direct
 inspection of the specific non-SP board and does not identify a safe solder
