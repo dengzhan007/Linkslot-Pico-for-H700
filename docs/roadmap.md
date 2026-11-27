@@ -35,9 +35,17 @@ static/newlib links、SD/GPT/FAT/exFAT host regressions 全部通过。完整构
 
 **新增单核约束：** artifact 中的 pinned LK layout audit 显示该 LK 参考仍是 UP scheduler：单一
 `current_thread`、单套 run queues 和全局 critical-section nesting counter；IRQ mask 是本核局部，
-`crt0.S` 的 ACTLR.SMP 设置仅覆盖 Cortex-A7 路径，没有 Cortex-A53 分支。BL31→BL33 时 CPU1–CPU3
-状态仍 UNKNOWN。后续 M1 必须先证明 CPU1–CPU3 被持续 hold-off / reset，或改用经过审计的 SMP runtime；
-不得释放次级核，也不能把本地 IRQ mask 当作跨核锁。详见 [M1 capsule audit](m1-oneshot-capsule-audit.md) §4.2–4.3。
+`crt0.S` 的 ACTLR.SMP 设置仅覆盖 Cortex-A7 路径，没有 Cortex-A53 分支。Boot0/SPL 静态证据
+使初始 BL31→BL33 时 CPU1–CPU3 hold-off 变为 PROBABLE_NOT_DEVICE_VERIFIED：Boot0 helper
+只可能保持 CPU2/CPU3 reset，CPU1 不进入 helper，SPL 只配置 primary RVBAR；H616 reset default
+仅作为家族参考，H700 live reset/status 仍未读回。另有明确的 BL31 PSCI `affinst_on` →
+CPU_ON helper `0x48002d78`，可按 per-core 计算地址设置 RVBAR 并进行 power/reset；其 SoC
+分支取决于 `VER_REG 0x03000024 & 7`，实际 selector 未读到。这个后续 CPU_ON callback 不证明
+初始 BL33 handoff 会自动释放次级核；固定地址 whole-image scan 也不能排除计算地址的 helper
+访问。后续 M1 必须证明 CPU1–CPU3 在 LK 整个生命周期内保持 hold-off / reset，或改用经审计
+的 SMP runtime；不得由 M1 调用 PSCI CPU_ON，也不能把本地 IRQ mask 当作跨核锁。详见
+[M1 capsule audit](m1-oneshot-capsule-audit.md) §4.2–4.3 与
+[A53 handoff audit](rg34xx-a53-handoff-and-memory-boundary.md) §1.1–1.2。
 
 ### 当前唯一近期交付物 M1
 
@@ -800,9 +808,16 @@ Hard size boundary: this first integration path is only for a small diagnostic p
   verifies BL31/SPL RVBAR selection. Matching VER_REG low3 values: 0, 2;
   mismatching values: 1, 3, 4, 5, 6, 7. The device value itself remains
   unknown and the mismatch remains a hard gate.
-- [ ] Do not equate the presence of a PSCI CPU_ON callback with automatic
-  secondary startup during the initial BL31-to-BL33 handoff. The live
-  CPU1-CPU3 state before the first BL33 instruction is still unknown.
+- [x] Confirm the PSCI CPU_ON callback is a real later per-core startup path:
+  `affinst_on` slot calls `0x48002d78`, which computes per-core addresses,
+  programs RVBAR and performs SoC-specific power/reset sequencing. Selector
+  `VER_REG 0x03000024 & 7` remains unread; two branches are identified, but
+  the active RG34XX H700 branch is unknown.
+- [ ] Do not equate that callback with automatic secondary startup during
+  the initial BL31-to-BL33 handoff. Boot0/SPL static evidence makes CPU1–CPU3
+  hold-off probable, not device-verified; ROM/secure/indirect paths and live
+  reset/status/RVBAR state remain unobserved. The fixed-address scan's empty
+  reset list does not cover the computed per-core accesses in the CPU_ON helper.
 - [x] Add `scripts/read-h700-rvbar-selector-readonly.py` and host
   regression. The device probe opens `/dev/mem` with `O_RDONLY`, reads
   only `0x03000024`, and outputs only `VER_REG & 7` plus the SPL/BL31
