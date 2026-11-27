@@ -590,7 +590,7 @@ DISASSEMBLY_WINDOWS = (
     ("system_suspend_helper_48012b60", 0x48012b60, 0x100),
     ("system_suspend_helper_48012ce0", 0x48012ce0, 0x100),
     ("system_suspend_helper_48013a48", 0x48013a48, 0x100),
-    ("system_suspend_helper_48013b98_complete", 0x48013b98, 0x280),
+    ("system_suspend_helper_48013b98", 0x48013b98, 0x280),
     ("system_suspend_helper_480137c8_timer", 0x480137c8, 0x100),
     ("system_suspend_helper_48012fa8", 0x48012fa8, 0x100),
     ("normal_suspend_powerdown_helper", 0x48015d70, 0x80),
