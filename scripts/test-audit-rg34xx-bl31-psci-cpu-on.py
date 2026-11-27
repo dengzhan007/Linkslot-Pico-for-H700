@@ -245,6 +245,14 @@ def main() -> int:
     assert window_map["cpux_axi_clock_transition_helper"][0] == 0x48011FF8
     assert window_map["cpux_axi_wait_target"][0] == 0x48014078
     assert window_map["cpux_axi_wait_target"][1] >= 0x100
+    assert window_map["system_suspend_helper_48011b40"][0] == 0x48011B40
+    assert window_map["system_suspend_helper_48011ba8"][0] == 0x48011BA8
+    assert window_map["system_suspend_helper_48011df8"][0] == 0x48011DF8
+    assert window_map["system_suspend_helper_48011b58"][0] == 0x48011B58
+    assert window_map["system_suspend_helper_48011b78"][0] == 0x48011B78
+    assert window_map["system_suspend_helper_48013df0"][0] == 0x48013DF0
+    assert window_map["system_suspend_helper_48013ee8"][0] == 0x48013EE8
+    assert window_map["system_suspend_helper_48012670"][0] == 0x48012670
     assert window_map["normal_suspend_powerdown_helper"][0] == 0x48015D70
     assert window_map["system_suspend_cache_teardown_and_trampoline"][0] == 0x48015FB8
     assert window_map["system_suspend_cache_teardown_and_trampoline"][1] >= 0x270
