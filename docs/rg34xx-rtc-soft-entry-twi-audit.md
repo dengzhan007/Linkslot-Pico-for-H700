@@ -38,10 +38,10 @@ Thus, `context + 0xa4` is a selector/index input to controller initialization in
 At `0x48013ac8`, the decoded instruction sequence:
 
 1. Forms candidate addresses `0x07022000` and `0x0701019c`, writes `0x33` to the former and `0x1000` then `0x10001` to the latter. The precise H700 register semantics of these writes have not been independently established.
-2. Forms table base `0x48014628`.
-3. Loads a 64-bit entry using `LDR X1, [X1, W0, SXTW #3]`.
-4. Dereferences the selected object at offsets including `+0x0c`, `+0x14`, and `+0x18`.
-5. Stores the selected object pointer into global slot `0x48015548`.
+2. Forms the indexed lookup address from `0x48014628`.
+3. Loads a 64-bit value using `LDR X1, [X1, W0, SXTW #3]`.
+4. Uses the loaded value as an object base and accesses offsets including `+0x0c`, `+0x14`, and `+0x18`.
+5. Stores the loaded value into global slot `0x48015548`.
 
 The helper at `0x48013a48` reloads the object pointer from global slot `0x48015548`, programs fields at object offsets `+0x0c`, `+0x10`, and `+0x20`, and polls for expected values including `0xf8` and `0x3a`. The transport routine at `0x48013b98` uses object offsets `+0x08`, `+0x0c`, `+0x10`, `+0x14`, `+0x18`, `+0x1c`, and `+0x20` for DATA/control/status/clock/reset/extension/line-control-like fields. It issues START/STOP/read/write-style operations and branches on status values including `0x08`, `0x18`, and `0x28`.
 
@@ -51,12 +51,32 @@ This is strong evidence of a TWI/I2C-master-style controller abstraction. It is 
 
 A direct comparison of code references with the raw monitor bytes exposes an unresolved initialization boundary:
 
-- Code at `0x48013ac8` treats `0x48014628` as an array of 64-bit pointers. However, the raw file bytes at that address decode as small integer pairs, for example the first entries are `(0x0000000b, 0x000186a0)`, `(0x002dc6c0, 0x0000000c)`, and `(0x0000000f, 0x000186a0)`. Interpreted literally as 64-bit pointers, these values are not plausible mapped object addresses.
+- Code at `0x48013ac8` uses `0x48014628` as the base of a selector-indexed 64-bit load and subsequently treats the loaded value as an object pointer. However, the raw file bytes at that address decode as small integer pairs, for example `(0x0000000b, 0x000186a0)`, `(0x002dc6c0, 0x0000000c)`, and `(0x0000000f, 0x000186a0)`. Interpreted literally as 64-bit pointers, these values are not plausible mapped object addresses. Therefore the binary proves the *use-time lookup pattern*, not that the raw file contains the valid runtime pointer table.
 - Code repeatedly loads `[0x48014668]` and passes the result as a context pointer, but the raw file's initial 64-bit value at `0x48014668` is `2`, not a valid context pointer.
 - Global slot `0x48015548` also has raw initial value `2`, but `0x48013b14` explicitly overwrites it with the object pointer selected in the preceding instructions. This proves at least this pointer slot is runtime-populated before the controller helper consumes it.
 - In the direct static address-reference review of this payload, no direct store to `0x48014628` or `0x48014668` was identified. This does not exclude indirect stores, runtime relocation/fixups, an external loader patch, or initialization outside the reviewed direct-reference pattern.
 
 Therefore the raw table bytes cannot be treated as the runtime pointer table, and the raw `0x48014668=2` value cannot be treated as the live context pointer. The function path establishes how these values are consumed, but not who populates them or when.
+
+
+## 4A. Pinned BaseOS native SPL patch audit (2026-11-27)
+
+The pinned BaseOS source `dengzhan007/BaseOS-MultiFrontend` commit `cbe253a43f46cf551cc9a6c79a84015bde3686cf`, file `experiments/h700-boot-speed/spl/native-boot.c`, contains these direct monitor modifications:
+
+- `memcpy(monitor + 0x30, parameters, 128)` — vendor DRAM parameters.
+- `memcpy(monitor + 0x24, board, 8)` — board bytes.
+- `*(u32 *)(monitor + 0xb0) = 0x4a200000` — DTB pointer.
+
+A source scan of the pinned file found direct `monitor + ...` offsets exactly `0x24`, `0x30`, and `0xb0`. It found no direct SPL patch targeting `monitor + 0x14628` or `monitor + 0x14668`. This narrows the hypotheses but does not eliminate indirect writes, runtime mutation inside BL31, or another initialization contract not visible as a direct patch in this source file.
+
+A reproducible host audit was added:
+
+- `scripts/audit-rg34xx-bl31-twi-descriptors.py`
+- `scripts/test-audit-rg34xx-bl31-twi-descriptors.py`
+- The audit pins the monitor size/SHA, checks the selector loads, indexed lookup instruction, object-pointer publication, raw qwords and BaseOS SPL patch offsets. It produces `TWI-DESCRIPTOR.md` and `twi-descriptor-report.json`.
+- Workflow integration is in `.github/workflows/h700-bl31-memory-audit.yml`; the first run is tracked in [BL31 audit #95](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45965350913).
+
+**Interpretation update:** do not describe `0x48014628` as a proven initialized runtime pointer table. It is a lookup base used by the code; its runtime contents and the runtime context pointer at `0x48014668` remain unknown. The pinned SPL header patch does not explain either value.
 
 ## 5. Relationship to the live FDT
 
@@ -70,13 +90,13 @@ Confirmed statically:
 
 - RTC soft-entry continuation `0x48012670` calls `0x48012070`; a return reaches `0x480126a4` self-loop.
 - The continuation carries context `+0xa4` into the TWI-like controller initialization path.
-- `0x48013ac8` indexes a 64-bit table, dereferences the selected object, and saves it to `0x48015548`.
+- `0x48013ac8` performs a selector-indexed 64-bit load from lookup base `0x48014628`, uses the loaded value as an object base, and saves it to `0x48015548`; raw file bytes do not prove the runtime table contents.
 - `0x48013a48` and `0x48013b98` implement controller setup and transfer/status handling.
 
 Unresolved:
 
 1. Who initializes or relocates the context pointer at `0x48014668`?
-2. Who populates the runtime pointer table consumed from `0x48014628`, and what is its runtime layout?
+2. Who populates or transforms the indexed lookup data consumed from `0x48014628`, and what are its runtime contents/layout?
 3. What value does context `+0xa4` carry on the actual RG34XX suspend path?
 4. What controller base/object, bus number, slave address and command sequence are selected?
 5. What final PMIC/RTC/power action follows the transfer, and what consumes the GP_DATA2 phase markers?
