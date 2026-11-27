@@ -11,6 +11,16 @@
 
 **目标顺序：** 先通过独立 TF1 测试卡验证最小 AArch32 BL33；首发 proof-of-life 优先采用机身可见 PI12 工作灯；UART0 为备用；LCD、Linkslot 和模拟器后续接入。稳定 Linkslot 业务基线仍为 main 1.0.49。
 
+### 2026-11-28 活动启动链 provenance 复核
+
+最新离线来源报告：[RG34XX active boot-loader provenance](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-active-loader-provenance.md)。报告基于 2026-11-22 只读库存，强证据确认当前捕获启动链为 **Boot ROM → TF 上的 128 KiB BaseOS Boot0-primary outer capsule → BaseOS AArch64 native SPL → vendor BL31 → AArch32 BL33 loader → p4+48 MiB BOL4 image → Linux**。嵌入的 64 KiB stock eGON Boot0 是 fallback；没有证据表明 stock TOC1 U-Boot 在当前捕获启动中执行。
+
+RG34XX 没有板载 eMMC，系统从可移动 TF 启动。报告中的 eMMC boot0 表述已在 reports 分支更正；BROM 精确 sector/LBA 仍未知，不作推断。报告中的 `0x8000ff04` 是既有 Linux kernel-entry SMC，不是通用裸机入口。
+
+因此 M1 的具体工程目标是：在已运行的 native-SPL/BL31 启动路径中，受控准备替换活动 A32 BL33 loader（`0x4a000000`）的最小诊断 payload。任何 loader 更新都必须重新生成 p4+40 MiB firmware package 的 length/FNV，并重建与之匹配的 AArch64 SPL 和 128 KiB Boot0-primary capsule；不得新旧代混配。
+
+当前分支 HEAD `15d4319` 的 H700 boot-audit run [46033210075](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46033210075) 两端成功；最近完整 feasibility #931 [84/84 passed](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46031541947) 对应父提交 `f83f5f0`，不是当前 HEAD。所有这些均为 host/cross-build 或离线审计证据，不是 BL33 实机启动。硬件 gate 保持关闭。
+
 ### 当前唯一近期交付物 M1
 
 按 [M1 BL33 diagnostic specification](m1-bl33-diagnostic.md) 与 [无拆机 TF bring-up 方案](no-disassembly-tf-bringup-plan.md) 执行：
