@@ -1080,3 +1080,11 @@ Hard size boundary: this first integration path is only for a small diagnostic p
 - [ ] Extend alias modeling to MOVN/logical-immediate constructions, stack spill/reload, BLR indirect calls and helper/memcpy semantics; external firmware initialization remains possible.
 - [ ] Resolve the runtime meaning/initialization of `0x48014668`, which overlaps lookup origin `0x48014628+0x40` (signed index 8); do not treat it as a proven independent global.
 - Hardware remains unchanged: `H700_MEMORY_LAYOUT_APPROVED=false`, `hardware_applied=0`; no SMC/MMIO, DRAM content access, TWI transaction, suspend/wake, Boot0/TOC1 write, flashing or payload execution.
+
+## 2026-11-27 — CFG address-seed reporting and BL31 audit #128
+
+- [x] Correct the generated CFG summary to report all address-materialization seed classes rather than labeling the total as ADRP-only.
+- [x] BL31 audit #128 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45973433905) passed the full matched-monitor audit; artifact [15185733602](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45973433905/artifacts/15185733602). Actual payload results: ADRP 79, ADR 0, MOV-immediate 0, literal-load 0; 38,676 CFG states; 83 load path hits / 22 unique PCs; zero modeled selector/context-slot writes.
+- [x] H700 boot audit #1476/#1477 passed Linux host-tools and Windows PowerShell after PROJECT-STATUS / roadmap updates.
+- [ ] Continue beyond current alias model: MOVN/bitfield immediate synthesis, stack spill/reload, BLR indirect calls, helper-copy semantics and external loader initialization.
+- Hardware remains unchanged: `H700_MEMORY_LAYOUT_APPROVED=false`, `hardware_applied=0`; no SMC/MMIO, DRAM content access, I2C/TWI transaction, suspend/wake, Boot0/TOC1 write, flashing or payload execution.
