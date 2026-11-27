@@ -191,6 +191,36 @@ This scan remains bounded, not a full formal CFG/interprocedural proof. It does 
 **Updated result:** the current matched-BL31 static analysis still finds no confirmed writer for `context +0xa4`. The runtime signed selector is unknown; index 73 remains a strong conditional R-TWI0 candidate only. The overlapping slot at `0x48014668` remains an unexplained context-like pointer/data slot.
 
 
+
+## 4E. MOVZ/MOVK and literal-pool address-construction coverage (2026-11-27)
+
+The bounded CFG seed model now also recognizes:
+
+- `MOV/MOVZ` immediate fragments that can form the context-like slot address (including low half `0x4668` and high half `0x4801`);
+- subsequent `MOVK` halfword replacement on a tracked register;
+- `LDR literal` values whose literal qword resolves to the context-like slot or a nearby monitor data page.
+
+Host regressions use real AArch64 instruction encodings and cover:
+- `MOVZ x20,#0x4668` + `MOVK x20,#0x4801,LSL #16` → `0x48014668`, then load context pointer and synthetic store to `+0xa4`;
+- `LDR x20,literal` whose literal qword is `0x48014668`, then the same context-pointer/selector write chain.
+
+CI:
+- [BL31 audit #126](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45972875430) passed after adding the expanded seed and MOVK transfer logic.
+- [BL31 audit #127](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45972935686) passed the full host regression including MOVZ/MOVK and LDR-literal fixtures; artifact [15185123383](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45972935686/artifacts/15185123383).
+
+For the actual matched 107,216-byte monitor, the expanded CFG report remains:
+- ADRP seeds: 79
+- ADR seeds: 0
+- MOV-immediate seeds: 0
+- literal-load seeds: 0
+- processed CFG states: 38,676
+- context-like slot loads: 83 path/seed hits, 22 unique PCs
+- context `+0xa4` alias stores: 0
+- context-like slot alias stores: 0
+
+Thus the new MOVZ/MOVK/literal-pool coverage does not change the real-monitor result; it closes additional synthetic-model gaps and confirms those specific construction idioms are absent as qualifying seeds in the current payload. More complex MOVN/bitfield synthesis, spill/reload, indirect calls, helper copies, register-indexed writes, and external initialization remain outside the model.
+
+
 ## 5. Relationship to the live FDT
 
 The uploaded live-FDT inventory reports an AXP2202 PMIC node beneath an H700 R-TWI-like node at `0x07081400`, compatible `x-powers,axp2202`. The H616 family reference maps R-TWI0 at `0x07081400`, and H616 DTS sources associate R-PIO PL0/PL1 with `s_i2c`.
