@@ -75,14 +75,14 @@ def parse_fdt(blob):
     strings=blob[ot:ot+ss]
     def str_at(off):
         if not 0<=off<len(strings): raise ValueError("FDT string offset out of range")
-        end=strings.find(b"\\0",off)
+        end=strings.find(b"\0",off)
         if end<0: raise ValueError("unterminated FDT property name")
         return strings[off:end].decode("ascii")
     nodes={}; stack=[]; p=os; stop=os+sz; ended=False
     while p+4<=stop:
         token=struct.unpack_from(">I",blob,p)[0]; p+=4
         if token==1:
-            end=blob.find(b"\\0",p,stop)
+            end=blob.find(b"\0",p,stop)
             if end<0: raise ValueError("unterminated FDT node")
             stack.append(blob[p:end].decode("ascii")); p=(end+4)&~3
             path="/"+"/".join(stack[1:]) if len(stack)>1 else "/"
@@ -106,8 +106,8 @@ def parse_fdt(blob):
 def fdt_string(nodes,path,name):
     try: raw=nodes[path][name]
     except KeyError as e: raise ValueError(f"missing FDT string {path}:{name}") from e
-    if not raw.endswith(b"\\0"): raise ValueError("FDT string is not NUL-terminated")
-    return raw.split(b"\\0",1)[0].decode("ascii")
+    if not raw.endswith(b"\0"): raise ValueError("FDT string is not NUL-terminated")
+    return raw.split(b"\0",1)[0].decode("ascii")
 def derive_selector(dtb):
     nodes=parse_fdt(dtb)
     pmu=fdt_string(nodes,"/aliases","pmu0")
@@ -131,7 +131,7 @@ def audit(monitor,dtb,baseos_source):
            0x480012FC:0x48000CB8,0x4800131C:0x48000974,0x48001330:0x4800B928}
     for pc,target in calls.items():
         if bl_target(word(monitor,pc),pc)!=target: raise ValueError(f"BL target changed at {pc:#x}")
-    for a,s in ((0x480163EE,b"pmu0\\0"),(0x480163F3,b"device_type\\0"),(0x480163FF,b"twi\\0")):
+    for a,s in ((0x480163EE,b"pmu0\0"),(0x480163F3,b"device_type\0"),(0x480163FF,b"twi\0")):
         if monitor[a-MONITOR_BASE:a-MONITOR_BASE+len(s)]!=s: raise ValueError(f"FDT key/prefix changed at {a:#x}")
 
     sr,sp=adrp(word(monitor,0x48001A08),0x48001A08); sd,sn,si=add_imm(word(monitor,0x48001A10),0x48001A10)
