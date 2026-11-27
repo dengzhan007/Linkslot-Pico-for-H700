@@ -18,6 +18,9 @@ def main() -> int:
     assert MODULE.read_u64(raw, MODULE.BASE) == 0x1122334455667788
     assert MODULE.classify_pointer(0x48002510) == "monitor-internal-address"
     assert MODULE.classify_pointer(0x07081400) == "soc-mmio-candidate"
+    assert MODULE.classify_pointer(0x05002000) == "soc-mmio-candidate"
+    assert MODULE.H616_TWI_BASES[0x07081400] == "R-TWI0"
+    assert MODULE.H616_TWI_BASES[0x05003000] == "TWI4"
     assert MODULE.classify_pointer(2) == "small-scalar-or-offset"
     assert MODULE.classify_pointer(0x000186A00000000B) == "unclassified-scalar-or-encoded-value"
     source = """
