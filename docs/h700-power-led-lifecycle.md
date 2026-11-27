@@ -63,23 +63,27 @@ PIO MMU 映射只更新已有 ARM section translation table 的一个外设条�
 
 ## PIO bus-clock dependency
 
-The H700/H616-family PIO binding in the reference
-[`sun50i-h616.dtsi`](https://github.com/torvalds/linux/blob/master/arch/arm64/boot/dts/allwinner/sun50i-h616.dtsi)
-connects the main pinctrl block to `CLK_APB1` and does not declare a separate
-PIO reset line. The reference
-[`ccu-sun50i-h616.c`](https://github.com/torvalds/linux/blob/master/drivers/clk/sunxi-ng/ccu-sun50i-h616.c)
-models APB1 as a mux/divider clock at CCU offset `0x520`, without a distinct
-PIO gate bit. The pinned vendor-equivalent H616 family uses the same
-`allwinner,sun50i-h616-pinctrl` binding; the v2 RG34XX Linux clock summary
-also reads `apb1=100 MHz` with a PIO consumer.
+The RG34XX live FDT identifies its main PIO controller as
+`allwinner,sun50iw9p1-pinctrl` at `0x0300b000/0x400`. A pinned
+2021 `sun50iw9p1` kernel-source cross-reference uses that exact compatible
+and binds PIO to a logical `pio` clock. Its clock provider maps `pio` to
+the `apb1` parent; the APB1 configuration register is CCU offset `0x520`
+from base `0x03001000`, i.e. candidate address `0x03001520`. The generic
+pinctrl probe enables its first clock, but the provider does not declare a
+separate PIO module gate/reset register.
 
-This supports using the already configured APB1 path without adding a
-speculative PIO gate/reset sequence. It does **not** prove the exact APB1
-parent/rate at the earlier BL33 handoff. The PI12 service deliberately does
-not write CCU registers or alter APB1. Early PIO access still needs cold-boot
-validation; if the board's handoff configuration has APB1 unavailable, keep
-the LED function fail-closed rather than enabling or reparenting clocks based
-on an unverified assumption.
+This is a closer family match than the earlier H616-only comparison, but it
+is not proven to be the exact source used for the shipping RG34XX Linux
+4.9.170 build. The user inventory has not captured the APB1 register at BL33
+entry, and the live-FDT JSON summary does not expose the PIO clock phandle
+tuple. Separately, target BL31's SPC setup is static evidence of attempted
+Non-secure access, not effective permission readback; the fuse condition
+remains unknown.
+
+The PI12 service does not write CCU/APB1, does not set a speculative separate
+PIO gate/reset, and does not alter the clock tree. Keep the physical wrapper
+default-off until inherited APB1 state and effective Non-secure PIO access
+are qualified. Do not reparent or enable clocks based on family inference.
 
 ## Linkslot 游戏生命周期
 
