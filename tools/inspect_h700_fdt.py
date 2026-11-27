@@ -795,9 +795,144 @@ def _interrupt_inventory(nodes: dict[str, dict[str, bytes]]) -> dict[str, Any]:
     }
 
 
+
+def _pinctrl_group_summary(node_path: str, props: dict[str, bytes]) -> dict[str, Any]:
+    """Summarize static Allwinner pin-group declarations without live-state claims."""
+    phandle = _number(props.get("phandle"))
+    if phandle is None:
+        phandle = _number(props.get("linux,phandle"))
+    function = (_strings(props.get("allwinner,function"))
+                or _strings(props.get("function")) or [None])[0]
+    pins = _strings(props.get("allwinner,pins")) or _strings(props.get("pins"))
+    return {
+        "node": node_path,
+        "phandle": f"0x{phandle:x}" if phandle is not None else None,
+        "function": function,
+        "pins": pins,
+        "mux_select": _number(props.get("allwinner,muxsel")),
+        "pull_cells": _cells(props.get("allwinner,pull")),
+        "drive_cells": _cells(props.get("allwinner,drive")),
+    }
+
+
+def _serial_inventory(nodes: dict[str, dict[str, bytes]]) -> dict[str, Any]:
+    """Resolve serial aliases, UART register windows, clocks and pinctrl groups."""
+    phandles = _phandle_index(nodes)
+    alias_props = nodes.get("/aliases", {})
+    serial_aliases = []
+    aliases_by_node: dict[str, list[str]] = {}
+    for alias_name, raw_target in sorted(alias_props.items()):
+        if not alias_name.startswith("serial"):
+            continue
+        targets = _strings(raw_target)
+        if not targets:
+            continue
+        target = targets[0]
+        serial_aliases.append({"alias": alias_name, "node": target})
+        aliases_by_node.setdefault(target, []).append(alias_name)
+
+    chosen = nodes.get("/chosen", {})
+    stdout_path = (_strings(chosen.get("stdout-path")) or [None])[0]
+    stdout_alias = stdout_path.split(":", 1)[0] if stdout_path else None
+    stdout_node = next(
+        (item["node"] for item in serial_aliases if item["alias"] == stdout_alias),
+        stdout_alias if stdout_alias and stdout_alias.startswith("/") else None,
+    )
+
+    serial_nodes = []
+    for node_path, props in nodes.items():
+        compatible = _strings(props.get("compatible"))
+        is_serial = (
+            node_path in aliases_by_node
+            or any("uart" in item.lower() or "serial" in item.lower()
+                   for item in compatible)
+        )
+        if not is_serial:
+            continue
+
+        address_cells = _ancestor_cell_count(nodes, node_path, "#address-cells", 2)
+        size_cells = _ancestor_cell_count(nodes, node_path, "#size-cells", 1)
+        reg_ranges = []
+        reg_decode_error = None
+        if "reg" in props:
+            try:
+                reg_ranges = _reg_ranges(props["reg"], address_cells, size_cells)
+            except FdtError as exc:
+                reg_decode_error = str(exc)
+
+        clock_refs = _phandle_refs(
+            props.get("clocks"), phandles, nodes, "#clock-cells"
+        )
+        for ref in clock_refs:
+            clock_props = nodes.get(ref.get("node") or "", {})
+            ref["compatible"] = _strings(clock_props.get("compatible"))
+            ref["status"] = (_strings(clock_props.get("status")) or ["okay"])[0]
+
+        pinctrl_names = _strings(props.get("pinctrl-names"))
+        pinctrl_states = []
+        for property_name, raw_refs in sorted(props.items()):
+            match = re.fullmatch(r"pinctrl-(\\d+)", property_name)
+            if not match:
+                continue
+            state_index = int(match.group(1), 10)
+            refs = _phandle_refs(raw_refs, phandles)
+            for ref in refs:
+                group_props = nodes.get(ref.get("node") or "", {})
+                ref["function"] = (
+                    _strings(group_props.get("allwinner,function"))
+                    or _strings(group_props.get("function")) or [None]
+                )[0]
+                ref["pins"] = (
+                    _strings(group_props.get("allwinner,pins"))
+                    or _strings(group_props.get("pins"))
+                )
+                ref["mux_select"] = _number(group_props.get("allwinner,muxsel"))
+            pinctrl_states.append({
+                "index": state_index,
+                "name": pinctrl_names[state_index] if state_index < len(pinctrl_names) else None,
+                "groups": refs,
+            })
+
+        serial_nodes.append({
+            "node": node_path,
+            "aliases": aliases_by_node.get(node_path, []),
+            "compatible": compatible,
+            "status": (_strings(props.get("status")) or ["okay"])[0],
+            "reg": reg_ranges,
+            "reg_decode_error": reg_decode_error,
+            "clock_names": _strings(props.get("clock-names")),
+            "clocks": clock_refs,
+            "pinctrl_names": pinctrl_names,
+            "pinctrl_states": sorted(pinctrl_states, key=lambda item: item["index"]),
+        })
+
+    uart0_related_groups = []
+    for node_path, props in nodes.items():
+        summary = _pinctrl_group_summary(node_path, props)
+        if summary["pins"] and summary["function"] in ("uart0", "uart0_jtag"):
+            uart0_related_groups.append(summary)
+
+    return {
+        "serial_aliases": serial_aliases,
+        "stdout_path": stdout_path,
+        "stdout_node": stdout_node,
+        "serial_nodes": sorted(serial_nodes, key=lambda item: item["node"]),
+        "uart0_related_pinctrl_groups": sorted(
+            uart0_related_groups, key=lambda item: item["node"]
+        ),
+        "note": (
+            "Static FDT declarations only. Alias, reg, clock and pinctrl references "
+            "do not prove live register state, physical pad routing/electrical "
+            "connection, BL31-to-BL33 state, security/firewall permission, or "
+            "that the declared clock remains enabled at BL33 entry."
+        ),
+    }
+
+
 def inspect_fdt(path: Path) -> dict[str, Any]:
     blob = path.read_bytes()
     nodes = parse_fdt(blob)
+    serial_inventory = _serial_inventory(nodes)
     root = nodes.get("/", {})
     addr_cells = _cell_count(root, "#address-cells", 2)
     size_cells = _cell_count(root, "#size-cells", 1)
@@ -959,6 +1094,12 @@ def inspect_fdt(path: Path) -> dict[str, Any]:
         "model": model,
         "compatible": compatible,
         "chosen_bootargs": chosen_bootargs,
+        "serial_aliases": serial_inventory["serial_aliases"],
+        "stdout_path": serial_inventory["stdout_path"],
+        "stdout_node": serial_inventory["stdout_node"],
+        "serial_nodes": serial_inventory["serial_nodes"],
+        "uart0_related_pinctrl_groups": serial_inventory["uart0_related_pinctrl_groups"],
+        "serial_inventory_note": serial_inventory["note"],
         "initrd": initrd,
         "firmware_nodes": firmware_nodes,
         "ion_heaps": ion_heaps,

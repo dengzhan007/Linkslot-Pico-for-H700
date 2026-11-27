@@ -25,6 +25,10 @@ def cells(*values):
 def make_fdt():
     property_names = (
         "#address-cells", "#size-cells", "model", "compatible", "bootargs",
+        "serial0", "clock-names", "clocks", "#clock-cells",
+        "pinctrl-names", "pinctrl-0", "pinctrl-1",
+        "allwinner,pins", "allwinner,function", "allwinner,muxsel",
+        "allwinner,pull", "allwinner,drive",
         "device_type", "reg", "lcd_driver_name", "lcd_x", "lcd_y", "lcd_if", "lcd_hv_if",
         "lcd_lvds_if", "lcd_dclk_freq", "lcd_ht", "lcd_hbp", "lcd_hspw", "lcd_vt",
         "lcd_vbp", "lcd_vspw", "status", "boot_fb0",
@@ -77,6 +81,18 @@ def make_fdt():
     prop("bootargs", b"root=/dev/mmcblk0p5 cma=64M disp_reserve=1382400,0x7bf24800\0")
     prop("linux,initrd-start", cells(0, 0x42000000))
     prop("linux,initrd-end", cells(0, 0x42000200))
+    end()
+
+    begin("aliases")
+    prop("serial0", b"/soc@03000000/uart@05000000\\0")
+    end()
+
+    begin("clocks")
+    begin("uart0")
+    prop("compatible", b"allwinner,periph-clock\\0")
+    prop("#clock-cells", be32(0))
+    prop("phandle", be32(0x80))
+    end()
     end()
 
     begin("memory@40000000")
@@ -152,6 +168,29 @@ def make_fdt():
     prop("#gpio-cells", be32(6))
     prop("gpio-controller", b"")
     prop("phandle", be32(0x60))
+    begin("uart0@0")
+    prop("allwinner,pins", b"PH0\\0PH1\\0")
+    prop("allwinner,function", b"uart0\\0")
+    prop("allwinner,muxsel", be32(2))
+    prop("phandle", be32(0x81))
+    end()
+    begin("uart0_jtag@0")
+    prop("allwinner,pins", b"PF0\\0PF1\\0PF2\\0PF3\\0PF4\\0PF5\\0")
+    prop("allwinner,function", b"uart0_jtag\\0")
+    prop("allwinner,muxsel", be32(3))
+    prop("phandle", be32(0x82))
+    end()
+    end()
+
+    begin("uart@05000000")
+    prop("compatible", b"allwinner,sun50i-uart\\0")
+    prop("reg", cells(0, 0x05000000, 0, 0x400))
+    prop("status", b"okay\\0")
+    prop("clocks", be32(0x80))
+    prop("clock-names", b"uart0\\0")
+    prop("pinctrl-names", b"default\\0sleep\\0")
+    prop("pinctrl-0", be32(0x81))
+    prop("pinctrl-1", be32(0x81))
     end()
 
     prop("interrupt-parent", be32(0x70))
@@ -426,6 +465,28 @@ class FdtInspectorTests(unittest.TestCase):
             "size_bytes": 512,
             "range_valid": True,
         })
+        self.assertEqual(report["serial_aliases"], [{
+            "alias": "serial0",
+            "node": "/soc@03000000/uart@05000000",
+        }])
+        serial0 = next(item for item in report["serial_nodes"] if "serial0" in item["aliases"])
+        self.assertEqual(serial0["compatible"], ["allwinner,sun50i-uart"])
+        self.assertEqual(serial0["status"], "okay")
+        self.assertEqual(serial0["reg"], [{
+            "start": "0x5000000", "size": "0x400", "end_exclusive": "0x5000400",
+        }])
+        self.assertEqual(serial0["clocks"][0]["node"], "/clocks/uart0")
+        self.assertEqual(serial0["clock_names"], ["uart0"])
+        self.assertEqual(serial0["pinctrl_names"], ["default", "sleep"])
+        self.assertEqual(serial0["pinctrl_states"][0]["groups"][0]["pins"], ["PH0", "PH1"])
+        self.assertEqual(serial0["pinctrl_states"][0]["groups"][0]["function"], "uart0")
+        jtag_group = next(
+            item for item in report["uart0_related_pinctrl_groups"]
+            if item["function"] == "uart0_jtag"
+        )
+        self.assertEqual(jtag_group["pins"], ["PF0", "PF1", "PF2", "PF3", "PF4", "PF5"])
+        self.assertEqual(jtag_group["mux_select"], 3)
+        self.assertIn("do not prove live register state", report["serial_inventory_note"])
         self.assertEqual(report["firmware_nodes"], [{
             "node": "/firmware/optee",
             "compatible": ["linaro,optee-tz"],
