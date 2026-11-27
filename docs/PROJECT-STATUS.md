@@ -128,6 +128,14 @@
 - 即使未来 classifier 显示整页 reserved，也只解除“Linux memblock 未保留”这一项疑点；仍不能证明 PFN allocator/page-owner、Secure/Non-secure firewall、BL31 访问权限、DRAM controller 状态或运行时 selector。始终保持 `H700_MEMORY_LAYOUT_APPROVED=false`，直至独立证据闭合。
 - BL31 audit #85（run `45934597078`）在 `855b022734693a8c5130b5a0773b8bd1922c0d22` 上完整成功；classifier host regression、reports JSON 分类、原有 BL31/Boot0/PSCI 审计及 artifact 上传步骤全部成功。生成 artifact `15170227641`。实际分类为 `UNRESERVED_SYSTEM_RAM` / `BLOCKED_SOURCE_PAGE_NOT_RESERVED`。#84 是 workflow YAML 语法错误导致的无-job失败，已由 `855b022` 修复并由 #85 复验。 无实机采集、SMC、MMIO、DRAM 读写、suspend/resume 或刷写，`hardware_applied=0`。
 
+### PFN 0x40000 的只读页元数据采集器已准备（2026-11-27）
+
+- 新增 `scripts/collect-rg34xx-dram-pfn-readonly.sh`，只针对 BL31 固定源页 `[0x40000000,0x40001000)`（4-KiB page，PFN `0x40000`）读取 `/proc/kpageflags` 与 `/proc/kpagecount` 的单个 8-byte 条目；同时只检查 page_owner 节点可用性及 `CONFIG_PROC_PAGE_MONITOR/PAGE_OWNER/PAGE_EXTENSION/DEBUG_VM` 配置。
+- 采集器要求 root、确认 page size=4096，且只读取 procfs/debugfs 元数据；不 dump `page_owner` 全表、不 mount debugfs、不读写 DRAM 物理内容、不触发 SMC/MMIO/PSCI、不做 suspend/resume，不写 boot media。
+- 本地 agent 执行方式：`adb push scripts/collect-rg34xx-dram-pfn-readonly.sh /data/local/tmp/rg34xx-dram-pfn-readonly.sh`，先确认 `adb shell id -u` 返回 `0`，再运行 `adb shell sh /data/local/tmp/rg34xx-dram-pfn-readonly.sh` 并将完整 stdout 保存为 `dram-retention-pfn.txt` 上传 reports 分支。若不是 root，不尝试提权/改启动参数；记录 `BLOCKED_ROOT_REQUIRED` 即可。
+- `kpageflags/kpagecount` 以原始 8-byte hex 保存，不在设备端根据不匹配的头文件解释 bit；必须先核对正在运行的精确 Linux `4.9.170 #19` kernel 对应的 `page-flags.h` 与 `fs/proc/page.c` 语义。
+- **状态：采集器已提交，尚未在设备上执行。** 即使 kpagecount 为 0 或某些 flag 表示 free，也不能仅凭一个采样时刻批准 BL31 与 Linux 并发访问；需要与 memblock 保留、PFN allocator、page owner 和 secure-world/BL31 ownership 证据共同判定。保持 `H700_MEMORY_LAYOUT_APPROVED` unset，`hardware_applied=0`。
+
 ### 证据边界与下一步
 
 - `scripts/audit-rg34xx-bl31-psci-cpu-on.py` 与 host test 现锁定：9 项 legacy platform-ops、affinity callback map、特殊 SYSTEM_SUSPEND 入口、SRAM code/context staging、clock/PLL restore、wake-source helpers、checksum 默认 descriptor 与 arm_svc SMC override、RTC GP_DATA1 retention buffer、双窗口 snapshot/restore、动态 bank selector、restore gate、DRAM clock restore、mode-dependent DRAM_CTRL/PHY_CTRL setup、MSI_CTRL fallback 及 0x047Fxxxx MMIO 地址构造。BL31 audit #76、#78、#79、#81、#82、#83 和 #85 通过；#85 将完整 PSCI/Boot0/BL31 审计与 DRAM page classifier 汇总验证。另已审查 SenkOS Super Standby 参考实现与其 pinned stub 的 DRAM write-probe 风险。所有结论仍是匹配 binary 的静态证据或独立参考实现对照。
