@@ -268,12 +268,19 @@ confirm the current pinned LK reference is **not an H700 SMP runtime**:
   one global critical-section nesting counter. `arch_disable_ints()` masks
   IRQs only on the executing core; it is not a cross-core lock.
 - The pinned `crt0.S` sets `ACTLR.SMP` only for the Cortex-A7 path; there is
-  no Cortex-A53 enable path in that reference. Secondary-core state at the
-  BL31→BL33 handoff remains UNKNOWN.
+  no Cortex-A53 enable path in that reference. Matched BL31 source-binary
+  audit makes the initial CPU1–CPU3 hold-off **probable, not device-verified**:
+  Boot0's helper keeps CPU2/CPU3 reset under H616 reference semantics and
+  omits CPU1; SPL configures only the primary RVBAR. However, BL31 also has
+  a later PSCI `affinst_on` callback (`0x4800255c`) to CPU_ON helper
+  `0x48002d78`, which can program per-core RVBAR and power/reset state.
+  The helper's SoC branch depends on selector `0x03000024 & 7`, which has
+  not been read. Its existence is not evidence it is auto-called at initial
+  BL33 entry; it is also not safe to call from this UP LK runtime.
 - Therefore any future M1 diagnostic using this LK runtime must be explicitly
   CPU0-only and gated on separate evidence that CPU1–CPU3 remain held off /
-  in reset for the entire runtime. Do not release secondaries or treat the
-  global critical-section counter as an SMP-safe lock.
+  in reset for the entire runtime. Do not invoke PSCI CPU_ON, release
+  secondaries, or treat the global critical-section counter as an SMP-safe lock.
 
 These are pinned-source and synthetic-link findings only. They do not prove
 the real SoC's CPU1–CPU3 reset state, ACTLR state, cache coherency, or memory
