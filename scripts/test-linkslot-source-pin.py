@@ -57,6 +57,8 @@ def main() -> int:
         workflow = (ROOT / relative).read_text(encoding="utf-8")
         if workflow.count("scripts/test-linkslot-source-pin.py") < 3:
             fail(f"{relative} must trigger and run the shared source-pin guard")
+        if workflow.count("integration/linkslot/upstream-snapshot.sha") < 2:
+            fail(f"{relative} must trigger when the shared pin file changes")
 
     print(f"PASS: all H700 Linkslot patchers and CI share immutable snapshot {pin}")
     print("PASS: workspace version remains 1.0.49; exported patch identity is consistent")
