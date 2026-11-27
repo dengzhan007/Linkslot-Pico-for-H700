@@ -162,11 +162,11 @@ WORDS = {
     0x48011370: 0x97fff31e,
     0x48011378: 0x97ffed9c,
     0x480113bc: 0x97fff3c9,
-    0x480113ec: 0x97fff445,
+    0x480113f0: 0x97fff444,
     0x4801140c: 0x97fff43d,
     0x48011438: 0x97fff5da,
     0x48011454: 0x97fff5d3,
-    0x4801147c: 0x97fff021,
+    0x48011480: 0x97fff020,
     0x480114a4: 0x97fff49f,
     0x480114f4: 0x97ffff8b,
     0x4801150c: 0x97fff5a5,
@@ -1590,6 +1590,7 @@ def main() -> int:
                                         {"pc":"0x48011378","target":"0x4800c9e8"}
                                     ],
                                     "success_epilogue_helper": "0x4800d500",
+                                    "success_epilogue_call_pc": "0x48011480",
                                     "failure_return": "W0=0 at 0x48011520",
                                     "outer_retry": {
                                         "counter_address":"0x48015410",

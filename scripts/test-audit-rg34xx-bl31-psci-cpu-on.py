@@ -272,11 +272,11 @@ def main() -> int:
     assert module.decode_bl_target(0x48011370,module.WORDS[0x48011370]) == 0x4800DFE8
     assert module.decode_bl_target(0x48011378,module.WORDS[0x48011378]) == 0x4800C9E8
     assert module.decode_bl_target(0x480113bc,module.WORDS[0x480113bc]) == 0x4800E2E0
-    assert module.decode_bl_target(0x480113ec,module.WORDS[0x480113ec]) == 0x4800E500
+    assert module.decode_bl_target(0x480113f0,module.WORDS[0x480113f0]) == 0x4800E500
     assert module.decode_bl_target(0x4801140c,module.WORDS[0x4801140c]) == 0x4800E500
     assert module.decode_bl_target(0x48011438,module.WORDS[0x48011438]) == 0x4800EBA0
     assert module.decode_bl_target(0x48011454,module.WORDS[0x48011454]) == 0x4800EBA0
-    assert module.decode_bl_target(0x4801147c,module.WORDS[0x4801147c]) == 0x4800D500
+    assert module.decode_bl_target(0x48011480,module.WORDS[0x48011480]) == 0x4800D500
     assert module.decode_bl_target(0x480114a4,module.WORDS[0x480114a4]) == 0x4800E720
     assert module.decode_bl_target(0x480114f4,module.WORDS[0x480114f4]) == 0x48011320
     assert module.decode_bl_target(0x4801150c,module.WORDS[0x4801150c]) == 0x4800EBA0
