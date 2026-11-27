@@ -96,7 +96,36 @@ The intended one-shot design is a separate build mode with the following fail-cl
 - The PI12 MMIO probe remains disabled until M1-S1 proves APB1/PIO handoff access, the SPC/fuse condition, the pin mux and polarity, PI11 preservation, and the abort/fail-stop path.
 - No UART writes, framebuffer, GIC/timer, heap, DMA, SMP, PMIC/TWI, or application DRAM arena in the first proof payload.
 
-## 4. Host-only verification required before producing an M1 artifact
+## 4. Concrete implementation cut points in the pinned BaseOS tree
+
+The implementation should be a separate build mode and separate source files;
+do not edit the meaning of `BASEOS_RAW_CAPSULE` in place.
+
+| Layer | Existing source cut point | M1-specific replacement |
+|---|---|---|
+| Outer A32 capsule | `native/capsule/entry.S`, `capsule.c`, `build.py` | Keep the bounded A32 context-save/copy-stub path only after independent review; replace `capsule_main()` with static Boot0/M1-SPL header+hash selection. No RTC, retention, watchdog, persistent attempt state or write-side fallback. |
+| SPL early entry | `spl/early-mmc.c` `BASEOS_RAW_CAPSULE` branch | Add a distinct `BASEOS_M1_ONESHOT` branch. It may initialise the already-selected TF controller and perform block reads, but has no `baseos_raw_adopt()`, no `blk_dwrite()`, no result/journal sectors and no RTC/WDT reads or writes. |
+| Native handoff | `spl/native-boot.c::baseos_vendor_handoff()` | Add a dedicated M1 handoff rather than branching through the production Linux-loader routine. Load and validate only the required native firmware extents; prepare the monitor's required DRAM/board/DTB fields; enter BL31's A32 SVC BL33 path. |
+| Build/package | `spl/build-early-mmc.py`, `native/build.py`, capsule builder | Generate a generation-bound M1 manifest and matched SPL/firmware/capsule. Keep the original 32 KiB A32 loader extent and zero header-reserved input contract. No release/upgrade artifact reuse. |
+
+### Explicit functions to exclude from the M1 native handoff unless separately justified
+
+- `baseos_native_bootreason()`: reads PMIC bus state and may write PMIC scratch `0xf0`; boot-reason metadata is unnecessary for a proof-of-life payload.
+- `baseos_vendor_pll_power()`: writes nine CCU PLL/gate registers. Its necessity for a minimal BL31→A32 diagnostic is unproven; do not inherit it by convenience.
+- `panel_start()`, `panel_advance()`, `panel_publish()`, `load_boot_logo()`: display PIO and logo handling are unrelated to entering LK; exclude them.
+- The p4 + 48 MiB BOL4 image read, FNV check, kernel decompression, Linux bootargs/FDT mutation and Linux-start SMC: none is required for an independent A32 BL33.
+- Watchdog adoption/reload, RTC markers and diagnostic trace writes: all excluded.
+
+### Dependencies that still need their own call-graph audit
+
+- `sunxi_board_init()` / DRAM training: determine whether this is needed because the selected M1 SPL, unlike the embedded stock Boot0, begins before DRAM is established. If it is required, enumerate its clock, pinmux, PMIC/RSB/TWI, DRAM and MMIO writes; no hidden call is grandfathered in.
+- MMC setup: controller/PIO/CCU register operations required to initialise the SD host are distinct from writing SD data sectors. The M1 source may perform the former only after a scoped allowlist; every block write command/data-sector write remains forbidden.
+- `baseos_native_cache_on()` / `baseos_native_cache_off()`: retain only the cache/MMU transitions proven necessary for safe image copying and BL31 handoff; audit the final A64 instructions and barriers.
+- Monitor input contract: prove which DRAM parameters, board bytes, DTB/DTBO extents, U-Boot header fields and scratch addresses are actually consumed on the BL31→A32 SVC path. Do not preserve Linux-only fields by assumption.
+
+A useful first implementation milestone is therefore **not** a bootable test image. It is an AArch32 capsule dispatcher unit plus an M1-SPL source branch that compile/link with dummy fixtures, followed by fake-MMC read-only tests and a final ELF MMIO/write-site audit. Only after that can the exact prepared bundle be run through the pinned native builder to generate a matched but still NON-INSTALLABLE artifact.
+
+## 5. Host-only verification required before producing an M1 artifact
 
 The M1 builder must emit a manifest with at least:
 
@@ -122,7 +151,7 @@ Tests must include:
 
 Until all checks pass, the output remains NON-INSTALLABLE / NOT FOR DEVICE.
 
-## 5. Recovery model and hardware gate
+## 6. Recovery model and hardware gate
 
 This mode has **no automatic runtime fallback after the M1 SPL begins execution**. Its only software fallback is the pre-entry selection of the embedded stock Boot0 when static image validation rejects the M1 SPL. If the M1 SPL starts and subsequently hangs, the only proposed recovery is:
 
@@ -134,7 +163,7 @@ That is a proposed manual recovery procedure, not yet a hardware-qualified recov
 
 The current M1 work remains host-only. M1-S1 (PI12 qualification), G2 (physical BL33 memory ownership), G3 (CPU1–CPU3 state and timer/PPI continuity), and the one-shot capsule recovery gate remain OPEN. Keep H700_MEMORY_LAYOUT_APPROVED=false and hardware_applied=0. Do not write a card, Boot0, TOC1, RTC, watchdog or device MMIO as part of this design work.
 
-## 6. Pinned source locations
+## 7. Pinned source locations
 
 All paths below are at BaseOS-MultiFrontend commit cbe253a43f46cf551cc9a6c79a84015bde3686cf:
 
