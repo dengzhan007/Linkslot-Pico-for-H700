@@ -51,8 +51,9 @@ UART0 降级为可选备用。已有 PH0/PH1 静态配置和 SPL/BL31 handoff �
 
 ### 已测量的 host-only BL33 内部布局（2026-11-27）
 
-Full feasibility #921 passed 75/75 and its actual LK early-MMU/PI12 link map
-records the following current layout:
+Full feasibility [#924](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46021131707)
+passed 75/75; artifact [15208527176](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46021131707/artifacts/15208527176)
+contains the actual LK early-MMU/PI12 link map, which records the following current layout:
 
 | Region | Interval | Size |
 |---|---|---:|
