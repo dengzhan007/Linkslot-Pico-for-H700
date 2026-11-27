@@ -36,8 +36,8 @@ def main():
     assert f["controller_path"]=="/soc@03000000/twi@0x07081400"
     assert f["pmu_compatible"]=="x-powers,axp2202"
     assert f["controller_device_type"]=="twi5" and f["selector"]==5
-    assert M.decode_adrp(0xB0000001,0x48013AC8)==(1,0x48014000)
-    assert M.decode_add(0x9118A021,0x48013AD4)==(1,1,0x628)
+    assert M.adrp(0xB0000001,0x48013AC8)==(1,0x48014000)
+    assert M.add_imm(0x9118A021,0x48013AD4)==(1,1,0x628)
     assert M.bl_target(0x97FFFB7E,0x48002998)==0x48001790
     lookup=M.relocated(0x48013AC8); table=(lookup&~0xFFF)+0x1000+0x628
     assert lookup==0x278A8 and table==0x28628
