@@ -29,6 +29,22 @@ def main() -> int:
     }
     assert MODULE.classify_pointer(2) == "small-scalar-or-offset"
     assert MODULE.classify_pointer(0x000186A00000000B) == "unclassified-scalar-or-encoded-value"
+    # AArch64 instruction words: LDR/STR W0,[X0,#0xa4] and
+    # LDR/STR X0,[X0,#0x668], respectively.
+    import struct
+    synthetic = struct.pack(
+        "<IIII",
+        0xB940A400,
+        0xB900A400,
+        0xF9433400,
+        0xF9033400,
+    )
+    writer_scan = MODULE.scan_direct_context_writes(synthetic)
+    assert len(writer_scan["context_plus_a4_direct_load_candidates"]) == 1
+    assert len(writer_scan["context_plus_a4_direct_store_candidates"]) == 1
+    assert len(writer_scan["global_slot_plus_668_load_candidates"]) == 1
+    assert len(writer_scan["global_slot_plus_668_store_candidates"]) == 1
+
     source = """
       memcpy(monitor + 0x30, params, 128);
       memcpy(monitor + 0x24, board, 8);
