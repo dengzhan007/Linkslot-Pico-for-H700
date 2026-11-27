@@ -267,6 +267,8 @@ def main() -> int:
     assert module.decode_bl_target(0x48011928,module.WORDS[0x48011928]) == 0x48011710
     assert module.decode_bl_target(0x48011330,module.WORDS[0x48011330]) == 0x480111A0
     assert module.decode_bl_target(0x48011338,module.WORDS[0x48011338]) == 0x480115C0
+    assert module.decode_bl_target(0x48011640,module.WORDS[0x48011640]) == 0x48010F98
+    assert module.decode_bl_target(0x4801166C,module.WORDS[0x4801166C]) == 0x48011360
     assert module.decode_bl_target(0x48011974,module.WORDS[0x48011974]) == 0x48011320
     assert module.decode_imm19_branch_target(0x4801197C,module.WORDS[0x4801197C]) == 0x48011A70
     assert module.decode_bl_target(0x48011990,module.WORDS[0x48011990]) == 0x4800C730
@@ -584,10 +586,14 @@ def main() -> int:
     assert window_map["retention_rtc_fallback_setup_helper"][1] >= 0x88
     assert window_map["retention_restore_gate_helper"][0] == 0x48011320
     assert window_map["retention_restore_gate_helper"][1] >= 0x40
-    assert window_map["retention_restore_probe_480111a0"][0] == 0x480111A0
-    assert window_map["retention_restore_probe_480111a0"][1] >= 0x180
-    assert window_map["retention_restore_probe_480115c0"][0] == 0x480115C0
-    assert window_map["retention_restore_probe_480115c0"][1] >= 0x150
+    assert window_map["retention_restore_dram_clock_helper"][0] == 0x480111A0
+    assert window_map["retention_restore_dram_clock_helper"][1] >= 0x180
+    assert window_map["retention_restore_dram_state_helper"][0] == 0x480115C0
+    assert window_map["retention_restore_dram_state_helper"][1] >= 0x150
+    assert window_map["retention_restore_lower_helper_48010f98"][0] == 0x48010F98
+    assert window_map["retention_restore_lower_helper_48010f98"][1] >= 0x120
+    assert window_map["retention_restore_lower_helper_48011360"][0] == 0x48011360
+    assert window_map["retention_restore_lower_helper_48011360"][1] >= 0x120
     assert window_map["system_suspend_helper_48011920_complete"][0] == 0x48011920
     assert window_map["system_suspend_helper_48011920_complete"][1] >= 0x220
     assert "ops_slot_3_raw" in window_map

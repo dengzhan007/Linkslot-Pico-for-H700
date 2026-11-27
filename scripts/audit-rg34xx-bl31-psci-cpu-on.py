@@ -157,6 +157,8 @@ WORDS = {
     0x48011928: 0x97ffff7a,
     0x48011330: 0x97ffff9c,
     0x48011338: 0x940000a2,
+    0x48011640: 0x97fffe56,
+    0x4801166c: 0x97ffff3d,
     0x4800c490: 0x940015ac, 0x4800c658: 0x94001540,
     0x48011710: 0xd2802082, 0x48011714: 0xb9401c01,
     0x48011718: 0xf2a0e002, 0x4801171c: 0xb9400045,
@@ -505,8 +507,10 @@ DISASSEMBLY_WINDOWS = (
     ("retention_bank_selector_helper", 0x4800c730, 0x70),
     ("retention_rtc_fallback_setup_helper", 0x4800c7a8, 0x88),
     ("retention_restore_gate_helper", 0x48011320, 0x40),
-    ("retention_restore_probe_480111a0", 0x480111a0, 0x180),
-    ("retention_restore_probe_480115c0", 0x480115c0, 0x150),
+    ("retention_restore_dram_clock_helper", 0x480111a0, 0x180),
+    ("retention_restore_dram_state_helper", 0x480115c0, 0x150),
+    ("retention_restore_lower_helper_48010f98", 0x48010f98, 0x120),
+    ("retention_restore_lower_helper_48011360", 0x48011360, 0x120),
 
     ("ccu_save_helper", 0x48001790, 0x100),
     ("ccu_restore_helper", 0x480018d8, 0x100),
@@ -1556,7 +1560,32 @@ def main() -> int:
                                 ],
                                 "return_value": "the second helper's W0 result for context+0x4 != 4; otherwise the first 32-bit word at DRAM 0x40000000",
                                 "alternate_layout_probe": "context+0x4 == 4 causes helper to load [0x40000000] and use that value as the copy-enable predicate",
-                                "runtime_gate_result": "not observed"
+                                "runtime_gate_result": "not observed",
+                                "subordinate_calls": [
+                                    {"pc":"0x48011640","target":"0x48010f98"},
+                                    {"pc":"0x4801166c","target":"0x48011360"}
+                                ],
+                                "preceding_dram_clock_reinitialization": {
+                                    "helper":"0x480111a0",
+                                    "call_pc":"0x48011330",
+                                    "mmio_registers": {
+                                        "0x03001540":"CCU MBUS_CFG (+0x540); helper clears clock-gating/reset bits31/30",
+                                        "0x0300180c":"CCU DRAM_BGR (+0x80c); helper clears DRAM_GATING bit0 and DRAM_RST bit16 before later re-enabling",
+                                        "0x03001010":"CCU PLL_DDR0_CTRL (+0x10); helper disables PLL, composes factors from context[0], re-enables and polls LOCK bit28",
+                                        "0x03001800":"CCU DRAM_CLK (+0x800); helper asserts module reset and reconfigures the DRAM clock"
+                                    },
+                                    "family_reference": "H616 CCU register map only; H700/sun50iw9 active bit semantics require target-specific confirmation"
+                                },
+                                "restore_state_staging_helper": {
+                                    "helper":"0x480115c0",
+                                    "calls":["0x48010f98","0x48011360"],
+                                    "draminternal_ram_addresses":[
+                                        "0x47f0a008","0x47f0a014","0x47f0a020","0x47f0a024","0x47f0a028",
+                                        "0x47f0a050","0x47f0a500","0x47f0b00c","0x47f0b038","0x47f0b060",
+                                        "0x47f0b250","0x47f0b320","0x47f0b324"
+                                    ],
+                                    "semantics": "matched BL31 performs loads/stores at DRAM-address-space locations; exact structure/PHY meaning not yet identified"
+                                }
                             },
                             "copy_direction": "scratch buffer -> DRAM",
                             "fixed_dram_segment": "[0x40000000,0x40000140)",
@@ -1753,7 +1782,7 @@ def main() -> int:
         "- RVBAR selector cross-check: BL31 uses VER_REG low3==0 for base 0x09010040, otherwise 0x08100040; pinned native SPL uses low3==2 for the alternate bank. Both agree only for selector values 0 and 2; the target value must be read.",
         "",
         "- Power-entry stores the scratch-buffer pointer 0x4801b400 in RTC GP_DATA1 0x07000104. Before SRAM entry, the matched BL31 copies 160 words (0x280 bytes) from two 0x140-byte address windows into this buffer; after resume, a companion helper copies them back. The fixed address window begins at 0x40000000; the second bank is selected from context +0x1c. context +0x4 == 4 selects alternate strided-copy branches. These are address-level DRAM candidates, not approved memory ownership; the buffer is outside the matched monitor file payload and its live contents/owner are unverified.",
-        "- The second DRAM window is not selected from a literal bank ID: unless context +0x1c bit31 is preset, caller 0x48011938 invokes geometry helper 0x4800c730 at 0x48011990. The helper derives a power-of-two-like selector from context DRAM-geometry fields (context words +0x18/+0x1c and halfword +0x7a), which the caller stores in context +0x1c bits16..30. Controller IDs 0x5c00/0x5d00 read from 0x03006200 add a 0x800 threshold exception. Resume is gated by 0x48011320: zero skips copy; it calls helpers 0x480111a0 and 0x480115c0, but the live result is unknown. For context +0x4 == 4, the gate instead reads [0x40000000] as the copy-enable predicate; the copy workers use alternate strided paths. Both gate outcomes and selector inputs remain runtime-unknown.",
+        "- The second DRAM window is not selected from a literal bank ID: unless context +0x1c bit31 is preset, caller 0x48011938 invokes geometry helper 0x4800c730 at 0x48011990. The helper derives a power-of-two-like selector from context DRAM-geometry fields (context words +0x18/+0x1c and halfword +0x7a), which the caller stores in context +0x1c bits16..30. Controller IDs 0x5c00/0x5d00 read from 0x03006200 add a 0x800 threshold exception. Resume is gated by 0x48011320: zero skips copy; it calls 0x480111a0 and 0x480115c0. The first disables/reconfigures/re-enables the DRAM PLL, DRAM clock, DRAM bus gate/reset and MBUS using context[0]; the second stages state through DRAM-space addresses around 0x47f0a000/0x47f0b000 and calls 0x48010f98/0x48011360. H616 same-family CCU definitions name the corresponding offsets, but active H700 bit semantics remain unverified. For context +0x4 == 4, the gate instead reads [0x40000000] as the copy-enable predicate; the copy workers use alternate strided paths. Both gate outcomes and selector inputs remain runtime-unknown.",
         "## Interpretation", "",
         "- The effective callback ABI is the legacy Allwinner `plat_pm_ops_t` order plus the vendor `get_sys_suspend_power_state` extension; do not apply modern `plat_psci_ops_t` slot offsets.",
         "- Callback semantics are mapped from binary table entries, dispatcher byte offsets, indirect calls, embedded strings and helper behavior; the exact vendor source commit remains unknown.",
