@@ -69,6 +69,18 @@ def main() -> int:
     assert len(alias_scan["context_plus_a4_alias_store_candidates"]) == 1
     assert len(alias_scan["global_slot_plus_668_alias_store_candidates"]) == 1
 
+    # A conditional branch must preserve the fall-through alias chain.
+    conditional_chain = struct.pack(
+        "<IIII",
+        0x900000B4,  # adrp x20, 0x48014000
+        0x34000082,  # cbz w2, +0x10
+        0xF9433680,  # ldr x0, [x20, #0x668]
+        0xB900A401,  # str w1, [x0, #0xa4]
+    )
+    conditional_scan = MODULE.scan_context_pointer_alias_writes(conditional_chain)
+    assert len(conditional_scan["global_slot_pointer_load_aliases"]) == 1
+    assert len(conditional_scan["context_plus_a4_alias_store_candidates"]) == 1
+
     source = """
       memcpy(monitor + 0x30, params, 128);
       memcpy(monitor + 0x24, board, 8);
