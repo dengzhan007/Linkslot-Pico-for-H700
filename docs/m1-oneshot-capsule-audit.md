@@ -234,11 +234,21 @@ LK production object lists.
 - It checks ELF32 / ARM machine identity, requires the public selector and
   dummy dispatch entry symbols, and rejects any unresolved runtime symbol.
   The internal FNV helper is allowed to inline under `-O2`.
-- CI [#937](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46035530557)
-  completed this new step successfully. The same run also passed the linked
-  GammaOS LK H700 BL33 CRT0/exception-vector build step.
+- Full feasibility [#937](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46035530557)
+  completed successfully on code commit `f3a815e16658533227e0907c8b4079185153ba9a`.
+  The `cross-compile` job reports 85/85 recorded steps successful, with zero
+  failures, skips, or cancellations (the count includes setup/post-job records).
+  The A32 selector fixture and linked GammaOS LK H700 BL33 CRT0/exception-vector
+  build both passed. The workflow's complete host/cross-build matrix also passed.
+- Artifact [15215748657](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46035530557/artifacts/15215748657)
+  (387,993,785 bytes) contains maps, ELF files, logs, and reports. Its
+  `h700-lk-overlay-build/REPORT.md` records the pinned LK overlay raw ELF as
+  5,804 bytes at entry `0x4a000000`, with the exception vector table at
+  `0x4a001000`, wrapper at `0x4a001024`, and `_end=0x4a0036d0`.
 - The runner installed LLVM/LLD from Ubuntu packages after the workflow
   disabled the unrelated Microsoft apt feed that had previously returned 403.
+  The earlier #934/#936 failures were tooling-feed / over-strict-test issues;
+  #937 is the first full green run after those fixes.
 
 **Scope boundary:** this proves the selector C policy is accepted by the
 AArch32 compiler/linker and exports the expected fixture ABI. It does not
@@ -248,6 +258,26 @@ an M1 SPL, regenerate the matched firmware/SPL/capsule generation, or touch a
 test card. The outer capsule still needs a separately reviewed no-RTC/no-WDT
 dispatcher and copy/handoff path. No hardware I/O or payload execution was
 performed; `hardware_applied=0`.
+
+### 4.3 Single-core runtime restriction confirmed in the pinned LK layout report
+
+The artifact's `lk-bl33-layout/REPORT.md` and `h700-lk-overlay-build/REPORT.md`
+confirm the current pinned LK reference is **not an H700 SMP runtime**:
+
+- Its scheduler uses one global `current_thread`, one global run-queue set and
+  one global critical-section nesting counter. `arch_disable_ints()` masks
+  IRQs only on the executing core; it is not a cross-core lock.
+- The pinned `crt0.S` sets `ACTLR.SMP` only for the Cortex-A7 path; there is
+  no Cortex-A53 enable path in that reference. Secondary-core state at the
+  BL31→BL33 handoff remains UNKNOWN.
+- Therefore any future M1 diagnostic using this LK runtime must be explicitly
+  CPU0-only and gated on separate evidence that CPU1–CPU3 remain held off /
+  in reset for the entire runtime. Do not release secondaries or treat the
+  global critical-section counter as an SMP-safe lock.
+
+These are pinned-source and synthetic-link findings only. They do not prove
+the real SoC's CPU1–CPU3 reset state, ACTLR state, cache coherency, or memory
+ownership. The gate remains OPEN and no payload was executed.
 
 ## 5. Host-only verification required before producing an M1 artifact
 
