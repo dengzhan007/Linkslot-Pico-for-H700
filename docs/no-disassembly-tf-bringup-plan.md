@@ -76,6 +76,8 @@ physical region and does not close the global memory gate. It only proves
 that the current pinned LK objects do not overlap each other in this
 specific host-linked layout.
 
+Pinned-source audit: [M1 one-shot capsule/SPL side-effect audit](m1-oneshot-capsule-audit.md). It records the ordinary and raw-capsule write sets and the required separate no-RTC/no-watchdog/no-media-write build mode. This remains a design only; no M1 SPL/capsule is built.
+
 ### Boot0/SPL capsule mode remains a separate M1 gate
 
 The current BaseOS v2 raw-capsule protocol is **not** the M1 test capsule.
