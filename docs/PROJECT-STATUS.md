@@ -2,7 +2,7 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-27。当前工作分支 `porting/linkslot-1.0.45-feasibility` 的最新 BL31 审计代码 HEAD 为 `95773e9d27281f4692478b6d441bde056a7a4092`。审计 [#69](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45926679076) 在该 HEAD 上 **20/20 steps 成功**，产物 [15167165432](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45926679076/artifacts/15167165432)。#66 与 #69 均通过；#67–#68 在新增 retention helper 指令字加入测试字典期间因字典漏项失败，已按日志修复并由 #69 复验。当前变更只扩展匹配 BL31 的静态审计、host regression 和交接文档，没有修改 Linkslot 产品运行时代码。最近一次完整 Linkslot/LK feasibility [#884](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45920262116) 在 `91a07300` 上运行，尚未据此宣称当前 HEAD 全量通过；H700 boot-audit [#1429](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45920262120) 成功。**本文 2026-11-27 PSCI 深度待机续接条目为当前状态；更早记录按各自 HEAD/run ID 理解。**
+**最后核对时间：** 2026-11-27。当前工作分支 `porting/linkslot-1.0.45-feasibility` 的最新审计/文档 HEAD 为 `09665657646ecd0fa6131e76106fd4f8c518dcb9`。BL31 静态审计 [#70](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45926919928) 在该 HEAD 上 **20/20 steps 成功**，产物 [15166259361](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45926919928/artifacts/15166259361)；本次还验证了生成的 `PSCI-CPU-ON.md` 已包含 DRAM retention snapshot/restore 摘要。H700 boot-audit [#1432](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45926919816) 的 Linux host-tools 与 Windows PowerShell 两个 job 均成功。BL31 指令级 retention 审计代码本身在 [#69](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45926679076) 通过 **20/20**，产物 [15167165432](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45926679076/artifacts/15167165432)。#67–#68 在新增 retention helper 指令字加入测试字典期间因字典漏项失败，已按日志修复并由 #69 复验。当前变更只扩展匹配 BL31 的静态审计、host regression 和交接文档，没有修改 Linkslot 产品运行时代码。最近一次完整 Linkslot/LK feasibility [#884](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45920262116) 在 `91a07300` 上运行，尚未据此宣称当前 HEAD 全量通过。**本文 2026-11-27 PSCI 深度待机续接条目为当前状态；更早记录按各自 HEAD/run ID 理解。**
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
@@ -10,8 +10,8 @@
 
 ## 2026-11-27 续接：BL31 legacy PSCI、SYSTEM_SUSPEND 深度待机与唤醒链已静态识别
 
-**当前审计代码 HEAD：** `95773e9d27281f4692478b6d441bde056a7a4092`。  
-**最新 BL31 静态审计：** [#69](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45926679076)，20/20 steps 成功；[审计产物](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45926679076/artifacts/15167165432)。#66 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45925450827) 也为 20/20。#67–#68 在新增 retention helper host assertions 时因 WORDS 字典漏项失败；已按日志补齐并由 #69 复验。  
+**当前审计/文档 HEAD：** `09665657646ecd0fa6131e76106fd4f8c518dcb9`。  
+**最新 BL31 静态审计：** [#70](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45926919928)，20/20 steps 成功；[审计产物](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45926919928/artifacts/15166259361)。该 run 同时验证了生成的 `PSCI-CPU-ON.md` retention 摘要。底层 retention 指令审计/host assertions 在 [#69](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45926679076) 通过 20/20；[对应产物](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45926679076/artifacts/15167165432)。H700 boot-audit [#1432](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45926919816) 的 Linux host-tools 与 Windows PowerShell 两 job 均通过。#66 也为 20/20。#67–#68 在新增 retention helper host assertions 时因 WORDS 字典漏项失败；已按日志补齐并由 #69 复验。  
 **匹配 monitor：** 107,216 bytes；SHA-256 `676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31`；该 payload 与采集到的原生 firmware/TOC1 monitor 匹配。
 
 ### PSCI 操作表与槽位映射
@@ -76,7 +76,7 @@
 - resume 恢复链：`0x4800c658 → 0x48011b58 → 0x48011b10 → 0x48011938`，normal path 反向写回上述两个 DRAM 地址窗口。保存 helper 在 context `+0x1c` bit0 为 1 时跳过 normal copy；若 context `+0x4 == 4`，会走 `0x480118d0/0x480118f8` 或恢复侧 `0x48011a80/0x48011aa8` 的 alternate strided addressing 分支，不能概括为连续 memcpy。
 - buffer 区间 `[0x4801b400,0x4801b680)` 位于匹配 monitor file payload 结束地址 `0x4801a2d0` 之外。RTC GP_DATA1 位于 RTC base `0x07000000` + offset `0x104`；Linux 同系列 `rtc-sun6i.c` 将 GP_DATA 区域映射为 battery-backed NVMEM（[source](https://github.com/torvalds/linux/blob/master/drivers/rtc/rtc-sun6i.c)）。这是同系列寄存器定义交叉参考，不是 RG34XX 实机 GP_DATA1 readback，也不代表 buffer 的 runtime ownership 已获批准。
 - checksum 的静态默认范围 `[0x40000000,0x40000100)` 位于第一段 `0x140` 快照窗口内；这只是地址重叠，不能据此推断固件设计意图，尤其 checksum descriptor 可由 `arm_svc` SMC 覆盖。
-- CI #69 新增了 buffer pointer、两组 0x140-byte 窗口、selector 算术、160-word loop、alternate stride branch 和 resume reverse-copy 的 host assertions，并扩大 pre-copy disassembly window 覆盖 `0x48011710–0x48011920`。#69 通过 20/20；结论依旧是匹配 BL31 的静态 control-flow 证据。
+- CI #69 新增了 buffer pointer、两组 `0x140`-byte 窗口、selector 算术、160-word loop、alternate stride branch 和 resume reverse-copy 的 host assertions，并扩大 pre-copy disassembly window 覆盖 `0x48011710–0x48011920`。#69 通过 20/20；#70 进一步验证了生成的 Markdown 报告包含 retention 摘要。结论依旧是匹配 BL31 的静态 control-flow 证据。
 - **边界：** 未读取设备 RTC GP_DATA1、context `+0x1c/+0x4`、`0x4801b400` 内容或 DRAM 窗口；未发起 PSCI SMC、未读写 MMIO、未执行待机/唤醒。内存所有权、RTC backup 实际供电状态与正常路径是否在目标机被选中仍未证明。
 
 ### 证据边界与下一步
