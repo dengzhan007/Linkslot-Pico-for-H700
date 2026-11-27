@@ -600,6 +600,15 @@ DISASSEMBLY_WINDOWS = (
     ("power_cpu_off_helper", 0x48001ed8, 0x60),
 )
 
+def retention_midpoint_address(capacity_mib: int) -> int:
+    """Return the second snapshot window address from DRAM capacity in MiB."""
+    if isinstance(capacity_mib, bool) or not isinstance(capacity_mib, int):
+        raise ValueError("capacity_mib must be an integer")
+    if capacity_mib <= 0:
+        raise ValueError("capacity_mib must be positive")
+    return RETENTION_FIXED_DRAM_BASE + ((capacity_mib >> 1) << RETENTION_BANK_STRIDE_SHIFT)
+
+
 def read_word(raw: bytes, address: int) -> int:
     offset = address - BASE
     if offset < 0 or offset + 4 > len(raw):
@@ -1580,7 +1589,24 @@ def main() -> int:
                             "skip_when": "context +0x1c bit0 is set",
                             "fixed_dram_segment": "[0x40000000,0x40000140)",
                             "fixed_segment_saved_to": "[0x4801b400,0x4801b540)",
-                            "dynamic_bank_base": "0x40000000 + (((context[0x1c] >> 17) << 20))",
+                            "dynamic_segment_base": "0x40000000 + ((selector_MiB >> 1) << 20) ; DRAM_BASE + total_dram_bytes/2",
+                            "dynamic_segment_role": "second 0x140-byte snapshot window at the midpoint of total DRAM capacity, not an arbitrary 1-MiB bank",
+                            "selector_units": "MiB of total DRAM capacity",
+                            "captured_memory_map_crosscheck": {
+                                "target_linux_system_ram": "[0x40000000,0x80000000)",
+                                "reported_capacity_bytes": 1073741824,
+                                "reported_capacity_mib": 1024,
+                                "derived_second_window_candidate": "0x60000000",
+                                "runtime_context_selector_read": False
+                            },
+                            "independent_h700_source_crosscheck": {
+                                "repository": "kailashrs/H700_rocknix_enhancement",
+                                "commit": "363b292f8fbb1bbce87f5738dba05641ef870e28",
+                                "files": ["suspend-stub/src/main.c", "suspend-stub/src/dram/dram_dw_helpers.c"],
+                                "equivalent_formula": "CFG_SYS_SDRAM_BASE + mctl_calc_size(config) / 2",
+                                "saved_window_sizes": [320, 320],
+                                "scope_limit": "separate custom SRAM/WFI implementation for RG34XX-SP 2-GiB LPDDR4; algorithm cross-check only, not current target runtime data or stock OEM PMIC path"
+                            },
                             "selector_derivation": {
                                 "helper": "0x4800c730",
                                 "call_pc": "0x48011990",
@@ -1597,7 +1623,7 @@ def main() -> int:
                                         "bits_0_3_zero": "select exponent bias 0x12; nonzero selects 0x13"
                                     },
                                     "context_halfword_0x7a": "low three bits gate a 3/4 scaling adjustment unless context+0x1c bits31:30 encode 2",
-                                    "output": "DRAM geometry/capacity selector; caller stores it in context+0x1c bits16..30"
+                                    "output": "total DRAM capacity selector in MiB; caller stores it in context+0x1c bits16..30, then uses selector>>1 as the midpoint offset in MiB"
                                 },
                                 "controller_exception": {
                                     "register": "0x03006200",
@@ -1735,7 +1761,8 @@ def main() -> int:
                             },
                             "copy_direction": "scratch buffer -> DRAM",
                             "fixed_dram_segment": "[0x40000000,0x40000140)",
-                            "dynamic_bank_base": "0x40000000 + (((context[0x1c] >> 17) << 20))",
+                            "dynamic_segment_base": "0x40000000 + ((selector_MiB >> 1) << 20) ; DRAM_BASE + total_dram_bytes/2",
+                            "dynamic_segment_role": "second 0x140-byte snapshot window at the midpoint of total DRAM capacity",
                             "dynamic_segment_bytes": 320,
                             "normal_path_total_bytes": 640,
                             "alternate_layout_condition": "context +0x4 == 4",
@@ -1927,7 +1954,8 @@ def main() -> int:
         "- Low-level routine writes a per-core RVBAR and contains a CPU power/reset sequence; one SoC-selected variant uses `0x09010000`, `0x09010010`, `0x07000440`, `0x07000444` and `0x090100c0`.",
         "- RVBAR selector cross-check: BL31 uses VER_REG low3==0 for base 0x09010040, otherwise 0x08100040; pinned native SPL uses low3==2 for the alternate bank. Both agree only for selector values 0 and 2; the target value must be read.",
         "",
-        "- Power-entry stores the scratch-buffer pointer 0x4801b400 in RTC GP_DATA1 0x07000104. Before SRAM entry, the matched BL31 copies 160 words (0x280 bytes) from two 0x140-byte address windows into this buffer; after resume, a companion helper copies them back. The fixed address window begins at 0x40000000; the second bank is selected from context +0x1c. context +0x4 == 4 selects alternate strided-copy branches. These are address-level DRAM candidates, not approved memory ownership; the buffer is outside the matched monitor file payload and its live contents/owner are unverified.",
+        "- Power-entry stores scratch-buffer pointer 0x4801b400 in RTC GP_DATA1 0x07000104. Before DRAM retraining, the matched BL31 copies 160 words (0x280 bytes) from two 0x140-byte source windows into this buffer; after retraining/resume, it copies them back. The first source is [0x40000000,0x40000140); the second begins at DRAM_BASE + total_DRAM_capacity/2. The capacity selector is stored in context +0x1c bits16..30; the copy code uses selector>>1 in MiB units. This exactly matches the independent H700 source formula CFG_SYS_SDRAM_BASE + mctl_calc_size(config)/2 and its two 0x140-byte save arrays (kailashrs/H700_rocknix_enhancement, commit 363b292f; custom SRAM/WFI implementation, RG34XX-SP 2-GiB LPDDR4 only). Current captured target System RAM is 1 GiB, giving a candidate midpoint 0x60000000, but the actual selector has not been read. context +0x4 == 4 selects alternate strided-copy branches; the scratch buffer is in the reserved monitor carveout and outside the matched monitor file payload.",
+
         "- The second DRAM window is not selected from a literal bank ID: unless context +0x1c bit31 is preset, caller 0x48011938 invokes geometry helper 0x4800c730 at 0x48011990. The helper derives a power-of-two-like selector from context DRAM-geometry fields (context words +0x18/+0x1c and halfword +0x7a), which the caller stores in context +0x1c bits16..30. Controller IDs 0x5c00/0x5d00 read from 0x03006200 add a 0x800 threshold exception. Resume is gated by 0x48011320: zero skips copy; it calls 0x480111a0 and 0x480115c0. The first disables/reconfigures/re-enables the DRAM PLL, DRAM clock, DRAM bus gate/reset and MBUS using context[0]; the second stages state through addresses formed from 0x047f0000 plus low offsets (for example 0x047fa008, 0x047fb320, 0x047fd180) and calls 0x48010f98/0x48011360. This is peripheral MMIO, not DRAM RAM: the H616 same-family memory map places 0x047fa000 in MSI_CTRL and 0x047fb000–0x047fffff in DRAM_CTRL; the mapping is a family cross-reference, not H700 target readback. For context +0x4 == 4, the gate instead reads [0x40000000] as the copy-enable predicate; the copy workers use alternate strided paths. Both gate outcomes and selector inputs remain runtime-unknown.",
         "- Fallback controller-configuration branch: TBZ at 0x480119d0 tests context +0x1c bit27; when clear it branches to 0x48011ae0, calls 0x4800c7a8, and writes constants into [0x047fa000,0x047fb000). The H616 same-family map labels this aperture MSI_CTRL; this is peripheral MMIO, not DRAM RAM, and exact H700 per-register semantics remain unverified.",
         "- Restore-gate setup also calls two mode-dependent helpers: 0x48011378 -> 0x4800c9e8 writes context-supplied parameters to the DRAM_CTRL window [0x047fb000,0x04800000) and polls status/busy bits for context modes 3/4/7/8; 0x48011370 -> 0x4800dfe8 configures PHY_CTRL registers in [0x04800000,0x05000000), with one path also touching MSI_CTRL 0x047fa500. Their active mode/values and completion result have not been observed on H700.",

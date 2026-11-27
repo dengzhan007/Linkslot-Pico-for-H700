@@ -295,6 +295,17 @@ def main() -> int:
     assert module.RETENTION_FIXED_DRAM_BASE == 0x40000000
     assert module.RETENTION_SELECTOR_SHIFT == 17
     assert module.RETENTION_BANK_STRIDE_SHIFT == 20
+    assert module.WORDS[0x480119EC] == 0x53117C00  # LSR W0, W0, #17
+    assert module.WORDS[0x480119F8] == 0x0B005020  # ADD W0, W1, W0, LSL #20
+    assert module.retention_midpoint_address(1024) == 0x60000000
+    assert module.retention_midpoint_address(2048) == 0x80000000
+    for invalid_capacity in (True, 0, -1):
+        try:
+            module.retention_midpoint_address(invalid_capacity)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("invalid DRAM capacity selector was accepted")
     checksum_config_load_store = {
         0x48001A58: 0xB00000C0, 0x48001A5C: 0x39402000,
         0x48001A60: 0xB900C260, 0x48001A64: 0xB00000C0,
