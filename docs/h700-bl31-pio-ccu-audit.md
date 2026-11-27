@@ -512,3 +512,63 @@ fail-code construction and fail-stop loop. No hardware checksum execution,
 MMIO, PSCI SMC, storage write or suspend/resume test was performed.
 
 `hardware_applied=0` remains unchanged.
+
+
+## 2026-11-27 BL31 pre-BL33 non-secure peripheral-security setup cross-reference
+
+A separate exact-target audit in
+[UART handoff audit](rg34xx-uart-bl31-handoff-audit.md) identifies the
+vendor monitor routine at file offset `0x2c78`, reached from the BL33
+preparation path at offset `0x21b4`. The target binary constructs and writes
+the following before preparing AArch32 SVC BL33:
+
+| Operation | Target address | Value |
+|---|---:|---:|
+| SPC decode-port set, ports 0–13 | `0x03008004 + 0x10*n` | `0xffffffff` each |
+| CCU security switch | `0x03001f00` | `0x00000007` |
+| R_PRCM security switch | `0x07010290` | `0x00000007` |
+| DMA security mask | `0x03002020` | `0x00000fff` |
+| Additional SPC write | `0x030080e0` | `0x00000001` |
+
+The sequence is statically placed in the target BL33-preparation path, not
+merely found in an unrelated function. A pinned H616 TF-A reference
+(`87cc230066271910096e025cf07376dba6c361d8`) provides the closest public
+semantic cross-reference:
+
+- `plat/allwinner/common/sunxi_security.c` describes the intent as setting
+  all SPC decode ports and bus/clock/PLL security switches for Non-secure
+  access.
+- `plat/allwinner/sun50i_h616/include/sunxi_mmap.h` places SPC at
+  `0x03008000`, CCU at `0x03001000`, and PIO at `0x0300b000`.
+- `plat/allwinner/sun50i_h616/include/sunxi_spc.h` defines 14 decode ports
+  and the `+0x04 + 0x10*n` set-register stride.
+- The TF-A source explicitly warns that SPC configuration may not take
+  effect unless a particular fuse is programmed (the source calls this an
+  erratum). The target-specific `0x030080e0` write is not explained by that
+  public H616 header.
+
+**What this improves:** we now have positive static ordering evidence that
+the target monitor attempts broad peripheral Non-secure security setup before
+BL33. This is materially stronger than assuming permissions are inherited
+unchanged from SPL.
+
+**What it does not establish:** the exact decode-port-to-peripheral mapping
+for this H700 target, the relevant fuse identity/value, whether the fuse
+condition makes SPC writes effective, the live SPC/CCU security state at
+BL33 entry, or whether APB1/PIO is clocked and out of reset. The ordinary
+APB1 clock register `0x03001520` appears in separate BL31 PSCI
+save/restore paths; this is not evidence of its value at initial handoff.
+The six earlier BL31 PIO scan rows at `0x0300b100/110/118` remain the
+conditional PH10 infrared-pin setup, not PI12 activity.
+
+Current RG34XX read-only inventory only captured the NVMEM speed and thermal
+calibration cells; it did not capture a secure-mode fuse. Do not infer fuse
+state from the A733/H616 family examples or read an unverified SID offset.
+A narrowly scoped future fuse-read is permissible only after the exact
+RG34XX/H700 fuse index, vendor read path, side effects, and privacy-safe
+masked output are pinned to target evidence.
+
+**Disposition:** PI12 physical MMIO remains default-off. This static
+security-path evidence narrows the question but does not close M1-S1. No
+device MMIO, fuse read, storage write, firmware flash, or payload execution
+was performed.
