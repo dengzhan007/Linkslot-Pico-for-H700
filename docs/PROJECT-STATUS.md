@@ -2,15 +2,41 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-27。最新 BL31 static memory audit **#114** 在审计脚本 HEAD `1c0c60835907d1e41588fc597a4ed45d04341281` 上完整成功（[run #114](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45969225655)，审计产物 [15183309990](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45969225655/artifacts/15183309990)）；完整报告固定列出 RTC context `+0xa4` 的四个读取 PCs。紧邻的 #113（[run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45969019644)，artifact [15184232541](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45969019644/artifacts/15184232541)）修正了扫描器汇总文字；#112（[run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45968869354)，artifact [15183549413](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45968869354/artifacts/15183549413)）通过宽写入/成对写入覆盖检测及 5 个偏移碰撞的基址/区域人工分类；#111（[run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45968594594)）通过 STR/STP overlap host regressions。H700 boot audit **#1468**（[run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45969079852)）对上一版 TWI 专项文档通过；最新专项文档提交会触发后续检查。完整 Linkslot/LK feasibility **#887** 仍是 `4934c503...` 上的成功结果（[run #887](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45964118596)）；其后只有静态审计脚本、CI 与文档更改，没有 Linkslot 产品运行时代码改动。
-匹配 BL31 的 RTC TWI 路径使用 `LDR X1,[X1,W0,SXTW #3]`，以 context `+0xa4` 的**有符号 32 位值**作为 8-byte-scaled index，从 lookup origin `0x48014628` 取 controller MMIO base。匹配 monitor 的静态数据在 signed indices 68–73 连续提供 H616-family TWI0–TWI4/R-TWI0 基址：`0x05002000`、`0x05002400`、`0x05002800`、`0x05002c00`、`0x05003000`、`0x07081400`。index 73 的 R-TWI0 (`0x07081400`) 与目标 live FDT 中 AXP2202 PMU parent 一致，但只有当实际运行时 `context +0xa4 == 73` 才会选中；selector 尚未捕获。
-全 monitor 的 4-byte aligned writer scan 覆盖 26,804 个 word slots，24,943 个解码为指令字；定位到四处 `+0xa4` 直接读取（`0x48012520`、`0x480125d4`、`0x48012694`、`0x480126d4`）。宽度感知扫描另发现五条指令的立即数写入区间与 `+0xa4` 字节范围重叠；逐函数/基址核对后，五条均属于栈帧局部字段、CPU architectural-context save 或 exception-entry stack save，**没有确认任何一条写入 RTC selector**。全局 context-like slot `0x48014668` 有 22 处读取候选、没有发现立即数偏移写入候选；raw qword 初值为 2。扫描不覆盖预计算指针、helper/memcpy、register-indexed store 或其他组件外部初始化，因此不能据此断言 runtime writer 不存在。详见 [RTC/TWI 专项审计](rg34xx-rtc-soft-entry-twi-audit.md)。
+**最后核对时间：** 2026-11-27。最新 BL31 static memory audit **#125** 在审计/测试 HEAD `1e7b48365b8d21f72c40ce8840cce934a7c563fa` 上完整成功（[run #125](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45971835320)，审计产物 [15184548909](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45971835320/artifacts/15184548909)）。#125 修复了 #124 两条 synthetic ADRP fixture 的链接基址编码错误；#124 失败只在 host synthetic assertion，并非真实 monitor 审计失败。之前 #123 的 bounded CFG scan 已成功并产出 [artifact 15184354173](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45971482861/artifacts/15184354173)。H700 boot audit **#1471** 成功（[run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45969488109)），#1472 由最新 TWI 专项文档提交触发，当前排队（[run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45972326736)）。完整 Linkslot/LK feasibility **#889** 在 SHA `309be4ae17f11e1fd1953f9e79fb32bc6b4bf66d` 上成功（[run #889](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45969487923)）。#889 之后仅修改静态审计脚本、host tests、CI 和文档，未修改 Linkslot 产品运行时代码。
+匹配 BL31 的 RTC TWI 路径使用 `LDR X1,[X1,W0,SXTW #3]`，以 context `+0xa4` 的**有符号 32 位值**作为 8-byte-scaled index，从 lookup origin `0x48014628` 取 controller MMIO base。signed indices 68–73 的静态 qword 对应 H616-family TWI0–TWI4/R-TWI0：`0x05002000`、`0x05002400`、`0x05002800`、`0x05002c00`、`0x05003000`、`0x07081400`。index 73 的 R-TWI0 与 live-FDT AXP2202 parent 匹配，但实际 selector `context +0xa4` 未捕获。
+RTC context 的全 monitor 分析已从固定偏移 writer scan 扩展到 alias-aware bounded CFG：79 个 ADRP seeds，38,676 个状态，83 条 context-like slot load path（22 个唯一指令 PC），未找到经已建模别名链写入 `context +0xa4` 或 context-like slot 的候选。四处 selector 直接读取为 `0x48012520`、`0x480125d4`、`0x48012694`、`0x480126d4`。固定偏移扫描的 5 条 `+0xa4` 写入范围碰撞已逐项确认均为 stack/CPU context/exception stack，不是 RTC selector 写入。
+地址语义补充：`0x48014668` 的 raw qword 为 `2`，它同时是 lookup origin `0x48014628 + 0x40`（signed index 8），因此应称为**context-like pointer slot / lookup-data overlap**，不能当作已经证明独立的 global variable。运行时初始化或别名写入来源依旧未知。详见 [RTC/TWI 专项审计](rg34xx-rtc-soft-entry-twi-audit.md)。
 #94 的 Boot0 静态分析仍显示 helper 条件调用 core2/core3，CPU1 未经过该 helper；H700 reset/SID live state 未读回，CPU1–CPU3 hold-off 仍仅为 **PROBABLE**。DRAM retention PFN `0x40000` 仍是 `LINUX_ACTIVE_ANON_MAPPED_PAGE`（kpageflags `0x5868`、mapcount 1），不能当作空闲 scratch。
 所有以上结果都是匹配二进制的 host/static audit，不是 RG34XX 实机启动或 PSCI 运行时验证。当前仍保持 `H700_MEMORY_LAYOUT_APPROVED=false`、`hardware_applied=0`；没有执行设备 SMC/MMIO、I2C/TWI transaction、DRAM 内容读写、待机/唤醒、Boot0/TOC1 写入、刷写或 payload execution。
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
 
+
+## 2026-11-27 最新续接：RTC context alias/CFG 写入追踪（BL31 audit #121–#125）
+
+### 扫描范围与结果
+
+- [x] 在固定偏移扫描基础上加入 alias-aware linear pass：追踪 `ADRP/ADD/SUB/MOV/LDR`，保留条件分支 fall-through，报告 15 个 context-like slot load PC；未发现 selector 或 slot store candidate。
+- [x] 加入 bounded CFG pass：种子为 ADRP target page `[0x48013000,0x48015000]`，探索条件分支两侧和直接 `BL` callee，传递 `x0–x7` 参数及 `x19–x29` callee-saved aliases，支持 shifted ADD/SUB immediate。
+- [x] 最新真实 monitor 报告（#125）：79 seeds、38,676 states、83 条 slot load path hits，对应 22 个唯一指令 PCs；`context +0xa4` alias stores=0，context-like slot stores=0。
+- [x] CFG 比先前 fall-through pass 多找到条件分支目标 `0x48013e44` 与 `0x48013f5c` 的读取路径；22 个 unique PCs 是去重后真实读取指令位置，83 是不同 seed/path 的重复命中计数。
+- [x] #121 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45970984518)、#122 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45971150288)、#123 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45971482861)、#125 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45971835320) 均通过；#125 artifact [15184548909](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45971835320/artifacts/15184548909)。
+- [x] #124 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45971516613) 仅因 synthetic ADRP fixture 使用 link-at-zero 编码却在 `BASE=0x48000000` 解码而失败；已改为 monitor-base-relative encodings，并由 #125 全量复验成功。
+
+### 重要地址布局修正
+
+- `0x48014668` 的 raw qword 是 `2`，且它恰好等于 lookup origin `0x48014628 + 0x40`，即 signed lookup index 8。
+- 因此不要再将它表述成已证明独立于 lookup data 的 global variable；准确名称为 **context-like pointer slot overlapping the lookup-data region**。它在运行时是否被覆写、是否另有结构性用途，目前都未确定。
+- signed indices 68–73 的 H616 TWI0–TWI4/R-TWI0 base map 仍在同一数据窗口后段；R-TWI0 index 73 依旧是条件候选，实际 selector 未捕获。
+
+### 结论边界与后续
+
+- bounded CFG 当前覆盖 ADRP 页构造、部分 ADD/SUB、MOV/LDR、条件分支与直接 BL 调用；未覆盖 BLR 间接调用、完整 return-state merge、栈 spill/reload、所有 literal-pool/MOVZ/MOVK 构造、helper/memcpy、register-indexed store 和其他组件写入。
+- 因此“没有 writer hit”只是当前扫描模型下的结果，不是不存在 runtime writer 的证明；仍需继续查别名、stack spill、helper copy 和外部 loader contract。
+- selector 仍未知；不发起 TWI transaction，不猜 PMIC slave address/command。A53 reset、active retention PFN、BL33 RAM ownership、PIO 权限、timer/PPI 等其他硬件门槛照旧保持关闭。
+
+`H700_MEMORY_LAYOUT_APPROVED=false`；`hardware_applied=0`。
 
 ## 2026-11-27 最新续接：RTC selector writer 全 monitor 审计与 TWI base-map（BL31 audit #109–#114）
 
