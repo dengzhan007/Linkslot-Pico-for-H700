@@ -12,6 +12,7 @@ on:
       - "scripts/apply-linkslot-render-core.py"
       - "scripts/apply-linkslot-h700-frontend-core.py"
       - "scripts/apply-linkslot-app-router.py"
+      - "scripts/test-linkslot-source-pin.py"
       - "scripts/test-linkslot-app-router-integration.py"
       - "scripts/audit-slot-i18n-nostd.py"
       - "scripts/test-h700-input-*.py"
@@ -28,6 +29,7 @@ on:
       - "scripts/apply-linkslot-render-core.py"
       - "scripts/apply-linkslot-h700-frontend-core.py"
       - "scripts/apply-linkslot-app-router.py"
+      - "scripts/test-linkslot-source-pin.py"
       - "scripts/test-linkslot-app-router-integration.py"
       - "scripts/audit-slot-i18n-nostd.py"
       - "scripts/test-h700-input-*.py"
@@ -45,6 +47,9 @@ jobs:
     steps:
       - name: Checkout feasibility branch
         uses: actions/checkout@v4
+
+      - name: Verify centralized Linkslot source identity
+        run: python3 scripts/test-linkslot-source-pin.py
 
       - name: Checkout immutable Linkslot 1.0.49 main snapshot
         uses: actions/checkout@v4
