@@ -131,7 +131,13 @@ def scan_direct_context_writes(blob: bytes) -> dict:
     global_slot_loads = []
     store_prefixes = ("str", "stp", "stnp", "stur", "sturb", "sturh", "sttr")
 
-    for ins in md.disasm(blob, BASE):
+    scanned_slots = len(blob) // 4
+    for offset in range(0, len(blob) - 3, 4):
+        # Decode each aligned word independently. A single invalid/data word
+        # must not terminate inspection of the remainder of this firmware blob.
+        ins = next(md.disasm(blob[offset:offset + 4], BASE + offset, count=1), None)
+        if ins is None:
+            continue
         decoded_count += 1
         mnemonic = ins.mnemonic.lower()
         mem_ops = [
@@ -175,6 +181,7 @@ def scan_direct_context_writes(blob: bytes) -> dict:
 
     return {
         "method": "4-byte aligned Capstone linear sweep over the complete payload; data may decode as instruction-shaped words",
+        "scanned_aligned_word_slots": scanned_slots,
         "decoded_instruction_words": decoded_count,
         "context_plus_a4_direct_load_candidates": selector_reads,
         "context_plus_a4_direct_store_candidates": selector_stores,
