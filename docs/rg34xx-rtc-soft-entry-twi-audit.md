@@ -303,11 +303,21 @@ The reproducible host audit is:
 - scripts/test-audit-rg34xx-bl31-twi-relocation.py
 - CI integration in .github/workflows/h700-bl31-memory-audit.yml; the audit consumes the pinned monitor and original TOC1 dtb.bin, and emits TWI-SELECTOR-RELOCATION.md plus a JSON report.
 
-## 5. Relationship to the live FDT
+## 5. Relationship to the original TOC1 DTB and live FDT
 
-The uploaded live-FDT inventory reports an AXP2202 PMIC node beneath an H700 R-TWI-like node at `0x07081400`, compatible `x-powers,axp2202`. The H616 family reference maps R-TWI0 at `0x07081400`, and H616 DTS sources associate R-PIO PL0/PL1 with `s_i2c`.
+The exact original TOC1 DTB is the authoritative input for this static selector derivation. Its SHA-256 is
+c28c87380ffab00148bf4dc457e70b8c6c576470dcfbc53df64addddf89603a1
+(144,384 bytes). It contains:
 
-The live FDT AXP2202 node agrees with the static H616-family lookup candidate at index 73 (`0x07081400`). This makes R-TWI0 the strongest static candidate, but does **not** prove that the actual suspend context selected index 73. The signed runtime value at context `+0xa4`, PMIC slave address, transaction capture, and target-specific schematic/readback remain unavailable.
+- alias pmu0 -> /soc@03000000/twi@0x07081400/pmu
+- PMU compatible x-powers,axp2202
+- parent controller device_type twi5
+
+The selector producer reads those exact properties and emits index 5. The copy-relative table lookup then resolves index 5 to 0x07081400 (R-TWI0). Therefore, on the matched static code/data path, this is no longer merely a conditional live-FDT correlation or an unresolved selector.
+
+The separate live-FDT inventory also reports the AXP2202 PMU beneath the H700 TWI controller at 0x07081400. That is an independent consistency check, not the source used for the producer's selector value.
+
+The H616 family reference maps R-TWI0 at 0x07081400 and H616 DTS associates R-PIO PL0/PL1 with s_i2c. This supports the controller-family label only. It does not establish the PMIC slave address, transaction sequence, or target-specific power-control semantics.
 
 ## 6. Conclusions and next evidence
 
