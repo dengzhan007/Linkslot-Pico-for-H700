@@ -25,10 +25,12 @@
 
 ### CI 与现有实现核对（2026-11-27）
 
-- Linkslot/LK feasibility #921 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46018337655) 75/75 成功，artifact [15207317115](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46018337655/artifacts/15207317115)（约 388 MB）；包含 PI12 unmatched Data Abort fail-stop opcode check、真实 LK early-MMU/PI12 layout link、stack/page-table non-overlap check、native header/override、Linkslot no_std、Libretro/mGBA 与 SD/GPT/FAT/VFS host tests。它没有生成可直接启动的完整设备镜像。
+- Linkslot/LK feasibility #924 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46021131707) **75/75 steps success，0 failures / 0 skipped**；artifact [15208527176](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46021131707/artifacts/15208527176)（约 388 MB）。实际 map 检查报告 raw ELF 7,940 B、early stack `[0x4a004000,0x4a006000)`、page table `[0x4a008000,0x4a00c000)`、8 KiB gap，stack/page-table overlap PASS。PI12 unmatched Data Abort fail-stop opcode、真实 LK early-MMU/PI12 link、native header/override、Linkslot no_std、Libretro/mGBA 与 SD/GPT/FAT/VFS host tests 通过。它没有生成可直接启动的完整设备镜像。
 - H700 boot audit #1523 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46010567336) 的 Linux host-tools 与 Windows PowerShell jobs 均成功。
 - platform/h700/power/h700_rg34xx_power_led.c 已有 PI12 最小服务；host tests 覆盖只修改 PI12、保留 PI11/其他位、写入顺序和读回错误。生产物理 wrapper 默认关闭。
 - RG34XX 非 SP boot DTS 的 PMU work_led 指向 PI12，low_pwr_led 指向 PI11；UART0 降为备用，不因缺少 test-pad 资料而阻塞首次启动。
+- PI12 权限审计补充：匹配 BL31 在 BL33 preparation path 尝试写 14 个 SPC decode-port set 寄存器以及 CCU/R_PRCM security switch；固定 H616 TF-A 参考代码将其意图描述为开放 Non-secure peripheral access，但明确指出特定 fuse 条件可能令 SPC 设置不生效。目标 fuse 与 BL33-entry effective permission 未读回，PIO decode-port 映射及 APB1 clock 仍未证明；PI12 继续 default-off。详见 [BL31 PIO/CCU audit](h700-bl31-pio-ccu-audit.md) 与 [UART/BL31 handoff audit](rg34xx-uart-bl31-handoff-audit.md)。
+
 - 以上 CI 均是 host/cross-build/audit 证据，不是实际 BL33 启动或 LED 冷启动验证。
 
 ### M1-T0 新增可量化布局证据（host only）
