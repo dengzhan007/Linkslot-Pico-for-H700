@@ -744,8 +744,8 @@ SECTIONS
     # target configuration. Verify the architectural encoding plus an
     # unconditional branch back to the same instruction, not its mnemonic.
     wfi_loop = re.search(
-        r"(?m)^\\s*([0-9a-fA-F]+):\\s+bf30\\b[^\\n]*\\n"
-        r"\\s*([0-9a-fA-F]+):\\s+[0-9a-fA-F]{4}\\s+b\\s+0x([0-9a-fA-F]+)",
+        r"(?m)^\s*([0-9a-fA-F]+):\s+bf30\b[^\n]*\n"
+        r"\s*([0-9a-fA-F]+):\s+[0-9a-fA-F]{4}\s+b\s+0x([0-9a-fA-F]+)",
         abort_block,
     )
     if wfi_loop is None or int(wfi_loop.group(1), 16) != int(wfi_loop.group(3), 16):
