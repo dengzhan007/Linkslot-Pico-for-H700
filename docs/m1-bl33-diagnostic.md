@@ -129,8 +129,9 @@ M1 采用**专用介质可写、设备内部状态不改**的分层边界：
 
 ### 2026-11-27 host layout evidence (not device approval)
 
-Feasibility [#921](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46018337655)
-passed 75/75. Its actual LK early-MMU/PI12 source-layout map records:
+Feasibility [#924](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46021131707)
+passed 75/75. Artifact [15208527176](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46021131707/artifacts/15208527176)
+contains the actual LK early-MMU/PI12 source-layout map, which records:
 
 - Raw flat ELF: 7,940 bytes; active native loader file extent: 32,768 bytes.
 - Linked `_end=0x4a00c024`; runtime span from BL33 base: `0xc024`.
