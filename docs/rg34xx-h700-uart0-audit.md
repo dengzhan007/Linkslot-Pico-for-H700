@@ -234,31 +234,46 @@ the target values above were decoded directly from its accompanying
 `live-fdt.dtb`. A subsequent inventory run will include the new JSON
 fields automatically.
 
-## 2026-11-27 pinned BaseOS native handoff source cross-check
+## 2026-11-27 pinned native SPL and exact BL31 UART handoff audit
 
-A bounded source review was performed against the fixed
-BaseOS-MultiFrontend source pin
-`cbe253a43f46cf551cc9a6c79a84015bde3686cf`:
+The earlier bounded review below only covered the BaseOS A32 loader and SPL
+adapter files; its negative result did not include inherited upstream U-Boot
+SPL board/clock/GPIO startup or the vendor monitor. It therefore must not be
+read as evidence that the full native boot chain contains no UART setup.
 
-- [native/entry32.S](https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/cbe253a43f46cf551cc9a6c79a84015bde3686cf/experiments/h700-boot-speed/native/entry32.S)
-- [native/loader.c](https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/cbe253a43f46cf551cc9a6c79a84015bde3686cf/experiments/h700-boot-speed/native/loader.c)
-- [spl/native-boot.c](https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/cbe253a43f46cf551cc9a6c79a84015bde3686cf/experiments/h700-boot-speed/spl/native-boot.c)
-- [spl/vendor-handoff.c](https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/cbe253a43f46cf551cc9a6c79a84015bde3686cf/experiments/h700-boot-speed/spl/vendor-handoff.c)
-- [spl/handoff32.S](https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/cbe253a43f46cf551cc9a6c79a84015bde3686cf/experiments/h700-boot-speed/spl/handoff32.S)
+See the dedicated
+[RG34XX UART0 SPL→BL31→BL33 audit](rg34xx-uart-bl31-handoff-audit.md).
+In summary:
 
-Within these scoped files, no UART initialisation, UART console call, or
-access to the `0x05000000` UART aperture was found. The `serial` string in
-`native/loader.c` is generated from SID words for the device-serial boot
-argument/template; it is not a UART driver or console.
+- Pinned U-Boot v2026.10 H616 `board_init_f()` runs `clock_init()`,
+  `gpio_init()`, then `preloader_console_init()` before
+  `sunxi_board_init()`. The H616 source maps console index 1 to PH0/PH1
+  UART0, configures APB2 from OSC24M at 24 MHz, enables the selected UART
+  gate and deasserts reset; `preloader_console_init()` invokes
+  `serial_init()`. The exact reproduced SPL symbol map includes
+  `clock_init_uart`, `preloader_console_init`, `serial_init` and
+  `board_init_f`.
+- The exact target monitor (107,216 bytes, SHA-256
+  `676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31`)
+  calls a UART gate selector before BL33 preparation. If a UART gate is
+  already enabled, its helper caches that controller's base and bypasses
+  clock/reset/divisor programming; otherwise it has a fallback APB2/16550
+  initialization path. This is static analysis of the exact monitor bytes.
+- The same target monitor calls an SPC/CCU/PRCM/DMA security routine in the
+  BL33 preparation path. The H616 TF-A reference documents the intended
+  non-secure setup but warns the SPC writes may be ineffective unless a
+  specific fuse is set. The target fuse status and live permission state are
+  unknown, and one extra target write at `0x030080e0` remains unexplained.
 
-This is **bounded negative source evidence**, not a statement that every
-stage is UART-silent. It does not cover inherited U-Boot common/board code,
-Boot0, vendor BL31, unlisted build inputs, or the exact deployed native SPL
-binary. The boot-handoff audit already records that the deployed native SPL's
-precise build inputs/generation are not fully reconstructable from currently
-published materials. Consequently this review cannot establish UART clock,
-reset, pinmux or security/firewall state at BL33 entry and does not change
-M1-S1 status.
+The source review of `native/entry32.S`, `native/loader.c`,
+`spl/native-boot.c`, `spl/vendor-handoff.c` and `spl/handoff32.S`
+remains accurate in its narrow scope: these files contain no UART driver or
+console call, and the `serial` string in `native/loader.c` is the SID-derived
+device serial argument, not a UART device. The review did **not** cover the
+inherited U-Boot SPL board initialization or the vendor BL31 binary.
+
+The target binary audit is host-only; no MMIO was read and no device code was
+executed. It advances the static handoff model but does not close M1-S1.
 
 
 ## 2026-11-27 exact target TOC1 and BaseOS native-builder provenance boundary

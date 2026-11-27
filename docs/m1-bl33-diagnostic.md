@@ -31,10 +31,38 @@
 - 匹配 RG34XX（非 SP）路径的 KNULLI boot DTS（固定 commit [`57afa662009641d181f57241bcc480119b131530`](https://github.com/knulli-cfw/knulli-linux/blob/57afa662009641d181f57241bcc480119b131530/package/boot/uboot-h700/rg34xx/boot_package/rg34xx.dts)）声明 `uart@05000000` 为 `okay`，寄存器窗口 `0x05000000/0x400`、UART0 clock phandle `0x29`、default pinctrl phandle `0x1a0`。该 pin group 将 PH0/PH1 配置为 `uart0_tx/uart0_rx`、muxsel 2；sleep pinctrl 则使用 muxsel 7。该 DTS 还将 UART3（`0x05000c00`）设为 disabled。
 - 独立 RG34XX [bootlog/pinctrl capture](https://gist.github.com/macromorgan/3e12146a63b53c5b61e4e3c7d4547a0e) 中有 Boot0、BL31、U-Boot 的串口输出；启动后的 pinmux snapshot 显示 PH0/PH1 由 uart0 claim。这支持 UART0 在至少一台 RG34XX 上曾作为实际调试控制台工作，不等于当前测试机的 PCB 焊盘位置或 BL33 可访问性已经验证。
 
+**新增的 SPL→BL31→BL33 静态链证据（2026-11-27）：**
+
+- BaseOS pinned U-Boot v2026.10 H616 `board_init_f()` 在进入 native
+  handoff 之前按顺序调用 `clock_init()`、`gpio_init()`、
+  `preloader_console_init()`。H616 的 UART0 console-index-1 分支把 PH0/PH1
+  设为 UART0 mux（mux value 2），PH1 pull-up；`clock_init_uart()` 将
+  APB2 配为 24 MHz、打开 UART gate 并解除 reset；console init 调用
+  `serial_init()`。精确 reproduction 的 SPL symbol map 中确实有
+  `board_init_f`、`clock_init_uart`、`preloader_console_init` 和
+  `serial_init`。生成的完整 `.config` 未随 artifact 发布，因此 console
+  index 的 1 是该 U-Boot Kconfig 默认/源代码路径，不能冒充独立 config
+  文件读回。
+- 目标机 exact vendor monitor（SHA-256
+  `676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31`）
+  在 BL33 准备路径调用 UART gate selector：若 SPL 留下已有 gate bit，
+  BL31 选择最低已启用 UART、缓存其 base 并跳过 clock/reset/divisor
+  重配置；若未启用则走 APB2/16550 fallback（24 MHz / 115200）。
+- 同一 BL31 路径还调用 SPC/CCU/PRCM/DMA security setup；其意图是让外围
+  资源可被 non-secure world 使用，但 H616 TF-A 明确警告 SPC 写入可能
+  需要特定 fuse 才生效。目标 fuse、实际 permission readback 与额外
+  `0x030080e0=1` 写入的语义未知。
+
+这补齐了此前只检查 BaseOS `native-boot.c` / `loader.c` 时漏掉的继承
+U-Boot SPL 和 vendor BL31 层；但它仍然是 source/target-binary 静态证据，
+不是 BL33 入口寄存器或物理引脚的实机读回。详细偏移、寄存器和固定
+source pin 见 [UART handoff audit](rg34xx-uart-bl31-handoff-audit.md)。
+M1-S1 仍 OPEN。
+
 **当前明确的阻塞：**
 
 - H700 MMU hook 已 host-test 增加第二个 shared Device/XN section `[0x05000000,0x05100000)`，覆盖 UART0 register aperture `0x05000000/0x400`。这只是 ARM translation descriptor，不会访问 UART、启用 clock、改变 reset/pinmux，也不赋予 security/firewall 权限；section-table 粒度同时映射相邻 peripheral address space，但没有驱动会访问它们。
-- 当前 GammaOS LK H700 项目仍没有 UART console/driver；匹配 BaseOS native SPL 入口文件没有 UART 初始化调用。目标设备 TOC1 的 stock-fallback `u-boot` item SHA-256 为 `4d60a22ff13eac00dba89e0ee7df52a49852c0d9d856bec545ce40126191d127`；`/chosen/uboot_message=2018.05(05/26/2026-13:55:09)` 是 BaseOS `native/build.py` 从该 TOC1 item 读取版本字面量并写入 bootargs 的元数据，不是该 U-Boot 执行过的证据（当前活动链由 native SPL 将 A32 loader 放在 BL33 slot）。BaseOS-MultiFrontend pin 确实包含 `rg34xx` prepared-source profile，v2026.10 是其 AArch64 SPL 构建使用的上游 U-Boot 源；但该实验的物理 `LIVE_TARGETS` 只有 RG34XX SP / RG40XX V。当前非 SP 的 native active path 已有现场证据，且 BaseOS workflow #45301188593 已在 host 侧精确重建 generation、loader、firmware、image 与 capsule（capsule byte-exact）；CI 明确未进行 hardware qualification，因此这不关闭 UART/BL33 状态资格；Boot0/BL31 输出串口日志也不能单独证明替换链在 BL31→BL33 时 UART clock、reset、security/firewall 权限保持不变。
+- 当前 GammaOS LK H700 项目仍没有自己的 UART console/driver；先前限定审查的 BaseOS A32 loader 文件没有 UART 初始化，但现在已补齐 inherited U-Boot SPL 与 vendor BL31 的初始化/复用路径，详见上述静态证据。目标设备 TOC1 的 stock-fallback `u-boot` item SHA-256 为 `4d60a22ff13eac00dba89e0ee7df52a49852c0d9d856bec545ce40126191d127`；`/chosen/uboot_message=2018.05(05/26/2026-13:55:09)` 是 BaseOS `native/build.py` 从该 TOC1 item 读取版本字面量并写入 bootargs 的元数据，不是该 U-Boot 执行过的证据（当前活动链由 native SPL 将 A32 loader 放在 BL33 slot）。BaseOS-MultiFrontend pin 确实包含 `rg34xx` prepared-source profile，v2026.10 是其 AArch64 SPL 构建使用的上游 U-Boot 源；但该实验的物理 `LIVE_TARGETS` 只有 RG34XX SP / RG40XX V。当前非 SP 的 native active path 已有现场证据，且 BaseOS workflow #45301188593 已在 host 侧精确重建 generation、loader、firmware、image 与 capsule（capsule byte-exact）；CI 明确未进行 hardware qualification，因此这不关闭 UART/BL33 状态资格；Boot0/BL31 输出串口日志也不能单独证明替换链在 BL31→BL33 时 UART clock、reset、security/firewall 权限保持不变。
 - 当前 inventory collector 已新增 `uart-runtime.txt`。2026-11-27 已在目标 RG34XX（非 SP）实机采集并上传完整报告：[reports/rg34xx-inventory-20261127-uart](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261127-uart)，reports HEAD `7217907f57408b714c55a872c6afc5cfc34fdac9`。本机 Linux post-boot view 显示 `ttyS0`→UART0 (`0x05000000`)、115200 console、PH0/PH1 function=`uart0`、pull-up/20 mA drive，以及 `apb2`/`uart0` 均为 24 MHz。`/proc/tty/driver/serial` 不可读，因此没有 divisor/FIFO 回读。dmesg 的六条 `uart0_jtag` / muxsel(3) 告警与参考 DTS 的 PF0–PF5 `sdc0_pins_c` 组合组逐 pin function 映射一致，且 vendor pinctrl driver 对这种组级名称与单 pin 名称差异只发 warning 后继续建图；它更可能不是 PH0/PH1 的 JTAG 冲突。目标机 redacted live FDT 已直接解析出告警组来源 `sdc0@2`（PF0–PF5、group function `uart0_jtag`、muxsel 3），并解析出 UART0 `serial0` alias、0x05000000/0x400 aperture，以及 PH0/PH1 default muxsel 2 / sleep muxsel 7。该结果只证明 FDT 静态声明，不是 live PIO 或 BL33 handoff 状态；详见 UART 专项审计。报告仍不提供物理 pad、电气连线或 BL33 handoff 证明。报告已附 redaction 说明与 SHA256 manifest；采集未访问 `/dev/mem`、未读写 MMIO、未挂载 debugfs、未写存储。M1-S1 仍 OPEN：尚需精确板号/revision 的物理 test-pad/electrical 确认，以及能说明 BL31→BL33 时 UART clock/reset/pinmux/security access 的匹配 handoff source 或可信最早期只读证据。
 - 本轮额外审查了固定 BaseOS-MultiFrontend source pin `cbe253a43f46cf551cc9a6c79a84015bde3686cf` 下的 `native/entry32.S`、`native/loader.c`、`spl/native-boot.c`、`spl/vendor-handoff.c` 与 `spl/handoff32.S`：这些限定文件中没有 UART 初始化/控制台调用或 `0x05000000` UART aperture 访问；`loader.c` 中的 `serial` 仅是从 SID 生成设备序列号字符串。该负面结果不覆盖 U-Boot 公共代码、Boot0/BL31、未包含的依赖或目标机实际部署的 SPL binary；部署 SPL 精确构建输入目前也未完全可重建。因此它不能作为 BL33 handoff state proof。 进一步核对发现，目标非 SP TOC1 的 U-Boot item 为 1 MiB、SHA-256 `4d60a22ff13eac00dba89e0ee7df52a49852c0d9d856bec545ce40126191d127`，live FDT `uboot_message` 报告 vendor U-Boot `2018.05(05/26/2026-13:55:09)`；而上述 BaseOS pin 的 SPL README 使用 upstream U-Boot v2026.10，`lab_devices.py` 仅列 RG34XX SP / RG40XX V。故它不是当前非 SP 设备的精确启动源，不能用其 UART 或 DRAM 路径作目标机证明。该 pin 文档中的 vendor-monitor A32 SVC entry `0x4a000000` / monitor `0x48000000` 仅作为同族 ABI 参考，仍需用当前设备实际 monitor/SPL 构建资料匹配确认。
 

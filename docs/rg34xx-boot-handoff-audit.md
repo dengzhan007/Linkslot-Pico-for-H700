@@ -91,6 +91,25 @@ Boot ROM
 - [真实 monitor 指令验证器](https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/main/experiments/h700-boot-speed/spl/verify-monitor.py)
 - [A32 loader 入口与 Linux SMC 汇编](https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/main/experiments/h700-boot-speed/native/entry32.S)
 
+### 4.1 UART0 的 SPL→BL31 交接（2026-11-27 静态审计）
+
+H616 U-Boot v2026.10 的早期 `board_init_f()` 在 native SPL handoff
+之前完成 clock、GPIO 和 console 初始化：`clock_init_uart()` 将 APB2
+配置为 24 MHz 并打开 UART gate/解除 reset；H616 console-index-1 GPIO
+分支把 PH0/PH1 设置为 UART0 mux；`preloader_console_init()` 调用
+`serial_init()`。对应符号均存在于 #45301188593 的精确 AArch64 SPL
+symbol map。BaseOS 的 early-MMC patch 保留这些调用顺序。
+
+目标 monitor 二进制随后在 BL33 preparation path 中检查 CCU UART gate
+bitmap。已有 gate 时只缓存选中 UART base 并跳过硬件重配置；没有 gate
+时才执行 APB2/16550 fallback。monitor 还在 A32 SVC BL33 交接前调用
+SPC/CCU/PRCM/DMA security setup；H616 TF-A 参考代码明确提示 SPC 写入
+可能受特定 fuse erratum 影响，因此不能把静态写入等同于实际权限已开放。
+
+详情、二进制 SHA/offset、未知 SPC register 与 scope 限制见
+[RG34XX UART0 SPL→BL31→BL33 audit](rg34xx-uart-bl31-handoff-audit.md)。
+这项补充不改变 G2/G3 或 M1-S1 的 OPEN 状态。
+
 ## 5. 地址与内存布局：仅作研究线索
 
 BaseOS 原生 SPL 研究中出现过以下实验地址：
