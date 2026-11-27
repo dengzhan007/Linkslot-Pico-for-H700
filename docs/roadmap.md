@@ -25,7 +25,7 @@ RG34XX 没有板载 eMMC，系统从可移动 TF 启动。报告中的 eMMC boot
 
 按 [M1 BL33 diagnostic specification](m1-bl33-diagnostic.md) 与 [无拆机 TF bring-up 方案](no-disassembly-tf-bringup-plan.md) 执行：
 
-- M1-T0：资格化 PI12 的 BL33 handoff clock/access、PI11 保留和 Data Abort fail-stop；已从真实 linker map 测量 8 KiB early stack、16 KiB section table 和 8 KiB gap，并在 CI 加入不重叠断言；仍须关闭 Boot0/BL31 生命周期与 PIO handoff gate。
+- M1-T0：PI12 的 Data Abort **source/linked-ELF fail-stop 子项已通过**：pinned LK frame/exception-return contract 有 host/source guard，PI12 等非白名单 abort 保留 fatal handler 并进入 WFI 自循环；这不是 A53 实机故障注入。已从真实 linker map 测量 8 KiB early stack、16 KiB section table 和 8 KiB gap，并在 CI 加入不重叠断言；仍须关闭 BL31/Boot0 对 BL33 slot 的生命周期、CPU1–CPU3 hold-off，以及 APB1/PIO 时钟和 SPC/fuse/Non-secure access gate。
 - M1-T1：构建极小 CPU0-only A32 BL33 诊断 payload，raw ≤ 32 KiB；代码、向量、BSS、stack、页表和异常路径必须有 ELF/map 报告，所有运行时范围限于审查过的 BL33 slot。
 - M1-T2：用 pinned BaseOS builder 生成同一代 payload/native firmware/SPL/capsule/TF 镜像；核验 header、FNV、generation、extent、padding、分区和所有 hash。
 - M1-T3：仅将标记为 M1-TEST-TF1-ONLY 的配对镜像写入独立 TF1 测试卡；RG34XX 不拆机、不焊接、不连接 UART；观察 PI12 成功信号。失败后关机换回原系统卡。
@@ -39,7 +39,7 @@ RG34XX 没有板载 eMMC，系统从可移动 TF 启动。报告中的 eMMC boot
 - H700 boot audit #1523 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46010567336) 的 Linux host-tools 与 Windows PowerShell jobs 均成功。
 - platform/h700/power/h700_rg34xx_power_led.c 已有 PI12 最小服务；host tests 覆盖只修改 PI12、保留 PI11/其他位、写入顺序和读回错误。生产物理 wrapper 默认关闭。
 - RG34XX 非 SP boot DTS 的 PMU work_led 指向 PI12，low_pwr_led 指向 PI11；UART0 降为备用，不因缺少 test-pad 资料而阻塞首次启动。
-- PI12 权限审计补充：匹配 BL31 在 BL33 preparation path 尝试写 14 个 SPC decode-port set 寄存器以及 CCU/R_PRCM security switch；固定 H616 TF-A 参考代码将其意图描述为开放 Non-secure peripheral access，但明确指出特定 fuse 条件可能令 SPC 设置不生效。目标 fuse 与 BL33-entry effective permission 未读回，PIO decode-port 映射及 APB1 clock 仍未证明；PI12 继续 default-off。详见 [BL31 PIO/CCU audit](h700-bl31-pio-ccu-audit.md) 与 [UART/BL31 handoff audit](rg34xx-uart-bl31-handoff-audit.md)。
+- PI12 权限审计补充：匹配 BL31 在 BL33 preparation path 尝试写 14 个 SPC decode-port set 寄存器以及 CCU/R_PRCM security switch；固定 H616 TF-A 参考代码将其意图描述为开放 Non-secure peripheral access，但明确指出特定 fuse 条件可能令 SPC 设置不生效。目标 fuse 与 BL33-entry effective permission 未读回，PIO decode-port 映射及 APB1 clock 仍未证明；PI12 继续 default-off。Data Abort 方面，现有 LK overlay 对 SYS_CFG 单寄存器 probe 设有精确恢复白名单，PI12/其他非匹配 fault 走原 fatal handler 并 WFI fail-stop；该结论仅限 host/linked-ELF，不等于硬件权限或 A53 fault recovery。详见 [BL31 PIO/CCU audit](h700-bl31-pio-ccu-audit.md)、[LK Data Abort audit](h700-lk-data-abort-recovery-audit.md) 与 [UART/BL31 handoff audit](rg34xx-uart-bl31-handoff-audit.md)。
 
 - 以上 CI 均是 host/cross-build/audit 证据，不是实际 BL33 启动或 LED 冷启动验证。
 
