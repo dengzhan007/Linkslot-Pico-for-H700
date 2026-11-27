@@ -187,6 +187,32 @@ mount and no storage write. Do not add a UART driver or output path, touch
 CCU offset `0x90c`, or alter PH0/PH1 mux on the basis of this report.
 M1-S1 remains OPEN.
 
+## 2026-11-27 pinned BaseOS native handoff source cross-check
+
+A bounded source review was performed against the fixed
+BaseOS-MultiFrontend source pin
+`cbe253a43f46cf551cc9a6c79a84015bde3686cf`:
+
+- [native/entry32.S](https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/cbe253a43f46cf551cc9a6c79a84015bde3686cf/experiments/h700-boot-speed/native/entry32.S)
+- [native/loader.c](https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/cbe253a43f46cf551cc9a6c79a84015bde3686cf/experiments/h700-boot-speed/native/loader.c)
+- [spl/native-boot.c](https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/cbe253a43f46cf551cc9a6c79a84015bde3686cf/experiments/h700-boot-speed/spl/native-boot.c)
+- [spl/vendor-handoff.c](https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/cbe253a43f46cf551cc9a6c79a84015bde3686cf/experiments/h700-boot-speed/spl/vendor-handoff.c)
+- [spl/handoff32.S](https://github.com/dengzhan007/BaseOS-MultiFrontend/blob/cbe253a43f46cf551cc9a6c79a84015bde3686cf/experiments/h700-boot-speed/spl/handoff32.S)
+
+Within these scoped files, no UART initialisation, UART console call, or
+access to the `0x05000000` UART aperture was found. The `serial` string in
+`native/loader.c` is generated from SID words for the device-serial boot
+argument/template; it is not a UART driver or console.
+
+This is **bounded negative source evidence**, not a statement that every
+stage is UART-silent. It does not cover inherited U-Boot common/board code,
+Boot0, vendor BL31, unlisted build inputs, or the exact deployed native SPL
+binary. The boot-handoff audit already records that the deployed native SPL's
+precise build inputs/generation are not fully reconstructable from currently
+published materials. Consequently this review cannot establish UART clock,
+reset, pinmux or security/firewall state at BL33 entry and does not change
+M1-S1 status.
+
 ## Sources
 
 - [RG34XX live inventory (reports branch)](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/docs/rg34xx-live-inventory-2026-11-22.md)
