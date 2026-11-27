@@ -33,19 +33,25 @@ def main() -> int:
     # LDR/STR X0,[X0,#0x668], respectively.
     import struct
     synthetic = struct.pack(
-        "<IIIII",
+        "<IIIIIIII",
         0xB940A400,
         0xFFFFFFFF,  # invalid/unallocated word must not stop the scan
-        0xB900A400,
-        0xF9433400,
-        0xF9033400,
+        0xB900A400,  # str w0, [x0, #0xa4]
+        0xF9433400,  # ldr x0, [x0, #0x668]
+        0xF9033400,  # str x0, [x0, #0x668]
+        0xF9005020,  # str x0, [x1, #0xa0] overlaps +0xa4
+        0x29140440,  # stp w0, w1, [x2, #0xa0] second word overlaps +0xa4
+        0xA9098440,  # stp x0, x1, [x2, #0x98] second qword overlaps +0xa4
     )
     writer_scan = MODULE.scan_direct_context_writes(synthetic)
-    assert writer_scan["scanned_aligned_word_slots"] == 5
+    assert writer_scan["scanned_aligned_word_slots"] == 8
     assert len(writer_scan["context_plus_a4_direct_load_candidates"]) == 1
     assert len(writer_scan["context_plus_a4_direct_store_candidates"]) == 1
+    assert len(writer_scan["context_plus_a4_overlapping_store_candidates"]) == 4
     assert len(writer_scan["global_slot_plus_668_load_candidates"]) == 1
     assert len(writer_scan["global_slot_plus_668_store_candidates"]) == 1
+    assert len(writer_scan["global_slot_plus_668_overlapping_store_candidates"]) == 1
+    assert 0x4801571C in MODULE.REVIEWED_NON_RTC_SELECTOR_OVERLAPS
 
     source = """
       memcpy(monitor + 0x30, params, 128);
