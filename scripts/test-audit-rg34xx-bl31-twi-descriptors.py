@@ -19,8 +19,14 @@ def main() -> int:
     assert MODULE.classify_pointer(0x48002510) == "monitor-internal-address"
     assert MODULE.classify_pointer(0x07081400) == "soc-mmio-candidate"
     assert MODULE.classify_pointer(0x05002000) == "soc-mmio-candidate"
-    assert MODULE.H616_TWI_BASES[0x07081400] == "R-TWI0"
-    assert MODULE.H616_TWI_BASES[0x05003000] == "TWI4"
+    assert MODULE.H616_TWI_BASES == {
+        0x05002000: "TWI0",
+        0x05002400: "TWI1",
+        0x05002800: "TWI2",
+        0x05002C00: "TWI3",
+        0x05003000: "TWI4",
+        0x07081400: "R-TWI0",
+    }
     assert MODULE.classify_pointer(2) == "small-scalar-or-offset"
     assert MODULE.classify_pointer(0x000186A00000000B) == "unclassified-scalar-or-encoded-value"
     source = """
