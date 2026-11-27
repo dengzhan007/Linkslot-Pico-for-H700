@@ -74,7 +74,8 @@ A reproducible host audit was added:
 - `scripts/audit-rg34xx-bl31-twi-descriptors.py`
 - `scripts/test-audit-rg34xx-bl31-twi-descriptors.py`
 - The audit pins the monitor size/SHA, checks the selector loads, indexed lookup instruction, object-pointer publication, raw qwords and BaseOS SPL patch offsets. It produces `TWI-DESCRIPTOR.md` and `twi-descriptor-report.json`.
-- Workflow integration is in `.github/workflows/h700-bl31-memory-audit.yml`; the first run is tracked in [BL31 audit #95](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45965350913).
+- Workflow integration is in `.github/workflows/h700-bl31-memory-audit.yml`; [BL31 audit #96](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45965474745) passed the complete `audit-matched-bl31` job on audit-script HEAD `f4676657ff0864e9ecd01878c59886798ac1ea11`. Artifact: [15182980313](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45965474745/artifacts/15182980313).
+- The initial run [#95](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45965350913) failed only because the new assertion expected `x19` at `0x480126d4`; the matched instruction uses `x0`. This audit-script assertion was corrected and the entire workflow passed on #96. No firmware/product code was modified.
 
 **Interpretation update:** do not describe `0x48014628` as a proven initialized runtime pointer table. It is a lookup base used by the code; its runtime contents and the runtime context pointer at `0x48014668` remain unknown. The pinned SPL header patch does not explain either value.
 
