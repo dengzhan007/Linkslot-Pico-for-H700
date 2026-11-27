@@ -46,6 +46,8 @@ Allwinner Boot ROM
 
 当前介质中仍存在 TOC1 AArch32 U-Boot 和 p4 偏移 0 的 gzip Android image，但它们是 stock compatibility/fallback path；现场的 `/chosen/baseos,*` markers、Boot0 trained DRAM → live `/dram` 对应关系、live bootargs 与 loader 生成模板匹配、p4+40 MiB loader/firmware package 和 p4+48 MiB BOL4 image 的身份共同证明本次启动执行的是 native path B，而不是 stock U-Boot path A。详细逐项证据见 [活动 loader provenance 报告](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-active-loader-provenance.md)。
 
+**版本字符串解释：** live FDT 中 `uboot_message=2018.05(05/26/2026-13:55:09)` 不表示 stock TOC1 U-Boot 在本次启动中运行。固定 BaseOS `native/build.py::vendor_version_message()` 会从 TOC1 `u-boot` fallback 项提取版本/日期/时间字面量，并将其写入生成的 bootargs；本机活动路径仍是 A32 loader 替换 BL33 slot。固定 BaseOS 源包含 `rg34xx` prepared profile（compatibility/vendor-handoff），但 `verify-fleet.py` 的 live hardware target 仅为 RG34XX SP / RG40XX V；这表示 `rg34xx` 有 host prepared-source 支持，不等于这台非 SP 的部署 generation 已被精确重建或该实验有同机硬件资格化。
+
 这对 Linkslot 移植的直接含义：GammaOS LK 的 H700 candidate 是替换当前 A32 BL33 loader 的候选程序。vendor BL31 → A32 SVC BL33 是启动入口，不等于 A32 BL33 必须继续执行 Linux-start SMC。若 LK 直接作为独立 A32 裸机系统运行，应留在 AArch32；只有兼容原有 Linux 启动时才复刻 loader 的 BOL4/FDT/SMC 逻辑。不能把 `0x8000ff04` 改写成未经证明的通用 A64 payload jump。
 
 Boot0 负责 DRAM training；不得在 Linkslot 主程序里重新初始化 DRAM，也不能把某台设备训练出的参数写死到同型号所有设备。当前 BL33 slot 的装载地址是活动链事实，但不代表其 1 MiB 研究 arena 全部可供 LK 任意使用；必须结合 monitor、native SPL、reserved-memory 和链接 map 审核实际尺寸与覆盖。

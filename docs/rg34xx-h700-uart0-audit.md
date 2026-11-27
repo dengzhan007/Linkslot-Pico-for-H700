@@ -261,39 +261,64 @@ reset, pinmux or security/firewall state at BL33 entry and does not change
 M1-S1 status.
 
 
-## 2026-11-27 exact target TOC1 and pinned BaseOS source boundary
+## 2026-11-27 exact target TOC1 and BaseOS native-builder provenance boundary
 
 The latest physical RG34XX **non-SP** capture pins the TOC1 package at SHA-256
 `e6c20e3a54c51b9336c798e3a4fa1ca6c45b28c6f70456e2db9c252aa4ba4604`.
-Its extracted `u-boot` item is 1,048,576 bytes with SHA-256
+Its extracted stock-fallback `u-boot` item is 1,048,576 bytes with SHA-256
 `4d60a22ff13eac00dba89e0ee7df52a49852c0d9d856bec545ce40126191d127`;
 the monitor item is 107,216 bytes with SHA-256
 `676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31`.
-The captured live FDT `/chosen/uboot_message` reports
-`2018.05(05/26/2026-13:55:09)`. This pins the package bytes and the firmware's
-reported build string, but not a U-Boot source commit, defconfig or reproducible
-build recipe.
 
-Do not treat the current pinned BaseOS-MultiFrontend H700 experiment as the
-matching build source for this target. At source pin
-`cbe253a43f46cf551cc9a6c79a84015bde3686cf`,
-`experiments/h700-boot-speed/spl/README.md` identifies official upstream
-U-Boot v2026.10 (archive SHA-256
-`f943a88389c8fd70a6b0d061a88267465e143c7ca6ea2b75837ab20f5b60c739`).
-Its `lab_devices.py` identifies only RG34XX SP and RG40XX V, with their own
-package hashes; the active handoff records RGSP as a separate per-device
-release. It contains no RG34XX non-SP target profile. The source audit of
-`native/entry32.S`, `native/loader.c`, `spl/native-boot.c`,
-`spl/vendor-handoff.c` and `spl/handoff32.S` therefore remains a bounded
-review of that experiment, not an audit of the exact deployed non-SP U-Boot/SPL.
+The live FDT `/chosen/uboot_message` reports
+`2018.05(05/26/2026-13:55:09)`. **Do not interpret this as evidence that
+the TOC1 U-Boot executed.** The active-loader provenance report establishes
+that this item belongs to the stock compatibility/fallback path; on the
+captured boot the native SPL places its A32 loader at `0x4a000000), replacing
+the U-Boot image in the BL33 slot. BaseOS `native/build.py` explicitly
+implements `vendor_version_message()`: it extracts the version/date/time
+literals from the TOC1 `u-boot` component and uses the resulting string in
+the generated bootargs. Thus the live `uboot_message` is build metadata copied
+from the fallback component, not a runtime execution trace.
 
-The same SPL README documents a vendor-monitor reference contract: monitor at
+The pinned BaseOS-MultiFrontend source at
+`cbe253a43f46cf551cc9a6c79a84015bde3686cf` **does include an `rg34xx`
+prepared-source profile** in both `evidence/compatibility.json` and
+`native/vendor-handoff.json`. That profile records a 1 GiB model and its own
+LPDDR4/672 MHz Boot0 candidates; its prepared TOC1 package SHA is
+`56371d984e29e74db63009ce27f829eb0a55ce9007ee5e40c52479b22418af3d`,
+monitor SHA `676bc020…`, and panel profile vendor-U-Boot SHA
+`0edfa88f7ef990ea4a423a2bbd4c0280006625b8c0cc5438cd2715527e891573`.
+The `rg34xx` profile is real and must not be discarded as an SP-only source.
+
+However, separate the levels of evidence:
+
+- `native/build.py` uses the pinned upstream U-Boot v2026.10 archive as the
+  source for building the mainline AArch64 SPL. This is a different component
+  from the stock TOC1 U-Boot v2018.05 fallback item.
+- `verify-fleet.py` defines physical `LIVE_TARGETS = {rg34xxsp, rg40xxv}`;
+  its `--prepared-only` route supports the eleven prepared model profiles.
+  `spl/inventory.py` likewise lists SP/RG40XXV/RGSP as authorized lab
+  devices. Therefore the non-SP `rg34xx` profile has prepared/host evidence,
+  not equivalent live hardware qualification in that experiment.
+- The deployed non-SP active path itself is established by
+  [the read-only active-loader provenance report](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-active-loader-provenance.md):
+  p4+40 MiB contains the native firmware package, p4+48 MiB the BOL4 image,
+  and the native A32 loader replaces the stock U-Boot slot. The report pins
+  the deployed package fingerprint and exact loader/image behavior, but the
+  raw build-time inventory prefix and Boot0 inputs needed to reproduce the
+  32-byte generation are not published; the current device's TOC1/Boot0
+  fingerprints differ from the pinned prepared-source inputs. Exact
+  source-to-deployed-generation provenance is consequently still OPEN.
+
+The same SPL README documents the monitor reference contract: monitor at
 `0x48000000`, next stage AArch32 SVC at `0x4a000000` with SPSR `0x1d3`,
 Boot0 DRAM parameters copied to monitor +`0x30` and an eight-byte board block
-to +`0x24`. This is useful family-level context for the M1 entry design, but
-must not be promoted to a target-specific handoff proof until matched to the
-captured non-SP monitor and deployed SPL. The target-specific U-Boot source and
-its pre-BL33 UART clock/pinmux handling remain unverified.
+to +`0x24`. The active-loader report corroborates this entry shape on the
+target. It does not prove the UART clock, pinmux, reset or security/firewall
+state at that entry; the source review of the SPL/loader files remains
+bounded and no UART initialization or `0x05000000` access was found in the
+scoped files.
 
 
 ## Sources
