@@ -76,6 +76,16 @@ physical region and does not close the global memory gate. It only proves
 that the current pinned LK objects do not overlap each other in this
 specific host-linked layout.
 
+### Native package pairing contract
+
+The two BL33 packaging paths serve different inputs:
+
+- The standalone `scripts/package-h700-bl33.py` wraps raw A32 LK bytes with the pinned vendor header and rejects any wrapped output beyond the active 32 KiB loader extent. Its result is host-only and remains non-installable.
+- The BaseOS override path consumes the **unwrapped raw** `lk-no-mtk-header.bin` with bytes `[+4,+0x640)` reserved/zero. The pinned native builder inserts its own package-matched header bytes, hashes the raw as a generation input, and preserves the exact 32 KiB loader extent. Its input is not the standalone wrapped output.
+- After loader replacement, the builder regenerates firmware length/FNV metadata. The AArch64 SPL embedding those constants must also be rebuilt and paired with the correct Boot0 capsule. Old SPL + new firmware is not an acceptable test pair.
+
+Full host CI #926 passed 75/75 and now covers the standalone 32 KiB exact/overflow boundary. It still does not run the real target native builder against an M1 payload. The prepared input bundle is SHA-pinned, but it has not yet been materialized in this runtime, so the matching firmware/SPL/capsule and TF1 image remain unbuilt.
+
 ## 4. 独立 TF1 测试卡流程
 
 ### 写卡前
