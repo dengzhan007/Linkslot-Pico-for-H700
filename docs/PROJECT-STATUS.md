@@ -19,6 +19,8 @@
 **当前 CI：** Linkslot/LK feasibility #893（[run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45977712810)，HEAD `afdf9c2`）74/74 主步骤成功；H700 boot-audit #1484（[run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45977712819)）Linux/Windows jobs 均成功。二者均为 host/cross-build。BL31 audit #132（[run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45977266644)）是静态审计成功，不代表设备 suspend/TWI 已运行。
 **基线事实源：** 当前唯一稳定 Linkslot 源码基线为 main 1.0.49；`porting/linkslot-1.0.45-feasibility` 是历史工作分支名，不表示源码仍 pin 在 1.0.45。版本依据见 [upstream-baselines.md](upstream-baselines.md)。
 
+**M1 UART0 只读准备与 CI（工作 HEAD `e5bc9924b2d2f1c331fe44d12be4a5010d0652f7`）：** 新增 UART0 Device/XN translation section 与 host descriptor regression 的提交为 [`3a4279b`](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/3a4279b6cd1d20be1e2ed27d725410167905234f)；只读库存采集器新增 `uart-runtime.txt` 的提交为 [`e5bc992`](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/e5bc9924b2d2f1c331fe44d12be4a5010d0652f7)。H700 boot-audit #1489（[run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45985687068)）Linux/Windows 两个 job 全部成功；AArch32/AArch64 compile #658（[run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45985687185)）全部成功。完整 feasibility #895（[run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45985179518)）在前一代码 HEAD `3a4279b` 上最后检查为 64/80 steps、无失败、仍运行；这些工作结果全是 host-only，不关闭任何硬件 gate。
+
 ### 当前验收门槛台账
 
 | ID | 验收项 | 状态 | 当前证据 / 阻塞 |
