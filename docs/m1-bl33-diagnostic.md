@@ -103,11 +103,24 @@ M1 采用**专用介质可写、设备内部状态不改**的分层边界：
 |---|---|---|---|
 | M1-S0 | 本规格与边界 | 范围/输出候选/禁止项/验收标准明确 | 文档 |
 | M1-S1 | PI12 proof-of-life 资格 | 精确板型 DTS、APB1/PIO handoff 权限、abort fail-stop、PI11 保留与可观察极性均有证据 | 只读审查、host tests；不需 UART 焊盘 |
-| M1-S2 | 最小 payload | A32 entry/vector 与 snapshot tests 通过；ELF/map/BSS/stack 边界有报告；raw ≤ 32768 bytes | host 编译/链接/静态分析 |
+| M1-S2 | 最小 payload | A32 entry/vector 与 snapshot tests 通过；ELF/map/BSS/stack 边界有报告；raw ≤ 32768 bytes；8 KiB early stack 与 16 KiB page table 不重叠 | host 编译/链接/静态分析 |
 | M1-S3 | 配对 package | pinned builder 生成 matched SPL/firmware/capsule；header、FNV、extent、padding 可复验；源树恢复干净 | 隔离 host checkout 构建；产物保持 NON-INSTALLABLE |
 | M1-S4 | 独立 TF1 无拆机实测 | BL33-slot-only 布局、CPU0-only、PI12 probe/异常路径、配对镜像与恢复流程均通过审查 | 仅写入 M1-TEST-TF1-ONLY 测试卡；不拆机、不焊线 |
 
 **策略调整不代表硬件 gate 已通过。** 当前实际状态：M1-S0 规格已建立；M1-S1 转为 PI12 首选资格化、仍 OPEN；UART0 降为备用；M1-S2/S3 尚未完成；尚无可写入测试卡的配对镜像或实机结果。
+
+### 2026-11-27 host layout evidence (not device approval)
+
+Feasibility [#921](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46018337655)
+passed 75/75. Its actual LK early-MMU/PI12 source-layout map records:
+
+- Raw flat ELF: 7,940 bytes; active native loader file extent: 32,768 bytes.
+- Linked `_end=0x4a00c024`; runtime span from BL33 base: `0xc024`.
+- Pinned LK CRT0 `abort_stack=[0x4a004000,0x4a006000)`, exactly 8 KiB; stack top `0x4a006000`, AAPCS aligned.
+- Real AArch32 section table `tt=[0x4a008000,0x4a00c000)`, 16 KiB aligned.
+- Stack/table intervals are disjoint with an 8 KiB gap. CI now asserts these symbols, extents, bounds, stack alignment and non-overlap.
+
+This is only a link-map/layout check for the pinned CRT0/MMU objects. The `0x4a000000–0x4a0e0000` linker ceiling remains a researched bound, not a proven reservation or safe physical allocation. Boot0/BL31 access/lifetime, CPU1–CPU3 initial hold-off, APB1/PIO handoff permissions and LED polarity remain unresolved. This evidence does not mark M1-S1/S2/S3 complete and does not make the ELF installable.
 
 ## 6. 退出条件与后续
 
