@@ -65,6 +65,70 @@ In experiments/h700-boot-speed/spl/native-boot.c:
 
 The existing implementation therefore contains multiple functions that an M1-specific build must either omit or replace with reviewed minimal equivalents. It is not enough to compile the current native SPL with a different outer capsule.
 
+### 2.5 Current native SPL entry and its PMIC/DRAM baseline (2026-11-27)
+
+The native boot chain must be described accurately. The deployed 128 KiB
+Boot0-primary image is itself the BaseOS A32 outer capsule executed by the
+Allwinner Boot ROM. It embeds a 64 KiB stock eGON.BT0 Boot0 as a fallback and
+a 48 KiB AArch64 native SPL. On the current native route, the outer capsule
+selects and copies the AArch64 SPL; the embedded stock Boot0 is **not** an
+earlier DRAM-training stage on that route. The stock Boot0 runs only when the
+outer selector chooses the fallback branch.
+
+The pinned BaseOS build script uses U-Boot v2026.10 and invokes
+`anbernic_rg35xx_h700_defconfig` for the native SPL. That defconfig enables
+LPDDR4 at 672 MHz, `CONFIG_AXP717_POWER`, SPL I2C / legacy I2C, and these
+voltage targets:
+
+| Config | Value |
+|---|---:|
+| `CONFIG_AXP_DCDC2_VOLT` | 940 mV |
+| `CONFIG_AXP_DCDC3_VOLT` | 1100 mV |
+| `CONFIG_DRAM_CLK` | 672 MHz |
+| DRAM type | H616 LPDDR4 |
+
+The U-Boot v2026.10 `arch/arm/mach-sunxi/board.c::board_init_f()` prelude
+performs SRAM, TZPC, timer, clock, UART GPIO/console, and (under this
+defconfig) I2C initialization. BaseOS inserts its early-MMC hook before the
+normal trailing `sunxi_board_init()` call. The custom
+`spl/native-boot.c::baseos_vendor_handoff()` then sets
+`baseos_dram_power=1` and calls `sunxi_board_init()` before accessing the
+firmware package in DRAM.
+
+In the pinned U-Boot source, `board/sunxi/board.c::sunxi_board_init()`:
+
+1. calls `axp_init()` for AXP717;
+2. calls `axp_set_dcdc2(940)` and `axp_set_dcdc3(1100)` because the above
+   defconfig values are set;
+3. runs `sunxi_dram_init()` and publishes the selected DRAM size; and
+4. may call `clock_set_pll1()` when the PMIC voltage setup succeeds.
+
+The pinned `drivers/power/axp_spl.c` implements the DCDC setters using
+`pmic_bus_write()` followed by `pmic_bus_setbits()`. These are real PMIC
+bus transactions, not just metadata or host-side operations.
+
+This means the currently deployed native SPL has a **board-init baseline
+that includes AXP717/TWI, DCDC voltage writes, DRAM training and CPU PLL
+setup**. It is a source-matched part of the existing native boot design, but
+it is not a "no-PMIC/no-TWI" design. A M1 one-shot must choose and declare
+one of two profiles:
+
+- **Reuse the exact deployed native-init baseline (lower-delta candidate):**
+  preserve the pinned board-init sequence and its exact DCDC2/DCDC3 values
+  unchanged; do not add PMIC scratch writes, new rail settings, new clock
+  programming, or other peripheral initialization. The build manifest must
+  report PMIC/TWI access as present and bind the profile/source pin.
+- **Strict no-PMIC/no-TWI profile:** do not call `sunxi_board_init()` or
+  the legacy board-init prelude blindly. This profile cannot simply assume
+  DRAM is already trained, because the current native capsule route selects
+  the A64 SPL directly from the outer capsule. It needs separate evidence
+  that usable DRAM is already established, or a separately designed and
+  qualified DRAM bring-up path.
+
+Until the project selects and reviews a profile, do not claim
+`pmic_access=false` / `twi_access=false` for an M1 artifact. The A32 BL33
+diagnostic itself still does not need PMIC/TWI, but the preceding A64 SPL may.
+
 ## 3. M1 one-shot contract
 
 The intended one-shot design is a separate build mode with the following fail-closed requirements.
@@ -83,7 +147,7 @@ The intended one-shot design is a separate build mode with the following fail-cl
 1. Add a dedicated BASEOS_M1_ONESHOT path. It must not call the normal baseos_control_mmc(), the persistent path, or baseos_raw_adopt().
 2. Do not call any block-device write routine. In particular, there must be no writes to 0x56000, 0x56200, LBA 16, Boot0/TOC1, or any hidden result/journal sector.
 3. Do not read or write RTC GP_DATA/retention state or watchdog CFG/MODE/CTRL.
-4. Do not call PMIC/RSB/TWI helpers, PMIC scratch operations, or panel/PIO display startup. Required clock, bus, and DRAM setup must be isolated and justified independently; no broad register setup may be copied merely because it is in the production path.
+4. Do not add PMIC/RSB/TWI, voltage, or CPU-PLL operations beyond the selected and explicitly declared initialization profile in section 2.5. In particular, exclude `baseos_native_bootreason()` (including PMIC scratch `0xf0`), `baseos_vendor_pll_power()` (the additional nine CCU writes), and panel/PIO display startup. If strict no-PMIC/no-TWI is selected, the implementation must not call `sunxi_board_init()` and must independently prove its DRAM prerequisite; if the exact deployed baseline is reused, preserve its AXP717/DRAM/PLL settings without modification and declare PMIC/TWI access.
 5. Read only the exact, pinned p4 + 40 MiB firmware package. Validate the package hash/FNV and every extent before copying the vendor monitor, DTBO, DTB, and M1 A32 BL33 payload to their audited destinations.
 6. Do not load the p4 + 48 MiB BOL4 Linux image, perform kernel decompression, prepare a Linux bootargs/FDT handoff, or issue the Linux-start SMC.
 7. Preserve only the vendor BL31 input fields proven necessary for its A32 SVC BL33 entry: selected DRAM parameters, the exact board bytes and DTB pointer. Their provenance and offsets must be tied to the matching package and Boot0.
@@ -125,6 +189,37 @@ do not edit the meaning of `BASEOS_RAW_CAPSULE` in place.
 
 A useful first implementation milestone is therefore **not** a bootable test image. It is an AArch32 capsule dispatcher unit plus an M1-SPL source branch that compile/link with dummy fixtures, followed by fake-MMC read-only tests and a final ELF MMIO/write-site audit. Only after that can the exact prepared bundle be run through the pinned native builder to generate a matched but still NON-INSTALLABLE artifact.
 
+### 4.1 Host-only pre-entry selection model (2026-11-27)
+
+A pure C policy model was added at
+`platform/h700/boot/m1_oneshot_selection_model.{h,c}`, with
+`tests/test_m1_oneshot_selection_model.c` and
+`scripts/test-m1-oneshot-capsule-selection.py`. It is **not** included in
+the LK, SPL, or Boot0 capsule build rules.
+
+Feasibility [#931](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46031541947)
+completed 84/84 steps successfully (zero failures, zero skipped). The new
+workflow step compiled and ran six policy cases:
+
+1. valid embedded stock Boot0 + valid M1 SPL selects M1;
+2. M1 SPL FNV mismatch selects stock;
+3. M1 SPL eGON magic mismatch selects stock;
+4. M1 SPL size mismatch selects stock;
+5. invalid embedded stock Boot0 fail-stops, even if M1 SPL is valid; and
+6. missing stock candidate fail-stops.
+
+The model uses the existing capsule FNV-1a convention for these host policy
+fixtures. FNV is not a cryptographic signature, and the model does not perform
+the outer capsule's eGON checksum/entry verification, execute the A32
+copy-stub, validate the final SPL ELF, or read hardware. Those remain separate
+builder / linked-ELF checks. It proves only the static choice rule.
+
+Artifact: [15215206088](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46031541947/artifacts/15215206088),
+SHA-256
+`0f6c6294f43fb734317be550815da2aa5bd2d89451e3c3e66e1b35025c1b4f6a`.
+No real capsule/SPL was built, no test card was written, and no payload was
+executed.
+
 ## 5. Host-only verification required before producing an M1 artifact
 
 The M1 builder must emit a manifest with at least:
@@ -136,8 +231,13 @@ The M1 builder must emit a manifest with at least:
 - rtc_access=false
 - watchdog_access=false
 - block_device_writes=false
-- pmic_access=false
-- display_gpio_access=false
+For the strict no-PMIC profile, assert `pmic_access=false` and
+`twi_access=false`. For the deployed-native-baseline reuse profile, assert
+`pmic_access=true`, `twi_access=true`, exact source/config pins for AXP717,
+DCDC2=940 mV and DCDC3=1100 mV, and no PMIC/voltage write delta beyond that
+baseline. Both profiles must assert `display_gpio_access=false`,
+`rtc_access=false`, `watchdog_access=false`, and
+`block_device_writes=false`.
 
 Tests must include:
 

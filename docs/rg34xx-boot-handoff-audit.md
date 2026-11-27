@@ -24,33 +24,34 @@ BaseOS 参考源本次按 `main` 快照审查，commit：[`cbe253a43f46cf551cc9a
 
 ```text
 Allwinner Boot ROM
-  └─ stock eGON.BT0 Boot0（DRAM training）
-       └─ BaseOS native SPL（AArch64 EL3，SRAM）
-            ├─ 从 p4 + 40 MiB 读取 native firmware package
-            │    ├─ vendor BL31 / monitor → 0x48000000
-            │    ├─ DTBO → 0x4a100000
-            │    ├─ TOC1 DTB → 0x4a200000
-            │    └─ AArch32 SVC BL33 loader → 0x4a000000
-            ├─ 从 p4 + 48 MiB 读取 BOL4 Android v2 image → staging 0x45000000
-            ├─ 校验镜像长度/FNV，并更新 BL33 header / native handoff record
-            └─ 进入 vendor BL31 / monitor
-                 └─ ERET 到 AArch32 SVC BL33（SPSR=0x1d3）
-                      └─ BaseOS A32 loader
-                           ├─ BOL4 raw-LZ4 → AArch64 Image @ 0x40080000
-                           ├─ 准备 initrd @ 0x42000000 与 live FDT @ 0x44000000
-                           └─ SMC #0：r0=0x8000ff04, r1=0x40080000,
-                                      r2=0x44000000, r3=1
-                                └─ vendor monitor ERET → AArch64 Linux
-                                     （SPSR=0x3c5，x0=0x44000000）
+  └─ deployed 128 KiB Boot0-primary BaseOS capsule (A32 outer, BROM entry)
+       └─ outer selector / context-copy stub (SRAM A1)
+            ├─ embedded 64 KiB stock eGON.BT0 Boot0 (fallback branch only)
+            └─ current native branch: 48 KiB AArch64 SPL copied to 0x20000
+                 ├─ SPL board_init_f prelude: SRAM/TZPC/timer/clock/GPIO/UART/I2C
+                 ├─ BaseOS early-MMC hook (read-only in raw-capsule mode)
+                 └─ baseos_vendor_handoff → sunxi_board_init()
+                      ├─ AXP717/TWI board power setup
+                      ├─ LPDDR4 DRAM training + selected DRAM-size publication
+                      └─ CPU PLL setup (if PMIC setup succeeded)
+                           ├─ p4 + 40 MiB firmware → 0x42e00000
+                           │    ├─ vendor BL31 / monitor → 0x48000000
+                           │    ├─ DTBO → 0x4a100000
+                           │    ├─ TOC1 DTB → 0x4a200000
+                           │    └─ AArch32 SVC BL33 loader → 0x4a000000
+                           ├─ p4 + 48 MiB BOL4 Android v2 image → staging 0x45000000
+                           └─ RVBAR/RMR3 handoff into vendor BL31
+                                └─ ERET to AArch32 SVC BL33 (SPSR=0x1d3)
+                                     └─ BaseOS A32 loader → Linux-start SMC
 ```
 
-当前介质中仍存在 TOC1 AArch32 U-Boot 和 p4 偏移 0 的 gzip Android image，但它们是 stock compatibility/fallback path；现场的 `/chosen/baseos,*` markers、Boot0 trained DRAM → live `/dram` 对应关系、live bootargs 与 loader 生成模板匹配、p4+40 MiB loader/firmware package 和 p4+48 MiB BOL4 image 的身份共同证明本次启动执行的是 native path B，而不是 stock U-Boot path A。详细逐项证据见 [活动 loader provenance 报告](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-active-loader-provenance.md)。
+当前 128 KiB Boot0-primary 的字节身份与部署的 BaseOS raw capsule 完全一致；BROM 执行的是这份 A32 outer capsule。它在内嵌 64 KiB stock eGON.BT0 Boot0 fallback 与 48 KiB AArch64 native SPL 之间选择。目标现场的 `/chosen/baseos,*` markers、native generation marker、p4+40 MiB loader/firmware package 与 p4+48 MiB BOL4 image 的身份共同证明本次启动走 native SPL 分支，而不是 embedded stock-Boot0/TOC1-U-Boot fallback。**修正 DRAM 阶段归属：**在当前 native 分支中，不能把嵌入的 stock Boot0 描述为先行完成 DRAM training 的阶段；native SPL 的 `baseos_vendor_handoff()` 会调用 `sunxi_board_init()`，由其执行 AXP717/DRAM/CPU-PLL 初始化。详细逐项身份证据见 [活动 loader provenance 报告](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-active-loader-provenance.md)。
 
 **版本字符串解释：** live FDT 中 `uboot_message=2018.05(05/26/2026-13:55:09)` 不表示 stock TOC1 U-Boot 在本次启动中运行。固定 BaseOS `native/build.py::vendor_version_message()` 会从 TOC1 `u-boot` fallback 项提取版本/日期/时间字面量，并将其写入生成的 bootargs；本机活动路径仍是 A32 loader 替换 BL33 slot。固定 BaseOS 源包含 `rg34xx` prepared profile（compatibility/vendor-handoff），但 `verify-fleet.py` 的 live hardware target 仅为 RG34XX SP / RG40XX V；这表示 `rg34xx` 有 host prepared-source 支持，不等于这台非 SP 的部署 generation 已被精确重建或该实验有同机硬件资格化。
 
 这对 Linkslot 移植的直接含义：GammaOS LK 的 H700 candidate 是替换当前 A32 BL33 loader 的候选程序。vendor BL31 → A32 SVC BL33 是启动入口，不等于 A32 BL33 必须继续执行 Linux-start SMC。若 LK 直接作为独立 A32 裸机系统运行，应留在 AArch32；只有兼容原有 Linux 启动时才复刻 loader 的 BOL4/FDT/SMC 逻辑。不能把 `0x8000ff04` 改写成未经证明的通用 A64 payload jump。
 
-Boot0 负责 DRAM training；不得在 Linkslot 主程序里重新初始化 DRAM，也不能把某台设备训练出的参数写死到同型号所有设备。当前 BL33 slot 的装载地址是活动链事实，但不代表其 1 MiB 研究 arena 全部可供 LK 任意使用；必须结合 monitor、native SPL、reserved-memory 和链接 map 审核实际尺寸与覆盖。
+在当前 native capsule 分支中，A64 native SPL 的 `sunxi_board_init()` 执行 DRAM training；embedded stock Boot0 只属于 fallback 分支。不得在 Linkslot 主程序里重新初始化 DRAM，也不能把某台设备训练出的参数写死到同型号所有设备。当前 BL33 slot 的装载地址是活动链事实，但不代表其 1 MiB 研究 arena 全部可供 LK 任意使用；必须结合 monitor、native SPL、reserved-memory 和链接 map 审核实际尺寸与覆盖。
 
 参考：
 - [活动 loader provenance](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-active-loader-provenance.md)

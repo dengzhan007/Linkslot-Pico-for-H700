@@ -6,7 +6,7 @@
 
 ## 1. 交付目标
 
-准备一个极小的 AArch32 BL33 诊断 payload，用于验证受控 BL33 启动路径的入口与可观测性；不引入完整 Linkslot、mGBA、Linux loader、PMIC、电源管理或多核功能。
+准备一个极小的 AArch32 BL33 诊断 payload，用于验证受控 BL33 启动路径的入口与可观测性；payload 本身不引入完整 Linkslot、mGBA、Linux loader、PMIC 控制或多核功能。前置 A64 native SPL 的 board-init 依赖单独管理，不能与 A32 payload 的能力边界混为一谈。
 
 活动 native firmware 中 BL33 loader 的文件 extent 是 `0x8000` bytes（32 KiB），目标装载地址为 `0x4a000000`。这是 raw input 文件边界，**不是**对整个 1 MiB BL33 区间、BSS、stack、heap、page table、DMA 或应用 DRAM 的内存授权。
 
@@ -24,6 +24,31 @@
 **M1 首选资格化方向：PI12 工作灯；UART0 不再是前置条件。** PI12 必须有精确 RG34XX 非 SP DTS/source 依据，明确 pin mux、APB1/PIO clock 与 BL33 访问权限，限定寄存器位域，保留 PI11，并具备确定的异常 fail-stop 路径。PI12 可从机身外观察，不需要 UART 焊盘；但 BL33 handoff 时访问权限、abort 处理和实际极性尚未通过。
 
 The detailed pinned-source side-effect audit and proposed replacement contract are recorded in [m1-oneshot-capsule-audit.md](m1-oneshot-capsule-audit.md). It distinguishes ordinary SPL scratch-sector/watchdog writes, raw-capsule RTC/WDT adoption, and native-handoff PMIC/CCU/display effects. No one-shot implementation has been built.
+
+### Native SPL initialisation dependency correction (2026-11-27)
+
+The deployed 128 KiB Boot0-primary image is the BaseOS A32 outer capsule
+executed by BROM. On the current native route it selects the embedded A64
+SPL directly; the embedded 64 KiB stock eGON Boot0 is the fallback, not a
+prior DRAM-training stage. The pinned native SPL build uses U-Boot
+v2026.10 `anbernic_rg35xx_h700_defconfig`: AXP717 + SPL I2C, DCDC2 940 mV,
+DCDC3 1100 mV, LPDDR4 672 MHz. Its `baseos_vendor_handoff()` calls
+`sunxi_board_init()`, which applies the AXP settings, calls
+`sunxi_dram_init()`, and may set CPU PLL before accessing the firmware
+package in DRAM.
+
+Consequently, a strict "no PMIC/TWI" M1 SPL cannot simply reuse the current
+native handoff while skipping this call: it must independently prove that
+DRAM is already usable or supply a separately qualified initialization
+path. The lower-delta candidate is to preserve the exact currently deployed
+board-init sequence and voltage settings unchanged, while removing the v2
+RTC/WDT state protocol and excluding the additional PMIC scratch, CCU PLL,
+display, watchdog-reload and Linux-image operations. That candidate still
+has PMIC/TWI access and must be declared as such; it is not a no-PMIC build.
+No profile has been selected or hardware-authorized yet.
+
+The exact U-Boot sequence and config pins are recorded in
+[m1-oneshot-capsule-audit.md](m1-oneshot-capsule-audit.md).
 
 ### Boot0/SPL capsule safety gate (2026-11-27)
 
@@ -79,10 +104,14 @@ must be rebuilt from those constants and paired with the correct Boot0
 capsule before a TF image can be assembled. Replacing only the 32 KiB loader
 file while retaining the old firmware FNV/SPL is not a valid boot package.
 
-The packager upper-bound regression and pinned BaseOS M1 one-shot source audit are now part of full feasibility CI:
-[#927](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46027513613)
-passed 75/75; artifact
-[15213455916](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46027513613/artifacts/15213455916).
+The full feasibility run [#931](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46031541947)
+passed 84/84 steps (zero failures, zero skipped); artifact
+[15215206088](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46031541947/artifacts/15215206088),
+SHA-256 `0f6c6294f43fb734317be550815da2aa5bd2d89451e3c3e66e1b35025c1b4f6a`.
+It includes the pinned BaseOS side-effect audit, BL33 32 KiB boundary checks,
+LK overlay/link and Linkslot/mGBA/VFS/SD host regressions, plus the new six-case
+host-only M1 capsule pre-entry selection model. The model is not linked into a
+real capsule/SPL.
 The audit verifies that ordinary SPL writes scratch/result sectors and watchdog state, raw-capsule v2 depends on RTC GP14/GP15 and watchdog adoption, and native handoff includes PMIC/CCU/PIO/watchdog side effects. The packager accepts exactly 32,768 bytes and rejects 32,769 bytes. These are host-side source/tool checks only; no M1 raw payload was packaged through the real BaseOS builder, no matching M1 SPL/capsule was generated, and no TF card was written.
 
 ### APB1/PIO clock-source evidence refinement (2026-11-27)

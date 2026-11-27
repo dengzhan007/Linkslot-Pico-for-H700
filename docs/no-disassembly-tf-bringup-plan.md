@@ -101,6 +101,31 @@ does not access RTC/watchdog or make hidden durable media writes and relies
 on manual power-off/card-swap recovery, or (b) a separately reviewed and
 hardware-qualified v2 watchdog/RTC handoff. Do not conflate the two.
 
+### Host-only one-shot selection and native-init boundary
+
+Full feasibility [#931](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46031541947)
+passed 84/84. Its six-case host-only selector model accepts a valid M1 SPL
+only when the embedded stock Boot0 is also valid; invalid M1 selects stock,
+while an invalid/missing stock candidate fail-stops. This is a pure policy
+model, not the real capsule dispatcher or a device image.
+
+A further source correction matters for the paired SPL: the current 128 KiB
+Boot0-primary is the outer capsule BROM executes. The native route selects the
+A64 SPL directly; the embedded 64 KiB stock Boot0 is a fallback, not a
+preceding DRAM-training stage. The pinned SPL config uses AXP717/SPL-I2C,
+DCDC2=940 mV, DCDC3=1100 mV and LPDDR4 672 MHz. Its native handoff calls
+`sunxi_board_init()` to apply PMIC settings and initialize DRAM before using
+the DRAM-resident firmware package. See
+[m1-oneshot-capsule-audit.md](m1-oneshot-capsule-audit.md).
+
+Thus a no-PMIC/TWI one-shot cannot simply omit `sunxi_board_init()` and
+assume DRAM is ready. The lower-delta candidate is exact reuse of the
+currently deployed baseline with those voltage/configuration values
+unchanged, while removing only the RTC/WDT attempt protocol and extra
+PMIC-scratch/CCU/display/watchdog/Linux-image operations. It must be declared
+as a PMIC/TWI-using profile, not a no-PMIC profile. No hardware authorization
+or M1 SPL/capsule build exists yet.
+
 ### Native package pairing contract
 
 The two BL33 packaging paths serve different inputs:
