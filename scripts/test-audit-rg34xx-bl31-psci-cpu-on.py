@@ -269,6 +269,20 @@ def main() -> int:
     assert module.decode_bl_target(0x48011338,module.WORDS[0x48011338]) == 0x480115C0
     assert module.decode_bl_target(0x48011640,module.WORDS[0x48011640]) == 0x48010F98
     assert module.decode_bl_target(0x4801166C,module.WORDS[0x4801166C]) == 0x48011360
+    assert module.decode_bl_target(0x48011370,module.WORDS[0x48011370]) == 0x4800DFE8
+    assert module.decode_bl_target(0x48011378,module.WORDS[0x48011378]) == 0x4800C9E8
+    assert module.decode_bl_target(0x480113bc,module.WORDS[0x480113bc]) == 0x4800E2E0
+    assert module.decode_bl_target(0x480113ec,module.WORDS[0x480113ec]) == 0x4800E500
+    assert module.decode_bl_target(0x4801140c,module.WORDS[0x4801140c]) == 0x4800E500
+    assert module.decode_bl_target(0x48011438,module.WORDS[0x48011438]) == 0x4800EBA0
+    assert module.decode_bl_target(0x48011454,module.WORDS[0x48011454]) == 0x4800EBA0
+    assert module.decode_bl_target(0x4801147c,module.WORDS[0x4801147c]) == 0x4800D500
+    assert module.decode_bl_target(0x480114a4,module.WORDS[0x480114a4]) == 0x4800E720
+    assert module.decode_bl_target(0x480114f4,module.WORDS[0x480114f4]) == 0x48011320
+    assert module.decode_bl_target(0x4801150c,module.WORDS[0x4801150c]) == 0x4800EBA0
+    assert module.decode_bl_target(0x48011534,module.WORDS[0x48011534]) == 0x4800E2E0
+    assert module.decode_bl_target(0x48011554,module.WORDS[0x48011554]) == 0x4800E500
+    assert module.decode_bl_target(0x4801157c,module.WORDS[0x4801157c]) == 0x4800E720
     assert module.decode_bl_target(0x48011974,module.WORDS[0x48011974]) == 0x48011320
     assert module.decode_imm19_branch_target(0x4801197C,module.WORDS[0x4801197C]) == 0x48011A70
     assert module.decode_bl_target(0x48011990,module.WORDS[0x48011990]) == 0x4800C730
@@ -591,9 +605,9 @@ def main() -> int:
     assert window_map["retention_restore_dram_state_helper"][0] == 0x480115C0
     assert window_map["retention_restore_dram_state_helper"][1] >= 0x150
     assert window_map["retention_restore_lower_helper_48010f98"][0] == 0x48010F98
-    assert window_map["retention_restore_lower_helper_48010f98"][1] >= 0x120
+    assert window_map["retention_restore_lower_helper_48010f98"][1] >= 0x208
     assert window_map["retention_restore_lower_helper_48011360"][0] == 0x48011360
-    assert window_map["retention_restore_lower_helper_48011360"][1] >= 0x120
+    assert window_map["retention_restore_lower_helper_48011360"][1] >= 0x1D0
     assert window_map["system_suspend_helper_48011920_complete"][0] == 0x48011920
     assert window_map["system_suspend_helper_48011920_complete"][1] >= 0x220
     assert "ops_slot_3_raw" in window_map

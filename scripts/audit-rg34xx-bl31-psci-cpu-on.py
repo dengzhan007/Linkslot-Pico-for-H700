@@ -159,6 +159,20 @@ WORDS = {
     0x48011338: 0x940000a2,
     0x48011640: 0x97fffe56,
     0x4801166c: 0x97ffff3d,
+    0x48011370: 0x97fff31e,
+    0x48011378: 0x97ffed9c,
+    0x480113bc: 0x97fff3c9,
+    0x480113ec: 0x97fff445,
+    0x4801140c: 0x97fff43d,
+    0x48011438: 0x97fff5da,
+    0x48011454: 0x97fff5d3,
+    0x4801147c: 0x97fff021,
+    0x480114a4: 0x97fff49f,
+    0x480114f4: 0x97ffff8b,
+    0x4801150c: 0x97fff5a5,
+    0x48011534: 0x97fff36b,
+    0x48011554: 0x97fff3eb,
+    0x4801157c: 0x97fff469,
     0x4800c490: 0x940015ac, 0x4800c658: 0x94001540,
     0x48011710: 0xd2802082, 0x48011714: 0xb9401c01,
     0x48011718: 0xf2a0e002, 0x4801171c: 0xb9400045,
@@ -509,8 +523,8 @@ DISASSEMBLY_WINDOWS = (
     ("retention_restore_gate_helper", 0x48011320, 0x40),
     ("retention_restore_dram_clock_helper", 0x480111a0, 0x180),
     ("retention_restore_dram_state_helper", 0x480115c0, 0x150),
-    ("retention_restore_lower_helper_48010f98", 0x48010f98, 0x120),
-    ("retention_restore_lower_helper_48011360", 0x48011360, 0x120),
+    ("retention_restore_lower_helper_48010f98", 0x48010f98, 0x208),
+    ("retention_restore_lower_helper_48011360", 0x48011360, 0x1d0),
 
     ("ccu_save_helper", 0x48001790, 0x100),
     ("ccu_restore_helper", 0x480018d8, 0x100),
@@ -1561,6 +1575,32 @@ def main() -> int:
                                 "return_value": "the second helper's W0 result for context+0x4 != 4; otherwise the first 32-bit word at DRAM 0x40000000",
                                 "alternate_layout_probe": "context+0x4 == 4 causes helper to load [0x40000000] and use that value as the copy-enable predicate",
                                 "runtime_gate_result": "not observed",
+                                "status_probe": {
+                                    "helper": "0x48011360",
+                                    "context_flags_word_offset": "0x6c",
+                                    "tested_flag_bits": [19,20,21,22,23],
+                                    "individual_probe_helpers": [
+                                        {"target":"0x4800e2e0","max_attempts":5},
+                                        {"target":"0x4800e500","max_attempts":5},
+                                        {"target":"0x4800eba0","max_attempts":5},
+                                        {"target":"0x4800e720","max_attempts":5}
+                                    ],
+                                    "common_setup_calls": [
+                                        {"pc":"0x48011370","target":"0x4800dfe8"},
+                                        {"pc":"0x48011378","target":"0x4800c9e8"}
+                                    ],
+                                    "success_epilogue_helper": "0x4800d500",
+                                    "failure_return": "W0=0 at 0x48011520",
+                                    "outer_retry": {
+                                        "counter_address":"0x48015410",
+                                        "maximum_attempts":10,
+                                        "reenter_pc":"0x480114f4",
+                                        "reenter_target":"0x48011320",
+                                        "failure_when_limit_reached":"0x48011520"
+                                    },
+                                    "flag_meaning": "context+0x6c bits control which status probes run; exact bit-to-DRAM-subsystem mapping is not yet identified",
+                                    "runtime_gate_result": "not observed"
+                                },
                                 "subordinate_calls": [
                                     {"pc":"0x48011640","target":"0x48010f98"},
                                     {"pc":"0x4801166c","target":"0x48011360"}
