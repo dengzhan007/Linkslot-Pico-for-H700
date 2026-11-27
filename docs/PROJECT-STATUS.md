@@ -25,6 +25,19 @@
 
 **M1 UART0 只读准备与 CI（工作 HEAD `e5bc9924b2d2f1c331fe44d12be4a5010d0652f7`）：** 新增 UART0 Device/XN translation section 与 host descriptor regression 的提交为 [`3a4279b`](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/3a4279b6cd1d20be1e2ed27d725410167905234f)；只读库存采集器新增 `uart-runtime.txt` 的提交为 [`e5bc992`](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/e5bc9924b2d2f1c331fe44d12be4a5010d0652f7)。H700 boot-audit #1489（[run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45985687068)）Linux/Windows 两个 job 全部成功；AArch32/AArch64 compile #658（[run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45985687185)）全部成功。完整 feasibility #895（[run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45985179518)）在前一代码 HEAD `3a4279b` 上最后检查为 64/80 steps、无失败、仍运行；这些工作结果全是 host-only，不关闭任何硬件 gate。
 
+### 2026-11-27 无拆机 / TF1 首启路线（当前执行策略）
+
+用户确认 RG34XX 没有板载 eMMC 系统盘，系统由 TF 卡启动。项目不再把拆机找 UART 焊盘作为首次实机验证前提：保留原系统卡，只用另一张独立 TF1 测试卡验证启动。无 eMMC 表示测试卡上的引导内容可通过更换介质恢复；不代表电气操作、SoC fuse/OTP、PMIC、错误电压或任意 MMIO 没有风险。
+
+- **首发 proof-of-life：PI12 工作灯优先，UART0 降为备用。** RG34XX 非 SP boot DTS 将 PMU work_led 映射到 bank I / PI12、low_pwr_led 映射到 PI11；仓库已有 PI12 服务与 fake-register tests，read-modify-write 保留 PI11 和其他位。生产物理 wrapper 仍 default-off；BL33-time APB1/PIO 权限、异常 fail-stop 路径及实际 LED 极性仍 OPEN。
+- **M1-S1 改为 PI12 资格化，不再等待 UART 焊盘。** 不拆机、不焊线、不连接 UART。LCD/framebuffer 延后，因其 ownership 尚未批准。
+- **M1 设备试验采用 BL33-slot-only + CPU0-only 边界。** Loader 输入 extent 为 32 KiB；实际代码、向量、BSS、stack、页表及异常路径必须由 ELF/map 审计。首轮不使用外部应用 DRAM、heap、DMA、GIC/timer/IRQ、SMP、SD controller、PMIC/TWI 或 CPU PLL。
+- 全局 H700_MEMORY_LAYOUT_APPROVED=false 与通用 H700_MEMBASE/H700_MEMSIZE gate 保持不变；M1 局部 slot profile 不批准完整 1 GiB DRAM 或 Linkslot/mGBA arena。
+- 仅允许向独立可擦写 TF1 测试卡写入经 hash/manifest/extent/分区/sector-range 检查的 M1-TEST-TF1-ONLY 配对镜像；原系统卡不写。失败后关机换回原卡。SoC fuse/OTP、PMIC/TWI、电压/CPU PLL 和未知外设访问仍禁止。
+- 完整方案：[no-disassembly-tf-bringup-plan.md](no-disassembly-tf-bringup-plan.md)。当前下一项为 M1-T0：PI12 handoff/权限/异常路径与 BL33 slot 局部布局审计；不是直接启用生产 PIO wrapper。
+
+**最近 CI：** Linkslot/LK feasibility #916 成功（[run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46010334262)）；H700 boot audit #1523 的 Linux 与 Windows jobs 均成功（[run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46010567336)）。这些是 host-side 结果，不代表实机启动。
+
 ### 当前验收门槛台账
 
 | ID | 验收项 | 状态 | 当前证据 / 阻塞 |
