@@ -229,6 +229,15 @@ def main() -> int:
         assert module.WORDS[address] == expected
     assert module.decode_bl_target(0x48001C3C,module.WORDS[0x48001C3C]) == 0x48001A04
     assert module.decode_bl_target(0x48002440,module.WORDS[0x48002440]) == 0x48001B74
+    assert module.decode_bl_target(0x48003B94,module.WORDS[0x48003B94]) == 0x480022FC
+    descriptor_writer_words = {
+        0x480022FC: 0x900000C3, 0x48002300: 0x39002060,
+        0x48002304: 0x900000C0, 0x48002308: 0xB9000001,
+        0x4800230C: 0x900000C0, 0x48002310: 0xB9000402,
+        0x48002314: 0x52800000, 0x48002318: 0xD65F03C0,
+    }
+    for address, expected in descriptor_writer_words.items():
+        assert module.WORDS[address] == expected
     assert module.decode_bl_target(0x48011928,module.WORDS[0x48011928]) == 0x48011710
     assert module.WORDS[0x48011B30] == 0xD65F03C0
     assert module.WORDS[0x48011B38] == 0xD65F03C0
@@ -434,6 +443,8 @@ def main() -> int:
     assert window_map["system_suspend_cache_teardown_and_trampoline"][0] == 0x48015FB8
     assert window_map["system_suspend_cache_teardown_and_trampoline"][1] >= 0x270
     assert window_map["system_suspend_caller_full"][0] == 0x480096F8
+    assert window_map["system_suspend_descriptor_writer"][0] == 0x480022FC
+    assert window_map["system_suspend_descriptor_writer_caller"][0] == 0x48003B50
     assert window_map["system_suspend_setup_caller"][0] == 0x48002400
     assert window_map["system_suspend_descriptor_handoff"][0] == 0x48002284
     assert window_map["system_suspend_descriptor_consumer"][0] == 0x48003374
