@@ -32,6 +32,9 @@ class InstructionDecoderTests(unittest.TestCase):
     def test_cbz_target(self):
         self.assertEqual(MODULE.decode_cbz_target(0x340000A2, 0xBFB0), 0xBFC4)
 
+    def test_unconditional_branch_target(self):
+        self.assertEqual(MODULE.decode_b_target(0x14000039, 0xBFC0), 0xC0A4)
+
     def test_movz_movk_pair_decodes_peripheral_address(self):
         data = bytearray(MODULE.EXPECTED_SIZE)
         put(data, 0x2C78, 0xD2900080)

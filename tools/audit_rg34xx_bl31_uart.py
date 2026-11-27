@@ -93,6 +93,14 @@ def decode_bl_target(word: int, pc: int) -> int:
     return pc + (imm26 << 2)
 
 
+def decode_b_target(word: int, pc: int) -> int:
+    """Decode AArch64 unconditional B (imm26 << 2), without link."""
+    if word & 0xFC000000 != 0x14000000:
+        raise ValueError(f"0x{word:08x} is not an AArch64 B")
+    imm26 = _sign_extend(word & 0x03FFFFFF, 26)
+    return pc + (imm26 << 2)
+
+
 def decode_cbz_target(word: int, pc: int) -> int:
     """Decode AArch64 CBZ/CBNZ (imm19 << 2), either W or X register."""
     if word & 0x7E000000 != 0x34000000:
@@ -194,7 +202,7 @@ def audit_monitor(data: bytes, *, require_identity: bool = True) -> dict[str, An
         raise ValueError("SPC security values changed")
     if decode_cbz_target(_u32(data, 0xBFB0), 0xBFB0) != 0xBFC4:
         raise ValueError("UART gate reuse/fallback branch changed")
-    if decode_bl_target(_u32(data, 0xBFC0), 0xBFC0) != 0xC0A4:
+    if decode_b_target(_u32(data, 0xBFC0), 0xBFC0) != 0xC0A4:
         raise ValueError("UART gate reuse path no longer bypasses UART reconfiguration")
     clock_hz = decode_movz_movk_pair(data, 0xC040, 0xC044)
     baud_times_16 = decode_movz_movk_pair(data, 0xC05C, 0xC060)
