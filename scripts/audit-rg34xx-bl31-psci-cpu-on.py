@@ -505,7 +505,7 @@ def main() -> int:
             raise RuntimeError("CPUX_AXI wait-loop instruction changed at 0x%08x" % address)
     if decode_b_target(0x48011ffc, read_word(raw, 0x48011ffc)) != 0x48014078:
         raise RuntimeError("CPUX_AXI wait wrapper target changed")
-    if decode_b_target(0x4801407c, read_word(raw, 0x4801407c)) != 0x48014078:
+    if decode_cond_branch_target(0x4801407c, read_word(raw, 0x4801407c)) != 0x48014078:
         raise RuntimeError("CPUX_AXI wait loop branch target changed")
     if read_word(raw, 0x4800c464) != 0x52800140:
         raise RuntimeError("CPUX_AXI standby wait argument changed")
