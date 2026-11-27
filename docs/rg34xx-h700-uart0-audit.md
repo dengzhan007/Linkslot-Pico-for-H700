@@ -189,32 +189,50 @@ M1-S1 remains OPEN.
 
 ## Pinctrl `uart0_jtag` warning interpretation (2026-11-27)
 
-The six warnings in the target log should not be read as proof that UART0 on
-PH0/PH1 is fighting JTAG. A bounded reference-source cross-check explains
-their exact six-entry pattern:
+The exact target-device FDT provenance is now available. A direct static parse
+of the redacted `live-fdt.dtb` in
+[reports/rg34xx-inventory-20261127-uart](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261127-uart)
+(573 nodes) found:
 
-- The pinned sun50iw9p1 pinctrl DTSI defines
-  [`sdc0_pins_c`](https://github.com/CrealityTech/sonic_pad_os/blob/7f37a7fbf4ad59907034715e3d967b9177de1cd4/lichee/linux-4.9/arch/arm64/boot/dts/sunxi/sun50iw9p1-pinctrl.dtsi)
-  over PF0–PF5 with group-level `allwinner,function = "uart0_jtag"` and
-  muxsel 3.
-- The matching-family pin function table in
-  [`pinctrl-sun50iw9p1.c`](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/pinctrl/sunxi/pinctrl-sun50iw9p1.c)
-  names muxsel 3 on PF0/PF1/PF3/PF5 as `jtag`, but PF2/PF4 as `uart0`.
-  That produces the exact six-name sequence seen in this device's dmesg.
-- In the same pinned vendor source family,
-  [`pinctrl-sunxi.c::sunxi_pctrl_dt_node_to_map()`](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/pinctrl/sunxi/pinctrl-sunxi.c)
-  logs a `dev_warn` when a group's expected function name differs from the
-  per-pin function found for its mux value, then still constructs the mux map
-  using that per-pin function. It does not fail the map operation.
+- `/aliases/serial0` resolves to
+  `/soc@03000000/uart@05000000`.
+- The UART node is `allwinner,sun50i-uart`, `status = "okay"`, with
+  `reg = <0x0 0x05000000 0x0 0x400>`. Its clock phandle `0x29` resolves
+  to `/clocks/uart0`.
+- `pinctrl-names = "default", "sleep"`. The default state references
+  phandle `0x1a0` / `pinctrl@0300b000/uart0@0`, declaring PH0/PH1,
+  function `uart0`, muxsel 2. The sleep state references phandle
+  `0x2b` / `uart0@1`, also declaring PH0/PH1 and function `uart0`,
+  with muxsel 7.
+- The same live FDT contains
+  `/soc@03000000/pinctrl@0300b000/sdc0@2` (phandle `0x95`), whose
+  group declaration is PF0–PF5, `allwinner,function = "uart0_jtag"`,
+  muxsel 3. This is the exact group-level source that was previously
+  inferred only from the matching-family reference DTSI.
 
-Therefore, the most likely explanation is a group-label/per-pin-function
-warning for the PF0–PF5 `sdc0_pins_c` alternate pin group, not a JTAG/UART
-electrical arbitration warning on PH0/PH1. This is a strong source-pattern
-match, not a proven active-FDT attribution: the current inventory parser
-does not emit the target's pinctrl map-node provenance, and the inspected
-vendor source is a matching-family reference rather than a hash-identified
-source tree for the target's exact 4.9.170 kernel. The independently captured
-pinctrl runtime view still reports PH0 and PH1 as function `uart0`.
+The six target dmesg warnings resolve in order to
+`jtag,jtag,uart0,jtag,uart0,jtag`. The matching-family pin function table
+names muxsel 3 on PF0/PF1/PF3/PF5 as `jtag`, but PF2/PF4 as `uart0`;
+the vendor mapping code warns when the group-level expected name differs
+from a per-pin function, then still constructs the mux map. The active FDT
+group plus this source cross-check now explain the warning provenance much
+more strongly than before. It is not evidence of PH0/PH1 JTAG arbitration.
+
+**Scope boundary:** this is static FDT declaration plus Linux post-boot log
+evidence. It does not prove that PF0–PF5 are electrically driven in that
+configuration, does not read the live PIO registers, and does not prove the
+UART clock/reset/pinmux/security state at BL33 entry. The exact deployed
+4.9.170 kernel source is still not hash-identified. The independent Linux
+pinctrl runtime view continues to report PH0/PH1 as function `uart0`.
+
+The host FDT inspector now emits `serial_aliases`, `serial_nodes`,
+`uart0_related_pinctrl_groups`, and an explicit static-only scope note.
+Synthetic regression coverage exercises alias, reg, clock, default/sleep
+pinctrl and the `uart0_jtag` group. H700 boot audit #1501 passed on Linux
+and Windows. The uploaded `live-fdt.json` predates this parser extension;
+the target values above were decoded directly from its accompanying
+`live-fdt.dtb`. A subsequent inventory run will include the new JSON
+fields automatically.
 
 ## 2026-11-27 pinned BaseOS native handoff source cross-check
 
@@ -245,6 +263,7 @@ M1-S1 status.
 ## Sources
 
 - [RG34XX live inventory (reports branch)](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/docs/rg34xx-live-inventory-2026-11-22.md)
+- [2026-11-27 exact RG34XX inventory snapshot and redacted live FDT](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261127-uart)
 - [Knulli RG34XX boot-package DTS](https://github.com/knulli-cfw/knulli-linux/blob/knulli-main/package/boot/uboot-h700/rg34xx/boot_package/rg34xx.dts)
 - [Allwinner sun50iw9p1 pinctrl DTSI reference](https://github.com/CrealityTech/sonic_pad_os/blob/7f37a7fbf4ad59907034715e3d967b9177de1cd4/lichee/linux-4.9/arch/arm64/boot/dts/sunxi/sun50iw9p1-pinctrl.dtsi)
 - [Linux H616 CCU clock/reset map](https://github.com/intel/mOS/blob/197f50d406e2cc5a347f3cb58fb00b483dce6af7/drivers/clk/sunxi-ng/ccu-sun50i-h616.c)
