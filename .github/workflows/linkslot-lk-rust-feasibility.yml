@@ -391,14 +391,14 @@ jobs:
           mkdir -p "$out"
 
           snapshot="$(git -C "$source" rev-parse HEAD)"
-          test "$snapshot" = "241e7c1974926fa22552b200852914ceaccbfd42"
+          test "$snapshot" = "6122c8f2357ecae43295fdb1a158ff5ef7488325"
           grep -q 'version = "1.0.49"' "$source/Cargo.toml"
 
           # Include the VFS and mGBA bridge files created by the preceding
           # temporary source-integration tests in the exported patch.
           git -C "$source" add -N -A
           git -C "$source" diff --check HEAD
-          git -C "$source" diff --binary HEAD -- > "$out/linkslot-1.0.45-h700-overlay.patch"
+          git -C "$source" diff --binary HEAD -- > "$out/linkslot-1.0.49-h700-overlay.patch"
           git -C "$source" diff --name-status HEAD -- > "$out/changed-files.txt"
           git -C "$source" diff --stat HEAD -- > "$out/diff-stat.txt"
           printf '%s\n' "$snapshot" > "$out/base-commit.txt"
@@ -406,7 +406,7 @@ jobs:
           grep -q 'crates/slot-retro/src/vfs.rs' "$out/changed-files.txt"
           grep -q 'crates/slot-retro/src/mgba_static.rs' "$out/changed-files.txt"
           grep -q 'crates/slot/src/core.rs' "$out/changed-files.txt"
-          test -s "$out/linkslot-1.0.45-h700-overlay.patch"
+          test -s "$out/linkslot-1.0.49-h700-overlay.patch"
 
           # Verify the generated patch applies to a clean extraction of the
           # immutable baseline, without touching the checked-out snapshot.
@@ -414,12 +414,12 @@ jobs:
           trap 'rm -rf "$verify"' EXIT
           git -C "$source" archive --format=tar HEAD | tar -xf - -C "$verify"
           git -C "$verify" init -q
-          git -C "$verify" apply --check "$GITHUB_WORKSPACE/$out/linkslot-1.0.45-h700-overlay.patch"
+          git -C "$verify" apply --check "$GITHUB_WORKSPACE/$out/linkslot-1.0.49-h700-overlay.patch"
 
           cat > "$out/README.md" <<'EOF'
           # Linkslot 1.0.49 H700 integration patch
 
-          Base: immutable user-supplied snapshot commit 241e7c1974926fa22552b200852914ceaccbfd42.
+          Base: immutable user-supplied snapshot commit 6122c8f2357ecae43295fdb1a158ff5ef7488325.
           Patch covers the tested slot-retro Libretro VFS v3 bridge, static Libretro API seam,
           namespaced mGBA Rust binding and built-in static mGBA selection in slot.
 
