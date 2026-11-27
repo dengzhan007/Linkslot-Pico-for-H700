@@ -346,21 +346,22 @@ def scan_context_pointer_alias_writes(blob: bytes) -> dict:
                 key = "x%d" % i
                 aliases.pop(key, None)
                 last_alias_origin.pop(key, None)
-        elif mnemonic in ("b", "br", "ret", "eret") or mnemonic.startswith(
-            ("b.", "cbz", "cbnz", "tbz", "tbnz")
-        ):
+        elif mnemonic in ("b", "br", "ret", "eret"):
             aliases.clear()
             last_alias_origin.clear()
+        # Conditional branches retain aliases on the linear fall-through path.
+        # The taken target is not followed, so this can miss/reorder target-only
+        # paths but avoids discarding valid fall-through dataflow.
 
     return {
-        "method": "aligned-word linear sweep with ADRP/ADD/SUB/MOV/LDR alias propagation; base aliases invalidated at branch and calls",
+        "method": "aligned-word linear sweep with ADRP/ADD/SUB/MOV/LDR alias propagation; aliases invalidated at unconditional branches/returns and caller-saved registers at calls; conditional branch targets are not followed",
         "decoded_instruction_words": decoded_words,
         "global_slot_pointer_load_aliases": global_slot_pointer_loads,
         "context_plus_a4_alias_store_candidates": context_selector_alias_stores,
         "global_slot_plus_668_alias_store_candidates": global_slot_alias_stores,
         "other_tracked_pointer_store_candidates": unhandled_pointer_stores,
         "limitations": [
-            "This is linear, not CFG/path-sensitive analysis; instruction-shaped data may seed aliases.",
+            "This is linear, not CFG/path-sensitive analysis; instruction-shaped data may seed aliases. Conditional branch target paths are not followed; only fall-through state is preserved.",
             "Only ADRP, ADD/SUB immediate, MOV register copy, and LDR through an absolute alias are propagated.",
             "It does not model BL callee return values, stack spills/reloads, table-driven pointer arithmetic, literal-pool indirection, helper/memcpy copies, register-indexed addressing, or external initialization.",
             "A reported alias store is a candidate requiring manual function/base-register review; absence of a hit is not proof that no runtime writer exists.",
