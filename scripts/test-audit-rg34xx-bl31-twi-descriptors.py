@@ -130,6 +130,35 @@ def main() -> int:
     assert len(shifted_scan["global_slot_pointer_load_aliases"]) == 1
     assert len(shifted_scan["context_plus_a4_alias_store_candidates"]) == 1
 
+    # MOVZ (decoded as MOV alias) + MOVK can construct the overlapping
+    # context-like slot address without ADRP.
+    movz_movk_chain = struct.pack(
+        "<IIIII",
+        0xD288CD14,  # mov x20, #0x4668
+        0xF2A90034,  # movk x20, #0x4801, lsl #16
+        0xF9400280,  # ldr x0, [x20]
+        0xB900A401,  # str w1, [x0, #0xa4]
+        0xD65F03C0,  # ret
+    )
+    movz_scan = MODULE.scan_context_pointer_alias_cfg_writes(movz_movk_chain)
+    assert movz_scan["seed_kind_counts"]["mov-immediate"] == 1
+    assert len(movz_scan["global_slot_pointer_load_aliases"]) == 1
+    assert len(movz_scan["context_plus_a4_alias_store_candidates"]) == 1
+
+    # An LDR-literal pointer to the context-like slot is also a seed.
+    literal_chain = struct.pack(
+        "<IIIIQ",
+        0x58000094,  # ldr x20, literal at PC + 0x10
+        0xF9400280,  # ldr x0, [x20]
+        0xB900A401,  # str w1, [x0, #0xa4]
+        0xD65F03C0,  # ret before literal data
+        0x48014668,  # literal qword: address of the context-like slot
+    )
+    literal_scan = MODULE.scan_context_pointer_alias_cfg_writes(literal_chain)
+    assert literal_scan["seed_kind_counts"]["literal-load"] == 1
+    assert len(literal_scan["global_slot_pointer_load_aliases"]) == 1
+    assert len(literal_scan["context_plus_a4_alias_store_candidates"]) == 1
+
     source = """
       memcpy(monitor + 0x30, params, 128);
       memcpy(monitor + 0x24, board, 8);
