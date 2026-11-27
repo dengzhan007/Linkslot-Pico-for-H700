@@ -66,10 +66,24 @@ the exact pinned native SPL source, and the matched BL31 CPU/MMIO scan.
   helper ORs CPU2/CPU3 one-hot masks into it. Do not modify either register
   based on this inference.
 - Pinned native SPL writes the primary RVBAR low/high pair only and does not
-  directly write per-core reset or secondary RVBAR offsets. The matched BL31
-  scan recovers CPU0 mode setup at 0x09010010, but no direct C0_RST_CTRL,
-  DBG_REG1 or CPU1–CPU3 RVBAR MMIO writes. The BL31 PSCI table has a CPU_ON
-  callback path, but its presence is not proof of an initial-handoff release.
+  directly write per-core reset or secondary RVBAR offsets during its handoff.
+- The matched BL31 contains a legacy nine-entry `plat_pm_ops_t` table at
+  `0x480165f8`; slot 1 (`affinst_on`) is dispatched through `0x4800255c`
+  to CPU_ON helper `0x48002d78` when its CPU_ON context argument is zero.
+  The helper calculates per-core addresses, programs a per-core RVBAR and
+  performs CPU power/reset sequencing. One SoC variant uses CPUCFG/PRCM
+  addresses `0x09010000`, `0x09010010`, `0x07000440`, `0x07000444` and
+  `0x090100c0`; another branch references the `0x08100000` region, including
+  `0x08100020`. The selected branch depends on `VER_REG 0x03000024 & 7`.
+- The 2026-11-26 selector read failed with `EFAULT`, so the active CPU_ON
+  variant is unknown. The whole-image fixed-address scanner's empty direct
+  reset list does not cover all helper-generated per-core addresses; it must
+  not be read as proof that BL31 has no secondary-core control logic.
+- This is a PSCI callback path for a later CPU_ON request. No evidence shows
+  it is called automatically during the initial BL31→BL33 handoff, nor has
+  non-secure availability/permissions been verified. Linux later showing
+  CPU0–CPU3 online is consistent with later CPU_ON calls but does not prove
+  when or how each secondary core was released.
 - Assessment: PROBABLE_NOT_DEVICE_VERIFIED. ROM/secure/indirect paths and
   actual register state at BL33 entry remain outside the static proof.
 
@@ -88,6 +102,22 @@ driver path through an already-mapped resource with explicit bounds and
 permission review. Until then, keep the LK runtime single-core-only and do
 not invoke CPU_ON or release secondary cores.
 
+## 1.2 PSCI CPU_ON is a separate later control path
+
+The separate `PSCI-CPU-ON.md` / `PSCI-CALLBACK-DISASSEMBLY.txt` output in
+BL31 static audit #134 shows a real platform `affinst_on` callback and a
+low-level helper that can program per-core RVBAR and execute power/reset
+operations. Its SoC-specific branch depends on the `VER_REG` low-three-bit
+selector at `0x03000024`; `/dev/mem` could not read this selector. This
+callback establishes the existence of a secondary-core start mechanism,
+not an automatic action at the initial BL31→BL33 transition. The direct
+fixed-address whole-image MMIO scanner does not model all calculated
+per-core addresses used by this helper.
+
+Do not invoke this path from LK/Linkslot for M1. Keep the runtime CPU0-only
+until initial hold-off and non-secure PSCI semantics are independently
+verified, and until an SMP-capable runtime is used. The unresolved active
+CPU_ON variant and reset/RVBAR values remain hardware gates.
 ## 2. What remains unknown
 
 1. Whether CPUs 1–3 are still held in reset, parked in a vendor holding pen, executing secure firmware, or released when BL31 enters the current A32 BL33.
