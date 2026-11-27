@@ -200,6 +200,15 @@ def main() -> int:
         0x48011CC4: 0xB9400100, 0x48011CC8: 0x12005C00,
         0x48011CCC: 0x2A030000, 0x48011CD0: 0xB9000100,
         0x48011D88: 0xD282A205, 0x48011DA8: 0x12067421,
+        0x48011D8C: 0xD2A0E024, 0x48011D90: 0xF2A06005,
+        0x48011D94: 0xD2800203, 0x48011D98: 0xF2A0E023,
+        0x48011D9C: 0xD2802C02, 0x48011DA0: 0xF2A0E002,
+        0x48011DA4: 0xB94000A1, 0x48011DB4: 0xB9400081,
+        0x48011DB8: 0x12067421, 0x48011DBC: 0x32070021,
+        0x48011DC0: 0xB9000081, 0x48011DC4: 0xB9400061,
+        0x48011DC8: 0x12067421, 0x48011DCC: 0x32070021,
+        0x48011DD0: 0xB9000061, 0x48011DD4: 0xB9400041,
+        0x48011DE0: 0xB9400041,
         0x48011DAC: 0x32070021, 0x48011DB0: 0xB90000A1,
         0x48011DD8: 0x32010021, 0x48011DDC: 0xB9000041,
         0x48011DE4: 0x121E7821, 0x48011DE8: 0xB9000041,
@@ -222,6 +231,20 @@ def main() -> int:
     assert module.decode_bl_target(0x48011D6C,module.WORDS[0x48011D6C]) == 0x48013620
     assert module.decode_bl_target(0x48011E10,module.WORDS[0x48011E10]) == 0x48014078
     assert module.decode_bl_target(0x48011EC0,module.WORDS[0x48011EC0]) == 0x48011FF8
+    assert module.WORDS[0x48011C74] == 0xB94000C1
+    assert module.WORDS[0x48011C78] == 0x29029007
+    assert module.WORDS[0x48011C7C] == 0x529FE064
+    assert module.WORDS[0x48011C80] == 0x12067421
+    assert module.WORDS[0x48011C84] == 0x72A00064
+    assert module.WORDS[0x48011C88] == 0x32080021
+    assert module.WORDS[0x48011C8C] == 0xB90000C1
+    assert ((0x701 << 16) | 0x244) == 0x07010244
+    assert ((0x700 << 16) | 0x160) == 0x07000160
+    assert (0x48011C70, module.WORDS[0x48011C70]) == (0x48011C70, 0x52B4E003)
+    assert module.WORDS[0x48011DD8] == 0x32010021
+    assert module.WORDS[0x48011DDC] == 0xB9000041
+    assert module.WORDS[0x48011DE4] == 0x121E7821
+    assert module.WORDS[0x48011DE8] == 0xB9000041
     wake_expected = {
         0x48013194: 0xD2824003, 0x4801319C: 0xF2A06043,
         0x480131A0: 0x531E7401, 0x480131A4: 0x52800022,
@@ -375,7 +398,7 @@ def main() -> int:
         pass
     else:
         raise AssertionError("B instruction was incorrectly accepted as BL")
-    print("PASS: PSCI clock save/PLL relock, GIC/IR/GPIO wake helpers and RTC return")
+    print("PASS: PSCI PLL LDO key/XO standby, PLL relock and GIC/IR/GPIO wake helpers")
     return 0
 
 if __name__ == "__main__":

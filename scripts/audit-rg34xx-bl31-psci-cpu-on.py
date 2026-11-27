@@ -169,6 +169,20 @@ WORDS = {
     0x48011bb0: 0xf2a06005, 0x48011bc4: 0xb94000a7,
     0x48011bd4: 0x0a0100e1, 0x48011be0: 0xb9041441,
     0x48011c28: 0x528063e2, 0x48011c2c: 0x72a06002,
+    0x48011c74: 0xb94000c1, 0x48011c78: 0x29029007,
+    0x48011c7c: 0x529fe064, 0x48011c80: 0x12067421,
+    0x48011c84: 0x72a00064, 0x48011c88: 0x32080021,
+    0x48011c8c: 0xb90000c1,
+    # mode-2 branch: CCU/ R_PRCM low-power muxes and RTC XO_CTRL.
+    0x48011d8c: 0xd2a0e024, 0x48011d90: 0xf2a06005,
+    0x48011d94: 0xd2800203, 0x48011d98: 0xf2a0e023,
+    0x48011d9c: 0xd2802c02, 0x48011da0: 0xf2a0e002,
+    0x48011da4: 0xb94000a1, 0x48011db4: 0xb9400081,
+    0x48011db8: 0x12067421, 0x48011dbc: 0x32070021,
+    0x48011dc0: 0xb9000081, 0x48011dc4: 0xb9400061,
+    0x48011dc8: 0x12067421, 0x48011dcc: 0x32070021,
+    0x48011dd0: 0xb9000061, 0x48011dd4: 0xb9400041,
+    0x48011de0: 0xb9400041, 0x48011dec: 0xb940cc01,
     0x48011c54: 0x12067463, 0x48011c5c: 0x32080063,
     0x48011c64: 0xb9000103, 0x48011c68: 0xd2804888,
     0x48011c6c: 0xf2a0e028, 0x48011c70: 0x52b4e003,
@@ -638,6 +652,51 @@ def main() -> int:
             raise RuntimeError("PLL resume instruction changed at 0x%08x" % address)
     if decode_bl_target(0x48011e10, read_word(raw, 0x48011e10)) != 0x48014078:
         raise RuntimeError("PLL resume pre-delay target changed")
+    # The OEM mode==2 branch selects the low-power mux encoding and edits RTC XO_CTRL.
+    mode2_address_words = {
+        0x48011d88: 0xd282a205,  # x5 = 0x1510
+        0x48011d8c: 0xd2a0e024,  # x4 = 0x07010000
+        0x48011d90: 0xf2a06005,  # x5 = 0x03001510
+        0x48011d94: 0xd2800203,  # x3 = 0x10
+        0x48011d98: 0xf2a0e023,  # x3 = 0x07010010
+        0x48011d9c: 0xd2802c02,  # x2 = 0x160
+        0x48011da0: 0xf2a0e002,  # x2 = 0x07000160
+        0x48011da4: 0xb94000a1,
+        0x48011da8: 0x12067421, 0x48011dac: 0x32070021,
+        0x48011db0: 0xb90000a1,  # CPUX_AXI[25:24] = 10
+        0x48011db4: 0xb9400081,
+        0x48011db8: 0x12067421, 0x48011dbc: 0x32070021,
+        0x48011dc0: 0xb9000081,  # R_PRCM+0x000[25:24] = 10
+        0x48011dc4: 0xb9400061,
+        0x48011dc8: 0x12067421, 0x48011dcc: 0x32070021,
+        0x48011dd0: 0xb9000061,  # R_PRCM+0x010[25:24] = 10
+        0x48011dd4: 0xb9400041,
+        0x48011dd8: 0x32010021,  # XO_CTRL bit31 set
+        0x48011ddc: 0xb9000041,
+        0x48011de0: 0xb9400041,
+        0x48011de4: 0x121e7821,  # XO_CTRL bit1 clear
+        0x48011de8: 0xb9000041,
+    }
+    for address, expected in mode2_address_words.items():
+        if read_word(raw, address) != expected:
+            raise RuntimeError("standby mode-2 clock/XO instruction changed at 0x%08x" % address)
+    if ((0x300 << 16) | 0x1510) != 0x03001510:
+        raise RuntimeError("CPUX/PSI bus-clock register address decode changed")
+    if ((0x701 << 16) | 0x10) != 0x07010010:
+        raise RuntimeError("R_PRCM+0x010 register address decode changed")
+    if ((0x700 << 16) | 0x160) != 0x07000160:
+        raise RuntimeError("RTC XO_CTRL register address decode changed")
+    # Cross-referenced same-family register labels: R_PRCM +0x244 PLL LDO key;
+    # RTC +0x160 XO_CTRL. These names are not an OEM source-provenance claim.
+    aon_key_address = (0x701 << 16) | 0x244
+    if aon_key_address != 0x07010244:
+        raise RuntimeError("R_PRCM PLL LDO key address decode changed")
+    if read_word(raw, 0x48011c70) != 0x52b4e003:
+        raise RuntimeError("PLL LDO key high-byte immediate changed")
+    if read_word(raw, 0x48011c80) != 0x12067421 or read_word(raw, 0x48011c88) != 0x32080021:
+        raise RuntimeError("PLL LDO key high-byte merge changed")
+    if decode_bl_target(0x48011ec0, read_word(raw, 0x48011ec0)) != 0x48011ff8:
+        raise RuntimeError("PLL resume settle-delay target changed")
     if decode_bl_target(0x48011ec0, read_word(raw, 0x48011ec0)) != 0x48011ff8:
         raise RuntimeError("PLL resume settle-delay target changed")
     # H616-compatible GICD_ISPENDR, IR FIFO/status and GPIO pin helpers.
@@ -1046,11 +1105,13 @@ def main() -> int:
                             "resume_set_lock_enable_bit29": True,
                             "resume_poll_lock_bit28": True
                         },
-                        "aon_opaque_word": {
+                        "r_prcm_pll_ldo_key": {
                             "address": "0x07010244",
+                            "block": "R_PRCM base 0x07010000 + offset 0x244",
                             "standby_high_byte_value": "0xa7",
                             "resume_clears_high_byte": True,
-                            "semantic_name": "unknown; not attributed to PMIC without matched documentation"
+                            "reference_identification": "HookedBehemoth/SenkOS sun50iw9/H616 suspend notes identify R_PRCM+0x244 as PLL LDO key 0xa7",
+                            "provenance_limit": "same-family reference only; exact OEM BL31 source revision and live register response are not available"
                         },
                         "context_gpio_configuration": {
                             "pin_config_offsets": ["0xd4", "0xec"],
@@ -1060,9 +1121,17 @@ def main() -> int:
                         },
                         "conditional_mode2_path": {
                             "condition": "saved mode word == 2",
-                            "registers": ["0x03001510", "0x07010000", "0x07010010", "0x07000160"],
-                            "actions": "set bits 25:24 to 10 in the first three; set bit31 then clear bit1 at 0x07000160",
-                            "interpretation": "opaque standby-mode branch; exact role of 0x07000160 is unresolved"
+                            "bus_registers": ["0x03001510", "0x07010000", "0x07010010"],
+                            "bus_actions": "set bits 25:24 to 10 in all three registers",
+                            "rtc_xo_control": {
+                                "address": "0x07000160",
+                                "block": "sun50iw9 RTC CCU",
+                                "register_name": "XO_CTRL_REG",
+                                "standby_actions": "set bit31; clear bit1",
+                                "reference_identification": "radxa/allwinner-bsp sun50iw9 RTC CCU header names offset 0x160 XO_CTRL_REG; SenkOS suspend notes document bit31 set and bit1 clear",
+                                "provenance_limit": "same-family source cross-reference, not a live RG34XX readback"
+                            },
+                            "interpretation": "mode-2 standby branch selects low-power bus mux fields and changes RTC XO control"
                         },
                         "resume_lock_poll_pc": "0x48011e7c",
                         "resume_post_lock_settle_call_pc": "0x48011ec0"
@@ -1233,7 +1302,8 @@ def main() -> int:
         "- The main copy spans the SRAM A1 range and extends into SRAM C; the SP is also in SRAM C. This is a static copy/map reconstruction, not a live SRAM ownership or wakeup measurement.",
         "- The copied code changes `0x03001500` around standby/resume: it clears bits 25:24 with `0xfcffffff` before standby and sets `0x03000000` on resume, calling helper `0x48011ff8` on both paths. The H616 reference map describes offset `0x500` as CPUX_AXI_CFG_REG and CLK_SRC_SEL bits 26:24; bit 26 is preserved here, so the actual mux source remains unknown without live readback.",
         "- Wait helper `0x48011ff8` shifts its argument left by two and branches to `0x48014078`, whose body is `subs x0, x0, #1; b.hi` back to itself; standby and resume pass 10, yielding 40 decrement iterations each. This is a count-based busy wait, not a timer-backed delay; duration is unknown.",
-        "- The clock-save path snapshots masked fields from `0x03001500/1510/151c/1520/1524` into PSCI context; H616 CCU references name these CPUX_AXI, PSI_AHB1_AHB2, AHB3, APB1 and APB2 configuration registers. It also saves PLL_CPUX factor bits with mask `0x0003ff03`, clears PLL enable bit31 and lock-enable bit29, and stages high byte `0xa7` in opaque AON word `0x07010244` (purpose unverified).",
+        "- The clock-save path snapshots masked fields from `0x03001500/1510/151c/1520/1524` into PSCI context; H616 CCU references name these CPUX_AXI, PSI_AHB1_AHB2, AHB3, APB1 and APB2 configuration registers. It also saves PLL_CPUX factor bits with mask `0x0003ff03`, clears PLL enable bit31 and lock-enable bit29, and stages high byte `0xa7` at `0x07010244` (R_PRCM+0x244). Same-family H616/sun50iw9 suspend notes identify this as the PLL LDO key; this is a cross-reference, not live readback or exact OEM-source proof.",
+        "- In the saved mode==2 branch the matched binary sets bits25:24 to `10b` in `0x03001510`, `0x07010000` and `0x07010010`, and sets bit31/clears bit1 at `0x07000160`. The sun50iw9 RTC CCU header names offset +0x160 `XO_CTRL_REG`; same-family suspend notes describe this bit31/bit1 operation. This remains family-reference identification, not device register verification.",
         "- Resume restores PLL_CPUX factors, sets enable bit31 and lock-enable bit29, polls lock bit28, then restores saved CCU fields. A mode==2 branch also touches `0x07010000`, `0x07010010` and `0x07000160`; the latter's exact standby role remains unknown.",
         "- Wake-source aggregation statically calls IR receive FIFO/status drain `0x480131b8`, GPIO name/read helpers `0x48013588/0x480135d8`, GPIO pad-config helper `0x48013620`, and GIC pending helper `0x48013190`. The latter reads GICD_ISPENDR at `0x03021200`, not an enable register. IR offsets `0x07040020/0x07040030` are in the H616 IR block; GPIO read/config use PIO `0x0300b000` or R_PIO `0x07022000`.",
         "- These are matched-binary wake-source preparation/polling paths; no pending interrupt, IR FIFO, GPIO level or pin configuration was probed or written on hardware.",
@@ -1258,7 +1328,7 @@ def main() -> int:
         "- No hardware MMIO, flash, boot-media write or payload execution occurred.", "",
     ]
     (args.out.parent / "PSCI-CPU-ON.md").write_text("\n".join(markdown), encoding="utf-8")
-    print("PASS: PSCI clock save/PLL relock, GIC/IR/GPIO wake helpers and RTC return")
+    print("PASS: PSCI PLL LDO key/XO standby, PLL relock and GIC/IR/GPIO wake helpers")
     print("  table[1] = 0x%08x -> low-level 0x48002d78" % table[1])
     print("  callback disassembly = %s" % disassembly_path)
     print("  monitor SHA-256 = %s" % digest)
