@@ -150,10 +150,28 @@ def store_overlaps(ins, target_start: int, target_size: int) -> bool:
         ranges = ((start, width), (start + width, width))
     else:
         width = register_bytes(ins, 0)
+        if mnemonic in ("strb", "sturb"):
+            width = 1
+        elif mnemonic in ("strh", "sturh"):
+            width = 2
         ranges = ((start, width),)
     target_end = target_start + target_size
     return any(width > 0 and begin < target_end and begin + width > target_start
                for begin, width in ranges)
+
+
+# Manual base-register/region review of every 4-byte-aligned overlap hit from
+# the pinned monitor. These explain why a displacement overlap is not proof
+# that the RTC context selector was written.
+REVIEWED_NON_RTC_SELECTOR_OVERLAPS = {
+    0x4800FCE4: "function 0x4800f150 sets X29=SP; store targets local stack-frame offset +0xa0",
+    0x48010704: "function 0x4800f150 sets X29=SP; store targets local stack-frame offset +0xa0",
+    0x4801571C: "CPU architectural-context save helper at 0x48015630; X0 points to saved system-register context (DACR32_EL2/IFSR32_EL2 pair)",
+    0x48015858: "exception-entry register save uses [SP,#0xa0]; current stack frame, not RTC context",
+    0x48015930: "exception-entry register save uses [SP,#0xa0]; current stack frame, not RTC context",
+    0x48018B64: "instruction-shaped bytes inside embedded EL3 exception diagnostic string/data",
+    0x48018B94: "instruction-shaped bytes inside embedded EL3 exception diagnostic string/data",
+}
 
 
 def scan_direct_context_writes(blob: bytes) -> dict:
@@ -200,10 +218,14 @@ def scan_direct_context_writes(blob: bytes) -> dict:
                 "operands": ins.op_str,
             })
         if store_overlaps(ins, 0xA4, 4):
+            pc = ins.address
             selector_overlapping_stores.append({
-                "pc": "0x%08x" % ins.address,
+                "pc": "0x%08x" % pc,
                 "mnemonic": mnemonic,
                 "operands": ins.op_str,
+                "manual_review": REVIEWED_NON_RTC_SELECTOR_OVERLAPS.get(
+                    pc, "unreviewed: base-register provenance must be checked"
+                ),
             })
         # A pair of 32-bit W registers stored at +0xa0 writes words at
         # +0xa0 and +0xa4. Record it separately as a possible selector writer.
@@ -242,6 +264,14 @@ def scan_direct_context_writes(blob: bytes) -> dict:
         "context_plus_a4_direct_store_candidates": selector_stores,
         "context_plus_a4_stp_w_pair_candidates_at_plus_a0": selector_pair_stores,
         "context_plus_a4_overlapping_store_candidates": selector_overlapping_stores,
+        "reviewed_non_rtc_selector_overlap_hits": [
+            item for item in selector_overlapping_stores
+            if int(item["pc"], 16) in REVIEWED_NON_RTC_SELECTOR_OVERLAPS
+        ],
+        "unreviewed_context_plus_a4_overlap_hits": [
+            item for item in selector_overlapping_stores
+            if int(item["pc"], 16) not in REVIEWED_NON_RTC_SELECTOR_OVERLAPS
+        ],
         "global_slot_plus_668_load_candidates": global_slot_loads,
         "global_slot_plus_668_store_candidates": global_slot_stores,
         "global_slot_plus_668_overlapping_store_candidates": global_slot_overlapping_stores,
@@ -418,7 +448,7 @@ def main() -> int:
         "",
         "## Interpretation",
         "",
-        "The full-payload aligned-word sweep found %d direct load candidates at context +0xa4, %d store instructions whose immediate memory ranges overlap context +0xa4, %d load candidates at global-slot offset +0x668, and %d store instructions whose immediate memory ranges overlap the global slot. These are instruction-shaped byte matches; review any PC against function boundaries and base-register dataflow. The scan does not detect stores through precomputed pointers, helper copies, register-indexed addresses, or external initialization." % (len(writer_scan["context_plus_a4_direct_load_candidates"]), len(writer_scan["context_plus_a4_overlapping_store_candidates"]), len(writer_scan["global_slot_plus_668_load_candidates"]), len(writer_scan["global_slot_plus_668_overlapping_store_candidates"])),
+        "The full-payload aligned-word sweep decoded %d of %d aligned word slots. It found %d direct loads at context offset +0xa4 and %d raw store instructions whose immediate memory ranges overlap that offset. Manual base-register/region review classifies %d overlap hits as non-RTC writes (stack frame, CPU architectural-context save, or embedded string/data), leaving %d unreviewed. It found %d loads and %d stores overlapping the +0x668 global-slot displacement. This offset-only scan does not detect stores through precomputed pointers, helper copies, register-indexed addresses, or external initialization." % (writer_scan["decoded_instruction_words"], writer_scan["scanned_aligned_word_slots"], len(writer_scan["context_plus_a4_direct_load_candidates"]), len(writer_scan["context_plus_a4_overlapping_store_candidates"]), len(writer_scan["reviewed_non_rtc_selector_overlap_hits"]), len(writer_scan["unreviewed_context_plus_a4_overlap_hits"]), len(writer_scan["global_slot_plus_668_load_candidates"]), len(writer_scan["global_slot_plus_668_overlapping_store_candidates"])),
         "",
         "The code treats the value selected by a signed, 8-byte-scaled index from lookup origin `0x48014628` as a controller MMIO base. A bounded scan finds six consecutive qwords at signed indices 68–73 matching the H616-family TWI0–TWI4 and R-TWI0 base-address sequence. In particular, index 73 contains `0x07081400` (R-TWI0); it is selected only if the runtime context `+0xa4` value is 73. The actual selector is unknown. The first eight qwords at offsets +0x00..+0x38 are adjacent scalar/encoded-looking data, not the six controller bases. The static value at `0x48014668` is `2`, even though multiple paths load it as a context pointer. The pinned BaseOS native SPL does not patch either location; it only patches `+0x24`, `+0x30`, and `+0xb0`.",
         "",
