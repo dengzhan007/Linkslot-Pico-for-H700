@@ -406,7 +406,7 @@ DISASSEMBLY_WINDOWS = (
     ("system_suspend_descriptor_writer_caller", 0x48003b50, 0x100),
     ("system_suspend_setup_caller", 0x48002400, 0x80),
     ("system_suspend_descriptor_handoff", 0x48002284, 0x40),
-    ("system_suspend_descriptor_consumer", 0x48003374, 0x180),
+    ("system_suspend_descriptor_consumer", 0x48003374, 0x940),
     ("system_suspend_retention_helper_48011710", 0x48011710, 0x100),
 
     ("ccu_save_helper", 0x48001790, 0x100),

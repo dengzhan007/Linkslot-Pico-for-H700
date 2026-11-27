@@ -448,6 +448,7 @@ def main() -> int:
     assert window_map["system_suspend_setup_caller"][0] == 0x48002400
     assert window_map["system_suspend_descriptor_handoff"][0] == 0x48002284
     assert window_map["system_suspend_descriptor_consumer"][0] == 0x48003374
+    assert window_map["system_suspend_descriptor_consumer"][1] >= 0x900
     assert window_map["system_suspend_retention_helper_48011710"][0] == 0x48011710
     assert "ops_slot_3_raw" in window_map
     assert window_map["ops_slot_3_raw"][0] <= 0x48002998 < window_map["ops_slot_3_raw"][0] + window_map["ops_slot_3_raw"][1]
