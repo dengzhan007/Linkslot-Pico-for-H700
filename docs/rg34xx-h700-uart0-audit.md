@@ -150,10 +150,42 @@ registers, or change clock/reset/pinmux state. The resulting file is strictly
 currently claims, but it cannot establish the earlier BL31-to-BL33 state.
 A missing debugfs view is reported as unavailable rather than worked around.
 
-Next M1-S1 evidence should come from a fresh inventory run on the actual
-RG34XX test unit. Compare the live PH0/PH1 owner and UART0/APB2 clock summary
-with the board DTS. Do not convert Linux runtime state into BL33 handoff
-proof; no UART driver or output path is enabled by this change.
+The first fresh inventory run on the actual RG34XX (non-SP) test unit is now
+published as [reports/rg34xx-inventory-20261127-uart](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261127-uart)
+(reports HEAD `7217907f57408b714c55a872c6afc5cfc34fdac9`). The 42-file capture
+re-confirms the same TOC1 package (`e6c20e3a...`), monitor
+(`676bc020...`) and TOC1 DTB (`c28c8738...`) as the prior inventory.
+
+### 2026-11-27 target-device UART0 runtime result
+
+- Filtered boot arguments: `earlyprintk=sunxi-uart,0x05000000`,
+  `console=ttyS0,115200`.
+- `/sys/class/tty/ttyS0` resolves to
+  `/sys/devices/platform/soc/uart0` (dev `248:0`); ttyS1 resolves to uart1.
+- Existing pinctrl debugfs reports PH0 and PH1 with function `uart0`;
+  pinconf shows pull-up and 20 mA drive strength.
+- Existing clock debugfs reports both `apb2` and `uart0` at 24 MHz.
+- `/proc/tty/driver/serial` is absent/unreadable, so there is no UART driver
+  line-status, divisor, or FIFO evidence in this capture.
+- Five dmesg lines report `expect_func as:uart0_jtag` while muxsel(3)
+  appears as `jtag` or `uart0`. This is a vendor pinctrl reconciliation
+  observation only; it does not identify the physical pad state or prove a
+  JTAG/UART arbitration outcome.
+- `GPIO UNCLAIMED` in `pinmux-pins` describes the GPIO request state; it
+  does not negate the separately reported `function uart0`.
+- The report includes a redaction record and SHA256 manifest. The published
+  scan reports zero device-serial, MAC-shaped, and workstation-path matches;
+  the redacted live FDT still parses to 573 nodes.
+
+This is a useful positive proof-of-life candidate observation on the exact
+target device's **Linux post-boot runtime**, but it does not establish the
+BL31-to-BL33 handoff state. In particular, current UART divisor/FIFO, the
+actual PH0/PH1 physical test-pad identity and electrical connection, and
+BL33-time clock/reset/pinmux/security-firewall access remain unknown.
+The collector performed no `/dev/mem` access, no MMIO read/write, no debugfs
+mount and no storage write. Do not add a UART driver or output path, touch
+CCU offset `0x90c`, or alter PH0/PH1 mux on the basis of this report.
+M1-S1 remains OPEN.
 
 ## Sources
 
