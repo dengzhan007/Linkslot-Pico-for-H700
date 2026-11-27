@@ -98,6 +98,8 @@ compatible as `sun50iw12p1-pinctrl`. It does not prove APB1's BL33-entry
 value, hidden PIO reset/power state, fuse effect, or effective Non-secure
 access. See [BL31 PIO/CCU audit](h700-bl31-pio-ccu-audit.md).
 
+The PIO clock-parent audit now has an exact-compatible cross-reference: the target live FDT uses `allwinner,sun50iw9p1-pinctrl`; a pinned `sun50iw9p1` kernel source binds that controller to logical `pio`, which inherits `apb1` from CCU register candidate `0x03001520`. That source's pinctrl probe enables the `pio` clock, while its clock provider declares no separate PIO gate/reset register. It is not verified as the exact source of the deployed Linux 4.9.170 build and does not prove BL33-entry APB1 state or effective SPC permission. PI12 stays default-off. See [PIO/CCU audit](h700-bl31-pio-ccu-audit.md).
+
 ### PI12 access-gate evidence refinement (2026-11-27)
 
 The pinned `sun50iw9p1` vendor clock implementation adds a further
