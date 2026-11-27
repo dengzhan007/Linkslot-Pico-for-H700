@@ -52,10 +52,22 @@ def read_u64(blob: bytes, address: int) -> int:
     return struct.unpack_from("<Q", blob, offset)[0]
 
 
+H616_TWI_BASES = {
+    0x05002000: "TWI0",
+    0x05002400: "TWI1",
+    0x05002800: "TWI2",
+    0x05002C00: "TWI3",
+    0x05003000: "TWI4",
+    0x07081400: "R-TWI0",
+}
+
+
 def classify_pointer(value: int) -> str:
     if BASE <= value < BASE + SIZE:
         return "monitor-internal-address"
     if 0x03000000 <= value < 0x04000000:
+        return "soc-mmio-candidate"
+    if 0x05000000 <= value < 0x06000000:
         return "soc-mmio-candidate"
     if 0x07000000 <= value < 0x08000000:
         return "soc-mmio-candidate"
@@ -150,12 +162,15 @@ def main() -> int:
     data_window_bytes = 0x500
     for relative_offset in range(0, data_window_bytes, 8):
         value = read_u64(blob, lookup_origin + relative_offset)
-        if 0x07000000 <= value < 0x08000000:
+        if classify_pointer(value) == "soc-mmio-candidate" and (
+            0x05000000 <= value < 0x06000000 or 0x07000000 <= value < 0x08000000
+        ):
             nearby_mmio_candidates.append({
                 "signed_lookup_index_if_selected": relative_offset // 8,
                 "relative_byte_offset": "0x%03x" % relative_offset,
                 "address": "0x%08x" % (lookup_origin + relative_offset),
                 "raw_qword": "0x%016x" % value,
+                "h616_family_twi_label": H616_TWI_BASES.get(value),
             })
 
     global_context_slot = read_u64(blob, 0x48014668)
@@ -213,7 +228,7 @@ def main() -> int:
         "limitations": [
             "The eight reported qwords are only bytes at relative offsets +0x00 through +0x38 from lookup origin 0x48014628; they are not asserted to be the selected entries. The SXTW index is signed, so an unknown negative context +0xa4 value may select memory before the lookup origin.",
             "The raw qword at 0x48014668 is 2, although reviewed code loads this slot as a context pointer. No BaseOS native SPL patch targets this slot.",
-            "The bounded +0x500 data scan finds any R-domain MMIO-looking qwords and reports their relative signed lookup indices as conditional candidates, not observed selections.",
+            "The bounded +0x500 data scan finds H616-family TWI/R-TWI MMIO-looking qwords and reports their relative signed lookup indices as conditional candidates, not observed selections.",
             "The raw qword at 0x48015548 is 2, but BL31 explicitly overwrites it with the selected object pointer at 0x48013b14 before the TWI setup helper consumes it.",
             "This audit verifies the exact static instructions, raw initial values, and the pinned BaseOS patch sites. It does not exclude indirect writes, BL31 runtime initialization, another loader, or runtime mutation outside the reviewed windows.",
             "No TWI bus index, controller base, PMIC slave address, command sequence, or final power action is established.",
@@ -238,7 +253,7 @@ def main() -> int:
         "- The raw initial qword at slot `0x48014668` (loaded as a context pointer by reviewed paths) is `0x%016x`; the controller-object global slot `0x48015548` initially contains `0x%016x`." % (global_context_slot, global_controller_slot),
         "- Pinned BaseOS native SPL only patches monitor offsets: %s." % ", ".join("`+%s`" % ("%x" % x) for x in patch_offsets),
         "",
-        "- R-domain MMIO-like qwords in the bounded lookup-origin +0x500 data window: %s." % (", ".join("`index %d → %s`" % (x["signed_lookup_index_if_selected"], x["raw_qword"]) for x in nearby_mmio_candidates) or "none"),
+        "- H616-family TWI/R-TWI-like qwords in the bounded lookup-origin +0x500 data window: %s." % (", ".join("`index %d → %s (%s)`" % (x["signed_lookup_index_if_selected"], x["raw_qword"], x["h616_family_twi_label"] or "other MMIO candidate") for x in nearby_mmio_candidates) or "none"),
         "",
         "## Adjacent qwords after lookup origin (not proven selected entries)",
         "",
@@ -251,13 +266,13 @@ def main() -> int:
         ))
     lines += [
         "",
-        "## Conditional R-domain controller candidates",
+        "## Conditional H616-family TWI/R-TWI controller-base candidates",
         "",
-        "| Signed index if selected | Address in monitor | Raw qword |",
-        "|---:|---:|---:|",
-        *["| %d | `%s` | `%s` |" % (x["signed_lookup_index_if_selected"], x["address"], x["raw_qword"]) for x in nearby_mmio_candidates],
+        "| Signed index if selected | Address in monitor | Raw qword | H616 family reference |",
+        "|---:|---:|---:|---|",
+        *["| %d | `%s` | `%s` | %s |" % (x["signed_lookup_index_if_selected"], x["address"], x["raw_qword"], x["h616_family_twi_label"] or "unclassified") for x in nearby_mmio_candidates],
         "",
-        "These are data candidates only. For example, a qword equal to `0x07081400` at relative index 73 would be selected only if the actual context `+0xa4` were 73; the runtime selector has not been captured.",
+        "These are data candidates only. The sequence at relative indices 68–73 is `0x05002000`, `0x05002400`, `0x05002800`, `0x05002c00`, `0x05003000`, `0x07081400`, which matches H616 TWI0–TWI4 and R-TWI0 base addresses. The R-TWI0 value at relative index 73 would be selected only if the actual context `+0xa4` were 73; the runtime selector has not been captured.",
         "",
         "## Interpretation",
         "",
