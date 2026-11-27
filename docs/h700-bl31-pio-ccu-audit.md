@@ -572,3 +572,43 @@ masked output are pinned to target evidence.
 security-path evidence narrows the question but does not close M1-S1. No
 device MMIO, fuse read, storage write, firmware flash, or payload execution
 was performed.
+
+
+## 2026-11-27 APB1→PIO clock relationship: pinned H616 cross-reference
+
+A pinned Linux mainline reference at commit
+`9437ee8b6cf607e883b36e44bd755968daaebd48` makes the APB1/PIO relationship
+more explicit:
+
+- `arch/arm64/boot/dts/allwinner/sun50i-h616.dtsi` declares the PIO controller
+  at `0x0300b000` and assigns clocks
+  `<&ccu CLK_APB1>, <&osc24M>, <&rtc CLK_OSC32K>` with names
+  `"apb", "hosc", "losc"`.
+- `drivers/clk/sunxi-ng/ccu-sun50i-h616.c` defines `apb1_clk` using CCU
+  offset `0x520`; with CCU base `0x03001000`, the physical APB1 register is
+  `0x03001520`.
+- `drivers/clk/sunxi-ng/ccu-sun50i-h616.h` explicitly labels the exported
+  APB1 clock as the clock for PIO.
+- `drivers/pinctrl/sunxi/pinctrl-sunxi.c` obtains and enables the PIO bus
+  clock named `"apb"` before registering the pinctrl device.
+
+Permalinks to the pinned references:
+
+- [H616 DTS PIO clock properties](https://github.com/torvalds/linux/blob/9437ee8b6cf607e883b36e44bd755968daaebd48/arch/arm64/boot/dts/allwinner/sun50i-h616.dtsi#L296-L312)
+- [H616 APB1 clock definition](https://github.com/torvalds/linux/blob/9437ee8b6cf607e883b36e44bd755968daaebd48/drivers/clk/sunxi-ng/ccu-sun50i-h616.c#L266-L285)
+- [H616 APB1 clock binding comment](https://github.com/torvalds/linux/blob/9437ee8b6cf607e883b36e44bd755968daaebd48/drivers/clk/sunxi-ng/ccu-sun50i-h616.h#L34-L52)
+- [Generic Sunxi pinctrl APB clock enable](https://github.com/torvalds/linux/blob/9437ee8b6cf607e883b36e44bd755968daaebd48/drivers/pinctrl/sunxi/pinctrl-sunxi.c#L1648-L1662)
+
+This identifies APB1 as the H616 reference pinctrl bus clock; it does **not**
+prove the RG34XX H700 BL33-entry state. The target live-FDT summary confirms
+the `sun50iw9p1-pinctrl` node and its PIO register window, but the inventory
+does not contain a BL33-entry clock readback. The exact deployed H700 vendor
+clock binding/driver must still be matched before treating H616 register
+semantics as exact. No source evidence here establishes that APB1 is enabled,
+that any clock gate/reset is released, or that BL33 can access PIO through the
+SPC/firewall at the moment it needs PI12.
+
+**Updated gate wording:** APB1 is now a well-grounded *candidate parent clock*
+for PIO from the H616 family, with candidate register `0x03001520`. Its
+handoff value and effective PIO accessibility remain unknown. PI12 stays
+default-off.
