@@ -363,12 +363,16 @@ WORDS = {
     0x480140a0: 0x58000081, 0x480140a4: 0x9100003f,
     0x480140a8: 0xd65f03c0,
     # EL3 special path disables MMU/D-cache then walks cache hierarchy by set/way.
-    0x48015fb8: 0xb40003e3, 0x48015fe4: 0xd51a000a,
-    0x48015fec: 0xd5390001, 0x48016040: 0xd508764b,
+    0x48015fb8: 0xb40003e3, 0x48015fc0: 0x100003ce,
+    0x48015fc4: 0x8b0015ce, 0x48015fe4: 0xd51a000a,
+    0x48015fec: 0xd5390001, 0x48016014: 0xd5033f9f,
+    0x48016018: 0xd61f01c0, 0x4801602c: 0xd5033f9f,
+    0x48016030: 0xd5033fdf, 0x48016040: 0xd508764b,
     0x48016060: 0xd5087e4b, 0x48016080: 0xd5087a4b,
     0x480160a8: 0xd5390029, 0x4801612c: 0xd53e1000,
     0x48016130: 0x8a210000, 0x48016134: 0xd51e1000,
-    0x48016138: 0xd5033fdf, 0x48016140: 0x17ffffda,
+    0x48016138: 0xd5033fdf, 0x4801613c: 0xd2800020,
+    0x48016140: 0x17ffffda,
     # OEM standby clock-save/restore, AON tag and PLL relock.
     0x48011bb0: 0xf2a06005, 0x48011bc4: 0xb94000a7,
     0x48011bd4: 0x0a0100e1, 0x48011be0: 0xb9041441,
@@ -1185,9 +1189,16 @@ def main() -> int:
         0x48016130: 0x8a210000,  # bic x0, x0, #5 (clear M and C)
         0x48016134: 0xd51e1000,  # msr SCTLR_EL3, x0
         0x48016138: 0xd5033fdf,  # isb
+        0x4801613c: 0xd2800020,  # mov x0, #1: select the CISW set/way opcode block
         0x48016140: 0x17ffffda,  # enter CLIDR-based cache-level maintenance
-        0x480160a8: 0xd5390029,  # mrs x9, CLIDR_EL1
+        0x480160a8: 0xd5390029,  # mrs x9, CLIDR_EL1 (LoC)
         0x48015fb8: 0xb40003e3,  # cache-level loop
+        0x48015fc0: 0x100003ce,  # adr x14, 0x48016038 (set/way opcode blocks)
+        0x48015fc4: 0x8b0015ce,  # add x14, x14, x0, lsl #5
+        0x48016014: 0xd5033f9f,  # dsb sy before selected set/way operation
+        0x48016018: 0xd61f01c0,  # br x14
+        0x4801602c: 0xd5033f9f,  # dsb sy after set/way loops
+        0x48016030: 0xd5033fdf,  # isb after cache-level maintenance
         0x48015fe4: 0xd51a000a,  # msr CSSELR_EL1, x10
         0x48015fec: 0xd5390001,  # mrs x1, CCSIDR_EL1
         0x48016040: 0xd508764b,  # dc isw, x11
@@ -1432,7 +1443,17 @@ def main() -> int:
                     "dc_isw_pc": "0x48016040",
                     "dc_cisw_pc": "0x48016060",
                     "dc_csw_pc": "0x48016080",
-                    "interpretation": "EL3 cache-level and set/way maintenance code; exact runtime cache-level/operation path is not dynamically observed",
+                    "dispatch_index": 1,
+                    "dispatch_selector_pc": "0x4801613c",
+                    "dispatch_block_base": "0x48016038",
+                    "dispatch_block_stride_bytes": 32,
+                    "selected_block": "0x48016058",
+                    "selected_operation_pc": "0x48016060",
+                    "selected_operation": "DC CISW, X11 (clean + invalidate by set/way)",
+                    "dsb_before_operation_pc": "0x48016014",
+                    "dsb_after_loop_pc": "0x4801602c",
+                    "isb_after_loop_pc": "0x48016030",
+                    "interpretation": "The matched static path sets dispatch index 1, selecting the CISW opcode block. CLIDR LoC, CCSIDR geometry, cache level count and set/way iterations remain hardware-derived and were not dynamically sampled.",
                 },
                 "ordinary_powerdown_path": {
                     "helper": "0x48015d70",

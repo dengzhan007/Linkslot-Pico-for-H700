@@ -567,6 +567,13 @@ def main() -> int:
     assert module.WORDS[0x48015FB8] == 0xB40003E3
     assert module.WORDS[0x48015FE4] == 0xD51A000A
     assert module.WORDS[0x48015FEC] == 0xD5390001
+    assert module.WORDS[0x4801613C] == 0xD2800020
+    assert module.WORDS[0x48015FC0] == 0x100003CE
+    assert module.WORDS[0x48015FC4] == 0x8B0015CE
+    assert module.WORDS[0x48016014] == 0xD5033F9F
+    assert module.WORDS[0x48016018] == 0xD61F01C0
+    assert module.WORDS[0x4801602C] == 0xD5033F9F
+    assert module.WORDS[0x48016030] == 0xD5033FDF
     assert module.WORDS[0x48016040] == 0xD508764B
     assert module.WORDS[0x48016060] == 0xD5087E4B
     assert module.WORDS[0x48016080] == 0xD5087A4B

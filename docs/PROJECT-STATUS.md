@@ -116,8 +116,8 @@
 - retention scratch buffer `[0x4801b400,0x4801b680)` 位于 `[0x48000000,0x49000000)` monitor carveout 内；这与 fixed DRAM source window 的证据状态不同。前者的地址区间有 Linux memblock reserved carveout 覆盖，后者没有。
 - 跨 2026-11-22 至 2026-11-26 的 inventory memory-map batches 复核结果一致；检查到的多个不同 JSON blob revision 均显示同样的 memblock.memory 起点、monitor carveout 和 fixed-window reserved-list miss。live FDT memory 区域为 `[0x40000000,0x80000000)`，`reserved_memory_nodes` 为空（FDT SHA-256 `620b36d84fb7e714dcb56891f50802048d83c64ca924222a4a566f340ac7242e`）。
 - **更新解释（2026-11-27 PFN 样本）：** 原先缺失的 `/proc/kpageflags` 与 `/proc/kpagecount` 已采集；它们显示 PFN `0x40000` 是 active-LRU anon mapped page，page_mapcount=1。因此它不是可供 Linkslot 分配的空闲 scratch。memblock reserved-list miss 仍然成立，但不应简单通过 memblock 强行 reserve 来“修复”：BL31 的静态路径看起来是保存并恢复这段原始 DRAM 内容。现在的关键门槛是证明保存/恢复在 suspend handoff 中无损且先于 Linux resume 完成，并核对 DMA/cache/CPU ownership；Secure/Non-secure firewall 和 BL31 权限仍未知。保持 `H700_MEMORY_LAYOUT_APPROVED` unset，不执行 SYSTEM_SUSPEND。
-- 下一只读证据：尝试确认目标 kernel 是否暴露 `/proc/kpageflags`、`/proc/kpagecount`、page_owner/page_ext 或可用的 page allocator debug view；只读取 PFN `0x40000` 对应页面，不触发 SMC、不读写 MMIO、不运行 suspend。若接口不可用，记录缺失并继续从 pinned kernel #19 的 boot-time memblock/reserved-memory 初始化源码寻找 secure carveout handoff；不得用未经验证的保留假设覆盖冲突。
-- 目前仅完成跨批次报告交叉检查与区间运算；尚未新增 CI memblock classifier（上轮尝试接入 workflow 未成功，未产生 GitHub commit），所以不能把该发现标为自动化 gate。`hardware_applied=0`。
+- 后续只读页证据已于 2026-11-27 上传并解码：`/proc/kpageflags` 显示 PFN `0x40000` 为 active-LRU anon mapped page，`/proc/kpagecount` 的 page_mapcount=1；page_owner/page_ext 仍未提供分配栈。不要再重复请求同一份 kpageflags/kpagecount 采集；下一门槛转为解释 BL31 snapshot/restore 的运行时条件及 secure/BL31 ownership。
+- memblock 区间 classifier 已在 BL31 audit #85（20/20 steps）接入 CI，实际输出 `UNRESERVED_SYSTEM_RAM` / `BLOCKED_SOURCE_PAGE_NOT_RESERVED`；PFN 元数据 decoder 又在 #86 完整通过。两者均为 host/report-side evidence gates，不会自行批准硬件内存布局。`hardware_applied=0`。
 
 ### DRAM retention fixed-page memblock classifier（2026-11-27）
 
@@ -134,7 +134,7 @@
 - 采集器要求 root、确认 page size=4096，且只读取 procfs/debugfs 元数据；不 dump `page_owner` 全表、不 mount debugfs、不读写 DRAM 物理内容、不触发 SMC/MMIO/PSCI、不做 suspend/resume，不写 boot media。
 - 本地 agent 执行方式：`adb push scripts/collect-rg34xx-dram-pfn-readonly.sh /data/local/tmp/rg34xx-dram-pfn-readonly.sh`，先确认 `adb shell id -u` 返回 `0`，再运行 `adb shell sh /data/local/tmp/rg34xx-dram-pfn-readonly.sh` 并将完整 stdout 保存为 `dram-retention-pfn.txt` 上传 reports 分支。若不是 root，不尝试提权/改启动参数；记录 `BLOCKED_ROOT_REQUIRED` 即可。
 - `kpageflags/kpagecount` 已按 Greg KH Linux stable tag `v4.9.170` 的 UAPI 与 `fs/proc/page.c` 解码；目标运行 kernel 是 `4.9.170 #19`、AArch64。目标 build-ID 为 `a1d211f847a5fb69fe9898e15fbccdd3ea8d7b68`，精确 vendor source commit 尚未恢复，因此保留 build-source provenance 限制。
-- **状态：采集器已提交，尚未在设备上执行。** 即使 kpagecount 为 0 或某些 flag 表示 free，也不能仅凭一个采样时刻批准 BL31 与 Linux 并发访问；需要与 memblock 保留、PFN allocator、page owner 和 secure-world/BL31 ownership 证据共同判定。保持 `H700_MEMORY_LAYOUT_APPROVED` unset，`hardware_applied=0`。
+- **状态：采集器已在目标 RG34XX 以 UID 0 执行。** Page size=4096，kpageflags raw=`6858000000000000`（KPF u64 `0x5868`），kpagecount raw=`0100000000000000`（page_mapcount=1）；page_owner/page_owner_stacks 不存在。该页采样时为 active-LRU anonymous mapped page，不得作为 Linkslot scratch。单次样本仍不能批准 BL31 与 Linux 并发访问；需结合 snapshot/restore gate、buffer lifetime、DMA/cache 与 secure-world ownership 判断。保持 `H700_MEMORY_LAYOUT_APPROVED` unset，`hardware_applied=0`。
 
 ### PFN 0x40000 元数据解码：确认是活动匿名映射页（2026-11-27）
 
