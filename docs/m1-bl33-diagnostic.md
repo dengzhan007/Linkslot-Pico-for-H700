@@ -23,6 +23,8 @@
 
 **M1 首选资格化方向：PI12 工作灯；UART0 不再是前置条件。** PI12 必须有精确 RG34XX 非 SP DTS/source 依据，明确 pin mux、APB1/PIO clock 与 BL33 访问权限，限定寄存器位域，保留 PI11，并具备确定的异常 fail-stop 路径。PI12 可从机身外观察，不需要 UART 焊盘；但 BL33 handoff 时访问权限、abort 处理和实际极性尚未通过。
 
+The detailed pinned-source side-effect audit and proposed replacement contract are recorded in [m1-oneshot-capsule-audit.md](m1-oneshot-capsule-audit.md). It distinguishes ordinary SPL scratch-sector/watchdog writes, raw-capsule RTC/WDT adoption, and native-handoff PMIC/CCU/display effects. No one-shot implementation has been built.
+
 ### Boot0/SPL capsule safety gate (2026-11-27)
 
 The pinned BaseOS native v2 raw-capsule path is **not yet approved for M1**.
