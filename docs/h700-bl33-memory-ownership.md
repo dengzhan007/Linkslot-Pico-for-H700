@@ -383,11 +383,12 @@ The linker address is still inside the historically copied `0x4a000000..0x4a0e00
 
 ### 2026-11-27 LK early stack + page-table non-overlap check (host link only)
 
-Full Linkslot/LK feasibility [#921](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46018337655)
-passed 75/75 on HEAD `3251a9772d7b8bd4779ab759757f209ce449257a`.
-Its artifact [15207317115](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46018337655/artifacts/15207317115)
+Full Linkslot/LK feasibility [#924](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46021131707)
+passed 75/75 on HEAD `5e85194cb473ee29ad909cc231128ddba5df87c0`.
+Its artifact [15208527176](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46021131707/artifacts/15208527176)
 contains the actual `h700-early-led-layout.map` and disassembly for the
-minimal source/layout ELF.
+minimal source/layout ELF. The stack/page-table assertions were added after
+#921 and are first validated by #924.
 
 The map resolves the pinned LK CRT0's 8 KiB initial/abort stack and the real
 LK 4096-entry AArch32 translation table as:
