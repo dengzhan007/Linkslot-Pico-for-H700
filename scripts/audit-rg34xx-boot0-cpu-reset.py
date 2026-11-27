@@ -78,6 +78,15 @@ def branch_target(ins) -> int:
     return int(ins.operands[0].imm)
 
 
+def cpu_reset_bit_asserted(reset_value: int, core: int) -> bool:
+    """Decode the H616-reference C0_RST_CTRL convention: zero asserts reset."""
+    if isinstance(reset_value, bool) or not isinstance(reset_value, int):
+        raise TypeError("reset_value must be an integer")
+    if isinstance(core, bool) or not isinstance(core, int) or not 0 <= core <= 3:
+        raise ValueError("core must be an integer from 0 through 3")
+    return (reset_value & (1 << core)) == 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reports-root", type=Path, required=True)
@@ -164,6 +173,19 @@ def main() -> int:
     reset_low_nibble = RESET_DEFAULT & 0xF
     if reset_low_nibble != 0x1:
         raise RuntimeError("unexpected H616 C0_RST_CTRL default low nibble")
+    h616_reference_reset_state = {
+        "cpu%d" % core: (
+            "asserted" if cpu_reset_bit_asserted(RESET_DEFAULT, core) else "deasserted"
+        )
+        for core in range(4)
+    }
+    if h616_reference_reset_state != {
+        "cpu0": "deasserted",
+        "cpu1": "asserted",
+        "cpu2": "asserted",
+        "cpu3": "asserted",
+    }:
+        raise RuntimeError("unexpected H616 C0_RST_CTRL reset-default interpretation")
 
     source_path = baseos / "experiments/h700-boot-speed/spl/native-boot.c"
     spl = source_path.read_text(encoding="utf-8")
@@ -193,7 +215,7 @@ def main() -> int:
         raise RuntimeError("expected BL31 CPUCFG C0_CTRL_REG0 AArch64-mode setup was not recovered")
 
     report = {
-        "schema": "rg34xx-boot0-cpu-reset-static-audit-v1",
+        "schema": "rg34xx-boot0-cpu-reset-static-audit-v2",
         "primary_boot0": {
             "bytes": len(raw),
             "sha256": digest,
@@ -242,6 +264,32 @@ def main() -> int:
             "observed_cpu0_mode_register_address": "0x09010010 (C0_CTRL_REG0)",
             "interpretation": "Only primary CPU0 mode setup is statically tracked; no direct C0_RST_CTRL / DBG_REG1 / CPU1-CPU3 RVBAR access was recovered",
         },
+        "secondary_core_assessment": {
+            "status": "PROBABLE_NOT_DEVICE_VERIFIED",
+            "cpu1": {
+                "boot0_reset_helper_invoked": False,
+                "h616_reference_reset_default": h616_reference_reset_state["cpu1"],
+            },
+            "cpu2": {
+                "boot0_reset_helper_invoked_conditionally": True,
+                "condition": "bit29 of 0x03006248",
+                "helper_reset_action": "clear reset bit; cannot deassert reset under H616 reference semantics",
+                "h616_reference_reset_default": h616_reference_reset_state["cpu2"],
+            },
+            "cpu3": {
+                "boot0_reset_helper_invoked_conditionally": True,
+                "condition": "bit29 of 0x03006248",
+                "helper_reset_action": "clear reset bit; cannot deassert reset under H616 reference semantics",
+                "h616_reference_reset_default": h616_reference_reset_state["cpu3"],
+            },
+            "h616_reference_reset_state": h616_reference_reset_state,
+            "native_spl_secondary_rvbar_or_reset_writes_found": False,
+            "direct_bl31_secondary_reset_or_rvbar_writes_found": False,
+            "gate_bit29_live_value": "NOT_CAPTURED",
+            "c0_rst_ctrl_live_value": "NOT_CAPTURED",
+            "h700_register_equivalence": "NOT_VERIFIED",
+            "assessment_boundary": "Static evidence suggests CPU1-CPU3 remain held off at initial BL33 handoff, but ROM/secure/indirect paths and live H700 register state are not proven.",
+        },
         "limitations": [
             "The file named boot0-secondary.bin is a second Boot0 image copy/slot, not CPU1 firmware.",
             "The reset default is a hardware reset value, not live readback at BL31->BL33 handoff.",
@@ -265,13 +313,14 @@ def main() -> int:
         "- Caller reads 0x03006248; bit 29 selects helper calls for core 2 and core 3. Core 1 is not passed to this helper.",
         "- Gate address 0x03006248 is in the H616 SID window [0x03006000,0x03007000), offset 0x248; the public register tables do not define this word/bit29.",
 
-        "- H616 C0_RST_CTRL reset default 0x13ff0101: CPU0 reset bit=1 (deasserted); CPU1-3 bits=0 (asserted).",
-        "- The helper reset write keeps selected CPU2/CPU3 reset bits asserted; it never sets/deasserts C0_RST_CTRL bits.",
+        "- H616 C0_RST_CTRL reset default 0x13ff0101: CPU0 reset bit=1 (deasserted); CPU1-3 bits=0 (asserted). This is a family reference, not H700 live readback.",
+        "- The helper reset write keeps selected CPU2/CPU3 reset bits asserted; it never sets/deasserts C0_RST_CTRL bits. Its call is gated by bit29 at 0x03006248; that value is unknown.",
+        "- CPU1 is not passed to the helper. Under H616 reference semantics its reset-default bit remains asserted unless an unreviewed stage releases it.",
         "- Native SPL programs the primary RVBAR pair only; BL31 statically references CPU0 mode register 0x09010010, with no direct reset/secondary RVBAR access recovered.",
         "",
         "## Required interpretation",
         "",
-        "- Static evidence strongly supports CPU0-only handoff for this Boot0/SPL/BL31 source set, but it does not prove the live C0_RST_CTRL value at BL33 entry.",
+        "- Static evidence makes CPU1-CPU3 hold-off PROBABLE for this Boot0/SPL/BL31 source set: CPU1 is not touched by the helper; CPU2/CPU3 are only passed to a helper that clears reset bits; and the H616 family reset default asserts bits 1-3. This is not an H700 device verification.",
         "- Treat CPU1-CPU3 hold-off as PROBABLE, not device-verified. Before executing a diagnostic BL33, collect read-only C0_RST_CTRL (0x09010000), C0_CPU_STATUS (0x09010080), RVBARADDR0-3 and DBG_REG0/1 via an existing trusted environment.",
         "- Do not enable SMP. Keep the single-core LK gate open until live readback or a reviewed explicit Boot0/SPL hold-off patch proves the other cores remain in reset for the full LK lifetime.",
         "- 0x09010044 is documented as CPU0 RVBAR high, but the Boot0 helper sets bits 2/3 there; this mismatch is unresolved and must be traced before modifying that register.",
