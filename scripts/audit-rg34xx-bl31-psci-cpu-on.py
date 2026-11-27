@@ -152,6 +152,8 @@ WORDS = {
     0x48015d64: 0xd2800000, 0x48015d68: 0x97ffcdd9,
     0x48015d6c: 0x17fffed7,
     # Copied code installs its SRAM-C stack.
+    0x48014078: 0xf1000400, 0x4801407c: 0x54ffffe8,
+    0x48014080: 0xd65f03c0,
     0x480140a0: 0x58000081, 0x480140a4: 0x9100003f,
     0x480140a8: 0xd65f03c0,
     # EL3 special path disables MMU/D-cache then walks cache hierarchy by set/way.
@@ -271,6 +273,15 @@ def decode_bl_target(pc: int, instruction: int) -> int:
     if immediate & (1 << 25):
         immediate -= 1 << 26
     return pc + (immediate << 2)
+
+def decode_cond_branch_target(pc: int, instruction: int) -> int:
+    if (instruction & 0xFF000010) != 0x54000000:
+        raise RuntimeError("instruction at 0x%08x is not B.cond" % pc)
+    immediate = (instruction >> 5) & 0x7FFFF
+    if immediate & (1 << 18):
+        immediate -= 1 << 19
+    return (pc + (immediate << 2)) & 0xFFFFFFFF
+
 
 def decode_b_target(pc: int, instruction: int) -> int:
     if (instruction & 0xfc000000) != 0x14000000:
@@ -480,6 +491,24 @@ def main() -> int:
         raise RuntimeError("CPUX_AXI standby transition helper changed")
     if decode_bl_target(0x4800c69c, read_word(raw, 0x4800c69c)) != 0x48011ff8:
         raise RuntimeError("CPUX_AXI resume transition helper changed")
+    wait_loop_words = {
+        0x48011ff8: 0x531e7400,  # lsl w0, w0, #2
+        0x48011ffc: 0x1400081f,  # b 0x48014078
+        0x48014078: 0xf1000400,  # subs x0, x0, #1
+        0x4801407c: 0x54ffffe8,  # b.hi 0x48014078
+        0x48014080: 0xd65f03c0,  # ret
+    }
+    for address, expected in wait_loop_words.items():
+        if read_word(raw, address) != expected:
+            raise RuntimeError("CPUX_AXI wait-loop instruction changed at 0x%08x" % address)
+    if decode_b_target(0x48011ffc, read_word(raw, 0x48011ffc)) != 0x48014078:
+        raise RuntimeError("CPUX_AXI wait wrapper target changed")
+    if decode_b_target(0x4801407c, read_word(raw, 0x4801407c)) != 0x48014078:
+        raise RuntimeError("CPUX_AXI wait loop branch target changed")
+    if read_word(raw, 0x4800c464) != 0xd2800140:
+        raise RuntimeError("CPUX_AXI standby wait argument changed")
+    if read_word(raw, 0x4800c688) != 0x52800140:
+        raise RuntimeError("CPUX_AXI resume wait argument changed")
     if (0xfcffffff & 0x03000000) != 0:
         raise RuntimeError("CPUX_AXI clear-mask bit range changed")
     if (0x03000000 & 0x04000000) != 0:
@@ -815,6 +844,16 @@ def main() -> int:
                         "standby_callsite": "0x4800c47c",
                         "resume_callsite": "0x4800c69c",
                         "helper_target": "0x48011ff8",
+                        "busy_wait": {
+                            "wrapper": "0x48011ff8",
+                            "wrapper_shift": "lsl w0, w0, #2",
+                            "loop_target": "0x48014078",
+                            "loop_body": "subs x0, x0, #1; b.hi 0x48014078; ret",
+                            "standby_argument": 10,
+                            "resume_argument": 10,
+                            "effective_iterations_each_call": 40,
+                            "time_unit": "unknown; no clock-frequency/calibration conversion asserted",
+                        },
                         "standby_read_pc": "0x4800c470",
                         "standby_clear_pc": "0x4800c474",
                         "standby_write_pc": "0x4800c478",
@@ -921,6 +960,7 @@ def main() -> int:
         "- The relocated entry zeros its in-image scratch range `[0x291f0,0x29349)`, records wake-return address `0x48015d14` at context offset `0xc4`, and the copied RTC path writes flag `0x10000` to `0x070001f8` plus the saved return address to `0x070001fc`.",
         "- The main copy spans the SRAM A1 range and extends into SRAM C; the SP is also in SRAM C. This is a static copy/map reconstruction, not a live SRAM ownership or wakeup measurement.",
         "- The copied code changes `0x03001500` around standby/resume: it clears bits 25:24 with `0xfcffffff` before standby and sets `0x03000000` on resume, calling helper `0x48011ff8` on both paths. The H616 reference map describes offset `0x500` as CPUX_AXI_CFG_REG and CLK_SRC_SEL bits 26:24; bit 26 is preserved here, so the actual mux source remains unknown without live readback.",
+        "- Wait helper `0x48011ff8` shifts its argument left by two and branches to `0x48014078`, whose body is `subs x0, x0, #1; b.hi` back to itself; standby and resume pass 10, yielding 40 decrement iterations each. This is a count-based busy wait, not a timer-backed delay; duration is unknown.",
         "- The RTC soft-entry stores saved return PC `0x48015d14`; resume code loads it from context `+0xc4` and indirect-branches through x22 at `0x4800c6a8`. The return continuation restores SCTLR_EL3, VBAR_EL3, DAIF and stack selection before returning into BL31.",
         "- The effective ABI is the legacy Allwinner `plat_pm_ops_t` order with a vendor getter extension; the exact source commit is not identified.",
 
@@ -942,7 +982,7 @@ def main() -> int:
         "- No hardware MMIO, flash, boot-media write or payload execution occurred.", "",
     ]
     (args.out.parent / "PSCI-CPU-ON.md").write_text("\n".join(markdown), encoding="utf-8")
-    print("PASS: PSCI standby staging, CPUX_AXI transition and RTC wake-return path")
+    print("PASS: PSCI standby staging, CPUX_AXI bitfield, wait loop and RTC wake-return")
     print("  table[1] = 0x%08x -> low-level 0x48002d78" % table[1])
     print("  callback disassembly = %s" % disassembly_path)
     print("  monitor SHA-256 = %s" % digest)

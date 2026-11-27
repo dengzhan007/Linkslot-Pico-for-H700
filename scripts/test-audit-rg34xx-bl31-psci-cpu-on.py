@@ -185,6 +185,15 @@ def main() -> int:
     assert module.WORDS[0x48016134] == 0xD51E1000
     assert module.WORDS[0x48016138] == 0xD5033FDF
     assert module.WORDS[0x48016140] == 0x17FFFFDA
+    assert module.WORDS[0x48011FF8] == 0x531E7400
+    assert module.WORDS[0x48011FFC] == 0x1400081F
+    assert module.WORDS[0x48014078] == 0xF1000400
+    assert module.WORDS[0x4801407C] == 0x54FFFFE8
+    assert module.WORDS[0x48014080] == 0xD65F03C0
+    assert module.decode_b_target(0x48011FFC,0x1400081F) == 0x48014078
+    assert module.decode_cond_branch_target(0x4801407C,0x54FFFFE8) == 0x48014078
+    assert module.WORDS[0x4800C464] == 0xD2800140
+    assert module.WORDS[0x4800C688] == 0x52800140
     assert module.WORDS[0x480160A8] == 0xD5390029
     assert module.WORDS[0x48015FB8] == 0xB40003E3
     assert module.WORDS[0x48015FE4] == 0xD51A000A
@@ -235,6 +244,7 @@ def main() -> int:
     assert window_map["sram_resume_return_target"][0] == 0x48015D14
     assert window_map["cpux_axi_clock_transition_helper"][0] == 0x48011FF8
     assert window_map["cpux_axi_wait_target"][0] == 0x48014078
+    assert window_map["cpux_axi_wait_target"][1] >= 0x100
     assert window_map["normal_suspend_powerdown_helper"][0] == 0x48015D70
     assert window_map["system_suspend_cache_teardown_and_trampoline"][0] == 0x48015FB8
     assert window_map["system_suspend_cache_teardown_and_trampoline"][1] >= 0x270
@@ -255,7 +265,7 @@ def main() -> int:
         pass
     else:
         raise AssertionError("B instruction was incorrectly accepted as BL")
-    print("PASS: PSCI standby staging, CPUX_AXI transition and RTC wake-return path")
+    print("PASS: PSCI standby staging, CPUX_AXI bitfield, wait loop and RTC wake-return")
     return 0
 
 if __name__ == "__main__":
