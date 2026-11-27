@@ -79,14 +79,24 @@ must be rebuilt from those constants and paired with the correct Boot0
 capsule before a TF image can be assembled. Replacing only the 32 KiB loader
 file while retaining the old firmware FNV/SPL is not a valid boot package.
 
-The packager upper-bound regression is now part of full feasibility CI:
-[#926](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46023266326)
+The packager upper-bound regression and pinned BaseOS M1 one-shot source audit are now part of full feasibility CI:
+[#927](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46027513613)
 passed 75/75; artifact
-[15212390740](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46023266326/artifacts/15212390740).
-The packager accepts exactly 32,768 bytes and rejects 32,769 bytes. This
-validates the host-side tool contract only; no M1 raw payload was packaged
-through the real BaseOS builder, no matching SPL/capsule was generated, and
-no TF card was written.
+[15213455916](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46027513613/artifacts/15213455916).
+The audit verifies that ordinary SPL writes scratch/result sectors and watchdog state, raw-capsule v2 depends on RTC GP14/GP15 and watchdog adoption, and native handoff includes PMIC/CCU/PIO/watchdog side effects. The packager accepts exactly 32,768 bytes and rejects 32,769 bytes. These are host-side source/tool checks only; no M1 raw payload was packaged through the real BaseOS builder, no matching M1 SPL/capsule was generated, and no TF card was written.
+
+### APB1/PIO clock-source evidence refinement (2026-11-27)
+
+A closer SoC-family source is now pinned: vendor `sun50iw9p1` clock code
+at `chainsx/u-boot-sun55i-vendor@a0723c51581c90bc4f060e9f251afff2ce76453f`
+defines APB1 at CCU offset `0x520` (candidate absolute address
+`0x03001520`) and registers the PIO clock provider as a child of APB1.
+That PIO provider has no separately declared gate/reset fields. This is
+stronger than the H616-only parent-clock reference, but not provenance for
+the exact deployed RG34XX binary; the matching source DTS labels its PIO
+compatible as `sun50iw12p1-pinctrl`. It does not prove APB1's BL33-entry
+value, hidden PIO reset/power state, fuse effect, or effective Non-secure
+access. See [BL31 PIO/CCU audit](h700-bl31-pio-ccu-audit.md).
 
 ### PI12 access-gate evidence refinement (2026-11-27)
 
