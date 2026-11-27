@@ -377,6 +377,17 @@ WORDS = {
     0x48016130: 0x8a210000, 0x48016134: 0xd51e1000,
     0x48016138: 0xd5033fdf, 0x4801613c: 0xd2800020,
     0x48016140: 0x17ffffda,
+    # RTC soft-entry TWI master and GP_DATA2 stage markers.
+    0x480129f8: 0x94000434, 0x48013bac: 0x97ffffa7,
+    0x48013be8: 0x321b0042, 0x48013c04: 0x361fffa2,
+    0x48013c1c: 0x531f78a5, 0x48013c2c: 0xb9000824,
+    0x48013c64: 0xb9000827, 0x48013c98: 0x7100a01f,
+    0x48013cc0: 0x710004df,
+    0x480122a0: 0xb90002c2, 0x48012338: 0xb90002c3,
+    0x48012354: 0xb90002c3, 0x48012370: 0xb90002c3,
+    0x48012380: 0x94000512, 0x4801238c: 0xb90002c0,
+    0x480137f0: 0x9bc37c23, 0x4801381c: 0xb9000043,
+    0x48013824: 0xb9000024,
     # OEM standby clock-save/restore, AON tag and PLL relock.
     0x48011bb0: 0xf2a06005, 0x48011bc4: 0xb94000a7,
     0x48011bd4: 0x0a0100e1, 0x48011be0: 0xb9041441,
@@ -579,7 +590,8 @@ DISASSEMBLY_WINDOWS = (
     ("system_suspend_helper_48012b60", 0x48012b60, 0x100),
     ("system_suspend_helper_48012ce0", 0x48012ce0, 0x100),
     ("system_suspend_helper_48013a48", 0x48013a48, 0x100),
-    ("system_suspend_helper_48013b98", 0x48013b98, 0x180),
+    ("system_suspend_helper_48013b98_complete", 0x48013b98, 0x280),
+    ("system_suspend_helper_480137c8_timer", 0x480137c8, 0x100),
     ("system_suspend_helper_48012fa8", 0x48012fa8, 0x100),
     ("normal_suspend_powerdown_helper", 0x48015d70, 0x80),
     ("system_suspend_cache_teardown_and_trampoline", 0x48015fb8, 0x270),
@@ -879,6 +891,34 @@ def main() -> int:
         raise RuntimeError("RTC soft-entry continuation changed")
     if decode_b_target(0x4800c610, read_word(raw, 0x4800c610)) != 0x48014078:
         raise RuntimeError("context+0xc8 counted-delay loop target changed")
+
+    # RTC soft-entry TWI-style master: static checks only, no target transaction.
+    if decode_bl_target(0x480129f8, read_word(raw, 0x480129f8)) != 0x48013ac8:
+        raise RuntimeError("RTC soft-entry TWI initializer edge changed")
+    if decode_bl_target(0x48013bac, read_word(raw, 0x48013bac)) != 0x48013a48:
+        raise RuntimeError("TWI transfer bus-idle helper edge changed")
+    if decode_bl_target(0x48012380, read_word(raw, 0x48012380)) != 0x480137c8:
+        raise RuntimeError("RTC GP_DATA2 timer helper edge changed")
+    twi_words = {
+        0x48013be8: 0x321b0042, 0x48013c04: 0x361fffa2,
+        0x48013c1c: 0x531f78a5, 0x48013c2c: 0xb9000824,
+        0x48013c64: 0xb9000827, 0x48013c98: 0x7100a01f,
+        0x48013cc0: 0x710004df,
+        0x480122a0: 0xb90002c2, 0x48012338: 0xb90002c3,
+        0x48012354: 0xb90002c3, 0x48012370: 0xb90002c3,
+        0x4801238c: 0xb90002c0,
+        0x480137f0: 0x9bc37c23, 0x4801381c: 0xb9000043,
+        0x48013824: 0xb9000024,
+    }
+    for address, expected in twi_words.items():
+        if read_word(raw, address) != expected:
+            raise RuntimeError("RTC soft-entry TWI instruction changed at 0x%08x" % address)
+    if decode_test_branch_target(0x48013c04, read_word(raw, 0x48013c04)) != 0x48013bf8:
+        raise RuntimeError("TWI INT_FLAG poll target changed")
+    if decode_test_branch_bit(read_word(raw, 0x48013c04)) != 3:
+        raise RuntimeError("TWI INT_FLAG bit changed")
+    if decode_test_branch_nonzero(read_word(raw, 0x48013c04)):
+        raise RuntimeError("TWI INT_FLAG wait is no longer TBZ")
     if decode_bl_target(0x480126a0, read_word(raw, 0x480126a0)) != 0x48012070:
         raise RuntimeError("RTC soft-entry context-dispatch helper call changed")
     if decode_b_target(0x480126a4, read_word(raw, 0x480126a4)) != 0x480126a4:

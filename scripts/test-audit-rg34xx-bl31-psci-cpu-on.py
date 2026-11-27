@@ -184,6 +184,31 @@ def main() -> int:
     assert module.WORDS[0x4800C56C] == 0x34FFFEA0
     assert module.WORDS[0x4800C5FC] == 0x1400181D
     assert module.WORDS[0x4800C610] == 0x14001E9A
+    # RTC soft-entry TWI and GP_DATA2 stage markers.
+    assert module.WORDS[0x480129F8] == 0x94000434
+    assert module.WORDS[0x48013BAC] == 0x97FFFFA7
+    assert module.WORDS[0x48013BE8] == 0x321B0042
+    assert module.WORDS[0x48013C04] == 0x361FFFA2
+    assert module.WORDS[0x48013C1C] == 0x531F78A5
+    assert module.WORDS[0x48013C2C] == 0xB9000824
+    assert module.WORDS[0x48013C64] == 0xB9000827
+    assert module.WORDS[0x48013C98] == 0x7100A01F
+    assert module.WORDS[0x48013CC0] == 0x710004DF
+    assert module.decode_bl_target(0x480129F8,module.WORDS[0x480129F8]) == 0x48013AC8
+    assert module.decode_bl_target(0x48013BAC,module.WORDS[0x48013BAC]) == 0x48013A48
+    assert module.decode_test_branch_target(0x48013C04,module.WORDS[0x48013C04]) == 0x48013BF8
+    assert module.decode_test_branch_bit(module.WORDS[0x48013C04]) == 3
+    assert not module.decode_test_branch_nonzero(module.WORDS[0x48013C04])
+    assert module.WORDS[0x480122A0] == 0xB90002C2
+    assert module.WORDS[0x48012338] == 0xB90002C3
+    assert module.WORDS[0x48012354] == 0xB90002C3
+    assert module.WORDS[0x48012370] == 0xB90002C3
+    assert module.WORDS[0x48012380] == 0x94000512
+    assert module.WORDS[0x4801238C] == 0xB90002C0
+    assert module.decode_bl_target(0x48012380,module.WORDS[0x48012380]) == 0x480137C8
+    assert module.WORDS[0x480137F0] == 0x9BC37C23
+    assert module.WORDS[0x4801381C] == 0xB9000043
+    assert module.WORDS[0x48013824] == 0xB9000024
     assert module.decode_test_branch_target(0x4800C4EC,module.WORDS[0x4800C4EC]) == 0x4800C530
     assert module.decode_test_branch_bit(module.WORDS[0x4800C4EC]) == 0
     assert not module.decode_test_branch_nonzero(module.WORDS[0x4800C4EC])
