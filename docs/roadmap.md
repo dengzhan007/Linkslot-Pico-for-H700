@@ -54,7 +54,7 @@ CPU_ON helper `0x48002d78`，可按 per-core 计算地址设置 RVBAR 并进行 
 
 按 [M1 BL33 diagnostic specification](m1-bl33-diagnostic.md) 与 [无拆机 TF bring-up 方案](no-disassembly-tf-bringup-plan.md) 执行：
 
-- M1-T0：PI12 的 Data Abort **source/linked-ELF fail-stop 子项已通过**；M1 selector 的 freestanding Cortex-A53 AArch32 ELF32 fixture 通过，完整 feasibility #939 85/85 recorded steps success。两项都是 host/source/link 证据，不是 A53 故障注入或 BL33 启动。Boot0/SPL 静态证据使初始 CPU1–CPU3 hold-off **PROBABLE_NOT_DEVICE_VERIFIED**；H700 live reset/status/RVBAR 与 `VER_REG 0x03000024 & 7` 尚未读取。匹配 BL31 另有后续 PSCI `affinst_on`→CPU_ON helper `0x48002d78`，具备 per-core RVBAR/power/reset 序列，但不是初始 handoff 自动释放证据，M1/LK 不得调用。pinned LK 是 UP scheduler，必须保持 CPU0-only；BL31/Boot0 对 BL33 slot 的生命周期与物理内存所有权、APB1/PIO 时钟、SPC/fuse/Non-secure access 仍 OPEN。
+- M1-T0：PI12 的 Data Abort **source/linked-ELF fail-stop 子项已通过**；M1 selector 的 freestanding Cortex-A53 AArch32 ELF32 fixture 通过，完整 feasibility #939 85/85 recorded steps success。两项都是 host/source/link 证据，不是 A53 故障注入或 BL33 启动。Boot0/SPL 静态证据使初始 CPU1–CPU3 hold-off **PROBABLE_NOT_DEVICE_VERIFIED**；H700 live reset/status/RVBAR 与 `VER_REG 0x03000024 & 7` 尚未读取。匹配 BL31 另有后续 PSCI `affinst_on`→CPU_ON helper `0x48002d78`，具备 per-core RVBAR/power/reset 序列，但不是初始 handoff 自动释放证据，M1/LK 不得调用。pinned LK 是 UP scheduler，必须保持 CPU0-only；BL31/Boot0 对 BL33 slot 的生命周期与物理内存所有权、APB1/PIO 时钟、SPC/fuse/Non-secure access 仍 OPEN SPL 与 BL31 后续 CPU_ON RVBAR 规则已穷举：仅 `VER_REG[2:0]`=0/2 时 bank 一致，1/3/4/5/6/7 不一致；设备 selector 尚未读取，保持 `UNRESOLVED_UNTIL_SELECTOR_READBACK`，M1/LK 不得调用 CPU_ON。
 - M1-T1：构建极小 CPU0-only A32 BL33 诊断 payload，raw ≤ 32 KiB；代码、向量、BSS、stack、页表和异常路径必须有 ELF/map 报告，所有运行时范围限于审查过的 BL33 slot。
 - M1-T2：用 pinned BaseOS builder 生成同一代 payload/native firmware/SPL/capsule/TF 镜像；核验 header、FNV、generation、extent、padding、分区和所有 hash。
 - M1-T3：仅将标记为 M1-TEST-TF1-ONLY 的配对镜像写入独立 TF1 测试卡；RG34XX 不拆机、不焊接、不连接 UART；观察 PI12 成功信号。失败后关机换回原系统卡。
@@ -807,10 +807,13 @@ Hard size boundary: this first integration path is only for a small diagnostic p
   scripts/test-audit-rg34xx-bl31-psci-cpu-on.py.
 - [x] Combined CI [#45816600012](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45816600012)
   passed. The matched monitor exposes a PSCI CPU_ON-capable callback.
-- [x] Selector parity audit [#45817598323](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45817598323)
-  verifies BL31/SPL RVBAR selection. Matching VER_REG low3 values: 0, 2;
-  mismatching values: 1, 3, 4, 5, 6, 7. The device value itself remains
-  unknown and the mismatch remains a hard gate.
+- [x] Exhaustive selector parity audit [#136](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46039667955)
+  factors both pinned predicates into testable helpers and checks all eight
+  `VER_REG[2:0]` inputs. SPL selects alternate bank only for 2; BL31 CPU_ON
+  selects primary bank only for 0. They match only at 0/2 and mismatch at
+  1/3/4/5/6/7. The live device value remains unknown; hard gate is
+  `UNRESOLVED_UNTIL_SELECTOR_READBACK`. Artifact: [15219895068](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46039667955/artifacts/15219895068).
+- [x] Latest full feasibility #940 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46039195103) passes 85/85 recorded steps; this validates host/cross-build only, not target selector readback or hardware boot.
 - [x] Confirm the PSCI CPU_ON callback is a real later per-core startup path:
   `affinst_on` slot calls `0x48002d78`, which computes per-core addresses,
   programs RVBAR and performs SoC-specific power/reset sequencing. Selector
