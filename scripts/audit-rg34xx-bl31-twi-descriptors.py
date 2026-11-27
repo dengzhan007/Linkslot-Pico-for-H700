@@ -315,7 +315,7 @@ def scan_context_pointer_alias_writes(blob: bytes) -> dict:
                     if dst_key:
                         last_alias_origin[dst_key] = (origins_before.get(src_key, []) + [pc])[-8:]
 
-        elif mnemonic.startswith("ldr") and len(ins.operands) >= 2:
+        elif mnemonic.startswith(("ldr", "ldur")) and len(ins.operands) >= 2:
             dst, memop = ins.operands[0], ins.operands[1]
             if dst.type == ARM64_OP_REG and memop.type == ARM64_OP_MEM and memop.mem.index == 0:
                 base_key = canonical_register(md.reg_name(memop.mem.base))
@@ -416,7 +416,7 @@ def scan_context_pointer_alias_cfg_writes(blob: bytes) -> dict:
     for ins in instructions.values():
         if ins.mnemonic.lower() == "adrp" and len(ins.operands) >= 2:
             dst, imm = ins.operands[0], ins.operands[1]
-            if dst.type == ARM64_OP_REG and imm.type == ARM64_OP_IMM and int(imm.imm) == 0x48014000:
+            if dst.type == ARM64_OP_REG and imm.type == ARM64_OP_IMM and 0x48013000 <= int(imm.imm) <= 0x48015000:
                 seed_instructions.append(ins)
 
     global_slot_loads = []
@@ -513,7 +513,9 @@ def scan_context_pointer_alias_cfg_writes(blob: bytes) -> dict:
                     src_alias = before.get(src_key) if src_key else None
                     if src_alias:
                         kind, value, chain = src_alias
-                        delta = int(imm.imm) * (1 if mnemonic == "add" else -1)
+                        shift = getattr(getattr(imm, "shift", None), "value", 0)
+                        immediate = int(imm.imm) << int(shift or 0)
+                        delta = immediate * (1 if mnemonic == "add" else -1)
                         dst_key = get_reg_key(dst.reg)
                         if dst_key:
                             aliases[dst_key] = (kind, value + delta, chain + (pc,))
@@ -583,7 +585,7 @@ def scan_context_pointer_alias_cfg_writes(blob: bytes) -> dict:
                 enqueue(queue, next_pc, aliases, origin_seed, steps + 1)
 
     return {
-        "method": "bounded CFG walk seeded by ADRP references to 0x48014000; follows both conditional edges and direct BL targets with x0-x7 plus callee-saved aliases",
+        "method": "bounded CFG walk seeded by ADRP references to pages 0x48013000..0x48015000; supports shifted ADD/SUB immediates, LDR/LDUR, conditional edges, and direct BL targets with x0-x7 plus callee-saved aliases",
         "seed_count": len(seed_instructions),
         "processed_states": processed,
         "global_slot_pointer_load_aliases": global_slot_loads,
