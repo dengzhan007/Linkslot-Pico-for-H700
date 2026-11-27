@@ -72,10 +72,10 @@ expected output comparisons as true:
 
 | Output | Size | SHA-256 | Result |
 |---|---:|---|---|
-| Generation | 32 B | `022f0d8816c861ebbec05f0d0d7f513d6b974d9930661d20fa8ad51b7b4c0fee` | <badge color="success">Exact</badge> |
-| A32 loader | 32,768 B | `48b2a837ac5d8daad8f524c976f2b3911d26a838f8b68fa695e3283412dd8590` | <badge color="success">Exact</badge> |
-| Native firmware | 287,232 B | `dc9dc3ae66b30244911e7054ca66136991626cabb0d59c796c4b253a126f28e9` | <badge color="success">Exact</badge> |
-| Active BOL4 image | 8,556,544 B | `d71e5bd87b23fb409d7a837cf90d153ae117af518fe6ee330a96d2c7a5f76fc3` | <badge color="success">Exact</badge> |
+| Generation | 32 B | `022f0d8816c861ebbec05f0d0d7f513d6b974d9930661d20fa8ad51b7b4c0fee` | PASS |
+| A32 loader | 32,768 B | `48b2a837ac5d8daad8f524c976f2b3911d26a838f8b68fa695e3283412dd8590` | PASS |
+| Native firmware | 287,232 B | `dc9dc3ae66b30244911e7054ca66136991626cabb0d59c796c4b253a126f28e9` | PASS |
+| Active BOL4 image | 8,556,544 B | `d71e5bd87b23fb409d7a837cf90d153ae117af518fe6ee330a96d2c7a5f76fc3` | PASS |
 
 The raw-capsule build then produces:
 
@@ -83,7 +83,7 @@ The raw-capsule build then produces:
   `cdfc6d480a257c5ccc3f5826c4e6cbcf499163c57119390e8bebeba6964a8570`.
 - Generation cookie: `0xf7bed1c8`.
 - Capsule: 131,072 B, SHA-256
-  `bf886995745a0eb9b5030296f9f6163035e164b3a82183716e67ff876876289f`.
+  `bf886995745a0eb9b5030296f9f6163035e164b3a82183716e67ff876319289f`.
 
 The authoritative capsule comparison file reports:
 `capsule_byte_exact_match=true`, `different_byte_count=0`, 36 raw-capsule
