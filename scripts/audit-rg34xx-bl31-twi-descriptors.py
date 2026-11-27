@@ -144,6 +144,20 @@ def main() -> int:
             "classification_if_pointer": classify_pointer(value),
         })
 
+    # Inspect a bounded adjacent data window for qwords that look like
+    # candidate R-domain MMIO bases. This is not a table-boundary claim.
+    nearby_mmio_candidates = []
+    data_window_bytes = 0x500
+    for relative_offset in range(0, data_window_bytes, 8):
+        value = read_u64(blob, lookup_origin + relative_offset)
+        if 0x07000000 <= value < 0x08000000:
+            nearby_mmio_candidates.append({
+                "signed_lookup_index_if_selected": relative_offset // 8,
+                "relative_byte_offset": "0x%03x" % relative_offset,
+                "address": "0x%08x" % (lookup_origin + relative_offset),
+                "raw_qword": "0x%016x" % value,
+            })
+
     global_context_slot = read_u64(blob, 0x48014668)
     global_controller_slot = read_u64(blob, 0x48015548)
 
@@ -178,6 +192,7 @@ def main() -> int:
         },
         "raw_static_data": {
             "adjacent_qwords_after_lookup_origin": adjacent_qwords,
+            "nearby_r_domain_mmio_candidate_qwords_in_plus_0x500_window": nearby_mmio_candidates,
             "slot_loaded_as_context_pointer": {
                 "address": "0x48014668",
                 "raw_qword": "0x%016x" % global_context_slot,
@@ -198,6 +213,7 @@ def main() -> int:
         "limitations": [
             "The eight reported qwords are only bytes at relative offsets +0x00 through +0x38 from lookup origin 0x48014628; they are not asserted to be the selected entries. The SXTW index is signed, so an unknown negative context +0xa4 value may select memory before the lookup origin.",
             "The raw qword at 0x48014668 is 2, although reviewed code loads this slot as a context pointer. No BaseOS native SPL patch targets this slot.",
+            "The bounded +0x500 data scan finds any R-domain MMIO-looking qwords and reports their relative signed lookup indices as conditional candidates, not observed selections.",
             "The raw qword at 0x48015548 is 2, but BL31 explicitly overwrites it with the selected object pointer at 0x48013b14 before the TWI setup helper consumes it.",
             "This audit verifies the exact static instructions, raw initial values, and the pinned BaseOS patch sites. It does not exclude indirect writes, BL31 runtime initialization, another loader, or runtime mutation outside the reviewed windows.",
             "No TWI bus index, controller base, PMIC slave address, command sequence, or final power action is established.",
@@ -222,6 +238,8 @@ def main() -> int:
         "- The raw initial qword at slot `0x48014668` (loaded as a context pointer by reviewed paths) is `0x%016x`; the controller-object global slot `0x48015548` initially contains `0x%016x`." % (global_context_slot, global_controller_slot),
         "- Pinned BaseOS native SPL only patches monitor offsets: %s." % ", ".join("`+%s`" % ("%x" % x) for x in patch_offsets),
         "",
+        "- R-domain MMIO-like qwords in the bounded lookup-origin +0x500 data window: %s." % (", ".join("`index %d → %s`" % (x["signed_lookup_index_if_selected"], x["raw_qword"]) for x in nearby_mmio_candidates) or "none"),
+        "",
         "## Adjacent qwords after lookup origin (not proven selected entries)",
         "",
         "| Relative offset | Address | Raw qword | Classification if interpreted as pointer |",
@@ -232,6 +250,14 @@ def main() -> int:
             item["relative_byte_offset"], item["address"], item["raw_qword"], item["classification_if_pointer"]
         ))
     lines += [
+        "",
+        "## Conditional R-domain controller candidates",
+        "",
+        "| Signed index if selected | Address in monitor | Raw qword |",
+        "|---:|---:|---:|",
+        *["| %d | `%s` | `%s` |" % (x["signed_lookup_index_if_selected"], x["address"], x["raw_qword"]) for x in nearby_mmio_candidates],
+        "",
+        "These are data candidates only. For example, a qword equal to `0x07081400` at relative index 73 would be selected only if the actual context `+0xa4` were 73; the runtime selector has not been captured.",
         "",
         "## Interpretation",
         "",
