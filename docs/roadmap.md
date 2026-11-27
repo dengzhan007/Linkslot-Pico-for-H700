@@ -28,7 +28,7 @@
 - [x] 在目标 RG34XX（非 SP）实机运行只读库存采集器，完整 42 文件报告已发布：[rg34xx-inventory-20261127-uart](https://github.com/dengzhan007/Linkslot-Pico-for-H700/tree/reports/reports/rg34xx-inventory-20261127-uart)，reports HEAD `7217907f57408b714c55a872c6afc5cfc34fdac9`。
 - [x] 确认 Linux post-boot 视图：UART0 `0x05000000)、`ttyS0` 115200、PH0/PH1 function=`uart0`、`apb2`/UART0 24 MHz；报告中的 TOC1 package/monitor/DTB hashes 与此前采集匹配。
 - [x] 审核报告脱敏记录与 SHA256 manifest；没有发现设备串号、MAC-shaped 值或本机路径残留。采集为只读，不使用 `/dev/mem`、不访问 MMIO、不挂载 debugfs、不写存储。
-- [ ] 不把 post-boot Linux 状态当作 BL33 handoff proof。UART serial driver status/divisor/FIFO 不可读；dmesg 有 `uart0_jtag` mux协调日志；物理 test-pad/electrical 连接与 BL33-time clock/reset/pinmux/security 权限仍未确认。M1-S1 不通过，保持 UART 不可写、CCU 不操作、PH0/PH1 不改 mux。
+- [ ] 不把 post-boot Linux 状态当作 BL33 handoff proof。UART serial driver status/divisor/FIFO 不可读；dmesg 六条 `uart0_jtag` muxsel(3) 告警与参考 DTS 的 PF0–PF5 `sdc0_pins_c` per-pin function 映射匹配，较可能是 group-label warning 而非 PH0/PH1 JTAG 冲突；目标 active FDT 来源仍未直接解码。物理 test-pad/electrical 连接与 BL33-time clock/reset/pinmux/security 权限仍未确认。M1-S1 不通过，保持 UART 不可写、CCU 不操作、PH0/PH1 不改 mux。
 
 - [x] 额外审查固定 BaseOS source pin `cbe253a43f46cf551cc9a6c79a84015bde3686cf` 的 A32 entry/native loader/SPL handoff 关键文件；限定范围内无 UART init/console/MMIO 引用，`loader.c` 的 `serial` 仅构造 SID 序列号字符串。该负面结果不覆盖 U-Boot common、Boot0/BL31 或实际部署 SPL binary，故不改变 M1-S1 OPEN。详见 [UART0 专项审计](rg34xx-h700-uart0-audit.md)。
 

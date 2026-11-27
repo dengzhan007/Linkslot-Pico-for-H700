@@ -167,10 +167,10 @@ re-confirms the same TOC1 package (`e6c20e3a...`), monitor
 - Existing clock debugfs reports both `apb2` and `uart0` at 24 MHz.
 - `/proc/tty/driver/serial` is absent/unreadable, so there is no UART driver
   line-status, divisor, or FIFO evidence in this capture.
-- Five dmesg lines report `expect_func as:uart0_jtag` while muxsel(3)
-  appears as `jtag` or `uart0`. This is a vendor pinctrl reconciliation
-  observation only; it does not identify the physical pad state or prove a
-  JTAG/UART arbitration outcome.
+- Six dmesg lines report `expect_func as:uart0_jtag` with muxsel(3) resolving
+  in order to `jtag,jtag,uart0,jtag,uart0,jtag`. This sequence matches the
+  reference sun50iw9p1 `sdc0_pins_c` group on PF0–PF5: at muxsel 3, PF0/PF1/
+  PF3/PF5 are named `jtag` and PF2/PF4 are named `uart0`.
 - `GPIO UNCLAIMED` in `pinmux-pins` describes the GPIO request state; it
   does not negate the separately reported `function uart0`.
 - The report includes a redaction record and SHA256 manifest. The published
@@ -186,6 +186,35 @@ The collector performed no `/dev/mem` access, no MMIO read/write, no debugfs
 mount and no storage write. Do not add a UART driver or output path, touch
 CCU offset `0x90c`, or alter PH0/PH1 mux on the basis of this report.
 M1-S1 remains OPEN.
+
+## Pinctrl `uart0_jtag` warning interpretation (2026-11-27)
+
+The six warnings in the target log should not be read as proof that UART0 on
+PH0/PH1 is fighting JTAG. A bounded reference-source cross-check explains
+their exact six-entry pattern:
+
+- The pinned sun50iw9p1 pinctrl DTSI defines
+  [`sdc0_pins_c`](https://github.com/CrealityTech/sonic_pad_os/blob/7f37a7fbf4ad59907034715e3d967b9177de1cd4/lichee/linux-4.9/arch/arm64/boot/dts/sunxi/sun50iw9p1-pinctrl.dtsi)
+  over PF0–PF5 with group-level `allwinner,function = "uart0_jtag"` and
+  muxsel 3.
+- The matching-family pin function table in
+  [`pinctrl-sun50iw9p1.c`](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/pinctrl/sunxi/pinctrl-sun50iw9p1.c)
+  names muxsel 3 on PF0/PF1/PF3/PF5 as `jtag`, but PF2/PF4 as `uart0`.
+  That produces the exact six-name sequence seen in this device's dmesg.
+- In the same pinned vendor source family,
+  [`pinctrl-sunxi.c::sunxi_pctrl_dt_node_to_map()`](https://github.com/qiaoweibiao/T507_Kernel/blob/98fcc7d3f112e51b0edfb71536da89cb2115106f/drivers/pinctrl/sunxi/pinctrl-sunxi.c)
+  logs a `dev_warn` when a group's expected function name differs from the
+  per-pin function found for its mux value, then still constructs the mux map
+  using that per-pin function. It does not fail the map operation.
+
+Therefore, the most likely explanation is a group-label/per-pin-function
+warning for the PF0–PF5 `sdc0_pins_c` alternate pin group, not a JTAG/UART
+electrical arbitration warning on PH0/PH1. This is a strong source-pattern
+match, not a proven active-FDT attribution: the current inventory parser
+does not emit the target's pinctrl map-node provenance, and the inspected
+vendor source is a matching-family reference rather than a hash-identified
+source tree for the target's exact 4.9.170 kernel. The independently captured
+pinctrl runtime view still reports PH0 and PH1 as function `uart0`.
 
 ## 2026-11-27 pinned BaseOS native handoff source cross-check
 
