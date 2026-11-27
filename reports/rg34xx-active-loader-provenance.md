@@ -472,7 +472,7 @@ The workflow restored and verified these derived inventory/source inputs:
 |---|---:|---|
 | first 73,728 sectors of prepared prefix (`inventory/prefix.bin`) | 37,748,736 | `725f8a1552b90659da9dee5e71ef02a3d914ef7f8b5e433584b85829df65b650` |
 | prepared stock Boot0 (`inventory/boot0.bin`) | 65,536 | `b6edbf39af0bf1f35a7e2fd991c8966b04d061e247c81985d2516f695464049b` |
-| prepared env (`inventory/env.bin`) | 131,072 | `d1a0856a8fb4c6b3f46f6b32` |
+| prepared env (`inventory/env.bin`) | 131,072 | `d1a0856a8fb4c6f3b785943929a59206424a189f92efcbea48c26b31f472a396` |
 | TOC1 source package | 1,310,720 | `56371d984e29e74db63009ce27f829eb0a55ce9007ee5e40c52479b22418af3d` |
 | original boot image | 7,161,856 | `5b1e30930a9b0e7642da39ce5c699cfdb03970346c6f2757dcfb063bfc8a0b51` |
 | U-Boot v2026.10 archive | — | `f943a88389c8fd70a6b0d061a88267465e143c7ca6ea2b75837ab20f5b60c739` |
