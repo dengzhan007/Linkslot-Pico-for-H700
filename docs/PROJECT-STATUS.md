@@ -28,6 +28,15 @@
 - BL31 snapshot source `[0x40000000,0x40000140)` 落在 PFN `0x40000`。memblock classifier 结果是 `UNRESERVED_SYSTEM_RAM`，但 Linux 4.9.170 PFN capture 给出 `kpageflags=0x5868`、`page_mapcount=1`、`LINUX_ACTIVE_ANON_MAPPED_PAGE`。安全 gate 为 `BLOCKED_LIVE_LINUX_PAGE_REQUIRES_EXACT_PRESERVE_RESTORE`；绝不可当作 free scratch。
 - RTC soft-entry continuation `0x48012670` 调用 helper `0x48012070`；后者经 `0x480129f0` 初始化 TWI-like controller，再经 `0x48013b98` 完成分阶段传输。controller descriptor 由 context `+0xa4` 选择，实际 selector、R-TWI bus index、PMIC slave/命令和最终 power action 未确认。保留“PMIC candidate”措辞，不称为已证明的关机/Boot0 跳转流程。
 
+### RTC soft-entry TWI descriptor follow-up (2026-11-27)
+
+Detailed audit: [rg34xx-rtc-soft-entry-twi-audit.md](rg34xx-rtc-soft-entry-twi-audit.md).
+
+- `0x48013ac8` forwards context `+0xa4` into a 64-bit table lookup at `0x48014628`, dereferences the returned controller object, and stores it to global slot `0x48015548`; `0x48013a48` / `0x48013b98` then configure and use the controller.
+- The raw monitor payload does not contain plausible pointer values in that table: initial qwords decode as numeric pairs. Likewise raw `0x48014668` is initially `2`, although code loads it as a context pointer. `0x48015548` also starts at `2` but is explicitly overwritten by `0x48013b14` before use. Thus runtime mutation/relocation/loader initialization is a real unresolved boundary; the raw table must not be interpreted as a live controller pointer list.
+- A direct static-address scan did not identify direct stores to `0x48014628` or `0x48014668`; this does not exclude indirect writes or external loader/relocation behavior.
+- The live-FDT AXP2202 / H616 R-TWI0 family correspondence remains a candidate only. No selected bus, object base, slave address or PMIC command is established.
+
 ### 下一步（全部 host/read-only 优先）
 
 1. 追踪 context `+0xa4` 的赋值来源、descriptor table 的运行时初始化/重定位和最终 controller base；在此闭合前不得命名 bus index 或发出 I2C/TWI transaction。
