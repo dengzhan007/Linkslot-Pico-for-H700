@@ -632,6 +632,24 @@ SECTIONS
     early_stubs_obj = compile_early_thumb("h700-early-led-stubs", early_stubs_path)
     early_main_obj = compile_early_thumb("h700-early-led-main", early_main_path)
 
+    # In the PI12-enabled diagnostic layout only, make every unmatched
+    # Data Abort an explicit fail-stop. The H700 matcher can return normally
+    # only for its already-armed, exact SYS_CFG read; a PI12 fault therefore
+    # cannot resume the caller or silently continue after a failed MMIO.
+    early_fault_path = out / "h700-early-data-abort-fail-stop.c"
+    early_fault_path.write_text(
+        "extern int h700_data_abort_try_recover(void *frame);\n"
+        "int arm_data_abort_handler(void *frame) {\n"
+        "    if (h700_data_abort_try_recover(frame)) return 1;\n"
+        "    for (;;) { __asm__ volatile(\\\"wfi\\\" ::: \\\"memory\\\"); }\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    early_fault_obj = compile_early_thumb(
+        "h700-early-data-abort-fail-stop",
+        early_fault_path,
+    )
+
     early_cache_ops_obj = out / "h700-real-lk-cache-ops.o"
     early_ops_obj = out / "h700-real-lk-cp15-ops.o"
     run(
@@ -655,7 +673,7 @@ SECTIONS
             str(exc_obj),
             str(early_stubs_obj),
             str(early_main_obj),
-            str(thumb_fault_obj),
+            str(early_fault_obj),
             str(h700_abort_obj),
             str(h700_probe_obj),
             str(early_arch_obj),
@@ -693,6 +711,7 @@ SECTIONS
         "physical_memory_size",
         "tt",
         "h700_led_diag_status",
+        "arm_data_abort_handler",
         "_end",
     ):
         early_symbols[required] = symbol_address(early_nm, required)
@@ -715,6 +734,12 @@ SECTIONS
 
     early_disasm = run(["llvm-objdump", "-d", str(early_elf)])
     (out / "h700-early-led-layout.disasm.txt").write_text(early_disasm, encoding="utf-8")
+    abort_at = early_disasm.find("<arm_data_abort_handler>:")
+    if abort_at < 0:
+        raise RuntimeError("PI12 diagnostic Data Abort fail-stop handler is missing from linked disassembly")
+    abort_block = early_disasm[abort_at:abort_at + 700]
+    if "h700_data_abort_try_recover" not in abort_block or "wfi" not in abort_block:
+        raise RuntimeError("unmatched PI12 Data Abort must enter the explicit non-returning WFI fail-stop")
     kmain_at = early_disasm.find("<kmain>:")
     if kmain_at < 0:
         raise RuntimeError("early-MMU/PI12 diagnostic kmain is missing from disassembly")
@@ -735,6 +760,8 @@ SECTIONS
         f"- target_early_init: 0x{early_symbols['target_early_init']:08x}; PI12 service: 0x{early_symbols['h700_rg34xx_power_led_early_init']:08x}.\n",
         f"- PI12 service-ready status word: 0x{early_symbols['h700_led_diag_status']:08x}.\n",
         "- Diagnostic kmain calls the real LK arch_early_init() first, then the real H700 target_early_init() hook; the latter calls the real PI12 service.\n",
+        "- The diagnostic-only Thumb Data Abort handler attempts only the existing exact SYS_CFG probe matcher; any unmatched fault (including a PI12 read or write abort) enters a non-returning WFI fail-stop.\n",
+        "- This adds no generic abort skip/retry and does not expand the matcher to PIO; the expected recovery from a failed PI12 access is operator power-off and test-card swap.\n",
         "- Pinned LK arch.c and H700 early-MMU/PIO/LED C services use Thumb-2; FPEXC uses VMRS/VMSR, while the exception vector and fixed SYS_CFG probe remain A32.\\n",
         "- The H700 platform-header shim supplies only DRAM_PHY_ADDR=0x40000000 required by the generic pinned LK mmu.c; no MTK platform register implementation is linked.\n",
         "- This disposable layout ELF explicitly opts into PI12 MMIO for link validation; production H700 rules keep the physical access macro undefined/disabled.\n",
