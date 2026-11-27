@@ -15,7 +15,7 @@
 
 按 [M1 BL33 diagnostic specification](m1-bl33-diagnostic.md) 与 [无拆机 TF bring-up 方案](no-disassembly-tf-bringup-plan.md) 执行：
 
-- M1-T0：资格化 PI12 的 BL33 handoff clock/access、PI11 保留和 Data Abort fail-stop；审计 BL33-slot-only 布局。
+- M1-T0：资格化 PI12 的 BL33 handoff clock/access、PI11 保留和 Data Abort fail-stop；已从真实 linker map 测量 8 KiB early stack、16 KiB section table 和 8 KiB gap，并在 CI 加入不重叠断言；仍须关闭 Boot0/BL31 生命周期与 PIO handoff gate。
 - M1-T1：构建极小 CPU0-only A32 BL33 诊断 payload，raw ≤ 32 KiB；代码、向量、BSS、stack、页表和异常路径必须有 ELF/map 报告，所有运行时范围限于审查过的 BL33 slot。
 - M1-T2：用 pinned BaseOS builder 生成同一代 payload/native firmware/SPL/capsule/TF 镜像；核验 header、FNV、generation、extent、padding、分区和所有 hash。
 - M1-T3：仅将标记为 M1-TEST-TF1-ONLY 的配对镜像写入独立 TF1 测试卡；RG34XX 不拆机、不焊接、不连接 UART；观察 PI12 成功信号。失败后关机换回原系统卡。
@@ -25,11 +25,15 @@
 
 ### CI 与现有实现核对（2026-11-27）
 
-- Linkslot/LK feasibility #916 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46010334262) 成功；它复验 source pin、native header/override、SoftwareCompositor、Linkslot no_std/runtime、Libretro/mGBA、AArch32 layout probes 和 SD/GPT/FAT/VFS host tests。它没有生成可直接启动的完整设备镜像。
+- Linkslot/LK feasibility #921 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46018337655) 75/75 成功，artifact [15207317115](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46018337655/artifacts/15207317115)（约 388 MB）；包含 PI12 unmatched Data Abort fail-stop opcode check、真实 LK early-MMU/PI12 layout link、stack/page-table non-overlap check、native header/override、Linkslot no_std、Libretro/mGBA 与 SD/GPT/FAT/VFS host tests。它没有生成可直接启动的完整设备镜像。
 - H700 boot audit #1523 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46010567336) 的 Linux host-tools 与 Windows PowerShell jobs 均成功。
 - platform/h700/power/h700_rg34xx_power_led.c 已有 PI12 最小服务；host tests 覆盖只修改 PI12、保留 PI11/其他位、写入顺序和读回错误。生产物理 wrapper 默认关闭。
 - RG34XX 非 SP boot DTS 的 PMU work_led 指向 PI12，low_pwr_led 指向 PI11；UART0 降为备用，不因缺少 test-pad 资料而阻塞首次启动。
 - 以上 CI 均是 host/cross-build/audit 证据，不是实际 BL33 启动或 LED 冷启动验证。
+
+### M1-T0 新增可量化布局证据（host only）
+
+#921 map 已测得 early stack `[0x4a004000,0x4a006000)`（8 KiB）、stack top `0x4a006000`、8 KiB 未分配间隔，以及 16 KiB `tt=[0x4a008000,0x4a00c000)`；`_end=0x4a00c024`。CI 从 ELF 符号表提取这些地址并拒绝 overlap，raw 文件 7,940 bytes。此项仅验证 LK 对象之间布局自洽，不证明 Boot0/BL31 的物理内存所有权；G2 仍 OPEN。
 
 ### 当前 Gate ledger
 
