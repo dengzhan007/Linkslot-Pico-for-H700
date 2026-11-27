@@ -450,3 +450,14 @@ a trusted early-boot capture or a bounded read through an already-mapped
 kernel resource. Until such readback exists, keep Linkslot/LK CPU0-only,
 do not call PSCI CPU_ON, and keep all hardware gates closed.
 
+## 7. SPL / BL31 RVBAR selector parity (2026-11-28)
+
+- Native SPL: `low3 == 2` selects `0x08100040`; all other values select `0x09010040`.
+- BL31 later CPU_ON: `low3 == 0` selects `0x09010040`; all nonzero values select `0x08100040`.
+- Matching values: `{0, 2}`. Mismatching values: `{1, 3, 4, 5, 6, 7}`.
+
+All eight values are regression-tested by [BL31 static audit #136](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46039667955);
+the report marks compatibility `UNRESOLVED_UNTIL_SELECTOR_READBACK`. The target
+selector read at `0x03000024` failed with EFAULT, so this is a potential bank
+mismatch, not a confirmed device state. No CPU_ON or secondary-core release
+is permitted until a trusted read-only selector capture confirms the value.
