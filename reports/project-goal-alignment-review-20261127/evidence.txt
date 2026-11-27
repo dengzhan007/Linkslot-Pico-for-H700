@@ -1,0 +1,125 @@
+# Reproducible evidence for project-goal-alignment-review-20261127
+# Repository: dengzhan007/Linkslot-Pico-for-H700
+# Branch: porting/linkslot-1.0.45-feasibility
+# HEAD: afdf9c24fd659d179e64a8afdd72f3a43663cadc
+# Generated: 2026-11-27T10:27:12Z (UTC)
+# All commands are read-only (git log/ls/wc/grep/sed). No device access, no build.
+
+## A. Commit volume
+$ git rev-list --count HEAD
+1683
+
+$ git log --since=2026-11-14 --date=format:%Y-%W --pretty=format:%ad | sort | uniq -c
+    194 2026-46
+   1489 2026-47
+
+$ per-day total commit counts
+2026-11-25: 264
+2026-11-26: 333
+2026-11-27: 163
+
+## B. Device-side commits per day (platform+target vs integration vs total)
+$ for d in 11-23..11-27: git log --since/--until --pretty=format:%h -- <tree> | grep -c .
+2026-11-23  platform+target=104  integration=  0  total=270
+2026-11-24  platform+target= 33  integration=106  total=459
+2026-11-25  platform+target= 14  integration=  7  total=264
+2026-11-26  platform+target= 28  integration= 20  total=333
+2026-11-27  platform+target=  0  integration=  0  total=163
+
+$ last commit touching each tree
+platform     4d83433 2026-11-26 23:14:55 +0800 fix(h700): gate PI12 MMIO until BL33 PIO access is qualified
+target       4d83433 2026-11-26 23:14:55 +0800 fix(h700): gate PI12 MMIO until BL33 PIO access is qualified
+integration  94c86bd 2026-11-26 11:31:15 +0800 docs: record H700 runtime bootstrap milestone
+scripts      e93235b 2026-11-27 17:52:00 +0800 fix(test): use TWI relocation audit helper names
+
+$ last 8 feat commits under platform/ + target/
+beb7aeb 2026-11-26 feat(h700): add dormant SYS_CFG read with narrow abort match
+dce0a1c 2026-11-26 feat(h700): provide RG34XX DRAM capacity to LK MMU bootstrap
+bbf0f48 2026-11-26 feat(h700): define RG34XX physical memory size ABI
+d3df343 2026-11-26 feat(h700): expose captured BL33 entry registers
+9f9d2eb 2026-11-26 feat(h700): define BL33 entry-state snapshot ABI
+900262f 2026-11-26 feat(h700): add read-only RG34XX PIO input sampler
+f4801f4 2026-11-26 feat(h700): add RG34XX live-FDT input edge adapter
+88d7c06 2026-11-26 feat: add read-only H700 Generic Timer time service
+
+$ git log --since=2026-11-23 --until=2026-11-24 --grep=feat -i -- platform target integration (sdc0/GPT/FAT bring-up)
+8ad499d feat(h700): enable APB1 clock before sdc0 pinmux
+3248cb2 feat(storage): add unified read-only sdc0 FAT VFS bootstrap
+c0d883c feat(storage): add read-only FAT Libretro VFS backend
+bc0804e feat(storage): mount GPT FAT volumes through read-only CMD17
+38c5102 feat(h700): orchestrate read-only sdc0 bring-up and GPT scan
+162900a feat(h700): connect CMD17 block reads to GPT reader
+5ca7142 feat(h700): add H616 sdc0 PF0-PF5 pin configuration
+70c33a6 feat(h700): integrate sdc0 H616 CCU and identification clock
+606304a feat(h700): add read-only SD card identification state machine
+3cd6dc7 feat(h700): parse SD CSD capacity and address mode
+f8ff4e8 feat(h700): add read-only CMD17 PIO sector reader
+5b86981 feat(h700): add host-tested MMC module clock calculator
+
+## C. Change hotspots, last 3 days
+$ git log --since=2026-11-25 --name-only --pretty=format: | sort | uniq -c | sort -rn | head -12
+    156 docs/PROJECT-STATUS.md
+    100 docs/roadmap.md
+     70 scripts/audit-rg34xx-bl31-psci-cpu-on.py
+     45 scripts/test-audit-rg34xx-bl31-psci-cpu-on.py
+     23 scripts/test-h700-lk-overlay.py
+     23 scripts/audit-rg34xx-bl31-twi-descriptors.py
+     18 docs/pvaibhav-slot-rg34xx-live-capture-2026-11-25.md
+     17 docs/h700-lk-project.md
+     16 docs/h700-display-refresh-policy.md
+     15 docs/linkslot-h700-runtime-architecture.md
+     14 docs/rg34xx-rtc-soft-entry-twi-audit.md
+     13 .github/workflows/h700-bl31-memory-audit.yml
+
+## D. Code and document size
+$ find platform target -type f \( -name '*.c' -o -name '*.h' -o -name '*.S' \) -exec cat {} + | wc -l
+15825
+$ cat scripts/*.py scripts/*.sh | wc -l
+18959
+$ cat scripts/audit-rg34xx-*.py scripts/test-audit-rg34xx-*.py | wc -l
+6139
+$ find integration -type f -name '*.rs' -exec cat {} + | wc -l
+7598
+$ du -sh docs ; wc -l docs/PROJECT-STATUS.md ; longest lines
+1.4M	docs
+1718 docs/PROJECT-STATUS.md
+1368
+1361
+1242
+
+## E. Status vocabulary in PROJECT-STATUS.md
+$ grep -o '未验证|未完成|不得|未知|未闭合' docs/PROJECT-STATUS.md | sort | uniq -c
+     36 不得
+      4 未完成
+     31 未知
+      7 未闭合
+      6 未验证
+
+## F. Workflow inventory (all jobs are host/cross-build; none executes on device)
+$ ls .github/workflows/
+h700-arch-check.yml
+h700-bl31-memory-audit.yml
+h700-boot-audit-tools.yml
+h700-linkslot-runtime.yml
+h700-newlib-adapter.yml
+h700-software-renderer.yml
+linkslot-lk-rust-feasibility.yml
+
+## G. The already-enabled 32 KiB diagnostic payload path (roadmap 2026-11-26)
+$ grep -n 'Small LK BL33 payload' docs/roadmap.md
+661:## 2026-11-26 Small LK BL33 payload into matched native SPL package
+$ sed -n '/2026-11-26 Small LK BL33 payload/,/Hard size boundary/p' docs/roadmap.md
+## 2026-11-26 Small LK BL33 payload into matched native SPL package
+
+- [x] Confirm active native firmware loader extent from uploaded firmware manifest: p4+40 MiB package; loader offset 0x3e200; exact extent 0x8000 bytes (32 KiB), destination 0x4a000000.
+- [x] Add a pinned-source patcher for BaseOS native/build.py, limited to a clean BaseOS-MultiFrontend checkout at cbe253a43f46cf551cc9a6c79a84015bde3686cf. The raw LK binary is constrained to the active 32 KiB extent and A32 entry/vector/header contract.
+- [x] Keep native loader extent, offsets and extent table fixed; the patched builder adds the raw payload to generation and persistent source hashes, inserts the paired header, pads exactly to 32 KiB, regenerates firmware FNV/header and then builds the matching native SPL.
+- [x] Add host regression for raw image validation, builder patch shape, hash-input ordering and idempotence.
+- [x] Patcher host regression and real pinned BaseOS source apply/check/AST-parse/byte-exact restore passed in full feasibility run #45785521254; `git diff --exit-code` and clean `git status` both passed.
+- [ ] Produce a compact diagnostic payload with a deterministic proof-of-life signal, then build the matched native SPL/firmware/capsule locally. Keep the artifacts non-installable until the BL31 and memory/recovery gates are reviewed.
+
+Hard size boundary: this first integration path is only for a small diagnostic payload <= 32 KiB. The 5,148-byte CRT0/exception layout probe is not yet such a diagnostic because it has no approved visible signal and uses stubs. It does not make the complete LK or Linkslot/mGBA fit the loader extent.
+$ grep -n 'H700_MEMORY_LAYOUT_APPROVED' target/rg34xx_h700/rules.mk | head -3
+10:ifneq ($(strip $(H700_MEMORY_LAYOUT_APPROVED)),yes)
+11:$(error H700_MEMORY_LAYOUT_APPROVED must be set to yes after the RG34XX memory layout is approved)
+45:DEFINES += H700_MEMORY_LAYOUT_APPROVED
