@@ -661,7 +661,7 @@ def decode_test_branch_target(pc: int, instruction: int) -> int:
 def decode_test_branch_bit(instruction: int) -> int:
     if (instruction & 0x7E000000) != 0x36000000:
         raise RuntimeError("instruction is not TBZ/TBNZ")
-    return (instruction >> 19) & 0x3F
+    return (instruction >> 19) & 0x1F
 
 
 def decode_test_branch_nonzero(instruction: int) -> bool:
