@@ -64,7 +64,22 @@ The full 1.5 GB A/B test image from this artifact is not a substitute: its first
 Its GPT uses the composed A/B layout and the p2/p4 regions have been changed
 during image assembly. Do not use that slice as the prepared source prefix.
 
-**Status:** TOC1 source package, gzip boot image, Boot0, env and existing generated
-native outputs are recovered and cross-checked. Exact source-prefix byte recovery
-and unmodified end-to-end generation reproduction remain open. This does not
-authorize firmware flashing or change the hardware NO-GO status.
+**Status of this artifact alone:** it does not include the prepared
+`boot-prefix.img`; the 1.5 GB A/B test image is not a valid substitute. That
+scoped statement remains true.
+
+**Later exact reproduction (2026-11-24):** BaseOS's dedicated
+[RG34XX native generation reproduction #45301188593](https://github.com/dengzhan007/BaseOS-MultiFrontend/actions/runs/45301188593)
+restored the prefix from the checksum-pinned prepared bundle via
+`fetch-prepared.sh`, verified its 222,298,112-byte SHA-256
+`fb75bc4c835fa74ff41c0a1fdbe79b8871a960fc249716847fb7be529835c3c3`,
+reconstructed `prefix.bin`, Boot0 and env, and reproduced the exact native
+generation, loader, firmware, active image and byte-identical 128 KiB capsule.
+See the updated
+[active-loader provenance report](rg34xx-active-loader-provenance.md) and
+[workflow artifact](https://github.com/dengzhan007/BaseOS-MultiFrontend/actions/runs/45301188593/artifacts/14877904442).
+
+**Current conclusion:** exact native generation/capsule build provenance is
+closed at host level. Hardware validation remains explicitly false; no
+flashing, install, payload execution or device MMIO is authorized by this
+reproduction.

@@ -252,27 +252,23 @@ baked from the partition table used when the image was built, not from the
 current GPT. It also explains why prior "U-Boot changed bootcmd at runtime"
 speculation is unnecessary.
 
-**Generation exact-match attempt — result: no published build artifact
-matches.** The 32-byte generation above was searched against every committed
-BaseOS evidence manifest (no hit), and an attempted reconstruction following
-`build.py` line 316 was run with all available combinations of local/pinned
-package hash, DTB hash, panel contract and both captured Boot0 copies (16
-attempts). None reproduced the live generation. The missing inputs are the
-**build-time** inventory prefix and Boot0 bytes: the current device's TOC1
-package (`e6c20e3a…`) and Boot0 (`bf886995…`) differ from the repository's
-pinned `rg34xx` contracts (`56371d98…` / `b6edbf39…`). This is consistent with
-the stated workflow — locally built and flashed first, then source pushed —
-and with the loader header not matching the current TOC1 U-Boot bytes. The
-honest conclusion is:
+**Historical generation attempt (2026-11-22; superseded by the dedicated 2026-11-24 rebuild):**
+The initial pass searched committed evidence manifests and tried 16 combinations
+of then-available local/pinned package, DTB, panel and Boot0 inputs; none matched.
+At that time the prepared source prefix and correct source-to-output distinctions
+were not available to that pass. This was an honest result for the inputs then
+present, but it is no longer the current provenance conclusion.
 
-- **A** the live generation is internally consistent and was produced by the
-  documented `build.py` algorithm shape;
-- **C** it belongs to a locally built, unpublished variant; an exact
-  source-to-generation reproduction is **not available** from the committed
-  repository alone.
+The dedicated BaseOS [RG34XX native generation reproduction #45301188593](https://github.com/dengzhan007/BaseOS-MultiFrontend/actions/runs/45301188593)
+later restored the checksum-pinned prepared source bundle and the original
+05c39a7 upgrade artifact, then rebuilt the native loader, firmware, image and
+generation. All four output identifiers matched exactly, and the resulting
+128 KiB capsule matched the committed RG34XX capsule reference byte-for-byte
+(0 different bytes). See section 9 below for input/output hashes and scope.
 
-No raw FDT, bootargs with identifiers, or generation-bearing binary is
-uploaded by this report beyond the digest itself.
+No raw FDT, bootargs with identifiers, or generation-bearing binary was
+uploaded by the original report beyond its digest.
+
 
 ---
 
@@ -326,19 +322,19 @@ treated as proof that it ran on this unit.
 
 ## 7. Remaining unknowns
 
-1. No exact reproduction of the 32-byte generation from committed source and
-   available inputs; the build-time Boot0/prefix bytes are not published.
-2. The build-time U-Boot bytes used for the loader header differ from the
-   current TOC1 U-Boot; the exact source package is unavailable.
-3. Whether the stock/fallback path has ever been exercised on this unit.
-4. Whether the vendor monitor validates the kernel-entry SMC's `r1`/`r2` for
-   anything other than the expected kernel/DTB addresses.
-5. DRM SMC success or failure during the captured boots (console level 1).
-6. Ownership of the 16 MiB `0x7ec00000..0x7fc00000` memblock reservation.
-7. Whether the GPT difference (build-time `appfs`/`UDISK` vs current
+1. Whether the stock/fallback path has ever been exercised on this unit.
+2. Whether the vendor monitor validates the kernel-entry SMC's `r1`/`r2`
+   for anything other than the expected kernel/DTB addresses.
+3. DRM SMC success or failure during the captured boots (console level 1).
+4. Ownership of the 16 MiB `0x7ec00000..0x7fc00000` memblock reservation.
+5. Whether the GPT difference (build-time `appfs`/`UDISK` vs current
    `UDISK`/`primary`) is a post-install repartition or a different SKU image.
 
----
+The prior build-provenance unknowns (exact prepared prefix, Boot0 source,
+native generation and capsule) are closed at host level by the dedicated
+reproduction in section 9. These remaining items are independent and are not
+closed by a reproducible build.
+
 
 ## 8. Recommendations for the next Linkslot Pico stage
 
@@ -350,10 +346,11 @@ treated as proof that it ran on this unit.
    initrd `0x42000000`, DTB `0x44000000`, image staging `0x45000000`, monitor
    `0x48000000` (never assume `0x49000000` is free), DTBO `0x4a100000`,
    TOC DTB `0x4a200000`, BL33 `0x4a000000`, records `0x4a300000`.
-3. **Make generation reproducible.** Publish the build-time inventory
-   (Boot0, GPT prefix, package), the exact manifest containing `generation`,
-   `image_fnv`, `firmware_fnv` and source hashes, and a verifier that compares
-   them with `/chosen/baseos,native-boot`. This is the missing audit link.
+3. **Preserve the now-reproducible generation evidence.** The dedicated
+   #45301188593 workflow restores the pinned prepared prefix/Boot0/env and
+   reproduces the manifest, loader, firmware, image and exact capsule. Keep its
+   source pin, artifact and comparison together; this is host provenance, not
+   hardware qualification or permission to install.
 4. **Keep the fallback explicit.** The gzip image at p4+0 and TOC1 U-Boot can
    remain a recovery path, but a loader must detect the `baseos,*` markers
    before claiming which path ran; identical kernel hashes are insufficient.
@@ -445,3 +442,78 @@ used to derive the policy and loader header. That input is not the
 The pinned TOC1 source package and build-time `inventory/prefix.bin` remain
 unavailable; the live TOC1 package hash differs from the pinned source hash.
 Those missing build inputs still block exact generation reproduction.
+
+
+## Addendum — 2026-11-24: exact native generation and capsule reproduction
+
+The dedicated workflow
+[RG34XX native generation reproduction #45301188593](https://github.com/dengzhan007/BaseOS-MultiFrontend/actions/runs/45301188593)
+completed successfully. Its workflow head is
+`448d7f4f332cbfc4b316ad53aa361dbe53145ed7`; it checked out the builder at
+BaseOS-MultiFrontend commit
+`cbe253a43f46cf551cc9a6c79a84015bde3686cf` and the expected deployed capsule
+reference at commit `339e1cd5f84a6178c496257f835beb3388b8d9f9`
+(`manifest/native/rg34xx/capsule.bin`).
+
+The workflow used `fetch-prepared.sh rg34xx`. The committed bundle pin is
+`baseos-prepared-20260914.tar.zst`, release URL
+`https://github.com/pvaibhav/BaseOS/releases/download/prepared-20260914/baseos-prepared-20260914.tar.zst`,
+bundle SHA-256
+`86a0186b5ac8ab907dc1d5c24220c9fcd94f38dd9dc3fddb7fb5cf59d4c7719f`.
+The prepared model manifest
+`manifest/prepared/rg34xx.json` (blob
+`8fadc1784bf78460edb9039115411debdfc738e7`) pins
+`boot-prefix.img` at 222,298,112 bytes and SHA-256
+`fb75bc4c835fa74ff41c0a1fdbe79b8871a960fc249716847fb7be529835c3c3`.
+
+The workflow restored and verified these derived inventory/source inputs:
+
+| Input | Bytes | SHA-256 |
+|---|---:|---|
+| first 73,728 sectors of prepared prefix (`inventory/prefix.bin`) | 37,748,736 | `725f8a1552b90659da9dee5e71ef02a3d914ef7f8b5e433584b85829df65b650` |
+| prepared stock Boot0 (`inventory/boot0.bin`) | 65,536 | `b6edbf39af0bf1f35a7e2fd991c8966b04d061e247c81985d2516f695464049b` |
+| prepared env (`inventory/env.bin`) | 131,072 | `d1a0856a8fb4c6b3f46f6b32` |
+| TOC1 source package | 1,310,720 | `56371d984e29e74db63009ce27f829eb0a55ce9007ee5e40c52479b22418af3d` |
+| original boot image | 7,161,856 | `5b1e30930a9b0e7642da39ce5c699cfdb03970346c6f2757dcfb063bfc8a0b51` |
+| U-Boot v2026.10 archive | — | `f943a88389c8fd70a6b0d061a88267465e143c7ca6ea2b75837ab20f5b60c739` |
+
+The workflow also restored the original 05c39a7 upgrade artifact and recovered
+the boot-gzip source package/image from its rootfs; it did not substitute the
+composed A/B test image's first 222 MB as the prepared prefix.
+
+The rebuilt generation was
+`022f0d8816c861ebbec05f0d0d7f513d6b974d9930661d20fa8ad51b7b4c0fee`.
+All four native output identifiers matched the expected values:
+
+- loader 32,768 B:
+  `48b2a837ac5d8daad8f524c976f2b3911d26a838f8b68fa695e3283412dd8590`;
+- firmware 287,232 B:
+  `dc9dc3ae66b30244911e7054ca66136991626cabb0d59c796c4b253a126f28e9`;
+- active image 8,556,544 B:
+  `d71e5bd87b23fb409d7a837cf90d153ae117af518fe6ee330a96d2c7a5f76fc3`;
+- generation: exact 32-byte value above.
+
+The raw-capsule stage built a 49,152-byte AArch64 SPL
+(`cdfc6d480a257c5ccc3f5826c4e6cbcf499163c57119390e8bebeba6964a8570`),
+passed 36 capsule verification cases and 2 entry verification cases, and
+produced a 131,072-byte capsule with SHA-256
+`bf886995745a0eb9b5030296f9f6163035e164b3a82183716e67ff876319289f`.
+It matched the committed expected capsule byte-for-byte:
+`capsule_byte_exact_match=true`, `different_byte_count=0`.
+
+This also resolves the apparent Boot0 and TOC1 hash mismatch:
+
+- `b6edbf39…` is the prepared 64 KiB stock Boot0 embedded in the capsule.
+- `bf886995…` is the full 128 KiB raw capsule, which matches the target's
+  captured 128 KiB Boot0-primary image.
+- `56371d98…` is the TOC1 source package consumed by the native builder.
+- `e6c20e3a…` is the separate recovery TOC copied into the native manifest.
+
+These are different roles, not inconsistent identities.
+
+**Scope boundary:** the workflow and its comparisons are host-only. The
+artifact states `hardware_qualified=false` and
+`durable_install_eligible=false`. The exact build provenance is now
+reproducible, but this does not prove cold boot, UART access at BL33 entry,
+physical pad wiring, DRAM ownership, CPU1–CPU3 hold-off or safe device
+installation.
