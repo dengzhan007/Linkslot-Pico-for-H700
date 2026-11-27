@@ -51,7 +51,7 @@ def main():
     if mon_path.exists():
         M.DTB_SIZE=len(dtb); M.DTB_SHA256=hashlib.sha256(dtb).hexdigest()
         spl=Path("/mnt/data/baseos-native-boot-contract.c")
-        spl.write_text("memcpy(monitor + 0x30, parameters, 128);\\nmemcpy(monitor + 0x24, board, 8);\\n*(u32 *)(monitor + 0xb0) = 0x4a200000;\\n",encoding="utf-8")
+        spl.write_text("memcpy(monitor + 0x30, parameters, 128);\nmemcpy(monitor + 0x24, board, 8);\n*(u32 *)(monitor + 0xb0) = 0x4a200000;\n",encoding="utf-8")
         r=M.audit(mon_path.read_bytes(),dtb,spl)
         assert r["selected_controller"]["selector"]==5
         assert r["selected_controller"]["controller_base"]=="0x7081400"
