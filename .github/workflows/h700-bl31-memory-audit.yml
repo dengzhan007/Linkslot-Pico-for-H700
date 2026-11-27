@@ -11,7 +11,9 @@ on:
       - "scripts/audit-rg34xx-bl31-full-image-cpu-mmio.py"
       - "scripts/test-audit-rg34xx-bl31-full-image-cpu-mmio.py"
       - "scripts/audit-rg34xx-bl31-psci-cpu-on.py"
-      - "scripts/test-audit-rg34xx-bl31-psci-cpu-on.py"\n      - "scripts/audit-rg34xx-dram-window-ownership.py"\n      - "scripts/test-audit-rg34xx-dram-window-ownership.py"
+      - "scripts/test-audit-rg34xx-bl31-psci-cpu-on.py"
+      - "scripts/audit-rg34xx-dram-window-ownership.py"
+      - "scripts/test-audit-rg34xx-dram-window-ownership.py"
       - ".github/workflows/h700-bl31-memory-audit.yml"
   workflow_dispatch:
 
