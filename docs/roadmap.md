@@ -19,7 +19,7 @@ RG34XX 没有板载 eMMC，系统从可移动 TF 启动。报告中的 eMMC boot
 
 因此 M1 的具体工程目标是：在已运行的 native-SPL/BL31 启动路径中，受控准备替换活动 A32 BL33 loader（`0x4a000000`）的最小诊断 payload。任何 loader 更新都必须重新生成 p4+40 MiB firmware package 的 length/FNV，并重建与之匹配的 AArch64 SPL 和 128 KiB Boot0-primary capsule；不得新旧代混配。
 
-当前分支 HEAD `15d4319` 的 H700 boot-audit run [46033210075](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46033210075) 两端成功；最近完整 feasibility #931 [84/84 passed](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46031541947) 对应父提交 `f83f5f0`，不是当前 HEAD。所有这些均为 host/cross-build 或离线审计证据，不是 BL33 实机启动。硬件 gate 保持关闭。
+复核起始 HEAD `15d4319` 的 H700 boot-audit run [46033210075](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46033210075) 两端成功；最近完整 feasibility #931 [84/84 passed](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46031541947) 对应父提交 `f83f5f0`，不是当前 HEAD。所有这些均为 host/cross-build 或离线审计证据，不是 BL33 实机启动。硬件 gate 保持关闭。
 
 ### 当前唯一近期交付物 M1
 
