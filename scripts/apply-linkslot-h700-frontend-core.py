@@ -7,7 +7,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-PINNED_SNAPSHOT = "241e7c1974926fa22552b200852914ceaccbfd42"
+PINNED_SNAPSHOT = "6122c8f2357ecae43295fdb1a158ff5ef7488325"
 UPSTREAM_CRATES = ("slot-input", "slot-model", "slot-i18n")
 
 
