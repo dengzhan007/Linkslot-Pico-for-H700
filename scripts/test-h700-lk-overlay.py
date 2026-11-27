@@ -641,7 +641,7 @@ SECTIONS
         "extern int h700_data_abort_try_recover(void *frame);\n"
         "int arm_data_abort_handler(void *frame) {\n"
         "    if (h700_data_abort_try_recover(frame)) return 1;\n"
-        "    for (;;) { __asm__ volatile(\\\"wfi\\\" ::: \\\"memory\\\"); }\n"
+        "    for (;;) { __asm__ volatile(\"wfi\" ::: \"memory\"); }\n"
         "}\n",
         encoding="utf-8",
     )
