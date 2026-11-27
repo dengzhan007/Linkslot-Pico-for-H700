@@ -867,8 +867,10 @@ Hard size boundary: this first integration path is only for a small diagnostic p
 - [x] Establish PM callback registration/dispatch path: map the nine-member
   legacy platform-ops table, slots 0–8, member byte offsets, indirect
   dispatches, system_off/system_reset helpers and SYSTEM_SUSPEND getter.
-  BL31 audit #39 passed 20/20. This remains static call-path evidence only;
-  runtime reachability/timing is unresolved.
+  BL31 audit #51 passed 20/20; static analysis now covers the SYSTEM_SUSPEND
+  affinity loop, special `-4` power-entry, SRAM image/context copy, RTC wake
+  return, CPUX_AXI field transition and count-based wait loop. Runtime reachability
+  and actual suspend/resume remain unverified.
 - [ ] Confirm APB1/PIO access permission and clock/reset state at BL33 entry;
   keep PI12 MMIO default-off.
 - [ ] Close BL31/Boot0 RAM ownership and secondary A53 hold-off/SMP gates.
@@ -889,10 +891,10 @@ Hard size boundary: this first integration path is only for a small diagnostic p
 - [ ] Recover exact vendor TF-A source commit/build provenance for the
   107,216-byte BL31; the effective ABI is binary-derived, not a recovered
   vendor source revision.
-- [ ] Recover the full CFG/semantics of SYSTEM_SUSPEND transition function
-  `0x48008d98`, including affinity-level callback iteration and ordering.
-  prove which registered callback owns each path and whether resume/restore
-  is a separate callback.
+- [x] Recover static CFG/semantics of SYSTEM_SUSPEND transition `0x48008d98`:
+  affinity-level callbacks, `-4` special entry, SRAM image/context staging,
+  RTC soft-entry return, cache teardown and CPUX_AXI bit transition.
+  BL31 audit #51 passed 20/20. This does not prove hardware execution.
 - [ ] Establish whether any such path executes during cold boot or only after
   later PSCI/power-management requests. Binary presence is not runtime proof.
 - Hardware unchanged: `hardware_applied=0`.
@@ -934,3 +936,32 @@ Hard size boundary: this first integration path is only for a small diagnostic p
   ordering. Do not call this live suspend/resume validation.
 - Hardware unchanged: `hardware_applied=0`; no MMIO, storage writes, flashing
   or payload execution.
+
+## 2026-11-27 — SYSTEM_SUSPEND SRAM standby image and wake-return statically mapped
+
+- [x] Trace `get_sys_suspend_power_state` (`0x02010000`) through the legacy
+  PSCI affinity loop and prove level-0/1/2 wrappers dispatch slot 3.
+- [x] Prove slot-3 `-4` sentinel routes to `0x48001a04`, then verify EL3
+  SCTLR M/C teardown and CLIDR/CCSIDR set/way cache-maintenance sequence.
+- [x] Reconstruct the main standby image copy `[0x4800c220,0x48015630)` to
+  `[0x20000,0x29410)`, entry relocation `0x4800c3d8 → 0x201b8`, auxiliary
+  context/header copies, scratch `[0x291f0,0x29349)`, stack helper `0x27e80`
+  and stack top `0x57ff0`.
+- [x] Verify WFI and RTC standby flag/soft-entry writes; trace saved return
+  address `0x48015d14` through `BLR X22` and BL31 continuation restore.
+- [x] Verify standby/resume writes to CPUX_AXI candidate register
+  `0x03001500`: clear/set bits 25:24; preserve bit 26; do not infer actual
+  mux selection, CPU frequency or DVFS from these instructions.
+- [x] Verify wait helper `0x48011ff8 → 0x48014078`: 10 argument becomes 40
+  decrement iterations. Time unit remains unknown.
+- [x] BL31 audit #51 [passed 20/20](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45917139830);
+  artifact [15162412897](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45917139830/artifacts/15162412897).
+- [ ] Inspect remaining PM helper calls `0x48011b40`, `0x48011ba8`,
+  `0x48011df8`, `0x48011b58` and their register semantics; obtain exact
+  source provenance before assigning undocumented names.
+- [ ] Establish SRAM C ownership/clock lifecycle and actual RTC/PMIC wake-source
+  configuration by non-invasive, trusted read-only evidence.
+- [ ] Close BL31/Boot0 RAM ownership, 32 KiB diagnostic loader limits,
+  secondary-A53 reset/hold-off and timer-PPI handoff before any runtime test.
+- Hardware unchanged: `hardware_applied=0`; no MMIO, PSCI SMC, suspend,
+  storage write, flashing or payload execution.

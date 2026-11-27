@@ -286,3 +286,101 @@ pointer-looking data near `0x48017b20` and `0x48017d70` is only a lead until
 its consumers and callsites are recovered.
 
 `hardware_applied=0` remains unchanged.
+
+## SYSTEM_SUSPEND SRAM standby and RTC wake-return path (2026-11-27)
+
+BL31 audit [#51](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45917139830)
+passed 20/20 on code HEAD `cb2b836e8fcf70e4a482ce922cfc0a850c927a58`.
+Artifact [15162412897](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45917139830/artifacts/15162412897)
+contains the JSON report and expanded callback disassembly. Monitor identity is
+unchanged: 107,216 bytes, SHA-256
+`676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31`.
+
+### Callback path to deep standby
+
+- `get_sys_suspend_power_state` at `0x48002544` returns `0x02010000`.
+- `0x48008d98` iterates affinity level 0 through 2 over callback map
+  `0x48017d70`: `0x48008b84`, `0x48008ab8`, `0x48008a00`. These wrappers
+  dispatch the legacy ops slot 3 `affinst_suspend`.
+- Slot 3 system-level CCU/AON save branch returns `-4`; SYSTEM_SUSPEND caller
+  compares this sentinel at `0x48009768` and calls special entry
+  `0x48001a04` from `0x48009774`.
+- Ordinary PSCI powerdown separately contains `DSB SY; WFI; B WFI` at
+  `0x48015d70–0x48015d78`. This loop is distinct from the SYSTEM_SUSPEND
+  SRAM-standby preparation path.
+
+### EL3 cache teardown and SRAM image staging
+
+The special entry invokes cache teardown through `0x48016128`: it reads
+`SCTLR_EL3`, clears M/C bits with mask `0x5`, writes it back and executes
+`ISB`. It then uses `CLIDR_EL1` / `CCSIDR_EL1` to select cache levels and
+perform set/way maintenance before branching to the relocated SRAM entry.
+
+The byte-copy helper is `0x4800aa80`. The main code/data image is copied as:
+
+| Source | Destination | Length | Meaning / condition |
+|---|---|---:|---|
+| `[0x4800c220,0x48015630)` | `[0x20000,0x29410)` | `0x9410` | standby image, always |
+| `[0x48000030,0x480000b0)` | `[0x20000,0x20080)` | `0x80` | BL31 header/context prefix, always; overlays first 0x80 bytes |
+| `[0x4803cb90,0x4803cbc0)` | `[0x20080,0x200b0)` | `0x30` | auxiliary runtime context; source lies outside monitor file payload |
+| `[0x4801b308,0x4801b368)` | `[0x200d4,0x20134)` | `0x60` | conditional context block |
+| `[0x4801b380,0x4801b400)` | `[0x20134,0x201b4)` | `0x80` | conditional context block |
+
+The copied entry source `0x4800c3d8` is offset `+0x1b8` from the main
+copy base and therefore executes at SRAM address `0x201b8`. The copied
+stack helper source `0x480140a0` maps to `0x27e80`; its literal stack top
+is `0x57ff0`. The entry clears relocated scratch/BSS region
+`[0x291f0,0x29349)`, derived by the same source/destination offset mapping.
+
+This layout extends beyond the low SRAM window into higher SRAM. Static copy
+instructions prove the intended addresses, but do not prove runtime SRAM C
+ownership, retention, clocking or arbitration conditions. Those remain closed
+hardware prerequisites, not assumptions.
+
+### RTC standby flag, wake entry and BL31 continuation
+
+The copied path contains WFI instructions at source PCs `0x4800c50c` and
+`0x4800c550`. It writes standby flag `0x00010000` to `0x070001f8`, and
+writes the saved return address from context offset `+0xc4` to RTC soft-entry
+register `0x070001fc`. The stored return address is `0x48015d14`.
+
+On the statically reconstructed wake path, copied code reads context
+`+0xc4` and reaches `BLR X22` at `0x4800c6a8`. The BL31 continuation at
+`0x48015d14` restores/configures `SCTLR_EL3`, points `VBAR_EL3` to
+`0x48019000`, clears the IRQ mask with `DAIFClr #4`, selects `SPSel=0`,
+restores CPU/PSCI context and branches to `0x480158c8`.
+
+### CPUX_AXI clock-field operation and wait helper
+
+The standby and resume paths both access candidate register `0x03001500`:
+
+- Standby reads it, applies `AND #0xfcffffff` (clears bits 25:24), writes
+  it and calls `0x48011ff8`.
+- Resume reads it, applies `ORR #0x03000000` (sets bits 25:24), writes it
+  and calls the same helper.
+- The H616 reference map labels offset `0x500` as `CPUX_AXI_CFG_REG` and
+  identifies `CLK_SRC_SEL[26:24]`. These operations preserve bit 26, so
+  exact mux selection cannot be inferred from these instructions alone.
+  Do not infer a PLL source, CPU OPP, or DVFS API.
+- Wait helper `0x48011ff8` performs `LSL W0,W0,#2` then branches to
+  `0x48014078`; that loop executes `SUBS X0,X0,#1; B.HI 0x48014078; RET`.
+  Each caller passes 10, yielding 40 decrement iterations. No timer or
+  reference-frequency conversion is present in this path; elapsed time is
+  unknown.
+
+### Evidence boundary and next work
+
+CI #51 proves these instruction words, BL targets, branch targets, copied
+address arithmetic and table entries against the matched static monitor. It
+is not evidence that the platform successfully entered standby or woke up.
+No PSCI SMC, MMIO access, RTC/PMIC probe, cache operation, storage write or
+firmware execution was performed on the device.
+
+Next inspect remaining called helpers (`0x48011b40`, `0x48011ba8`,
+`0x48011df8`, `0x48011b58`) and identify exact register semantics/source
+provenance. Separately establish SRAM C ownership/clock lifecycle, RTC wake
+source, CPUX_AXI live field value, and close BL31/Boot0 memory ownership,
+secondary A53 hold-off and timer-PPI prerequisites before any reversible
+runtime test.
+
+`hardware_applied=0` remains unchanged.
