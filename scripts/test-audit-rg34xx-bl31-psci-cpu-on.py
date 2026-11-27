@@ -15,6 +15,37 @@ spec.loader.exec_module(module)
 def main() -> int:
     assert module.decode_bl_target(0x48009dec, 0x97ffe2f4) == 0x480029bc
     assert module.decode_bl_target(0x4800255c, 0x94000207) == 0x48002d78
+
+    # SPL and BL31 CPU_ON RVBAR selection must agree only for known-safe
+    # selector classes 0 and 2; all other low-three-bit values mismatch.
+    expected_banks = {
+        0: (0x09010040, 0x09010040),
+        1: (0x08100040, 0x09010040),
+        2: (0x08100040, 0x08100040),
+        3: (0x08100040, 0x09010040),
+        4: (0x08100040, 0x09010040),
+        5: (0x08100040, 0x09010040),
+        6: (0x08100040, 0x09010040),
+        7: (0x08100040, 0x09010040),
+    }
+    for selector, (bl31_base, spl_base) in expected_banks.items():
+        assert module.bl31_cpu_on_rvbar_base(selector) == bl31_base
+        assert module.native_spl_primary_rvbar_base(selector) == spl_base
+    assert module.rvbar_selector_parity() == {
+        "matching": [0, 2],
+        "mismatching": [1, 3, 4, 5, 6, 7],
+    }
+    for invalid_selector in (-1, 8, True, 1.5):
+        for helper in (
+            module.bl31_cpu_on_rvbar_base,
+            module.native_spl_primary_rvbar_base,
+        ):
+            try:
+                helper(invalid_selector)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("invalid VER_REG selector was accepted")
     assert module.decode_bl_target(0x48002998, 0x97fffb7e) == 0x48001790
     assert module.decode_bl_target(0x48002858, 0x97fffc20) == 0x480018d8
     assert module.decode_b_target(0x48002874, 0x17ffff83) == 0x48002680
