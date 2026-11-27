@@ -710,6 +710,8 @@ SECTIONS
         "h700_rg34xx_power_led_is_ready",
         "physical_memory_size",
         "tt",
+        "abort_stack",
+        "abort_stack_top",
         "h700_led_diag_status",
         "arm_data_abort_handler",
         "_end",
@@ -723,6 +725,33 @@ SECTIONS
     if early_symbols["_end"] >= IMAGE_END:
         raise RuntimeError(f"early-MMU/PI12 BSS exceeds the researched link bound: {early_symbols['_end']:#x}")
 
+
+    # Explicitly qualify the two large early-runtime BSS objects. The pinned
+    # LK CRT0 uses one 8 KiB shared early stack until threading starts; the
+    # AArch32 section table is 4096 * 4 bytes. They must be disjoint and
+    # contained in the candidate BL33 slot. This is a local layout check,
+    # not approval of the slot against opaque BL31/Boot0 consumers.
+    stack_begin = early_symbols["abort_stack"]
+    stack_end = early_symbols["abort_stack_top"]
+    tt_begin = early_symbols["tt"]
+    tt_end = tt_begin + 4096 * 4
+    if stack_end - stack_begin != 0x2000:
+        raise RuntimeError(
+            f"pinned LK early abort/initial stack must remain 8 KiB: "
+            f"[{stack_begin:#x},{stack_end:#x})"
+        )
+    if stack_begin < IMAGE_BASE or stack_end > early_symbols["_end"]:
+        raise RuntimeError("LK early stack must be fully contained in the linked BL33 BSS")
+    if tt_begin < IMAGE_BASE or tt_end > early_symbols["_end"]:
+        raise RuntimeError("LK 16 KiB translation table must be fully contained in the linked BL33 BSS")
+    if stack_begin < tt_end and tt_begin < stack_end:
+        raise RuntimeError(
+            f"LK early stack [{stack_begin:#x},{stack_end:#x}) overlaps "
+            f"translation table [{tt_begin:#x},{tt_end:#x})"
+        )
+    if stack_end & 7:
+        raise RuntimeError("LK early stack top must satisfy the 8-byte AAPCS alignment")
+    stack_tt_gap = max(tt_begin - stack_end, stack_begin - tt_end, 0)
     early_binary = out / "h700-early-led-layout.bin"
     run(["llvm-objcopy", "-O", "binary", str(early_elf), str(early_binary)])
     early_raw = early_binary.read_bytes()
@@ -764,7 +793,8 @@ SECTIONS
         "- Result: PASS for a minimal source/layout ELF linking the pinned LK AArch32 architecture/MMU/cache/CP15 code and the H700 PI12 service.\n",
         f"- Raw ELF image: {len(early_raw)} bytes; 32 KiB file headroom {ACTIVE_LOADER_EXTENT_BYTES - len(early_raw)} bytes.\n",
         f"- Linked _end: 0x{early_symbols['_end']:08x}; in-memory span 0x{early_symbols['_end'] - IMAGE_BASE:x} bytes.\n",
-        f"- Actual LK section table tt: 0x{early_symbols['tt']:08x}, 16 KiB aligned (16,384-byte table).\n",
+        f"- Actual LK section table tt: [0x{tt_begin:08x},0x{tt_end:08x}), 16 KiB aligned (16,384-byte table).\\n",
+        f"- Pinned LK early/abort stack: [0x{stack_begin:08x},0x{stack_end:08x}) ({stack_end - stack_begin} bytes); stack/table gap {stack_tt_gap} bytes; overlap check PASS.\\n",
         f"- arch_early_init: 0x{early_symbols['arch_early_init']:08x}; platform_init_mmu_mappings: 0x{early_symbols['platform_init_mmu_mappings']:08x}.\n",
         f"- arm_mmu_init: 0x{early_symbols['arm_mmu_init']:08x}; arm_mmu_map_section: 0x{early_symbols['arm_mmu_map_section']:08x}; arch_enable_mmu: 0x{early_symbols['arch_enable_mmu']:08x}.\n",
         f"- target_early_init: 0x{early_symbols['target_early_init']:08x}; PI12 service: 0x{early_symbols['h700_rg34xx_power_led_early_init']:08x}.\n",
@@ -778,7 +808,7 @@ SECTIONS
         "\n### Explicit limits\n\n",
         "- This is a minimal layout regression, not a bootable image or a full LK target. It deliberately omits thread_init_early(), the vendor-specific platform_early_init(), GIC/timer/console, heap, storage and the rest of kmain().\n",
         "- APB1/PIO clock state at the BL33 handoff is not proven by this link test. The LED service does not alter CCU/APB1; do not execute this payload until the early PIO bus-clock and physical memory ownership gates are separately closed.\n",
-        "- The 32 KiB check is raw-file size only. _end/BSS and the 16 KiB translation table are runtime memory; this test does not grant ownership of the [0x4a000000,0x4a0e0000) range.\n",
+        "- The 32 KiB check is raw-file size only. _end/BSS, the 8 KiB early stack and 16 KiB translation table are runtime memory; automated non-overlap checks do not grant ownership of the [0x4a000000,0x4a0e0000) range against Boot0/BL31.\\n",
         "- No vendor header or firmware/SPL pair was generated, no SD/Boot0/TOC1 was written, and no MMIO register was accessed on device.\n",
     ]
     (out / "H700_EARLY_LED_LAYOUT.md").write_text("".join(early_report), encoding="utf-8")
