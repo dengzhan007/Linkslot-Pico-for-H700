@@ -1,0 +1,664 @@
+{
+  "cma_areas": [],
+  "cma_pfns_normalized": true,
+  "debugfs_presence": {
+    "/sys/kernel/debug/cma": "not_present"
+  },
+  "fdt_sha256": "b761cbcca4087951b3d57fc40b5e84d100c0a51dad6b6b98ab8cf74527a45a89",
+  "framebuffers": [
+    {
+      "base": "0x7bf24800",
+      "bits_per_pixel": 32,
+      "end_exclusive": "0x7c076000",
+      "height": 480,
+      "matches_disp_reserve": true,
+      "node": "/soc@03000000/disp@01000000",
+      "raw": "7bf24800,2d0,1e0,20,b40,0,0,2d0,1e0",
+      "remaining_hex_fields": [
+        "0",
+        "0",
+        "2d0",
+        "1e0"
+      ],
+      "size_bytes": 1382400,
+      "stride_bytes": 2880,
+      "width": 720
+    }
+  ],
+  "limitations": [
+    "CMA PFN ranges identify CMA-managed physical pages; they do not by themselves describe every secure-world or device-specific reservation.",
+    "memblock data can be absent after boot on kernels that do not preserve memblock arrays; absence is not proof that no reserved regions exist.",
+    "This report is based only on the captured read-only debugfs snapshot."
+  ],
+  "memblock": {
+    "memory": [
+      {
+        "attributes": "size:1048576K",
+        "end_exclusive": "0x80000000",
+        "end_inclusive": "0x7fffffff",
+        "index": 0,
+        "reported_size": {
+          "bytes": 1073741824,
+          "unit": "K",
+          "value": 1048576
+        },
+        "size_bytes": 1073741824,
+        "start": "0x40000000"
+      }
+    ],
+    "reserved": [
+      {
+        "attributes": "size:17620K",
+        "end_exclusive": "0x411b5000",
+        "end_inclusive": "0x411b4fff",
+        "index": 0,
+        "reported_size": {
+          "bytes": 18042880,
+          "unit": "K",
+          "value": 17620
+        },
+        "size_bytes": 18042880,
+        "start": "0x40080000"
+      },
+      {
+        "attributes": "size:8K",
+        "end_exclusive": "0x411b8000",
+        "end_inclusive": "0x411b7fff",
+        "index": 1,
+        "reported_size": {
+          "bytes": 8192,
+          "unit": "K",
+          "value": 8
+        },
+        "size_bytes": 8192,
+        "start": "0x411b6000"
+      },
+      {
+        "attributes": "size:4K",
+        "end_exclusive": "0x42001000",
+        "end_inclusive": "0x42000fff",
+        "index": 2,
+        "reported_size": {
+          "bytes": 4096,
+          "unit": "K",
+          "value": 4
+        },
+        "size_bytes": 4096,
+        "start": "0x42000000"
+      },
+      {
+        "attributes": "size:140K",
+        "end_exclusive": "0x44023240",
+        "end_inclusive": "0x4402323f",
+        "index": 3,
+        "reported_size": {
+          "bytes": 143360,
+          "unit": "K",
+          "value": 140
+        },
+        "size_bytes": 143936,
+        "start": "0x44000000"
+      },
+      {
+        "attributes": "size:16384K",
+        "end_exclusive": "0x49000000",
+        "end_inclusive": "0x48ffffff",
+        "index": 4,
+        "reported_size": {
+          "bytes": 16777216,
+          "unit": "K",
+          "value": 16384
+        },
+        "size_bytes": 16777216,
+        "start": "0x48000000"
+      },
+      {
+        "attributes": "size:65536K",
+        "end_exclusive": "0x7bc00000",
+        "end_inclusive": "0x7bbfffff",
+        "index": 5,
+        "reported_size": {
+          "bytes": 67108864,
+          "unit": "K",
+          "value": 65536
+        },
+        "size_bytes": 67108864,
+        "start": "0x77c00000"
+      },
+      {
+        "attributes": "size:16384K",
+        "end_exclusive": "0x7fc00000",
+        "end_inclusive": "0x7fbfffff",
+        "index": 6,
+        "reported_size": {
+          "bytes": 16777216,
+          "unit": "K",
+          "value": 16384
+        },
+        "size_bytes": 16777216,
+        "start": "0x7ec00000"
+      },
+      {
+        "attributes": "size:4K",
+        "end_exclusive": "0x7fd4b000",
+        "end_inclusive": "0x7fd4afff",
+        "index": 7,
+        "reported_size": {
+          "bytes": 4096,
+          "unit": "K",
+          "value": 4
+        },
+        "size_bytes": 4096,
+        "start": "0x7fd4a000"
+      },
+      {
+        "attributes": "size:1936K",
+        "end_exclusive": "0x7ff49000",
+        "end_inclusive": "0x7ff48fff",
+        "index": 8,
+        "reported_size": {
+          "bytes": 1982464,
+          "unit": "K",
+          "value": 1936
+        },
+        "size_bytes": 1982464,
+        "start": "0x7fd65000"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ff49a60",
+        "end_inclusive": "0x7ff49a5f",
+        "index": 9,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 96,
+        "start": "0x7ff49a00"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ff49ae0",
+        "end_inclusive": "0x7ff49adf",
+        "index": 10,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 96,
+        "start": "0x7ff49a80"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ff49c20",
+        "end_inclusive": "0x7ff49c1f",
+        "index": 11,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 288,
+        "start": "0x7ff49b00"
+      },
+      {
+        "attributes": "size:4K",
+        "end_exclusive": "0x7ff4cc90",
+        "end_inclusive": "0x7ff4cc8f",
+        "index": 12,
+        "reported_size": {
+          "bytes": 4096,
+          "unit": "K",
+          "value": 4
+        },
+        "size_bytes": 4112,
+        "start": "0x7ff4bc80"
+      },
+      {
+        "attributes": "size:712K",
+        "end_exclusive": "0x7ffff008",
+        "end_inclusive": "0x7ffff007",
+        "index": 13,
+        "reported_size": {
+          "bytes": 729088,
+          "unit": "K",
+          "value": 712
+        },
+        "size_bytes": 729896,
+        "start": "0x7ff4cce0"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffff088",
+        "end_inclusive": "0x7ffff087",
+        "index": 14,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 8,
+        "start": "0x7ffff080"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffff3bc",
+        "end_inclusive": "0x7ffff3bb",
+        "index": 15,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 700,
+        "start": "0x7ffff100"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffff6bc",
+        "end_inclusive": "0x7ffff6bb",
+        "index": 16,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 700,
+        "start": "0x7ffff400"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffff9bc",
+        "end_inclusive": "0x7ffff9bb",
+        "index": 17,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 700,
+        "start": "0x7ffff700"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffffac0",
+        "end_inclusive": "0x7ffffabf",
+        "index": 18,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 192,
+        "start": "0x7ffffa00"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffffb14",
+        "end_inclusive": "0x7ffffb13",
+        "index": 19,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 44,
+        "start": "0x7ffffae8"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffffb43",
+        "end_inclusive": "0x7ffffb42",
+        "index": 20,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 43,
+        "start": "0x7ffffb18"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffffb73",
+        "end_inclusive": "0x7ffffb72",
+        "index": 21,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 43,
+        "start": "0x7ffffb48"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffffba4",
+        "end_inclusive": "0x7ffffba3",
+        "index": 22,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 44,
+        "start": "0x7ffffb78"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffffbd4",
+        "end_inclusive": "0x7ffffbd3",
+        "index": 23,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 44,
+        "start": "0x7ffffba8"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffffc05",
+        "end_inclusive": "0x7ffffc04",
+        "index": 24,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 45,
+        "start": "0x7ffffbd8"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffffc34",
+        "end_inclusive": "0x7ffffc33",
+        "index": 25,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 44,
+        "start": "0x7ffffc08"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffffc64",
+        "end_inclusive": "0x7ffffc63",
+        "index": 26,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 44,
+        "start": "0x7ffffc38"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffffc9d",
+        "end_inclusive": "0x7ffffc9c",
+        "index": 27,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 53,
+        "start": "0x7ffffc68"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffffccd",
+        "end_inclusive": "0x7ffffccc",
+        "index": 28,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 45,
+        "start": "0x7ffffca0"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffffcfd",
+        "end_inclusive": "0x7ffffcfc",
+        "index": 29,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 45,
+        "start": "0x7ffffcd0"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffffd2c",
+        "end_inclusive": "0x7ffffd2b",
+        "index": 30,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 44,
+        "start": "0x7ffffd00"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffffd5b",
+        "end_inclusive": "0x7ffffd5a",
+        "index": 31,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 43,
+        "start": "0x7ffffd30"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffffd8c",
+        "end_inclusive": "0x7ffffd8b",
+        "index": 32,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 44,
+        "start": "0x7ffffd60"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffffdbc",
+        "end_inclusive": "0x7ffffdbb",
+        "index": 33,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 44,
+        "start": "0x7ffffd90"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffffdec",
+        "end_inclusive": "0x7ffffdeb",
+        "index": 34,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 44,
+        "start": "0x7ffffdc0"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffffe1c",
+        "end_inclusive": "0x7ffffe1b",
+        "index": 35,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 44,
+        "start": "0x7ffffdf0"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffffe4c",
+        "end_inclusive": "0x7ffffe4b",
+        "index": 36,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 44,
+        "start": "0x7ffffe20"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffffe7c",
+        "end_inclusive": "0x7ffffe7b",
+        "index": 37,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 44,
+        "start": "0x7ffffe50"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffffeac",
+        "end_inclusive": "0x7ffffeab",
+        "index": 38,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 44,
+        "start": "0x7ffffe80"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7ffffedc",
+        "end_inclusive": "0x7ffffedb",
+        "index": 39,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 44,
+        "start": "0x7ffffeb0"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7fffff0f",
+        "end_inclusive": "0x7fffff0e",
+        "index": 40,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 47,
+        "start": "0x7ffffee0"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7fffff3f",
+        "end_inclusive": "0x7fffff3e",
+        "index": 41,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 47,
+        "start": "0x7fffff10"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7fffff6f",
+        "end_inclusive": "0x7fffff6e",
+        "index": 42,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 47,
+        "start": "0x7fffff40"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7fffff9f",
+        "end_inclusive": "0x7fffff9e",
+        "index": 43,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 47,
+        "start": "0x7fffff70"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7fffffcf",
+        "end_inclusive": "0x7fffffce",
+        "index": 44,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 47,
+        "start": "0x7fffffa0"
+      },
+      {
+        "attributes": "size:0K",
+        "end_exclusive": "0x7fffffff",
+        "end_inclusive": "0x7ffffffe",
+        "index": 45,
+        "reported_size": {
+          "bytes": 0,
+          "unit": "K",
+          "value": 0
+        },
+        "size_bytes": 47,
+        "start": "0x7fffffd0"
+      }
+    ]
+  },
+  "meminfo_bytes": {
+    "CmaFree": 65961984,
+    "CmaTotal": 67108864,
+    "MemTotal": 1020620800
+  },
+  "page_size_bytes": 4096,
+  "ram_regions": [
+    {
+      "end_exclusive": "0x80000000",
+      "node": "/memory@40000000",
+      "size": "0x40000000",
+      "start": "0x40000000"
+    }
+  ]
+}

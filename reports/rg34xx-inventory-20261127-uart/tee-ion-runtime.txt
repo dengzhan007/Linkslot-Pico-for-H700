@@ -1,0 +1,102 @@
+== kernel identity ==
+Linux rg34xx 4.9.170 #19 SMP PREEMPT Tue May 26 13:58:08 CST 2026 aarch64 Linux
+
+== kernel configuration (when exported) ==
+-- /proc/config.gz --
+CONFIG_CMA=y
+CONFIG_DMA_CMA=y
+CONFIG_OF_RESERVED_MEM=y
+CONFIG_ION=y
+CONFIG_TEE=y
+CONFIG_OPTEE=y
+
+== ION device and runtime debugfs ==
+crw-------    1 root     root       10,  63 Jan  1  1970 /dev/ion
+NOT_PRESENT: /dev/tee0
+NOT_PRESENT: /dev/teepriv0
+lrwxrwxrwx    1 root     root             0 Nov 27 10:58 /sys/class/misc/ion -> ../../devices/virtual/misc/ion
+drwxr-xr-x    2 root     root             0 Nov 27 10:58 /sys/class/tee
+drwxr-xr-x    4 root     root             0 Jan  1  1970 /sys/kernel/debug/ion
+drwxr-xr-x    2 root     root             0 Jan  1  1970 /sys/kernel/debug/ion/heaps
+drwxr-xr-x    2 root     root             0 Jan  1  1970 /sys/kernel/debug/ion/clients
+drwxr-xr-x    2 root     root             0 Nov 27 10:58 /sys/bus/platform/drivers/ion-sunxi
+-- /sys/kernel/debug/ion/heaps/sys_user --
+          client              pid             size
+----------------------------------------------------
+       ion_disp2                1          7372800
+         ion_vin                1             4096
+         ion_vin                1             4096
+         ion_vin                1             4096
+         ion_vin                1             4096
+         ion_vin                1             4096
+         ion_vin                1             4096
+----------------------------------------------------
+orphaned allocations (info is from last known client):
+----------------------------------------------------
+  total orphaned                0
+          total           7397376
+   deferred free                0
+----------------------------------------------------
+0 order 8 highmem pages uncached 0 total
+0 order 8 lowmem pages uncached 0 total
+0 order 4 highmem pages uncached 0 total
+0 order 4 lowmem pages uncached 0 total
+0 order 0 highmem pages uncached 0 total
+0 order 0 lowmem pages uncached 0 total
+0 order 8 highmem pages cached 0 total
+0 order 8 lowmem pages cached 0 total
+0 order 4 highmem pages cached 0 total
+0 order 4 lowmem pages cached 0 total
+0 order 0 highmem pages cached 0 total
+0 order 0 lowmem pages cached 0 total
+-- /sys/kernel/debug/ion/heaps/cma --
+          client              pid             size
+----------------------------------------------------
+----------------------------------------------------
+orphaned allocations (info is from last known client):
+----------------------------------------------------
+  total orphaned                0
+          total                 0
+----------------------------------------------------
+
+ 0x77c00000:  d7 3f 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+ 0x79000000:  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+ 0x7a400000:  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+ 0x7b800000:  00 00 00 00
+ Cma area start:0x77c00000 end:0x7bc00000
+ Cma area Total:64MB Free:64416KB ~= 62MB
+-- /sys/kernel/debug/ion/heaps/secure --
+          client              pid             size
+----------------------------------------------------
+----------------------------------------------------
+orphaned allocations (info is from last known client):
+----------------------------------------------------
+  total orphaned                0
+          total                 0
+----------------------------------------------------
+
+== loaded ION / TEE modules ==
+NO_MATCHING_MODULES (drivers may be built-in)
+
+== platform driver binding ==
+total 0
+drwxr-xr-x    2 root     root             0 Nov 27 10:58 .
+drwxr-xr-x   73 root     root             0 Nov 27 10:58 ..
+--w-------    1 root     root          4096 Nov 27 10:58 bind
+lrwxrwxrwx    1 root     root             0 Nov 27 10:58 ion -> ../../../../devices/platform/ion
+--w-------    1 root     root          4096 Nov 27 10:58 uevent
+--w-------    1 root     root          4096 Nov 27 10:58 unbind
+
+== ION / TEE / DRM / secure / CMA kernel log lines ==
+[    0.741580] sunxi cedar version 0.1
+[    0.781632] device-mapper: uevent: version 1.0.3
+[    0.980184] optee: probing for conduit method from DT.
+[    0.980192] optee: api uid mismatch
+[    0.981721] pktgen: Packet Generator for packet performance testing. Version: 2.75
+[    0.994622] nf_conntrack version 0.5.0 (8192 buckets, 32768 max)
+[    1.004119] Registered cp15_barrier emulation handler
+[    1.004132] Registered setend emulation handler
+[    1.004951] registered taskstats version 1
+[    1.026888] input: ANBERNIC-keys as /devices/platform/soc/soc@03000000:gpio_keys/input/input1
+[    1.027760] input: dierct-keys-polled as /devices/platform/dierct-keys-polled/input/input2
+[    3.508157] RTW: rtl8821cs BT-Coex version = COEX20180712-3232

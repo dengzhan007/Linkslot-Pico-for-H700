@@ -1,0 +1,48 @@
+collector=rg34xx-uart0-runtime-readonly-v1
+captured_at=Fri Nov 27 10:59:36 UTC 2026
+kernel=Linux rg34xx 4.9.170 #19 SMP PREEMPT Tue May 26 13:58:08 CST 2026 aarch64 Linux
+evidence_scope=Linux post-boot runtime only; not BL33-entry state
+access=read-only procfs/sysfs and already-mounted debugfs text views
+no_devmem=1
+no_mmio_reads_or_writes=1
+no_uart_ccu_reset_or_pinmux_writes=1
+no_debugfs_mount=1
+
+== active Linux serial console arguments only ==
+earlyprintk=sunxi-uart,0x05000000
+console=ttyS0,115200
+
+== serial driver runtime view ==
+NOT_READABLE_OR_ABSENT: /proc/tty/driver/serial
+
+== ttyS device links (read-only sysfs) ==
+-- /sys/class/tty/ttyS0 --
+/sys/devices/platform/soc/uart0
+dev=248:0
+-- /sys/class/tty/ttyS1 --
+/sys/devices/platform/soc/uart1
+dev=248:1
+
+== PH0/PH1 pinmux and pinconf (existing debugfs only) ==
+-- /sys/kernel/debug/pinctrl/pio/pinmux-pins --
+pin 224 (PH0): uart0 (GPIO UNCLAIMED) function uart0 group PH0
+pin 225 (PH1): uart0 (GPIO UNCLAIMED) function uart0 group PH1
+-- /sys/kernel/debug/pinctrl/r_pio/pinmux-pins --
+NO_PH0_PH1_MATCH
+-- /sys/kernel/debug/pinctrl/pio/pinconf-pins --
+pin 224 (PH0):input bias pull up, output drive strength (20 mA)
+pin 225 (PH1):input bias pull up, output drive strength (20 mA)
+-- /sys/kernel/debug/pinctrl/r_pio/pinconf-pins --
+NO_PH0_PH1_MATCH
+
+== UART0 / APB2 clock summary (existing debugfs only) ==
+    apb2                                  2            2    24000000          0 0  
+       uart0                              1            1    24000000          0 0  
+
+== UART0-related kernel log lines (filtered; no full cmdline or serial IDs) ==
+[    0.786889] sun50iw9p1-pinctrl pio: expect_func as:uart0_jtag, but muxsel(3) is func:jtag
+[    0.786906] sun50iw9p1-pinctrl pio: expect_func as:uart0_jtag, but muxsel(3) is func:jtag
+[    0.786921] sun50iw9p1-pinctrl pio: expect_func as:uart0_jtag, but muxsel(3) is func:uart0
+[    0.786936] sun50iw9p1-pinctrl pio: expect_func as:uart0_jtag, but muxsel(3) is func:jtag
+[    0.786951] sun50iw9p1-pinctrl pio: expect_func as:uart0_jtag, but muxsel(3) is func:uart0
+[    0.786966] sun50iw9p1-pinctrl pio: expect_func as:uart0_jtag, but muxsel(3) is func:jtag
