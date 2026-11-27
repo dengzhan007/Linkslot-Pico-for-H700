@@ -2,16 +2,43 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-27。最新 BL31 static memory audit **#94** 在审计代码 HEAD `8477f41a1bce996d36e240e041723cc877962223` 上成功（[run #94](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45956263984)，job `audit-matched-bl31` 全部 24 steps 成功）。#94 复验了匹配 monitor、Boot0 CPU reset helper、BL31 CPU/MMIO 扫描、DRAM source-page ownership、Linux PFN metadata 与 PSCI CPU_ON；新增产物包括 [BL31 audit 15178254258](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45956263984/artifacts/15178254258) 和 [Boot0/monitor read-only capture 15178074907](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45956263984/artifacts/15178074907)。前一轮 #93 的唯一失败是审计窗口测试 key 不匹配（`KeyError: system_suspend_helper_48013b98`），#94 已修复并完整复验；不是产品运行时代码回归。H700 boot audit **#1452** 的 Linux host-tools 与 Windows PowerShell 两 job 也均成功（[run #1452](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45956131864)，文档提交 `39c1b9d3ac52df47eb53f4a92145afe8bc3d82df`）。
+**最后核对时间：** 2026-11-27。最新 BL31 static memory audit **#96** 在审计脚本 HEAD `f4676657ff0864e9ecd01878c59886798ac1ea11` 上完整成功（[run #96](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45965474745)，新增 TWI 单元测试及 descriptor-boundary audit 均通过）；审计产物 [15182980313](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45965474745/artifacts/15182980313)，只读 Boot0/monitor capture [15182359284](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45965474745/artifacts/15182359284)。#95 的唯一失败是新增审计脚本将 `0x480126d4` 的基址寄存器误写为 `x19`；实际指令为 `ldr w0,[x0,#0xa4]`，已修正并由 #96 完整复验。**H700 boot audit #1459** 在文档 HEAD `999966d2e0bcc2a85355fab53d5016c3051c3351` 上 Linux host-tools、Windows PowerShell 两 job 均成功（[run #1459](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45965447342)）。完整 Linkslot/LK feasibility **#887** 在 `4934c5034cdb921382215c2f75b116b4606c9974` 上成功（[run #887](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45964118596)）；#887 之后只增加静态审计脚本、CI 与文档，没有改动 Linkslot 产品运行时代码。
 
-#94 的 Boot0 静态分析显示 helper 只对 CPU2/CPU3 条件调用，并对 `C0_RST_CTRL` 执行清位（按 H616 family reference 语义是保持/断言 reset，而非释放）；CPU1 未经过该 helper，且 `0x03006248[29]` 的 H700 含义未知。因此 CPU1–CPU3 hold-off 仍是 **PROBABLE，不是设备实测**。同轮 DRAM 审计将 BL31 retention source page PFN `0x40000` 分类为 `LINUX_ACTIVE_ANON_MAPPED_PAGE`（kpageflags `0x5868`、mapcount 1）；它不能作为空闲 scratch。RTC soft-entry 的 TWI master / PMIC 候选路径已记录，但 context `+0xa4` descriptor 的实际 selector/bus、交易命令和最终平台动作仍未知。
+#96 新增的 TWI 静态审计证明：匹配 monitor 代码将 context `+0xa4` 用作 indexed 64-bit load 的输入，读取 lookup base `0x48014628` 后把结果作为对象指针使用并写入 `0x48015548`；但该区域 raw qwords 并非有效 monitor/SoC 地址。另行核对固定版本 BaseOS native SPL 后，发现它直接修改 monitor 的 offsets **仅有** `+0x24`（board bytes）、`+0x30`（DRAM parameters）、`+0xb0`（DTB pointer），不解释 `0x48014628` 或 `0x48014668`。因此 runtime descriptor/context 的初始化来源依旧未知；不认定是 R-TWI0，不推测 bus index、PMIC slave address 或命令。
 
-这些是精确匹配二进制的静态审计与 host CI，不是 RG34XX 实机启动或 PSCI 运行时验证。当前仍保持 `H700_MEMORY_LAYOUT_APPROVED=false`、`hardware_applied=0`；没有执行设备 SMC/MMIO、DRAM 内容读写、待机/唤醒、Boot0/TOC1 写入、刷写或 payload execution。最近一次完整 Linkslot/LK feasibility **#884** 仍是旧 revision 的历史结果，不能代表 #94 当前 HEAD 的完整产品构建通过。
+#94 的 Boot0 静态分析仍显示 helper 条件调用 core2/core3，CPU1 未经过该 helper；H700 reset/SID live state 未读回，CPU1–CPU3 hold-off 仍仅为 **PROBABLE**。DRAM retention PFN `0x40000` 仍是 `LINUX_ACTIVE_ANON_MAPPED_PAGE`（kpageflags `0x5868`、mapcount 1），不能当作空闲 scratch。
+
+所有以上结果都是匹配二进制的 host/static audit，不是 RG34XX 实机启动或 PSCI 运行时验证。当前仍保持 `H700_MEMORY_LAYOUT_APPROVED=false`、`hardware_applied=0`；没有执行设备 SMC/MMIO、I2C/TWI transaction、DRAM 内容读写、待机/唤醒、Boot0/TOC1 写入、刷写或 payload execution。
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
 
 
+## 2026-11-27 最新续接：RTC TWI descriptor 初始化边界与 BL31 audit #96
+
+### CI 结果
+
+- [x] BL31 static audit [#96](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45965474745)：审计脚本 HEAD `f4676657ff0864e9ecd01878c59886798ac1ea11`，`audit-matched-bl31` job 成功；新增 TWI test 与 TWI descriptor audit 步骤通过；产物 [15182980313](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45965474745/artifacts/15182980313)。
+- [x] H700 boot audit [#1459](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45965447342)：Linux host-tools 与 Windows PowerShell 均通过。
+- [x] 完整 Linkslot/LK feasibility [#887](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45964118596)：cross-compile job 成功；该 run 对应 SHA `4934c503...`，之后提交只改审计/CI/文档。
+- [x] #95 的新增审计脚本断言错误已修正：`0x480126d4` 的实际指令基址寄存器是 `x0`，不是 `x19`；#96 完整复验成功。
+
+### TWI 初始化边界更新
+
+- 匹配 monitor 的 RTC continuation `0x48012670 → 0x48012070` 最终进入 `0x480129f0 → 0x48013ac8`；`0x48013ac8` 使用 context `+0xa4` 的值执行 `LDR X1,[X1,W0,SXTW #3]`，随后将加载值视作对象地址并发布到 `0x48015548`。
+- raw monitor 中 `0x48014628` 的首 8 个 qwords 是 scalar/encoded-looking values，不是可信的 monitor-internal/SoC MMIO pointers；`0x48014668` 与 `0x48015548` 的 raw 初值均为 2。后者在 `0x48013b14` 被显式覆盖；前者在已审查调用路径中被反复作为 context pointer 读取。
+- pinned BaseOS native SPL `cbe253a43f46cf551cc9a6c79a84015bde3686cf` 对 monitor 的直接修改 offsets 为 `+0x24`、`+0x30`、`+0xb0`，不含 `+0x14628` 或 `+0x14668`。这排除了当前已审查 SPL 源码中的直接 patch 作为解释，但不排除 BL31 内部间接初始化/运行时 mutation 或其他未审查的 loader contract。
+- 专项文档：[rg34xx-rtc-soft-entry-twi-audit.md](rg34xx-rtc-soft-entry-twi-audit.md)。自动审计脚本：[audit-rg34xx-bl31-twi-descriptors.py](../scripts/audit-rg34xx-bl31-twi-descriptors.py)；host test：[test-audit-rg34xx-bl31-twi-descriptors.py](../scripts/test-audit-rg34xx-bl31-twi-descriptors.py)。
+
+### 下一步
+
+1. 静态追踪 BL31 自身对 lookup data `0x48014628` 和 context slot `0x48014668` 的所有初始化/复制/清零路径，尤其是 indirect pointer 和 helper-based memory writes；不能仅凭 direct xref 缺失宣布不存在 writer。
+2. 扩展 matched monitor 全镜像的绝对地址/寄存器基址数据流扫描，定位可能为这两个窗口赋值的 copy/fill loops；对找到的写路径建立可复现 host assertion。
+3. 仍然不推断 TWI bus/controller、PMIC 地址/命令；不发起 TWI transaction。
+4. CPU reset、active retention PFN、BL33 memory ownership、PIO permission 与 timer/PPI handoff 门槛全部保持关闭。
+
+`H700_MEMORY_LAYOUT_APPROVED=false`；`hardware_applied=0`。
+ 
 ## 2026-11-27 增量续接：BL31 audit #94、Boot0 CPU hold-off 与 retention source-page 结论
 
 ### CI 与审计产物
