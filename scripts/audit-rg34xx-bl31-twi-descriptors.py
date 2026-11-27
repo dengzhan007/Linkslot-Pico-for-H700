@@ -133,15 +133,15 @@ def main() -> int:
     if branch_target(decoded[0x480129F8]) != 0x48013AC8:
         raise RuntimeError("TWI initializer target changed")
 
-    table_base = 0x48014628
-    table_entries = []
-    for index in range(8):
-        value = read_u64(blob, table_base + index * 8)
-        table_entries.append({
-            "index": index,
-            "address": "0x%08x" % (table_base + index * 8),
+    lookup_origin = 0x48014628
+    adjacent_qwords = []
+    for relative_offset in range(0, 8 * 8, 8):
+        value = read_u64(blob, lookup_origin + relative_offset)
+        adjacent_qwords.append({
+            "relative_byte_offset": "0x%02x" % relative_offset,
+            "address": "0x%08x" % (lookup_origin + relative_offset),
             "raw_qword": "0x%016x" % value,
-            "classification": classify_pointer(value),
+            "classification_if_pointer": classify_pointer(value),
         })
 
     global_context_slot = read_u64(blob, 0x48014668)
@@ -170,14 +170,14 @@ def main() -> int:
             "continuation": "0x48012670",
             "helper": "0x48012070",
             "controller_initializer": "0x48013ac8",
-            "table_base": "0x48014628",
+            "lookup_origin": "0x48014628",
             "lookup_instruction": "0x48013af0",
-            "lookup_semantics": "LDR X1, [X1, W0, SXTW #3]",
+            "lookup_semantics": "LDR X1, [X1, W0, SXTW #3] — signed 32-bit W0 scaled by 8; actual W0 is unknown and may address before or after the lookup origin",
             "published_object_global": "0x48015548",
             "published_object_store_pc": "0x48013b14",
         },
         "raw_static_data": {
-            "table_entries": table_entries,
+            "adjacent_qwords_after_lookup_origin": adjacent_qwords,
             "context_pointer_global": {
                 "address": "0x48014668",
                 "raw_qword": "0x%016x" % global_context_slot,
@@ -196,7 +196,7 @@ def main() -> int:
         },
         "reviewed_context_global_load_sites": ["0x%08x" % x for x in context_pointer_load_sites],
         "limitations": [
-            "The raw qwords at 0x48014628 are not plausible monitor-internal or H700 SoC MMIO addresses. The actual context +0xa4 value and selected runtime table entry are unknown.",
+            "The eight reported qwords are only bytes at relative offsets +0x00 through +0x38 from lookup origin 0x48014628; they are not asserted to be the selected entries. The SXTW index is signed, so an unknown negative context +0xa4 value may select memory before the lookup origin.",
             "The raw qword at 0x48014668 is 2, although reviewed code loads this slot as a context pointer. No BaseOS native SPL patch targets this slot.",
             "The raw qword at 0x48015548 is 2, but BL31 explicitly overwrites it with the selected object pointer at 0x48013b14 before the TWI setup helper consumes it.",
             "This audit verifies the exact static instructions, raw initial values, and the pinned BaseOS patch sites. It does not exclude indirect writes, BL31 runtime initialization, another loader, or runtime mutation outside the reviewed windows.",
@@ -218,24 +218,24 @@ def main() -> int:
         "- Monitor: %d bytes, SHA-256 `%s`." % (len(blob), digest),
         "- RTC context selector: offset `+0xa4`; code loads it at `0x48012520`, `0x48012694`, and `0x480126d4`.",
         "- RTC continuation/helper: `0x48012670 → 0x48012070`; controller initialization `0x480129f0 → 0x48013ac8`.",
-        "- The initializer performs `LDR X1, [X1, W0, SXTW #3]` from base `0x48014628`, then publishes the selected object pointer to `0x48015548` at `0x48013b14`.",
+        "- The initializer performs `LDR X1, [X1, W0, SXTW #3]` from lookup origin `0x48014628`: W0 is a signed 32-bit index scaled by 8, and the unknown value may address before or after that origin. The loaded value is then published to `0x48015548` at `0x48013b14`.",
         "- The raw initial qword at `0x48014668` is `0x%016x`; the raw initial qword at `0x48015548` is `0x%016x`." % (global_context_slot, global_controller_slot),
         "- Pinned BaseOS native SPL only patches monitor offsets: %s." % ", ".join("`+%s`" % ("%x" % x) for x in patch_offsets),
         "",
-        "## Initial table qwords",
+        "## Adjacent qwords after lookup origin (not proven selected entries)",
         "",
-        "| Index | Address | Raw qword | Classification |",
+        "| Relative offset | Address | Raw qword | Classification if interpreted as pointer |",
         "|---:|---:|---:|---|",
     ]
-    for item in table_entries:
-        lines.append("| %d | `%s` | `%s` | %s |" % (
-            item["index"], item["address"], item["raw_qword"], item["classification"]
+    for item in adjacent_qwords:
+        lines.append("| `%s` | `%s` | `%s` | %s |" % (
+            item["relative_byte_offset"], item["address"], item["raw_qword"], item["classification_if_pointer"]
         ))
     lines += [
         "",
         "## Interpretation",
         "",
-        "The code treats the value selected from `0x48014628` as a pointer, but the raw file's first eight qwords are scalar/encoded-looking values rather than addresses inside the monitor or known H700 MMIO windows. The static value at `0x48014668` is `2`, even though multiple paths load it as a context pointer. The pinned BaseOS native SPL does not patch either location; it only patches `+0x24`, `+0x30`, and `+0xb0`.",
+        "The code treats the value selected by a signed, 8-byte-scaled index from lookup origin `0x48014628` as a pointer. The eight qwords shown above are only the adjacent raw bytes at offsets +0x00..+0x38; the actual signed selector is unknown, so the selected slot could be before or after this window. The raw adjacent values are not plausible monitor-internal or known H700 MMIO addresses. The static value at `0x48014668` is `2`, even though multiple paths load it as a context pointer. The pinned BaseOS native SPL does not patch either location; it only patches `+0x24`, `+0x30`, and `+0xb0`.",
         "",
         "This narrows the missing evidence to **runtime initialization, indirect mutation, or another loader-side contract**. Do not describe `0x48014628` as a proven runtime pointer table. Do not infer R-TWI0, a bus number, PMIC address, or command sequence from the FDT alone.",
         "",
