@@ -1058,3 +1058,15 @@ Hard size boundary: this first integration path is only for a small diagnostic p
 - [ ] Resolve the runtime signed selector at context `+0xa4`; index 73 remains only the strongest R-TWI0 candidate, not a captured runtime choice.
 - [ ] Identify the PMIC slave/command path and final power action using static evidence only. Do not issue TWI transactions.
 - Hardware remains unchanged: `H700_MEMORY_LAYOUT_APPROVED=false`, `hardware_applied=0`; no SMC/MMIO, DRAM content read/write, suspend/wake, Boot0/TOC1 write, flashing or payload execution.
+
+## 2026-11-27 — RTC context alias-aware bounded CFG scan (BL31 #121–#125)
+
+- [x] Add alias-aware linear scan for `ADRP/ADD/SUB/MOV/LDR` to track loads from the context-like slot `0x48014668`; the fall-through pass found 15 load PCs and no modeled selector/slot writes.
+- [x] Add bounded CFG scan: 79 ADRP page seeds across `0x48013000..0x48015000`, 38,676 states, conditional target + fall-through traversal, and direct BL callee traversal with AAPCS64 x0–x7 argument / x19–x29 callee-saved alias transfer.
+- [x] Latest report #125: 83 path/seed-specific context-like slot loads, 22 unique instruction PCs, zero modeled stores through derived context aliases to `+0xa4`, and zero modeled writes to the context-like slot. New CFG scan recovers conditional target reads at `0x48013e44` and `0x48013f5c`.
+- [x] Pin corrected synthetic ADRP fixture encodings for monitor link base `0x48000000`; #124 failed because test words were encoded for link-at-zero. #125 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45971835320) passed the complete BL31 audit; artifact [15184548909](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45971835320/artifacts/15184548909).
+- [x] Correct terminology: address `0x48014668` is also lookup origin `0x48014628 + 0x40` (signed lookup index 8), so it is a context-like pointer slot overlapping the lookup-data region, not a separately proven global variable.
+- [ ] Extend the alias model to MOVZ/MOVK and literal-pool absolute-address construction; examine stack spill/reload and helper-copy candidates.
+- [ ] Identify whether the context-like qword is overwritten during BL31 initialization, by an external loader, or intentionally shares storage with the indexed lookup data.
+- [ ] Resolve runtime signed selector `context +0xa4`; index 73 / R-TWI0 remains only a conditional static candidate. Do not issue TWI transactions.
+- Hardware remains unchanged: `H700_MEMORY_LAYOUT_APPROVED=false`, `hardware_applied=0`; no SMC/MMIO, DRAM content access, suspend/wake, Boot0/TOC1 write, flashing or payload execution.
