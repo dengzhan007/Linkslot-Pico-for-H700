@@ -125,6 +125,22 @@ WORDS = {
     0x4800c3f0: 0x54ffffc9, 0x4800c3fc: 0x94001f29,
     0x4800c400: 0x94000006, 0x4800c404: 0x94000033,
     0x4800c408: 0x94000084,
+    # Standby image additive checksum and resume integrity comparison.
+    0x4800c43c: 0xb940c260, 0x4800c440: 0x34000080,
+    0x4800c444: 0xaa1303e0, 0x4800c448: 0x940015cc,
+    0x4800c44c: 0xb900ba60,
+    0x4800c6c0: 0xaa1503e0, 0x4800c6c4: 0x9400152d,
+    0x4800c6c8: 0xf9433661, 0x4800c6cc: 0xb940b822,
+    0x4800c6d0: 0xb900bea0, 0x4800c6d4: 0xb940bc20,
+    0x4800c6d8: 0x6b00005f, 0x4800c6dc: 0x54fffcc0,
+    0x4800c6e0: 0x52800020, 0x4800c6e4: 0x72b10000,
+    0x4800c6e8: 0xb9000280, 0x4800c6ec: 0x14000000,
+    0x48011b78: 0x29560c01, 0x48011b7c: 0x52800000,
+    0x48011b80: 0x0b030023, 0x48011b84: 0x2a0103e1,
+    0x48011b88: 0xeb01007f, 0x48011b8c: 0x540000c9,
+    0x48011b90: 0xb8404422, 0x48011b94: 0xeb01007f,
+    0x48011b98: 0x0b020000, 0x48011b9c: 0x54ffffa8,
+    0x48011ba0: 0xd65f03c0, 0x48011ba4: 0xd65f03c0,
     0x4800c50c: 0xd503207f, 0x4800c550: 0xd503207f,
     0x4800c53c: 0x94001e2d, 0x4800c568: 0x94001e60,
     0x4800c460: 0xd282a002, 0x4800c468: 0xf2a06002,
@@ -394,6 +410,15 @@ def decode_bl_target(pc: int, instruction: int) -> int:
     if immediate & (1 << 25):
         immediate -= 1 << 26
     return pc + (immediate << 2)
+
+def decode_imm19_branch_target(pc: int, instruction: int) -> int:
+    if (instruction & 0x7E000000) != 0x34000000:
+        raise RuntimeError("instruction at 0x%08x is not CBZ/CBNZ" % pc)
+    immediate = (instruction >> 5) & 0x7FFFF
+    if immediate & (1 << 18):
+        immediate -= 1 << 19
+    return (pc + (immediate << 2)) & 0xFFFFFFFF
+
 
 def decode_cond_branch_target(pc: int, instruction: int) -> int:
     if (instruction & 0xFF000010) != 0x54000000:
@@ -798,6 +823,49 @@ def main() -> int:
             raise RuntimeError("SRAM RTC standby instruction changed at 0x%08x" % address)
     if read_word(raw, 0x4800c50c) != 0xd503207f or read_word(raw, 0x4800c550) != 0xd503207f:
         raise RuntimeError("relocated SRAM WFI path changed")
+    # Optional additive checksum protects selected SRAM standby contents.
+    checksum_words = {
+        0x48011b78: 0x29560c01,  # ldp w1,w3,[x0,#0xb0]
+        0x48011b7c: 0x52800000,  # mov w0,#0
+        0x48011b80: 0x0b030023,  # add w3,w1,w3
+        0x48011b84: 0x2a0103e1,  # mov w1,w1 (zero-extend)
+        0x48011b88: 0xeb01007f,  # cmp x3,x1
+        0x48011b8c: 0x540000c9,  # b.ls return zero
+        0x48011b90: 0xb8404422,  # ldr w2,[x1],#4
+        0x48011b94: 0xeb01007f,  # cmp x3,x1
+        0x48011b98: 0x0b020000,  # add w0,w0,w2
+        0x48011b9c: 0x54ffffa8,  # b.hi word loop
+        0x48011ba0: 0xd65f03c0,
+        0x4800c43c: 0xb940c260,  # load checksum enable flag at context +0xc0
+        0x4800c440: 0x34000080,  # cbz skip initial checksum
+        0x4800c444: 0xaa1303e0,  # x0 = standby context
+        0x4800c448: 0x940015cc,  # bl checksum
+        0x4800c44c: 0xb900ba60,  # store checksum at context +0xb8
+        0x4800c6c0: 0xaa1503e0,  # x0 = context
+        0x4800c6c4: 0x9400152d,  # bl checksum after wake
+        0x4800c6cc: 0xb940b822,  # load saved checksum at +0xb8
+        0x4800c6d0: 0xb900bea0,  # store resumed checksum at +0xbc
+        0x4800c6d4: 0xb940bc20,  # load resumed checksum
+        0x4800c6d8: 0x6b00005f,  # cmp
+        0x4800c6dc: 0x54fffcc0,  # b.eq continue
+        0x4800c6e0: 0x52800020,  # mov w0,#1
+        0x4800c6e4: 0x72b10000,  # movk w0,#0x8800,lsl #16
+        0x4800c6e8: 0xb9000280,  # write fail code to RTC scratch/status
+        0x4800c6ec: 0x14000000,  # self-loop; fail-stop
+    }
+    for address, expected in checksum_words.items():
+        if read_word(raw, address) != expected:
+            raise RuntimeError("standby checksum instruction changed at 0x%08x" % address)
+    if decode_bl_target(0x4800c448, read_word(raw, 0x4800c448)) != 0x48011b78:
+        raise RuntimeError("standby pre-entry checksum call changed")
+    if decode_bl_target(0x4800c6c4, read_word(raw, 0x4800c6c4)) != 0x48011b78:
+        raise RuntimeError("wake resume checksum call changed")
+    if decode_imm19_branch_target(0x4800c440, read_word(raw, 0x4800c440)) != 0x4800c450:
+        raise RuntimeError("checksum disabled skip branch changed")
+    if decode_cond_branch_target(0x4800c6dc, read_word(raw, 0x4800c6dc)) != 0x4800c674:
+        raise RuntimeError("checksum success branch target changed")
+    if decode_b_target(0x4800c6ec, read_word(raw, 0x4800c6ec)) != 0x4800c6ec:
+        raise RuntimeError("checksum mismatch fail-stop loop changed")
     if decode_bl_target(0x48001b5c, read_word(raw, 0x48001b5c)) != 0x48016128:
         raise RuntimeError("SYSTEM_SUSPEND trampoline preparation helper changed")
     cache_control_words = {
@@ -1136,6 +1204,23 @@ def main() -> int:
                         "resume_lock_poll_pc": "0x48011e7c",
                         "resume_post_lock_settle_call_pc": "0x48011ec0"
                     },
+                    "standby_integrity_checksum": {
+                        "helper": "0x48011b78",
+                        "algorithm": "32-bit additive sum over 32-bit words; pointer increments by 4",
+                        "range_descriptor": "context +0xb0 = start pointer; context +0xb4 = byte length",
+                        "enable_flag": "context +0xc0",
+                        "initial_call_pc": "0x4800c448",
+                        "saved_sum_field": "context +0xb8",
+                        "resume_call_pc": "0x4800c6c4",
+                        "resumed_sum_field": "context +0xbc",
+                        "comparison_pc": "0x4800c6d8",
+                        "success_branch_pc": "0x4800c6dc",
+                        "failure_code": "0x88000001",
+                        "failure_write_pc": "0x4800c6e8",
+                        "failure_write_register": "RTC/system scratch at address held in x20 (base 0x07000108 in this path)",
+                        "failure_path": "unconditional branch to self at 0x4800c6ec; fail-stop",
+                        "range_identity_limit": "the exact start/length values are stored in context; this check proves the configured range, not automatically the whole 0x9410-byte copy",
+                    },
                     "wake_source_helpers": {
                         "aggregate_function": "0x48013ee8",
                         "gpio_configuration_function": "0x48013df0",
@@ -1307,6 +1392,7 @@ def main() -> int:
         "- Resume restores PLL_CPUX factors, sets enable bit31 and lock-enable bit29, polls lock bit28, then restores saved CCU fields. A mode==2 branch also touches `0x07010000`, `0x07010010` and `0x07000160`; the latter's exact standby role remains unknown.",
         "- Wake-source aggregation statically calls IR receive FIFO/status drain `0x480131b8`, GPIO name/read helpers `0x48013588/0x480135d8`, GPIO pad-config helper `0x48013620`, and GIC pending helper `0x48013190`. The latter reads GICD_ISPENDR at `0x03021200`, not an enable register. IR offsets `0x07040020/0x07040030` are in the H616 IR block; GPIO read/config use PIO `0x0300b000` or R_PIO `0x07022000`.",
         "- These are matched-binary wake-source preparation/polling paths; no pending interrupt, IR FIFO, GPIO level or pin configuration was probed or written on hardware.",
+        "- Integrity helper `0x48011b78` calculates a 32-bit additive sum over the 32-bit words in the caller-selected range described by context `+0xb0` (start pointer) and `+0xb4` (byte length). If context `+0xc0` enables it, standby saves the sum at `+0xb8`; resume recalculates and compares at `0x4800c6d8`. On mismatch, firmware writes fail code `0x88000001` to the RTC/system scratch address held in x20 (this path builds base `0x07000108`) and branches to a self-loop. The range's actual configured start/length are not inferred to equal the entire SRAM copy until their assignments are traced.",
         "- The RTC soft-entry stores saved return PC `0x48015d14`; resume code loads it from context `+0xc4` and indirect-branches through x22 at `0x4800c6a8`. The return continuation restores SCTLR_EL3, VBAR_EL3, DAIF and stack selection before returning into BL31.",
         "- The effective ABI is the legacy Allwinner `plat_pm_ops_t` order with a vendor getter extension; the exact source commit is not identified.",
 
@@ -1328,7 +1414,7 @@ def main() -> int:
         "- No hardware MMIO, flash, boot-media write or payload execution occurred.", "",
     ]
     (args.out.parent / "PSCI-CPU-ON.md").write_text("\n".join(markdown), encoding="utf-8")
-    print("PASS: PSCI PLL LDO key/XO standby, PLL relock and GIC/IR/GPIO wake helpers")
+    print("PASS: PSCI standby integrity checksum, PLL/XO clock restore and wake-source helpers")
     print("  table[1] = 0x%08x -> low-level 0x48002d78" % table[1])
     print("  callback disassembly = %s" % disassembly_path)
     print("  monitor SHA-256 = %s" % digest)

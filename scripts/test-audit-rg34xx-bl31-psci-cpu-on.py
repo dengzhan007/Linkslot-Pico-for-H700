@@ -185,6 +185,29 @@ def main() -> int:
     assert module.WORDS[0x48016134] == 0xD51E1000
     assert module.WORDS[0x48016138] == 0xD5033FDF
     assert module.WORDS[0x48016140] == 0x17FFFFDA
+    checksum_expected = {
+        0x48011B78: 0x29560C01, 0x48011B7C: 0x52800000,
+        0x48011B80: 0x0B030023, 0x48011B84: 0x2A0103E1,
+        0x48011B88: 0xEB01007F, 0x48011B8C: 0x540000C9,
+        0x48011B90: 0xB8404422, 0x48011B94: 0xEB01007F,
+        0x48011B98: 0x0B020000, 0x48011B9C: 0x54FFFFA8,
+        0x48011BA0: 0xD65F03C0, 0x4800C43C: 0xB940C260,
+        0x4800C440: 0x34000080, 0x4800C444: 0xAA1303E0,
+        0x4800C448: 0x940015CC, 0x4800C44C: 0xB900BA60,
+        0x4800C6C0: 0xAA1503E0, 0x4800C6C4: 0x9400152D,
+        0x4800C6CC: 0xB940B822, 0x4800C6D0: 0xB900BEA0,
+        0x4800C6D4: 0xB940BC20, 0x4800C6D8: 0x6B00005F,
+        0x4800C6DC: 0x54FFFCC0, 0x4800C6E0: 0x52800020,
+        0x4800C6E4: 0x72B10000, 0x4800C6E8: 0xB9000280,
+        0x4800C6EC: 0x14000000,
+    }
+    for address, expected in checksum_expected.items():
+        assert module.WORDS[address] == expected
+    assert module.decode_bl_target(0x4800C448,module.WORDS[0x4800C448]) == 0x48011B78
+    assert module.decode_bl_target(0x4800C6C4,module.WORDS[0x4800C6C4]) == 0x48011B78
+    assert module.decode_imm19_branch_target(0x4800C440,0x34000080) == 0x4800C450
+    assert module.decode_cond_branch_target(0x4800C6DC,0x54FFFCC0) == 0x4800C674
+    assert module.decode_b_target(0x4800C6EC,0x14000000) == 0x4800C6EC
     suspend_clock_expected = {
         0x48011BB0: 0xF2A06005, 0x48011BC4: 0xB94000A7,
         0x48011BD4: 0x0A0100E1, 0x48011BE0: 0xB9041441,
@@ -343,6 +366,7 @@ def main() -> int:
     assert window_map["system_suspend_helper_48011df8"][0] == 0x48011DF8
     assert window_map["system_suspend_helper_48011b58"][0] == 0x48011B58
     assert window_map["system_suspend_helper_48011b78"][0] == 0x48011B78
+    assert window_map["sram_resume_power_and_rtc_source"][0] == 0x4800C418
     assert window_map["system_suspend_helper_48013df0"][0] == 0x48013DF0
     assert window_map["system_suspend_helper_48013ee8"][0] == 0x48013EE8
     assert window_map["system_suspend_helper_48012670"][0] == 0x48012670
@@ -398,7 +422,7 @@ def main() -> int:
         pass
     else:
         raise AssertionError("B instruction was incorrectly accepted as BL")
-    print("PASS: PSCI PLL LDO key/XO standby, PLL relock and GIC/IR/GPIO wake helpers")
+    print("PASS: PSCI standby integrity checksum, PLL/XO clock restore and wake-source helpers")
     return 0
 
 if __name__ == "__main__":
