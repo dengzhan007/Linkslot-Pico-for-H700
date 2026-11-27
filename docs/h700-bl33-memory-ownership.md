@@ -381,6 +381,41 @@ The successful full feasibility run [#45843270056](https://github.com/dengzhan00
 The linker address is still inside the historically copied `0x4a000000..0x4a0e0000` loader bound. No independent BL31/Boot0 ownership approval is inferred from the successful link. Keep `H700_MEMORY_LAYOUT_APPROVED` unset; do not build an installable package, flash or execute the ELF. Secondary A53 hold-off/SMP and early APB1/PIO handoff access are separate unresolved gates.
 
 
+### 2026-11-27 LK early stack + page-table non-overlap check (host link only)
+
+Full Linkslot/LK feasibility [#921](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46018337655)
+passed 75/75 on HEAD `3251a9772d7b8bd4779ab759757f209ce449257a`.
+Its artifact [15207317115](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46018337655/artifacts/15207317115)
+contains the actual `h700-early-led-layout.map` and disassembly for the
+minimal source/layout ELF.
+
+The map resolves the pinned LK CRT0's 8 KiB initial/abort stack and the real
+LK 4096-entry AArch32 translation table as:
+
+| Object | Exact interval | Size |
+|---|---|---:|
+| `abort_stack` | `[0x4a004000,0x4a006000)` | 8 KiB |
+| Initial stack top | `0x4a006000` | 8-byte aligned |
+| Unallocated gap | `[0x4a006000,0x4a008000)` | 8 KiB |
+| `tt` | `[0x4a008000,0x4a00c000)` | 16 KiB |
+| `g_power_led_service` / `_end` | `[0x4a00c000,0x4a00c024)` | 36 B |
+
+The raw flat ELF is 7,940 bytes (24,828 bytes below the 32 KiB input
+extent); linked `_end=0x4a00c024`, giving an image-base-to-`_end` span of
+`0xc024` bytes. The CI test now obtains `abort_stack`, `abort_stack_top`
+and `tt` from the linked symbol table, requires the pinned 8 KiB stack,
+checks stack/table containment within the link bound, enforces AAPCS stack
+alignment and rejects any stack/table overlap. The current measured gap is
+8 KiB.
+
+This closes a **host-side internal-layout consistency check** that was
+previously implicit in the map. It does not prove the BL33 slot is free of
+opaque Boot0/BL31 consumers, does not approve any stack/table memory for
+hardware use, and does not verify APB1/PIO clock/security state. The
+production PI12 wrapper remains default-off; no image/package was generated,
+no boot media was written and no payload was executed. Keep
+`H700_MEMORY_LAYOUT_APPROVED` unset.
+
 ### 2026-11-26 BaseOS SPL PIO access is pre-BL31 evidence only
 
 The pinned BaseOS-MultiFrontend source
