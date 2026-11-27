@@ -426,10 +426,22 @@ BaseOS native SPL and matched vendor BL31 now narrows the interpretation:
   H700 C0_RST_CTRL equivalence, bit-29 meaning/value, ROM/secure/indirect
   paths, and live C0_RST_CTRL/RVBAR values remain unknown. The unusual
   Boot0 write to 0x09010044 is not resolved and must not be modified.
-- The 2026-11-27 Linux runtime snapshot showing possible/present/online
-  CPUs 0-3 is after the kernel has started; it does not establish initial
-  BL31→BL33 state. The matched BL31 has a CPU_ON callback path, but does not
-  prove that CPU_ON is automatically called at initial handoff.
+- The matched BL31 has a concrete later CPU_ON implementation, not merely
+  symbol strings: legacy ops-table slot 1 `affinst_on` at `0x4800255c`
+  branches to helper `0x48002d78` when `W3 == 0`. The helper computes
+  per-core register addresses, writes per-core RVBAR and performs the
+  selected CPU power/reset sequence. One selector branch uses
+  `0x09010000/0x09010010`, `0x07000440/0x07000444` and `0x090100c0`; the
+  other uses the `0x08100000` region (direct reference `0x08100020`).
+- The active helper branch is selected using `VER_REG 0x03000024 & 7`.
+  The read-only probe failed, so the actual RG34XX branch is unknown. The
+  fixed-address full-image scanner's empty `cpu_reset_mmio_accesses` list
+  does not capture the helper's computed per-core accesses.
+- This is a later PSCI CPU_ON callback; there is no evidence it is invoked
+  automatically during the first BL31→BL33 handoff, and non-secure call
+  availability remains unverified. Linux later showing possible/present/
+  online CPUs 0–3 is consistent with a later OS CPU_ON sequence but does
+  not establish the initial handoff state.
 
 The static audit is being rerun with an explicit reset-bit unit test in the
 [BL31 static audit workflow](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/workflows/h700-bl31-memory-audit.yml).
