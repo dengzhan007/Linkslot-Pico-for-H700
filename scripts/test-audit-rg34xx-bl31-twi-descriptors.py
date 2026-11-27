@@ -81,6 +81,26 @@ def main() -> int:
     assert len(conditional_scan["global_slot_pointer_load_aliases"]) == 1
     assert len(conditional_scan["context_plus_a4_alias_store_candidates"]) == 1
 
+    # CFG scan follows direct BL targets and transfers x0-x7 aliases to
+    # the callee. It also detects a write to the global pointer slot.
+    cfg_call_chain = struct.pack(
+        "<IIIIIIIII",
+        0x900000B4,  # adrp x20, 0x48014000 at BASE
+        0xF9433680,  # ldr x0, [x20, #0x668]
+        0x94000002,  # bl BASE+0x10
+        0xD65F03C0,  # ret (caller continuation)
+        0xB900A401,  # callee: str w1, [x0, #0xa4]
+        0xD65F03C0,  # ret
+        0x900000B5,  # adrp x21, 0x48014000
+        0xF90336A0,  # str x0, [x21, #0x668]
+        0xD65F03C0,  # ret
+    )
+    cfg_scan = MODULE.scan_context_pointer_alias_cfg_writes(cfg_call_chain)
+    assert cfg_scan["seed_count"] == 2
+    assert len(cfg_scan["global_slot_pointer_load_aliases"]) == 1
+    assert len(cfg_scan["context_plus_a4_alias_store_candidates"]) == 1
+    assert len(cfg_scan["global_slot_plus_668_alias_store_candidates"]) == 1
+
     source = """
       memcpy(monitor + 0x30, params, 128);
       memcpy(monitor + 0x24, board, 8);
