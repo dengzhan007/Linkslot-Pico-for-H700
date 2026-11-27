@@ -1039,17 +1039,17 @@ def main() -> int:
                         "pll_cpux": {
                             "control_register": "0x03001000",
                             "saved_factor_mask": "0x0003ff03",
-                            "standby_clear_enable_bit31": true,
-                            "standby_clear_lock_enable_bit29": true,
-                            "resume_restore_factors": true,
-                            "resume_set_enable_bit31": true,
-                            "resume_set_lock_enable_bit29": true,
-                            "resume_poll_lock_bit28": true
+                            "standby_clear_enable_bit31": True,
+                            "standby_clear_lock_enable_bit29": True,
+                            "resume_restore_factors": True,
+                            "resume_set_enable_bit31": True,
+                            "resume_set_lock_enable_bit29": True,
+                            "resume_poll_lock_bit28": True
                         },
                         "aon_opaque_word": {
                             "address": "0x07010244",
                             "standby_high_byte_value": "0xa7",
-                            "resume_clears_high_byte": true,
+                            "resume_clears_high_byte": True,
                             "semantic_name": "unknown; not attributed to PMIC without matched documentation"
                         },
                         "context_gpio_configuration": {
