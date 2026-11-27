@@ -2,11 +2,40 @@
 
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
-**最后核对时间：** 2026-11-27。最新 BL31 static memory audit #90 在审计代码 revision `06035269bff95b896a65f3a5af89963de4efce51` 上 **完整成功**（[run #90](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45953721636)，审计产物 [15177424759](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45953721636/artifacts/15177424759)）。#90 在 #89 的 sleep-mode selector regression 之外，进一步锁定 RTC soft-entry continuation `0x48012670 → 0x48012070` 以及 helper 返回后的 `0x480126a4` self-loop；全部 BL31/Boot0/PSCI、memblock/PFN、host assertions 与 artifact 步骤通过。H700 boot audit #1448 在同一 revision 的 Linux host-tools、Windows PowerShell 两 job 均成功（[run #1448](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45953721408)）。#89 在 `a57b35be74d3535d9ebfd56bd398871ff019f7c3` 上通过（[run #89](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45953389511)，artifact [15177467882](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45953389511/artifacts/15177467882)），确认 context `+0xcc/+0xc8` 四种 sleep branch；#88 暴露并促成 TBZ bit-index decoder 的 5-bit mask 修正，由 #89 复验。#87 在 `4efff40ff68b7d918ac9b414e52efa5d3a2a0592` 上通过（[run #87](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45952554608)，artifact [15177486691](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45952554608/artifacts/15177486691)），锁定 DC CISW dispatch 与前后 DSB/ISB；#86 在 `d2199893faaed4db2ebbb129968fbb6254d0b603` 上通过（[run #86](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45951458800)，artifact [15177495643](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45951458800)），确认 PFN `0x40000` 的 `kpageflags=0x5868`、`page_mapcount=1`，分类 `LINUX_ACTIVE_ANON_MAPPED_PAGE`。#85 通过 memblock page classifier；#84 的 workflow YAML 错误已由 #85 修复。#83 在 `ae49671695819b8930cce7955af8f0aa26824d7e` 上 20/20 steps 成功（[run #83](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45932690509)）。此前 #82 对 MSI_CTRL fallback 函数精确窗口 `[0x4800c7a8,0x4800c964)`；#81 将 DRAM_CTRL/PHY_CTRL mode-setup helpers 加入独立反汇编窗口并通过 20/20；#79 验证 fallback 条件与 MSI_CTRL 报告分类。当前新增工作仅是 host 侧匹配二进制审计、内存元数据判读、CI 与交接文档，没有修改 Linkslot 产品运行时代码；未进行实机 SMC、MMIO、DRAM 内容读写或待机/唤醒。最近一次完整 Linkslot/LK feasibility [#884](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45920262116) 在 `91a07300` 上运行，尚未据此宣称当前代码 revision 全量通过。**本文 2026-11-27 PSCI 深度待机续接条目为当前状态；更早记录按各自 HEAD/run ID 理解。**
+**最后核对时间：** 2026-11-27。最新 BL31 static memory audit **#94** 在审计代码 HEAD `8477f41a1bce996d36e240e041723cc877962223` 上成功（[run #94](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45956263984)，job `audit-matched-bl31` 全部 24 steps 成功）。#94 复验了匹配 monitor、Boot0 CPU reset helper、BL31 CPU/MMIO 扫描、DRAM source-page ownership、Linux PFN metadata 与 PSCI CPU_ON；新增产物包括 [BL31 audit 15178254258](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45956263984/artifacts/15178254258) 和 [Boot0/monitor read-only capture 15178074907](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45956263984/artifacts/15178074907)。前一轮 #93 的唯一失败是审计窗口测试 key 不匹配（`KeyError: system_suspend_helper_48013b98`），#94 已修复并完整复验；不是产品运行时代码回归。H700 boot audit **#1452** 的 Linux host-tools 与 Windows PowerShell 两 job 也均成功（[run #1452](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45956131864)，文档提交 `39c1b9d3ac52df47eb53f4a92145afe8bc3d82df`）。
+
+#94 的 Boot0 静态分析显示 helper 只对 CPU2/CPU3 条件调用，并对 `C0_RST_CTRL` 执行清位（按 H616 family reference 语义是保持/断言 reset，而非释放）；CPU1 未经过该 helper，且 `0x03006248[29]` 的 H700 含义未知。因此 CPU1–CPU3 hold-off 仍是 **PROBABLE，不是设备实测**。同轮 DRAM 审计将 BL31 retention source page PFN `0x40000` 分类为 `LINUX_ACTIVE_ANON_MAPPED_PAGE`（kpageflags `0x5868`、mapcount 1）；它不能作为空闲 scratch。RTC soft-entry 的 TWI master / PMIC 候选路径已记录，但 context `+0xa4` descriptor 的实际 selector/bus、交易命令和最终平台动作仍未知。
+
+这些是精确匹配二进制的静态审计与 host CI，不是 RG34XX 实机启动或 PSCI 运行时验证。当前仍保持 `H700_MEMORY_LAYOUT_APPROVED=false`、`hardware_applied=0`；没有执行设备 SMC/MMIO、DRAM 内容读写、待机/唤醒、Boot0/TOC1 写入、刷写或 payload execution。最近一次完整 Linkslot/LK feasibility **#884** 仍是旧 revision 的历史结果，不能代表 #94 当前 HEAD 的完整产品构建通过。
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承均已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 也已分别实测，均约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。120-Hz 候选仍未获面板资格：官方产品页只公布 3.4-inch IPS 720×480，未公布模组料号或刷新上限；Slot 维护者也将相关 120-Hz 实现描述为对略低于 60-Hz 面板的 driver tweak，并因 stutter/复杂度决定跳过。当前下一步是识别测试机的 LCD 模组完整料号/Revision 并取得对应 datasheet；没有该证据前，60 Hz 是唯一合格模式。禁止任何 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist，`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
 
+
+## 2026-11-27 增量续接：BL31 audit #94、Boot0 CPU hold-off 与 retention source-page 结论
+
+### CI 与审计产物
+
+- [x] BL31 static audit [#94](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45956263984)：HEAD `8477f41a1bce996d36e240e041723cc877962223`，`audit-matched-bl31` job 全部 24 steps 成功；产物 [15178254258](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45956263984/artifacts/15178254258)。
+- [x] 同一 run 上传 Boot0 primary/secondary、对应 metadata 与匹配 monitor 的只读 capture：[15178074907](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45956263984/artifacts/15178074907)。
+- [x] H700 boot audit [#1452](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45956131864)：Linux host-tools、Windows PowerShell 两 job 成功。
+- [x] 记录 #93 的测试失败根因：`system_suspend_helper_48013b98_complete` / `system_suspend_helper_48013b98` 窗口 key 不一致导致 `KeyError`；#94 修正 test key 后复验成功。未涉及固件运行时代码。
+
+### 新证据与边界
+
+- Boot0 helper 位于 `0x231e0`，调用者位于 `0x23224`；SID-window 候选寄存器 `0x03006248` bit29 决定是否以 core index 2、3 调用 helper，core1 未传入。helper 对 `0x09010000` 执行 `C0_RST_CTRL & ~(1 << core)`；H616 family reference 中 0 为 assert reset、1 为 deassert，因此该操作不会释放 CPU2/CPU3。H700 bit29 语义、H700 reset default 和 BL33 入口实时状态仍未读回。
+- CPU1–CPU3 保持 reset 的静态结论只能标为 **PROBABLE**。不得启用 SMP；不能将 helper 对 core2/core3 的行为外推为 CPU1 的独立显式 hold-off 证明。寄存器 `0x09010044` 的 CPU0 RVBAR high 命名与 helper 的 bit2/bit3 写入仍有未解释矛盾。
+- BL31 snapshot source `[0x40000000,0x40000140)` 落在 PFN `0x40000`。memblock classifier 结果是 `UNRESERVED_SYSTEM_RAM`，但 Linux 4.9.170 PFN capture 给出 `kpageflags=0x5868`、`page_mapcount=1`、`LINUX_ACTIVE_ANON_MAPPED_PAGE`。安全 gate 为 `BLOCKED_LIVE_LINUX_PAGE_REQUIRES_EXACT_PRESERVE_RESTORE`；绝不可当作 free scratch。
+- RTC soft-entry continuation `0x48012670` 调用 helper `0x48012070`；后者经 `0x480129f0` 初始化 TWI-like controller，再经 `0x48013b98` 完成分阶段传输。controller descriptor 由 context `+0xa4` 选择，实际 selector、R-TWI bus index、PMIC slave/命令和最终 power action 未确认。保留“PMIC candidate”措辞，不称为已证明的关机/Boot0 跳转流程。
+
+### 下一步（全部 host/read-only 优先）
+
+1. 追踪 context `+0xa4` 的赋值来源、descriptor table 的运行时初始化/重定位和最终 controller base；在此闭合前不得命名 bus index 或发出 I2C/TWI transaction。
+2. 追踪 Boot0 所有 CPUCFG 写路径，解释 `0x09010044` 异常；仅通过已批准的可信只读路径取得 pre-BL33 `C0_RST_CTRL`、`C0_CPU_STATUS`、RVBAR0–3、DBG_REG0/1 与 SID bit29，不能改用裸 devmem/mmap 猜测。
+3. 对 PFN `0x40000` 建立精确保存/恢复、cache/DMA/CPU quiescence 与 Linux continuation 的静态证明；在 source page 所有权闭合前禁止任何 suspend 实验。
+4. 继续关闭 BL33 runtime/BSS/page-table/stack 所有权、timer-PPI continuity、APB1/PIO permission 与 32 KiB diagnostic loader package/rollback 审查。
+
+`H700_MEMORY_LAYOUT_APPROVED` 继续 false；`hardware_applied=0`。
 
 ## 2026-11-27 续接：BL31 legacy PSCI、SYSTEM_SUSPEND 深度待机与唤醒链已静态识别
 
