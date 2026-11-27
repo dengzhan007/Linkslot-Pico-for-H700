@@ -74,11 +74,11 @@ A reproducible host audit was added:
 
 - `scripts/audit-rg34xx-bl31-twi-descriptors.py`
 - `scripts/test-audit-rg34xx-bl31-twi-descriptors.py`
-- The audit pins the monitor size/SHA, checks the selector loads, signed indexed lookup instruction, object-pointer publication, adjacent raw qwords and BaseOS SPL patch offsets. It produces `TWI-DESCRIPTOR.md` and `twi-descriptor-report.json`.
-- Workflow integration is in `.github/workflows/h700-bl31-memory-audit.yml`; [BL31 audit #96](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45965474745) passed the complete `audit-matched-bl31` job on audit-script HEAD `f4676657ff0864e9ecd01878c59886798ac1ea11`. Artifact: [15182980313](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45965474745/artifacts/15182980313).
-- The initial run [#95](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45965350913) failed only because the new assertion expected `x19` at `0x480126d4`; the matched instruction uses `x0`. This audit-script assertion was corrected and the entire workflow passed on #96. No firmware/product code was modified.
+- The audit pins the monitor size/SHA, checks the selector loads, signed indexed lookup instruction, controller-base publication, nearby TWI/R-TWI qwords and BaseOS SPL patch offsets. It produces `TWI-DESCRIPTOR.md` and `twi-descriptor-report.json`.
+- Workflow integration is in `.github/workflows/h700-bl31-memory-audit.yml`. BL31 audits [#100](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45966317624) and [#101](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45966329671) passed after extending the data scan to include both standard TWI and R-TWI base candidates; #101 also passed the complete six-address H616 mapping regression. Latest generated report: [artifact 15182284425](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45966329671/artifacts/15182284425).
+- Earlier [#96](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45965474745) established the first passing descriptor-boundary audit; [#95](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45965350913) failed only because the new assertion expected `x19` at `0x480126d4`, while the matched instruction uses `x0`. This audit-script assertion was corrected and later runs passed. No firmware/product runtime code was modified.
 
-**Interpretation update:** do not describe `0x48014628` as a proven initialized runtime pointer table. It is a lookup base used by the code; its runtime contents and the runtime context pointer at `0x48014668` remain unknown. The pinned SPL header patch does not explain either value.
+**Interpretation update:** the static bytes at signed lookup indices 68–73 now form a coherent H616-family controller-base sequence (TWI0–TWI4/R-TWI0). This identifies the likely semantics of those entries, but not which index is selected at runtime. The context slot at `0x48014668` still has an unexplained raw initial value of 2, and the pinned SPL patch does not explain it.
 
 
 ## 4B. H616-family TWI base-map correlation (2026-11-27)
@@ -136,10 +136,9 @@ Confirmed statically:
 Unresolved:
 
 1. Who initializes or relocates the context pointer at `0x48014668`?
-2. Who populates or transforms the indexed lookup data consumed from `0x48014628`, and what are its runtime contents/layout?
-3. What signed value does context `+0xa4` carry on the actual RG34XX suspend path, and what absolute address does its scaled lookup select?
-4. What signed selector is present at context `+0xa4` on the actual RG34XX suspend path (in particular, is it 73), and therefore which of the statically mapped TWI0–TWI4/R-TWI0 bases is actually selected? The PMIC slave address and command sequence are also unresolved.
-5. What final PMIC/RTC/power action follows the transfer, and what consumes the GP_DATA2 phase markers?
+2. What signed value does context `+0xa4` carry on the actual RG34XX suspend path (in particular, is it 73), and therefore which statically mapped TWI0–TWI4/R-TWI0 base is selected?
+3. What PMIC slave address and command sequence are used?
+4. What final PMIC/RTC/power action follows the transfer, and what consumes the GP_DATA2 phase markers?
 
 Next work should remain host/static: trace the source/producer of context `+0xa4` and its signed value through the RTC soft-entry caller, or identify a trustworthy pre-suspend read-only capture. The static base mapping is already constrained; the missing fact is the runtime selector. Do not infer that selector from the FDT, do not guess a PMIC slave address, and do not issue a TWI transaction.
 
