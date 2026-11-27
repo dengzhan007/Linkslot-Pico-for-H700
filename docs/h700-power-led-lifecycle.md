@@ -17,6 +17,12 @@
 
 保留“玩游戏熄灯”作为未来 opt-in build 的默认策略，无前端用户设置项。真实 LED 极性、灯亮时间和是否足以作为松开电源键提示，仍需在安全门槛关闭后做 RG34XX 冷启动验证。
 
+## 2026-11-27：无拆机首启信号定位
+
+RG34XX 首轮 BL33 bring-up 将 PI12 工作灯列为首选待资格化的外部可视信号。目标非 SP boot DTS 已把 PMU work_led 映射到 bank I / PI12、low_pwr_led 映射到 PI11；现有服务只修改 PI12 的 DATA/MUX 位并保留 PI11。该路线不需要拆机或连接 UART 焊盘，UART0 保留为备用。
+
+这项路线调整没有启用生产硬件 wrapper：H700_RG34XX_PI12_EARLY_ACCESS_ENABLE 仍默认 0。BL33 入口时 APB1/PIO clock、non-secure access/firewall 与 Data Abort containment 仍需资格化。首个实机试验必须使用独立 TF1 测试卡，payload 限于经 map 审计的 BL33-slot-only 布局；全局 H700_MEMORY_LAYOUT_APPROVED 继续关闭。完整策略见 [无拆机 TF bring-up 方案](no-disassembly-tf-bringup-plan.md)。
+
 ## 板级证据与寄存器
 
 RG34XX（非 SP）KNULLI 启动设备树（固定提交
