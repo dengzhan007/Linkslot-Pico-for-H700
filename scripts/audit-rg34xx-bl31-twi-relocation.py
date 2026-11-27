@@ -240,7 +240,7 @@ def render(r):
       "## Limitations",""
     ]
     lines.extend("- "+x for x in r["limitations"])
-    return "\\n".join(lines)+"\\n"
+    return "\n".join(lines)+"\n"
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
@@ -251,7 +251,7 @@ def main():
     a=p.parse_args()
     r=audit(a.monitor.read_bytes(),a.dtb.read_bytes(),a.baseos_source)
     a.out_dir.mkdir(parents=True,exist_ok=True)
-    (a.out_dir/"twi-selector-relocation-report.json").write_text(json.dumps(r,indent=2,sort_keys=True)+"\\n",encoding="utf-8")
+    (a.out_dir/"twi-selector-relocation-report.json").write_text(json.dumps(r,indent=2,sort_keys=True)+"\n",encoding="utf-8")
     md=render(r); (a.out_dir/"TWI-SELECTOR-RELOCATION.md").write_text(md,encoding="utf-8")
     print(md); return 0
 if __name__=="__main__": raise SystemExit(main())
