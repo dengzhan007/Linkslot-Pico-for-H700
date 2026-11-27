@@ -5,23 +5,47 @@
 本项目采用可验证的垂直切片推进。每一阶段都必须产出可重复构建的测试对象和明确的验收记录；不以“编译通过”代替设备验证。
 
 
-## 2026-11-27 主线优先级重置：先完成首次 BL33 诊断启动准备
+## 2026-11-27 主线调整：无拆机、独立 TF1、PI12 可视信号优先
 
-本节是当前执行优先级的唯一事实源，覆盖本路线图下方历史条目中的“下一步”建议；历史结果保留，不代表 deferred 项仍在执行。
+本节是当前执行优先级的唯一事实源，覆盖下方历史条目的旧“下一步”建议。用户确认 RG34XX 没有板载 eMMC 系统盘，系统由 TF 卡启动；项目据此采用专用测试卡恢复路线，不把拆机焊 UART 作为首启前提。无 eMMC 降低的是启动介质写坏后的恢复风险，不代表任意电气操作、SoC 状态写入或错误电压没有风险。
 
-**目标顺序：** 先打通最小 AArch32 BL33 的可验证启动链，再逐层接入 H700 HAL、Linkslot UI 与模拟器；最后再做 PMIC 完全关机和发行验收。当前稳定上游基线为 Linkslot main **1.0.49**（见 [upstream-baselines.md](upstream-baselines.md)）。工作分支名含 `1.0.45` 是历史名称，不是实际源码 pin。
+**目标顺序：** 先通过独立 TF1 测试卡验证最小 AArch32 BL33；首发 proof-of-life 优先采用机身可见 PI12 工作灯；UART0 为备用；LCD、Linkslot 和模拟器后续接入。稳定 Linkslot 业务基线仍为 main 1.0.49。
 
 ### 当前唯一近期交付物 M1
 
-按 [M1 BL33 diagnostic specification](m1-bl33-diagnostic.md) 执行：
+按 [M1 BL33 diagnostic specification](m1-bl33-diagnostic.md) 与 [无拆机 TF bring-up 方案](no-disassembly-tf-bringup-plan.md) 执行：
 
-- M1-S0：固定最小诊断 payload 规格、成功信号资格标准、host-only 构建边界和禁止事项。
-- M1-S1：确认 RG34XX 当前目标板真实可用且 BL33 可访问的 proof-of-life 接口。UART0 只能作为待验证候选；不得只凭 Linux bootargs、通用 H700 文档或其他机型 pinout 推定 UART/PIO 可用。
-- M1-S2：信号资格通过后，复用已存在的 BL33 first-entry snapshot ABI，构建不超过活动 native loader 0x8000-byte extent 的 AArch32 诊断 payload，并完成 ELF/map/BSS/stack/入口契约 host 检查。
-- M1-S3：只在隔离的 pinned BaseOS source checkout 中生成配对 native SPL/firmware/capsule；检查 header/FNV/extent/padding 与源树恢复。输出必须标记 `NON-INSTALLABLE / NOT FOR DEVICE`。
-- M1-S4：设备执行/刷写不属于自动流程。G2/G3、handoff 与恢复门槛未关闭，或没有针对本次设备测试的明确授权时，禁止执行。
+- M1-T0：资格化 PI12 的 BL33 handoff clock/access、PI11 保留和 Data Abort fail-stop；审计 BL33-slot-only 布局。
+- M1-T1：构建极小 CPU0-only A32 BL33 诊断 payload，raw ≤ 32 KiB；代码、向量、BSS、stack、页表和异常路径必须有 ELF/map 报告，所有运行时范围限于审查过的 BL33 slot。
+- M1-T2：用 pinned BaseOS builder 生成同一代 payload/native firmware/SPL/capsule/TF 镜像；核验 header、FNV、generation、extent、padding、分区和所有 hash。
+- M1-T3：仅将标记为 M1-TEST-TF1-ONLY 的配对镜像写入独立 TF1 测试卡；RG34XX 不拆机、不焊接、不连接 UART；观察 PI12 成功信号。失败后关机换回原系统卡。
+- M1-T4：补齐完整 LK 必需的 GIC/timer、heap、显示、输入和存储服务，再逐步接入 Linkslot 与模拟器。
 
-**硬件安全闸：** `H700_MEMORY_LAYOUT_APPROVED=false`；不得设置 `H700_MEMBASE/H700_MEMSIZE`，不得执行 SMC/MMIO、TWI transaction、DRAM 内容读写、Boot0/TOC1/SD 写入、刷写或 payload execution。32 KiB 仅为 raw loader file extent，不代表 BSS、stack、heap、page table 或外部应用内存已获批准。
+**全局硬件闸继续保持：** H700_MEMORY_LAYOUT_APPROVED=false，不设置通用 H700_MEMBASE/H700_MEMSIZE；不写未知 DRAM，不做 PMIC/TWI、CPU PLL/电压、SoC fuse/OTP、SMP、DMA 或任意外设访问。M1 只能使用单独审计的 BL33-slot-only 局部布局，不能批准完整 1 GiB DRAM 或 Linkslot 应用 arena。PI12 的物理 wrapper 仍 default-off，必须先证明 PIO handoff 权限和异常路径，不能因已有 host tests 直接打开宏。
+
+### CI 与现有实现核对（2026-11-27）
+
+- Linkslot/LK feasibility #916 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46010334262) 成功；它复验 source pin、native header/override、SoftwareCompositor、Linkslot no_std/runtime、Libretro/mGBA、AArch32 layout probes 和 SD/GPT/FAT/VFS host tests。它没有生成可直接启动的完整设备镜像。
+- H700 boot audit #1523 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46010567336) 的 Linux host-tools 与 Windows PowerShell jobs 均成功。
+- platform/h700/power/h700_rg34xx_power_led.c 已有 PI12 最小服务；host tests 覆盖只修改 PI12、保留 PI11/其他位、写入顺序和读回错误。生产物理 wrapper 默认关闭。
+- RG34XX 非 SP boot DTS 的 PMU work_led 指向 PI12，low_pwr_led 指向 PI11；UART0 降为备用，不因缺少 test-pad 资料而阻塞首次启动。
+- 以上 CI 均是 host/cross-build/audit 证据，不是实际 BL33 启动或 LED 冷启动验证。
+
+### 当前 Gate ledger
+
+| Gate | 当前结论 | 下一项可验收证据 |
+|---|---|---|
+| G1 BL33 启动 | OPEN | 最小 CPU0-only A32 payload 从独立 TF1 启动，并由 PI12 确认 |
+| G2 通用内存所有权 | OPEN | 完整 LK/BSS/stack/heap/page-table/DMA/应用 DRAM 生命周期闭合；M1 局部 slot 审计不替代通用批准 |
+| G3 多核交接 | OPEN | 仍需匹配证据；M1 不启动 CPU1–CPU3、不用 SMP |
+| G4 显示 | PARTIAL | BL33 自有 framebuffer/scanout ownership 与实机画面 |
+| G5 输入 | PARTIAL | PIO/IRQ → H700 HAL → Linkslot 端到端验证 |
+| G6 GIC/timer | OPEN | BL33 安全态、GIC group/PPI、CNTFRQ/CNTVCT 与 IRQ handoff 验证 |
+| G7 音频 | NOT STARTED | H700 PCM/DMA 端到端输出 |
+| G8 存储 | PARTIAL | 真机 CMD17/FAT 只读后，再验证受控写入、flush 与断电一致性 |
+| G9 完全关机 | DEFERRED / OPEN | 单独审查 PMIC command/action 与保存语义 |
+| G10 thermal | OPEN | 可信 sensor/AVCC 校准 |
+| G11 OPP | OPEN | 经板级证据批准的频率/电压表 |
 
 ### 2026-11-27 实机 UART0 运行态证据（M1-S1 仍 OPEN）
 
