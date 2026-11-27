@@ -1044,3 +1044,17 @@ Hard size boundary: this first integration path is only for a small diagnostic p
 - [ ] Determine the actual signed context `+0xa4` value on the RG34XX RTC soft-entry path, preferably by tracing its producer/initializer in BL31 and caller setup or by a trusted read-only capture. Do not infer index 73 from the FDT alone.
 - [ ] Resolve PMIC slave address, command/register sequence, GP_DATA2 marker consumer and final power action from matched-binary control/data flow. No TWI transaction.
 - Hardware remains unchanged: `H700_MEMORY_LAYOUT_APPROVED=false`, `hardware_applied=0`; no SMC/MMIO, DRAM content access, suspend/wake, Boot0/TOC1 write, flashing or payload execution.
+
+## 2026-11-27 — Full-monitor RTC selector writer audit and TWI map (BL31 #109–#114)
+
+- [x] Scan all 26,804 4-byte-aligned monitor word slots independently; 24,943 decode as AArch64 instruction-shaped words. Invalid/data words no longer stop the scan.
+- [x] Pin all four RTC context `+0xa4` read sites: `0x48012520`, `0x480125d4`, `0x48012694`, `0x480126d4`; BL31 audit #114 checks the fourth site explicitly.
+- [x] Use access-width-aware store-range analysis to find five instructions whose immediate write ranges overlap `[context+0xa4, context+0xa8)`.
+- [x] Manually trace the five candidates: two use X29 as the current stack-frame base, one saves `DACR32_EL2/IFSR32_EL2` into the CPU architectural context, and two use SP for exception-entry stack saves. None writes the RTC selector object.
+- [x] Scan global context-like slot `[0x48014668,0x48014670)`: 22 load candidates, no immediate-offset store candidate; raw initial qword is `2`, runtime producer still unknown.
+- [x] BL31 audits #111 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45968594594), #112 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45968869354), #113 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45969019644), #114 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45969225655) all passed. Latest report artifact [15183309990](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45969225655/artifacts/15183309990).
+- [x] Update [RTC/TWI audit](rg34xx-rtc-soft-entry-twi-audit.md) and `PROJECT-STATUS.md` with the exact scan coverage, candidate classifications, and limitations.
+- [ ] Continue tracing aliases/precomputed pointers and helper-copy paths that could initialize the global context-like pointer or selector indirectly; the current scan does not prove the absence of such writers.
+- [ ] Resolve the runtime signed selector at context `+0xa4`; index 73 remains only the strongest R-TWI0 candidate, not a captured runtime choice.
+- [ ] Identify the PMIC slave/command path and final power action using static evidence only. Do not issue TWI transactions.
+- Hardware remains unchanged: `H700_MEMORY_LAYOUT_APPROVED=false`, `hardware_applied=0`; no SMC/MMIO, DRAM content read/write, suspend/wake, Boot0/TOC1 write, flashing or payload execution.
