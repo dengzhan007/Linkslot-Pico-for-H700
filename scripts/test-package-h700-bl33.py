@@ -91,10 +91,21 @@ class PackageH700Bl33Tests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "vector 0"):
             MODULE.package_image(bytes(raw), reference, require_pinned_reference=False)
 
-    def test_rejects_image_over_native_limit(self) -> None:
+    def test_accepts_exact_active_32k_loader_extent(self) -> None:
         raw, reference = fixtures()
-        raw = raw + bytes(MODULE.MAX_IMAGE_BYTES - len(raw) + 4)
-        with self.assertRaisesRegex(ValueError, "native BL33 limit"):
+        raw = raw + bytes(MODULE.ACTIVE_LOADER_EXTENT_BYTES - len(raw))
+        output, report = MODULE.package_image(
+            raw, reference, require_pinned_reference=False
+        )
+        self.assertEqual(report["raw_lk_bytes"], 0x8000)
+        self.assertEqual(report["active_loader_extent_bytes"], 0x8000)
+        self.assertEqual(report["fits_active_loader_extent"], True)
+        self.assertEqual(len(output), 0x8000)
+
+    def test_rejects_image_over_active_32k_loader_extent(self) -> None:
+        raw, reference = fixtures()
+        raw = raw + bytes(MODULE.ACTIVE_LOADER_EXTENT_BYTES - len(raw) + 1)
+        with self.assertRaisesRegex(ValueError, "active native loader extent"):
             MODULE.package_image(raw, reference, require_pinned_reference=False)
 
 
