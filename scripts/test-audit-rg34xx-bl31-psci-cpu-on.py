@@ -253,6 +253,25 @@ def main() -> int:
     assert window_map["system_suspend_helper_48013df0"][0] == 0x48013DF0
     assert window_map["system_suspend_helper_48013ee8"][0] == 0x48013EE8
     assert window_map["system_suspend_helper_48012670"][0] == 0x48012670
+    assert window_map["system_suspend_helper_48011ba8_full"][1] >= 0x240
+    assert window_map["system_suspend_helper_48011df8_full"][1] >= 0x180
+    assert window_map["system_suspend_helper_48013ee8_full"][1] >= 0x180
+    assert window_map["system_suspend_helper_48011b38"][0] == 0x48011B38
+    assert window_map["system_suspend_helper_48011920"][0] == 0x48011920
+    assert window_map["system_suspend_helper_48011b10"][0] == 0x48011B10
+    assert window_map["system_suspend_helper_48011b30"][0] == 0x48011B30
+    assert window_map["system_suspend_helper_48012070"][0] == 0x48012070
+    assert window_map["system_suspend_helper_480126b0"][0] == 0x480126B0
+    assert window_map["system_suspend_helper_48012868"][0] == 0x48012868
+    assert window_map["system_suspend_helper_48013490"][0] == 0x48013490
+    assert window_map["system_suspend_helper_480125d0"][0] == 0x480125D0
+    assert window_map["system_suspend_helper_48013620"][0] == 0x48013620
+    assert window_map["system_suspend_helper_48013738"][0] == 0x48013738
+    assert window_map["system_suspend_helper_480131b8"][0] == 0x480131B8
+    assert window_map["system_suspend_helper_48013588"][0] == 0x48013588
+    assert window_map["system_suspend_helper_480135d8"][0] == 0x480135D8
+    assert window_map["system_suspend_helper_48012510"][0] == 0x48012510
+    assert window_map["system_suspend_helper_48013190"][0] == 0x48013190
     assert window_map["normal_suspend_powerdown_helper"][0] == 0x48015D70
     assert window_map["system_suspend_cache_teardown_and_trampoline"][0] == 0x48015FB8
     assert window_map["system_suspend_cache_teardown_and_trampoline"][1] >= 0x270
