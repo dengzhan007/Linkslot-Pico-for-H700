@@ -1007,3 +1007,18 @@ Hard size boundary: this first integration path is only for a small diagnostic p
   `0x9410`-byte SRAM copy.
 - [ ] Continue analysis of separate context helpers and their return/failure paths.
 - Hardware unchanged: `hardware_applied=0`; no MMIO, PSCI SMC or payload execution.
+
+
+## 2026-11-27 — BL31 audit #94 / Boot0 CPU hold-off / retention PFN checkpoint
+
+- [x] Exact-matched BL31 static audit [#94](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45956263984) passed all 24 steps on `8477f41a1bce996d36e240e041723cc877962223`; archived [audit output](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45956263984/artifacts/15178254258) and [Boot0/monitor input capture](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45956263984/artifacts/15178074907).
+- [x] H700 boot-audit [#1452](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45956131864) passed Linux host-tools and Windows PowerShell jobs.
+- [x] Resolve #93's audit-only `KeyError: system_suspend_helper_48013b98` by aligning the test window key; #94 re-ran the full audit successfully. No product runtime code was implicated.
+- [x] Record Boot0 reset-helper behavior: conditional calls for core indices 2/3 only, with `C0_RST_CTRL &= ~(1 << core)`; no explicit core1 helper call. H616 family reset semantics are reference-only; the H700 live state and SID bit29 semantics remain unverified.
+- [x] Classify BL31 retention source PFN `0x40000` as `LINUX_ACTIVE_ANON_MAPPED_PAGE` from Linux 4.9.170 capture (`kpageflags=0x5868`, mapcount 1). The page is not free scratch; exact save/restore and quiescence proof remains mandatory.
+- [x] Record RTC soft-entry TWI-like controller initialization/transfer path and its evidence limits; context `+0xa4` actual descriptor, selected bus, slave address, command sequence and final platform action remain unresolved.
+- [ ] Trace the context `+0xa4` selector and runtime descriptor-table initialization/relocation to recover the actual controller base. No I2C/TWI transaction or guessed bus access.
+- [ ] Expand Boot0 CPUCFG write-path audit to explain the unusual `0x09010044` writes; obtain trusted read-only pre-BL33 CPUCFG/reset/RVBAR state before any diagnostic BL33. Keep SMP disabled.
+- [ ] Prove retention-buffer ownership and exact preservation/recovery for the active PFN, including CPU/DMA/cache quiescence and Linux continuation ordering. No suspend/wake experiment until closed.
+- [ ] Close BL33 runtime/BSS/page-table/stack ownership, APB1/PIO permissions, timer-PPI continuity and 32 KiB diagnostic package/rollback gates.
+- Current result is host/static evidence only. `H700_MEMORY_LAYOUT_APPROVED=false`, `hardware_applied=0`; no device SMC/MMIO, memory content access, suspend/wake, storage write, flashing or payload execution. The latest full Linkslot/LK feasibility run #884 is an older revision and does not certify this HEAD.
