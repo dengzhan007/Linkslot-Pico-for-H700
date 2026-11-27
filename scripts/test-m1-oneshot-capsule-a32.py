@@ -116,9 +116,10 @@ def main() -> int:
             raise RuntimeError("AArch32 selector fixture has undefined symbols:\n" + undefined)
 
         symbols = run([nm, str(elf)])
+        # The internal FNV helper may be inlined at -O2; only require
+        # the public selector and capsule-facing fixture entry points.
         required = (
             "h700_m1_capsule_select",
-            "h700_m1_capsule_fnv1a",
             "h700_m1_capsule_dispatch_fixture",
         )
         missing = [symbol for symbol in required if symbol not in symbols]
