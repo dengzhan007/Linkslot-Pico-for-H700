@@ -286,6 +286,21 @@ These are pinned-source and synthetic-link findings only. They do not prove
 the real SoC's CPU1–CPU3 reset state, ACTLR state, cache coherency, or memory
 ownership. The gate remains OPEN and no payload was executed.
 
+### 4.4 SPL / BL31 RVBAR selector parity gate
+
+The pinned SPL and matched BL31 later CPU_ON helper select RVBAR banks
+differently. SPL uses `low3 == 2` for alternate bank `0x08100040`, otherwise
+primary `0x09010040`. BL31 CPU_ON uses `low3 == 0` for primary, otherwise
+alternate. They match only for `VER_REG[2:0]` values 0 and 2; values
+1, 3, 4, 5, 6 and 7 mismatch.
+
+The all-values regression [BL31 audit #136](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46039667955)
+marks this `UNRESOLVED_UNTIL_SELECTOR_READBACK`. It is a potential cross-stage
+incompatibility, not a confirmed mismatch on this device: the only target
+read attempt at `0x03000024` failed with EFAULT. M1/LK must not call PSCI
+CPU_ON or release CPU1–CPU3. Keep the runtime CPU0-only until selector and
+reset/RVBAR state are established through a trusted read-only path and an
+SMP-capable runtime is independently qualified.
 ## 5. Host-only verification required before producing an M1 artifact
 
 The M1 builder must emit a manifest with at least:
