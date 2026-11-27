@@ -207,6 +207,7 @@ Host regressions use real AArch64 instruction encodings and cover:
 CI:
 - [BL31 audit #126](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45972875430) passed after adding the expanded seed and MOVK transfer logic.
 - [BL31 audit #127](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45972935686) passed the full host regression including MOVZ/MOVK and LDR-literal fixtures; artifact [15185123383](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45972935686/artifacts/15185123383).
+- [BL31 audit #128](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45973433905) passed after correcting the generated report label to show all seed classes; artifact [15185733602](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45973433905/artifacts/15185733602). The generated report confirms ADRP=79, ADR=0, MOV-immediate=0, literal-load=0; 38,676 states, 83 path hits / 22 unique load PCs, zero modeled selector or slot writes.
 
 For the actual matched 107,216-byte monitor, the expanded CFG report remains:
 - ADRP seeds: 79
