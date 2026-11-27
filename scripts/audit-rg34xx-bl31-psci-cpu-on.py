@@ -165,6 +165,69 @@ WORDS = {
     0x480160a8: 0xd5390029, 0x4801612c: 0xd53e1000,
     0x48016130: 0x8a210000, 0x48016134: 0xd51e1000,
     0x48016138: 0xd5033fdf, 0x48016140: 0x17ffffda,
+    # OEM standby clock-save/restore, AON tag and PLL relock.
+    0x48011bb0: 0xf2a06005, 0x48011bc4: 0xb94000a7,
+    0x48011bd4: 0x0a0100e1, 0x48011be0: 0xb9041441,
+    0x48011c28: 0x528063e2, 0x48011c2c: 0x72a06002,
+    0x48011c54: 0x12067463, 0x48011c5c: 0x32080063,
+    0x48011c64: 0xb9000103, 0x48011c68: 0xd2804888,
+    0x48011c6c: 0xf2a0e028, 0x48011c70: 0x52b4e003,
+    0x48011c90: 0xb94000a1, 0x48011c94: 0x12067421,
+    0x48011c98: 0x32080021, 0x48011c9c: 0xb90000a1,
+    0x48011ca8: 0x0a040021, 0x48011cac: 0x120078a5,
+    0x48011cb0: 0xb9000045, 0x48011cb4: 0xb9001c01,
+    0x48011cbc: 0x12027800, 0x48011cc0: 0xb9000040,
+    0x48011cc4: 0xb9400100, 0x48011cc8: 0x12005c00,
+    0x48011ccc: 0x2a030000, 0x48011cd0: 0xb9000100,
+    0x48011d2c: 0x9400063d, 0x48011d6c: 0x9400062d,
+    0x48011d88: 0xd282a205, 0x48011da8: 0x12067421,
+    0x48011dac: 0x32070021, 0x48011db0: 0xb90000a1,
+    0x48011dd8: 0x32010021, 0x48011ddc: 0xb9000041,
+    0x48011de4: 0x121e7821, 0x48011de8: 0xb9000041,
+    0x48011df0: 0x17ffffc0,
+    0x48011e10: 0x9400089a, 0x48011e48: 0x12027884,
+    0x48011e4c: 0xb9000004, 0x48011e54: 0x0a030083,
+    0x48011e58: 0x2a020062, 0x48011e5c: 0xb9000002,
+    0x48011e64: 0x32010042, 0x48011e68: 0xb9000002,
+    0x48011e70: 0x32030042, 0x48011e74: 0xb9000002,
+    0x48011e78: 0xb9400020, 0x48011e7c: 0x36e7ffe0,
+    0x48011e94: 0x52800280, 0x48011ec0: 0x9400004e,
+    # GIC pending, IR FIFO/status and GPIO wake-pin helpers.
+    0x48013194: 0xd2824003, 0x4801319c: 0xf2a06043,
+    0x480131a0: 0x531e7401, 0x480131a4: 0x52800022,
+    0x480131a8: 0x1ac42040, 0x480131ac: 0xb8614861,
+    0x480131b0: 0x0a010000, 0x480131b4: 0xd65f03c0,
+    0x480131bc: 0xd2800609, 0x480131c0: 0xd2800406,
+    0x480131c8: 0xf2a0e089, 0x480131cc: 0xf2a0e086,
+    0x480131d8: 0xb9400128, 0x480131dc: 0x12001d05,
+    0x480131e0: 0xd3483901, 0x480131e4: 0xb9000125,
+    0x48013200: 0xb94000c4, 0x4801320c: 0x39001024,
+    0x48013214: 0xb9000043,
+    0x48013588: 0x39400001, 0x48013594: 0x39400402,
+    0x48013598: 0x51010442, 0x480135a0: 0x39400801,
+    0x480135a4: 0x5100c060, 0x480135b4: 0x2a024000,
+    0x480135d8: 0x53107c01, 0x480135e0: 0x7100283f,
+    0x480135ec: 0x72a0e044, 0x480135f0: 0x72a06002,
+    0x480135fc: 0x1a843042, 0x48013600: 0x531e7421,
+    0x48013608: 0x0b020021, 0x4801360c: 0xb9400021,
+    0x48013610: 0x6a01001f, 0x48013614: 0x1a9f07e0,
+    0x48013620: 0x39400001, 0x48013654: 0x53107c26,
+    0x48013660: 0x72a06003, 0x48013664: 0x0b060cc2,
+    0x48013668: 0x710028df, 0x4801366c: 0xb9400c09,
+    0x48013674: 0x1a883068, 0x48013678: 0x12003c23,
+    0x48013684: 0x11004087, 0x48013690: 0x1ac32129,
+    0x480136a4: 0x0b030903, 0x480136a8: 0x0b020902,
+    0x480136b4: 0xb94000e4, 0x480136c4: 0x0a250085,
+    0x480136d4: 0xb90000e5, 0x480136dc: 0xb9401007,
+    0x480136f4: 0xb9000044, 0x48013714: 0xb90000c2,
+    0x48013724: 0xb9000060,
+    # Wake-source aggregator call sites.
+    0x48013e88: 0x97fffde6, 0x48013ec8: 0x97fffdd6,
+    0x48013f14: 0x97fffca9, 0x48013f48: 0x97fffd90,
+    0x48013f54: 0x97fffda1, 0x48013f8c: 0x97fffd7f,
+    0x48013f94: 0x97fffd91, 0x48013fe4: 0x97fffc6b,
+    0x48014050: 0x97fffc5a, 0x4800c4a0: 0x940015c2,
+    0x4800c648: 0x940015ec,
     # Slot 7 system-reset and slot 6 system-off helper calls.
     0x48002588: 0x97fffe50, 0x480025a8: 0x97fffe4c,
     0x48002858: 0x97fffc20, 0x48002874: 0x17ffff83,
@@ -529,6 +592,88 @@ def main() -> int:
     for address, expected in cpux_clock_words.items():
         if read_word(raw, address) != expected:
             raise RuntimeError("CPUX_AXI clock switch instruction changed at 0x%08x" % address)
+    # Clock/context save path: CCU fields, PLL_CPUX factors and opaque AON tag.
+    suspend_clock_save_words = {
+        0x48011bb0: 0xf2a06005, 0x48011bc4: 0xb94000a7,
+        0x48011bd4: 0x0a0100e1, 0x48011be0: 0xb9041441,
+        0x48011c28: 0x528063e2, 0x48011c2c: 0x72a06002,
+        0x48011c54: 0x12067463, 0x48011c5c: 0x32080063,
+        0x48011c64: 0xb9000103, 0x48011c68: 0xd2804888,
+        0x48011c6c: 0xf2a0e028, 0x48011c70: 0x52b4e003,
+        0x48011c90: 0xb94000a1, 0x48011c94: 0x12067421,
+        0x48011c98: 0x32080021, 0x48011c9c: 0xb90000a1,
+        0x48011ca8: 0x0a040021, 0x48011cac: 0x120078a5,
+        0x48011cb0: 0xb9000045, 0x48011cb4: 0xb9001c01,
+        0x48011cbc: 0x12027800, 0x48011cc0: 0xb9000040,
+        0x48011cc4: 0xb9400100, 0x48011cc8: 0x12005c00,
+        0x48011ccc: 0x2a030000, 0x48011cd0: 0xb9000100,
+        0x48011d88: 0xd282a205, 0x48011da8: 0x12067421,
+        0x48011dac: 0x32070021, 0x48011db0: 0xb90000a1,
+        0x48011dd8: 0x32010021, 0x48011ddc: 0xb9000041,
+        0x48011de4: 0x121e7821, 0x48011de8: 0xb9000041,
+        0x48011df0: 0x17ffffc0,
+    }
+    for address, expected in suspend_clock_save_words.items():
+        if read_word(raw, address) != expected:
+            raise RuntimeError("suspend clock-save instruction changed at 0x%08x" % address)
+    if decode_bl_target(0x48011d2c, read_word(raw, 0x48011d2c)) != 0x48013620:
+        raise RuntimeError("suspend GPIO configuration call A changed")
+    if decode_bl_target(0x48011d6c, read_word(raw, 0x48011d6c)) != 0x48013620:
+        raise RuntimeError("suspend GPIO configuration call B changed")
+    # Resume path restores PLL factor bits, enables it and polls LOCK bit28.
+    pll_resume_words = {
+        0x48011e10: 0x9400089a,
+        0x48011e48: 0x12027884,
+        0x48011e54: 0x0a030083, 0x48011e58: 0x2a020062,
+        0x48011e5c: 0xb9000002, 0x48011e64: 0x32010042,
+        0x48011e68: 0xb9000002, 0x48011e70: 0x32030042,
+        0x48011e74: 0xb9000002, 0x48011e78: 0xb9400020,
+        0x48011e7c: 0x36e7ffe0, 0x48011e94: 0x52800280,
+        0x48011ec0: 0x9400004e,
+    }
+    for address, expected in pll_resume_words.items():
+        if read_word(raw, address) != expected:
+            raise RuntimeError("PLL resume instruction changed at 0x%08x" % address)
+    if decode_bl_target(0x48011e10, read_word(raw, 0x48011e10)) != 0x48014078:
+        raise RuntimeError("PLL resume pre-delay target changed")
+    if decode_bl_target(0x48011ec0, read_word(raw, 0x48011ec0)) != 0x48011ff8:
+        raise RuntimeError("PLL resume settle-delay target changed")
+    # H616-compatible GICD_ISPENDR, IR FIFO/status and GPIO pin helpers.
+    wake_source_words = {
+        0x48013194: 0xd2824003, 0x4801319c: 0xf2a06043,
+        0x480131a0: 0x531e7401, 0x480131a4: 0x52800022,
+        0x480131a8: 0x1ac42040, 0x480131ac: 0xb8614861,
+        0x480131b0: 0x0a010000, 0x480131b4: 0xd65f03c0,
+        0x480131c8: 0xf2a0e089, 0x480131cc: 0xf2a0e086,
+        0x480131d8: 0xb9400128, 0x480131dc: 0x12001d05,
+        0x480131e0: 0xd3483901, 0x480131e4: 0xb9000125,
+        0x48013200: 0xb94000c4, 0x4801320c: 0x39001024,
+        0x48013598: 0x51010442, 0x480135a4: 0x5100c060,
+        0x480135b4: 0x2a024000, 0x480135d8: 0x53107c01,
+        0x480135e0: 0x7100283f, 0x480135f0: 0x72a06002,
+        0x480135f8: 0x1a843042, 0x48013600: 0x531e7421,
+        0x48013608: 0x0b020021, 0x4801360c: 0xb9400021,
+        0x48013610: 0x6a01001f, 0x48013614: 0x1a9f07e0,
+        0x48013654: 0x53107c26, 0x48013660: 0x72a06003,
+        0x48013668: 0x710028df, 0x48013674: 0x1a883068,
+        0x4801367c: 0x531e7444, 0x480136c4: 0x0a250085,
+        0x480136d4: 0xb90000e5, 0x480136dc: 0xb9401007,
+        0x480136f4: 0xb9000044, 0x48013714: 0xb90000c2,
+        0x48013724: 0xb9000060,
+    }
+    for address, expected in wake_source_words.items():
+        if read_word(raw, address) != expected:
+            raise RuntimeError("wake-source helper instruction changed at 0x%08x" % address)
+    wake_call_edges = {
+        0x48013e88: 0x48013620, 0x48013ec8: 0x48013620,
+        0x48013f14: 0x480131b8, 0x48013f48: 0x48013588,
+        0x48013f54: 0x480135d8, 0x48013f8c: 0x48013588,
+        0x48013f94: 0x480135d8, 0x48013fe4: 0x48013190,
+        0x48014050: 0x480131b8,
+    }
+    for call_pc, expected_target in wake_call_edges.items():
+        if decode_bl_target(call_pc, read_word(raw, call_pc)) != expected_target:
+            raise RuntimeError("wake-source helper call target changed at 0x%08x" % call_pc)
     if decode_bl_target(0x4800c47c, read_word(raw, 0x4800c47c)) != 0x48011ff8:
         raise RuntimeError("CPUX_AXI standby transition helper changed")
     if decode_bl_target(0x4800c69c, read_word(raw, 0x4800c69c)) != 0x48011ff8:
@@ -880,6 +1025,89 @@ def main() -> int:
                     "rtc_soft_entry_register": "0x070001fc",
                     "rtc_soft_entry_value_source": "context + 0xc4",
                     "wfi_in_source_blob": ["0x4800c50c", "0x4800c550"],
+                    "clock_save_restore": {
+                        "clock_context_source": "0x48015414",
+                        "saved_ccu_registers": [
+                            {"address": "0x03001500", "reference_name": "CPUX_AXI_CFG_REG", "saved_mask": "0x00000303"},
+                            {"address": "0x03001510", "reference_name": "PSI_AHB1_AHB2_CFG", "saved_mask": "0x0003031f"},
+                            {"address": "0x0300151c", "reference_name": "AHB3_CFG", "saved_mask": "0x0003031f"},
+                            {"address": "0x03001520", "reference_name": "APB1_CFG", "saved_mask": "0x00000303"},
+                            {"address": "0x03001524", "reference_name": "APB2_CFG", "saved_mask": "0x00000303"}
+                        ],
+                        "pll_cpux": {
+                            "control_register": "0x03001000",
+                            "saved_factor_mask": "0x0003ff03",
+                            "standby_clear_enable_bit31": true,
+                            "standby_clear_lock_enable_bit29": true,
+                            "resume_restore_factors": true,
+                            "resume_set_enable_bit31": true,
+                            "resume_set_lock_enable_bit29": true,
+                            "resume_poll_lock_bit28": true
+                        },
+                        "aon_opaque_word": {
+                            "address": "0x07010244",
+                            "standby_high_byte_value": "0xa7",
+                            "resume_clears_high_byte": true,
+                            "semantic_name": "unknown; not attributed to PMIC without matched documentation"
+                        },
+                        "context_gpio_configuration": {
+                            "pin_config_offsets": ["0xd4", "0xec"],
+                            "helper": "0x48013620",
+                            "calls": ["0x48011d2c", "0x48011d6c"],
+                            "note": "context-provided pin configurations are statically passed to a pad configuration helper; no pad writes were performed"
+                        },
+                        "conditional_mode2_path": {
+                            "condition": "saved mode word == 2",
+                            "registers": ["0x03001510", "0x07010000", "0x07010010", "0x07000160"],
+                            "actions": "set bits 25:24 to 10 in the first three; set bit31 then clear bit1 at 0x07000160",
+                            "interpretation": "opaque standby-mode branch; exact role of 0x07000160 is unresolved"
+                        },
+                        "resume_lock_poll_pc": "0x48011e7c",
+                        "resume_post_lock_settle_call_pc": "0x48011ec0"
+                    },
+                    "wake_source_helpers": {
+                        "aggregate_function": "0x48013ee8",
+                        "gpio_configuration_function": "0x48013df0",
+                        "gic_pending_query": {
+                            "function": "0x48013190",
+                            "register_base": "0x03021200",
+                            "register": "GICD_ISPENDR",
+                            "operation": "word_index = irq >> 5; bit_index = irq & 31; read pending bit from ISPENDR[word_index]"
+                        },
+                        "ir_fifo_drain": {
+                            "function": "0x480131b8",
+                            "status_register": "0x07040030",
+                            "fifo_register": "0x07040020",
+                            "status_ack": "writes low status byte back to status register",
+                            "fifo_limit": "0xff entries",
+                            "queue_context": "0x48016438",
+                            "meaning": "drains IR receive FIFO bytes into standby context queue"
+                        },
+                        "gpio_pin_name_decoder": {
+                            "function": "0x48013588",
+                            "format": "ASCII bank letter followed by one or two decimal digits; return bank<<16 | pin; empty name -> -1"
+                        },
+                        "gpio_read": {
+                            "function": "0x480135d8",
+                            "data_register_offset": "0x10 + bank * 9 * 4",
+                            "normal_pio_base": "0x0300b000 for bank < 10",
+                            "r_pio_base": "0x07022000 for bank >= 10",
+                            "operation": "read DAT and test requested pin bit"
+                        },
+                        "gpio_pad_config": {
+                            "function": "0x48013620",
+                            "register_families": ["PIO CFG", "PIO DAT", "PIO drive", "PIO pull"],
+                            "operation": "decode bank/pin and apply context-supplied mux, pull, drive and data fields",
+                            "meaning": "static helper contains writes; no target call was executed"
+                        },
+                        "wake_poll_edges": [
+                            {"pc": "0x48013f14", "target": "0x480131b8", "kind": "IR FIFO capture"},
+                            {"pc": "0x48013f48", "target": "0x48013588", "kind": "parse GPIO name"},
+                            {"pc": "0x48013f54", "target": "0x480135d8", "kind": "sample GPIO DAT"},
+                            {"pc": "0x48013fe4", "target": "0x48013190", "kind": "query GIC pending bit"}
+                        ],
+                        "runtime_limit": "static matching-binary paths only; no IR FIFO, GIC pending, GPIO data or pinmux register was probed on device"
+                    },
                     "cpux_axi_clock_source_transition": {
                         "register_candidate": "0x03001500",
                         "register_name_reference": "CPUX_AXI_CFG_REG (H616 reference manual / Linux CCU description)",
@@ -1003,6 +1231,10 @@ def main() -> int:
         "- The main copy spans the SRAM A1 range and extends into SRAM C; the SP is also in SRAM C. This is a static copy/map reconstruction, not a live SRAM ownership or wakeup measurement.",
         "- The copied code changes `0x03001500` around standby/resume: it clears bits 25:24 with `0xfcffffff` before standby and sets `0x03000000` on resume, calling helper `0x48011ff8` on both paths. The H616 reference map describes offset `0x500` as CPUX_AXI_CFG_REG and CLK_SRC_SEL bits 26:24; bit 26 is preserved here, so the actual mux source remains unknown without live readback.",
         "- Wait helper `0x48011ff8` shifts its argument left by two and branches to `0x48014078`, whose body is `subs x0, x0, #1; b.hi` back to itself; standby and resume pass 10, yielding 40 decrement iterations each. This is a count-based busy wait, not a timer-backed delay; duration is unknown.",
+        "- The clock-save path snapshots masked fields from `0x03001500/1510/151c/1520/1524` into PSCI context; H616 CCU references name these CPUX_AXI, PSI_AHB1_AHB2, AHB3, APB1 and APB2 configuration registers. It also saves PLL_CPUX factor bits with mask `0x0003ff03`, clears PLL enable bit31 and lock-enable bit29, and stages high byte `0xa7` in opaque AON word `0x07010244` (purpose unverified).",
+        "- Resume restores PLL_CPUX factors, sets enable bit31 and lock-enable bit29, polls lock bit28, then restores saved CCU fields. A mode==2 branch also touches `0x07010000`, `0x07010010` and `0x07000160`; the latter's exact standby role remains unknown.",
+        "- Wake-source aggregation statically calls IR receive FIFO/status drain `0x480131b8`, GPIO name/read helpers `0x48013588/0x480135d8`, GPIO pad-config helper `0x48013620`, and GIC pending helper `0x48013190`. The latter reads GICD_ISPENDR at `0x03021200`, not an enable register. IR offsets `0x07040020/0x07040030` are in the H616 IR block; GPIO read/config use PIO `0x0300b000` or R_PIO `0x07022000`.",
+        "- These are matched-binary wake-source preparation/polling paths; no pending interrupt, IR FIFO, GPIO level or pin configuration was probed or written on hardware.",
         "- The RTC soft-entry stores saved return PC `0x48015d14`; resume code loads it from context `+0xc4` and indirect-branches through x22 at `0x4800c6a8`. The return continuation restores SCTLR_EL3, VBAR_EL3, DAIF and stack selection before returning into BL31.",
         "- The effective ABI is the legacy Allwinner `plat_pm_ops_t` order with a vendor getter extension; the exact source commit is not identified.",
 
@@ -1024,7 +1256,7 @@ def main() -> int:
         "- No hardware MMIO, flash, boot-media write or payload execution occurred.", "",
     ]
     (args.out.parent / "PSCI-CPU-ON.md").write_text("\n".join(markdown), encoding="utf-8")
-    print("PASS: PSCI standby staging, CPUX_AXI bitfield, wait loop and RTC wake-return")
+    print("PASS: PSCI clock save/PLL relock, GIC/IR/GPIO wake helpers and RTC return")
     print("  table[1] = 0x%08x -> low-level 0x48002d78" % table[1])
     print("  callback disassembly = %s" % disassembly_path)
     print("  monitor SHA-256 = %s" % digest)

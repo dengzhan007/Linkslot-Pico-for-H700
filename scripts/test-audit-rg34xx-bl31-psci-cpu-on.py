@@ -185,6 +185,76 @@ def main() -> int:
     assert module.WORDS[0x48016134] == 0xD51E1000
     assert module.WORDS[0x48016138] == 0xD5033FDF
     assert module.WORDS[0x48016140] == 0x17FFFFDA
+    suspend_clock_expected = {
+        0x48011BB0: 0xF2A06005, 0x48011BC4: 0xB94000A7,
+        0x48011BD4: 0x0A0100E1, 0x48011BE0: 0xB9041441,
+        0x48011C28: 0x528063E2, 0x48011C2C: 0x72A06002,
+        0x48011C54: 0x12067463, 0x48011C5C: 0x32080063,
+        0x48011C64: 0xB9000103, 0x48011C68: 0xD2804888,
+        0x48011C6C: 0xF2A0E028, 0x48011C70: 0x52B4E003,
+        0x48011C90: 0xB94000A1, 0x48011C94: 0x12067421,
+        0x48011C98: 0x32080021, 0x48011C9C: 0xB90000A1,
+        0x48011CA8: 0x0A040021, 0x48011CAC: 0x120078A5,
+        0x48011CB0: 0xB9000045, 0x48011CB4: 0xB9001C01,
+        0x48011CBC: 0x12027800, 0x48011CC0: 0xB9000040,
+        0x48011CC4: 0xB9400100, 0x48011CC8: 0x12005C00,
+        0x48011CCC: 0x2A030000, 0x48011CD0: 0xB9000100,
+        0x48011D88: 0xD282A205, 0x48011DA8: 0x12067421,
+        0x48011DAC: 0x32070021, 0x48011DB0: 0xB90000A1,
+        0x48011DD8: 0x32010021, 0x48011DDC: 0xB9000041,
+        0x48011DE4: 0x121E7821, 0x48011DE8: 0xB9000041,
+        0x48011DF0: 0x17FFFFC0,
+    }
+    for address, expected in suspend_clock_expected.items():
+        assert module.WORDS[address] == expected
+    pll_resume_expected = {
+        0x48011E10: 0x9400089A, 0x48011E48: 0x12027884,
+        0x48011E54: 0x0A030083, 0x48011E58: 0x2A020062,
+        0x48011E5C: 0xB9000002, 0x48011E64: 0x32010042,
+        0x48011E68: 0xB9000002, 0x48011E70: 0x32030042,
+        0x48011E74: 0xB9000002, 0x48011E78: 0xB9400020,
+        0x48011E7C: 0x36E7FFE0, 0x48011E94: 0x52800280,
+        0x48011EC0: 0x9400004E,
+    }
+    for address, expected in pll_resume_expected.items():
+        assert module.WORDS[address] == expected
+    assert module.decode_bl_target(0x48011D2C,module.WORDS[0x48011D2C]) == 0x48013620
+    assert module.decode_bl_target(0x48011D6C,module.WORDS[0x48011D6C]) == 0x48013620
+    assert module.decode_bl_target(0x48011E10,module.WORDS[0x48011E10]) == 0x48014078
+    assert module.decode_bl_target(0x48011EC0,module.WORDS[0x48011EC0]) == 0x48011FF8
+    wake_expected = {
+        0x48013194: 0xD2824003, 0x4801319C: 0xF2A06043,
+        0x480131A0: 0x531E7401, 0x480131A4: 0x52800022,
+        0x480131A8: 0x1AC42040, 0x480131AC: 0xB8614861,
+        0x480131B0: 0x0A010000, 0x480131B4: 0xD65F03C0,
+        0x480131C8: 0xF2A0E089, 0x480131CC: 0xF2A0E086,
+        0x480131D8: 0xB9400128, 0x480131DC: 0x12001D05,
+        0x480131E0: 0xD3483901, 0x480131E4: 0xB9000125,
+        0x48013200: 0xB94000C4, 0x4801320C: 0x39001024,
+        0x48013598: 0x51010442, 0x480135A4: 0x5100C060,
+        0x480135B4: 0x2A024000, 0x480135D8: 0x53107C01,
+        0x480135E0: 0x7100283F, 0x480135F0: 0x72A06002,
+        0x480135F8: 0x1A843042, 0x48013600: 0x531E7421,
+        0x48013608: 0x0B020021, 0x4801360C: 0xB9400021,
+        0x48013610: 0x6A01001F, 0x48013614: 0x1A9F07E0,
+        0x48013654: 0x53107C26, 0x48013660: 0x72A06003,
+        0x48013668: 0x710028DF, 0x48013674: 0x1A883068,
+        0x4801367C: 0x531E7444, 0x480136C4: 0x0A250085,
+        0x480136D4: 0xB90000E5, 0x480136DC: 0xB9401007,
+        0x480136F4: 0xB9000044, 0x48013714: 0xB90000C2,
+        0x48013724: 0xB9000060,
+    }
+    for address, expected in wake_expected.items():
+        assert module.WORDS[address] == expected
+    wake_call_targets = {
+        0x48013E88: 0x48013620, 0x48013EC8: 0x48013620,
+        0x48013F14: 0x480131B8, 0x48013F48: 0x48013588,
+        0x48013F54: 0x480135D8, 0x48013F8C: 0x48013588,
+        0x48013F94: 0x480135D8, 0x48013FE4: 0x48013190,
+        0x48014050: 0x480131B8,
+    }
+    for call_pc, expected_target in wake_call_targets.items():
+        assert module.decode_bl_target(call_pc,module.WORDS[call_pc]) == expected_target
     assert module.WORDS[0x48011FF8] == 0x531E7400
     assert module.WORDS[0x48011FFC] == 0x1400081F
     assert module.WORDS[0x48014078] == 0xF1000400
@@ -305,7 +375,7 @@ def main() -> int:
         pass
     else:
         raise AssertionError("B instruction was incorrectly accepted as BL")
-    print("PASS: PSCI standby staging, CPUX_AXI bitfield, wait loop and RTC wake-return")
+    print("PASS: PSCI clock save/PLL relock, GIC/IR/GPIO wake helpers and RTC return")
     return 0
 
 if __name__ == "__main__":
