@@ -359,24 +359,31 @@ scoped files.
 
 ## RG34XX non-SP physical-board equivalence and UART pad evidence
 
-A manufacturer/lab model-difference statement was found in the 2026-06-15
-FCC Part 15.247 report CTA26060900901 (FCC ID `2AJU8-RG34XXSP`): the test
-sample is RG34XXSP, the listed models include `RG 34XX`, and page 2 states
-that the listed models share the same PCB, circuit, structure and internals,
-differing only by model number and colour. The report's test-sample hardware
-version is RG34XXSP V1.0. See the
-[40-page test report](https://device.report/m/01bdfd2898f5171e5885aa83c80a2fc5bfaf6bff027ac94b28bdfdfef077e12d.pdf)
-and the [FCC filing with exhibit index](https://fccid.io/2AJU8RG34XXSP).
+A signed manufacturer `Declaration Letter of Model Difference`, dated
+2026-06-17, is available as FCC document 9400819 (SHA-256
+`28138824031a0f7e4ff395ce800b8b4bb9062184b114bf60d55884d3130a8bcf`).
+It names FCC ID `2AJU8-RG34XXSP`, lists `RG 34XXSP, RG 34XX, RG CubeXX,
+RG 40XXV, RG 40XXH, RG SP, RG DS, RG DDS, RG DS Pro`, and states that the
+models share the same PCB board, circuit, structure and internals, differing
+only by model number and colour. The declaration is signed by the applicant's
+manager. See the
+[original one-page declaration PDF](https://device.report/m/28138824031a0f7e4ff395ce800b8b4bb9062184b114bf60d55884d3130a8bcf.pdf)
+and its
+[FCC exhibit entry](https://fccid.io/2AJU8-RG34XXSP/Letter/Declaration-Letter-of-Model-Difference-9400819).
 
-The FCC filing separately lists a 4-page `Internal Photos` exhibit
-(document 9400823, SHA-256
+The associated 2026-06-15 FCC Part 15.247 report CTA26060900901
+(FCC ID `2AJU8-RG34XXSP`) identifies its test sample as RG34XXSP V1.0;
+page 2 repeats the model-commonality assertion. See the
+[40-page test report](https://device.report/m/01bdfd2898f5171e5885aa83c80a2fc5bfaf6bff027ac94b28bdfdfef077e12d.pdf).
+
+The four-page `Internal Photos` exhibit is FCC document 9400823 (SHA-256
 `3ff489bb32e9b47a56097c164a191453e16561d76c4ca3a50ebe3ddfc3cab1d2`).
-The test report's internal-photo section (pages 37–40) shows the H700 board
-removed from the RG34XXSP housing. This supports a manufacturer-declared
-common PCB family, but the public photos do **not** identify PH0/PH1 test
-pads, TX/RX labels, ground points, net names or a PCB revision that can be
-matched to the user's non-SP unit. The FCC listing exposes its schematic as
-metadata-only, not a downloadable schematic/boardview.
+Its page 3 shows the H700 mainboard front and page 4 the reverse side:
+[original four-page PDF](https://device.report/m/3ff489bb32e9b47a56097c164a191453e16561d76c4ca3a50ebe3ddfc3cab1d2.pdf).
+These are useful visual references for the declared common board family,
+but neither side has PH0/PH1 test-pad, TX/RX, GND or net labels. The FCC
+filing exposes its schematic as metadata-only, not as a downloadable
+schematic/boardview.
 
 **Evidence classification:** a manufacturer/lab assertion of model-level PCB
 commonality plus reference photos of an RG34XXSP sample. It is not direct
