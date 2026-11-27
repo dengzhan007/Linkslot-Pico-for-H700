@@ -74,8 +74,9 @@ The intended one-shot design is a separate build mode with the following fail-cl
 1. Use a distinct source directory/build target and manifest identity; do not reuse v2's RTC protocol or its diagnostic outer-control builder.
 2. Preserve and validate the exact Boot0 source and embedded M1 SPL using pinned hashes, fixed sizes, eGON header/checksum validation, and an explicit copy/entry layout.
 3. Dispatch to the M1 SPL deterministically. Do not read or write RTC GP_DATA, retention registers, watchdog registers, PMIC state, or SD/eMMC data sectors.
-4. On invalid header/hash/entry, stop in a bounded, documented fail-stop state. There is no automatic stock fallback in this mode.
-5. Do not silently inherit v2 attempt-pair, cookie, pending, or watchdog assumptions.
+4. Validate the embedded stock Boot0 and M1 SPL before dispatch. If the M1 SPL header/hash/entry is invalid but the embedded stock Boot0 is valid, select the embedded stock Boot0 using the existing source-select/copy-stub pattern; if the outer capsule or both inner candidates are invalid, stop in a documented fail-stop state.
+5. This is a pre-entry validation fallback only. Once the M1 SPL has started, there is no automatic runtime rollback; use the separately reviewed manual card-swap recovery.
+6. Do not silently inherit v2 attempt-pair, cookie, pending, or watchdog assumptions.
 
 ### AArch64 SPL
 
@@ -123,7 +124,7 @@ Until all checks pass, the output remains NON-INSTALLABLE / NOT FOR DEVICE.
 
 ## 5. Recovery model and hardware gate
 
-This mode intentionally has **no automatic fallback**. The only proposed recovery is:
+This mode has **no automatic runtime fallback after the M1 SPL begins execution**. Its only software fallback is the pre-entry selection of the embedded stock Boot0 when static image validation rejects the M1 SPL. If the M1 SPL starts and subsequently hangs, the only proposed recovery is:
 
 1. power the device fully off;
 2. remove the dedicated M1 TF1 test card;
