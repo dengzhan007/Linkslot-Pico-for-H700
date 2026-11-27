@@ -8,6 +8,7 @@ on:
       - "scripts/test-audit-rg34xx-bl31-memory.py"
       - "scripts/test-rg34xx-bl31-startup-contract.py"
       - "scripts/audit-rg34xx-boot0-cpu-reset.py"
+      - "scripts/test-audit-rg34xx-boot0-cpu-reset.py"
       - "scripts/audit-rg34xx-bl31-full-image-cpu-mmio.py"
       - "scripts/test-audit-rg34xx-bl31-full-image-cpu-mmio.py"
       - "scripts/audit-rg34xx-bl31-psci-cpu-on.py"
@@ -67,6 +68,10 @@ jobs:
           python3 scripts/audit-rg34xx-bl31-memory.py \
             --reports-root .ci/reports/reports \
             --out build/rg34xx-bl31-static-audit
+
+      - name: Test Boot0 CPU reset-bit interpretation (H616 reference only)
+        run: |
+          python3 scripts/test-audit-rg34xx-boot0-cpu-reset.py
 
       - name: Audit Boot0 CPU reset helper and BL31 secondary-core MMIO
         run: |
