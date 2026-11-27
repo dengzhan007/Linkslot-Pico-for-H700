@@ -1070,3 +1070,13 @@ Hard size boundary: this first integration path is only for a small diagnostic p
 - [ ] Identify whether the context-like qword is overwritten during BL31 initialization, by an external loader, or intentionally shares storage with the indexed lookup data.
 - [ ] Resolve runtime signed selector `context +0xa4`; index 73 / R-TWI0 remains only a conditional static candidate. Do not issue TWI transactions.
 - Hardware remains unchanged: `H700_MEMORY_LAYOUT_APPROVED=false`, `hardware_applied=0`; no SMC/MMIO, DRAM content access, suspend/wake, Boot0/TOC1 write, flashing or payload execution.
+
+## 2026-11-27 — MOVZ/MOVK and literal-pool address construction (BL31 #126–#127)
+
+- [x] Extend the bounded CFG alias seed model to recognize MOV/MOVZ immediate fragments, MOVK halfword replacement and LDR-literal pointer values that reference the context-like slot / nearby monitor data.
+- [x] Add real AArch64 synthetic instruction regressions for `MOVZ x20,#0x4668; MOVK x20,#0x4801,LSL #16; LDR x0,[x20]; STR w1,[x0,#0xa4]`, and for an LDR-literal qword containing `0x48014668`.
+- [x] BL31 audit #126 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45972875430) passed after scanner expansion; #127 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45972935686) passed the new tests and complete audit; artifact [15185123383](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45972935686/artifacts/15185123383).
+- [x] Actual monitor result remains 79 ADRP seeds, 0 ADR seeds, 0 MOV-immediate seeds, 0 literal-load seeds; 38,676 CFG states, 83 context-like slot load path hits / 22 unique PCs, no modeled selector or context-slot writes.
+- [ ] Extend alias modeling to MOVN/logical-immediate constructions, stack spill/reload, BLR indirect calls and helper/memcpy semantics; external firmware initialization remains possible.
+- [ ] Resolve the runtime meaning/initialization of `0x48014668`, which overlaps lookup origin `0x48014628+0x40` (signed index 8); do not treat it as a proven independent global.
+- Hardware remains unchanged: `H700_MEMORY_LAYOUT_APPROVED=false`, `hardware_applied=0`; no SMC/MMIO, DRAM content access, TWI transaction, suspend/wake, Boot0/TOC1 write, flashing or payload execution.
