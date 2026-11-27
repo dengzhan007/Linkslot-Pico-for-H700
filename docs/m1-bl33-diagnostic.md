@@ -1,6 +1,6 @@
 # M1 — RG34XX AArch32 BL33 诊断启动规格
 
-**状态：** M1-S0 规格草案；未生成诊断 payload，未构建设备可安装固件，未执行设备测试。  
+**状态：** M1 已改为无拆机 / 独立 TF1 测试路线；尚未生成 M1 设备 payload、尚未写入测试卡、尚未执行实机启动。  
 **目标设备：** Anbernic RG34XX（非 SP），Allwinner H700，AArch32 SVC BL33 handoff。  
 **上游/构建 pin：** Linkslot main 1.0.49（本阶段不链接 Linkslot）；BaseOS-MultiFrontend native builder `cbe253a43f46cf551cc9a6c79a84015bde3686cf`。
 
@@ -21,9 +21,9 @@
 
 ## 3. Proof-of-life 信号资格
 
-**当前没有获准的硬件输出接口。** 选择输出之前必须同时满足：对应精确 RG34XX 非 SP 板型的可信原理图/PCB test-pad 资料或同版本启动源代码；明确 pin mux、clock/reset、供电域与 BL33 入口时访问权限；不覆盖 Boot0/SPL/BL31 必需功能；输出不依赖未批准的 DRAM、framebuffer、GIC、timer、DMA、PMIC 或存储控制器；信号实现和恢复方案经项目所有者审查。
+**M1 首选资格化方向：PI12 工作灯；UART0 不再是前置条件。** PI12 必须有精确 RG34XX 非 SP DTS/source 依据，明确 pin mux、APB1/PIO clock 与 BL33 访问权限，限定寄存器位域，保留 PI11，并具备确定的异常 fail-stop 路径。PI12 可从机身外观察，不需要 UART 焊盘；但 BL33 handoff 时访问权限、abort 处理和实际极性尚未通过。
 
-### 当前候选：UART0（有板级配置旁证，仍未批准、不可写）
+### 备用候选：UART0（静态证据较多，但不作为首启依赖）
 
 **已取得的正向证据：**
 
@@ -73,41 +73,42 @@ M1-S1 仍 OPEN；FCC 共板声明不构成当前非 SP 实机的 PH0/PH1 焊盘�
 
 **构建来源状态更新（2026-11-27）：** native generation provenance 已由 BaseOS host-only workflow #45301188593 精确重建，输入/输出哈希与 reference capsule 全部匹配；这使得后续 UART/BL33 分析可以使用精确 pin 的 loader/SPL 来源，不再需要以“build inputs 未知”作为阻塞。CI 仍明确 `hardware_qualified=false`，所以该结果不证明 BL33 入口时的 UART clock/reset/pinmux/firewall 状态，也不提供实机信号授权。详见 [native generation provenance](rg34xx-native-generation-provenance.md)。
 
-因此 UART0 目前是**优先资格化的候选**，不是已批准的 proof-of-life。资格关闭前，不得向 `0x05000000` 写寄存器，不得改变 PH0/PH1 pinmux/clock，也不得将 UART 输出写入诊断 payload。若 UART0 最终不可用，应重新审查替代方案，不能自动改用 PI12、LCD 或 SD。
+因此 UART0 继续作为**可选备用诊断路径**，不是无拆机首启的前置条件。项目不因缺少 PH0/PH1 物理 test-pad 资料而阻塞 M1；首轮优先资格化 PI12。UART 未经单独批准仍不可写，也不得改变 PH0/PH1 pinmux/clock。
 
-### 当前不选择的输出
+### 首轮输出优先级
 
-- **PI12 LED：** production PIO wrapper 当前 default-off；BL33 入口 APB1/PIO 权限未闭合。
-- **LCD/framebuffer：** framebuffer 与 scanout ownership 尚未向 BL33 批准。
-- **SD 单扇区读：** 需要控制器/时钟/pinmux 与 buffer 权限，不能当作无副作用的存活信号。
-- **内部 DRAM marker：** 无外部观察者，且会依赖尚未批准的 DRAM scratch 区域，不能构成合格 proof-of-life。
+1. **PI12 工作灯（首选待资格化）：** 精确 RG34XX 非 SP DTS 将 PMU work_led 映射到 bank I / PI12；现有驱动只改 PI12 DATA/MUX 位并保留 PI11。production wrapper 仍 default-off；BL33 APB1/PIO handoff 权限、访问失败路径和实际极性必须先闭合。
+2. **UART0（备用）：** 保留现有静态审计结果，不要求拆机寻找 PH0/PH1 焊盘，也不作为首启阻塞项。
+3. **LCD/framebuffer（后续）：** framebuffer/scanout ownership 尚未向 BL33 批准，不进入首轮。
+4. **SD / DRAM marker：** 不作为 proof-of-life；首轮不访问存储控制器，也不写外部 DRAM scratch。
 
 ## 4. 必须维持的硬件与执行边界
 
-在 G2/G3 等相关门槛正式关闭之前：
+M1 采用**专用介质可写、设备内部状态不改**的分层边界：
 
-- `H700_MEMORY_LAYOUT_APPROVED=false`；不提供或猜测 `H700_MEMBASE`、`H700_MEMSIZE`。
-- 不执行设备 SMC/MMIO，不读取/写入未知 DRAM，不发起 I2C/TWI transaction，不访问 PMIC。
-- 不写 SD、Boot0、TOC1，不刷写 native SPL/firmware，不替换用户卡上的 loader。
-- 不执行新 BL33 payload；CI、ELF link、package/FNV 检查全部限 host。
-- 不启动 CPU1–CPU3，不调用 PSCI CPU_ON，不启用 SMP。
-- 不启动 GIC/timer/IRQ、DMA、SD、LCD/PIO、Wi-Fi、Bluetooth、音频或 Linkslot。
-- 任何后续设备测试前，必须具体化并审查失败恢复路径；不得假设设备有 eMMC 或自动回退。
+- 全局 `H700_MEMORY_LAYOUT_APPROVED=false` 必须保持；不提供或猜测通用 `H700_MEMBASE`、`H700_MEMSIZE`。M1 若需要运行时空间，只能建立独立、可审计的 BL33-slot-only 局部布局，不能批准完整 DRAM 或 Linkslot 应用 arena。
+- 允许 host 侧构建、验证独立测试 TF 镜像；实际写卡只限一张可擦写的专用 TF1 测试卡。原系统卡永不作为写入目标。
+- 仅当配对 builder、manifest、hash、extent、分区和精确写入范围审计全部通过，才允许将该完整 M1 测试镜像（包括其镜像定义中的 Boot0/TOC1/native package）写入专用测试卡。不得把单独 capsule 或猜测的 sector offset 当作通用刷写命令。
+- 不修改 SoC fuse/OTP，不访问 PMIC，不发起 I2C/TWI transaction，不改 CPU PLL/电压，不执行设备 SMC。M1 仅允许在 PI12 路径单独资格化后访问其精确 PIO 位域；不扫描其他外设。
+- 不读取/写入未知 DRAM，不使用候选 Linux arena、BOL4、BL31 或未知保留区。首轮只允许经 ELF/map 审计的 BL33-slot 运行区。
+- 不启动 CPU1–CPU3，不调用 PSCI CPU_ON，不启用 SMP/GIC/timer/IRQ/DMA/SD/LCD/Wi-Fi/Bluetooth/音频/Linkslot。
+- PIO 访问若无法得到确定的异常 fail-stop 行为，则不进入实机测试；不得以尝试其他外设地址作为恢复方式。
+- 测试卡启动失败时关机并换回原系统卡；异常发热、异味或供电异常时立即停止。
 
-`NON-INSTALLABLE / NOT FOR DEVICE` 必须作为诊断产物文件名、报告与 CI summary 的显式标识。任何 host 构建成功都不得被表述为可刷写、可安装或可运行。
+未完成配对与写入范围审计的产物必须标记 `NON-INSTALLABLE / NOT FOR DEVICE`。只有逐项核验过的测试镜像才可标记 `M1-TEST-TF1-ONLY`，不得称为正式发行镜像。
 
 ## 5. M1 阶段验收
 
 | 阶段 | 内容 | 通过标准 | 允许动作 |
 |---|---|---|---|
 | M1-S0 | 本规格与边界 | 范围/输出候选/禁止项/验收标准明确 | 文档 |
-| M1-S1 | proof-of-life 资格 | 精确板型信号链有可信资料支撑，入口访问权限与 pin/clock 状态可解释 | 只读资料审查、host tests |
+| M1-S1 | PI12 proof-of-life 资格 | 精确板型 DTS、APB1/PIO handoff 权限、abort fail-stop、PI11 保留与可观察极性均有证据 | 只读审查、host tests；不需 UART 焊盘 |
 | M1-S2 | 最小 payload | A32 entry/vector 与 snapshot tests 通过；ELF/map/BSS/stack 边界有报告；raw ≤ 32768 bytes | host 编译/链接/静态分析 |
 | M1-S3 | 配对 package | pinned builder 生成 matched SPL/firmware/capsule；header、FNV、extent、padding 可复验；源树恢复干净 | 隔离 host checkout 构建；产物保持 NON-INSTALLABLE |
-| M1-S4 | 设备 proof-of-life | G2/G3 与 handoff/recovery gates 已书面关闭；信号经批准；有本次具体测试的明确授权 | 另行制定、审批的单次设备测试 |
+| M1-S4 | 独立 TF1 无拆机实测 | BL33-slot-only 布局、CPU0-only、PI12 probe/异常路径、配对镜像与恢复流程均通过审查 | 仅写入 M1-TEST-TF1-ONLY 测试卡；不拆机、不焊线 |
 
-**M1-S0 完成不代表 M1-S1 通过。** 当前实际状态：M1-S0 规格建立；M1-S1 的 UART0 候选未资格化；M1-S2/S3 尚未执行；M1-S4 未授权。
+**策略调整不代表硬件 gate 已通过。** 当前实际状态：M1-S0 规格已建立；M1-S1 转为 PI12 首选资格化、仍 OPEN；UART0 降为备用；M1-S2/S3 尚未完成；尚无可写入测试卡的配对镜像或实机结果。
 
 ## 6. 退出条件与后续
 
-只有最小 BL33 诊断能产生经资格确认的确定信号，且可观测入口快照可复验，才算完成 M1 的 host/packaging 准备。设备执行仍需要 G2/G3 等 gate 和明确审批。M1 之后按路线图推进 HAL 垂直切片：先输入/显示/SD 读，再在文件系统/flush/断电风险审查后做受控写入。PMIC 完全关机、BL31 suspend/TWI、120 Hz 与 CPU DVFS 不会因 M1 通过而自动解冻。
+M1 的首个目标是独立 TF1 启动后通过 PI12 给出可观察信号；它只证明最小 BL33 控制流与该 LED 路径，不等于完整 LK、通用 DRAM、应用 arena 或 G2/G3 已获批准。M1 之后按路线图推进 HAL 垂直切片：先输入/显示/SD 读，再在文件系统/flush/断电风险审查后做受控写入。PMIC 完全关机、BL31 suspend/TWI、120 Hz 与 CPU DVFS 不会因 M1 通过而自动解冻。
