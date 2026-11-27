@@ -50,9 +50,12 @@ section 6.
 ## 1. Current active boot flow
 
 ```
-Boot0 (stock, on eMMC boot0 area; DRAM training)
+Boot ROM [boot source: removable TF medium; exact ROM lookup/LBA not established here]
   |
-  | loads/enters native mainline SPL at EL3 in AArch64
+  | loads and executes the 128 KiB BaseOS Boot0-primary outer capsule
+  v
+BaseOS A32 outer capsule [selects native A64 SPL on the active path]
+  |  embedded 64 KiB stock eGON Boot0 is fallback only
   v
 BaseOS native SPL  [AArch64 EL3, from SRAM; source spl/native-boot.c]
   |  reads p4 + 40 MiB firmware package into 0x42e00000
@@ -80,6 +83,8 @@ BaseOS A32 loader  [AArch32/SVC at 0x4a000000; source native/loader.c]
   v
 AArch64 Linux kernel  [EL1h, SPSR=0x3c5, x0=DTB, entry 0x40080000]
 ```
+
+**Boot-medium correction (2026-11-28):** The RG34XX target has no onboard eMMC; its system boots from removable TF media. The flow above therefore starts at the Boot ROM and the TF-resident 128 KiB Boot0-primary capsule. This report identifies the captured capsule by byte-exact hash, but does **not** establish the Boot ROM's exact lookup sector/LBA or partition-selection mechanism; none is asserted here. The embedded 64 KiB stock eGON Boot0 is a fallback image, not a preceding DRAM-training stage on the active native-SPL path.
 
 The AArch32 loader replaces the **vendor U-Boot image in RAM** at `0x4a000000`;
 it keeps a U-Boot-derived header region so the vendor BL31 image parser still
