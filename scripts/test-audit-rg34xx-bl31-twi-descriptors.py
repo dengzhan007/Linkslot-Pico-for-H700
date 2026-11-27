@@ -101,6 +101,35 @@ def main() -> int:
     assert len(cfg_scan["context_plus_a4_alias_store_candidates"]) == 1
     assert len(cfg_scan["global_slot_plus_668_alias_store_candidates"]) == 1
 
+    # Alternate ADRP page + SUB computes the same global slot address.
+    alternate_page_chain = struct.pack(
+        "<IIIII",
+        0xB02400B4,  # adrp x20, 0x48015000
+        0xD1266294,  # sub x20, x20, #0x998 -> 0x48014668
+        0xF9400280,  # ldr x0, [x20]
+        0xB900A401,  # str w1, [x0, #0xa4]
+        0xD65F03C0,
+    )
+    alternate_scan = MODULE.scan_context_pointer_alias_cfg_writes(alternate_page_chain)
+    assert alternate_scan["seed_count"] == 1
+    assert len(alternate_scan["global_slot_pointer_load_aliases"]) == 1
+    assert len(alternate_scan["context_plus_a4_alias_store_candidates"]) == 1
+
+    # ADRP + shifted ADD + ADD reaches the slot without naming its page directly.
+    shifted_add_chain = struct.pack(
+        "<IIIIII",
+        0xF0240094,  # adrp x20, 0x48013000
+        0x91400694,  # add x20, x20, #1, lsl #12
+        0x9119A294,  # add x20, x20, #0x668
+        0xF9400280,  # ldr x0, [x20]
+        0xB900A401,  # str w1, [x0, #0xa4]
+        0xD65F03C0,
+    )
+    shifted_scan = MODULE.scan_context_pointer_alias_cfg_writes(shifted_add_chain)
+    assert shifted_scan["seed_count"] == 1
+    assert len(shifted_scan["global_slot_pointer_load_aliases"]) == 1
+    assert len(shifted_scan["context_plus_a4_alias_store_candidates"]) == 1
+
     source = """
       memcpy(monitor + 0x30, params, 128);
       memcpy(monitor + 0x24, board, 8);
