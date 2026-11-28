@@ -163,6 +163,13 @@ class TestRG34XXStockTOC1(unittest.TestCase):
         selector = self.fdt["/soc@03000000/dram_select_para"]
         self.assertEqual(be32(selector["select_mode"]), 1)  # GPIO auto-detection mode
         self.assertEqual(be32(selector["gpadc_channel"]), 1)
+        pinctrl = self.fdt["/soc@03000000/pinctrl@0300b000"]
+        self.assertEqual(be32(pinctrl["phandle"]), 0x4B)
+        self.assertEqual(
+            pinctrl["compatible"].rstrip(b"\\0"),
+            b"allwinner,sun50iw9p1-pinctrl",
+        )
+        self.assertEqual(be32(pinctrl["#gpio-cells"]), 6)
         expected_pins = [6, 7, 8, 10]
         for index, expected_pin in enumerate(expected_pins):
             cells = struct.unpack(">7I", selector[f"select_gpio{index}"])
