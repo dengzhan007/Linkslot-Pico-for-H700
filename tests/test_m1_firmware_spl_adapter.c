@@ -12,10 +12,12 @@ lbaint_t blk_dread(struct blk_desc *desc, lbaint_t start,
                    lbaint_t count, void *destination)
 {
     desc->reads++;
-    if (desc->fail_read || start != desc->first_lba ||
-        count != desc->sectors || count != H700_M1_PACKAGE_SECTORS)
+    if (desc->fail_read || start < desc->first_lba ||
+        start - desc->first_lba + count > desc->sectors ||
+        count == 0 || count > H700_M1_STREAM_CHUNK_SECTORS)
         return 0;
-    memcpy(destination, desc->image, H700_M1_PACKAGE_BYTES);
+    uint64_t offset = (start - desc->first_lba) * H700_M1_SECTOR_BYTES;
+    memcpy(destination, desc->image + offset, (size_t)count * H700_M1_SECTOR_BYTES);
     return count;
 }
 
@@ -33,7 +35,7 @@ static uint8_t *fixture(void)
 int main(void)
 {
     uint8_t *image = fixture();
-    uint8_t *staging = malloc(H700_M1_PACKAGE_BYTES);
+    uint8_t *staging = malloc(H700_M1_STREAM_CHUNK_BYTES);
     assert(staging);
     const uint64_t p4_lba = 32768;
     const uint64_t p4_blocks = 200000;
@@ -42,28 +44,27 @@ int main(void)
     const uint32_t digest = h700_m1_package_fnv1a(image, H700_M1_PACKAGE_BYTES);
 
     assert(h700_m1_spl_preflight(&card, p4_lba, p4_blocks, digest,
-                                 staging, H700_M1_PACKAGE_BYTES));
-    assert(card.reads == 1 && card.writes == 0);
-    assert(memcmp(image, staging, H700_M1_PACKAGE_BYTES) == 0);
+                                 staging, H700_M1_STREAM_CHUNK_BYTES));
+    assert(card.reads == 71 && card.writes == 0);
 
     card.fail_read = 1;
     assert(!h700_m1_spl_preflight(&card, p4_lba, p4_blocks, digest,
-                                  staging, H700_M1_PACKAGE_BYTES));
-    assert(card.reads == 2 && card.writes == 0);
+                                  staging, H700_M1_STREAM_CHUNK_BYTES));
+    assert(card.reads == 72 && card.writes == 0);
     card.fail_read = 0;
 
     assert(!h700_m1_spl_preflight(&card, p4_lba, 0x02800000u / 512u + 0x230u,
-                                  digest, staging, H700_M1_PACKAGE_BYTES));
-    assert(card.reads == 2 && card.writes == 0);
+                                  digest, staging, H700_M1_STREAM_CHUNK_BYTES));
+    assert(card.reads == 72 && card.writes == 0);
 
     assert(!h700_m1_spl_preflight(&card, p4_lba, p4_blocks, digest,
-                                  staging, H700_M1_PACKAGE_BYTES - 1u));
-    assert(card.reads == 2 && card.writes == 0);
+                                  staging, H700_M1_STREAM_CHUNK_BYTES - 1u));
+    assert(card.reads == 72 && card.writes == 0);
 
     free(staging);
     free(image);
     puts("PASS SPL blk_dread adapter fake-card integration");
-    puts("PASS one read path; zero block writes");
+    puts("PASS bounded 8-sector reads; zero block writes");
     puts("LIMIT host shim only; not linked to or run by physical BaseOS SPL");
     return 0;
 }
