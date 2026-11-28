@@ -9,6 +9,8 @@ struct blk_desc {
     unsigned reads;
     unsigned writes;
     int fail_read;
+    const uint8_t *gpt_image;
+    uint32_t gpt_sector_count;
 };
 lbaint_t blk_dread(struct blk_desc *desc, lbaint_t start,
                    lbaint_t count, void *destination);
