@@ -175,11 +175,11 @@ def main() -> int:
     # M1 preflight reads a fixed raw p4+40MiB stream and does not load FIT.
     sunxi_kconfig = uboot / "arch/arm/mach-sunxi/Kconfig"
     sunxi_text = sunxi_kconfig.read_text()
-    family_start = sunxi_text.index("config SUN50I_GEN_H6\\n")
-    family_end = sunxi_text.find("\\nconfig ", family_start + 1)
+    family_start = sunxi_text.index("config SUN50I_GEN_H6\n")
+    family_end = sunxi_text.find("\nconfig ", family_start + 1)
     require(family_end > family_start, "cannot isolate SUN50I_GEN_H6 Kconfig block")
     family_block = sunxi_text[family_start:family_end]
-    for selector in ("\\tselect FIT\\n", "\\tselect SPL_LOAD_FIT if SPL\\n"):
+    for selector in ("\tselect FIT\n", "\tselect SPL_LOAD_FIT if SPL\n"):
         require(family_block.count(selector) == 1,
                 f"unexpected H616 FIT selector: {selector.strip()}")
         family_block = family_block.replace(selector, "", 1)
@@ -201,7 +201,7 @@ def main() -> int:
     # Preserve the resolved Kconfig result in the artifact even when a
     # fail-closed contract assertion stops the build.
     (out / "m1-spl-preflight-resolved.config").write_text(config_text)
-    relevant_config = "\\n".join(
+    relevant_config = "\n".join(
         line for line in config_text.splitlines()
         if any(key in line for key in ("SPL_FIT", "SPL_LOAD_FIT", "FIT_SIGNATURE",
                                        "SPL_OF_CONTROL", "SPL_OF_REAL", "SPL_DM",
@@ -230,7 +230,7 @@ def main() -> int:
         "# CONFIG_OF_REAL is not set",
     ):
         require(token in config_text,
-                f"resolved SPL config missing contract: {token}\\n{relevant_config}")
+                f"resolved SPL config missing contract: {token}\n{relevant_config}")
 
     map_file = out / "spl/u-boot-spl.map"
     map_arg = f"-Map={map_file}"
