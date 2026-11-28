@@ -188,6 +188,27 @@ class TestRG34XXStockTOC1(unittest.TestCase):
         self.assertEqual(be32(lpddr4["dram_clk"]), 672)
         self.assertEqual(lpddr4["dram_tpr6"], bytes.fromhex("40808080"))
 
+    def test_bl31_psci_reset_and_system_off_dispatch(self) -> None:
+        monitor = self.items["monitor"]
+        self.assertIn(b"plat/sun50iw9p1/plat_pm.c", monitor)
+        self.assertIn(b"psci_afflvl0_on", monitor)
+        self.assertIn(b"psci_afflvl0_off", monitor)
+        self.assertIn(b"psci_afflvl0_suspend", monitor)
+        self.assertIn(b"Platform has not exported a PSCI System Off hook.", monitor)
+        self.assertIn(b"Platform has not exported a PSCI System Reset hook.", monitor)
+        self.assertIn(b"ERROR:   Sunxi System Reset", monitor)
+        self.assertIn(b"Sunxi System Reset: operation not handled.", monitor)
+
+        def insn(offset: int) -> int:
+            return struct.unpack_from("<I", monitor, offset)[0]
+
+        self.assertEqual(insn(0x2588), 0x97FFFE50)  # BL reset sequence at 0x1ec8
+        self.assertEqual(insn(0x258C), 0xD503207F)  # WFI after reset attempt
+        self.assertEqual(insn(0x9EF0), 0xF9401C00)  # PSCI system-off op field +56
+        self.assertEqual(insn(0x9F48), 0xF9402000)  # PSCI system-reset op field +64
+        self.assertEqual(insn(0x9F50), 0xD63F0000)  # indirect call to reset hook if present
+        # String checks alone do not establish whether the system-off pointer is NULL.
+
     def test_pmic_regulator_ranges(self) -> None:
         root = "/soc@03000000/twi@0x07081400/pmu/regulators@0"
         dcdc2 = self.fdt[root + "/dcdc2"]
