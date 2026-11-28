@@ -55,6 +55,26 @@ MMIO sites. Keep the standard and raw-capsule-v2 paths unchanged.
  
 ## 1. Decision
 
+## 2026-11-28 RG34XX partition geometry cross-check
+
+The synthetic test geometry has been replaced with the captured RG34XX non-SP
+block layout from the `reports` branch inventory
+(`reports/rg34xx-inventory-20261127-uart/device-and-block-layout.txt`):
+
+- `mmcblk0p4` is the boot partition, first LBA **303104**, length **131072
+  sectors** (512-byte sectors).
+- The M1 package offset is p4 + 40 MiB = **81920 sectors**, so its expected
+  first LBA is **385024**. The 561-sector package ends at LBA 385584 inclusive,
+  within p4's end-exclusive LBA 434176.
+- Both host fake-card tests now use this captured p4 start/length and retain a
+  boundary-negative case one sector too short.
+
+This verifies arithmetic against the captured partition geometry; it does not
+prove that every future TF image has the same GPT or that the bytes currently
+at p4+40 MiB match the expected package. The actual package's cryptographic
+identity and runtime p4 discovery remain separate requirements.
+ 
+
 ## 2026-11-28 M1 SPL read-only adapter and bounded streaming
 
 - Added `platform/h700/boot/m1_firmware_spl_adapter.c`: a narrow adapter to U-Boot's `blk_dread()` API. It contains no `blk_dwrite()` call or write-capable callback.
