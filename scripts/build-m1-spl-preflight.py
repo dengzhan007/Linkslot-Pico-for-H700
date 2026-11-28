@@ -146,6 +146,10 @@ def main() -> int:
          "--enable", "SPL_LIBCOMMON_SUPPORT",
          "--enable", "SPL_ENV_SUPPORT",
          "--enable", "SPL_CYCLIC",
+         "--enable", "SPL_SYS_MALLOC",
+         "--set-val", "SPL_SYS_MALLOC_SIZE", "0x10000",
+         "--disable", "SPL_SYS_MALLOC_SIMPLE",
+         "--disable", "SPL_USE_TINY_PRINTF",
          "--disable", "SPL_CMDLINE_EDITING",
          "--disable", "CMDLINE",
          "--disable", "SPL_FIT_SIGNATURE",
@@ -290,7 +294,12 @@ def main() -> int:
         "CONFIG_SPL_LIBCOMMON_SUPPORT=y",
         "CONFIG_SPL_ENV_SUPPORT=y",
         "CONFIG_SPL_CYCLIC=y",
-        "CONFIG_SPL_SYS_MALLOC_SIMPLE=y",
+        "CONFIG_SPL_SYS_MALLOC=y",
+        "CONFIG_SPL_SYS_MALLOC_SIZE=0x10000",
+        "# CONFIG_SPL_SYS_MALLOC_SIMPLE is not set",
+        "# CONFIG_SPL_USE_TINY_PRINTF is not set",
+        "CONFIG_SPL_SYS_MALLOC_F=y",
+        "CONFIG_SPL_SYS_MALLOC_F_LEN=0x2000",
         "CONFIG_SPL_USE_TINY_PRINTF=y",
         "# CONFIG_SPL_POWER is not set",
         "# CONFIG_SPL_DM_I2C is not set",
@@ -312,6 +321,9 @@ def main() -> int:
     require("CONFIG_OF_REAL=y" in config_text,
             "SPL_OF_CONTROL must retain its OF_CONTROL-selected OF_REAL dependency")
 
+    require("CONFIG_SPL_SYS_MALLOC=y" in config_text and
+            "CONFIG_SPL_SYS_MALLOC_SIZE=0x10000" in config_text,
+            "M1 preflight requires a bounded 64KiB SRAM-C dlmalloc pool")
     map_file = out / "spl/u-boot-spl.map"
     map_arg = f"-Map={map_file}"
     build_log = run([
@@ -379,14 +391,20 @@ def main() -> int:
                               "entry_slots": 8, "inside_bss": True},
         "spl_stack_pointer": hex(SPL_STACK),
         "bss_end_to_stack_gap_bytes": SPL_STACK - bss_end,
+        "sram_c": {"start": "0x28000", "end_exclusive": "0x58000"},
+        "spl_malloc_pool_to_stack_gap_bytes": SPL_STACK - (BSS_START + BSS_LIMIT + 0x10000),
         "linked_map": str(map_file.name),
         "forbidden_symbols_absent": forbidden,
         "test_fingerprint": "0x00000000 (deliberate fail-closed sentinel)",
         "spl_allocator_profile": {
-            "simple_malloc_enabled_by_resolved_kconfig": "CONFIG_SPL_SYS_MALLOC_SIMPLE=y" in config_text,
+            "allocator": "U-Boot SPL dlmalloc",
+            "simple_malloc_disabled": "# CONFIG_SPL_SYS_MALLOC_SIMPLE is not set" in config_text,
             "early_malloc_f_enabled": "CONFIG_SPL_SYS_MALLOC_F=y" in config_text,
             "early_malloc_f_bytes": "0x2000",
-            "tiny_printf_enabled_by_resolved_kconfig": "CONFIG_SPL_USE_TINY_PRINTF=y" in config_text,
+            "tiny_printf_disabled": "# CONFIG_SPL_USE_TINY_PRINTF is not set" in config_text,
+            "heap_start": hex(BSS_START + BSS_LIMIT),
+            "heap_bytes": 0x10000,
+            "heap_end_exclusive": hex(BSS_START + BSS_LIMIT + 0x10000),
             "heap_high_water_measured": False,
         },
         "firmware_payload_read_at_runtime": False,
@@ -399,8 +417,8 @@ def main() -> int:
         "candidate_eligible": False,
         "limitations": [
             "This is a compile/link-only preflight harness, not a complete M1 boot path.",
-            "Pinned U-Boot v2026.10 resolves SPL_SYS_MALLOC_SIMPLE and SPL_USE_TINY_PRINTF to y; these are recorded as actual defaults, not falsely asserted disabled. SPL_CMDLINE is not a symbol in this pinned tree.",
-            "The simple-malloc heap's exact runtime reservation and high-water usage are not measured; the 4KiB static scratch/BSS check is not a complete SPL heap-capacity proof.",
+            "The isolated profile disables ARCH_SUNXI's simple-malloc/tiny-printf selectors and uses a bounded 64KiB SPL dlmalloc pool immediately after the reserved 16KiB BSS window in SRAM C; SPL_CMDLINE is not a symbol in this pinned tree.",
+            "The 64KiB heap range is statically separated from the configured initial stack, but allocator high-water usage is not measured; this is not a complete runtime memory-usage proof.",
             "The zero FNV sentinel makes the package planner reject before firmware payload reads.",
             "The harness still contains pre-MMC SRAM/TZPC/timer/clock setup and the MMC controller read path; no device execution is performed.",
             "Absence of named forbidden functions is not a complete MMIO/SMC instruction audit; inspect the map and disassembly before any hardware authorization.",
