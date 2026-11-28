@@ -2066,3 +2066,11 @@ AArch64 反汇编窗口，验证：
 - In the disposable U-Boot checkout created by the preflight script only, these four objects are now restricted to non-XPL builds. Normal U-Boot sources and existing raw-capsule v2 path are not modified. `SPL_ENV_SUPPORT` is disabled because this fixed read-only p4+40MiB path does not use environment variables; `SPL_SPRINTF` is explicitly enabled to provide the full `sprintf/vsnprintf` implementation required by the MMC and FDT/DM helpers.
 - This is dependency isolation, not a workaround by adding UART/I2C/PMIC providers. The next CI must prove the remaining SPL dependency set and inspect linked ELF undefined symbols, relocation/call graph and side-effect sites. If any disabled provider remains reachable, the build must fail rather than silently re-enable it.
 - No hardware access or writes were performed. G2/G3/M1-S1 remain open; output remains host-only, non-installable, and candidate-ineligible.
+
+
+## 2026-11-28 M1 SPL disposable Makefile patch assertion correction
+
+- Feasibility [#1051](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46112268640) completed with failure at the isolated SPL preflight script before U-Boot compilation. The failure was in our patch guard: the Python tuple used the two-character sequence `\\n` instead of an actual newline in the expected Makefile rule, so the exact upstream line was incorrectly reported as unexpected.
+- Corrected `scripts/build-m1-spl-preflight.py` to construct each expected rule from an object name and a real newline, while retaining the fail-closed exact-one-match check and the XPL-only exclusion wrapper. This is a harness string-literal defect, not evidence about SPL linker dependencies.
+- The separate H700 boot-audit workflow [#1655](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46112269757) completed successfully (both Windows and host-tools jobs). This does not validate the SPL link.
+- Next gate: rerun feasibility from the corrected script, then inspect the actual linked SPL ELF/map and reachable provider/side-effect set. No SPL link success is claimed; all hardware gates remain closed and no device operation occurred.
