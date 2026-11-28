@@ -118,3 +118,17 @@ A cross-check exposed a board-specific mismatch that must be resolved before Pro
 
 **Disposition:** Profile A remains the approved policy, but the actual target-specific PMIC initialization implementation is **blocked pending source provenance**. First locate the vendor AXP2202 driver/register definitions and board-specific power sequence from the exact RG34XX firmware/source lineage; then compare its bus/controller and register semantics with the matched BL31 R-TWI0 path. Do not substitute AXP717, copy generic H700 voltage settings, or add a guessed AXP2202 driver. Until that source is found and audited, the current M1 preflight remains PMIC/TWI-disabled and the future DRAM-capable Profile A path remains unimplemented.
 
+
+
+### E.4 Target-specific DTS confirmation and candidate Allwinner AXP2202 source
+
+A later source search refined the PMIC identity finding:
+
+- The Knulli H700 package's **RG34XX-specific** boot-package DTS at `package/boot/uboot-h700/rg34xx/boot_package/rg34xx.dts` (repository `knulli-cfw/knulli-linux`, branch `knulli-main`, commit `57afa662009641d181f57241bcc480119b131530`) declares `/soc@03000000/twi@0x07081400` as `device_type = "twi5"`, and its child PMU as `compatible = "x-powers,axp2202"`, `reg = <0x34>`. This independently matches the captured RG34XX live-FDT inventory. The target bus/address pair is therefore strongly grounded as **R-TWI0 at 0x07081400, PMIC address 0x34**.
+- An Allwinner-authored AXP2202 SPL driver is available in `sam-yangjj/tina-v821-v1.3-brandy`, commit `34809037526678ccda1720cb4b4ec7ee32272c38`, files `brandy-2.0/spl/drivers/power/axp2202.c` and `brandy-2.0/spl/include/arch/axp2202_reg.h`. Under `CFG_SUNXI_TWI` it uses 400 kHz, runtime address 0x34 with fallback 0x35, and exposes AXP2202 register definitions. The driver has a helper `axp2202_set_ddr_voltage()` mapped to DCDC3; however, this source is for a different Allwinner platform, and no call site tying that helper to the RG34XX/H700 DRAM initialization was established.
+- That candidate driver's `axp2202_set_necessary_reg()` writes charge-current, VBUS-current, ADC, VSYS-minimum, DCDC1 undervoltage-protection and module-enable registers. These are not automatically DRAM prerequisites. The helper's presence does not prove that every listed write belongs in our Profile A path.
+- The same AXP2202 driver family appears in SyterKit, but the SyterKit implementation is an independent bare-metal reference, not the RG34XX vendor boot chain. Treat both as register-map/protocol cross-checks only, not as a source of board-specific voltage values.
+- The generic U-Boot H700 defconfig's `CONFIG_AXP717_POWER` selection and the PMIC driver's compatible table remain a **binding/configuration mismatch to reconcile**, not proof that the physical PMIC is an incompatible chip. AXP2202/AXP717 register-family overlap is suggested by external driver headers, but no exact H700 binding equivalence has been proven.
+
+**Revised disposition:** target PMIC identity, R-TWI0 controller and I2C address are now independently corroborated. The unresolved items are the exact RG34XX vendor SPL/Boot0 PMIC transaction sequence, whether/when DCDC3 or another rail must be adjusted before DRAM training, the precise AXP2202 silicon revision/address fallback behavior, and which initialization writes are necessary. Keep Profile A implementation blocked until those are resolved against the actual target firmware lineage. Do not copy the Tina/SyterKit voltage or initialization writes directly.
+
