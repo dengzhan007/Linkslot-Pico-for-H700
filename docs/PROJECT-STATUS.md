@@ -2020,3 +2020,13 @@ AArch64 反汇编窗口，验证：
 - BL31→BL33 PIO/clock/permission、BL31/Boot0 RAM 生命周期、secondary
   A53 初始 reset/hold-off 和 timer continuity 尚未闭合。
 - `H700_MEMORY_LAYOUT_APPROVED` 未设置；`hardware_applied=0`。
+
+
+## 2026-11-28 M1 SPL build-profile audit correction
+
+- The first real isolated H700 SPL build attempt exposed a test-contract error before compilation: the harness attempted to force `SPL_SYS_MALLOC_SIMPLE`, `SPL_USE_TINY_PRINTF`, and a nonexistent `SPL_CMDLINE` symbol off, then required those exact disabled lines after `olddefconfig`. Pinned U-Boot v2026.10 resolves the first two to enabled defaults; `SPL_CMDLINE` is not defined in this source tree. The failure was therefore a stale/invalid Kconfig expectation, not evidence of an SPL source or linker failure.
+- Updated `scripts/build-m1-spl-preflight.py` to assert the resolved defaults accurately, remove ineffective disable requests, and record the simple allocator / early malloc configuration in the manifest. The report now explicitly states that the simple-malloc heap high-water mark and exact runtime reservation remain unmeasured; the 4 KiB static BSS scratch check alone does not prove total SPL memory safety.
+- Latest pre-correction run [#1039](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46110121736) failed at the SPL build-profile assertion with `resolved SPL config missing contract: # CONFIG_SPL_SYS_MALLOC_SIMPLE is not set`. Its earlier source audits and host-only M1 tests passed. The code correction is a new commit and must pass a fresh run before any SPL link/layout claim is made.
+- Current source remains host-only and non-installable. No hardware access, SD/Boot0/TOC1 writes, firmware flash, MMIO/SMC, TWI, DRAM access, or payload execution occurred. G2/G3/M1-S1 remain open; `hardware_applied=0`.
+
+**Next gate:** rerun the isolated SPL build with the corrected Kconfig contract. If linking succeeds, inspect actual `__bss_start/__bss_end`, scratch/table symbols, allocator placement and high-water evidence, stack separation, provider set, and linked-ELF side effects. Do not treat source Kconfig resolution as a completed memory-safety proof.
