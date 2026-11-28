@@ -15,7 +15,7 @@ These are the project's RG34XX TF-card captures, not eMMC boot partitions. No ha
 
 The 128 KiB primary capture is not a flat single Boot0 executable. It contains three aligned eGON-tagged headers:
 
-| File offset | Declared size | Header tag | Interpretation |
+| File offset | Declared size | Header word at +0x14 | Interpretation |
 |---:|---:|---|---|
 | \`0x0000\` | \`0x20000\` (128 KiB) | \`0x30\` | Outer eGON Boot0 container; standard checksum passes |
 | \`0x1000\` | \`0x10000\` (64 KiB) | \`0x30\` | Embedded eGON Boot0 component; standard checksum passes |
