@@ -84,6 +84,23 @@ def scan(raw: bytes) -> list[dict]:
                 index_reg = canon(ins.reg_name(op.mem.index)) if op.mem.index else ""
                 if base in before and not index_reg and before[base] + int(op.mem.disp) == SLOT:
                     access = "possible-direct-write" if ins.mnemonic.startswith(("str", "stp", "stlr", "stur", "stxr", "stlxr")) else "possible-read-or-other"
+            if ins.mnemonic == "bl":
+                for arg_index in range(8):
+                    arg_reg = "x%d" % arg_index
+                    if regs.get(arg_reg) == SLOT:
+                        access = "possible-call-argument-x%d" % arg_index
+                        key = (ins.address, access)
+                        lo = max(0, start + max(0, index - 4) * 4)
+                        hi = min(len(raw), start + min(len(decoded), index + 3) * 4)
+                        context = ["%08x: %s %s" % (x.address, x.mnemonic, x.op_str)
+                                   for x in md.disasm(raw[lo:hi], BASE + lo)]
+                        hits[key] = {
+                            "pc": "0x%08x" % ins.address, "access": access,
+                            "effective_address": "0x%08x" % SLOT,
+                            "instruction": "%s %s" % (ins.mnemonic, ins.op_str),
+                            "argument_register": arg_reg, "window": context,
+                            "decode_scope": "overlapping aligned 16-instruction window; may include data/literal false positives",
+                        }
             if access:
                 key = (ins.address, access)
                 lo = max(0, start + max(0, index - 3) * 4)
@@ -120,6 +137,7 @@ def main() -> int:
         "target_slot": "0x%08x" % SLOT,
         "candidate_access_count": len(hits), "candidate_writes": writes,
         "candidate_reads_or_other": [x for x in hits if x["access"] != "possible-direct-write"],
+        "candidate_call_arguments": [x for x in hits if x["access"].startswith("possible-call-argument")],
         "runtime_context_pointer": "UNKNOWN",
         "scope": "host-only overlapping decode; no hardware access or payload execution",
         "limitations": [
@@ -137,7 +155,7 @@ def main() -> int:
         "# BL31 context-slot whole-payload scan", "",
         "- Exact monitor identity verified: %d bytes, SHA-256 %s." % (len(raw), digest),
         "- Target global slot: 0x%08x." % SLOT,
-        "- Candidate accesses: %d; possible direct writes: %d." % (len(hits), len(writes)),
+        "- Candidate accesses/call arguments: %d; possible direct writes: %d." % (len(hits), len(writes)),
         "- Results are overlapping-decode leads, not proven control-flow or live writes.",
         "- Runtime context pointer remains UNKNOWN; no hardware state was read.",
     ]
