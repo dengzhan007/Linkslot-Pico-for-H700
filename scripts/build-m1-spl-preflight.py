@@ -62,6 +62,8 @@ def main() -> int:
     ap.add_argument("--output", type=Path, required=True)
     ap.add_argument("--cross-compile", default="aarch64-linux-gnu-")
     ap.add_argument("--jobs", type=int, default=2)
+    ap.add_argument("--geometry-only", action="store_true",
+                    help="link only the real M1 SRAM objects; do not retain an executable board/MMC entry path")
     args = ap.parse_args()
 
     uboot = args.uboot_root.resolve()
@@ -102,7 +104,16 @@ def main() -> int:
     start = board_text.index("void board_init_f(ulong dummy)")
     end_marker = "\n}\n#endif /* CONFIG_XPL_BUILD */"
     end = board_text.index(end_marker, start) + 2
-    replacement = """void board_init_f(ulong dummy)
+    if args.geometry_only:
+        replacement = """void board_init_f(ulong dummy)
+{
+    /* Link-only fixture: deliberately no board init, memory access or device I/O. */
+    for (;;)
+        asm volatile("b .");
+}
+"""
+    else:
+        replacement = """void board_init_f(ulong dummy)
 {
     extern char __bss_start[], __bss_end[];
     extern void baseos_early_mmc(void);
@@ -407,6 +418,8 @@ static inline int vprintf(const char *fmt, va_list args)
     # unrelated board/image/command function is retained and drags in providers
     # that the read-only M1 entry intentionally disables.
     map_arg = f"-Map={map_file} --gc-sections"
+    if args.geometry_only:
+        map_arg += " --undefined=h700_m1_spl_geometry_anchor"
     # Kbuild's Makefile.xpl appends the mandatory `-T u-boot-spl.lds`
     # to LDFLAGS_u-boot-spl. Supplying that variable on the make command line
     # overrides the makefile assignment and silently drops the linker script.
@@ -424,9 +437,13 @@ static inline int vprintf(const char *fmt, va_list args)
 
     nm = run([f"{cross}nm", "-S", "-n", str(elf)])
     symbols = symbol_table(nm)
-    for name in ("__bss_start", "__bss_end", "m1_package_scratch",
-                 "m1_boot_partitions", "baseos_early_mmc",
-                 "h700_m1_spl_preflight_gpt"):
+    required_symbols = ["__bss_start", "__bss_end", "m1_package_scratch",
+                        "m1_boot_partitions"]
+    if args.geometry_only:
+        required_symbols.append("h700_m1_spl_geometry_anchor")
+    else:
+        required_symbols.extend(["baseos_early_mmc", "h700_m1_spl_preflight_gpt"])
+    for name in required_symbols:
         require(name in symbols, f"linked SPL symbol missing: {name}")
 
     bss_start, _, _ = symbols["__bss_start"]
@@ -463,7 +480,9 @@ static inline int vprintf(const char *fmt, va_list args)
     (out / "m1-spl-build.log").write_text(build_log)
 
     manifest = {
-        "kind": "M1 preflight-only H700 SPL link audit",
+        "kind": ("M1 link-only SRAM/BSS geometry fixture" if args.geometry_only else "M1 preflight-only H700 SPL link audit"),
+        "geometry_only": args.geometry_only,
+        "board_init_f_behavior": "non-returning inert loop; no initialization or device I/O" if args.geometry_only else "BSS clear + SRAM/TZPC/timer/clock setup + MMC preflight",
         "uboot_tag": "v2026.10",
         "uboot_commit": head,
         "source_variant": "isolated board_init_f overlay; no sunxi_board_init continuation",
@@ -502,7 +521,8 @@ static inline int vprintf(const char *fmt, va_list args)
         "installable": False,
         "candidate_eligible": False,
         "limitations": [
-            "This is a compile/link-only preflight harness, not a complete M1 boot path.",
+            "This is a compile/link-only fixture, not a complete M1 boot path.",
+            "In geometry-only mode, the entry is an inert loop and the linker retains the real scratch/GPT objects through a never-called geometry anchor; it is not an executable boot path.",
             "The isolated profile disables ARCH_SUNXI's simple-malloc/tiny-printf selectors and uses a bounded 64KiB SPL dlmalloc pool immediately after the reserved 16KiB BSS window in SRAM C; SPL_CMDLINE is not a symbol in this pinned tree.",
             "The 64KiB heap range is statically separated from the configured initial stack, but allocator high-water usage is not measured; this is not a complete runtime memory-usage proof.",
             "The zero FNV sentinel makes the package planner reject before firmware payload reads.",
