@@ -120,9 +120,9 @@ def main() -> int:
                    "SPL_BLK", "SPL_OF_CONTROL", "SPL_OF_REAL"):
         require(f'"--enable", "{option}"' in spl_builder,
                 f"M1 preflight builder no longer enables {option}")
-    for option in ("SPL_LIBCOMMON_SUPPORT", "SPL_FIT_SIGNATURE", "SPL_FIT_IMAGE_TINY", "SPL_FIT_PRINT", "FIT_SIGNATURE", "FIT", "SPL_FIT", "SPL_LOAD_FIT",
+    for option in ("SPL_FIT_SIGNATURE", "SPL_FIT_IMAGE_TINY", "SPL_FIT_PRINT", "FIT_SIGNATURE", "FIT", "SPL_FIT", "SPL_LOAD_FIT",
                    "SPL_I2C", "SPL_POWER", "SPL_SUNXI_LED_STATUS", "SPL_DM_I2C", "SPL_DM_PMIC", "SPL_DM_REGULATOR", "SPL_DM_SERIAL", "SPL_DM_USB",
-                   "CMD_BOOTD", "VERSION_VARIABLE"):
+                   "CMD_BOOTD", "VERSION_VARIABLE", "SPL_SYS_MALLOC_SIMPLE", "SPL_USE_TINY_PRINTF", "SPL_CMDLINE", "SPL_CMDLINE_EDITING", "CMDLINE"):
         require(f'"--disable", "{option}"' in spl_builder,
                 f"M1 preflight builder no longer disables unrelated {option}")
     require("fit_selector =" in spl_builder and
@@ -139,10 +139,15 @@ def main() -> int:
             'select SPL_LOAD_FIT if SPL' in spl_builder and
             'sunxi_kconfig.write_text' in spl_builder,
             "M1 preflight builder no longer removes H616 FIT selectors")
-    require('for obj in ("membuf.o", "abuf.o")' in spl_builder and
-            "re.compile(rf" in spl_builder and
-            "rule.sub" in spl_builder and "ifneq ($(CONFIG_XPL_BUILD),y)" in spl_builder,
-            "M1 preflight builder no longer isolates generic dynamic-buffer helpers")
+    for option in ("SPL_LIBCOMMON_SUPPORT", "SPL_ENV_SUPPORT", "SPL_CYCLIC"):
+        require(f'"--enable", "{option}"' in spl_builder,
+                f"M1 preflight builder no longer enables required SPL provider {option}")
+    require('image_fdt_rule =' in spl_builder and
+            'boot_makefile.write_text(boot_text)' in spl_builder and
+            'display_rule =' in spl_builder and
+            'lib_makefile.write_text(lib_text)' in spl_builder and
+            '__start_rodata = .' in spl_builder and '__end_rodata = .' in spl_builder,
+            "M1 preflight builder no longer isolates SPL image/banner helpers and rodata bounds")
 
     # Geometry derived from pinned Kconfig, linker script and H616 SRAM node.
     sram_start, sram_bytes = 0x28000, 0x30000
