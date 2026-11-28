@@ -2369,3 +2369,13 @@ AArch64 反汇编窗口，验证：
 - The captured single record has key `0x4d` and callback pointer `0x2984c`. This is a concrete descriptor-dispatch mechanism, but not yet a BL31 loader. No validated control-flow link from the eGON AArch32 entry into this AArch64 region has been established.
 - The `0x1a2d0/0x48000000` size/base pair remains an unconnected data candidate. Next: inspect callback `0x2984c`, locate the AArch64 region's entry/caller, and find actual code references to the size/base descriptor. Do not infer a monitor copy or context-slot writer.
 - Full notes are in [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md), commit [6d42e46](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/6d42e46618bef158b5d235019919285675ac7d6d). Hardware safety gates remain unchanged.
+
+
+### Boot0 callback pointer / eGON address-space reconciliation
+
+- The primary eGON header reports `run_addr=0x20000` and public-header size `0x30`; mapping the registry callback `0x2984c` against executable base `0x20030` gives file offset `0x981c`.
+- File offset `0x981c` is a coherent Thumb-2 function entry. It saves r4-r11/lr and consumes a structured context. The adjacent callback value `0x298b0` maps to `0x9880`, inside that same function rather than a separate entry.
+- This is a useful address correlation, not a validated call edge. The registry dispatcher at `0x1b694..0x1b73c` decodes as AArch64 and ends in `br x16`, whereas the target bytes decode as Thumb-2 and the pointer low bit is clear. AArch64 BR cannot switch to Thumb; the code/data ownership or state-transition path remains unresolved.
+- The actual eGON entry is AArch32: initial branch to `0x400`; early code saves CPU state, checks CPSR/SCTLR, masks interrupts, sets SP `0x57000`, calls `0x4e0`, and later accepts selected return addresses `0x21000`/`0x31000` before indirect transfer through `0x494` (value `0x50000`). This still does not establish a reachable edge to the AArch64 registry.
+- Detailed evidence and caveats: [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md), commit [88d1410](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/88d1410e304783e199e7aa4fc9ce5506934656c4).
+- Next: trace the AArch32 entry's continuation and the AArch64 registry's code/data boundary; look for a real state-switch or separate execution context. Do not label this a BL31 loader or context-slot producer.
