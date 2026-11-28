@@ -13,8 +13,14 @@ from inspect_h700_boot0 import parse_boot0
 
 REPORT_PATH = "reports/rg34xx-inventory-20261127-uart"
 EXPECTED = {
-    "boot0-primary.bin": "bf886995745a0eb9b5030296f9f6163035e164b3a82183716e67ff876319289f",
-    "boot0-secondary.bin": "5f143679e0d2c5293d22fee47a47ea6c17120c7a19e6007247c8b13710aa5ef9",
+    "boot0-primary.bin": {
+        "capture_sha": "bf886995745a0eb9b5030296f9f6163035e164b3a82183716e67ff876319289f",
+        "image_sha": "bf886995745a0eb9b5030296f9f6163035e164b3a82183716e67ff876319289f",
+    },
+    "boot0-secondary.bin": {
+        "capture_sha": "5f143679e0d2c5293d22fee47a47ea6c17120c7a19e6007247c8b13710aa5ef9",
+        "image_sha": "4701a85e4db7e8339b91b92f691a83cc954ec63a09369087c2e41d80eafa9f5d",
+    },
 }
 
 
@@ -45,15 +51,22 @@ def main() -> int:
     args = parser.parse_args()
 
     reports = {}
-    for filename, expected_sha in EXPECTED.items():
+    for filename, expected in EXPECTED.items():
         path = f"{REPORT_PATH}/{filename}"
         data = read_git_blob(args.reports_ref, path)
-        actual_sha = hashlib.sha256(data[: struct_image_size(data)]).hexdigest()
-        if actual_sha != expected_sha:
+        capture_sha = hashlib.sha256(data).hexdigest()
+        if capture_sha != expected["capture_sha"]:
             raise AssertionError(
-                f"{filename}: declared-image SHA-256 {actual_sha} != {expected_sha}"
+                f"{filename}: raw-capture SHA-256 {capture_sha} != "
+                f"{expected['capture_sha']}"
             )
-        reports[filename] = parse_boot0(data)
+        report = parse_boot0(data)
+        if report["sha256_full"] != expected["image_sha"]:
+            raise AssertionError(
+                f"{filename}: declared-image SHA-256 {report['sha256_full']} != "
+                f"{expected['image_sha']}"
+            )
+        reports[filename] = report
 
     primary = reports["boot0-primary.bin"]
     secondary = reports["boot0-secondary.bin"]
@@ -78,18 +91,12 @@ def main() -> int:
         assert table["entries"][13]["clock_mhz"] == 672, (name, table)
         assert table["entries"][14]["clock_mhz"] == 672, (name, table)
 
-    print("PASS: both published RG34XX Boot0 captures pass eGON checksum and SHA-256 checks")
+    print("PASS: both published RG34XX Boot0 raw captures and declared images pass SHA-256 and eGON checksum checks")
     print("PASS: active header parameter block in both copies reports LPDDR4 at 672 MHz")
     print("PASS: primary Boot0 DRAM.ext table is discovered at 0x1348 (15 profiles)")
     print("PASS: secondary Boot0 DRAM.ext table is discovered at 0x348 (15 profiles)")
     print("LIMIT: profile-table extraction does not prove runtime selection, PMIC writes, or DRAM map")
     return 0
-
-
-def struct_image_size(data: bytes) -> int:
-    if len(data) < 0x14:
-        raise AssertionError("Boot0 capture is shorter than its header")
-    return int.from_bytes(data[0x10:0x14], "little")
 
 
 if __name__ == "__main__":
