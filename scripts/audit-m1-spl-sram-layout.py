@@ -132,6 +132,11 @@ def main() -> int:
     require('"m1-spl-preflight-resolved.config"' in spl_builder and
             "relevant_config =" in spl_builder,
             "M1 preflight builder no longer preserves resolved Kconfig diagnostics")
+    require('sunxi_kconfig = uboot / "arch/arm/mach-sunxi/Kconfig"' in spl_builder and
+            'config SUN50I_GEN_H6' in spl_builder and
+            'select SPL_LOAD_FIT if SPL' in spl_builder and
+            'sunxi_kconfig.write_text' in spl_builder,
+            "M1 preflight builder no longer removes H616 FIT selectors")
     require('for obj in ("membuf.o", "abuf.o")' in spl_builder and
             "re.compile(rf" in spl_builder and
             "rule.sub" in spl_builder,
