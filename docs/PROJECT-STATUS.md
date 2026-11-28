@@ -2139,3 +2139,10 @@ AArch64 反汇编窗口，验证：
 - This is a hypothesis-driven link correction, not a pass. The next feasibility run must show a fully resolved SPL ELF, then pass the existing assertions for the 4 KiB aligned scratch, bounded GPT table, BSS ceiling, stack separation, and forbidden write/side-effect symbols. If any unresolved references remain, use the new map to identify their live call path rather than broadening Kconfig.
 - The linked map inspection also corrects the earlier diagnosis: the immediate cause is not simply missing Kconfig providers; it is whole-archive retention without --gc-sections. The archive includes full feature objects, but their unrelated function sections should not be part of this M1 preflight image.
 - No SPL was executed and no hardware access occurred. H700_MEMORY_LAYOUT_APPROVED=false, hardware_applied=0; all artifacts remain non-installable, hardware-unvalidated, and candidate-ineligible.
+
+## 2026-11-28 Feasibility #1058 script-format regression
+
+- The first section-GC correction in [#1058](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46114757784) did not reach the linker. The Python builder failed immediately with NameError: map_arg is not defined at the SPL make invocation.
+- Root cause: the explanatory comment and map_arg assignment had been inserted with literal backslash-n characters, so Python treated the entire inserted block as one comment line. This was a patch-generation formatting error, not an SPL or linker regression.
+- Corrected in [1566094](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/15660947d1f7827ab226b09076c18d494b03b6ec): restore actual source newlines so map_arg is assigned and --gc-sections reaches the linker command. The section-GC hypothesis remains unverified until the next run completes the actual SPL link.
+- No hardware action occurred. All existing hardware gates and candidate-ineligible status remain unchanged.
