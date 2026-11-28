@@ -27,11 +27,10 @@ SPL or to physical addresses.
   fingerprint, nonzero padding, and altered destination metadata. The same
   production C module is compiled and linked as freestanding Cortex-A53
   AArch32 ARM-state ELF32 with no undefined runtime symbols.
-- Full feasibility [#948](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46097505586)
+- Full feasibility [#950](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46097505586)
   completed successfully: 87/87 recorded steps, zero failures and zero skips.
   Artifact [15243703880](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46097505586/artifacts/15243703880)
-  contains the build outputs and report. H700 AArch32/AArch64 compile check
-  [#?](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46097466062)
+  contains the build outputs and report. H700 AArch32/AArch64 compile check [#670](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46097466062)
   also completed successfully.
 - The test image is synthetic. The captured reference package fingerprint
   0xaf0018cb is recorded for comparison, but this module does not yet pin the
