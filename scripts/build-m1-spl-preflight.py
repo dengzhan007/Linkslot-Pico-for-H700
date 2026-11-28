@@ -171,6 +171,20 @@ def main() -> int:
             "unexpected ARMv8 SPL_FIT selector count")
     armv8_kconfig.write_text(armv8_text.replace(fit_selector, "", 1))
 
+    # The H616 SoC-family Kconfig also selects FIT and SPL_LOAD_FIT. The
+    # M1 preflight reads a fixed raw p4+40MiB stream and does not load FIT.
+    sunxi_kconfig = uboot / "arch/arm/mach-sunxi/Kconfig"
+    sunxi_text = sunxi_kconfig.read_text()
+    family_start = sunxi_text.index("config SUN50I_GEN_H6\\n")
+    family_end = sunxi_text.find("\\nconfig ", family_start + 1)
+    require(family_end > family_start, "cannot isolate SUN50I_GEN_H6 Kconfig block")
+    family_block = sunxi_text[family_start:family_end]
+    for selector in ("\\tselect FIT\\n", "\\tselect SPL_LOAD_FIT if SPL\\n"):
+        require(family_block.count(selector) == 1,
+                f"unexpected H616 FIT selector: {selector.strip()}")
+        family_block = family_block.replace(selector, "", 1)
+    sunxi_kconfig.write_text(sunxi_text[:family_start] + family_block + sunxi_text[family_end:])
+
     # U-Boot v2026.10 unconditionally lists these general-purpose dynamic
     # buffer helpers in lib/Makefile. They are unrelated to read-only MMC/GPT
     # preflight and pull realloc()/vsnprintf() into a tiny SRAM-only SPL.
