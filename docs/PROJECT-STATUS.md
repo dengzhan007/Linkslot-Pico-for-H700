@@ -1,3 +1,12 @@
+## 2026-11-28 AXP2202 / AXP717 naming reconciliation
+
+- Corrected the earlier PMIC naming concern: Linux upstream AXP717 support author Andre Przywara says Allwinner BSP often calls the same chip AXP2202 and reports that a Boot0 AXP2202 driver drove a chip labelled AXP717. Allwinner's Tina PMU guide explicitly says AXP717 uses the AXP2202 software framework name in DTS/kernel configuration.
+- Inspected Allwinner-authored Tina v821 AXP2202 SPL reference source (sun50iw10p1 lineage, not the RG34XX/H700 exact target): DCDC3 voltage register 0x85, output control 0x80 bit 2, mask 0x7f, 500–1840 mV split-step encoding; 400 kHz TWI; runtime address 0x34 with 0x35 fallback; CHIP_ID_EXT 0x0e expected value 0x02; generic set_ddr_voltage() dispatcher to axp2202_set_ddr_voltage().
+- These register details match the pinned U-Boot AXP717 SPL DCDC3 register/enable map. AXP2202/AXP717 is therefore a strong legacy BSP naming / same-PMIC-family reconciliation, not a silicon incompatibility blocker.
+- This does not prove the inspected Tina source is the exact RG34XX Boot0 source, nor prove the target's call site, fallback use, DCDC3-before-DRAM ordering, or necessity of every PMIC init write. The actual RG34XX Boot0 binary/log remains the target authority.
+- Detailed crosswalk: docs/rg34xx-axp2202-axp717-crosswalk-20261128.md. Next static task: disassemble the target 128 KiB Boot0 and recover PMU ID probe, 0x34/0x35 bus path, DCDC3 0x85 / enable 0x80 writes and ordering relative to DRAM training.
+- Safety unchanged: no PMIC/TWI write, MMIO/SMC, physical I/O, DRAM content access, Boot0/TOC1/TF write, firmware flash or payload execution. M1 remains preflight-only; H700_MEMORY_LAYOUT_APPROVED=false and hardware_applied=0.
+
 ## 2026-11-28 RG34XX stock Boot0 DRAM.ext parser correction
 
 - Audited the two raw RG34XX non-SP stock Boot0 captures on the reports branch. Primary is a 128 KiB eGON image; secondary capture is 128 KiB but its eGON header declares a 64 KiB image. Both declared images pass checksum validation.
@@ -28,7 +37,7 @@
 ## 2026-11-28 Target PMIC identity mismatch found
 
 - Cross-checked the captured RG34XX live FDT against the public U-Boot v2026.10 H700 defconfig and PMIC driver. The target inventory identifies `x-powers,axp2202` on R-TWI0 `0x07081400`; the generic `anbernic_rg35xx_h700_defconfig` selects `AXP717_POWER`, and upstream `drivers/power/pmic/axp.c` has no `x-powers,axp2202` compatible entry.
-- This is a material board-specific compatibility gap. Do not import the generic AXP717 regulator voltages or enable its PMIC path as a substitute. Profile A remains the owner's approved policy, but its target-specific implementation is blocked until the exact RG34XX AXP2202 source/register map and pre-DRAM power sequence are located and audited.
+- This initially appeared to be a material compatibility gap, but subsequent upstream Linux and Allwinner documentation strongly support AXP2202 as the legacy BSP name/framework for AXP717-compatible silicon. Do not treat the naming difference as incompatibility; nevertheless, do not enable PMIC writes or import voltage policy until the exact RG34XX Boot0 sequence and board-specific requirements are recovered.
 - The target FDT regulator ranges are declarations only, not measured register state or a safe initialization recipe. No PMIC writes may be inferred from them.
 - Detailed evidence and disposition appended to [`docs/m1-owner-policy-audit-20261128.md`](m1-owner-policy-audit-20261128.md). Current M1 preflight remains PMIC/TWI-disabled; that is intentional because it stops before the DRAM/board-init continuation.
 - The static source trace has therefore narrowed the next task: identify the exact vendor AXP2202 implementation for RG34XX, reconcile its R-TWI0 access with BL31's matched static path, and only then build a separate Profile A DRAM-capable SPL audit. Continue RTC/WDT host-state-machine design separately; do not reuse raw-capsule-v2.
@@ -2640,7 +2649,7 @@ See [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md) for the detai
 - In the generic H700 defconfig, R-TWI is the only registered MVTWSI adapter: logical bus 0 maps to adapter `twsi2` / hardware index 2 / `SUNXI_R_TWI_BASE`. H616 `i2c_init_board()` enables TWI channel 5 and configures GPL0/GPL1. The target DTS `twi5` at 0x07081400 matches that controller.
 - `board_init_f()` initializes the I2C board pins and bus before `sunxi_board_init()`. The latter initializes the PMIC, applies configured DCDC2/DCDC3 settings, then calls `sunxi_dram_init()`. Thus the upstream reference's PMIC writes are statically ordered before DRAM training.
 - The generic upstream source path is now traced end-to-end: logical I2C bus 0 → twsi2 hardware adapter → R-TWI0 → PMIC 0x34; DCDC3 register write 0x85 followed by read-modify-write of enable register 0x80 bit 2.
-- Revised blocker: upstream U-Boot PMIC/TWI selection and pre-DRAM ordering are no longer open. Remaining target blockers are the exact stock Boot0 PMIC source path, physical PMIC identity / vendor AXP2202-to-AXP717 register equivalence, and target-specific PH6/PH7/PH8/PH10 strap evidence. AXP717 SPL's lack of chip-ID read means this identity gate cannot be waived.
+- Revised blocker: upstream U-Boot PMIC/TWI selection and pre-DRAM ordering are no longer open. Remaining target blockers are the exact stock Boot0 PMIC source path, exact target Boot0 PMIC transaction sequence, bus/address fallback and DCDC3-before-DRAM ordering, and target-specific PH6/PH7/PH8/PH10 strap evidence. AXP717 SPL's lack of chip-ID read means this identity gate cannot be waived.
 - No source code or Kconfig was changed; M1 preflight remains PMIC/TWI-disabled. No firmware execution, device register writes, media writes or hardware qualification.
 
 
