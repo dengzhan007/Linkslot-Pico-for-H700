@@ -2058,3 +2058,11 @@ AArch64 反汇编窗口，验证：
 
 
 **Correction:** the previous assertion cleanup must retain `CONFIG_SPL_SYS_MALLOC_F=y` with `CONFIG_SPL_SYS_MALLOC_F_LEN=0x2000`. This early pool is required by `spl_early_init()` before the explicit full-pool initialization in the M1 hook; it is not disabled. The profile now distinguishes the 8 KiB early allocator arena from the 64 KiB full dlmalloc pool.
+
+
+## 2026-11-28 M1 SPL link dependency isolation
+
+- Retrieved and inspected the complete #1050 workflow artifact and pinned upstream U-Boot v2026.10 `common/Makefile`, `common/stdio.c`, `common/cli.c`, and `lib/Makefile`. The SPL link failure was caused by upstream XPL Makefile rules that unconditionally add `stdio.o`, `cli.o`, `command.o`, and `s_record.o`. Those objects reference serial console providers, legacy I2C init, CLI buffer/control helpers and serial input even though this M1 path intentionally disables SPL serial/I2C and has no command interpreter.
+- In the disposable U-Boot checkout created by the preflight script only, these four objects are now restricted to non-XPL builds. Normal U-Boot sources and existing raw-capsule v2 path are not modified. `SPL_ENV_SUPPORT` is disabled because this fixed read-only p4+40MiB path does not use environment variables; `SPL_SPRINTF` is explicitly enabled to provide the full `sprintf/vsnprintf` implementation required by the MMC and FDT/DM helpers.
+- This is dependency isolation, not a workaround by adding UART/I2C/PMIC providers. The next CI must prove the remaining SPL dependency set and inspect linked ELF undefined symbols, relocation/call graph and side-effect sites. If any disabled provider remains reachable, the build must fail rather than silently re-enable it.
+- No hardware access or writes were performed. G2/G3/M1-S1 remain open; output remains host-only, non-installable, and candidate-ineligible.
