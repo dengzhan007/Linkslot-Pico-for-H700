@@ -146,7 +146,6 @@ def main() -> int:
          "--enable", "SPL_LIBCOMMON_SUPPORT",
          "--enable", "SPL_ENV_SUPPORT",
          "--enable", "SPL_CYCLIC",
-         "--enable", "SPL_PRINTF",
          "--disable", "SPL_ENV_SUPPORT",
          "--enable", "SPL_SYS_MALLOC",
          "--set-val", "SPL_SYS_MALLOC_SIZE", "0x10000",
@@ -185,6 +184,19 @@ def main() -> int:
     require(armv8_text.count(fit_selector) == 1,
             "unexpected ARMv8 SPL_FIT selector count")
     armv8_kconfig.write_text(armv8_text.replace(fit_selector, "", 1))
+
+    # SPL_PRINTF is a hidden Kconfig symbol with no prompt/default; scripts/config
+    # cannot enable it directly. SPL_SERIAL normally selects it, but serial is
+    # deliberately disabled for this preflight. Select it from the already
+    # required SPL_LIBCOMMON_SUPPORT parent in this disposable checkout only.
+    spl_kconfig = uboot / "common/spl/Kconfig"
+    spl_kconfig_text = spl_kconfig.read_text()
+    spl_common_block = "config SPL_LIBCOMMON_SUPPORT\\n\\tbool \\\"Support common libraries\\\"\\n"
+    require(spl_kconfig_text.count(spl_common_block) == 1,
+            "unexpected SPL_LIBCOMMON_SUPPORT Kconfig definition")
+    spl_kconfig.write_text(spl_kconfig_text.replace(
+        spl_common_block,
+        spl_common_block + "\\tselect SPL_PRINTF\\n", 1))
 
     # ARCH_SUNXI force-selects the tiny allocator/printf profile for SPL.
     # This preflight needs dlmalloc realloc and full snprintf for DM/FDT helpers.
