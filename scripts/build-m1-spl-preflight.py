@@ -196,11 +196,11 @@ def main() -> int:
     lib_makefile = uboot / "lib/Makefile"
     lib_text = lib_makefile.read_text()
     for obj in ("membuf.o", "abuf.o"):
-        rule = re.compile(rf"^obj-y\\s*\\+=\\s*{re.escape(obj)}\\s*$", re.MULTILINE)
+        rule = re.compile(rf"^obj-y\s*\+=\s*{re.escape(obj)}\s*$", re.MULTILINE)
         require(rule.search(lib_text) is not None,
                 f"unexpected U-Boot lib object rule for {obj}")
-        guarded = (f"ifneq ($(CONFIG_XPL_BUILD),y)\\n"
-                   f"obj-y += {obj}\\n"
+        guarded = (f"ifneq ($(CONFIG_XPL_BUILD),y)\n"
+                   f"obj-y += {obj}\n"
                    "endif")
         lib_text = rule.sub(lambda _match: guarded, lib_text, count=1)
     lib_makefile.write_text(lib_text)
