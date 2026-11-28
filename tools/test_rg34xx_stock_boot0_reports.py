@@ -117,6 +117,33 @@ def main() -> int:
     print("PASS: primary inner Boot0 and secondary Boot0 differ only in checksum, debug byte, TPR6 and TPR12")
     print("REVIEW: embedded SPL2 platform label is rg35xx-2024; compatibility with RG34XX must be established, not assumed")
 
+    # Target-specific SPL2 regulator table and PMIC I2C path.
+    spl2 = raw_captures["boot0-primary.bin"][0x11000:0x1D000]
+    assert len(spl2) == 0xC000
+    expected_regulator_table = bytes.fromhex(
+        "8001837ff40104060a46"
+        "8002847ff40104060a46"
+        "8004857ff40130070a46"
+    )
+    assert spl2[0xAAFC:0xAAFC + len(expected_regulator_table)] == expected_regulator_table
+    assert struct.unpack_from("<I", spl2, 0x5F8)[0] == 0x52800680  # mov w0, #0x34 (I2C slave)
+    assert struct.unpack_from("<I", spl2, 0x61C)[0] == 0x52800680  # same for write helper
+    assert struct.unpack_from("<I", spl2, 0x4CE8)[0] == 0x52807580  # request 940 mV
+    assert struct.unpack_from("<I", spl2, 0x4CEC)[0] == 0x9400158B  # DCDC2 setter
+    assert struct.unpack_from("<I", spl2, 0x4CF4)[0] == 0x52808980  # request 1100 mV
+    assert struct.unpack_from("<I", spl2, 0x4CF8)[0] == 0x9400158B  # DCDC3 setter
+    assert struct.unpack_from("<I", spl2, 0x7AE0)[0] == 0x7100081F  # compare controller index 2
+    assert struct.unpack_from("<I", spl2, 0x7B0C)[0] == 0xD2828000  # base low 0x1400
+    assert struct.unpack_from("<I", spl2, 0x7B10)[0] == 0xF2A0E100  # base high 0x0708
+    assert struct.unpack_from("<I", spl2, 0x7B14)[0] == 0xD65F03C0  # return
+    assert struct.unpack_from("<Q", spl2, 0xB6B0 + 16)[0] == 0x27D30  # link-time read callback
+    assert struct.unpack_from("<Q", spl2, 0xB6B0 + 24)[0] == 0x27C20  # link-time write callback
+    assert struct.unpack_from("<Q", spl2, 0xB6B0 + 56)[0] == 2  # controller index -> R-TWI0
+    assert struct.unpack_from("<Q", spl2, 0xB6B0 + 0x48 + 56)[0] == 2
+    print("PASS: RG34XX SPL2 requests DCDC2=940 mV and DCDC3=1100 mV via PMIC I2C slave 0x34")
+    print("PASS: regulator table maps DCDC2/DCDC3 to 0x84/0x85 and control masks 0x02/0x04")
+    print("PASS: SPL2 controller-index 2 resolves to MMIO base 0x07081400 (R-TWI0); selected descriptor index remains externally initialized")
+
     assert secondary_table["valid_entry_count"] == 15
     for name, table in (
         ("primary relocated DRAM.ext", primary_relocated),
