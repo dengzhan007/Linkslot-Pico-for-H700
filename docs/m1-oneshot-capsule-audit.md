@@ -1,5 +1,36 @@
 # M1 one-shot capsule / SPL safety audit
 
+## 2026-11-28 M1 isolated SPL link debugging
+
+The first attempt to link the M1 preflight-only SPL exposed a configuration problem,
+not a source-code failure in the read-only GPT/firmware adapters:
+
+- feasibility #1009 reached the isolated SPL link, then failed on unresolved
+  full-U-Boot references including `do_bootd`, `env_get`, `ofnode_*`,
+  `lmb_*`, `realloc_simple`, `vsnprintf`, and `__start_rodata`.
+- Root cause: the stock RG35XX H700 defconfig is a full-featured vendor SPL
+  configuration. The preflight build was inheriting unrelated command, FIT,
+  PMIC/TWI, and image-relocation paths while only part of their SPL-specific
+  providers were selected. This made the first link unsuitable as a measure of
+  M1 scratch/BSS integration.
+- The isolated builder now explicitly requests DM-backed MMC, SPL block I/O,
+  SPL device-tree support, and retains read-only `blk_dread`; it disables
+  common command/FIT/serial/I2C/power/LED and vendor PMIC paths, and excludes
+  unrelated `membuf.o` / `abuf.o` dynamic-buffer helpers from the temporary
+  U-Boot source checkout. The upstream U-Boot pin is not modified in Git.
+- This is an isolated compile/link harness, not the stock BaseOS SPL, not a
+  deployable image, and not evidence that runtime hardware accesses are safe.
+  The harness still has to prove that its actual final ELF contains the M1
+  4 KiB scratch and bounded GPT table inside the measured BSS, and that all
+  other symbols and side effects meet the source-level contract.
+
+The follow-up feasibility run #1010 (commit `acf920e`) is in progress.
+The next decision is based on the actual linker output, not source geometry
+alone. If it fails, preserve the full linker diagnostics and correct only the
+specific missing SPL providers/configuration. Do not widen the profile back to
+the vendor PMIC/TWI path just to obtain a link.
+
+
 ## 2026-11-28 M1 GPT partition discovery and bounded SRAM scratch
 
 - New source finding: U-Boot v2026.10's `SPL_EFI_PARTITION` defaults to disabled for `ARCH_SUNXI`; the RG35XX H700 defconfig does not explicitly enable it. Therefore SPL code must not assume `part_get_info_by_name()` has a GPT driver behind it. The source-layout audit now pins this Kconfig boundary.
