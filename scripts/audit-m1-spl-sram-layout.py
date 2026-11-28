@@ -125,9 +125,9 @@ def main() -> int:
                    "CMD_BOOTD", "VERSION_VARIABLE", "OF_REAL"):
         require(f'"--disable", "{option}"' in spl_builder,
                 f"M1 preflight builder no longer disables unrelated {option}")
-    require('"obj-y += membuf.o\\\\n"' in spl_builder and
-            '"obj-y += abuf.o\\\\n"' in spl_builder and
-            'lib_text = lib_text.replace(line, "")' in spl_builder,
+    require('for obj in ("membuf.o", "abuf.o")' in spl_builder and
+            "re.compile(rf" in spl_builder and
+            "lib_text = rule.sub(\\"\\", lib_text)" in spl_builder,
             "M1 preflight builder no longer isolates generic dynamic-buffer helpers")
 
     # Geometry derived from pinned Kconfig, linker script and H616 SRAM node.
