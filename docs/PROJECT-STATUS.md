@@ -2621,3 +2621,13 @@ See [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md) for the detai
 - Corrected disposition: the earlier AXP2202-versus-AXP717 incompatibility is **not established**. Current classification is strongly corroborated driver/binding candidate, with exact silicon/register equivalence and active bus path still unproven. Do not enable PMIC writes in the M1 preflight; retain the Profile A allowlist gate for a separate DRAM-capable SPL.
 - Next static task: close the `i2c_read/i2c_write` → active bus → R-TWI0 path and compare the exact Boot0 DCDC3 register writes with the pinned AXP717 sequence, including failure propagation and timing relative to DRAM training.
 - CI #1075 remains completed/success; this documentation-only update does not change its result or any safety gate.
+
+
+## 2026-11-28 R-TWI adapter mapping and PMIC-before-DRAM ordering
+
+- Extended the cross-audit with the full pinned U-Boot v2026.10 legacy I2C adapter trace.
+- In the generic H700 defconfig, R-TWI is the only registered MVTWSI adapter: logical bus 0 maps to adapter `twsi2` / hardware index 2 / `SUNXI_R_TWI_BASE`. H616 `i2c_init_board()` enables TWI channel 5 and configures GPL0/GPL1. The target DTS `twi5` at 0x07081400 matches that controller.
+- `board_init_f()` initializes the I2C board pins and bus before `sunxi_board_init()`. The latter initializes the PMIC, applies configured DCDC2/DCDC3 settings, then calls `sunxi_dram_init()`. Thus the upstream reference's PMIC writes are statically ordered before DRAM training.
+- The generic upstream source path is now traced end-to-end: logical I2C bus 0 → twsi2 hardware adapter → R-TWI0 → PMIC 0x34; DCDC3 register write 0x85 followed by read-modify-write of enable register 0x80 bit 2.
+- Revised blocker: upstream U-Boot PMIC/TWI selection and pre-DRAM ordering are no longer open. Remaining target blockers are the exact stock Boot0 PMIC source path, physical PMIC identity / vendor AXP2202-to-AXP717 register equivalence, and target-specific PH6/PH7/PH8/PH10 strap evidence. AXP717 SPL's lack of chip-ID read means this identity gate cannot be waived.
+- No source code or Kconfig was changed; M1 preflight remains PMIC/TWI-disabled. No firmware execution, device register writes, media writes or hardware qualification.
