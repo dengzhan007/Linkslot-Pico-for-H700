@@ -223,13 +223,13 @@ def main() -> int:
     # U-Boot checkout used by this preflight build.
     common_makefile = uboot / "common/Makefile"
     common_text = common_makefile.read_text()
-    for object_line in ("obj-y += stdio.o\\n", "obj-y += cli.o\\n",
-                        "obj-y += command.o\\n", "obj-y += s_record.o\\n"):
+    for object_name in ("stdio.o", "cli.o", "command.o", "s_record.o"):
+        object_line = f"obj-y += {object_name}\n"
         require(common_text.count(object_line) == 1,
-                f"unexpected common/Makefile object rule: {object_line.strip()}")
+                f"unexpected common/Makefile object rule: {object_name}")
         common_text = common_text.replace(
             object_line,
-            "ifndef CONFIG_XPL_BUILD\\n" + object_line + "endif\\n", 1)
+            "ifndef CONFIG_XPL_BUILD\n" + object_line + "endif\n", 1)
     common_makefile.write_text(common_text)
 
     # Keep general-purpose helpers in U-Boot proper, but omit image-fdt from
