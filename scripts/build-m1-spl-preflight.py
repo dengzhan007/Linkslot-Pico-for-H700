@@ -198,6 +198,77 @@ def main() -> int:
         spl_common_block,
         spl_common_block + "\tselect SPL_PRINTF\n", 1))
 
+    # SPL_PRINTF builds the formatter, but upstream stdio.h couples printf/vprintf
+    # declarations to the serial-console branch. Keep putc/puts as silent inline
+    # sinks while exposing the real formatter prototypes in this disposable tree.
+    stdio_header = uboot / "include/stdio.h"
+    stdio_text = stdio_header.read_text()
+    stdio_block = """#if !defined(CONFIG_XPL_BUILD) || CONFIG_IS_ENABLED(SERIAL)
+void putc(const char c);
+void puts(const char *s);
+#ifdef CONFIG_CONSOLE_FLUSH_SUPPORT
+void flush(void);
+#else
+static inline void flush(void) {}
+#endif
+int __printf(1, 2) printf(const char *fmt, ...);
+int vprintf(const char *fmt, va_list args);
+#else
+static inline void putc(const char c)
+{
+}
+
+static inline void puts(const char *s)
+{
+}
+
+static inline void flush(void)
+{
+}
+
+static inline int __printf(1, 2) printf(const char *fmt, ...)
+{
+    return 0;
+}
+
+static inline int vprintf(const char *fmt, va_list args)
+{
+    return 0;
+}
+#endif
+"""
+    stdio_replacement = """#if !defined(CONFIG_XPL_BUILD) || CONFIG_IS_ENABLED(SERIAL)
+void putc(const char c);
+void puts(const char *s);
+#ifdef CONFIG_CONSOLE_FLUSH_SUPPORT
+void flush(void);
+#else
+static inline void flush(void) {}
+#endif
+#else
+static inline void putc(const char c) {}
+static inline void puts(const char *s) {}
+static inline void flush(void) {}
+#endif
+
+#if !defined(CONFIG_XPL_BUILD) || CONFIG_IS_ENABLED(PRINTF)
+int __printf(1, 2) printf(const char *fmt, ...);
+int vprintf(const char *fmt, va_list args);
+#else
+static inline int __printf(1, 2) printf(const char *fmt, ...)
+{
+    return 0;
+}
+static inline int vprintf(const char *fmt, va_list args)
+{
+    return 0;
+}
+#endif
+"""
+    require(stdio_text.count(stdio_block) == 1,
+            "unexpected U-Boot stdio.h stdout declaration block")
+    stdio_header.write_text(stdio_text.replace(stdio_block, stdio_replacement, 1))
+
     # ARCH_SUNXI force-selects the tiny allocator/printf profile for SPL.
     # This preflight needs dlmalloc realloc and full snprintf for DM/FDT helpers.
     arm_kconfig = uboot / "arch/arm/Kconfig"
