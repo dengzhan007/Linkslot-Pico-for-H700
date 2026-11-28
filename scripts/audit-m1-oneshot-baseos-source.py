@@ -48,6 +48,12 @@ def reject(text: str, token: str, label: str) -> None:
         raise RuntimeError(f"unexpected {label} in source section: {token}")
 
 
+def require_order(text: str, tokens: tuple[str, ...], label: str) -> None:
+    positions = [text.find(token) for token in tokens]
+    if any(position < 0 for position in positions) or positions != sorted(positions):
+        raise RuntimeError(f"pinned BaseOS source order changed: {label}")
+
+
 def audit(root: Path) -> dict:
     head = git_head(root)
     if head != BASEOS_PIN:
@@ -88,12 +94,58 @@ def audit(root: Path) -> dict:
         require(raw, token, label)
     reject(raw, "blk_dwrite(", "raw SPL block-device write")
     reject(raw, "attempt_commit(", "raw SPL persistent attempt commit")
+    raw_adopt = raw.split("void baseos_raw_adopt(void)", 1)[1].split(
+        "void baseos_checkpoint", 1
+    )[0]
+    require_order(
+        raw_adopt,
+        (
+            "for (unsigned int pass=0;pass<2;pass++)",
+            "readl((void *)0x07000138ul)",
+            "readl((void *)0x0700013cul)",
+            "readl((void *)0x030090b4ul)",
+            "readl((void *)0x030090b8ul)",
+        ),
+        "two-pass read-only RTC/WDT adoption verification",
+    )
 
     for token, label in (
         ('"--disable SPL_MMC_WRITE"', "raw SPL MMC-write disable"),
         ('"--raw-capsule"', "raw-capsule builder option"),
     ):
         require(builder, token, label)
+
+    stop_watchdog = capsule.split("static int stop_new_watchdog(void)", 1)[1].split(
+        "static int arm_watchdog(void)", 1
+    )[0]
+    require_order(
+        stop_watchdog,
+        ("write32(WDT_MODE, 0)", "return !(read32(WDT_MODE) & 1u)"),
+        "new watchdog stop and readback",
+    )
+    arm_watchdog = capsule.split("static int arm_watchdog(void)", 1)[1].split("#endif", 1)[0]
+    require_order(
+        arm_watchdog,
+        (
+            "write32(WDT_CFG, 1)",
+            "if (read32(WDT_CFG) != 1u)",
+            "write32(WDT_MODE, UINT32_C(0xb1))",
+            "(read32(WDT_MODE) & UINT32_C(0xf1)) != UINT32_C(0xb1)",
+            "write32(WDT_CTRL, UINT32_C(0x14af))",
+            "return read32(WDT_CFG) == 1u",
+        ),
+        "watchdog config/mode/control arm sequence",
+    )
+    capsule_main = capsule.split("uint32_t capsule_main(void)", 1)[1]
+    require_order(
+        capsule_main,
+        (
+            "if (read32(WDT_MODE) & 1u) return prepare_copy(STOCK);",
+            "if (!arm_watchdog())",
+            "if (attempt_commit(&io, CAPSULE_COOKIE) != IO_COMPLETE)",
+        ),
+        "refuse active watchdog, arm new watchdog, then commit attempt pair",
+    )
 
     for token, label in (
         ("#define GP14", "outer GP14 address"),
@@ -119,6 +171,13 @@ def audit(root: Path) -> dict:
         ("msr rmr_el3", "native EL3 reset handoff"),
     ):
         require(native, token, label)
+
+    native_handoff = native.split("int baseos_vendor_handoff", 1)[1]
+    require_order(
+        native_handoff,
+        ("baseos_raw_adopt();", "writel(0x14af, (void *)0x030090b0);"),
+        "native watchdog reload occurs after raw adoption",
+    )
 
     # The standard release driver deliberately wires the existing raw-capsule v2
     # protocol through all three layers. Matching generation metadata does not
