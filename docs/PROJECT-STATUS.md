@@ -2679,7 +2679,22 @@ See [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md) for the detai
 ## 2026-11-28 Nested Boot0 parser and CI validation
 
 - \`tools/inspect_h700_boot0.py\` now enumerates aligned nested eGON-tagged components instead of treating the 128 KiB primary capture as one flat Boot0. It recognizes standard zero-tag Boot0 headers and reports the nonstandard \`SPL\\x02\` component separately without applying the wrong checksum rule.
-- Host audit CI run #1796 passed on Linux and Windows after this parser correction: [run #1796](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46144699538). The report-branch regression checks the nested 64 KiB Boot0 at +0x1000, the SPL2 component at +0x11000, the RG35XX-2024 platform label, and the five-byte primary/secondary Boot0 difference.
+- H700 run #1796 passed an earlier host-test set but predates the final nested-header regression assertions; it should not be treated as final validation. A later run exposed that the synthetic test fixture omitted the real eGON 0x30 header-size word. The fixture was corrected, and H700 host audit run #1807 then passed: [run #1807](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46145458872).
 - Linkslot feasibility run #1081 is still in progress on the same parser commit: [run #1081](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46144699555). No result is claimed yet.
 - A new H700 audit pass is being prepared to disassemble the primary outer Boot0, embedded inner Boot0, and SPL2 at candidate VMA \`0x50000\`, while scanning the TOC1 package and same-capture live FDT. This is static analysis only; the SPL2 handoff remains a candidate until the control-flow/copy path is recovered.
+
+
+
+## 2026-11-28 SPL2 PMIC path and TOC1 identity cross-check
+
+- H700 static disassembly run #1808 passed and produced the dual-mode Boot0/SPL2 bundle: [run #1808](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46145510710). Artifact: \`rg34xx-stock-boot0-spl2-toc1-disassembly\`.
+- TOC1 is 1,310,720 bytes (SHA-256 \`e6c20e3a54c51b9336c798e3a4fa1ca6c45b28c6f70456e2db9c252aa4ba4604\`). It contains one validated embedded FDT at offset \`0x11b800\`, size 139,822 bytes, with \`:rg34xx_v1\`, \`x-powers,axp2202\`, and AXP2202 regulator nodes. The live FDT also validates as RG34XX-v1.
+- The TOC1 string index contains \`U-Boot 2018.05\`, BL31 source-path strings, \`pmu_axp2202_probe\`, and \`bmu_axp2202_probe\`; no RG35XX board label appears in its filtered board strings. The RG35XX-2024 build label is localized to the embedded SPL2 component.
+- SPL2 AArch64 code requests DCDC2 940 mV (regulator ID 2) and DCDC3 1100 mV (ID 3) before calling the next DRAM-init routine. Inside the DRAM path it selects DCDC3 by DRAM type: LPDDR4 type 8 -> 1100 mV; LPDDR3 type 7 -> 1200 mV; other types -> 1500 mV.
+- The SPL2 regulator table at component offset \`0xaafc\` maps DCDC2 to control reg \`0x80\` mask \`0x02\`, voltage reg \`0x84\` mask \`0x7f\`; DCDC3 to control reg \`0x80\` mask \`0x04\`, voltage reg \`0x85\` mask \`0x7f\`. The setter uses 500 mV minimum and 10 mV steps; 940 mV maps to \`0x2c\`, 1100 mV to \`0x3c\`.
+- SPL2's PMIC read/write helpers pass I2C slave address \`0x34\` and one-byte register/data arguments through a bus callback table. This register layout matches the audited AXP717 DCDC2/DCDC3 map and the RG34XX AXP2202 FDT; it is strong evidence of an AXP717-compatible register path, not proof of physical silicon identity.
+- The callback table is selected via \`x18 + 264\`; its stored callback pointer values do not decode as AArch64 code at the corresponding addresses in the captured Boot0 image. Do not claim that they are Boot0 callbacks or that the bus is R-TWI0 yet. Exact callback relocation/descriptor semantics and the mapping to \`twi5\` / \`0x07081400\` remain open.
+- This target SPL2 voltage policy independently corroborates SenkOS's LPDDR4 1100 mV / LPDDR3 1200 mV values. It does not validate SenkOS's PH6/PH7/PH8/PH10 strap mapping for RG34XX.
+- Linkslot feasibility run #1083 is still in progress; no result is claimed: [run #1083](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46145458855). All hardware safety gates remain unchanged.
+- Detailed report: \`docs/rg34xx-boot0-container-spl2-audit-20261128.md\`.
 
