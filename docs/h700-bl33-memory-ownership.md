@@ -499,3 +499,20 @@ A new identity-pinned, host-only overlapping AArch64 scan was run against the ex
 - The scan's possible reads are heuristic leads because overlapping decoding may interpret data/literal bytes as instructions. Validate each candidate against the reachable disassembly/function boundaries before assigning a function semantic. No monitor code was executed and no device state was read.
 
 The new scanner is `scripts/audit-rg34xx-bl31-context-slot.py` and is part of `.github/workflows/h700-bl31-memory-audit.yml`. The next static investigation is the initialization of the relevant monitor data region and any Boot0/SPL/secure-entry handoff that can populate it; do not infer the runtime pointer from the file's initial bytes.
+
+
+### 2026-11-28 validated call chain from context slot to DRAM retention worker
+
+The callback disassembly gives a concrete link between the context slot and the retention worker, rather than relying only on nearby offsets:
+
+- At `0x4800c654`, BL31 loads `x0 = *(u64 *)0x48014668`; at `0x4800c658` it calls `0x48011b58`.
+- `0x48011b58` calls `0x48011b10`; the latter forwards its incoming `x0` into `x1`, sets `w0=0`, and calls `0x48011938`.
+- `0x48011938` stores `x1` in `x19` and consumes the context object fields `+0x18`, `+0x1c`, `+0x78`, and `+0x04`; it then runs the retention gate and selector/copy path described above.
+
+This confirms that the value loaded from `0x48014668` is passed as the context argument on this call chain. It does not identify who initializes the slot or establish that this branch executes on the target device. The raw file qword at the slot is still `2`, which is not a usable pointer; the runtime value must differ before this path can safely dereference it.
+
+The same matched monitor has a separate, demonstrable runtime-published pointer at `0x48015548`: helper `0x48013ac8` selects a controller object and stores it at `0x48013b14`. That is a distinct slot and does not initialize `0x48014668`; it only demonstrates that this binary uses small initial data values as placeholders for pointers that are later published by explicit setup code.
+
+The whole-payload context-slot scanner was refined to propagate PC-relative literal loads and image-backed loads, then to record direct-call arguments. The final audit [#145](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46124497685) passed; its artifact [15254429553](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46124497685/artifacts/15254429553) still reports 11 candidate reads, zero candidate direct writes, and zero direct-call argument references to the slot. This is still bounded static analysis: it does not resolve stack spills, indirect stores, helper/memcpy semantics, or external initialization. The separate descriptor audit also reports no alias/CFG direct-store candidate to this slot, with the same caveat.
+
+The remaining question is now specific: identify the producer of the runtime value loaded at `0x48014668`, or establish whether a loader/secure-entry path writes it outside the matched monitor. Do not treat the separate `0x48015548` controller pointer as evidence for this slot.
