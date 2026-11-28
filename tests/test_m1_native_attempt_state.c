@@ -131,5 +131,5 @@ int main(void)
                     "torn acknowledgment fails closed to stock recovery");
 
     printf("BaseOS RTC attempt-pair host model: %d/17 checks passed\n", passed);
-    return passed == 17 ? 0 : 1;
+    return passed == 19 ? 0 : 1;
 }
