@@ -461,3 +461,15 @@ The successful matched-monitor audit [#138](https://github.com/dengzhan007/Links
 - The SRAM scratch pointer is published through RTC GP_DATA1 `0x07000104`. The 0x280-byte scratch lies in the reserved monitor carveout, outside the 107,216-byte monitor file payload. This is a static binary reconstruction; it does not establish live SRAM ownership, actual context values, whether the standby handler is selected, or whether every save/restore branch completes.
 
 This changes the interpretation of the live PFN evidence: the page is not free, but the matched BL31 contains a deliberate snapshot/restore mechanism intended to preserve the two DRAM windows across its retraining path. Do not infer that this mechanism makes the page generally allocatable or proves the mechanism ran on this unit. G2 remains blocked until the active selector/context and exact save-before-retraining / restore-before-Linux-resume sequence, plus CPU/DMA/cache quiescence, are established. No suspend/resume, SMC, MMIO, SRAM/DRAM content read, or hardware execution was performed.
+
+
+### 2026-11-28 Boot0 DRAM geometry cross-check (host-only)
+
+The 2026-11-27 read-only inventory contains two checksum-valid Boot0 copies. Their primary 32-word DRAM parameter blocks agree on the geometry-bearing fields:
+
+- Both identify DRAM type 8 (LPDDR4), parameter clock field 672 MHz, word[6] `0x000030fa`, and word[7] `0x04000000`.
+- The pinned BaseOS native SPL encoder in `experiments/h700-boot-speed/spl/dram-select.c` defines word[6] as `(3 << 12) | (rows << 4) | columns`, and word[7] as `(size_MiB << 16) | (dual_rank ? 0x1000 : 0) | (narrow_bus ? 1 : 0)`. Applying that exact encoding yields 15 rows, 10 columns, one rank, 32-bit bus, and 1024 MiB.
+- The resulting 1 GiB capacity independently matches the live Linux memblock window `[0x40000000,0x80000000)`. Thus the matched BL31 midpoint formula `DRAM_BASE + total_DRAM_capacity/2` yields a second source-window candidate `[0x60000000,0x60000140)`.
+- A reproducible fail-closed decoder and unit test are now in `scripts/audit-rg34xx-boot0-dram-geometry.py` and `scripts/test-audit-rg34xx-boot0-dram-geometry.py`; the BL31 memory audit workflow executes them against the pinned reports.
+
+Limits: the two Boot0 primary parameter blocks are captured candidate/training metadata; the captures do not prove which Boot0 copy or runtime branch supplied the live trained state. The debug bytes differ (primary 3, secondary 0) and are not interpreted here. The 672 MHz field is not an independently measured live DRAM clock. The matching Linux memblock is post-boot evidence. The midpoint address is now derived from mutually consistent Boot0 geometry and Linux capacity, but the actual BL31 context selector, selected branch, resume gate, and successful save/restore execution remain unobserved. Keep both source windows excluded from LK allocations; `H700_MEMORY_LAYOUT_APPROVED=false`.
