@@ -68,7 +68,7 @@ jobs:
           git show refs/remotes/origin/reports:reports/rg34xx-inventory-20261127-uart/toc1-package.bin > build/rg34xx-boot0-input/toc1-package.bin
           git show refs/remotes/origin/reports:reports/rg34xx-inventory-20261127-uart/live-fdt.dtb > build/rg34xx-boot0-input/live-fdt.dtb
           sudo apt-get update
-          sudo apt-get install -y binutils-arm-linux-gnueabihf
+          sudo apt-get install -y binutils-arm-linux-gnueabihf binutils-aarch64-linux-gnu
           python3 ci/rg34xx_boot0_disassemble.py \
             --primary build/rg34xx-boot0-input/boot0-primary.bin \
             --secondary build/rg34xx-boot0-input/boot0-secondary.bin \
