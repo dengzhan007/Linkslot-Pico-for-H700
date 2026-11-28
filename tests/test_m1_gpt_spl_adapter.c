@@ -205,7 +205,7 @@ static void test_bad_gpt_and_ambiguous_boot_fail_closed(void)
     card = make_card(package);
     assert(!h700_m1_spl_find_boot_partition(&card, DISK_SECTORS, 512u,
                                              &first, &blocks));
-    assert(!h700_m1_spl_preflight_gpt(&card, DISK_SECTORS, 512u, 0xaf0018cbu));
+    assert(!h700_m1_spl_preflight_gpt(&card, DISK_SECTORS, 512u, digest));
     assert(card.writes == 0u);
     free(package);
 }
@@ -221,7 +221,7 @@ static void test_wrong_geometry_and_io_fail_closed(void)
     card = make_card(package);
     assert(!h700_m1_spl_find_boot_partition(&card, DISK_SECTORS, 4096u,
                                              &first, &blocks));
-    assert(!h700_m1_spl_preflight_gpt(&card, DISK_SECTORS, 4096u, 0xaf0018cbu));
+    assert(!h700_m1_spl_preflight_gpt(&card, DISK_SECTORS, 4096u, digest));
     card.fail_read = 1;
     assert(!h700_m1_spl_find_boot_partition(&card, DISK_SECTORS, 512u,
                                              &first, &blocks));
