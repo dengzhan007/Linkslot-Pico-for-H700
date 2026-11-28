@@ -1,5 +1,18 @@
 # M1 one-shot capsule / SPL safety audit
 
+## 2026-11-28 M1 SPL SRAM / separate-BSS source-layout audit
+
+- Added `scripts/audit-m1-spl-sram-layout.py` and a feasibility CI step. It checks the public U-Boot v2026.10 tag commit `5508406582f6f7120dce0c4b3059819a41788db2`, the pinned BaseOS builder commit `cbe253a43f46cf551cc9a6c79a84015bde3686cf`, and the builder's separate U-Boot archive SHA-256 pin `f943a88389c8fd70a6b0d061a88267465e143c7ca6ea2b75837ab20f5b60c739`. The Git tag commit and BaseOS archive digest are intentionally recorded as separate provenance pins; this audit does not claim byte identity between them.
+- U-Boot H616 Kconfig selects ARM64 and H6-generation support. ARM64 implies `SPL_SEPARATE_BSS`; the sunxi SPL linker places `.bss` in a distinct `.sdram` region. BaseOS sets `SPL_BSS_START_ADDR=0x30000` and `SPL_BSS_MAX_SIZE=0x4000`, giving a configured BSS window `[0x30000,0x34000)`.
+- The H616 upstream device tree describes SRAM C as `[0x28000,0x58000)`. The configured 16 KiB BSS window is inside SRAM C. The initial SPL stack pointer defaults to `0x52a00`, leaving `0x1ea00` (125,440 bytes) between the BSS ceiling and the stack pointer. The separate initial RAM window is `[0x20000,0x28000)`; the 4 KiB streaming scratch is not being assigned to that 32 KiB initial-RAM/A1 window.
+- BaseOS explicitly clears `__bss_start..__bss_end` before `spl_early_init()`, then inserts `baseos_early_mmc()` before `sunxi_board_init()`. Thus a future static BSS scratch reservation would be initialized before the early-MMC hook.
+- **Important limit:** this proves source-level address geometry and a 16 KiB linker ceiling, not actual BSS headroom. No M1 scratch symbol has been linked into SPL, no SPL map/ELF has been inspected, and stack high-water usage is not measured. The report deliberately sets `linked_map_verified=false`, `scratch_symbol_integrated=false`, and `buffer_reservation_approved=false`. A final M1-enabled SPL build must prove actual `__bss_end`, symbol extent/alignment, and non-overlap before this reservation can be accepted.
+- Full feasibility [#978](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46101368294) and H700 boot audit [#1641](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46101368298) completed successfully on the prior source HEAD. The new source-layout check runs on the current change and is not yet counted as passed until its own CI completes.
+- No SPL binary was built in this audit; no device SRAM/MMC/DRAM access, MMIO/SMC, TWI, media write, firmware flash, or payload execution occurred. `hardware_applied=0`; G2/G3/M1-S1 and one-shot recovery remain open.
+
+**Next gate:** build the pinned M1-only SPL overlay in CI, link a named 4 KiB BSS scratch symbol, and inspect the final map/ELF to measure actual BSS use and audit the complete transitive preflight call path. Do not connect it to the standard or raw-capsule-v2 flow.
+
+
 ## 2026-11-28 M1 runtime firmware provenance and DTB-tail validation
 
 The earlier apparent size discrepancy is resolved by distinguishing the **source
