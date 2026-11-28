@@ -2158,3 +2158,10 @@ AArch64 反汇编窗口，验证：
 
 - Added `V=1` to the isolated SPL make invocation in [617bb46](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/617bb46e8a26b1cbb56da6cb2294b44383d87307). The next CI log will retain the exact final linker command, including the actual `-T` linker-script path, so we can resolve why the archived preprocessed script declares `__bss_end` and `_image_binary_end` while the link map omits them.
 - This is diagnostic instrumentation only; it does not alter linker-script symbols, memory placement, or hardware behavior. Do not add aliases until the exact consumed script and symbol semantics are confirmed.
+
+## 2026-11-28 Feasibility #1060: linker-script dropped by command-line variable override
+
+- Feasibility [#1060](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46115534114) reached the final AArch64 SPL link but failed with unresolved `__bss_end` and `_image_binary_end`.
+- The verbose linker command provided the decisive evidence: it contained `--gc-sections` and the map output option, but no `-T u-boot-spl.lds`. This was not a missing symbol declaration in the linker script. The harness passed `LDFLAGS_u-boot-spl=...` on the make command line; GNU make command-line variable precedence suppressed the target-specific assignment in U-Boot v2026.10 `scripts/Makefile.xpl` (line 424), which appends the mandatory `-T u-boot-spl.lds`.
+- Corrected in [59c5826](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/59c582629b633736a6dea0a729eec0afa7448f3c): move the map and `--gc-sections` flags to `KBUILD_LDFLAGS`, leaving `LDFLAGS_u-boot-spl` under upstream Makefile.xpl control. This preserves the real linker script and its distinct `__bss_end` / `_image_binary_end` boundaries; no speculative aliases were added.
+- Next CI must prove the emitted linker command contains both `-T u-boot-spl.lds` and `--gc-sections`, then produce the ELF/map and pass linked-symbol plus SRAM/BSS assertions. No hardware execution or access occurred; `H700_MEMORY_LAYOUT_APPROVED=false`, `hardware_applied=0`; output remains non-installable, hardware-unvalidated, and candidate-ineligible.
