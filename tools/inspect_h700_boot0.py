@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Inspect the RG34XX H700 eGON.BT0 Boot0 image without modifying it."""
+"""Inspect an RG34XX H700 eGON.BT0 image without modifying it.
+
+The fixed-offset candidates are retained for compatibility with older reports.
+A second scanner discovers DRAM.ext parameter tables at any image offset; this
+is necessary because the captured 128 KiB primary Boot0 and 64 KiB secondary
+Boot0 do not place their full profile table at the same offset.
+"""
 
 from __future__ import annotations
 
@@ -17,10 +23,28 @@ CHECKSUM_STAMP = 0x5F0A6C39
 IMAGE_SIZE_OFFSET = 0x10
 DEBUG_OFFSET = 0x34
 PARAMETER_WORDS = 32
+DRAM_EXT_MAGIC = b"DRAM.ext"
+DRAM_EXT_PARAMETER_DELTA = 44
+DRAM_EXT_PROFILE_COUNT = 15
+DRAM_EXT_PROFILE_BYTES = PARAMETER_WORDS * 4
+
+# H616/H700 parameter layout documented by apritzel/sunxi-fw's H616/H700
+# parser. These are parameter names, not direct MMIO register assignments.
+H616_H700_FIELDS = (
+    "dram_clk", "dram_type", "dram_dx_odt", "dram_dx_dri", "dram_ca_dri",
+    "dram_para0", "dram_para1", "dram_para2",
+    "dram_mr0", "dram_mr1", "dram_mr2", "dram_mr3", "dram_mr4", "dram_mr5",
+    "dram_mr6", "dram_mr11", "dram_mr12", "dram_mr13", "dram_mr14",
+    "dram_mr16", "dram_mr17", "dram_mr22",
+    "dram_tpr0", "dram_tpr1", "dram_tpr2", "dram_tpr3", "dram_tpr6",
+    "dram_tpr10", "dram_tpr11", "dram_tpr12", "dram_tpr13", "dram_tpr14",
+)
+DRAM_TYPE_NAMES = {2: "DDR2", 3: "DDR3", 4: "DDR4", 6: "LPDDR2", 7: "LPDDR3", 8: "LPDDR4"}
+
 CANDIDATES = (
     ("primary", 0x38, "primary block in mutable first sector"),
-    ("lpddr3_alternate", 0x9F4, "LPDDR3 alternate"),
-    ("lpddr4_alternate", 0xA74, "LPDDR4 alternate"),
+    ("lpddr3_alternate", 0x9F4, "legacy fixed-offset LPDDR3 alternate"),
+    ("lpddr4_alternate", 0xA74, "legacy fixed-offset LPDDR4 alternate"),
 )
 
 
@@ -37,6 +61,84 @@ def allwinner_checksum(data: bytes, checksum_offset: int = CHECKSUM_OFFSET) -> i
         raise Boot0Error("Boot0 length/checksum offset is not word-aligned")
     words = struct.unpack(f"<{len(data) // 4}I", data)
     return (sum(words) - words[checksum_offset // 4] + CHECKSUM_STAMP) & 0xFFFFFFFF
+
+
+def decode_h616_h700_profile(words: list[int], offset: int) -> dict[str, Any]:
+    named = {
+        name: (words[index] if index == 0 else f"0x{words[index]:08x}")
+        for index, name in enumerate(H616_H700_FIELDS)
+    }
+    dram_type = words[1]
+    return {
+        "offset": f"0x{offset:x}",
+        "dram_type_id": dram_type,
+        "dram_type": DRAM_TYPE_NAMES.get(dram_type, "unknown"),
+        "clock_mhz": words[0],
+        "named_fields": named,
+        "words": [f"0x{word:08x}" for word in words],
+    }
+
+
+def is_plausible_h616_h700_profile(words: list[int]) -> bool:
+    """Conservative structure filter; does not establish runtime selection."""
+    if len(words) != PARAMETER_WORDS:
+        return False
+    if not 100 <= words[0] <= 1200:
+        return False
+    if words[1] not in DRAM_TYPE_NAMES:
+        return False
+    if words[2] & 0xF0F0F0F0:
+        return False
+    if words[3] & 0xF0F0F0F0:
+        return False
+    return True
+
+
+def scan_dram_ext_tables(data: bytes) -> list[dict[str, Any]]:
+    """Find DRAM.ext markers and report contiguous plausible 32-word profiles.
+
+    The 44-byte marker-to-profile offset and 32-word profile layout follow the
+    H616/H700 parsing convention in apritzel/sunxi-fw. A marker can be a string
+    or embedded structure, so a table is reported only when its following
+    records pass conservative field-shape checks. The result is evidence of
+    embedded parameter data, not proof that Boot0 selected or consumed it.
+    """
+    tables: list[dict[str, Any]] = []
+    cursor = 0
+    while True:
+        marker = data.find(DRAM_EXT_MAGIC, cursor)
+        if marker < 0:
+            break
+        cursor = marker + 1
+        parameter_start = marker + DRAM_EXT_PARAMETER_DELTA
+        entries: list[dict[str, Any]] = []
+        stopped_by_invalid = False
+        for index in range(DRAM_EXT_PROFILE_COUNT):
+            offset = parameter_start + index * DRAM_EXT_PROFILE_BYTES
+            end = offset + DRAM_EXT_PROFILE_BYTES
+            if end > len(data):
+                stopped_by_invalid = True
+                break
+            words = list(struct.unpack_from(f"<{PARAMETER_WORDS}I", data, offset))
+            if not is_plausible_h616_h700_profile(words):
+                stopped_by_invalid = True
+                break
+            entry = decode_h616_h700_profile(words, offset)
+            entry["index"] = index
+            entries.append(entry)
+        if entries:
+            tables.append({
+                "marker_offset": f"0x{marker:x}",
+                "parameter_offset": f"0x{parameter_start:x}",
+                "valid_entry_count": len(entries),
+                "stopped_at_invalid_or_end": stopped_by_invalid,
+                "entries": entries,
+                "interpretation": (
+                    "Contiguous structurally plausible H616/H700 32-word profiles; "
+                    "runtime selection and use are not established by this scan."
+                ),
+            })
+    return tables
 
 
 def parse_boot0(data: bytes) -> dict[str, Any]:
@@ -77,17 +179,18 @@ def parse_boot0(data: bytes) -> dict[str, Any]:
             raise Boot0Error(f"{name} DRAM parameter block exceeds Boot0")
         words = list(struct.unpack_from(f"<{PARAMETER_WORDS}I", data, offset))
         dram_type = words[1]
-        candidates.append(
-            {
-                "name": name,
-                "offset": f"0x{offset:x}",
-                "description": description,
-                "dram_type_id": dram_type,
-                "dram_type": {7: "LPDDR3", 8: "LPDDR4"}.get(dram_type, "unknown"),
-                "clock_mhz_from_word0": words[0],
-                "words": [f"0x{word:08x}" for word in words],
-            }
-        )
+        candidate = {
+            "name": name,
+            "offset": f"0x{offset:x}",
+            "description": description,
+            "dram_type_id": dram_type,
+            "dram_type": DRAM_TYPE_NAMES.get(dram_type, "unknown"),
+            "clock_mhz_from_word0": words[0],
+            "words": [f"0x{word:08x}" for word in words],
+        }
+        if len(words) == len(H616_H700_FIELDS):
+            candidate["named_fields"] = decode_h616_h700_profile(words, offset)["named_fields"]
+        candidates.append(candidate)
 
     return {
         "format": "Allwinner eGON.BT0",
@@ -101,10 +204,13 @@ def parse_boot0(data: bytes) -> dict[str, Any]:
         "sha256_first_512_bytes": sha256(data[:512]),
         "sha256_body_after_first_sector": sha256(data[512:]),
         "dram_candidates": candidates,
+        "dram_ext_tables": scan_dram_ext_tables(data),
         "interpretation_notes": [
             "The primary parameter block at 0x38 lies in the first 512-byte sector and may be rewritten by Boot0 during DRAM training.",
             "The body hash intentionally excludes that mutable first sector; it is not a substitute for validating the live checksum.",
-            "Candidate words are reported raw. Training success, selected memory geometry and a safe DRAM map require separate runtime evidence.",
+            "Legacy fixed-offset candidates are retained for compatibility but are not exhaustive across Boot0 layouts.",
+            "DRAM.ext markers are scanned across the declared image; only contiguous records passing conservative H616/H700 structural checks are reported.",
+            "DRAM.ext profile extraction does not prove which profile Boot0 selected, whether a marker is consumed on this boot path, or the physical DRAM map.",
         ],
     }
 
@@ -137,6 +243,12 @@ def main() -> int:
         print(
             f"{candidate['name']:<18} {candidate['dram_type']:<8} "
             f"{candidate['clock_mhz_from_word0']} MHz  {candidate['offset']}",
+            file=sys.stderr,
+        )
+    for table in report["dram_ext_tables"]:
+        print(
+            f"DRAM.ext @ {table['marker_offset']}: "
+            f"{table['valid_entry_count']} plausible H616/H700 profiles",
             file=sys.stderr,
         )
     return 0
