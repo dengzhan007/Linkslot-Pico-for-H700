@@ -235,7 +235,6 @@ def main() -> int:
         "# CONFIG_SPL_DM_SERIAL is not set",
         "# CONFIG_SPL_DM_USB is not set",
         "# CONFIG_CMD_BOOTD is not set",
-        "# CONFIG_OF_REAL is not set",
     ):
         require(token in config_text,
                 f"resolved SPL config missing contract: {token}\n{relevant_config}")
@@ -243,6 +242,9 @@ def main() -> int:
     require("CONFIG_SPL_FIT=y" not in config_text and
             "CONFIG_SPL_LOAD_FIT=y" not in config_text,
             "resolved M1 preflight profile unexpectedly enables FIT loading")
+
+    require("CONFIG_OF_REAL=y" not in config_text,
+            "resolved M1 preflight profile unexpectedly enables full-U-Boot OF_REAL")
 
     map_file = out / "spl/u-boot-spl.map"
     map_arg = f"-Map={map_file}"
