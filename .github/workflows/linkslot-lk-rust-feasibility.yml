@@ -238,9 +238,9 @@ jobs:
 
       - name: Audit H700 SPL separate-BSS SRAM geometry for M1 scratch
         run: |
-          python3 scripts/audit-m1-spl-sram-layout.py \\
-            --uboot-root .ci/u-boot-v2026.10 \\
-            --baseos-root .ci/baseos-native \\
+          python3 scripts/audit-m1-spl-sram-layout.py \
+            --uboot-root .ci/u-boot-v2026.10 \
+            --baseos-root .ci/baseos-native \
             --output build/audit-work/linkslot-1.0.49/m1-spl-sram-layout.json
 
       - name: Test host-only M1 one-shot capsule pre-entry selection model
