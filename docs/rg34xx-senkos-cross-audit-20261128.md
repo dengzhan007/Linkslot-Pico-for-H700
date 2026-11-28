@@ -164,7 +164,7 @@ The previous broad statement that the target AXP2202 compatible versus upstream 
 - AXP717 SPL DCDC2/DCDC3 configuration values match the target's measured runtime rails;
 - RG34XX Boot0 log independently reports the corresponding DRAM voltage.
 
-Classify this as **strongly corroborated candidate; exact silicon identity and active bus call path still unproven**. Do not enable PMIC writes in the M1 preflight. Profile A remains a separate future DRAM-capable SPL audit.
+Classify this as **strong same-PMIC-family / legacy-name evidence; exact RG34XX Boot0 call path and register sequence still unproven**. Do not enable PMIC writes in the M1 preflight. Profile A remains a separate future DRAM-capable SPL audit.
 
 
 
@@ -194,7 +194,7 @@ This closes the generic upstream U-Boot reference's controller-selection and pre
 
 - **Upstream U-Boot AXP717 → R-TWI0 → address 0x34 → DCDC3 register sequence:** statically traced.
 - **Upstream U-Boot PMIC-before-DRAM ordering:** statically traced.
-- **RG34XX target-specific physical PMIC identity and vendor AXP2202 register-map equivalence:** not yet proven.
+- **AXP2202 / AXP717 same-PMIC-family naming:** strongly supported by upstream Linux and Allwinner documentation. **Exact RG34XX Boot0 PMIC transaction sequence and active bus/address fallback:** not yet recovered.
 - **Exact stock Boot0 implementation and equivalence to the upstream sequence:** not yet proven.
 - **RG34XX DRAM strap values and Boot0 `DRAM.ext` selection:** not yet proven from target-specific strap evidence.
 
