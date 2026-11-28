@@ -23,6 +23,7 @@ on:
       - "integration/linkslot/h700-render-core/**"
       - "scripts/audit-linkslot-nostd.py"
       - "scripts/audit-lk-bl33-layout.py"
+      - "scripts/audit-m1-a32-artifact.py"
       - "scripts/audit-m1-oneshot-baseos-source.py"
       - "scripts/test-m1-oneshot-capsule-selection.py"
       - "scripts/test-m1-oneshot-capsule-a32.py"
@@ -595,6 +596,25 @@ jobs:
           python3 scripts/audit-lk-bl33-layout.py \
             --lk-source .ci/lk-reference \
             --out build/audit-work/linkslot-1.0.49/lk-bl33-layout
+
+      - name: Emit fail-closed M1 A32 ELF/raw/map manifests
+        run: |
+          OUT=build/audit-work/linkslot-1.0.49/m1-artifact-accounting
+          python3 scripts/audit-m1-a32-artifact.py \
+            --elf build/audit-work/linkslot-1.0.49/h700-lk-overlay-build/h700-early-led-layout.elf \
+            --raw build/audit-work/linkslot-1.0.49/h700-lk-overlay-build/h700-early-led-layout.bin \
+            --map build/audit-work/linkslot-1.0.49/h700-lk-overlay-build/h700-early-led-layout.map \
+            --profile pi12-mmio-layout --output "$OUT/pi12-early-layout.json"
+          python3 scripts/audit-m1-a32-artifact.py \
+            --elf build/audit-work/linkslot-1.0.49/h700-lk-overlay-build/lk-bl33-overlay-layout.elf \
+            --raw build/audit-work/linkslot-1.0.49/h700-lk-overlay-build/lk-bl33-overlay-layout.bin \
+            --map build/audit-work/linkslot-1.0.49/h700-lk-overlay-build/lk-bl33-overlay-layout.map \
+            --profile stub-overlay --output "$OUT/stub-overlay.json"
+          python3 scripts/audit-m1-a32-artifact.py \
+            --elf build/audit-work/linkslot-1.0.49/lk-bl33-layout/lk-a32-bl33-layout.elf \
+            --raw build/audit-work/linkslot-1.0.49/lk-bl33-layout/lk-a32-bl33-layout.bin \
+            --map build/audit-work/linkslot-1.0.49/lk-bl33-layout/lk-a32-bl33-layout.map \
+            --profile a32-entry-stub --output "$OUT/a32-entry-stub.json"
 
       - name: Publish build report in job summary
         if: always()
