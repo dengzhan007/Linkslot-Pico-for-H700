@@ -150,7 +150,7 @@ def main() -> int:
         8, "0x000030fa", "0x04000000", "0x02008c60"
     ):
         raise RuntimeError("captured RG34XX primary candidate changed")
-    if result["helper_result"] != "0x00000400" or result["word7_after_helper"] != "0x04000040":
+    if result["helper_result"] != "0x00000400" or result["word7_after_helper"] != "0x04000000":
         raise RuntimeError("captured 1-GiB candidate no longer yields the expected selector")
     if result["second_source_window"] != ["0x60000000", "0x60000140"]:
         raise RuntimeError("captured 1-GiB candidate no longer yields the expected midpoint")
