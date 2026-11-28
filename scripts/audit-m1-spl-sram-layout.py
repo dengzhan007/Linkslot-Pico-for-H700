@@ -122,7 +122,7 @@ def main() -> int:
                 f"M1 preflight builder no longer enables {option}")
     for option in ("SPL_FIT_SIGNATURE", "SPL_FIT_IMAGE_TINY", "SPL_FIT_PRINT", "FIT_SIGNATURE", "FIT", "SPL_FIT", "SPL_LOAD_FIT",
                    "SPL_I2C", "SPL_POWER", "SPL_SUNXI_LED_STATUS", "SPL_DM_I2C", "SPL_DM_PMIC", "SPL_DM_REGULATOR", "SPL_DM_SERIAL", "SPL_DM_USB",
-                   "CMD_BOOTD", "VERSION_VARIABLE", "SPL_CMDLINE_EDITING", "CMDLINE"):
+                   "CMD_BOOTD", "VERSION_VARIABLE", "SPL_CMDLINE_EDITING", "CMDLINE", "SPL_SYS_MALLOC_SIMPLE", "SPL_USE_TINY_PRINTF"):
         require(f'"--disable", "{option}"' in spl_builder,
                 f"M1 preflight builder no longer disables unrelated {option}")
     require("fit_selector =" in spl_builder and
