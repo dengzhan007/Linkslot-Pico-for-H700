@@ -61,6 +61,7 @@ def main() -> int:
     builder = read(baseos, "experiments/h700-boot-speed/spl/build-early-mmc.py")
     board = read(uboot, "arch/arm/mach-sunxi/board.c")
     m1_adapter = read(Path(__file__).resolve().parents[1], "platform/h700/boot/m1_gpt_spl_adapter.c")
+    spl_builder = read(Path(__file__).resolve().parents[1], "scripts/build-m1-spl-preflight.py")
 
     require('CONFIG_DEFAULT_DEVICE_TREE="allwinner/sun50i-h700-anbernic-rg35xx-2024"' in defconfig,
             "defconfig is not the RG35XX H700 board")
@@ -115,6 +116,18 @@ def main() -> int:
             "M1 adapter no longer bounds its GPT entry table to eight slots")
     require("h700_m1_spl_preflight(card, p4_first_lba, p4_block_count" in m1_adapter,
             "M1 GPT adapter no longer chains partition discovery to firmware preflight")
+    for option in ("SPL_DM", "DM_MMC", "SPL_DM_MMC", "BLK",
+                   "SPL_BLK", "SPL_OF_CONTROL", "SPL_OF_REAL"):
+        require(f'"--enable", "{option}"' in spl_builder,
+                f"M1 preflight builder no longer enables {option}")
+    for option in ("SPL_LIBCOMMON_SUPPORT", "SPL_FIT", "SPL_LOAD_FIT",
+                   "SPL_I2C", "SPL_POWER", "SPL_SUNXI_LED_STATUS",
+                   "CMD_BOOTD", "VERSION_VARIABLE", "OF_REAL"):
+        require(f'"--disable", "{option}"' in spl_builder,
+                f"M1 preflight builder no longer disables unrelated {option}")
+    for line in ('obj-y += membuf.o\\n', 'obj-y += abuf.o\\n'):
+        require(line in spl_builder,
+                "M1 preflight builder no longer isolates generic dynamic-buffer helpers")
 
     # Geometry derived from pinned Kconfig, linker script and H616 SRAM node.
     sram_start, sram_bytes = 0x28000, 0x30000
@@ -148,6 +161,8 @@ def main() -> int:
         "uboot_spl_gpt_support_default": False,
         "m1_gpt_strategy": "use the project read-only GPT parser; do not assume part_get_info_by_name is backed by SPL_EFI_PARTITION",
         "m1_scratch_4k_fits_configured_bss_window": True,
+        "preflight_build_profile": "DM-backed read-only MMC + SPL_OF_CONTROL; unrelated common/FIT/PMIC/TWI/display paths disabled",
+        "dynamic_buffer_helpers": "membuf.o and abuf.o excluded from isolated SPL link",
         "adapter_scratch_symbol_declared": True,
         "adapter_gpt_entry_slots": 8,
         "actual_bss_consumption_known": False,
@@ -160,7 +175,8 @@ def main() -> int:
         "limitations": [
             "The BaseOS archive SHA-256 and upstream U-Boot tag commit are separate pins; this audit does not prove the archive bytes are identical to the Git tag tree.",
             "The 16 KiB BSS limit is a linker-enforced ceiling, not a measurement of current BSS use or remaining free bytes.",
-            "The adapter declares a named 4 KiB aligned scratch symbol and an eight-slot GPT table, but neither has yet been linked into the actual U-Boot SPL.",
+            "The adapter declares a named 4 KiB aligned scratch symbol and an eight-slot GPT table; the isolated builder now requests DM MMC + SPL_OF_CONTROL and removes unrelated command/FIT/PMIC/TWI/display paths, but the current linked SPL attempt has not yet passed.",
+            "The isolated build profile is not the stock BaseOS SPL configuration and is not an installable image.",
             "A final M1-enabled SPL link map and ELF are still required to measure BSS symbols, prove the 4 KiB scratch reservation fits, and inspect transitive call sites.",
             "The initial stack pointer is source-configured; stack high-water usage is not measured here.",
             "U-Boot SPL EFI/GPT partition support defaults off for ARCH_SUNXI and is not enabled by the RG35XX H700 defconfig; M1 needs its own bounded GPT adapter or a separately audited config change.",
