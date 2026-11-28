@@ -139,6 +139,12 @@ def main() -> int:
             'select SPL_LOAD_FIT if SPL' in spl_builder and
             'sunxi_kconfig.write_text' in spl_builder,
             "M1 preflight builder no longer removes H616 FIT selectors")
+    require('arm_kconfig = uboot / "arch/arm/Kconfig"' in spl_builder and
+            'config ARCH_SUNXI' in spl_builder and
+            'select SPL_SYS_MALLOC_SIMPLE if SPL' in spl_builder and
+            'select SPL_USE_TINY_PRINTF if SPL' in spl_builder and
+            'arm_kconfig.write_text' in spl_builder,
+            "M1 preflight builder no longer releases ARCH_SUNXI tiny allocator/printf selectors")
     for option in ("SPL_LIBCOMMON_SUPPORT", "SPL_ENV_SUPPORT", "SPL_CYCLIC"):
         require(f'"--enable", "{option}"' in spl_builder,
                 f"M1 preflight builder no longer enables required SPL provider {option}")
