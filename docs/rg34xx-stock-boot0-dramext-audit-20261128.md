@@ -72,7 +72,10 @@ tools/inspect_h700_boot0.py now:
 5. Emits named fields and the source offset for each discovered profile.
 6. Explicitly states that profile extraction does not prove Boot0 runtime selection, PMIC writes, or the physical DRAM map.
 
-The H616/H700 field layout and basic structural checks are cross-referenced against the H616/H700 parser in apritzel/sunxi-fw commit 1ba5f4c:
+The 44-byte marker-to-profile offset and 15-slot DRAM.ext count follow the constants in apritzel/sunxi-fw main (DRAM_EXT_MAGIC_OFS=210, DRAM_EXT_PARA_OFS=221, DRAM_EXT_PARA_SIZE=32, DRAM_EXT_PARA_CNT=15):
+https://github.com/apritzel/sunxi-fw/blob/main/sunxi-boot0.c
+
+The 32-word H616/H700 field layout and DX ODT/DRI plausibility checks are cross-referenced against the H616/H700 parser revision in apritzel/sunxi-fw commit 1ba5f4c:
 https://github.com/apritzel/sunxi-fw/blob/1ba5f4c/sunxi-boot0.c
 
 The tool's checks are a format plausibility filter, not a hardware qualification test.
