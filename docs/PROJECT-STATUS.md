@@ -2631,3 +2631,13 @@ See [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md) for the detai
 - The generic upstream source path is now traced end-to-end: logical I2C bus 0 → twsi2 hardware adapter → R-TWI0 → PMIC 0x34; DCDC3 register write 0x85 followed by read-modify-write of enable register 0x80 bit 2.
 - Revised blocker: upstream U-Boot PMIC/TWI selection and pre-DRAM ordering are no longer open. Remaining target blockers are the exact stock Boot0 PMIC source path, physical PMIC identity / vendor AXP2202-to-AXP717 register equivalence, and target-specific PH6/PH7/PH8/PH10 strap evidence. AXP717 SPL's lack of chip-ID read means this identity gate cannot be waived.
 - No source code or Kconfig was changed; M1 preflight remains PMIC/TWI-disabled. No firmware execution, device register writes, media writes or hardware qualification.
+
+
+## 2026-11-28 Target applicability correction: RG34XX vs RG35XX
+
+- Explicitly reaffirmed: the project target is **RG34XX**. SenkOS and `anbernic_rg35xx_h700_defconfig` are H700-family reference sources, not RG34XX hardware proof.
+- ROCKNIX publishes separate RG34XX, RG35XX 2024 and RG35XX H DTBs; therefore shared H700 SoC does not justify reusing board-specific GPIO, strap, DRAM, PMIC, panel or power-sequencing assumptions.
+- Reclassified SenkOS PH6/PH7/PH8/PH10 strap mapping, DRAM timing tables, LPDDR3 branch, AXP717 configuration and generic H700 PMIC-before-DRAM ordering as **reference-only hypotheses** until independently matched to RG34XX board revision and stock Boot0 lineage.
+- RG34XX-specific evidence remains the authority: target-specific KNULLI RG34XX DTS, RG34XX Boot0 log, and this project's read-only RG34XX runtime captures. Even these do not alone prove physical PMIC silicon/register equivalence.
+- Corrected blocker status: SenkOS does not close RG34XX DRAM strap or PMIC provenance gates. No family-reference strap values, timing tables, voltage policy or PMIC writes are approved for RG34XX.
+- Detailed correction added to `docs/rg34xx-senkos-cross-audit-20261128.md`. M1 preflight remains PMIC/TWI-disabled; all safety gates unchanged.
