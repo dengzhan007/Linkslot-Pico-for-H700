@@ -577,3 +577,17 @@ Important unresolved ISA issue: the registry lookup/dispatch sequence at file of
 The primary eGON entry itself is AArch32: its initial branch at file offset `0x0` targets `0x400`, where the first-stage code saves CPU state, checks CPSR mode and SCTLR bits, masks interrupts, sets SP to `0x57000`, and calls the routine at `0x4e0`. It then accepts selected return addresses (`0x21000` or `0x31000`) and transfers control through the value at `0x494` (currently `0x50000`). This validates the AArch32 entry path but does not connect it to the AArch64 registry at `0x1b694`.
 
 Next static task: map the AArch32 entry's actual continuation/return path and the code/data boundary around the AArch64 registry; determine whether the descriptor table is consumed in another processor/firmware context or whether a state-switch trampoline exists. Until then, classify `0x2984c` → `0x981c` as a high-confidence address correlation with unresolved execution semantics, not proof of a monitor loader or BL31 copy routine.
+
+
+### Boot0 AArch32 continuation: SRAM resume trampoline and zeroed context block
+
+The primary Boot0 AArch32 entry path is now traced through its first helper and continuation:
+
+- Entry at file offset `0x400` sets SP to `0x57000`, calls `0x4e0`, and accepts only return values `0x21000` or `0x31000`. It then transfers to the selected address through the literal at `0x494` (whose current value is `0x50000`).
+- The helper at `0x4e0` validates the eGON image-size field at runtime address `0x20010` against `0x20000`, compares the eight-byte signature against the literal at `0x720`, computes/checks the image checksum, and performs a sequence of read/write/readback operations through the peripheral base formed as `0x070001f8`. The precise peripheral function and its relationship to the resume path are not inferred here.
+- On the accepted path, code at `0x768` copies bytes from `0x20840..0x20884` (68 bytes) to SRAM `0x50000`. It then copies 72 bytes from `0x20498..0x204e0` to `0x52000`; the entire source interval is zero-filled in the captured image, so this operation initializes/clears the 72-byte context block rather than installing a second code stub.
+- The 68-byte routine at file offset `0x840`, copied to `0x50000`, is an AArch32 restore trampoline. It copies a caller-supplied byte range back to `0x20000`, restores a saved CPSR and general-register/SP/LR context from `0x52000`, and finally branches to `0x20000`. The code at `0x840` itself is the copy/restore routine; the 72-byte block at `0x52000` is its context area.
+
+This is a real Boot0 SRAM resume/restore mechanism and a useful upstream handoff lead, but it is not the BL31 context at `0x48014668`: it uses SRAM `0x50000/0x52000`, its 72-byte context is explicitly zeroed by this path, and no dataflow from this block to the BL31 slot has been found. It also does not prove that the AArch64 descriptor dispatcher at `0x1b694` is reachable from this AArch32 path. Treat it as a separate Boot0 resume mechanism unless a concrete bridge is discovered.
+
+Next static step: identify the meaning of the peripheral handshake in `0x4e0` and search the Boot0 image for code that populates `0x52000` after the zeroing copy, then determine whether any path transfers the restored state or pointer into BL31. Keep the BL31 context producer unresolved.
