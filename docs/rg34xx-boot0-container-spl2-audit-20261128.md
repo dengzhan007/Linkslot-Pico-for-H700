@@ -162,21 +162,40 @@ The remaining distinction is important: the DTB proves the configured pins, pull
 A new regression test \`tools/test_rg34xx_stock_toc1_dtb.py\` pins the TOC1/package payload hashes, FDT identity, PMIC/TWI node, GPIO strap tuples, LPDDR3/LPDDR4 profile IDs and regulator voltage ranges. The H700 audit workflow now fetches the read-only reports branch before running the host tests on Linux and Windows.
 
 
-## 8. Independent public UART sample remains separate
+
+## 9. SPL2 contains a separate three-candidate DRAM fallback table
+
+A follow-up read of the SPL2 data table and AArch64 control flow reveals a second mechanism that must not be conflated with the DTB's GPIO strap declaration:
+
+- Candidate table VMA: \`0x5a7f4\`; component-relative offset: \`0xa7f4\`.
+- Candidate stride: \`0x30\` bytes.
+- The DRAM initialization loop at VMA \`0x53608\` initializes an index to zero, allows indices 0 through 2, computes \`base + index * 0x30\`, and calls the candidate DRAM initialization routine at \`0x538dc\`.
+- The three embedded candidate records are all 672 MHz:
+  - Candidate 0: LPDDR4 type 8; \`dram_tpr6=0x3e808080\` (matches the active Boot0 primary header block).
+  - Candidate 1: LPDDR3 type 7; \`dram_tpr6=0x2fb08080\` (matches the RG34XX DTB's \`dram_para14\`).
+  - Candidate 2: LPDDR4 type 8; \`dram_tpr6=0x40808080\` (matches the RG34XX DTB's \`dram_para15\`).
+- After the candidate init call, the code branches on the candidate's DRAM type and requests DCDC3 1100 mV for type 8, 1200 mV for type 7, and 1500 mV for other types; the 1000 ms delay and subsequent validation path are visible in the disassembly.
+
+This establishes that the stock SPL2 has a fixed three-entry candidate table and a bounded sequential candidate loop. It does **not** yet establish that the loop is selected by the DTB's \`dram_select_para\` GPIOs, nor that it implements SenkOS's "strap value 14 selects LPDDR3" rule. The GPIO configuration and the SPL2 candidate loop are separate pieces of evidence until the code path joining them is recovered.
+
+A regression test now pins all three candidate records and the key AArch64 loop/voltage instructions in the raw RG34XX Boot0 capture. The next analysis should trace the candidate-init routine at \`0x538dc\`, validation routine at \`0x50980\`, and the caller/global state to determine whether failed candidates are skipped, how success is accepted, and whether strap inputs influence candidate order or selection.
+
+
+## 10. Independent public UART sample remains separate
 
 The published macromorgan RG34XX UART sample reports PMU AXP2202 and DRAM_VCC 1100 mV before DRAM training. That sample is not part of the reports-branch binary inventory, and the captured Boot0 image contains \`BOOT0 commit : %s\` rather than a fixed build hash. Do not match the public sample's displayed \`749c1f9a-dirty\` identifier to this binary or claim that the public log is this exact binary's runtime trace.
 
 The public log remains useful independent RG34XX corroboration. The project's own read-only runtime capture reports DCDC3 at 1100 mV, and the stock SPL2 AArch64 code now provides a direct DCDC3 voltage-setting path. Whether the public UART's `DRAM_VCC` message originates in Boot0 or SPL2 remains unproven.
 
-## 10. Required next static work
+## 11. Required next static work
 
-1. Trace SPL2's DRAM selector: prove the GPIO sample order, polarity, profile-index calculation, profile 14/15 selection and failure fallback for PH6/PH7/PH8/PH10.
+1. Trace SPL2 candidate-init at `0x538dc`, validation at `0x50980`, and the state that selects/advances the three-entry DRAM table; determine whether PH6/PH7/PH8/PH10 strap inputs influence it.
 2. Parse the TOC1 header/component table and validate embedded FDT blobs; identify BL31/U-Boot payload boundaries and the selected RG34XX-v1 FDT.
 3. Trace the DCDC enable/read-modify-write call path and exact PMU probe sequence; the voltage-setting calls and R-TWI0 backend are already statically identified.
 4. Establish whether the RG35XX-2024 SPL2 build label is a shared vendor target or board-specific, and verify its remaining DRAM/PMIC/power assumptions against RG34XX-v1 evidence.
 5. Trace BL31 PSCI platform operation hooks and PMIC power-off/reset path; target strap wiring is now DTB-confirmed, but no writes are authorized by this audit.
 
-## 11. Safety state
+## 12. Safety state
 
 This was read-only parsing, hashing, string extraction and static ARM/AArch64 disassembly only.
 
