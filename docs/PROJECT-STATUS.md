@@ -15,6 +15,15 @@
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 分别实测约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。60 Hz 是唯一合格模式。120 Hz 已移入 deferred：没有面板完整料号/Revision 与对应 datasheet 前不再投入主线，不做 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist。当前唯一近期交付目标改为 M1：受控的 AArch32 BL33 诊断启动准备；详细门槛见下方“项目主线纠偏与验收门槛”。`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
 
+## 2026-11-28 continuation — dormant SYS_CFG probe and packaging gate
+
+- Reconciled the roadmap: the probe-scoped AArch32 Data Abort trampoline, exact matcher, caller-RAM result channel, and linked-ELF checks are already implemented and host-validated; earlier duplicate checklist items are now marked complete.
+- Re-audited active call-site owners (`target/rg34xx_h700/init.c`, target rules, BL33 entry snapshot, timer and input scan). No call site to `h700_syscfg_ver_reg_low3` and no raw `0x03000024` read appears in startup, input, timer, or entry code. The probe remains dormant.
+- The BaseOS native-loader override validates the 32 KiB raw extent, reserved vendor header bytes, entry/vector address bounds, and fixed-size padding. It explicitly marks `loader_elf_matches_loader_bin=false`; this is a builder contract, not a paired deployable diagnostic image.
+- Next gate is a separately packaged, byte-accounted diagnostic candidate within the 32 KiB loader extent, including matched firmware/SPL metadata and memory-ownership/rollback review. Do not call the probe or modify TF media until those gates and pre-BL33 CPU reset/RVBAR evidence are satisfied.
+- Latest CI at this review: feasibility #941 passed 85/85; boot audit #1597 passed Linux and Windows; documentation-baseline feasibility #942 is still running.
+- Hardware remains fail-closed: `H700_MEMORY_LAYOUT_APPROVED=false`, `hardware_applied=0`; no device MMIO, module load, TF/Boot0/TOC1 write, firmware flash, or diagnostic execution.
+
 ## 2026-11-28 最新续接：活动启动链、TF 启动介质与 CI 对齐
 
 **复核起始代码 HEAD：** `15d431936247b24430adc912c553eedee24fb6a9`（[commit](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/15d431936247b24430adc912c553eedee24fb6a9)）；reports 分支修正前 HEAD 为 `701167dcd8db1eac9baedde00e84c56c46e36ead`，本轮介质纠错提交为 `fcaab72524c473a06235376221bbed8ddb34d50b`。本轮状态/路线图同步提交包括 `8a16da65732ed21d5a59086eb9802bb4812a5cbe` 与 `de7a63e31855eff7affcc305c69ebc38567dc9c4`。新增只读启动链报告：[rg34xx-active-loader-provenance.md](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-active-loader-provenance.md)。该报告依据 2026-11-22 只读库存及固定 BaseOS source pin，属于设备既有库存的离线/静态来源复核，不是 2026-11-28 新实机测试。
