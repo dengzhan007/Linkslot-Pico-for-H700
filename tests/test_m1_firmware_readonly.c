@@ -45,8 +45,8 @@ int main(void)
     uint8_t *image = make_image();
     uint8_t *staging = (uint8_t *)malloc(H700_M1_PACKAGE_BYTES);
     assert(staging != 0);
-    const uint64_t p4_lba = 32768;
-    const uint64_t p4_blocks = 200000;
+    const uint64_t p4_lba = 303104;
+    const uint64_t p4_blocks = 131072;
     const uint64_t expected_lba = p4_lba + 0x02800000u / 512u;
     struct h700_m1_package_plan plan;
     assert(h700_m1_package_make_plan(p4_lba, p4_blocks,
