@@ -2446,3 +2446,15 @@ AArch64 反汇编窗口，验证：
 - All identified static references to this operand are loads. No direct `STR/STP/STUR/STLR/STXR/STLXR [xN,#0x668]` store was found in the whole-image disassembly. The image qword at the slot is initially `2`; nearby structured data and indexed loads are not sufficient to identify its runtime owner.
 - This does not exclude computed aliases, helper/memcpy writes, register-indexed or stack-mediated stores, exception/secure-call setup outside BL31, or writes by another boot stage. G2 remains unresolved; runtime context pointer remains UNKNOWN. See [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md).
 - Continue with cross-stage writer provenance and alias/data-flow analysis. No hardware interaction or payload execution occurred.
+
+
+### 2026-11-28 G2 correction: relocation resolves the standby context pointer
+
+- Revisited the successful BL31 audit #145 artifact `15254429553`, specifically `TWI-SELECTOR-RELOCATION.md` and its JSON. The standby image `[0x4800c220,0x48015630)` is copied to SRAM at `0x20000`; the code at source PC `0x4800c430` is then executed at `0x20210`.
+- Its `ADRP x20,0x48014000; LDR x19,[x20,#0x668]` pair is rebased. Runtime ADRP page is `0x28000`, so the actual load address is `0x28668`. Its source-equivalent backing qword is `0x48014888`, whose value is `0x20000`.
+- **Correction:** `0x48014668` and its raw qword value `2` were the unrelocated source-coordinate interpretation, not the live effective slot for the copied standby path. The runtime context base is statically resolved to SRAM `0x20000`; the previous “unknown writer for 0x48014668” blocker is superseded for this path.
+- The same audit derives FDT `twi5` → R-TWI0 `0x07081400`, and traces selector staging from `0x4803cbb4` to SRAM context+`0xa4` at `0x200a4`. This is static dataflow only; it does not prove a PMIC transaction or that standby/resume executed on hardware.
+- Updated `scripts/audit-rg34xx-bl31-context-slot.py` to label its old `0x48014668` hits as unrelocated source-coordinate candidates, validate the relocated slot `0x28668`, and assert the backing qword `0x48014888 == 0x20000`.
+- **G2 is narrowed, not cleared:** active retention path selection, context geometry values, DRAM save/restore timing, CPU/DMA/cache quiescence, and ownership through Linux resume remain unproven. Keep DRAM source pages excluded and `H700_MEMORY_LAYOUT_APPROVED=false`. No hardware access or payload execution occurred.
+
+See [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md) for the detailed correction and evidence boundary.
