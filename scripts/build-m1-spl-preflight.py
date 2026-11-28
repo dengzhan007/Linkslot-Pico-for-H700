@@ -146,6 +146,8 @@ def main() -> int:
          "--enable", "SPL_LIBCOMMON_SUPPORT",
          "--enable", "SPL_ENV_SUPPORT",
          "--enable", "SPL_CYCLIC",
+         "--enable", "SPL_SPRINTF",
+         "--disable", "SPL_ENV_SUPPORT",
          "--enable", "SPL_SYS_MALLOC",
          "--set-val", "SPL_SYS_MALLOC_SIZE", "0x10000",
          "--disable", "SPL_SYS_MALLOC_SIMPLE",
@@ -212,6 +214,23 @@ def main() -> int:
                 f"unexpected H616 FIT selector: {selector.strip()}")
         family_block = family_block.replace(selector, "", 1)
     sunxi_kconfig.write_text(sunxi_text[:family_start] + family_block + sunxi_text[family_end:])
+
+    # This isolated M1 hook is a fixed read-only MMC/GPT/FDT path, not a
+    # command-capable SPL. Upstream common/Makefile unconditionally adds
+    # stdio.o, cli.o, command.o and s_record.o even in XPL builds; those
+    # objects pull serial/I2C/console input providers that this profile
+    # deliberately excludes. Remove only these objects in the disposable
+    # U-Boot checkout used by this preflight build.
+    common_makefile = uboot / "common/Makefile"
+    common_text = common_makefile.read_text()
+    for object_line in ("obj-y += stdio.o\\n", "obj-y += cli.o\\n",
+                        "obj-y += command.o\\n", "obj-y += s_record.o\\n"):
+        require(common_text.count(object_line) == 1,
+                f"unexpected common/Makefile object rule: {object_line.strip()}")
+        common_text = common_text.replace(
+            object_line,
+            "ifndef CONFIG_XPL_BUILD\\n" + object_line + "endif\\n", 1)
+    common_makefile.write_text(common_text)
 
     # Keep general-purpose helpers in U-Boot proper, but omit image-fdt from
     # the isolated XPL link: this path never relocates a FIT/image and does not
@@ -292,7 +311,8 @@ def main() -> int:
         "# CONFIG_SPL_EFI_PARTITION is not set",
         "# CONFIG_SPL_I2C is not set",
         "CONFIG_SPL_LIBCOMMON_SUPPORT=y",
-        "CONFIG_SPL_ENV_SUPPORT=y",
+        "# CONFIG_SPL_ENV_SUPPORT is not set",
+        "CONFIG_SPL_SPRINTF=y",
         "CONFIG_SPL_CYCLIC=y",
         "# CONFIG_SPL_SYS_MALLOC_SIMPLE is not set",
         "# CONFIG_SPL_USE_TINY_PRINTF is not set",
