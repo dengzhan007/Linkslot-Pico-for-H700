@@ -18,6 +18,7 @@ on:
       - ".github/workflows/h700-boot-audit-tools.yml"
   pull_request:
     paths:
+      - "ci/rg34xx_boot0_disassemble.py"
       - "scripts/collect-rg34xx-readonly-inventory.sh"
       - "scripts/collect-rg34xx-pio-input-readonly.sh"
       - "scripts/collect-rg34xx-gpio-debugfs-readonly.sh"
