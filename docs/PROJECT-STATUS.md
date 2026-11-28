@@ -2422,3 +2422,11 @@ AArch64 反汇编窗口，验证：
 - Caller `0x4800a134` reaches the writer at `0x4800a1a0`, passing `x0=0x4800a504`. That target is an AArch64 per-CPU/exception-context routine using MPIDR_EL1 and TPIDR_EL3. The installer function's cold-boot reachability/timing still needs tracing; the slot is inside the startup-cleared BSS interval.
 - This resolves the separate callback slot `0x4803c048`, **not** the G2 DRAM-retention context slot `0x48014668`. No G2 writer is established. Full evidence and disassembly notes: [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md).
 - Continue by tracing the entry/callers of `0x4800a134` and expanding full-payload indirect writer analysis for `0x48014668`. G2/G3/M1-S1 remain closed; no device interaction or payload execution.
+
+
+### BL31 callback installer call-site follow-up (2026-11-28)
+
+- Full-image AArch64 disassembly finds no direct BL/B immediate targeting installer function `0x4800a134`. The function performs MPIDR/per-CPU initialization and installs callback `0x4800a504` into `0x4803c048` only on its initialized branch.
+- A raw qword at `0x48018d00` equals `0x4800a134`, but it is not yet tied to a live consumer. Known MIDR lookup `0x48015cd0` scans `[0x48018d10,0x48018d70)`, excluding that qword; known exception dispatch based at `0x48018ca8` indexes 0x20-byte records and likewise does not calculate `0x48018d00`.
+- Therefore the callback writer/value remain confirmed, but installer reachability is unresolved. This does not establish a G2 writer for `0x48014668`. Full detail: [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md).
+- Next investigate the owner/consumer of the data record at `0x48018d00`, then resume G2 indirect writer tracing. G2/G3/M1-S1 remain closed; no device interaction or payload execution.
