@@ -536,3 +536,17 @@ The exact primary Boot0 capture was wrapped as a temporary ARM ELF and disassemb
 A later reachable-looking helper at file offset `0x1b7d4` is called from `0x1b6d0`; a nearby literal at `0x1b7cc` is `0x48000000`, with the preceding word `0x0001a2d0`. The latter matches the exact BL31 payload size and the former its load base. This is materially stronger than the earlier raw literal-only check: the address/size pair sits directly beside a function call in the Boot0 code tail and likely participates in a monitor load/copy operation. However, the helper's full control flow and its callers/arguments must be reconstructed before assigning semantics or claiming which source buffer is copied. The literal pair alone does not show a write to `0x48014668`; it indicates the BL31 extent transfer path is now the next concrete reverse-engineering target.
 
 The full disassembly is not committed as a generated dump. The source capture and hashes remain the evidence source. Next inspect the routine at `0x1b7d4`, its caller at `0x1b6d0`, and the code that prepares its arguments; classify every destination write and any relocation/zero-fill performed over the monitor extent. Do not infer the runtime context pointer from the copy operation.
+
+
+### Correction: Boot0 tail is mixed-ISA data/code; the 0x1b7d4 target is not a monitor-copy helper
+
+A second-pass disassembly with the correct AArch64 decoder invalidates the tentative interpretation above. The ARMv7 decoder had misidentified AArch64 words as ARM instructions, including the apparent `BL` at `0x1b6d0`. Correct AArch64 decoding shows:
+
+- `0x1b6d0` is `cmp x1, x0`, not a call.
+- `0x1b6d4` is a conditional branch; `0x1b6f4` begins an AArch64 function that dispatches through a function pointer at descriptor offset `+0x20`.
+- `0x1b7d4` is data (`0x00000920`), not executable code.
+- The words at `0x1b7c8/0x1b7cc` are a data pair `0x1a2d0/0x48000000`; they match the monitor extent length and load base but are not shown by this disassembly to be arguments to a copy routine.
+
+Therefore the prior paragraph's claim that `0x1b7d4` is a monitor-loader helper and that `0x1b6d0` calls it is withdrawn. The reliable finding is narrower: Boot0 contains an AArch64 code/data region with a descriptor/dispatch function and an adjacent extent-like size/base pair. Its role and reachability from the Boot0 entry are not yet established. No monitor-copy semantics or context-slot writer can be inferred from it.
+
+Next work must first identify the ISA transition and control-flow reachability into this AArch64 region, decode the descriptor layout around `0x1b740..0x1b7f8`, and trace the actual data consumer of the `0x1a2d0/0x48000000` pair. Do not use the previous tentative interpretation as evidence.
