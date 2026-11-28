@@ -184,6 +184,15 @@ def main() -> int:
     lib_makefile.write_text(lib_text)
     run(["make", f"O={out}", f"CROSS_COMPILE={cross}", "olddefconfig"], cwd=uboot)
     config_text = config.read_text()
+    # Preserve the resolved Kconfig result in the artifact even when a
+    # fail-closed contract assertion stops the build.
+    (out / "m1-spl-preflight-resolved.config").write_text(config_text)
+    relevant_config = "\\n".join(
+        line for line in config_text.splitlines()
+        if any(key in line for key in ("SPL_FIT", "SPL_LOAD_FIT", "FIT_SIGNATURE",
+                                       "SPL_OF_CONTROL", "SPL_OF_REAL", "SPL_DM",
+                                       "SPL_DM_MMC", "SPL_BLK", "SPL_LIBCOMMON"))
+    )
     for token in (
         "CONFIG_ARM64=y",
         "CONFIG_MACH_SUN50I_H616=y",
@@ -206,7 +215,8 @@ def main() -> int:
         "# CONFIG_CMD_BOOTD is not set",
         "# CONFIG_OF_REAL is not set",
     ):
-        require(token in config_text, f"resolved SPL config missing contract: {token}")
+        require(token in config_text,
+                f"resolved SPL config missing contract: {token}\\n{relevant_config}")
 
     map_file = out / "spl/u-boot-spl.map"
     map_arg = f"-Map={map_file}"
