@@ -365,3 +365,17 @@ All paths below are at BaseOS-MultiFrontend commit cbe253a43f46cf551cc9a6c79a840
 
 The matching RG34XX native-generation provenance is documented in rg34xx-native-generation-provenance.md.
 The full M1 diagnostic boundaries remain in m1-bl33-diagnostic.md.
+
+### 4.5 Standard release driver is not an M1 one-shot builder (2026-11-28)
+
+A direct source trace of the pinned BaseOS `experiments/h700-boot-speed/native/build-release.py` closes an important packaging ambiguity:
+
+- `build-release.py` calls the native builder with `raw_capsule=True`.
+- Its `spl()` helper calls `build-early-mmc.py` with `raw_capsule=True`.
+- It then invokes the existing `native/capsule/build.py` builder for the outer capsule.
+- The generated package checks that native manifest and capsule manifest share the same generation. This proves generation pairing, not that the capsule protocol is suitable for M1.
+- The pinned raw-capsule path still commits RTC GP14/GP15 attempt state and arms/reads the watchdog; the outer capsule and native handoff have their separately audited side effects.
+
+Therefore, the documented `build-release.py` command in the BL33 image-format guide is a **host build/reproduction route for the existing BaseOS raw-capsule v2 release flow only**. It must not be run or described as producing an M1 one-shot capsule. Even if its firmware, SPL and capsule hashes all match, the result remains ineligible for M1 until the outer capsule, SPL and native handoff are separately implemented for the M1 one-shot contract and audited from the final linked binaries. Do not use its output to write TF1.
+
+This finding is source-level only; no build-release package was generated in this review.
