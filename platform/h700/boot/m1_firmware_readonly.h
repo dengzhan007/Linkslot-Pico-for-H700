@@ -2,7 +2,20 @@
 #define H700_M1_FIRMWARE_READONLY_H
 
 #include <stddef.h>
+#if defined(CONFIG_XPL_BUILD)
+#include <linux/types.h>
+#ifndef UINT32_C
+#define UINT32_C(value) value##U
+#endif
+#ifndef UINT64_C
+#define UINT64_C(value) value##ULL
+#endif
+#ifndef UINT64_MAX
+#define UINT64_MAX 0xffffffffffffffffULL
+#endif
+#else
 #include <stdint.h>
+#endif
 
 /*
  * Host-tested M1 firmware-package preflight contract.
