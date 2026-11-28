@@ -679,3 +679,15 @@ A byte-accurate decode of the 32-byte records at `0x48018ca8..0x48018d68` refine
 This narrows the call-site question: the known exception dispatcher only uses the first qword, so the fourth-qword pointer is not its direct handler target. Do not describe `0x4800a134` as an exception callback or claim it is invoked by this table without finding a separate consumer. The installer function's execution path remains unknown; consequently the actual runtime initialization of `0x4803c048` remains unproven despite the direct writer and callback value being identified.
 
 No G2 writer for `0x48014668` is established by this finding. No monitor execution, device access, MMIO/SMC, suspend/wake, or firmware write occurred. G2/G3/M1-S1 remain open.
+
+
+### 2026-11-28: G2 direct-store cross-check against the complete BL31 disassembly
+
+The exact monitor image (107,216 bytes; SHA-256 `676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31`) was rechecked as a whole-image AArch64 disassembly, focusing on the effective address `0x48014000 + 0x668 = 0x48014668`.
+
+- The references already identified at `0x4800c434`, `0x4800c48c`, `0x4800c4e0`, `0x4800c560`, `0x4800c63c`, `0x4800c654`, `0x4800c65c`, `0x4800c6c8`, `0x48011cd4`, `0x48011d30`, `0x48013408`, `0x48013e1c`, `0x48013e24`, `0x48013e44`, `0x48013e4c`, `0x48013e8c`, `0x48013f20`, `0x48013f5c`, `0x48013f9c`, `0x48013ff0`, `0x48014010`, and `0x48014028` are load sites. No matching direct `STR/STP/STUR/STLR/STXR/STLXR` operand targeting `[xN,#0x668]` was found in the decoded image.
+- The image's initial qword at `0x48014668` is `2`. The surrounding bytes from `0x48014600` onward form a dense structured data region; nearby code at `0x48013ac8` also performs an indexed 64-bit load from a region based at `0x48014628`. This proximity is a data-layout lead only; it does not establish the semantics or runtime owner of the slot.
+- This negative direct-store result is narrower than a complete writer proof. It does not exclude a store through a computed alias, a helper/memcpy destination, stack-mediated or register-indexed addressing, exception/secure-call setup outside this image, relocation, or a write performed before/after the captured BL31 execution phase.
+- Accordingly, the strongest defensible statement is: **no direct static store to the exact page-base-plus-offset operand was found in this whole-image disassembly; runtime writer and live pointer value remain unknown.** Do not mark G2 resolved.
+
+This was a host-only inspection of the existing captured monitor. No device access, monitor execution, MMIO/SMC, DRAM inspection, suspend/wake test, media write, or firmware operation occurred.
