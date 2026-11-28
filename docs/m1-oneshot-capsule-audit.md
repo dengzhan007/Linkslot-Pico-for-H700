@@ -379,3 +379,7 @@ A direct source trace of the pinned BaseOS `experiments/h700-boot-speed/native/b
 Therefore, the documented `build-release.py` command in the BL33 image-format guide is a **host build/reproduction route for the existing BaseOS raw-capsule v2 release flow only**. It must not be run or described as producing an M1 one-shot capsule. Even if its firmware, SPL and capsule hashes all match, the result remains ineligible for M1 until the outer capsule, SPL and native handoff are separately implemented for the M1 one-shot contract and audited from the final linked binaries. Do not use its output to write TF1.
 
 This finding is source-level only; no build-release package was generated in this review.
+
+### 4.6 Release-driver path is now regression-pinned
+
+The host source audit `scripts/audit-m1-oneshot-baseos-source.py` now also reads the pinned `native/build-release.py` and asserts that the standard release driver invokes the native builder, SPL builder and outer capsule builder through the raw-capsule v2 path, and that its generation equality check is present. The audit output explicitly records `standard_release_driver.m1_one_shot_eligible=false`. This is a regression guard against accidentally treating generation pairing as protocol qualification.
