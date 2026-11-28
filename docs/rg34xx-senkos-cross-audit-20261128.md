@@ -255,3 +255,17 @@ The project's later read-only analysis of the RG34XX TF-card SPL2 provides targe
 
 Detailed target evidence: \`docs/rg34xx-boot0-container-spl2-audit-20261128.md\`.
 
+
+
+## 2026-11-28 RG34XX SPL2 R-TWI0 path cross-check
+
+The later dual-mode disassembly of the RG34XX stock SPL2 resolves the bus-controller base used by its AXP-compatible PMIC path:
+
+- The SPL2 PMIC helpers use slave address \`0x34\`.
+- The first two bus descriptors both select controller index 2.
+- The controller lookup maps index 2 to MMIO base \`0x07081400\`, matching RG34XX \`twi5\` in the live FDT and KNULLI RG34XX DTS.
+- The callback table's link-time addresses relocate to AArch64 read/write functions inside SPL2; they are not callbacks into the captured Boot0 image.
+- The global selector \`x18 + 264\` is read but its runtime value is not directly established; descriptor 0 versus 1 remains unresolved, although both observed valid descriptors route to controller index 2.
+
+This confirms the R-TWI0 backend at static-code level. It does not prove that SenkOS's PH6/PH7/PH8/PH10 strap mapping applies to RG34XX, nor does it prove physical PMIC silicon identity or authorize hardware writes.
+
