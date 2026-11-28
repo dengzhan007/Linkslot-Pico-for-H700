@@ -7,6 +7,8 @@ on:
       - "scripts/collect-rg34xx-pio-input-readonly.sh"
       - "scripts/collect-rg34xx-gpio-debugfs-readonly.sh"
       - "scripts/collect-rg34xx-dram-pfn-readonly.sh"
+      - "scripts/audit-rg34xx-dram-pfn-metadata.py"
+      - "scripts/test-audit-rg34xx-dram-pfn-metadata.py"
       - "scripts/run-rg34xx-inventory.ps1"
       - "scripts/read-h700-rvbar-selector-readonly.py"
       - "scripts/test-read-h700-rvbar-selector-readonly.py"
@@ -19,6 +21,9 @@ on:
       - "scripts/collect-rg34xx-pio-input-readonly.sh"
       - "scripts/collect-rg34xx-gpio-debugfs-readonly.sh"
       - "scripts/run-rg34xx-inventory.ps1"
+      - "scripts/collect-rg34xx-dram-pfn-readonly.sh"
+      - "scripts/audit-rg34xx-dram-pfn-metadata.py"
+      - "scripts/test-audit-rg34xx-dram-pfn-metadata.py"
       - "tools/**"
       - "docs/**"
       - ".github/workflows/h700-boot-audit-tools.yml"
@@ -46,6 +51,9 @@ jobs:
 
       - name: Test read-only H700 RVBAR selector classification
         run: python3 scripts/test-read-h700-rvbar-selector-readonly.py
+
+      - name: Test dual-page RG34XX DRAM PFN metadata decoder
+        run: python3 scripts/test-audit-rg34xx-dram-pfn-metadata.py
 
   windows-powershell:
     runs-on: windows-latest
