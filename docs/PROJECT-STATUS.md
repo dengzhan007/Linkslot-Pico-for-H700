@@ -2321,3 +2321,6 @@ AArch64 反汇编窗口，验证：
 ### H700 documentation CI confirmation
 
 - H700 boot audit tools [#1691](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46123014893) and [#1692](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46123047272) both passed after the BL31 context-pointer/selector analysis was recorded. Both Windows PowerShell and host-tools jobs are green; this validates documentation-linked smoke paths, not hardware state.
+
+
+- H700 boot audit tools [#1693](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46123133209) passed after this status update; both Windows PowerShell and host-tools jobs are green. This is the latest smoke confirmation for the current documentation state.
