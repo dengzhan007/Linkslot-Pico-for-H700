@@ -2316,3 +2316,8 @@ AArch64 反汇编窗口，验证：
 - The second-window address expression is `0x40000000 + (((context[+0x1c] >> 17) & 0x7fff) << 20)`. When context bit31 is clear, helper `0x4800c730` computes a selector using context `+0x18/+0x1c/+0x7a`; controller IDs `0x5c00` and `0x5d00` have special branches. The 0x60000000 candidate requires a final selector of 512 MiB, but the context and helper result are not captured.
 - Restore gate `0x48011320` calls `0x480111a0` and `0x480115c0`; in context mode `+0x04 == 4`, it additionally reads the first word at `0x40000000`. Caller `0x48011974` skips the copy worker if the gate returns zero. Live context, controller ID, gate return, and branch execution remain unknown.
 - Detailed static findings added to [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md) in [52d45b0](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/52d45b05ab0521917c83c258046aa540276b73ba). Next static task: locate how the global context slot is initialized, including any upstream SRAM resume stub or external handoff; no new device probe, SMC, MMIO, or suspend/resume is warranted.
+
+
+### H700 documentation CI confirmation
+
+- H700 boot audit tools [#1691](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46123014893) and [#1692](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46123047272) both passed after the BL31 context-pointer/selector analysis was recorded. Both Windows PowerShell and host-tools jobs are green; this validates documentation-linked smoke paths, not hardware state.
