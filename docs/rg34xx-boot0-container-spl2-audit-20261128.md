@@ -123,8 +123,43 @@ This register table matches the AXP717 SPL driver's DCDC2/DCDC3 register layout 
 
 The bus helpers at \`0x5779c\` and \`0x57804\` dispatch through a descriptor selected from global field \`x18 + 264\`; the descriptor table begins at \`0x5b6b0\`. Descriptor entry 0 stores link-time callback addresses \`0x27d30\` (read) and \`0x27c20\` (write), which relocate by \`+0x30000\` to valid SPL2 AArch64 functions at \`0x57d30\` and \`0x57c20\`. Those functions read the descriptor's controller index at offset \`+56\`. Entry 0 and entry 1 both specify controller index 2. The controller lookup at \`0x57ae0\` returns MMIO base \`0x07081400\` when the index is 2 and reports an unknown bus for other indices. Thus the stock SPL2 contains an R-TWI0 backend at exactly the RG34XX FDT/KNULLI \`twi5\` base. The selector \`x18 + 264\` is read but no explicit assignment was found in the SPL2 code; whether entry 0 or 1 is selected remains open, although both route to controller index 2. The I2C transaction helpers pass slave address \`0x34\` through this descriptor path.
 
-This independently corroborates the LPDDR4 1100 mV / LPDDR3 1200 mV voltage policy seen in SenkOS, but it does **not** validate SenkOS's PH6/PH7/PH8/PH10 strap mapping for RG34XX. Voltage policy and strap wiring remain separate evidence questions.
+This independently corroborates the LPDDR4 1100 mV / LPDDR3 1200 mV voltage policy seen in SenkOS. The later TOC1 DTB audit below also directly confirms PH6/PH7/PH8/PH10 as RG34XX DRAM-selection GPIOs; the remaining open question is the exact SPL2 sampling/bit-order/fallback path, not whether those pins are configured in the RG34XX package.
 
+
+
+
+## 8. RG34XX TOC1 DTB confirms the SenkOS DRAM strap pins
+
+This section supersedes the earlier statement that SenkOS's PH6/PH7/PH8/PH10 strap mapping had not been confirmed for RG34XX.
+
+The extracted TOC1 package contains four components: \`u-boot\`, \`monitor\`, \`dtbo\`, and \`dtb\`. The package's DTB payload is 144,384 bytes (SHA-256 \`c28c87380ffab00148bf4dc457e70b8c6c576470dcfbc53df64addddf89603a1\`); its valid FDT occupies 139,822 bytes (SHA-256 \`7017a8f970234f7518e7f417fa9f86dd4ad3e46529bc5282c05a31e9f007dbc5\`). It contains the \`:rg34xx_v1\` board marker and the same AXP2202/R-TWI0 topology as the live RG34XX FDT.
+
+The FDT's \`/soc@03000000/dram_select_para\` node contains:
+
+- \`select_mode = 1\`, which Allwinner's sys_config documentation defines as GPIO-based automatic DRAM profile selection (mode 2 is GPADC; mode 3 is GPIO+GPADC).
+- \`gpadc_channel = 1\` is present in the configuration, but mode 1 is the GPIO-only mode.
+- \`select_gpio0\` through \`select_gpio3\` all reference pinctrl phandle \`0x4b\`, which resolves to \`allwinner,sun50iw9p1-pinctrl\` at \`/soc@03000000/pinctrl@0300b000\`.
+- The six GPIO cells after that phandle encode port index 7, pin numbers 6, 7, 8 and 10, GPIO input function 0, pull-up 1, and default drive/data values. Allwinner's port numbering maps index 7 to port H. These are therefore **PH6, PH7, PH8 and PH10**, in the same order as SenkOS's strap patch.
+
+The same DTB contains two relevant profiles:
+
+| Profile node | DRAM type | Type ID | Clock |
+|---|---|---:|---:|
+| \`dram_para14\` | LPDDR3 | 7 | 672 MHz |
+| \`dram_para15\` | LPDDR4 | 8 | 672 MHz |
+
+This is now direct RG34XX package evidence that the four SenkOS strap pins are configured as DRAM-selection inputs and that the package carries LPDDR3/LPDDR4 profiles 14 and 15. It materially validates the pin mapping on RG34XX; SenkOS is no longer merely a source of unverified pin assumptions.
+
+The remaining distinction is important: the DTB proves the configured pins, pull-ups, mode and available profiles. It does not by itself prove the exact SPL2 runtime sampling order, polarity interpretation, selected profile index, or fallback when a strap read fails. The SenkOS patch's rule (strap index 14 selects LPDDR3; other values select LPDDR4) is strongly consistent with the RG34XX profile table, but the stock SPL2 control flow still needs to be traced before reusing that algorithm.
+
+### Extracted later-stage identities
+
+- The U-Boot payload is AArch32 ARM-state code, begins with entry word \`0xea00018e\`, contains \`U-Boot.armv7\`, and identifies itself as \`U-Boot 2018.05 (May 26 2026 - 13:55:09 +0800) Allwinner Technology\`. Its strings include \`pmu_axp2202_probe\` and \`bmu_axp2202_probe\`.
+- The monitor payload is AArch64, begins with entry word \`0x1400003e\`, and contains TF-A source paths \`plat/sun50iw9p1/bl31_sunxi_setup.c\` and \`plat/sun50iw9p1/plat_pm.c\`. It includes PSCI CPU on/off/suspend implementation strings such as \`psci_afflvl0_on\`, \`psci_afflvl0_off\` and \`psci_afflvl0_suspend\`.
+- The monitor also contains generic TF-A error strings for a platform that has not exported PSCI System Off/System Reset hooks. String presence is not enough to prove those hooks are absent in this binary; the actual platform operation table and call paths must be traced.
+- These are extracted vendor-stage references from the RG34XX TOC1 package, not outputs that can be safely executed as project firmware.
+
+A new regression test \`tools/test_rg34xx_stock_toc1_dtb.py\` pins the TOC1/package payload hashes, FDT identity, PMIC/TWI node, GPIO strap tuples, LPDDR3/LPDDR4 profile IDs and regulator voltage ranges. The H700 audit workflow now fetches the read-only reports branch before running the host tests on Linux and Windows.
 
 
 ## 8. Independent public UART sample remains separate
@@ -133,15 +168,15 @@ The published macromorgan RG34XX UART sample reports PMU AXP2202 and DRAM_VCC 11
 
 The public log remains useful independent RG34XX corroboration. The project's own read-only runtime capture reports DCDC3 at 1100 mV, and the stock SPL2 AArch64 code now provides a direct DCDC3 voltage-setting path. Whether the public UART's `DRAM_VCC` message originates in Boot0 or SPL2 remains unproven.
 
-## 9. Required next static work
+## 10. Required next static work
 
-1. Resolve the global bus-descriptor selector `x18 + 264` and prove whether the PMIC path selects descriptor 0 or 1; both observed descriptors route to controller index 2 / R-TWI0.
+1. Trace SPL2's DRAM selector: prove the GPIO sample order, polarity, profile-index calculation, profile 14/15 selection and failure fallback for PH6/PH7/PH8/PH10.
 2. Parse the TOC1 header/component table and validate embedded FDT blobs; identify BL31/U-Boot payload boundaries and the selected RG34XX-v1 FDT.
 3. Trace the DCDC enable/read-modify-write call path and exact PMU probe sequence; the voltage-setting calls and R-TWI0 backend are already statically identified.
-4. Establish whether the RG35XX-2024 SPL2 build label is a shared vendor target or board-specific, and verify its DRAM strap assumptions against RG34XX-v1 evidence.
-5. Find target-specific evidence for the physical PMIC identity and PH6/PH7/PH8/PH10 strap wiring; no writes are authorized by this audit.
+4. Establish whether the RG35XX-2024 SPL2 build label is a shared vendor target or board-specific, and verify its remaining DRAM/PMIC/power assumptions against RG34XX-v1 evidence.
+5. Trace BL31 PSCI platform operation hooks and PMIC power-off/reset path; target strap wiring is now DTB-confirmed, but no writes are authorized by this audit.
 
-## 10. Safety state
+## 11. Safety state
 
 This was read-only parsing, hashing, string extraction and static ARM/AArch64 disassembly only.
 
