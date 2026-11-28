@@ -605,3 +605,20 @@ A closer read of helper `0x4e0` narrows the accepted resume path further:
 This is consistent with a retained-image/resume validation protocol, but it does not identify the peripheral as an RTC, PMIC, mailbox, or PSCI interface. A raw scan finds the `0x50000`, `0x20840`, `0x20498`, `0x070001f8`, and `0x030090b4` literals, but no direct `0x52000`, `0x07000138`, `0x0700013c`, or `0x48014668` literal. The two 0x07000138/13c register addresses are formed by the helper at runtime from a base plus a small offset; the 0x52000 destination is formed as an immediate in the copy loop. These literal-scan absences do not rule out computed aliases or writes from other code.
 
 This path therefore strengthens the existence of a Boot0 retained-image resume protocol, not the claim that it initializes BL31's context slot. The runtime producer for `0x48014668` remains unknown.
+
+
+### 2026-11-28 correction: Boot0 callback offsets and registry address space
+
+A byte-level recheck of the captured 128 KiB primary Boot0 image corrects the previous callback mapping. The earlier note subtracted an assumed executable base of `0x20030` from callback addresses; that assumption was not established. With the eGON image mapped as a whole at its reported `0x20000` base, file offsets map directly as `runtime = 0x20000 + file_offset`:
+
+- The Thumb-2 prologue is at file offset `0x981c` (runtime `0x2981c`).
+- Descriptor callback value `0x2984c` maps to file offset `0x984c`, 0x30 bytes inside that function, not to its prologue.
+- Adjacent value `0x298b0` maps to file offset `0x98b0`, also inside the same Thumb-2 routine, not to a separate function entry.
+
+This supersedes the earlier statement that `0x2984c` maps to file offset `0x981c` and that `0x298b0` maps to `0x9880`. The correction weakens the proposed callback-to-function correlation: these table values are interior code addresses, and their low bits are clear. The AArch64 dispatcher ends in `br x16`, which cannot switch into Thumb state. No valid AArch64-to-Thumb call edge is established.
+
+The AArch64-looking registry code at file offset `0x1b694`, interpreted under the same whole-image mapping, computes its descriptor table at runtime `0x3c688` (file offset `0x1c688`). The bytes there do contain the expected 0x28-byte records, key `0x4d`, and callback value `0x2984c`; this makes the code/table relationship internally address-consistent within the Boot0 image, but it does not resolve the ISA-state mismatch or prove that this code is reachable from the AArch32 eGON entry.
+
+A cross-image comparison also rejects treating this as an unmodified copy of the live TOC1 monitor: Boot0 file window `0x1b694` is not byte-identical to monitor offset `0x13694` and has no matching 16-byte anchor in the monitor; the 0x80-byte Boot0 table window at `0x1c688` is not byte-identical to monitor offset `0x14688` (only 54/128 bytes match, largely zero fields). Therefore do not equate the Boot0 registry/table with BL31's `0x48014668` context slot or `0x48014688` table without a separate relocation/copy proof.
+
+This is a static correction only. No Boot0/TOC1 write, payload execution, MMIO/SMC, or device test occurred. G2/G3/M1-S1 remain open.
