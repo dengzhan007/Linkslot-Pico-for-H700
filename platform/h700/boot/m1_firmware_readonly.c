@@ -69,7 +69,7 @@ static int plan_valid(const struct h700_m1_package_plan *plan)
         plan->monitor.padded_bytes == 0x1a400 &&
         plan->dtbo.offset == 0x1a400 && plan->dtbo.payload_bytes == 0x920 &&
         plan->dtbo.padded_bytes == 0xa00 &&
-        plan->dtb.offset == 0x1ae00 && plan->dtb.payload_bytes == 0x23400 &&
+        plan->dtb.offset == 0x1ae00 && plan->dtb.payload_bytes == 0x2222e &&
         plan->dtb.padded_bytes == 0x23400 &&
         plan->bl33.offset == 0x3e200 && plan->bl33.payload_bytes == 0x8000 &&
         plan->bl33.padded_bytes == 0x8000 &&
@@ -126,7 +126,8 @@ int h700_m1_package_read_validate_streaming(
             return 0;
         hash = fnv1a_update(hash, buffer, bytes);
         if (!zero_intersection(buffer, offset, bytes, 0x1a2d0, 0x1a400) ||
-            !zero_intersection(buffer, offset, bytes, 0x1ad20, 0x1ae00))
+            !zero_intersection(buffer, offset, bytes, 0x1ad20, 0x1ae00) ||
+            !zero_intersection(buffer, offset, bytes, 0x3d02e, 0x3e200))
             return 0;
         offset += bytes;
     }
@@ -151,7 +152,9 @@ int h700_m1_package_read_validate(
     if (!zero_bytes(bytes + plan->monitor.offset + plan->monitor.payload_bytes,
                     plan->monitor.padded_bytes - plan->monitor.payload_bytes) ||
         !zero_bytes(bytes + plan->dtbo.offset + plan->dtbo.payload_bytes,
-                    plan->dtbo.padded_bytes - plan->dtbo.payload_bytes))
+                    plan->dtbo.padded_bytes - plan->dtbo.payload_bytes) ||
+        !zero_bytes(bytes + plan->dtb.offset + plan->dtb.payload_bytes,
+                    plan->dtb.padded_bytes - plan->dtb.payload_bytes))
         return 0;
     return 1;
 }
