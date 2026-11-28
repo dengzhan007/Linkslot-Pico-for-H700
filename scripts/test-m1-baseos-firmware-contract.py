@@ -48,7 +48,7 @@ def main() -> int:
         'firmware.extend(bytes(-len(firmware) % 512))',
         '(output / "firmware.bin").write_bytes(firmware)',
         'f"\\n#define BASEOS_FIRMWARE_BYTES {len(firmware)}u\\n"',
-        'f"0x{fnv(firmware):08x}u\\n"',
+        'BASEOS_FIRMWARE_FNV 0x{fnv(firmware):08x}u',
     ):
         if token not in native_build:
             raise SystemExit(f"FAIL pinned native builder contract missing: {token}")
