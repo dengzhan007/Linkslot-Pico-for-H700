@@ -2324,3 +2324,13 @@ AArch64 反汇编窗口，验证：
 
 
 - H700 boot audit tools [#1693](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46123133209) passed after this status update; both Windows PowerShell and host-tools jobs are green. This is the latest smoke confirmation for the current documentation state.
+
+
+### G2 follow-up: whole-payload context-slot scan (#142)
+
+- Added [audit-rg34xx-bl31-context-slot.py](../scripts/audit-rg34xx-bl31-context-slot.py), identity-pinned to the matched 107,216-byte BL31 payload, and integrated it into the BL31 memory audit workflow. It scans aligned overlapping AArch64 windows for reads/writes to slot `0x48014668`; results are heuristic candidates, not a call graph.
+- BL31 static memory audit [#142](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46123660057) passed all steps. Artifact [15254871932](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46123660057/artifacts/15254871932) reports 10 candidate reads and zero candidate direct writes to the slot.
+- Candidate read instructions include `0x4800c434`, `0x4800c4e0`, `0x4800c63c`, `0x4800c654`, `0x4800c65c`, `0x48013408`, `0x48013e1c`, `0x48013e24`, `0x48013f20`, and `0x48013ff0`. These are overlapping-window decode leads; not all have yet been validated as reachable code.
+- The scanner cannot resolve indirect stores, loaded-pointer writes, exception paths, runtime relocation, or external initialization. Zero direct-write candidates is not proof that no writer exists. Runtime context pointer remains UNKNOWN; the static qword value 2 at file offset `0x14668` is not a valid substitute.
+- Detailed evidence and limitations are recorded in [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md), commit [cce3d67](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/cce3d67a95a812331b9c8a8caa0c4872c510f25b).
+- Next static step: identify initialization of the monitor data region and possible Boot0/SPL/secure-entry handoff writes, then validate candidate references against reachable function boundaries. No hardware probe, MMIO/SMC, DRAM access, suspend/resume, or payload execution. G2/G3/M1-S1 remain open; `H700_MEMORY_LAYOUT_APPROVED=false`.
