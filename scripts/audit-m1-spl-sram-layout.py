@@ -54,6 +54,7 @@ def main() -> int:
     arm_kconfig = read(uboot, "arch/arm/Kconfig")
     sunxi_kconfig = read(uboot, "arch/arm/mach-sunxi/Kconfig")
     spl_kconfig = read(uboot, "common/spl/Kconfig")
+    disk_kconfig = read(uboot, "disk/Kconfig")
     linker = read(uboot, "arch/arm/cpu/armv8/u-boot-spl.lds")
     sunxi_header = read(uboot, "include/configs/sunxi-common.h")
     h616_dtsi = read(uboot, "dts/upstream/src/arm64/allwinner/sun50i-h616.dtsi")
@@ -81,6 +82,13 @@ def main() -> int:
             "H616 SRAM base default changed")
     require("default 0x52a00 if MACH_SUN50I_H616" in spl_kconfig,
             "H616 initial SPL stack default changed")
+    spl_efi = disk_kconfig[disk_kconfig.index("config SPL_EFI_PARTITION"):][:700]
+    require("default n if ARCH_SUNXI" in spl_efi and
+            "default y if EFI_PARTITION" in spl_efi,
+            "SPL GPT support defaults changed for sunxi")
+    require("CONFIG_EFI_PARTITION=y" not in defconfig and
+            "CONFIG_SPL_EFI_PARTITION=y" not in defconfig,
+            "RG35XX H700 defconfig unexpectedly enables built-in SPL GPT")
     require("sram_c: sram@28000" in h616_dtsi and
             "reg = <0x00028000 0x30000>" in h616_dtsi,
             "H616 SRAM C range changed")
@@ -128,6 +136,8 @@ def main() -> int:
         "separate_bss": "ARM64 implies SPL_SEPARATE_BSS; sunxi linker places .bss in .sdram",
         "bss_zeroed_before_early_mmc": True,
         "early_mmc_hook_order": "spl_early_init -> baseos_early_mmc -> sunxi_board_init",
+        "uboot_spl_gpt_support_default": False,
+        "m1_gpt_strategy": "use the project read-only GPT parser; do not assume part_get_info_by_name is backed by SPL_EFI_PARTITION",
         "m1_scratch_4k_fits_configured_bss_window": True,
         "actual_bss_consumption_known": False,
         "linked_map_verified": False,
@@ -141,6 +151,7 @@ def main() -> int:
             "The 16 KiB BSS limit is a linker-enforced ceiling, not a measurement of current BSS use or remaining free bytes.",
             "A final M1-enabled SPL link map and ELF are still required to measure BSS symbols, prove the 4 KiB scratch reservation fits, and inspect transitive call sites.",
             "The initial stack pointer is source-configured; stack high-water usage is not measured here.",
+            "U-Boot SPL EFI/GPT partition support defaults off for ARCH_SUNXI and is not enabled by the RG35XX H700 defconfig; M1 needs its own bounded GPT adapter or a separately audited config change.",
             "No SRAM access, MMC read, DRAM access, hardware register access, media write, or payload execution occurs."
         ]
     }
