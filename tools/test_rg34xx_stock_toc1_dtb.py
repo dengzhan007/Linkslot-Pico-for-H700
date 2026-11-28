@@ -204,9 +204,11 @@ class TestRG34XXStockTOC1(unittest.TestCase):
 
         self.assertEqual(insn(0x2588), 0x97FFFE50)  # BL reset sequence at 0x1ec8
         self.assertEqual(insn(0x258C), 0xD503207F)  # WFI after reset attempt
-        self.assertEqual(insn(0x9EF0), 0xF9401C00)  # PSCI system-off op field +56
-        self.assertEqual(insn(0x9F48), 0xF9402000)  # PSCI system-reset op field +64
-        self.assertEqual(insn(0x9F50), 0xD63F0000)  # indirect call to reset hook if present
+        self.assertEqual(insn(0x9EC0), 0xF9401821)  # primary PSCI System Off callback +48
+        self.assertEqual(insn(0x9F18), 0xF9401C21)  # primary PSCI System Reset callback +56
+        self.assertEqual(insn(0x9EF0), 0xF9401C00)  # secondary System Off action +56
+        self.assertEqual(insn(0x9F48), 0xF9402000)  # secondary System Reset action +64
+        self.assertEqual(insn(0x9F5C), 0xD63F0000)  # indirect call to primary reset hook if present
         # String checks alone do not establish whether the system-off pointer is NULL.
 
     def test_pmic_regulator_ranges(self) -> None:
