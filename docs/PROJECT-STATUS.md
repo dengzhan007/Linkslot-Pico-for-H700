@@ -2789,5 +2789,5 @@ Detailed evidence: \`docs/rg34xx-boot0-container-spl2-audit-20261128.md\`.
 - H700 audit run #1853 passed on Linux and Windows with the updated documentation state: [run #1853](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46149296929).
 - The test pins the primary Boot0 capture SHA, DRAM.ext signature/mode, all four PH descriptors, profile14/15 records, PIO data-register literal, Thumb GPIO sampler, LSB-first bit packing, one-based profile lookup, and zero/invalid-profile fallback branch.
 - Earlier #1849–#1851 failures were from the first test assertion omitting a conditional branch instruction in the profile lookup byte sequence. The expected bytes were corrected; #1852/#1853 are the successful reruns.
-- Linkslot LK/Rust feasibility #1089 remains in progress; no new completion result is claimed: [run #1089](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46148779578).
+- Linkslot LK/Rust feasibility #1089 completed successfully: 102/102 cross-compile and static verification steps passed; artifact `linkslot-lk-rust-feasibility-46148779578` is available: [run #1089](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46148779578).
 
