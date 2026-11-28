@@ -294,7 +294,7 @@ jobs:
               gcc-arm-linux-gnueabi g++-arm-linux-gnueabi libc6-dev-armel-cross \
               gcc-arm-none-eabi libnewlib-arm-none-eabi libnewlib-dev \
               libstdc++-arm-none-eabi-dev gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
-              libssl-dev bison flex bc device-tree-compiler swig python3-dev \
+              libssl-dev libgnutls28-dev bison flex bc device-tree-compiler swig python3-dev \
               python3-pyelftools python3-setuptools python3-yaml dosfstools mtools exfatprogs
           for tool in clang ld.lld llvm-nm llvm-objcopy arm-none-eabi-gcc arm-linux-gnueabi-gcc aarch64-linux-gnu-gcc aarch64-linux-gnu-nm aarch64-linux-gnu-objdump mkfs.fat mcopy mkfs.exfat; do
             command -v "$tool" >/dev/null || { echo "Missing required tool: $tool"; exit 1; }
