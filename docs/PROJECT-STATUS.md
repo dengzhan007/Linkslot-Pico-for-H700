@@ -1,3 +1,12 @@
+## 2026-11-28 Owner decisions — M1 hardware-policy boundaries
+
+The project owner explicitly confirmed the following policy decisions:
+
+1. **SPL Profile A selected.** The isolated M1 SPL may include PMIC/TWI operations only where each operation is traced to the pinned stock initialization path and independently audited (controller, target/address, register, value/mask, ordering, timeout/error handling, and necessity). This is permission to design and statically audit the compatibility profile, **not** blanket authorization for PMIC writes or hardware execution. Do not add speculative voltage changes or broaden PMIC access.
+2. **Native RTC/WDT protocol accepted only for an audited dedicated test-TF workflow.** RTC backup/retention register ownership and semantics, GP14/GP15 use, watchdog configuration/arming/reset behavior, stale-state cleanup, timeout and recovery paths must be documented and statically audited before any test implementation can be exercised. Do not enable this protocol in the normal daily boot path by default.
+3. **No execution or hardware-application authorization is implied.** Firmware payload execution, DRAM destination writes/copies, physical device tests, TF/Boot0/TOC1 writes, and firmware flashing remain unauthorized. Preserve `H700_MEMORY_LAYOUT_APPROVED=false`, `hardware_applied=0`, and `candidate_eligible=false`. DRAM source pages `0x40000000` and `0x60000000` remain excluded from scratch use.
+4. **Next work:** continue source-level PMIC/TWI provenance and side-effect auditing for Profile A; separately map RTC retention/GP14/GP15 and WDT ownership/protocol against the pinned BaseOS capsule and H700 startup sources. Add regression checks for the declared allowlist/denylist and fail-closed behavior. Keep M1 final-link/callgraph/ELF verification as the mainline; do not reinterpret these owner decisions as closure of G2/G3/M1-S1 or permission to advance to M2.
+
 ## 2026-11-28 M1 GPT partition discovery and bounded SRAM scratch
 
 - New source finding: U-Boot v2026.10's `SPL_EFI_PARTITION` defaults to disabled for `ARCH_SUNXI`; the RG35XX H700 defconfig does not explicitly enable it. Therefore SPL code must not assume `part_get_info_by_name()` has a GPT driver behind it. The source-layout audit now pins this Kconfig boundary.
