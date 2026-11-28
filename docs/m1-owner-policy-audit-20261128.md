@@ -73,3 +73,35 @@ The accepted scope is one dedicated, recoverable test-TF workflow. It is not the
 - No TF/Boot0/TOC1 writes or firmware flashing.
 - DRAM source pages `0x40000000` and `0x60000000` remain excluded from scratch use.
 - No M2 advancement based solely on this static audit or a green compile/link workflow.
+
+
+## E. Additional pinned-source findings (2026-11-28 continuation)
+
+The pinned BaseOS source was inspected directly at commit `cbe253a43f46cf551cc9a6c79a84015bde3686cf`, including `spl/build-early-mmc.py`, `spl/early-mmc.c`, `spl/native-boot.c`, `native/capsule/capsule.c`, `native/capsule/entry.S`, and `src/native-attempt.h`.
+
+### E.1 Profile A must not be confused with the current preflight-only SPL
+
+- The builder's documented sequence inserts `baseos_early_mmc()` before `sunxi_board_init()`; the mainline path is explicitly a pre-DRAM SD control. The current M1 preflight overlay deliberately stops after the read-only MMC/GPT/package validation path and never calls the later `sunxi_board_init()` continuation.
+- The pinned builder shows that the persistent non-resume board-init path retains `i2c_init_board()` and `i2c_init(CONFIG_SYS_I2C_SPEED, CONFIG_SYS_I2C_SLAVE)`, while the resume path skips them. This is evidence that the upstream SPL board-init sequence has an I2C/TWI initialization phase whose ordering is conditional on resume state; it is not yet proof of the exact AXP2202 register writes or their necessity for DRAM rails.
+- The current `native-boot.c` PMIC calls (`pmic_bus_read(0x20)`, `pmic_bus_read(0)`, `pmic_bus_read(0xf0)`, conditional `pmic_bus_write(0xf0, 0)`) are in `baseos_native_bootreason()`, which is called from `baseos_vendor_handoff()` after its `sunxi_board_init()` call. These are boot-reason / scratch-byte operations, not demonstrated DRAM-voltage initialization. Do not reuse them as the Profile A power-up sequence.
+- Therefore the correct implementation split is: retain the current M1 read-only preflight's no-PMIC/no-TWI configuration; separately audit the I2C/TWI board-init path that precedes DRAM initialization in the future SPL profile. Profile A is a requirement for that future DRAM-capable path, not a reason to pull PMIC drivers into the current preflight ELF.
+
+### E.2 Exact raw-capsule-v2 RTC/WDT addresses and behavior
+
+The pinned raw-capsule-v2 source defines:
+
+| Function | Address | Current source behavior |
+|---|---:|---|
+| RTC GP14 | `0x07000138` | attempt cookie |
+| RTC GP15 | `0x0700013c` | attempt marker |
+| RTC retention | `0x070001f8` | bit 16 selects resume in outer capsule |
+| WDT control | `0x030090b0` | reload value `0x14af` |
+| WDT config | `0x030090b4` | set/read back `1` |
+| WDT mode | `0x030090b8` | set/read back `0xb1`; low-bit active check |
+
+The raw outer capsule reads retention first. If not resuming, it reads the GP14/GP15 pair, requires the empty pair before the native attempt, validates stock/native fingerprints, refuses to take over an already-active watchdog, writes WDT config/mode/control with readback checks, then commits the attempt pair with barriers and readback. The A32 entry saves CPU context and transfers through the SRAM copy stub. The raw SPL adoption function performs two passes of read-only GP14/GP15 and WDT config/mode checks; it does not commit the attempt pair. The later native handoff reloads the watchdog control register.
+
+The attempt-pair implementation in `src/native-attempt.h` is explicitly non-atomic: it uses ordered cookie-then-marker writes and detects observed changes by readback. Its own comment requires exclusive firmware ownership plus one serialized Linux health supervisor for acknowledgment. This protocol is not a generic free RTC scratch area.
+
+**M1 implication:** do not copy this v2 state machine into M1. First define a distinct dedicated-test marker and owner, document whether the test path is allowed to touch retention or only GP14/GP15, and define interruption-safe cleanup and reset recovery. The accepted RTC/WDT decision authorizes this design/audit work only. It does not authorize writing these registers on a device.
+
