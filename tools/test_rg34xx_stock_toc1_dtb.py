@@ -122,6 +122,11 @@ class TestRG34XXStockTOC1(unittest.TestCase):
             f"{REPORT_PATH}/toc1-package.bin",
         )
         cls.package_sha256 = hashlib.sha256(cls.package).hexdigest()
+        cls.boot0 = read_git_blob(
+            "refs/remotes/origin/reports",
+            f"{REPORT_PATH}/boot0-primary.bin",
+        )
+        cls.inner_boot0 = cls.boot0[0x1000:0x11000]
         cls.items = parse_sunxi_package(cls.package)
         cls.dtb = cls.items["dtb"]
         cls.fdt = parse_fdt(cls.dtb)
@@ -143,6 +148,55 @@ class TestRG34XXStockTOC1(unittest.TestCase):
         self.assertIn(b"psci_afflvl0_suspend", self.items["monitor"])
         self.assertIn(b"psci_afflvl0_on", self.items["monitor"])
         self.assertIn(b"psci_afflvl0_off", self.items["monitor"])
+
+    def test_boot0_dram_ext_gpio_to_profile_selection(self) -> None:
+        inner = self.inner_boot0
+        self.assertEqual(len(self.boot0), 0x20000)
+        self.assertEqual(
+            hashlib.sha256(self.boot0).hexdigest(),
+            "bf886995745a0eb9b5030296f9f6163035e164b3a82183716e67ff876319289f",
+        )
+
+        # The actual Boot0 DRAM.ext block (not just the later DTB copy).
+        self.assertEqual(inner[0x348:0x350], b"DRAM.ext")
+        self.assertEqual(inner[0x350], 1)  # select_mode 1 = GPIO-only
+        self.assertEqual(inner[0x351], 1)  # GPADC channel field, unused by mode 1
+        expected_gpio = (
+            bytes.fromhex("08060001ffff0000"),  # port H, PH6
+            bytes.fromhex("08070001ffff0000"),  # port H, PH7
+            bytes.fromhex("08080001ffff0000"),  # port H, PH8
+            bytes.fromhex("080a0001ffff0000"),  # port H, PH10
+        )
+        for index, expected in enumerate(expected_gpio):
+            self.assertEqual(inner[0x354 + index * 8 : 0x35C + index * 8], expected)
+
+        # DRAM.ext profile table is one-based, 0x80 bytes per profile.
+        profile14 = struct.unpack_from("<32I", inner, 0x374 + 13 * 0x80)
+        profile15 = struct.unpack_from("<32I", inner, 0x374 + 14 * 0x80)
+        self.assertEqual((profile14[0], profile14[1], profile14[26]), (672, 7, 0x2FB08080))
+        self.assertEqual((profile15[0], profile15[1], profile15[26]), (672, 8, 0x40808080))
+
+        # Thumb code validates DRAM.ext, takes the mode-1 GPIO path, samples
+        # four descriptors from the PIO data register, and packs them LSB-first.
+        self.assertEqual(inner[0x340E:0x3412], bytes.fromhex("95f85083"))  # load mode byte +0x350
+        self.assertEqual(inner[0x3412:0x3416], bytes.fromhex("b8f1010f"))  # mode == 1
+        self.assertEqual(inner[0x341E:0x3422], bytes.fromhex("39463e46"))  # bit index/result start at zero
+        self.assertEqual(inner[0x3418:0x341C], bytes.fromhex("dff864c1"))  # PIO data register literal
+        self.assertEqual(inner[0x3426:0x342A], bytes.fromhex("90f85433"))  # descriptor port field
+        self.assertEqual(inner[0x342E:0x3432], bytes.fromhex("90f855e3"))  # descriptor pin field
+        self.assertEqual(inner[0x3434:0x3438], bytes.fromhex("53f80c80"))  # read PIO data
+        self.assertEqual(inner[0x3438:0x3440], bytes.fromhex("02fa0ef303ea0803"))  # mask and extract pin
+        self.assertEqual(inner[0x3440:0x3448], bytes.fromhex("23fa0ef38b401e43"))  # shift into result bit and OR
+        self.assertEqual(inner[0x3448:0x3450], bytes.fromhex("013108300429ead1"))  # advance 4 GPIO entries
+
+        # The 4-bit result is used as a 1-based profile number:
+        # profile_ptr = DRAM.ext + 0x374 + (index - 1) * 0x80.
+        self.assertEqual(
+            inner[0x3482:0x3492],
+            bytes.fromhex("16ebc404611ec9016b18d3f87463"),
+        )
+        self.assertEqual(struct.unpack_from("<I", inner, 0x3580)[0], 0x0300B010)
+        self.assertEqual(struct.unpack_from("<I", inner, 0x3584)[0], 0x00020038)
 
     def test_embedded_rg34xx_fdt_and_axp2202_r_twi0(self) -> None:
         total_size = be32(self.dtb[4:8])
