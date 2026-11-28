@@ -13,6 +13,7 @@ on:
       - "scripts/read-h700-rvbar-selector-readonly.py"
       - "scripts/test-read-h700-rvbar-selector-readonly.py"
       - "tools/**"
+      - "ci/rg34xx_boot0_disassemble.py"
       - "docs/**"
       - ".github/workflows/h700-boot-audit-tools.yml"
   pull_request:
@@ -54,6 +55,30 @@ jobs:
 
       - name: Test dual-page RG34XX DRAM PFN metadata decoder
         run: python3 scripts/test-audit-rg34xx-dram-pfn-metadata.py
+
+      - name: Disassemble RG34XX stock Boot0 (static only)
+        if: github.event_name == 'push' && (contains(github.event.head_commit.modified, 'ci/rg34xx_boot0_disassemble.py') || contains(github.event.head_commit.added, 'ci/rg34xx_boot0_disassemble.py') || contains(github.event.head_commit.modified, '.github/workflows/h700-boot-audit-tools.yml'))
+        run: |
+          git fetch --filter=blob:none --no-tags --depth=1 origin refs/heads/reports:refs/remotes/origin/reports
+          mkdir -p build/rg34xx-boot0-input
+          git show refs/remotes/origin/reports:reports/rg34xx-inventory-20261127-uart/boot0-primary.bin > build/rg34xx-boot0-input/boot0-primary.bin
+          git show refs/remotes/origin/reports:reports/rg34xx-inventory-20261127-uart/boot0-secondary.bin > build/rg34xx-boot0-input/boot0-secondary.bin
+          sudo apt-get update
+          sudo apt-get install -y binutils-arm-linux-gnueabihf
+          python3 ci/rg34xx_boot0_disassemble.py \
+            --primary build/rg34xx-boot0-input/boot0-primary.bin \
+            --secondary build/rg34xx-boot0-input/boot0-secondary.bin \
+            --outdir build/rg34xx-boot0-disassembly
+
+      - name: Upload RG34XX Boot0 static disassembly
+        if: always() && github.event_name == 'push' && (contains(github.event.head_commit.modified, 'ci/rg34xx_boot0_disassemble.py') || contains(github.event.head_commit.added, 'ci/rg34xx_boot0_disassemble.py') || contains(github.event.head_commit.modified, '.github/workflows/h700-boot-audit-tools.yml'))
+        uses: actions/upload-artifact@v4
+        with:
+          name: rg34xx-stock-boot0-static-disassembly
+          path: build/rg34xx-boot0-disassembly/
+          if-no-files-found: warn
+          retention-days: 7
+
 
   windows-powershell:
     runs-on: windows-latest
