@@ -2353,3 +2353,11 @@ AArch64 反汇编窗口，验证：
 - Pinned BaseOS SPL source audit already limits explicit monitor patches to `+0x24..+0x2b`, `+0x30..+0xaf`, and `+0xb0..+0xb3`; no direct patch to `+0x14668`.
 - This excludes only obvious direct-literal Boot0/SPL writes. Computed address construction, generic relocation/copy behavior, indirect writes, and runtime BL31 initialization remain open. Do not call this proof of no Boot0 writer.
 - Details added to [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md), commit [dd47238](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/dd4723802d788a670acb8624b266799fd2d58f73). Next static task: inspect Boot0's monitor extent-copy routine and BL31's initialization/registration paths for computed writes or indirect handoff of the context pointer. G2/G3/M1-S1 remain open; no device access or payload execution.
+
+
+### Boot0 mixed-ISA reverse-engineering correction
+
+- A second-pass disassembly used the correct AArch64 decoder for the Boot0 tail. The earlier ARMv7 decode had misclassified AArch64 words: `0x1b6d0` is `cmp x1,x0`, not `BL`; `0x1b7d4` is data, not a monitor-copy helper.
+- The AArch64 function at `0x1b6f4` dispatches through a function pointer stored at descriptor offset `+0x20`. The data pair at `0x1b7c8/0x1b7cc` remains `0x1a2d0/0x48000000`, matching BL31 size/base, but no consumer or copy semantics have yet been established.
+- The prior tentative claim that Boot0 calls a monitor-loader helper at `0x1b7d4` is explicitly withdrawn. Full correction and evidence are in [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md), commit [8fe153f](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/8fe153f4f8b69712938a4850f18b95901a145394).
+- Next: identify how/if Boot0 reaches the AArch64 region, decode descriptor layout `0x1b740..0x1b7f8`, and find the actual consumer of the size/base pair. No execution or device access. G2/G3/M1-S1 remain open; `H700_MEMORY_LAYOUT_APPROVED=false`.
