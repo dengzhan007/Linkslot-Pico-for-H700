@@ -191,12 +191,12 @@ def main() -> int:
     # required SPL_LIBCOMMON_SUPPORT parent in this disposable checkout only.
     spl_kconfig = uboot / "common/spl/Kconfig"
     spl_kconfig_text = spl_kconfig.read_text()
-    spl_common_block = "config SPL_LIBCOMMON_SUPPORT\\n\\tbool \\\"Support common libraries\\\"\\n"
+    spl_common_block = "config SPL_LIBCOMMON_SUPPORT\n\tbool \"Support common libraries\"\n"
     require(spl_kconfig_text.count(spl_common_block) == 1,
             "unexpected SPL_LIBCOMMON_SUPPORT Kconfig definition")
     spl_kconfig.write_text(spl_kconfig_text.replace(
         spl_common_block,
-        spl_common_block + "\\tselect SPL_PRINTF\\n", 1))
+        spl_common_block + "\tselect SPL_PRINTF\n", 1))
 
     # ARCH_SUNXI force-selects the tiny allocator/printf profile for SPL.
     # This preflight needs dlmalloc realloc and full snprintf for DM/FDT helpers.
