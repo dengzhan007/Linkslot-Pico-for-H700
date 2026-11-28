@@ -123,7 +123,7 @@ This register table matches the AXP717 SPL driver's DCDC2/DCDC3 register layout 
 
 The bus helpers at \`0x5779c\` and \`0x57804\` dispatch through a descriptor selected from global field \`x18 + 264\`; the descriptor table begins at \`0x5b6b0\`. Descriptor entry 0 stores link-time callback addresses \`0x27d30\` (read) and \`0x27c20\` (write), which relocate by \`+0x30000\` to valid SPL2 AArch64 functions at \`0x57d30\` and \`0x57c20\`. Those functions read the descriptor's controller index at offset \`+56\`. Entry 0 and entry 1 both specify controller index 2. The controller lookup at \`0x57ae0\` returns MMIO base \`0x07081400\` when the index is 2 and reports an unknown bus for other indices. Thus the stock SPL2 contains an R-TWI0 backend at exactly the RG34XX FDT/KNULLI \`twi5\` base. The selector \`x18 + 264\` is read but no explicit assignment was found in the SPL2 code; whether entry 0 or 1 is selected remains open, although both route to controller index 2. The I2C transaction helpers pass slave address \`0x34\` through this descriptor path.
 
-This independently corroborates the LPDDR4 1100 mV / LPDDR3 1200 mV voltage policy seen in SenkOS. The later TOC1 DTB audit below also directly confirms PH6/PH7/PH8/PH10 as RG34XX DRAM-selection GPIOs; the remaining open question is the exact SPL2 sampling/bit-order/fallback path, not whether those pins are configured in the RG34XX package.
+This independently corroborates the LPDDR4 1100 mV / LPDDR3 1200 mV voltage policy seen in SenkOS. The later TOC1 DTB and raw Boot0 DRAM.ext/Thumb audit directly confirm PH6/PH7/PH8/PH10, LSB-first bit packing and profile 14/15 selection. The separate SPL2 three-candidate test loop is not yet proven to consume the Boot0-selected profile.
 
 
 
