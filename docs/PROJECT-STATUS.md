@@ -2475,3 +2475,43 @@ See [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md) for the detai
 - [CI #150 passed](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46134616497); artifact [15259340938](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46134616497/artifacts/15259340938) records the conditional result: helper `0x400`, context word[7] `0x04000000`, second DRAM save/restore window candidate `[0x60000000,0x60000140)`.
 - Initial #147–#149 attempts caught incorrect test expectations/instruction pinning; corrected in #150. The successful report explicitly says no live parameter block or suspend/resume execution was captured and memory layout remains unapproved.
 - Static provenance/regression is complete. G2 remains open for actual branch selection, live parameter values, save/restore lifetime, and CPU/DMA/cache quiescence. Keep both DRAM source pages excluded; no device interaction or payload execution.
+
+## 2026-11-28 Decision record: M1 primary / G2 safety parallel
+
+### Approved decisions
+
+1. **M1 isolated SPL final-link verification is the primary implementation line.** Complete the real linked ELF, linker-map, symbol, BSS, stack/heap geometry, and reachable-callgraph audit before attempting any executable image integration.
+2. **G2 DRAM ownership remains a parallel safety line.** It must independently establish save/restore lifetime and Linux/DMA/cache ownership; it is not allowed to borrow confidence from M1 link success.
+3. Planning allocation: **60% M1 / 40% G2**. This is a work-priority split, not a progress percentage or safety waiver.
+4. Preserve the milestone gates:
+   - **M0 — final SPL ELF/link geometry:** actual ELF + MAP + NM + disassembly; exact BSS/scratch/GPT table/heap/stack intervals; callgraph and store review.
+   - **M1 — preflight-only path:** read-only GPT/MMC source path and fail-closed package planner, with no payload execution or media writes.
+   - **M2 — H700 BL33/LK minimal boot:** only after M0/M1 evidence and a separately reviewed boot handoff contract.
+   - **M3 — Linkslot minimal UI:** only after stable BL33/LK display/input/storage prerequisites.
+5. The geometry-only link fixture is evidence about symbol retention and SRAM geometry only. It must never be described as an executable preflight.
+6. No change to the normal BaseOS boot path or raw-capsule-v2 semantics is authorized. M1 remains an isolated one-shot path.
+7. No DRAM destination copy, payload execution, Boot0/TOC1/TF write, firmware flashing, or installable candidate is authorized by this decision.
+
+### Implementation order
+
+- **M1-A (now):** run and preserve the isolated U-Boot v2026.10 SPL ELF/MAP/NM/disassembly build; make the CI contract assert the manifest's non-installable state, exact linked scratch/GPT symbols, BSS ceiling, stack separation, and absence of named write/PMIC/TWI/normal-board-init symbols. Review reachable stores and indirect-call limitations manually.
+- **M1-B:** keep board_init_f limited to BSS clear, required SRAM/TZPC/timer/clock setup, and read-only MMC/GPT preflight. Treat even read-only device access as unvalidated until the final linked path is audited.
+- **G2-A (parallel):** extend read-only Linux 4.9.170 ownership evidence around PFN 0x40000 and the corresponding 0x60000000 source window. Obtain repeated/independent page metadata and kernel memory-map evidence; do not infer free memory from one sample.
+- **G2-B:** reconstruct BL31 save-before-training / restore-before-Linux-resume timing and prove CPU, DMA, and cache quiescence. Any Linux-mapped source page remains excluded unless exact preservation/restoration is demonstrated.
+- Update this status file with every CI result and every change to the safety gate.
+
+### Current evidence and safety interpretation
+
+- The 2026-11-28 PFN audit decoded the captured Linux 4.9.170 sample for PFN 0x40000 as LINUX_ACTIVE_ANON_MAPPED_PAGE, kpageflags=0x5868, page_mapcount=1; its gate is BLOCKED_LIVE_LINUX_PAGE_REQUIRES_EXACT_PRESERVE_RESTORE. This is affirmative evidence that the sampled page was actively mapped by Linux at capture time. It is not evidence that BL31 actually overwrites it, but it rules out treating it as free scratch.
+- The same audit classifies the 0x60000000 source page as UNRESERVED_SYSTEM_RAM / BLOCKED_SOURCE_PAGE_NOT_RESERVED; absence of a reserved marker is not ownership proof.
+- M1 builder currently has an actual-link path that emits m1-spl-preflight.elf, .bin, .map, .nm.txt, disassembly, and a manifest; it asserts the aligned 4 KiB scratch and bounded GPT table are inside linked BSS, BSS stays within 16 KiB, BSS does not overlap the initial stack, and named write/PMIC/TWI/normal-board-init symbols are absent. The reachable-callgraph audit follows direct BL and direct tail B edges only; indirect calls and complete MMIO/SMC semantics remain manual-review blockers.
+- The M1 link result, even when CI passes, is not a hardware-qualified boot result. The builder's sentinel intentionally prevents firmware payload reads; device_io_performed=false, payload_executed=false, installable=false, and candidate_eligible=false remain mandatory.
+- Safety flags remain unchanged: H700_MEMORY_LAYOUT_APPROVED=false, hardware_applied=0, candidate_eligible=false. Keep the DRAM source pages 0x40000000 and 0x60000000 excluded.
+
+### Active next tasks
+
+1. Resolve the latest M1 CI build result and preserve the complete ELF/MAP/NM/disassembly artifact set; if the link fails, fix only the isolated disposable U-Boot overlay and add a regression for the exact failure.
+2. Add a strict CI post-link contract over the generated manifest and callgraph so a successful compile cannot silently weaken the fail-closed flags or omit audit outputs.
+3. For G2, extend the read-only collector/report to capture the relevant memory-map/zone/page allocator evidence for both candidate pages, while keeping the report non-authorizing and avoiding reads of DRAM contents.
+4. Do not advance to M2 until M0 and M1 gates are explicitly closed by evidence review.
+
