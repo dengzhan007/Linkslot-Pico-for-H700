@@ -130,7 +130,7 @@ def analyze_capture(binary: Path, outdir: Path, objdump: str, aarch64_objdump: s
     return report, data
 
 
-def scan_fdt_blobs(data: bytes) -> list[dict]:
+def scan_fdt_blobs(data: bytes, base_offset: int = 0) -> list[dict]:
     found = []
     magic = b"\xd0\x0d\xfe\xed"
     cursor = 0
@@ -156,7 +156,7 @@ def scan_fdt_blobs(data: bytes) -> list[dict]:
         ):
             continue
         blob = data[offset : offset + total]
-        relevant = strings_index(blob, offset)
+        relevant = strings_index(blob, base_offset + offset)
         board_strings = [
             item for item in relevant
             if re.search(r"rg34|rg35|anbernic|sun50i-h700|x-powers,axp2202", item["text"], re.I)
@@ -164,7 +164,7 @@ def scan_fdt_blobs(data: bytes) -> list[dict]:
         if board_strings:
             found.append(
                 {
-                    "offset": f"0x{offset:x}",
+                    "offset": f"0x{base_offset + offset:x}",
                     "total_size": total,
                     "version": version,
                     "last_comp_version": last_comp,
@@ -198,6 +198,74 @@ def marker_offsets(data: bytes) -> dict[str, list[str]]:
             cursor = offset + 1
         result[name] = offsets[:100]
     return result
+
+
+
+def parse_sunxi_package(data: bytes, outdir: Path) -> dict:
+    if len(data) < 0x30 or not data.startswith(b"sunxi-package"):
+        raise ValueError("boot-package does not have the sunxi-package signature")
+    magic, checksum, serial, status, item_count, total_size, boot_media = struct.unpack_from(
+        "<7I", data, 0x10
+    )
+    if magic != 0x89119800:
+        raise ValueError(f"unexpected sunxi-package magic: 0x{magic:08x}")
+    if total_size > len(data) or total_size < 0x30:
+        raise ValueError(f"invalid sunxi-package declared size: 0x{total_size:x}")
+    if item_count < 1 or item_count > 32:
+        raise ValueError(f"invalid sunxi-package item count: {item_count}")
+
+    items = []
+    item_stride = 0x170
+    item_table_start = 0x30
+    for index in range(item_count):
+        item_start = item_table_start + index * item_stride
+        if item_start + 0x60 > total_size:
+            raise ValueError(f"sunxi-package item header {index} is truncated")
+        marker = data[item_start + 0x0C : item_start + 0x10].decode("ascii", errors="replace")
+        name_raw = data[item_start + 0x10 : item_start + 0x50]
+        name = name_raw.split(b"\0", 1)[0].decode("ascii", errors="replace")
+        payload_offset, payload_length, item_reserved, item_type = struct.unpack_from(
+            "<4I", data, item_start + 0x50
+        )
+        if not name or payload_length == 0:
+            raise ValueError(f"sunxi-package item {index} has an empty name or payload")
+        if payload_offset < 0x30 or payload_offset + payload_length > total_size:
+            raise ValueError(
+                f"sunxi-package item {name} range 0x{payload_offset:x}+0x{payload_length:x} is invalid"
+            )
+        payload = data[payload_offset : payload_offset + payload_length]
+        extracted = outdir / f"sunxi-package-{name}.bin"
+        extracted.write_bytes(payload)
+        items.append(
+            {
+                "index": index,
+                "header_offset": f"0x{item_start:x}",
+                "marker": marker,
+                "name": name,
+                "payload_offset": f"0x{payload_offset:x}",
+                "payload_length": payload_length,
+                "reserved": f"0x{item_reserved:x}",
+                "item_type": item_type,
+                "sha256": sha256(payload),
+                "extracted_file": extracted.name,
+                "relevant_strings": strings_index(payload, payload_offset),
+                "embedded_fdt_blobs": scan_fdt_blobs(payload, payload_offset),
+            }
+        )
+    return {
+        "format": "Allwinner sunxi-package boot package",
+        "signature": "sunxi-package",
+        "magic": f"0x{magic:08x}",
+        "checksum_field": f"0x{checksum:08x}",
+        "serial": serial,
+        "status": status,
+        "item_count": item_count,
+        "declared_total_size": total_size,
+        "boot_media": boot_media,
+        "item_table_start": f"0x{item_table_start:x}",
+        "item_header_stride": f"0x{item_stride:x}",
+        "items": items,
+    }
 
 
 def main() -> int:
@@ -248,7 +316,9 @@ def main() -> int:
 
     toc1_data = args.toc1.read_bytes()
     fdt_data = args.fdt.read_bytes()
+    sunxi_package = parse_sunxi_package(toc1_data, args.outdir)
     toc1_fdt = {
+        "sunxi_package": sunxi_package,
         "toc1": {
             "file": args.toc1.name,
             "bytes": len(toc1_data),
@@ -309,7 +379,7 @@ def main() -> int:
         "Inputs: reports-branch Boot0 primary/secondary captures, TOC1 package, and live FDT.\n"
         "The primary capture contains nested eGON Boot0 and SPL2 components.\n"
         "Boot0 components are disassembled in ARM and AArch64 modes; SPL2 is disassembled in ARM mode and its candidate AArch64 region separately.\n"
-        "TOC1 and live FDT are scanned for embedded FDT blobs and board/PMIC/BL31/U-Boot strings.\n"
+        "The sunxi-package wrapper is parsed into u-boot, monitor, dtbo and dtb payloads; each payload is hashed and scanned for FDT/board/PMIC/BL31/U-Boot strings.\n"
         "Only static parsing, string extraction, hashing and disassembly were performed. No firmware was executed and no hardware was accessed.\n",
         encoding="utf-8",
     )
