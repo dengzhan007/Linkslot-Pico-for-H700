@@ -105,3 +105,16 @@ The attempt-pair implementation in `src/native-attempt.h` is explicitly non-atom
 
 **M1 implication:** do not copy this v2 state machine into M1. First define a distinct dedicated-test marker and owner, document whether the test path is allowed to touch retention or only GP14/GP15, and define interruption-safe cleanup and reset recovery. The accepted RTC/WDT decision authorizes this design/audit work only. It does not authorize writing these registers on a device.
 
+
+
+### E.3 Target PMIC identity versus generic upstream H700 defconfig — unresolved compatibility gap
+
+A cross-check exposed a board-specific mismatch that must be resolved before Profile A can be implemented:
+
+- The captured RG34XX live-FDT inventory on the `reports` branch identifies `x-powers,axp2202` at `/soc@03000000/twi@0x07081400/pmu`, with the parent controller `twi5` / R-TWI0. This is target-specific captured DT evidence.
+- The public U-Boot v2026.10 `configs/anbernic_rg35xx_h700_defconfig` instead enables `CONFIG_AXP717_POWER`, with AXP717 regulator settings. It is a generic RG35XX H700 defconfig, not proof of the RG34XX board's PMIC.
+- The same pinned U-Boot v2026.10 `drivers/power/pmic/axp.c` compatible table contains several AXP families (including AXP717) but no `x-powers,axp2202` entry. Therefore simply enabling the stock AXP PMIC Kconfig path does not establish working AXP2202 support.
+- The target FDT's regulator constraints (including CPU DCDC1 range and enabled/boot-on rails) are declarations, not measured PMIC register values or a validated power-up recipe. They must not be translated into guessed register writes.
+
+**Disposition:** Profile A remains the approved policy, but the actual target-specific PMIC initialization implementation is **blocked pending source provenance**. First locate the vendor AXP2202 driver/register definitions and board-specific power sequence from the exact RG34XX firmware/source lineage; then compare its bus/controller and register semantics with the matched BL31 R-TWI0 path. Do not substitute AXP717, copy generic H700 voltage settings, or add a guessed AXP2202 driver. Until that source is found and audited, the current M1 preflight remains PMIC/TWI-disabled and the future DRAM-capable Profile A path remains unimplemented.
+
