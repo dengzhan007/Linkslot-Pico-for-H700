@@ -223,7 +223,6 @@ def main() -> int:
         "# CONFIG_SPL_MMC_WRITE is not set",
         "# CONFIG_SPL_EFI_PARTITION is not set",
         "# CONFIG_SPL_LIBCOMMON_SUPPORT is not set",
-        "# CONFIG_SPL_FIT is not set",
         "# CONFIG_SPL_I2C is not set",
         "# CONFIG_SPL_POWER is not set",
         "# CONFIG_CMD_BOOTD is not set",
@@ -231,6 +230,10 @@ def main() -> int:
     ):
         require(token in config_text,
                 f"resolved SPL config missing contract: {token}\n{relevant_config}")
+
+    require("CONFIG_SPL_FIT=y" not in config_text and
+            "CONFIG_SPL_LOAD_FIT=y" not in config_text,
+            "resolved M1 preflight profile unexpectedly enables FIT loading")
 
     map_file = out / "spl/u-boot-spl.map"
     map_arg = f"-Map={map_file}"
