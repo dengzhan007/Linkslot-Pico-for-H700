@@ -1,3 +1,12 @@
+## 2026-11-28 RTC/WDT regression and AXP2202 runtime rail evidence
+
+- Added `scripts/test-m1-native-attempt-state.py` and `tests/test_m1_native_attempt_state.c`, wired into Linkslot feasibility CI. The host-only model compiles against pinned BaseOS `src/native-attempt.h` at `cbe253a43f46cf551cc9a6c79a84015bde3686cf`; it covers 19 cases including empty/resume/stale state, ordered commit, dropped first/second writes, health/generation rejection, acknowledgment and torn acknowledgment. The model passed locally and the CI step passed in run `46141495743`.
+- Strengthened `scripts/audit-m1-oneshot-baseos-source.py` to assert raw-capsule-v2 watchdog stop/readback, CFG→MODE→CTRL arm/readback ordering, refusal of an already-active WDT before arm, attempt-pair commit after watchdog arm, two-pass read-only GP14/GP15/WDT adoption, and native WDT reload after raw adoption. The new source-order audit passed in run `46141495743`.
+- Important test boundary: this host model validates the existing BaseOS v2 attempt-pair semantics using fake registers. It does not model actual watchdog MMIO, and it does not authorize reusing the v2 state machine in M1.
+- New read-only RG34XX runtime evidence: three captures (2026-11-25/26/27) report AXP2202 DCDC2=940 mV and DCDC3=1,100 mV (enabled); DCDC1 is about 1.15–1.16 V. Tina's AXP2202 SPL reference exposes a DCDC3 DDR-voltage helper, but no target H700 call site or explicit memory-supply link is proven. Do not copy the separate RG SP DCDC3=1.2 V setting into RG34XX. See [`docs/m1-owner-policy-audit-20261128.md`](m1-owner-policy-audit-20261128.md).
+- Linkslot feasibility run #1075 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46141495743), commit `807b3b2`, is in progress. The new RTC/WDT source-order audit and host attempt-pair regression have passed; the isolated M1 SPL build/link and final artifact checks are still running. Earlier run #1074 was superseded/cancelled by #1075 after its audit/test steps and compact artifact upload had succeeded; do not treat #1074 as a completed workflow.
+- Safety gates remain unchanged: no firmware writes, payload execution, physical register writes, or hardware application.
+
 ## 2026-11-28 AXP2202 bus identity refined
 
 - The RG34XX-specific Knulli boot-package DTS (commit `57afa662009641d181f57241bcc480119b131530`) independently confirms `twi5` at `0x07081400`, PMU compatible `x-powers,axp2202`, and I2C address `0x34`; this matches the captured RG34XX live-FDT inventory and BL31 selector path.
