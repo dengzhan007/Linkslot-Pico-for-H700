@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -160,9 +161,11 @@ def main() -> int:
     # preflight and pull realloc()/vsnprintf() into a tiny SRAM-only SPL.
     lib_makefile = uboot / "lib/Makefile"
     lib_text = lib_makefile.read_text()
-    for line in ("obj-y += membuf.o\\n", "obj-y += abuf.o\\n"):
-        require(line in lib_text, f"unexpected U-Boot lib object rule: {line.strip()}")
-        lib_text = lib_text.replace(line, "")
+    for obj in ("membuf.o", "abuf.o"):
+        rule = re.compile(rf"^obj-y\\s*\\+=\\s*{re.escape(obj)}\\s*$", re.MULTILINE)
+        require(rule.search(lib_text) is not None,
+                f"unexpected U-Boot lib object rule for {obj}")
+        lib_text = rule.sub("", lib_text)
     lib_makefile.write_text(lib_text)
     run(["make", f"O={out}", f"CROSS_COMPILE={cross}", "olddefconfig"], cwd=uboot)
     config_text = config.read_text()
