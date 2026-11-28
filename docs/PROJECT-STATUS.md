@@ -2082,3 +2082,12 @@ AArch64 反汇编窗口，验证：
 - Pinned U-Boot v2026.10 `lib/Kconfig` confirms `SPL_PRINTF` selects `SPL_SPRINTF` (and `SPL_STRTO` when tiny printf is disabled). Changed the requested symbol to `SPL_PRINTF` and strengthened the resolved-config contract to require both parent and selected implementation. This is a Kconfig dependency correction; no compiler/linker failure occurred in #1052.
 - The #1052 fake-block-device and GPT read-only adapter tests completed before the SPL config gate; they do not establish a successful SPL link.
 - Next gate: fresh feasibility run must resolve the full printf profile, then compile/link the actual SPL and validate final ELF/map. All hardware gates remain closed; no device operations occurred.
+
+
+## 2026-11-28 SPL_PRINTF hidden-symbol Kconfig selection correction
+
+- Linkslot LK feasibility [#1053](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46112854654) failed again at the resolved-config assertion, before the SPL compile/link step. The artifact's final config contains `CONFIG_SPL_LIBCOMMON_SUPPORT=y`, `CONFIG_PRINTF=y`, and `CONFIG_SPRINTF=y`, but neither `CONFIG_SPL_PRINTF` nor `CONFIG_SPL_SPRINTF`.
+- Inspection of the pinned U-Boot v2026.10 Kconfig shows `SPL_PRINTF` is a hidden bool with no prompt or default; the only stock selector in this profile was `SPL_SERIAL`. Since the preflight intentionally disables serial, `scripts/config --enable SPL_PRINTF` is ineffective and must not be treated as a valid way to enable a hidden symbol.
+- Corrected the disposable-source patch: add an exact-match, fail-closed `select SPL_PRINTF` to the existing `SPL_LIBCOMMON_SUPPORT` Kconfig block in the temporary U-Boot checkout, then let Kconfig resolve `SPL_SPRINTF`. Removed the ineffective direct `scripts/config --enable SPL_PRINTF` request. This preserves the no-UART policy and leaves upstream source untouched.
+- Separate H700 boot audit [#1657](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46112872726) completed successfully; it does not validate SPL linking.
+- Next gate: verify the resolved config now contains both `CONFIG_SPL_PRINTF=y` and `CONFIG_SPL_SPRINTF=y`; only then proceed to actual SPL compile/link, final ELF/map and undefined-symbol/provider audit. No device operations occurred; G2/G3/M1-S1 remain open, and all outputs remain non-installable, hardware-unvalidated, and candidate-ineligible.
