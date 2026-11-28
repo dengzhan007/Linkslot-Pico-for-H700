@@ -516,3 +516,14 @@ The same matched monitor has a separate, demonstrable runtime-published pointer 
 The whole-payload context-slot scanner was refined to propagate PC-relative literal loads and image-backed loads, then to record direct-call arguments. The final audit [#145](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46124497685) passed; its artifact [15254429553](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46124497685/artifacts/15254429553) still reports 11 candidate reads, zero candidate direct writes, and zero direct-call argument references to the slot. This is still bounded static analysis: it does not resolve stack spills, indirect stores, helper/memcpy semantics, or external initialization. The separate descriptor audit also reports no alias/CFG direct-store candidate to this slot, with the same caveat.
 
 The remaining question is now specific: identify the producer of the runtime value loaded at `0x48014668`, or establish whether a loader/secure-entry path writes it outside the matched monitor. Do not treat the separate `0x48015548` controller pointer as evidence for this slot.
+
+
+### Boot0/SPL producer-path exclusion: no direct context-slot literal found
+
+A host-only raw-byte review of the exact Boot0 captures from BL31 audit #145 (artifact [15254688500](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46124497685/artifacts/15254688500)) adds a narrow exclusion:
+
+- Primary Boot0: 131,072 bytes, SHA-256 `bf886995745a0eb9b5030296f9f6163035e164b3a82183716e67ff876319289f`. Secondary Boot0 logical image: 65,536 bytes, SHA-256 `4701a85e4db7e8339b91b92f691a83cc954ec63a09369087c2e41d80eafa9f5d` (the captured backing file is 131,072 bytes; only the first 65,536 bytes are the checksum-valid logical image).
+- Neither logical Boot0 image contains the direct 32-bit little-endian literals `0x48014668`, `0x48014000`, or `0x00014668`. The primary image contains one `0x48000000` literal at file offset `0x1b7cc`; adjacent words at `0x1b7c8/0x1b7cc` are `0x1a2d0/0x48000000`, matching the exact monitor payload length and load base. The secondary logical image contains no `0x48000000` literal.
+- The pinned BaseOS native SPL contract independently verifies that its explicit monitor patches are limited to `+0x24..+0x2b`, `+0x30..+0xaf`, and `+0xb0..+0xb3`; it has no direct patch to `+0x14668`.
+
+This rules out only an obvious direct-literal Boot0/SPL patch to the context slot. It does not rule out computed addresses, generic relocation/copy side effects, code outside the logical Boot0 extent, or runtime/indirect initialization inside BL31. It is not proof that Boot0 never writes the slot. The context value's producer remains unresolved.
