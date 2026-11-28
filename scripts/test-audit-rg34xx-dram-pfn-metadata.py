@@ -49,6 +49,42 @@ def main():
     assert unmapped["classification"] == "NO_MAPPING_OBSERVED_AT_SAMPLE"
     assert unmapped["gate"] == "BLOCKED_OWNERSHIP_NOT_PROVEN"
 
+    dual = fixture() + """[kpageflags_pfn_60000]
+status=READ_OK
+raw_8_bytes_hex=0000000000000000
+[kpagecount_pfn_60000]
+status=READ_OK
+raw_8_bytes_hex=0000000000000000
+[kernel_memory_iomem]
+status=READ_OK
+00000000-7fffffff : System RAM
+[kernel_memory_zoneinfo]
+status=READ_OK
+Node 0, zone Normal
+[kernel_memory_buddyinfo]
+status=READ_OK
+Node 0, zone Normal 1 2 3
+[kernel_memory_pagetypeinfo]
+status=READ_OK
+Page block order
+[kernel_memory_meminfo]
+status=READ_OK
+MemTotal: 2048000 kB
+"""
+    both = module.decode_report(dual)
+    secondary = both["secondary_page_0x60000000"]
+    assert secondary["pfn"] == "0x60000"
+    assert secondary["classification"] == "NO_MAPPING_OR_RESERVED_FLAG_OBSERVED"
+    assert secondary["gate"] == "BLOCKED_OWNERSHIP_NOT_PROVEN"
+    assert secondary["ownership_proven"] is False
+    assert secondary["free_scratch_eligible"] is False
+    assert both["kernel_memory_context"]["iomem"]["status"] == "READ_OK"
+    assert both["kernel_memory_context"]["meminfo"]["present"] is True
+
+    absent = module.decode_report(fixture())
+    assert absent["secondary_page_0x60000000"]["present"] is False
+    assert absent["secondary_page_0x60000000"]["free_scratch_eligible"] is False
+
     for bad in (fixture(kernel="4.9.171"), fixture(flags="685800")):
         try:
             module.decode_report(bad)
