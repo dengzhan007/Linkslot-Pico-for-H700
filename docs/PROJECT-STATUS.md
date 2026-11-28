@@ -2153,3 +2153,8 @@ AArch64 反汇编窗口，验证：
 - This confirms the section-GC change materially improved link reachability: previous unresolved board/image/command providers disappeared. The current failure is now a linker-script/symbol-contract mismatch, not broad Kconfig provider leakage.
 - Next: capture verbose (`V=1`) final SPL link invocation and the exact preprocessed linker script used by that invocation; compare its path/hash with the archived `spl/u-boot-spl.lds`. Determine why the script's declared boundary assignments are absent from the map. Do not alias `__bss_end` to an arbitrary symbol or `_image_binary_end` to `_end`: those boundaries have different memory semantics, especially with `CONFIG_SPL_SEPARATE_BSS`.
 - No hardware operation occurred. `H700_MEMORY_LAYOUT_APPROVED=false`, `hardware_applied=0`; no SPL execution, physical MMC read, SRAM/DRAM access, MMIO/SMC/TWI transaction, media write, firmware flash, or payload execution. Artifacts remain non-installable, hardware-unvalidated, and candidate-ineligible.
+
+## 2026-11-28 Follow-up instrumentation for #1059 linker-script mismatch
+
+- Added `V=1` to the isolated SPL make invocation in [617bb46](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/617bb46e8a26b1cbb56da6cb2294b44383d87307). The next CI log will retain the exact final linker command, including the actual `-T` linker-script path, so we can resolve why the archived preprocessed script declares `__bss_end` and `_image_binary_end` while the link map omits them.
+- This is diagnostic instrumentation only; it does not alter linker-script symbols, memory placement, or hardware behavior. Do not add aliases until the exact consumed script and symbol semantics are confirmed.
