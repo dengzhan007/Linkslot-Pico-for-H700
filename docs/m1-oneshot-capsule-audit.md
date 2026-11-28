@@ -63,12 +63,12 @@ SPL or to physical addresses.
 - The plan fixes the captured active firmware-package geometry: p4 + 40 MiB,
   0x46200 bytes / 561 sectors; monitor at offset 0x00000 (payload 0x1a2d0,
   padded 0x1a400, destination 0x48000000); DTBO at 0x1a400 (0x920 / 0xa00,
-  destination 0x4a100000); DTB at 0x1ae00 (0x23400, destination 0x4a200000);
+  destination 0x4a100000); DTB at 0x1ae00 (FDT totalsize 0x2222e, copied/padded component 0x23400, destination 0x4a200000);
   A32 BL33 at 0x3e200 (0x8000, destination 0x4a000000).
 - The planner checks p4 boundary arithmetic and staging capacity. The reader
   interface exposes only a `read_blocks` callback; the validation path issues
-  one bounded read, checks the supplied FNV-1a, validates zero padding for the
-  monitor/DTBO extents, and rejects changed extent/destination metadata.
+  bounded 8-sector streaming reads, checks the build-supplied FNV-1a, validates
+  monitor/DTBO/DTB zero padding, and rejects changed extent/destination metadata.
 - Host fake-card tests cover successful read, exact LBA/count, read failure,
   partition-end and integer-overflow rejection, undersized staging, bad
   fingerprint, nonzero padding, and altered destination metadata. The same
@@ -125,7 +125,7 @@ identity and runtime p4 discovery remain separate requirements.
 ## 2026-11-28 M1 SPL read-only adapter and bounded streaming
 
 - Added `platform/h700/boot/m1_firmware_spl_adapter.c`: a narrow adapter to U-Boot's `blk_dread()` API. It contains no `blk_dwrite()` call or write-capable callback.
-- Important SRAM correction: the complete firmware package is 0x46200 bytes (287 KiB), larger than the H700 SRAM A1 window (32 KiB). The initial full-buffer approach therefore must not be used as an SPL SRAM staging design. The SPL adapter now streams the package through an 8-sector / 4 KiB scratch buffer, reading 561 sectors in 71 bounded calls, updating FNV-1a incrementally and checking both zero-padding ranges without retaining the full package in SRAM.
+- Important SRAM correction: the complete firmware package is 0x46200 bytes (287 KiB), larger than the H700 SRAM A1 window (32 KiB). The initial full-buffer approach therefore must not be used as an SPL SRAM staging design. The SPL adapter now streams the package through an 8-sector / 4 KiB scratch buffer, reading 561 sectors in 71 bounded calls, updating FNV-1a incrementally and checking all three component padding ranges without retaining the full package in SRAM.
 - The adapter host fixture compiles the actual adapter C source against a minimal fake U-Boot `blk.h`; it verifies the 71-read sequence, maximum 8 sectors per read, partition-end rejection, read-error handling, insufficient scratch rejection, and zero writes. `scripts/test-m1-spl-adapter.py` also checks the linked test binary for absence of a `blk_dwrite` dependency.
 - The streaming routine is a preflight only. It does not load/copy the validated extents into DRAM or execute them. The current test uses a synthetic package and a host shim, not the pinned BaseOS SPL or a physical MMC controller.
 - CI feasibility [#959](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46099372148) was cancelled by branch concurrency after 38 steps; both the new adapter test and package fake-card/AArch32 test had completed successfully before cancellation. Replacement feasibility [#960](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46099471409) is running against the documentation HEAD. AArch32/AArch64 compile check [#675](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46099368676) completed successfully, including the storage host regression job. H700 boot audit [#1627](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46099465183) and [#1628](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46099468041) both passed.
