@@ -2397,3 +2397,11 @@ AArch64 反汇编窗口，验证：
 - The peripheral protocol is not identified; do not label it RTC/PMIC/mailbox/PSCI. Literal scans find no direct `0x48014668` or `0x52000` literal; computed address formation and other writers remain possible.
 - This is evidence for a Boot0 retained-image resume protocol, not evidence that it initializes BL31's context slot. Full notes: [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md), commit [69e23bb](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/69e23bb757f9a4fec3ded02310999b917801517e).
 - The latest preceding CI #1709 passed for commit `03adbe0`; this new documentation commit will trigger another audit. G2/G3/M1-S1 remain open; no device interaction or payload execution.
+
+
+### Boot0 callback mapping correction (2026-11-28)
+
+- Rechecked the raw 128 KiB primary Boot0 bytes against the eGON whole-image load base `0x20000`. The Thumb function prologue is at file offset `0x981c` / runtime `0x2981c`; descriptor values `0x2984c` and `0x298b0` map to file offsets `0x984c` and `0x98b0`, both interior locations, not independent function entries. This supersedes the earlier `0x20030`-based callback mapping.
+- The AArch64-looking registry code at file offset `0x1b694` computes a table at runtime `0x3c688` / file offset `0x1c688`, and that table contains key `0x4d` plus callback `0x2984c`. The address relationship is internally consistent under the Boot0 image mapping, but the dispatcher uses `br x16` and the target region is Thumb code; no valid ISA transition or reachable AArch32-to-AArch64 path is proven.
+- The Boot0 registry/code windows are not byte-identical to the corresponding candidate windows in the live TOC1 monitor. Do not identify this registry with BL31's context slot or callback machinery. Full correction: [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md).
+- G2/G3/M1-S1 remain open; no device interaction or payload execution.
