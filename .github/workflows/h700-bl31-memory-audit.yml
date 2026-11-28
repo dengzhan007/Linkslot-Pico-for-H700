@@ -77,10 +77,10 @@ jobs:
 
       - name: Cross-check Boot0 DRAM geometry against Linux runtime memblock
         run: |
-          python3 scripts/audit-rg34xx-boot0-dram-geometry.py \\
-            --primary .ci/reports/reports/rg34xx-inventory-20261127-uart/boot0-primary.json \\
-            --secondary .ci/reports/reports/rg34xx-inventory-20261127-uart/boot0-secondary.json \\
-            --memory-map .ci/reports/reports/rg34xx-inventory-20261127-uart/memory-map-report.json \\
+          python3 scripts/audit-rg34xx-boot0-dram-geometry.py \
+            --primary .ci/reports/reports/rg34xx-inventory-20261127-uart/boot0-primary.json \
+            --secondary .ci/reports/reports/rg34xx-inventory-20261127-uart/boot0-secondary.json \
+            --memory-map .ci/reports/reports/rg34xx-inventory-20261127-uart/memory-map-report.json \
             --out-dir build/rg34xx-bl31-static-audit
 
       - name: Test Boot0 CPU reset-bit interpretation (H616 reference only)
