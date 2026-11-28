@@ -57,6 +57,7 @@ jobs:
       - name: Test dual-page RG34XX DRAM PFN metadata decoder
         run: python3 scripts/test-audit-rg34xx-dram-pfn-metadata.py
 
+      # Static ARM disassembly only; the SPL2 VMA is a candidate inferred from the Boot0 handoff literal.
       - name: Disassemble RG34XX stock Boot0 (static only)
         if: github.event_name == 'push' && contains(github.event.head_commit.message, 'disassemble')
         run: |
