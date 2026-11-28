@@ -150,7 +150,54 @@ The same DTB contains two relevant profiles:
 
 This is now direct RG34XX package evidence that the four SenkOS strap pins are configured as DRAM-selection inputs and that the package carries LPDDR3/LPDDR4 profiles 14 and 15. It materially validates the pin mapping on RG34XX; SenkOS is no longer merely a source of unverified pin assumptions.
 
-The remaining distinction is important: the DTB proves the configured pins, pull-ups, mode and available profiles. It does not by itself prove the exact SPL2 runtime sampling order, polarity interpretation, selected profile index, or fallback when a strap read fails. The SenkOS patch's rule (strap index 14 selects LPDDR3; other values select LPDDR4) is strongly consistent with the RG34XX profile table, but the stock SPL2 control flow still needs to be traced before reusing that algorithm.
+The stock Boot0 Thumb disassembly now closes the runtime sampling-order and profile-index questions. The actual selector reads the Boot0 image's own `DRAM.ext` block; the later FDT node is a matching configuration copy, not the structure directly consumed by this Boot0 routine. The exact Boot0 algorithm and its limits are detailed below.
+
+
+### Stock Boot0 Thumb-code confirms GPIO sampling and profile lookup
+
+The raw primary Boot0 capture is 128 KiB, SHA-256 \`bf886995745a0eb9b5030296f9f6163035e164b3a82183716e67ff876319289f\`. Its inner 64 KiB image begins at file offset \`0x1000\` and is linked at \`0x20000\`.
+
+The Boot0 \`DRAM.ext\` block begins at inner-image offset \`0x348\` (VMA \`0x20348\`):
+
+- Signature: \`DRAM.ext\`.
+- Byte \`+0x350\`: \`select_mode=1\`.
+- Byte \`+0x351\`: GPADC channel field \`1\` (not used by the mode-1 GPIO-only branch).
+- Four 8-byte GPIO descriptors at \`+0x354 + i*8\`:
+  - \`08 06 00 01 ff ff 00 00\`
+  - \`08 07 00 01 ff ff 00 00\`
+  - \`08 08 00 01 ff ff 00 00\`
+  - \`08 0a 00 01 ff ff 00 00\`
+- The first descriptor byte is the one-based port value 8; Boot0 subtracts one before applying the \`0x24\`-byte PIO-bank stride. Thus it resolves to port index 7 / PH. The second byte is the pin number. The remaining descriptor bytes encode GPIO mux/pull/drive/data settings; the pull field is 1.
+
+The Thumb code at VMA \`0x2340e\` loads the mode byte at \`DRAM.ext + 0x350\`; VMA \`0x23412\` compares it with 1 and branches to the GPIO sampler at \`0x23418\`. That sampler:
+
+1. Uses the PIO data-register base literal \`0x0300b010\` (inner-image literal at offset \`0x3580\`).
+2. For each of four descriptors, reads the port value at descriptor offset \`+0\`, subtracts one, multiplies by \`0x24\`, and reads the GPIO data register.
+3. Reads the pin number at descriptor offset \`+1\`, forms \`1 << pin\`, masks and extracts the sampled bit.
+4. Shifts the result by a bit position initialized to zero, ORs it into the result, increments the bit position, advances the descriptor pointer by 8 bytes, and repeats until four GPIOs have been sampled.
+
+Therefore the bit mapping is exact and LSB-first:
+
+| DRAM.ext entry | RG34XX pin | Result bit |
+|---:|---|---:|
+| 0 | PH6 | 0 |
+| 1 | PH7 | 1 |
+| 2 | PH8 | 2 |
+| 3 | PH10 | 3 |
+
+The four-bit result is then used as a **one-based profile number**. The Thumb code at VMA \`0x23482\` computes the selected index; at \`0x23486\` it subtracts one; at \`0x23488\` it shifts by seven (128-byte profile stride); at \`0x2348a\` it adds the DRAM.ext base; and at \`0x2348c\` it checks the first word at profile-table base offset \`0x374\`. The selected 128-byte profile is copied to the active DRAM parameter block at inner VMA \`0x20038\` (literal at inner offset \`0x3584\`).
+
+The Boot0 DRAM.ext table has 15 profiles. Profiles 1–13 are DDR3 type 3 at 792 MHz. The two RG34XX-relevant entries are:
+
+| Four-bit selector | Profile | Type ID | DRAM | Clock | TPR6 |
+|---:|---:|---:|---|---:|---:|
+| \`1110b\` = 14 | 14 | 7 | LPDDR3 | 672 MHz | \`0x2fb08080\` |
+| \`1111b\` = 15 | 15 | 8 | LPDDR4 | 672 MHz | \`0x40808080\` |
+
+This directly confirms SenkOS's **14 → LPDDR3** mapping on RG34XX, including the exact pin order. The stock Boot0 implementation is more general than the SenkOS patch's simplified "14 else LPDDR4" rule: it performs a direct profile-index lookup, and selector values 1–13 address DDR3 profiles. Our port must preserve the lookup semantics and fail closed on unexpected/unsupported indices; it must not silently map every non-14 value to LPDDR4.
+
+The public RG34XX Boot0 runtime log reporting LPDDR4 type 8 at 672 MHz is consistent with profile 15, but does not contain the raw GPIO sample. The actual electrical strap level on each pin is therefore not independently measured by this static audit.
+
 
 ### Extracted later-stage identities
 
