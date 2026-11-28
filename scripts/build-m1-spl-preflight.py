@@ -143,7 +143,14 @@ def main() -> int:
          "--disable", "SPL_MMC_WRITE",
          "--disable", "SPL_EFI_PARTITION",
          "--disable", "EFI_PARTITION",
-         "--disable", "SPL_LIBCOMMON_SUPPORT",
+         "--enable", "SPL_LIBCOMMON_SUPPORT",
+         "--enable", "SPL_ENV_SUPPORT",
+         "--enable", "SPL_CYCLIC",
+         "--disable", "SPL_SYS_MALLOC_SIMPLE",
+         "--disable", "SPL_USE_TINY_PRINTF",
+         "--disable", "SPL_CMDLINE",
+         "--disable", "SPL_CMDLINE_EDITING",
+         "--disable", "CMDLINE",
          "--disable", "SPL_FIT_SIGNATURE",
          "--disable", "SPL_FIT_IMAGE_TINY",
          "--disable", "SPL_FIT_PRINT",
@@ -190,20 +197,57 @@ def main() -> int:
         family_block = family_block.replace(selector, "", 1)
     sunxi_kconfig.write_text(sunxi_text[:family_start] + family_block + sunxi_text[family_end:])
 
-    # U-Boot v2026.10 unconditionally lists these general-purpose dynamic
-    # buffer helpers in lib/Makefile. They are unrelated to read-only MMC/GPT
-    # preflight and pull realloc()/vsnprintf() into a tiny SRAM-only SPL.
+    # Keep general-purpose helpers in U-Boot proper, but omit image-fdt from
+    # the isolated XPL link: this path never relocates a FIT/image and does not
+    # need LMB. The FDT support functions used by DM remain linked.
+    boot_makefile = uboot / "boot/Makefile"
+    boot_text = boot_makefile.read_text()
+    image_fdt_rule = "obj-$(CONFIG_$(PHASE_)OF_LIBFDT) += image-fdt.o\\n"
+    require(boot_text.count(image_fdt_rule) == 1,
+            "unexpected U-Boot image-fdt object rule")
+    boot_text = boot_text.replace(
+        image_fdt_rule,
+        "ifneq ($(CONFIG_XPL_BUILD),y)\\n" + image_fdt_rule + "endif\\n",
+        1,
+    )
+    boot_makefile.write_text(boot_text)
+
+    # display_options is a full-U-Boot banner/hexdump helper and pulls in
+    # version_string/sprintf; the M1 SPL path has no console/banner output.
     lib_makefile = uboot / "lib/Makefile"
     lib_text = lib_makefile.read_text()
-    for obj in ("membuf.o", "abuf.o"):
-        rule = re.compile(rf"^obj-y\s*\+=\s*{re.escape(obj)}\s*$", re.MULTILINE)
-        require(rule.search(lib_text) is not None,
-                f"unexpected U-Boot lib object rule for {obj}")
-        guarded = (f"ifneq ($(CONFIG_XPL_BUILD),y)\n"
-                   f"obj-y += {obj}\n"
-                   "endif")
-        lib_text = rule.sub(lambda _match: guarded, lib_text, count=1)
+    display_rule = "obj-y += display_options.o\\n"
+    require(lib_text.count(display_rule) == 1,
+            "unexpected U-Boot display_options object rule")
+    lib_text = lib_text.replace(
+        display_rule,
+        "ifneq ($(CONFIG_XPL_BUILD),y)\\n" + display_rule + "endif\\n",
+        1,
+    )
     lib_makefile.write_text(lib_text)
+
+    # OF_REAL's string helpers use these section bounds; the upstream SPL
+    # linker script does not currently publish them.
+    spl_lds = uboot / "arch/arm/cpu/armv8/u-boot-spl.lds"
+    lds_text = spl_lds.read_text()
+    rodata_rule = "\\t.rodata : {\\n\\t\\t. = ALIGN(8);\\n"
+    require(lds_text.count(rodata_rule) == 1,
+            "unexpected AArch64 SPL rodata section")
+    lds_text = lds_text.replace(
+        rodata_rule,
+        "\\t.rodata : {\\n\\t\\t__start_rodata = .;\\n\\t\\t. = ALIGN(8);\\n",
+        1,
+    )
+    rodata_end = "\\t\\t*(SORT_BY_ALIGNMENT(SORT_BY_NAME(.rodata*)))\\n\\t} >.sram"
+    require(lds_text.count(rodata_end) == 1,
+            "unexpected AArch64 SPL rodata end")
+    lds_text = lds_text.replace(
+        rodata_end,
+        "\\t\\t*(SORT_BY_ALIGNMENT(SORT_BY_NAME(.rodata*)))\\n\\t\\t__end_rodata = .;\\n\\t} >.sram",
+        1,
+    )
+    spl_lds.write_text(lds_text)
+
     run(["make", f"O={out}", f"CROSS_COMPILE={cross}", "olddefconfig"], cwd=uboot)
     config_text = config.read_text()
     # Preserve the resolved Kconfig result in the artifact even when a
@@ -230,8 +274,13 @@ def main() -> int:
         "CONFIG_SPL_OF_REAL=y",
         "# CONFIG_SPL_MMC_WRITE is not set",
         "# CONFIG_SPL_EFI_PARTITION is not set",
-        "# CONFIG_SPL_LIBCOMMON_SUPPORT is not set",
         "# CONFIG_SPL_I2C is not set",
+        "CONFIG_SPL_LIBCOMMON_SUPPORT=y",
+        "CONFIG_SPL_ENV_SUPPORT=y",
+        "CONFIG_SPL_CYCLIC=y",
+        "# CONFIG_SPL_SYS_MALLOC_SIMPLE is not set",
+        "# CONFIG_SPL_USE_TINY_PRINTF is not set",
+        "# CONFIG_SPL_CMDLINE is not set",
         "# CONFIG_SPL_POWER is not set",
         "# CONFIG_SPL_DM_I2C is not set",
         "# CONFIG_SPL_DM_PMIC is not set",
@@ -246,6 +295,9 @@ def main() -> int:
             "CONFIG_SPL_LOAD_FIT=y" not in config_text,
             "resolved M1 preflight profile unexpectedly enables FIT loading")
 
+    require("CONFIG_SPL_FIT=y" not in config_text and
+            "CONFIG_SPL_LOAD_FIT=y" not in config_text,
+            "resolved M1 preflight profile unexpectedly enables FIT loading")
     require("CONFIG_OF_REAL=y" in config_text,
             "SPL_OF_CONTROL must retain its OF_CONTROL-selected OF_REAL dependency")
 
