@@ -43,14 +43,40 @@ def scan(raw: bytes) -> list[dict]:
                     if source in regs:
                         value = regs[source] + int(ops[2].imm) if ins.mnemonic == "add" else regs[source] - int(ops[2].imm)
                         regs[dest] = value & (0xffffffff if dn.startswith("w") else 0xffffffffffffffff)
-            elif ins.mnemonic == "mov" and len(ops) >= 2 and ops[0].type == ARM64_OP_REG:
-                dest = canon(ins.reg_name(ops[0].reg))
-                if ops[1].type == ARM64_OP_REG:
+            elif ins.mnemonic in ("mov", "movz", "movk", "movn") and len(ops) >= 2 and ops[0].type == ARM64_OP_REG:
+                dn = ins.reg_name(ops[0].reg)
+                dest = canon(dn)
+                if ins.mnemonic == "mov" and ops[1].type == ARM64_OP_REG:
                     source = canon(ins.reg_name(ops[1].reg))
                     if source in regs:
                         regs[dest] = regs[source]
                 elif ops[1].type == ARM64_OP_IMM:
-                    regs[dest] = int(ops[1].imm)
+                    imm = int(ops[1].imm)
+                    shift = int(getattr(ops[1].shift, "value", 0) or 0)
+                    mask = 0xffffffff if dn.startswith("w") else 0xffffffffffffffff
+                    chunk = 0xffff << shift
+                    if ins.mnemonic == "movk":
+                        value = (regs.get(dest, 0) & ~chunk) | ((imm << shift) & chunk)
+                    elif ins.mnemonic == "movn":
+                        value = ~(imm << shift) & mask
+                    else:
+                        value = (imm << shift) & mask
+                    regs[dest] = value & mask
+            # Resolve PC-relative literal loads and loads from known image addresses.
+            if ins.mnemonic == "ldr" and len(ops) >= 2 and ops[0].type == ARM64_OP_REG:
+                dest_name = ins.reg_name(ops[0].reg)
+                dest = canon(dest_name)
+                literal_address = None
+                if ops[1].type == ARM64_OP_IMM:
+                    literal_address = int(ops[1].imm)
+                elif ops[1].type == ARM64_OP_MEM:
+                    base = canon(ins.reg_name(ops[1].mem.base)) if ops[1].mem.base else ""
+                    index_reg = canon(ins.reg_name(ops[1].mem.index)) if ops[1].mem.index else ""
+                    if base in before and not index_reg:
+                        literal_address = before[base] + int(ops[1].mem.disp)
+                if literal_address is not None and BASE <= literal_address <= BASE + len(raw) - 8:
+                    off = literal_address - BASE
+                    regs[dest] = int.from_bytes(raw[off:off + 8], "little")
             for op in ops:
                 if op.type != ARM64_OP_MEM:
                     continue
@@ -73,7 +99,7 @@ def scan(raw: bytes) -> list[dict]:
                 }
             if ops and ops[0].type == ARM64_OP_REG:
                 dest = canon(ins.reg_name(ops[0].reg))
-                if ins.mnemonic not in ("adr", "adrp", "add", "sub", "mov"):
+                if ins.mnemonic not in ("adr", "adrp", "add", "sub", "mov", "movz", "movk", "movn", "ldr"):
                     regs.pop(dest, None)
     return sorted(hits.values(), key=lambda x: int(x["pc"], 16))
 
