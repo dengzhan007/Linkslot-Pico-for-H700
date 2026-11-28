@@ -2074,3 +2074,11 @@ AArch64 反汇编窗口，验证：
 - Corrected `scripts/build-m1-spl-preflight.py` to construct each expected rule from an object name and a real newline, while retaining the fail-closed exact-one-match check and the XPL-only exclusion wrapper. This is a harness string-literal defect, not evidence about SPL linker dependencies.
 - The separate H700 boot-audit workflow [#1655](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46112269757) completed successfully (both Windows and host-tools jobs). This does not validate the SPL link.
 - Next gate: rerun feasibility from the corrected script, then inspect the actual linked SPL ELF/map and reachable provider/side-effect set. No SPL link success is claimed; all hardware gates remain closed and no device operation occurred.
+
+
+## 2026-11-28 M1 SPL printf Kconfig dependency correction
+
+- Feasibility [#1052](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46112527006) completed with failure at the resolved-config assertion, before SPL compilation/linking. Artifact inspection showed the generated config had `CONFIG_PRINTF=y` but neither `CONFIG_SPL_PRINTF=y` nor `CONFIG_SPL_SPRINTF=y`; the harness had attempted to enable the hidden leaf symbol `SPL_SPRINTF` directly, which Kconfig does not select without its parent.
+- Pinned U-Boot v2026.10 `lib/Kconfig` confirms `SPL_PRINTF` selects `SPL_SPRINTF` (and `SPL_STRTO` when tiny printf is disabled). Changed the requested symbol to `SPL_PRINTF` and strengthened the resolved-config contract to require both parent and selected implementation. This is a Kconfig dependency correction; no compiler/linker failure occurred in #1052.
+- The #1052 fake-block-device and GPT read-only adapter tests completed before the SPL config gate; they do not establish a successful SPL link.
+- Next gate: fresh feasibility run must resolve the full printf profile, then compile/link the actual SPL and validate final ELF/map. All hardware gates remain closed; no device operations occurred.
