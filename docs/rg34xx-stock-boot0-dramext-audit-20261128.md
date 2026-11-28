@@ -84,7 +84,7 @@ A synthetic regression covers multiple markers, a relocated 15-entry table, and 
 
 ## Runtime log correlation
 
-The public RG34XX Boot0 UART capture reports:
+An independent public RG34XX Boot0 UART sample (macromorgan's published capture, not the reports-branch binary inventory) reports:
 
 - PMU: AXP2202
 - DRAM_VCC set to 1100 mv
@@ -94,7 +94,7 @@ The public RG34XX Boot0 UART capture reports:
 - successful DRAM simple test / initialization
 - vaild para:8 select dram para0
 
-The Boot0 binary also contains PMU identification strings for AXP2202 and other PMU families. Together with the runtime log, this is strong target-specific evidence that the stock RG34XX Boot0 selected its AXP2202 path. It does not yet reveal the exact AXP2202 register writes, their order, or the I2C bus transaction sequence.
+The reports-branch primary binary contains the format strings HELLO! BOOT0 is starting! and BOOT0 commit : %s at offsets 0xe817 and 0xe832. Its build identifier is passed as a runtime argument, so the public log's displayed 749c1f9a-dirty value cannot be matched to this captured image by string search alone. The Boot0 binary also contains PMU identification strings for AXP2202 and other PMU families. Together with the runtime log, this is strong target-specific evidence that the stock RG34XX Boot0 selected its AXP2202 path. It does not yet reveal the exact AXP2202 register writes, their order, or the I2C bus transaction sequence.
 
 DRAM_VCC 1100 mV is retained as the exact log label/value. This audit does not map it to a particular DCDC output or equate it to the upstream U-Boot AXP717 DCDC3 setting.
 
