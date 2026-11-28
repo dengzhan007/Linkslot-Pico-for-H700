@@ -1,5 +1,52 @@
 # M1 one-shot capsule / SPL safety audit
 
+## 2026-11-28 M1 runtime firmware provenance and DTB-tail validation
+
+The earlier apparent size discrepancy is resolved by distinguishing the **source
+TOC1 container** from the **runtime p4+40 MiB firmware stream**:
+
+- The captured source TOC1 package is 1,310,720 bytes
+  (SHA-256 `e6c20e3a54c51b9336c798e3a4fa1ca6c45b28c6f70456e2db9c252aa4ba4604`).
+  Its item directory contains U-Boot, monitor, DTBO and DTB. This is not the
+  byte stream read at p4+40 MiB.
+- Pinned BaseOS `native/build.py` extracts monitor, DTBO and DTB, appends the
+  generated 32 KiB A32 loader, and pads each component to 512-byte boundaries.
+  The SPL consumer reads this generated `firmware.bin` at p4+40 MiB and checks
+  the build-generated `BASEOS_FIRMWARE_BYTES` / `BASEOS_FIRMWARE_FNV`.
+- The captured deployed stream manifest
+  (`reports/rg34xx-native-firmware/firmware-manifest.json`) confirms 287,232
+  bytes / `0x46200` / 561 sectors, SHA-256
+  `dc9dc3ae66b30244911e7054ca66136991626cabb0d59c796c4b253a126f28e9`,
+  FNV-1a `0xaf0018cb`, and extents monitor `0x00000`, DTBO `0x1a400`,
+  DTB `0x1ae00`, loader `0x3e200`. Thus the existing 0x46200 plan is the
+  runtime firmware stream, not the 1.31 MiB TOC1 source container.
+- The DTB FDT totalsize is 139,822 bytes (`0x2222e`) inside a 144,384-byte
+  (`0x23400`) copied component. Its 4,562-byte tail must be zero. The
+  preflight now validates monitor, DTBO **and DTB** padding in both full-buffer
+  and 4 KiB streaming paths. Tests deliberately inject a nonzero DTB-tail byte
+  while recomputing FNV, proving rejection is due to the padding contract.
+- The old fixed `H700_M1_PACKAGE_FNV1A` macro was removed. FNV is generated
+  from the actual matching firmware build and must be passed from that
+  generation's generated metadata; the captured `0xaf0018cb` is a baseline
+  fingerprint, not a constant for a new Linkslot loader. FNV is regression
+  integrity, not authentication; generation matching and cryptographic
+  provenance remain separate requirements.
+
+Added `tests/fixtures/m1-rg34xx-toc1-provenance.json` and
+`scripts/test-m1-baseos-firmware-contract.py`. The new CI step checks the
+pinned BaseOS source contract, source TOC1 item hashes/sizes, 512-byte packing,
+p4+40 MiB generated metadata flow, native SPL consumer bounds/copies, and the
+expected 0x46200 extent arithmetic. It is a source/layout audit only; it does
+not build or execute BaseOS SPL, read a physical card, copy to DRAM, or qualify
+a capsule.
+
+**Next gate:** pass the source/layout test, then make the M1 adapter consume the
+same generated `BASEOS_FIRMWARE_BYTES` and `BASEOS_FIRMWARE_FNV` from one
+immutable build manifest. Do not freeze the captured FNV into the new loader
+generation. SPL integration still waits for proven SRAM scratch placement and
+the full call-graph / linked-ELF side-effect audit.
+
+
 **Status:** design constraint and source audit only. No M1 capsule, M1 SPL, or paired image has been built. No SD write, device MMIO, or payload execution was performed.
 
 **Target:** RG34XX non-SP / H700, replacing only the current AArch32 SVC BL33 loader at 0x4a000000 on a separately prepared TF1 test card.
