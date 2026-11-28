@@ -41,6 +41,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Fetch read-only RG34XX reports fixtures
+        run: git fetch --filter=blob:none --no-tags --depth=1 origin refs/heads/reports:refs/remotes/origin/reports
+
       - name: Validate shell syntax
         run: |
           sh -n scripts/collect-rg34xx-readonly-inventory.sh
@@ -91,6 +94,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Fetch read-only RG34XX reports fixtures
+        run: git fetch --filter=blob:none --no-tags --depth=1 origin refs/heads/reports:refs/remotes/origin/reports
 
       - name: Set up Python
         uses: actions/setup-python@v5
