@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -50,8 +49,9 @@ def main() -> int:
             raise RuntimeError("expected read-only blk_dread symbol missing")
         if "m1_boot_partitions" not in symbols:
             raise RuntimeError("bounded eight-entry GPT table is not present in the linked adapter")
-        scratch = re.search(r"^[0-9a-fA-F]+\\s+([0-9a-fA-F]+)\\s+[bB]\\s+m1_package_scratch$", symbols, re.M)
-        if not scratch or int(scratch.group(1), 16) != 4096:
+        scratch = next((line.split() for line in symbols.splitlines()
+                        if line.rstrip().endswith(" m1_package_scratch")), None)
+        if not scratch or len(scratch) < 4 or int(scratch[1], 16) != 4096:
             raise RuntimeError("expected aligned 4KiB static M1 package scratch symbol missing")
         print(output, end="")
         print("PASS adapter link has blk_dread only; no blk_dwrite")
