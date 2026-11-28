@@ -2048,3 +2048,10 @@ AArch64 反汇编窗口，验证：
 - Updated `baseos_m1_preflight.c` to initialize the configured SRAM-C dlmalloc pool explicitly at `SPL_SYS_MALLOC_START` / `SPL_SYS_MALLOC_SIZE` and set `GD_FLG_FULL_MALLOC_INIT` **before** `mmc_initialize()`. This prevents MMC/DM discovery from silently relying on the 8 KiB early malloc-F fallback while claiming a 64 KiB full pool.
 - The pool remains `0x34000..0x44000`; the reserved BSS window is `0x30000..0x34000`; configured stack is `0x52a00`. This is a static non-overlap design only. It does not prove allocator high-water, stack high-water, actual SRAM availability at BL33 entry, or BL31/Boot0 ownership.
 - CI must now verify this initialization order in the linked SPL call path and validate the final map/ELF. The zero FNV sentinel still rejects the firmware package; this harness cannot hand off to BL33 and remains non-installable.
+
+
+## 2026-11-28 M1 SPL allocator profile assertion correction
+
+- Feasibility [#1048](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46111154580) reached the isolated SPL build step and failed at Kconfig validation, before compiling/linking. The resolved config correctly had `# CONFIG_SPL_USE_TINY_PRINTF is not set`, but the assertion tuple also incorrectly required `CONFIG_SPL_USE_TINY_PRINTF=y`; the same block redundantly listed the disabled state twice. This was a contradictory test assertion, not a compiler or linker failure.
+- Removed the contradictory enabled-state requirement and deduplicated the allocator/printf options. The intended M1 profile is full SPL dlmalloc with a 64 KiB SRAM-C pool, simple malloc disabled, tiny printf disabled, and the 8 KiB early malloc-F region recorded separately. (The early malloc-F pool remains enabled; its address/overlap must be audited independently.)
+- The M1 hook now explicitly initializes the full pool and sets `GD_FLG_FULL_MALLOC_INIT` before MMC/DM discovery. This still requires a fresh CI build and final ELF/map audit; no successful SPL link is claimed yet.
