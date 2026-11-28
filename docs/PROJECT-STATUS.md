@@ -1,3 +1,14 @@
+## 2026-11-28 Owner policy decisions and static-audit continuation
+
+- Owner decisions are now recorded: **SPL Profile A** (only source-proven, individually audited PMIC/TWI operations may be retained) and **native RTC/WDT accepted only for an audited dedicated test-TF workflow**. These decisions do not authorize execution or hardware application.
+- Detailed policy, evidence boundaries, and next audit requirements: [`docs/m1-owner-policy-audit-20261128.md`](m1-owner-policy-audit-20261128.md).
+- Important distinction: the current linked M1 SPL is a **read-only MMC/GPT preflight fixture**, not the future Profile A DRAM/power-init SPL. Its Kconfig intentionally disables SPL I2C/DM-I2C/DM-PMIC/POWER, and the linked contract rejects I2C/PMIC bus symbols. Keep that restriction for this preflight unless a concrete dependency is proven; do not label this artifact Profile A.
+- The matched BL31 + original TOC1-DTB static audit resolves suspend-side selector flow to `twi5` / R-TWI0 `0x07081400` and AXP2202 parent node. It does **not** identify a PMIC slave address/register sequence or prove a live transaction. PMIC init provenance remains open.
+- Raw-capsule-v2 is stateful (RTC retention/GP14/GP15 attempt pair, watchdog setup/arm, attempt commit, SRAM copy/launch). It is not the dedicated M1 one-shot protocol; do not alter v2 semantics or inherit them implicitly. RTC/WDT ownership, exact consumers, cleanup and reset recovery still require source audit.
+- Linkslot/LK feasibility #1073 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46138855460), commit `5f46a52`: **completed success**. Compact artifact 551,255 bytes; downloaded and inspected; ZIP SHA-256 matches GitHub digest `dd5f65d63cce41ed240247fe68b397ddf505f2c87574fa31591714d48d4244cb`; all 10 internal SHA256SUMS entries match. Linked contract: BSS 5,032/16,384 bytes, scratch `0x30340`, GPT table `0x30000`, stack `0x52a00`, 160 reachable functions / 759 store-class instructions; all execution/hardware/candidate authorization flags remain false.
+- H700 boot audit #1738 [run](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46138911358) completed success (Windows and host-tools). The audit triggered by the owner-decision record, run `46139583546`, also completed success (host-tools and Windows; no artifact expected).
+- Current follow-up: continue static source tracing for the actual PMIC/DRAM initialization owner and the RTC/GP14/GP15/WDT state machine; add host-only fail-closed regressions before any test implementation. No hardware test is authorized.
+
 ## 2026-11-28 Owner decisions — M1 hardware-policy boundaries
 
 The project owner explicitly confirmed the following policy decisions:
