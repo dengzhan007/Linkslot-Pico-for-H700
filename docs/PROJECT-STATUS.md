@@ -2781,3 +2781,13 @@ Detailed evidence: \`docs/rg34xx-boot0-container-spl2-audit-20261128.md\`.
 - The new \`tools/test_rg34xx_stock_toc1_dtb.py\` test pins the raw Boot0 hash, DRAM.ext descriptors, profile14/15 records and Thumb instruction bytes for the sampler and profile lookup.
 - Detailed evidence: \`docs/rg34xx-boot0-container-spl2-audit-20261128.md\`.
 
+
+
+## 2026-11-28 Boot0 strap regression CI closure
+
+- H700 audit run #1852 passed on Linux and Windows after the Boot0 DRAM.ext/Thumb selector test was corrected to include the zero-index fallback branch: [run #1852](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46149278892).
+- H700 audit run #1853 passed on Linux and Windows with the updated documentation state: [run #1853](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46149296929).
+- The test pins the primary Boot0 capture SHA, DRAM.ext signature/mode, all four PH descriptors, profile14/15 records, PIO data-register literal, Thumb GPIO sampler, LSB-first bit packing, one-based profile lookup, and zero/invalid-profile fallback branch.
+- Earlier #1849–#1851 failures were from the first test assertion omitting a conditional branch instruction in the profile lookup byte sequence. The expected bytes were corrected; #1852/#1853 are the successful reruns.
+- Linkslot LK/Rust feasibility #1089 remains in progress; no new completion result is claimed: [run #1089](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46148779578).
+
