@@ -161,6 +161,16 @@ def main() -> int:
          "--disable", "CMD_BOOTD",
          "--disable", "VERSION_VARIABLE",
          "--disable", "OF_REAL"], cwd=uboot)
+    # ARMv8 Kconfig force-selects SPL_FIT even for this read-only preflight.
+    # The harness neither loads nor parses FIT images, so remove that one
+    # architecture-wide selector in the disposable source checkout only.
+    armv8_kconfig = uboot / "arch/arm/cpu/armv8/Kconfig"
+    armv8_text = armv8_kconfig.read_text()
+    fit_selector = "\\tselect SPL_FIT\\n"
+    require(armv8_text.count(fit_selector) == 1,
+            "unexpected ARMv8 SPL_FIT selector count")
+    armv8_kconfig.write_text(armv8_text.replace(fit_selector, "", 1))
+
     # U-Boot v2026.10 unconditionally lists these general-purpose dynamic
     # buffer helpers in lib/Makefile. They are unrelated to read-only MMC/GPT
     # preflight and pull realloc()/vsnprintf() into a tiny SRAM-only SPL.
