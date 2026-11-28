@@ -721,13 +721,37 @@ jobs:
             cat build/audit-work/linkslot-1.0.49/REPORT.md >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      - name: Stage compact M1 review artifact set
+        if: always()
+        run: |
+          set -euo pipefail
+          SRC=build/audit-work/linkslot-1.0.49/m1-spl-preflight
+          DST=build/m1-review-artifacts
+          mkdir -p "$DST"
+          for name in \
+            m1-spl-preflight.elf \
+            m1-spl-preflight.bin \
+            m1-spl-preflight.map \
+            m1-spl-preflight.nm.txt \
+            m1-spl-preflight.disasm.txt \
+            m1-spl-preflight-manifest.json \
+            m1-spl-reachable-callgraph.json \
+            M1-LINKED-CONTRACT.json \
+            m1-spl-build.log; do
+            test -s "$SRC/$name"
+            cp "$SRC/$name" "$DST/"
+          done
+          if [ -f build/audit-work/linkslot-1.0.49/REPORT.md ]; then
+            cp build/audit-work/linkslot-1.0.49/REPORT.md "$DST/"
+          fi
+          (cd "$DST" && sha256sum * > SHA256SUMS.txt)
+          du -ah "$DST" | sort -h
+
       - name: Upload maps, ELFs, logs and report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: linkslot-lk-rust-feasibility-${{ github.run_id }}
-          path: |
-            build/audit-work/linkslot-1.0.49/
-            !build/audit-work/linkslot-1.0.49/**/CMakeFiles/Progress/**
+          path: build/m1-review-artifacts/
           if-no-files-found: warn
           retention-days: 30
