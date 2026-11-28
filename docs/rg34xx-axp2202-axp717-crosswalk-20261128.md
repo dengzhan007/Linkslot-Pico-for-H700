@@ -84,9 +84,9 @@ This is consistent with a generic multi-PMU probe framework. In the inspected Ti
 
 ### Stronger probe-order hypothesis from the generic dispatcher
 
-The inspected Tina v821 generic axp.c probe order is AXP858, AXP81X, AXP806, AXP809, AXP2101, AXP2202, then AXP152/AXP1530 and later families. The AXP858 and AXP806 probe functions each call pmic_bus_read() for their PMU type and emit the same generic bus-read error when that read fails. The Boot0 binary contains PMU labels for AXP858, AXP806, AXP2202 and AXP1530; it does not contain the AXP81X/AXP809/AXP2101 labels in the extracted PMU string set.
+The inspected Tina v821 generic axp.c probe order is AXP858, AXP81X, AXP806, AXP809, AXP2101, AXP2202, then AXP152/AXP1530 and later families. The AXP858 and AXP806 probe functions each call pmic_bus_read() for their PMU type and emit the same generic bus-read error when that read fails. The Boot0 binary contains PMU labels for AXP858, AXP806, AXP2202 and AXP1530; the extracted PMU string set does not show AXP81X/AXP809/AXP2101 labels.
 
-If the target Boot0 uses this dispatcher ordering and has AXP858, AXP806, AXP2202 and AXP1530 enabled, the two initial bus-read errors are consistent with failed AXP858 and AXP806 probes, followed by successful AXP2202 detection. This is currently the best source-backed explanation of the observed log order.
+If the target Boot0 uses this dispatcher ordering and the AXP81X/AXP809/AXP2101 probes are not compiled in, the two initial bus-read errors map exactly to failed AXP858 and AXP806 probes, followed by successful AXP2202 detection. This is currently the strongest source-backed explanation of the observed log order. It also implies that the AXP2202 0x34 read probably succeeded directly rather than requiring the 0x35 fallback, although that remains unproven.
 
 It is still a hypothesis: the inspected Tina v821 source is not proven to be the exact source revision used to build the RG34XX Boot0 commit 749c1f9a-dirty. The target binary's exact compile-time PMU set and call order must be established by disassembly or an exact source match. The later U-Boot stage's AXP152/AXP1530 failures are a separate stage and must not be substituted for Boot0 probe identities.
 
