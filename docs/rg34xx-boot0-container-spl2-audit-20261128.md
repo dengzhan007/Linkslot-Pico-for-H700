@@ -174,7 +174,7 @@ A follow-up read of the SPL2 data table and AArch64 control flow reveals a secon
   - Candidate 0: LPDDR4 type 8; \`dram_tpr6=0x3e808080\` (matches the active Boot0 primary header block).
   - Candidate 1: LPDDR3 type 7; \`dram_tpr6=0x2fb08080\` (matches the RG34XX DTB's \`dram_para14\`).
   - Candidate 2: LPDDR4 type 8; \`dram_tpr6=0x40808080\` (matches the RG34XX DTB's \`dram_para15\`).
-- After the candidate init call, the code branches on the candidate's DRAM type and requests DCDC3 1100 mV for type 8, 1200 mV for type 7, and 1500 mV for other types; the 1000 ms delay and subsequent validation path are visible in the disassembly.
+- The candidate-specific routines call the low-level helper at `0x50980`, which manipulates DRAM-controller MMIO beginning at `0x03001540`; the `0x5287c` path also copies a 64-byte scratch block to/from physical address `0x40000000`, and `0x52984` performs further memory checks. The outer loop branches on the candidate DRAM type and requests DCDC3 1100 mV for type 8, 1200 mV for type 7, and 1500 mV for other types; the 1000 ms delay is visible in the disassembly.
 
 This establishes that the stock SPL2 has a fixed three-entry candidate table and a bounded sequential candidate loop. It does **not** yet establish that the loop is selected by the DTB's \`dram_select_para\` GPIOs, nor that it implements SenkOS's "strap value 14 selects LPDDR3" rule. The GPIO configuration and the SPL2 candidate loop are separate pieces of evidence until the code path joining them is recovered.
 
