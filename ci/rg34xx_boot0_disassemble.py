@@ -69,26 +69,42 @@ def analyze_capture(binary: Path, outdir: Path, objdump: str, aarch64_objdump: s
     run_address = struct.unpack_from("<I", declared, 0x20)[0]
     output = outdir / f"{binary.stem}-outer.arm.disasm"
     command = disassemble_bytes(declared, output, objdump, run_address, "arm")
+    aarch64_outer_output = outdir / f"{binary.stem}-outer.aarch64.disasm"
+    aarch64_outer_command = disassemble_bytes(
+        declared, aarch64_outer_output, aarch64_objdump, run_address, "aarch64"
+    )
 
     report["source_file"] = binary.name
     report["source_capture_sha256"] = sha256(data)
     report["outer_disassembly"] = output.name
     report["outer_objdump_command"] = command
+    report["outer_aarch64_disassembly"] = aarch64_outer_output.name
+    report["outer_aarch64_objdump_command"] = aarch64_outer_command
     report["pmu_dram_board_strings"] = strings_index(declared)
 
-    if binary.name == "boot0-primary.bin":
-        for component in report["embedded_egon_components"]:
-            offset = int(component["offset"], 16)
-            size = component["declared_size"]
-            component_bytes = declared[offset : offset + size]
-            if component["component_kind"] == "eGON Boot0" and offset != 0:
-                output = outdir / "boot0-primary-inner.arm.disasm"
-                component["disassembly"] = output.name
-                component["disassembly_vma"] = "0x20000"
-                component["objdump_command"] = disassemble_bytes(
-                    component_bytes, output, objdump, 0x20000, "arm"
-                )
-            elif component["component_kind"] == "SPL2 component":
+    for component in report["embedded_egon_components"]:
+        offset = int(component["offset"], 16)
+        size = component["declared_size"]
+        component_bytes = declared[offset : offset + size]
+        if component["component_kind"] == "eGON Boot0":
+            if offset == 0 and binary.name == "boot0-secondary.bin":
+                stem = "boot0-secondary"
+            elif offset == 0:
+                stem = "boot0-primary-outer-component"
+            else:
+                stem = "boot0-primary-inner"
+            arm_output = outdir / f"{stem}.arm.disasm"
+            a64_output = outdir / f"{stem}.aarch64.disasm"
+            component["arm_disassembly"] = arm_output.name
+            component["aarch64_disassembly"] = a64_output.name
+            component["disassembly_vma"] = "0x20000"
+            component["arm_objdump_command"] = disassemble_bytes(
+                component_bytes, arm_output, objdump, 0x20000, "arm"
+            )
+            component["aarch64_objdump_command"] = disassemble_bytes(
+                component_bytes, a64_output, aarch64_objdump, 0x20000, "aarch64"
+            )
+        elif component["component_kind"] == "SPL2 component":
                 output = outdir / "boot0-primary-spl2-rg35xx-2024.arm.disasm"
                 component["disassembly"] = output.name
                 component["disassembly_vma_candidate"] = "0x50000"
@@ -295,7 +311,7 @@ def main() -> int:
         "RG34XX H700 stock boot-chain static analysis bundle\n"
         "Inputs: reports-branch Boot0 primary/secondary captures, TOC1 package, and live FDT.\n"
         "The primary capture contains nested eGON Boot0 and SPL2 components.\n"
-        "SPL2 is disassembled in ARM mode and its candidate AArch64 region is disassembled separately.\n"
+        "Boot0 components are disassembled in ARM and AArch64 modes; SPL2 is disassembled in ARM mode and its candidate AArch64 region separately.\n"
         "TOC1 and live FDT are scanned for embedded FDT blobs and board/PMIC/BL31/U-Boot strings.\n"
         "Only static parsing, string extraction, hashing and disassembly were performed. No firmware was executed and no hardware was accessed.\n",
         encoding="utf-8",
