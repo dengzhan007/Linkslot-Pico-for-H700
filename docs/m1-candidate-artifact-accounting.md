@@ -77,3 +77,9 @@ Before a candidate can be promoted beyond host-only audit:
 ## Safety boundary
 
 This accounting is host-side analysis of a downloaded CI artifact. It performed no device MMIO/SMC, TWI transaction, DRAM content access, suspend/resume, TF write, Boot0/TOC1 write, firmware flash, or payload execution. Keep `H700_MEMORY_LAYOUT_APPROVED=false` and `hardware_applied=0`.
+
+## Automated ELF/raw/map manifest (2026-11-28)
+
+The feasibility workflow now runs `scripts/audit-m1-a32-artifact.py` on each of the three CI layout prototypes and emits JSON manifests under `m1-artifact-accounting/`. The auditor requires ELF32 little-endian ARM ET_EXEC, matching `_start`/entry at `0x4a000000`, a matching linker-map `_end`, the raw 32 KiB limit, zero vendor-header reservation, all eight in-range A32 vector branches, and byte-for-byte equality between the supplied raw file and `llvm-objcopy -O binary` output from the supplied ELF. It records ELF/raw/map SHA-256, PT_LOAD extents, runtime span and relevant stack/page-table symbols.
+
+The profile is explicit: `pi12-mmio-layout`, `stub-overlay`, or `a32-entry-stub`. Every output is hard-coded `host_only=true`, `not_installable=true`, `hardware_validated=false`, and `candidate_eligible=false`. The PI12 profile is visibly marked as physical-MMIO-enabled disposable layout work. This manifest joins the exact three files but does not certify the real vendor header, BaseOS firmware generation/FNV, SPL, Boot0 capsule, physical RAM ownership or hardware behavior. This is accounting infrastructure, not promotion of any prototype to an M1 candidate.
