@@ -37,6 +37,7 @@ on:
       - "tests/fake_uboot/blk.h"
       - "tests/test_m1_firmware_spl_adapter.c"
       - "scripts/test-m1-spl-adapter.py"
+      - "scripts/audit-m1-spl-sram-layout.py"
       - "tests/m1_oneshot_capsule_a32_fixture.c"
       - "tests/test_m1_oneshot_selection_model.c"
       - "scripts/audit-h700-lk-timer-prerequisites.py"
@@ -217,6 +218,15 @@ jobs:
           path: .ci/baseos-native
           persist-credentials: false
 
+      - name: Checkout pinned U-Boot v2026.10 source for SPL SRAM layout audit
+        uses: actions/checkout@v4
+        with:
+          repository: u-boot/u-boot
+          ref: 5508406582f6f7120dce0c4b3059819a41788db2
+          path: .ci/u-boot-v2026.10
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Audit pinned LK early GIC and scheduler timer prerequisites
         run: python3 scripts/audit-h700-lk-timer-prerequisites.py --lk-source .ci/lk-reference
 
@@ -225,6 +235,13 @@ jobs:
 
       - name: Verify M1 firmware stream against pinned BaseOS builder and captured TOC1
         run: python3 scripts/test-m1-baseos-firmware-contract.py --baseos-root .ci/baseos-native
+
+      - name: Audit H700 SPL separate-BSS SRAM geometry for M1 scratch
+        run: |
+          python3 scripts/audit-m1-spl-sram-layout.py \\
+            --uboot-root .ci/u-boot-v2026.10 \\
+            --baseos-root .ci/baseos-native \\
+            --output build/audit-work/linkslot-1.0.49/m1-spl-sram-layout.json
 
       - name: Test host-only M1 one-shot capsule pre-entry selection model
         run: python3 scripts/test-m1-oneshot-capsule-selection.py
