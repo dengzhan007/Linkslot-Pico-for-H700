@@ -241,3 +241,17 @@ The Linux upstream AXP717 support author states that Allwinner BSP code often ca
 An Allwinner-authored Tina v821 AXP2202 SPL reference (sun50iw10p1 lineage, not the RG34XX/H700 target source) and the pinned U-Boot AXP717 SPL use the same DCDC3 voltage register 0x85, output-enable register 0x80 bit 2, mask 0x7f, and 500–1840 mV split-step encoding. The AXP2202 reference additionally probes CHIP_ID_EXT 0x0e (expected value 0x02), initializes a 400 kHz TWI bus, and supports address fallback 0x34 -> 0x35. Its generic dispatcher exposes set_ddr_voltage() -> axp2202_set_ddr_voltage() -> DCDC3. These findings make the AXP717 SPL driver a credible register-family reference, not an incompatible-chip substitute.
 
 The exact RG34XX Boot0 call site, PMIC read/write sequence, fallback selection, and DCDC3-before-DRAM ordering remain unproven. See [RG34XX AXP2202/AXP717 crosswalk](rg34xx-axp2202-axp717-crosswalk-20261128.md).
+
+
+## 2026-11-28 RG34XX stock SPL2 voltage-policy cross-check
+
+The project's later read-only analysis of the RG34XX TF-card SPL2 provides target-specific evidence for one part of SenkOS's DRAM-voltage policy:
+
+- RG34XX SPL2 code selects DCDC3 1100 mV for LPDDR4 type 8 and 1200 mV for LPDDR3 type 7; other types take a 1500 mV branch.
+- The SPL2 regulator table maps DCDC3 to voltage register \`0x85\`, control register \`0x80\`, enable mask \`0x04\`, I2C slave \`0x34\`; DCDC2 maps to voltage register \`0x84\`, control mask \`0x02\`.
+- This independently confirms the LPDDR4 1100 mV / LPDDR3 1200 mV voltage values on the RG34XX stock path, and shows an AXP717-compatible DCDC register layout for the AXP2202-labelled PMIC path.
+- It does **not** confirm SenkOS's PH6/PH7/PH8/PH10 strap wiring or profile index selection for RG34XX. Those remain reference-only until target-specific evidence is found.
+- The bus callback table's runtime resolution and exact R-TWI0 mapping remain open. No PMIC write or hardware action is authorized.
+
+Detailed target evidence: \`docs/rg34xx-boot0-container-spl2-audit-20261128.md\`.
+
