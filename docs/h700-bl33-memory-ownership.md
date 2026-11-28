@@ -665,3 +665,17 @@ The exact monitor was disassembled as a complete AArch64 image with the verified
 Current interpretation: the writer and installed callback value are proven, but the installer function's invocation source remains unresolved. The qword at 0x48018d00 is a data xref lead only. Continue by identifying the owner/consumer of that record and any indirect branch, while avoiding assumptions from raw pointer coincidence. This does not alter the separate G2 finding: no write to 0x48014668 is established.
 
 No monitor execution, device access, MMIO/SMC, suspend/wake, or firmware write occurred. G2/G3/M1-S1 remain open.
+
+
+### 2026-11-28: 0x4800a134 is an auxiliary field in an exception descriptor, not a proven dispatch target
+
+A byte-accurate decode of the 32-byte records at `0x48018ca8..0x48018d68` refines the earlier raw-qword lead:
+
+- The exception entry at `0x48015884` sets `x11=0x48018ca8`, derives an index from the exception vector, scales it by 0x20, and executes `LDR x15,[x11,w10,uxtw]`. It then invokes only that first qword via `BLR x15` at `0x480158c4`.
+- Record `0x48018ce8` is four qwords: `0x4800a29c`, `0x00013f32`, `0x480184e1`, `0x4800a134`. Thus `0x4800a134` is the fourth qword (+0x18) of the record whose first-qword dispatch handler is `0x4800a29c`; the dispatcher does not load or call the fourth qword.
+- Adjacent record `0x48018d08` starts with `0x4800a29c` and has different trailing fields. This confirms a structured 0x20-byte exception descriptor table, not a flat array of function pointers.
+- Therefore the earlier raw pointer at `0x48018d00` is not evidence that the exception dispatcher invokes `0x4800a134`. It is an auxiliary descriptor field associated with handler `0x4800a29c`. Its consumer, semantics, and any possible indirect use remain unresolved.
+
+This narrows the call-site question: the known exception dispatcher only uses the first qword, so the fourth-qword pointer is not its direct handler target. Do not describe `0x4800a134` as an exception callback or claim it is invoked by this table without finding a separate consumer. The installer function's execution path remains unknown; consequently the actual runtime initialization of `0x4803c048` remains unproven despite the direct writer and callback value being identified.
+
+No G2 writer for `0x48014668` is established by this finding. No monitor execution, device access, MMIO/SMC, suspend/wake, or firmware write occurred. G2/G3/M1-S1 remain open.
