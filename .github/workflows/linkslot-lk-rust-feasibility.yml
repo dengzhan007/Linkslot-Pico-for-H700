@@ -5,6 +5,9 @@ on:
     branches: [porting/linkslot-1.0.45-feasibility]
     paths:
       - ".github/workflows/linkslot-lk-rust-feasibility.yml"
+      - "tools/inspect_h700_boot0.py"
+      - "tools/test_inspect_h700_boot0.py"
+      - "tools/test_rg34xx_stock_boot0_reports.py"
       - "scripts/test-linkslot-slot-retro-vfs.py"
       - "scripts/test-linkslot-static-core-api.py"
       - "scripts/test-linkslot-mgba-static-rust-binding.py"
@@ -89,6 +92,9 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - ".github/workflows/linkslot-lk-rust-feasibility.yml"
+      - "tools/inspect_h700_boot0.py"
+      - "tools/test_inspect_h700_boot0.py"
+      - "tools/test_rg34xx_stock_boot0_reports.py"
       - "scripts/audit-linkslot-nostd.py"
       - "scripts/audit-lk-bl33-layout.py"
       - "scripts/audit-m1-oneshot-baseos-source.py"
@@ -406,6 +412,12 @@ jobs:
             -o build/audit-work/linkslot-1.0.49/physical-memory/test
           build/audit-work/linkslot-1.0.49/physical-memory/test
           echo "PASS: RG34XX physical DRAM capacity is 1 GiB; memory ownership remains separately gated."
+
+      - name: Test RG34XX stock Boot0 DRAM.ext extraction (read-only captured binaries)
+        run: |
+          git fetch --filter=blob:none --no-tags --depth=1 origin refs/heads/reports:refs/remotes/origin/reports
+          python3 -m unittest tools.test_inspect_h700_boot0
+          python3 tools/test_rg34xx_stock_boot0_reports.py --reports-ref refs/remotes/origin/reports
 
       - name: Install pinned Rust toolchain and freestanding targets
         uses: dtolnay/rust-toolchain@1.96.0
