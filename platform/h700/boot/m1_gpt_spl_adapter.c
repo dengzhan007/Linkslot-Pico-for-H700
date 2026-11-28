@@ -5,9 +5,16 @@
 #include <blk.h>
 
 #include "h700_gpt_readonly.h"
+#include "m1_firmware_readonly.h"
 #include "m1_gpt_spl_adapter.h"
 
 #define H700_M1_GPT_ENTRY_SLOTS 8u
+
+int h700_m1_spl_preflight(struct blk_desc *, uint64_t, uint64_t, uint32_t,
+                          void *, size_t);
+
+static uint8_t m1_package_scratch[H700_M1_STREAM_CHUNK_BYTES]
+    __attribute__((aligned(64)));
 
 static struct h700_gpt_partition m1_boot_partitions[H700_M1_GPT_ENTRY_SLOTS]
     __attribute__((aligned(8)));
@@ -50,4 +57,20 @@ int h700_m1_spl_find_boot_partition(struct blk_desc *card,
     *partition_first_lba = boot->first_lba;
     *partition_block_count = boot->last_lba - boot->first_lba + 1u;
     return *partition_block_count != 0;
+}
+
+int h700_m1_spl_preflight_gpt(struct blk_desc *card,
+                              uint64_t device_sector_count,
+                              uint32_t sector_size,
+                              uint32_t expected_firmware_fnv1a)
+{
+    uint64_t p4_first_lba = 0;
+    uint64_t p4_block_count = 0;
+
+    if (!h700_m1_spl_find_boot_partition(card, device_sector_count, sector_size,
+                                         &p4_first_lba, &p4_block_count))
+        return 0;
+    return h700_m1_spl_preflight(card, p4_first_lba, p4_block_count,
+                                 expected_firmware_fnv1a, m1_package_scratch,
+                                 sizeof(m1_package_scratch));
 }
