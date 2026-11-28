@@ -2405,3 +2405,12 @@ AArch64 反汇编窗口，验证：
 - The AArch64-looking registry code at file offset `0x1b694` computes a table at runtime `0x3c688` / file offset `0x1c688`, and that table contains key `0x4d` plus callback `0x2984c`. The address relationship is internally consistent under the Boot0 image mapping, but the dispatcher uses `br x16` and the target region is Thumb code; no valid ISA transition or reachable AArch32-to-AArch64 path is proven.
 - The Boot0 registry/code windows are not byte-identical to the corresponding candidate windows in the live TOC1 monitor. Do not identify this registry with BL31's context slot or callback machinery. Full correction: [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md).
 - G2/G3/M1-S1 remain open; no device interaction or payload execution.
+
+
+### Boot0 AArch32-to-AArch64 reachability follow-up (2026-11-28)
+
+- Dual-mode disassembly confirms a coherent AArch64 code tail beginning at Boot0 file offset `0x1b548`; the descriptor lookup/dispatch is at `0x1b694..0x1b73c`, with its table at `0x1c688` (whole-image runtime addresses add `0x20000`).
+- The eGON entry at file offset `0x400` and its resume trampoline at `0x50000` are AArch32. The entry validates state, calls helper `0x4e0`, then loads PC from `0x494` (captured value `0x50000`). The trampoline restores CPSR/register/SP/LR and branches back to `0x20000`. No AArch64 exception-return or state-switch path was found in this resume sequence.
+- A full-image direct-word scan found no literal pointers to A64 candidate runtime addresses `0x3b548/0x3b580/0x3b640/0x3b694/0x3b6f4/0x3b728` or table `0x3c688`. Computed pointers, external consumers, and indirect loader paths remain unexcluded.
+- The A64 descriptor callback values still land inside Thumb code with low bits clear, and `br x16` does not change ISA state. Treat the A64 tail as an unresolved embedded region, not a proven Boot0 handoff or BL31 loader. Full analysis: [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md).
+- Continue BL31 indirect-writer tracing for `0x48014668`; G2/G3/M1-S1 remain closed. No hardware interaction or payload execution.
