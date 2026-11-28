@@ -1,3 +1,12 @@
+## 2026-11-28 PMIC/TWI and RTC/WDT source-trace refinement
+
+- Extended [`docs/m1-owner-policy-audit-20261128.md`](m1-owner-policy-audit-20261128.md) after directly reviewing the pinned BaseOS files at `cbe253a43f46cf551cc9a6c79a84015bde3686cf`.
+- **Profile A scope clarification:** the BaseOS builder inserts `baseos_early_mmc()` before `sunxi_board_init()`; this early MMC path is explicitly pre-DRAM. The current M1 overlay stops after read-only MMC/GPT preflight and does not invoke the DRAM/board-init continuation. Its no-PMIC/no-TWI config is therefore intentional and must remain so. Profile A applies to the separate future DRAM-capable SPL board-init profile.
+- The pinned builder retains `i2c_init_board()` and `i2c_init(...)` on the non-resume persistent board-init path, while resume skips them. This proves a conditional SPL I2C/TWI initialization stage exists, but does not yet identify its exact PMIC writes or prove which regulators/voltages are necessary.
+- The PMIC operations in pinned `native-boot.c` (`pmic_bus_read(0x20)`, reads of `0` and `0xf0`, conditional write `0xf0=0`) are in boot-reason/scratch-byte handling called after `sunxi_board_init()`; they are not evidence for DRAM rail initialization and must not be copied into Profile A power-up logic.
+- Exact raw-capsule-v2 state addresses documented: GP14 `0x07000138` cookie; GP15 `0x0700013c` marker; retention `0x070001f8` bit 16 resume; WDT CTRL/CFG/MODE `0x030090b0/0x030090b4/0x030090b8`. Outer capsule owns attempt commit and WDT arm; raw SPL adoption is read-only (two-pass state verification); later native handoff reloads WDT. The pair writes are ordered but non-atomic, with readback/barrier checks. M1 must define a separate test marker/protocol and recovery state machine, not reuse v2.
+- Next static work: trace `i2c_init_board()`, `i2c_init()`, AXP2202 bus/register mapping and DRAM regulator requirements from pinned U-Boot/board sources; independently build a host-only RTC/WDT test-state model with torn-write, stale-marker, watchdog-reset and power-loss cases. No physical register writes.
+
 ## 2026-11-28 Owner policy decisions and static-audit continuation
 
 - Owner decisions are now recorded: **SPL Profile A** (only source-proven, individually audited PMIC/TWI operations may be retained) and **native RTC/WDT accepted only for an audited dedicated test-TF workflow**. These decisions do not authorize execution or hardware application.
