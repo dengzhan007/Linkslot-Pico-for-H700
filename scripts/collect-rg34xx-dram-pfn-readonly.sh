@@ -82,6 +82,57 @@ read_page_metadata() {
 read_page_metadata "kpageflags" "/proc/kpageflags"
 read_page_metadata "kpagecount" "/proc/kpagecount"
 
+# The relocated BL31 retention analysis also identifies a second candidate
+# source window at 0x60000000. Capture only its PFN metadata, never page bytes.
+SECOND_PFN_DEC=393216
+echo
+echo "secondary_physical_source_window=[0x60000000,0x60000140)"
+echo "secondary_target_page=[0x60000000,0x60001000)"
+echo "secondary_target_pfn=0x60000 decimal=$SECOND_PFN_DEC"
+echo "secondary_kpage_metadata_file_offset_bytes=$((SECOND_PFN_DEC * 8))"
+read_secondary_metadata() {
+    label="$1"
+    path="$2"
+    echo "[${label}_pfn_60000]"
+    echo "path=$path"
+    if [ ! -e "$path" ]; then
+        echo "status=NOT_PRESENT"
+        return
+    fi
+    if [ ! -r "$path" ] || ! command -v dd >/dev/null 2>&1 || ! command -v od >/dev/null 2>&1; then
+        echo "status=NOT_READABLE_OR_REQUIRED_TOOL_MISSING"
+        return
+    fi
+    raw_hex="$(dd if="$path" bs=8 skip="$SECOND_PFN_DEC" count=1 2>/dev/null | od -An -tx1 2>/dev/null | tr -d '[:space:]')"
+    case "$raw_hex" in
+        ''|*[!0-9a-fA-F]*) echo "status=READ_FAILED_OR_NON_HEX"; return ;;
+    esac
+    if [ "${#raw_hex}" -ne 16 ]; then
+        echo "status=SHORT_READ"
+        echo "returned_hex_chars=${#raw_hex}"
+        return
+    fi
+    echo "status=READ_OK"
+    echo "raw_8_bytes_hex=$raw_hex"
+}
+read_secondary_metadata "kpageflags" "/proc/kpageflags"
+read_secondary_metadata "kpagecount" "/proc/kpagecount"
+
+# Kernel ownership context only; these are metadata interfaces, not DRAM reads.
+for proc_path in /proc/iomem /proc/zoneinfo /proc/buddyinfo /proc/pagetypeinfo /proc/meminfo; do
+    section="$(basename "$proc_path")"
+    echo
+    echo "[kernel_memory_${section}]"
+    if [ -r "$proc_path" ]; then
+        echo "status=READ_OK"
+        cat "$proc_path"
+    elif [ -e "$proc_path" ]; then
+        echo "status=NOT_READABLE"
+    else
+        echo "status=NOT_PRESENT"
+    fi
+done
+
 echo "[page_owner_availability]"
 if [ -r /sys/kernel/debug/page_owner ]; then
     echo "status=READABLE_NOT_DUMPED"
