@@ -99,21 +99,49 @@ The SPL2 string index also shows \`U-Boot SPL 2026.10 (Oct 02 2026)\`, \`spl_loa
 The TOC1 string index does not yet identify exact component boundaries or prove which embedded FDT is selected. A follow-up scan validates FDT headers and reports component marker offsets.
 
 
-## 7. Independent public UART sample remains separate
+## 7. SPL2 AArch64 PMIC regulator path
+
+The SPL2 component is mixed-mode: its early header/entry stub is ARM-state code, while valid AArch64 instruction sequences appear from candidate component offset \`0x188\`. The AArch64 disassembly is therefore required for the main SPL logic; the ARM-only listing is not a reliable decode of that region.
+
+The AArch64 listing provides a target-specific DCDC voltage path:
+
+- At candidate VMA \`0x54cec\`, the code requests 940 mV through wrapper \`0x5a318\` (regulator ID 2 / DCDC2).
+- At \`0x54cf8\`, it requests 1100 mV through wrapper \`0x5a324\` (regulator ID 3 / DCDC3).
+- It then prints the \`DRAM:\` banner and calls \`0x53608\`, the next DRAM-initialization routine.
+- Inside that DRAM path, code around \`0x53720\` reads the DRAM type and selects DCDC3 voltage: LPDDR4 type 8 -> 1100 mV; LPDDR3 type 7 -> 1200 mV; other types -> 1500 mV. It calls the same DCDC3 wrapper and waits 1000 ms.
+
+The regulator table at candidate VMA \`0x5aafc\` (component-relative offset \`0xaafc\`) contains 10-byte entries:
+
+| Regulator ID | Rail | Control register | Enable mask | Voltage register | Voltage mask | Range / step |
+|---:|---|---:|---:|---:|---:|---|
+| 2 | DCDC2 | \`0x80\` | \`0x02\` | \`0x84\` | \`0x7f\` | 500–1540 mV / 10 mV |
+| 3 | DCDC3 | \`0x80\` | \`0x04\` | \`0x85\` | \`0x7f\` | 500–1840 mV / 10 mV |
+
+The voltage setter computes the code from the table's minimum and step. Therefore 940 mV on DCDC2 maps to code \`0x2c\`; 1100 mV on DCDC3 maps to code \`0x3c\`. The SPL2 I2C read/write helpers pass slave address \`0x34\`, one-byte register addresses and one-byte data through a bus callback table. The helper at \`0x50678\` performs a read-modify-write that ORs an enable mask into a control register; however, the call sites recovered so far prove the voltage-setting calls, not the complete DCDC enable sequence.
+
+This register table matches the AXP717 SPL driver's DCDC2/DCDC3 register layout audited earlier, while the same RG34XX inventory's live FDT and TOC1 identify the PMIC as \`x-powers,axp2202\`. This is strong evidence that the stock RG34XX SPL2 uses an AXP717-compatible DCDC register map for its AXP2202-labelled PMIC path. It does not prove the physical silicon identity or complete register-map equivalence.
+
+The bus helpers at \`0x5779c\` and \`0x57804\` dispatch through a bus descriptor selected from \`x18 + 264\`; the descriptor table begins at \`0x5b6b0\`. Its callback pointer values include \`0x27d30\` and \`0x27c20\`, which appear to lie in the Boot0 image address range. The next pass disassembles the inner Boot0 in AArch64 mode to determine whether these are Boot0-provided I2C callbacks and whether they map to the RG34XX R-TWI0 controller at \`0x07081400\`.
+
+This independently corroborates the LPDDR4 1100 mV / LPDDR3 1200 mV voltage policy seen in SenkOS, but it does **not** validate SenkOS's PH6/PH7/PH8/PH10 strap mapping for RG34XX. Voltage policy and strap wiring remain separate evidence questions.
+
+
+
+## 8. Independent public UART sample remains separate
 
 The published macromorgan RG34XX UART sample reports PMU AXP2202 and DRAM_VCC 1100 mV before DRAM training. That sample is not part of the reports-branch binary inventory, and the captured Boot0 image contains \`BOOT0 commit : %s\` rather than a fixed build hash. Do not match the public sample's displayed \`749c1f9a-dirty\` identifier to this binary or claim that the public log is this exact binary's runtime trace.
 
 The public log remains useful independent RG34XX corroboration. The project's own read-only runtime capture independently reports DCDC3 at 1100 mV. Together with the Allwinner AXP2202 \`set_ddr_voltage()\` reference path, this makes DCDC3 the strongest DRAM_VCC candidate, but the exact target Boot0 write/call site remains open.
 
-## 8. Required next static work
+## 9. Required next static work
 
 1. Disassemble the outer Boot0, embedded 64 KiB Boot0, and SPL2 component separately; map SPL2 at candidate VMA \`0x50000\`.
 2. Parse the TOC1 header/component table and validate embedded FDT blobs; identify BL31/U-Boot payload boundaries and the selected RG34XX-v1 FDT.
 3. Disassemble the SPL2 in both ARM and AArch64 modes; compare its DRAM/PMIC/strap/power assumptions against RG34XX-v1 evidence.
 4. Establish whether the SPL2 label is a shared vendor build target or a board-specific hardware configuration before any reuse in the project.
-5. Recover the exact target PMU probe and DCDC3 write call path; no writes are authorized by this audit.
+5. Recover the complete DCDC enable/read-modify-write path and exact target PMU probe; no writes are authorized by this audit.
 
-## 9. Safety state
+## 10. Safety state
 
 This was read-only parsing, hashing, string extraction and static ARM disassembly only.
 
