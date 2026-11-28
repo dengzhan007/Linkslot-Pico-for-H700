@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create read-only ARM disassembly and component metadata for RG34XX boot captures."""
+"""Create read-only ARM/AArch64 disassembly and component metadata for RG34XX boot captures."""
 
 from __future__ import annotations
 
@@ -47,34 +47,28 @@ def strings_index(data: bytes, base_offset: int = 0) -> list[dict[str, str]]:
     return found
 
 
-def disassemble_bytes(data: bytes, output: Path, objdump: str, vma: int) -> list[str]:
+def disassemble_bytes(
+    data: bytes, output: Path, objdump: str, vma: int, arch: str = "arm"
+) -> list[str]:
     with tempfile.TemporaryDirectory(prefix="rg34xx-boot-disasm-") as temporary:
         image = Path(temporary) / "component.bin"
         image.write_bytes(data)
-        command = [
-            objdump,
-            "-D",
-            "-b",
-            "binary",
-            "-m",
-            "arm",
-            "-M",
-            "reg-names-std",
-            f"--adjust-vma=0x{vma:x}",
-            str(image),
-        ]
+        command = [objdump, "-D", "-b", "binary", "-m", arch]
+        if arch == "arm":
+            command.extend(["-M", "reg-names-std"])
+        command.extend([f"--adjust-vma=0x{vma:x}", str(image)])
         with output.open("w", encoding="utf-8") as stream:
             subprocess.run(command, check=True, stdout=stream, stderr=subprocess.PIPE, text=True)
     return command
 
 
-def analyze_capture(binary: Path, outdir: Path, objdump: str) -> tuple[dict, bytes]:
+def analyze_capture(binary: Path, outdir: Path, objdump: str, aarch64_objdump: str) -> tuple[dict, bytes]:
     data = binary.read_bytes()
     report = parse_boot0(data)
     declared = data[: report["image_size"]]
     run_address = struct.unpack_from("<I", declared, 0x20)[0]
     output = outdir / f"{binary.stem}-outer.arm.disasm"
-    command = disassemble_bytes(declared, output, objdump, run_address)
+    command = disassemble_bytes(declared, output, objdump, run_address, "arm")
 
     report["source_file"] = binary.name
     report["source_capture_sha256"] = sha256(data)
@@ -92,18 +86,105 @@ def analyze_capture(binary: Path, outdir: Path, objdump: str) -> tuple[dict, byt
                 component["disassembly"] = output.name
                 component["disassembly_vma"] = "0x20000"
                 component["objdump_command"] = disassemble_bytes(
-                    component_bytes, output, objdump, 0x20000
+                    component_bytes, output, objdump, 0x20000, "arm"
                 )
             elif component["component_kind"] == "SPL2 component":
                 output = outdir / "boot0-primary-spl2-rg35xx-2024.arm.disasm"
                 component["disassembly"] = output.name
                 component["disassembly_vma_candidate"] = "0x50000"
                 component["objdump_command"] = disassemble_bytes(
-                    component_bytes, output, objdump, 0x50000
+                    component_bytes, output, objdump, 0x50000, "arm"
+                )
+                aarch64_start = 0x188
+                aarch64_output = outdir / "boot0-primary-spl2-rg35xx-2024.aarch64.disasm"
+                component["aarch64_disassembly"] = aarch64_output.name
+                component["aarch64_candidate_start_offset"] = f"0x{aarch64_start:x}"
+                component["aarch64_candidate_vma"] = f"0x{0x50000 + aarch64_start:x}"
+                component["aarch64_objdump_command"] = disassemble_bytes(
+                    component_bytes[aarch64_start:],
+                    aarch64_output,
+                    aarch64_objdump,
+                    0x50000 + aarch64_start,
+                    "aarch64",
+                )
+                component["mode_note"] = (
+                    "The SPL2 component has an ARM-mode entry/header stub and AArch64-looking "
+                    "instruction encodings from candidate offset 0x188. The AArch64 region is "
+                    "disassembled separately; the exact exception-level transition path is not proven."
                 )
                 component["pmu_dram_board_strings"] = strings_index(component_bytes, offset)
 
     return report, data
+
+
+def scan_fdt_blobs(data: bytes) -> list[dict]:
+    found = []
+    magic = b"\xd0\x0d\xfe\xed"
+    cursor = 0
+    while True:
+        offset = data.find(magic, cursor)
+        if offset < 0:
+            break
+        cursor = offset + 1
+        if offset + 40 > len(data):
+            continue
+        total, off_struct, off_strings, off_mem_rsv, version, last_comp = struct.unpack_from(
+            ">6I", data, offset + 4
+        )
+        if (
+            total < 40
+            or offset + total > len(data)
+            or off_struct >= total
+            or off_strings >= total
+            or off_mem_rsv >= total
+            or version < 16
+            or version > 20
+            or last_comp > version
+        ):
+            continue
+        blob = data[offset : offset + total]
+        relevant = strings_index(blob, offset)
+        board_strings = [
+            item for item in relevant
+            if re.search(r"rg34|rg35|anbernic|sun50i-h700|x-powers,axp2202", item["text"], re.I)
+        ]
+        if board_strings:
+            found.append(
+                {
+                    "offset": f"0x{offset:x}",
+                    "total_size": total,
+                    "version": version,
+                    "last_comp_version": last_comp,
+                    "sha256": sha256(blob),
+                    "board_strings": board_strings,
+                }
+            )
+    return found
+
+
+def marker_offsets(data: bytes) -> dict[str, list[str]]:
+    markers = {
+        "TOC1": b"TOC1",
+        "TOC0": b"TOC0",
+        "eGON.BT1": b"eGON.BT1",
+        "eGON.BT0": b"eGON.BT0",
+        "BL31": b"BL31",
+        "BL33": b"BL33",
+        "U-Boot": b"U-Boot",
+        "FDT_magic": b"\xd0\x0d\xfe\xed",
+    }
+    result = {}
+    for name, marker in markers.items():
+        offsets = []
+        cursor = 0
+        while True:
+            offset = data.find(marker, cursor)
+            if offset < 0:
+                break
+            offsets.append(f"0x{offset:x}")
+            cursor = offset + 1
+        result[name] = offsets[:100]
+    return result
 
 
 def main() -> int:
@@ -114,19 +195,18 @@ def main() -> int:
     parser.add_argument("--fdt", type=Path, required=True)
     parser.add_argument("--outdir", type=Path, required=True)
     parser.add_argument("--objdump", default="arm-linux-gnueabihf-objdump")
+    parser.add_argument("--aarch64-objdump", default="aarch64-linux-gnu-objdump")
     args = parser.parse_args()
 
     if not shutil.which(args.objdump):
-        raise SystemExit(f"required disassembler not found: {args.objdump}")
+        raise SystemExit(f"required ARM disassembler not found: {args.objdump}")
+    if not shutil.which(args.aarch64_objdump):
+        raise SystemExit(f"required AArch64 disassembler not found: {args.aarch64_objdump}")
     args.outdir.mkdir(parents=True, exist_ok=True)
 
-    primary, primary_bytes = analyze_capture(args.primary, args.outdir, args.objdump)
-    secondary, secondary_bytes = analyze_capture(args.secondary, args.outdir, args.objdump)
+    primary, primary_bytes = analyze_capture(args.primary, args.outdir, args.objdump, args.aarch64_objdump)
+    secondary, _ = analyze_capture(args.secondary, args.outdir, args.objdump, args.aarch64_objdump)
 
-    # The outer Boot0 stub's literal at file offset 0x494 points to 0x50000.
-    # The embedded SPL2 component begins at +0x11000 and its first ARM branch
-    # targets component offset 0x60. This is an address correlation, not a
-    # proof of the complete runtime copy/control-flow path.
     handoff = {}
     if len(primary_bytes) >= 0x498:
         literal = struct.unpack_from("<I", primary_bytes, 0x494)[0]
@@ -150,7 +230,7 @@ def main() -> int:
                 "spl2_branch_target_offset": f"0x{branch_target:x}",
                 "candidate_spl2_load_vma": "0x50000",
                 "candidate_spl2_code_entry": f"0x{literal + branch_target:x}",
-                "assessment": "The address relationship is consistent with the Boot0 stub handing off to the embedded SPL2 component; exact copy/selection/reachability still requires control-flow confirmation.",
+                "assessment": "Address relationship is consistent with Boot0 handing off to SPL2; exact copy/selection/reachability remains unproven.",
             }
 
     toc1_data = args.toc1.read_bytes()
@@ -160,18 +240,22 @@ def main() -> int:
             "file": args.toc1.name,
             "bytes": len(toc1_data),
             "sha256": sha256(toc1_data),
+            "header_preview_hex": toc1_data[:256].hex(),
             "relevant_strings": strings_index(toc1_data),
+            "marker_offsets": marker_offsets(toc1_data),
+            "embedded_fdt_blobs": scan_fdt_blobs(toc1_data),
         },
         "live_fdt": {
             "file": args.fdt.name,
             "bytes": len(fdt_data),
             "sha256": sha256(fdt_data),
             "relevant_strings": strings_index(fdt_data),
+            "embedded_fdt_blobs": scan_fdt_blobs(fdt_data),
         },
         "cross_component_identity_note": (
-            "A RG35XX-2024 SPL2 build label alongside an RG34XX-v1 live FDT is a "
-            "cross-component naming discrepancy. It does not by itself prove "
-            "incompatibility; verify the SPL's hardware assumptions and TOC1 payload."
+            "An RG35XX-2024 SPL2 build label alongside RG34XX-v1 FDT data is a cross-component "
+            "naming discrepancy. TOC1 board strings and SPL hardware assumptions must be checked "
+            "before concluding that the SPL is shared or incompatible."
         ),
     }
 
@@ -179,20 +263,22 @@ def main() -> int:
         json.dumps(
             {
                 "scope": "RG34XX non-SP TF-card boot chain, read-only static analysis",
-                "objdump_version": subprocess.run(
-                    [args.objdump, "--version"],
-                    check=True,
-                    capture_output=True,
-                    text=True,
+                "arm_objdump_version": subprocess.run(
+                    [args.objdump, "--version"], check=True, capture_output=True, text=True
+                ).stdout.splitlines()[0],
+                "aarch64_objdump_version": subprocess.run(
+                    [args.aarch64_objdump, "--version"], check=True, capture_output=True, text=True
                 ).stdout.splitlines()[0],
                 "captures": [primary, secondary],
                 "candidate_handoff": handoff,
                 "limitations": [
-                    "Static ARM-mode disassembly only; no code was executed.",
+                    "Static ARM/AArch64 disassembly only; no code was executed.",
                     "Raw-binary disassembly has no ELF symbols or relocations; code/data regions may be mixed.",
-                    "The outer header run address is used for the outer image; the SPL2 VMA 0x50000 is a candidate inferred from a literal and branch target.",
+                    "The SPL2 component appears mixed-mode; the AArch64 start offset 0x188 is a candidate, not a proven exception-level transition.",
+                    "The SPL2 VMA 0x50000 is inferred from an outer Boot0 literal and the SPL2 branch target.",
                     "The SPL2 platform string is a build label, not proof of board incompatibility.",
-                    "This output does not by itself establish PMU probe order, register writes, runtime profile selection, or hardware qualification.",
+                    "TOC1 FDT/string scanning does not establish which FDT or image component is selected at runtime.",
+                    "This output does not by itself establish PMU register writes, DRAM profile selection, or hardware qualification.",
                 ],
             },
             indent=2,
@@ -208,10 +294,10 @@ def main() -> int:
     (args.outdir / "README.txt").write_text(
         "RG34XX H700 stock boot-chain static analysis bundle\n"
         "Inputs: reports-branch Boot0 primary/secondary captures, TOC1 package, and live FDT.\n"
-        "The primary capture contains nested eGON Boot0 and SPL2 components; the SPL2 component is disassembled at candidate VMA 0x50000.\n"
-        "The embedded SPL2 header advertises an RG35XX-2024 build path, while the live FDT contains an RG34XX-v1 marker.\n"
-        "Only static parsing, string extraction, hashing and ARM-mode disassembly were performed. No firmware was executed and no hardware was accessed.\n"
-        "See JSON reports for hashes, nested headers, profile tables, platform strings and caveats.\n",
+        "The primary capture contains nested eGON Boot0 and SPL2 components.\n"
+        "SPL2 is disassembled in ARM mode and its candidate AArch64 region is disassembled separately.\n"
+        "TOC1 and live FDT are scanned for embedded FDT blobs and board/PMIC/BL31/U-Boot strings.\n"
+        "Only static parsing, string extraction, hashing and disassembly were performed. No firmware was executed and no hardware was accessed.\n",
         encoding="utf-8",
     )
     print(f"PASS: Boot0/TOC1/FDT static analysis written to {args.outdir}")
