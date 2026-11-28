@@ -651,3 +651,17 @@ This resolves the *writer* and value for the separate callback slot `0x4803c048`
 Do not conflate `0x4803c048` with G2 slot `0x48014668`: the former is a separate callback pointer; the latter is consumed as a DRAM-retention context pointer by the `0x48011938` path. No write to `0x48014668` is established by this finding. Next trace the callers/registration route into `0x4800a134`, then resume indirect writer analysis for `0x48014668` including full-payload stores and stack/helper propagation.
 
 No monitor execution, device access, MMIO/SMC, suspend/wake, or firmware write occurred. G2/G3/M1-S1 remain open.
+
+
+### 2026-11-28 follow-up: callback installer 0x4800a134 has no direct BL caller in the matched image
+
+The exact monitor was disassembled as a complete AArch64 image with the verified load base 0x48000000. The following details narrow the remaining callback-registration question:
+
+- Function 0x4800a134 is a complete function. It reads MPIDR_EL1, maps the affinity through helper 0x48015630, and calls 0x48002138. It then checks a returned object (including its +8 field); on the initialized branch it computes a per-CPU record at 0x4803cff0 + cpu_index * 0x240, calls 0x48009f60 with that record and flag 1, and installs 0x4800a504 through writer 0x480075e8. Error/skip branches return without installing the callback.
+- A whole-image direct-branch scan finds no BL/B immediate targeting 0x4800a134. A raw qword at 0x48018d00 does equal 0x4800a134, but the nearby data is mixed metadata and this pointer alone does not establish a caller or execution path.
+- The nearby MIDR dispatch helper 0x48015cd0 explicitly scans [0x48018d10, 0x48018d70) in 0x20-byte records. That range starts after 0x48018d00; therefore it does not consume the qword at 0x48018d00. Do not claim that this known MIDR lookup invokes 0x4800a134.
+- Exception entry 0x48015884 uses a separate table-like region based at 0x48018ca8 and an index scaled by 0x20. Its calculated record addresses are base + multiples of 0x20; 0x48018d00 is not one of those aligned lookup addresses. Thus the visible exception-dispatch lookup also does not explain the 0x48018d00 pointer.
+
+Current interpretation: the writer and installed callback value are proven, but the installer function's invocation source remains unresolved. The qword at 0x48018d00 is a data xref lead only. Continue by identifying the owner/consumer of that record and any indirect branch, while avoiding assumptions from raw pointer coincidence. This does not alter the separate G2 finding: no write to 0x48014668 is established.
+
+No monitor execution, device access, MMIO/SMC, suspend/wake, or firmware write occurred. G2/G3/M1-S1 remain open.
