@@ -159,7 +159,7 @@ def main() -> int:
         assert actual == expected, (index, actual, expected)
     # AArch64 SPL2 loop: indices 0..2, 0x30-byte stride, then per-type DCDC3 policy.
     for offset, expected_word in (
-        (0x3658, 0x7100081F),  # cmp candidate_index, #2
+        (0x365C, 0x7100081F),  # cmp candidate_index, #2
         (0x3674, 0x52800600),  # mov candidate_stride, #0x30
         (0x3694, 0x94000092),  # save CPU context before candidate DRAM tests
         (0x3728, 0x7100201F),  # compare DRAM type 8
