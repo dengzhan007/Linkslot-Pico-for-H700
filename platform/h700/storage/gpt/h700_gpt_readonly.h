@@ -9,7 +9,11 @@
 #define H700_GPT_READONLY_H
 
 #include <stddef.h>
+#if defined(CONFIG_XPL_BUILD)
+#include <linux/types.h>
+#else
 #include <stdint.h>
+#endif
 
 #define H700_GPT_SECTOR_SIZE 512u
 #define H700_GPT_MAX_ENTRIES 128u
