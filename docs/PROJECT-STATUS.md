@@ -2467,3 +2467,11 @@ See [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md) for the detai
 - Conditional calculation for captured Boot0 primary LPDDR4 candidate: word[6]=`0x30fa`, word[7]=`0x04000000`, word[30]=`0x02008c60`. Under the matching 1-GiB trained-geometry assumption, helper `0x4800c730` returns `0x400`; caller produces context +0x1c=`0x04000000`; the second DRAM source window resolves to `0x60000000`. This matches the independent 1-GiB capacity/midpoint evidence.
 - **Boundary:** this is a conditional source/binary derivation, not a live trace. The selected Boot0 copy/candidate, actual native SPL training result, final patched 128-byte block, and BL31 suspend execution have not been observed together. G2 remains blocked on live retention selection/timing and CPU/DMA/cache ownership; keep `0x40000000` and `0x60000000` source pages excluded and `H700_MEMORY_LAYOUT_APPROVED=false`.
 - Next: add a host regression joining the captured Boot0 parameter report, SPL normalization, BL31 patch/copy, relocation, and selector arithmetic. Full detail: [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md).
+
+
+### BL31 retention-parameter regression completed: CI #150
+
+- Added `scripts/audit-rg34xx-bl31-dram-context.py` plus unit test and integrated both into the BL31 static memory workflow. It checks the exact monitor instruction words, pinned BaseOS SPL parameter producer/copy path, captured Boot0 primary candidate, and helper arithmetic.
+- [CI #150 passed](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46134616497); artifact [15259340938](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46134616497/artifacts/15259340938) records the conditional result: helper `0x400`, context word[7] `0x04000000`, second DRAM save/restore window candidate `[0x60000000,0x60000140)`.
+- Initial #147–#149 attempts caught incorrect test expectations/instruction pinning; corrected in #150. The successful report explicitly says no live parameter block or suspend/resume execution was captured and memory layout remains unapproved.
+- Static provenance/regression is complete. G2 remains open for actual branch selection, live parameter values, save/restore lifetime, and CPU/DMA/cache quiescence. Keep both DRAM source pages excluded; no device interaction or payload execution.
