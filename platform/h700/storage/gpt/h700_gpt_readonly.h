@@ -9,7 +9,7 @@
 #define H700_GPT_READONLY_H
 
 #include <stddef.h>
-#if defined(CONFIG_XPL_BUILD)
+#if defined(CONFIG_XPL_BUILD) || defined(CONFIG_SPL_BUILD)
 #include <linux/types.h>
 #else
 #include <stdint.h>
