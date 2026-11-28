@@ -181,21 +181,38 @@ This establishes that the stock SPL2 has a fixed three-entry candidate table and
 A regression test now pins all three candidate records, loop/voltage instructions, controller-helper call sites and the \`0x40000000\` scratch address in the raw RG34XX Boot0 capture. \`0x538dc\` is a context-save helper, not the DRAM initializer. The next analysis should trace \`0x527d8\`, \`0x5287c\`, \`0x50980\`, and the outer caller/global state to determine candidate acceptance/failure semantics and whether strap inputs influence candidate order or selection.
 
 
-## 10. Independent public UART sample remains separate
+
+## 10. BL31 PSCI dispatch: reset path found, system-off hook unresolved
+
+The AArch64 monitor contains the TF-A PSCI core and the H700 platform path \`plat/sun50iw9p1/plat_pm.c\`. Static disassembly identifies the following dispatch behavior:
+
+- The PSCI System Off handler around VMA \`0x9eb0\` loads the platform-ops pointer from global address \`0x3c000 + 4040\`, then reads the System Off callback at structure offset \`+56\`. If the pointer is null, the generic TF-A path emits \`Platform has not exported a PSCI System Off hook.\`
+- The PSCI System Reset handler around \`0x9f08\` reads the callback at offset \`+64\`, and calls it indirectly when present. If it is null, it emits the corresponding generic missing-System-Reset-hook message.
+- A platform reset routine exists around \`0x2578\`: it logs \`ERROR: Sunxi System Reset\`, calls reset sequence \`0x1ec8\`, executes \`WFI\`, and if execution continues logs \`Sunxi System Reset: operation not handled.\` before entering the fatal path. This is strong evidence of a platform reset implementation in this monitor.
+- The reset sequence at \`0x1ec8\` manipulates platform state and calls lower-level helpers; its complete PMU/RTC/WDT effects are not yet resolved.
+
+No corresponding named \`sunxi_system_off\` implementation or platform System Off routine has been identified in the monitor strings/code reviewed so far. However, the actual platform-ops table initialization and the runtime value of its \`+56\` callback have not yet been recovered. Therefore **PSCI_SYSTEM_OFF is unproven and must not be assumed available**; the generic missing-hook message alone does not prove that the callback is null.
+
+The monitor also contains generic PSCI CPU on/off/suspend code and the H700 \`plat_pm.c\` path, including universal-standby strings. This confirms the code family has suspend-related machinery, but it does not establish that the desired Linkslot product should use suspend; the project requirement remains no standby/suspend as a user-facing power mode.
+
+The regression test \`tools/test_rg34xx_stock_toc1_dtb.py\` now pins the monitor's PSCI dispatch field offsets and the platform reset call/WFI sequence. Next work is to recover the actual PSCI platform-ops table initialization, prove whether System Off is exported, and trace the reset routine's PMIC/RTC/WDT dependencies.
+
+
+## 11. Independent public UART sample remains separate
 
 The published macromorgan RG34XX UART sample reports PMU AXP2202 and DRAM_VCC 1100 mV before DRAM training. That sample is not part of the reports-branch binary inventory, and the captured Boot0 image contains \`BOOT0 commit : %s\` rather than a fixed build hash. Do not match the public sample's displayed \`749c1f9a-dirty\` identifier to this binary or claim that the public log is this exact binary's runtime trace.
 
 The public log remains useful independent RG34XX corroboration. The project's own read-only runtime capture reports DCDC3 at 1100 mV, and the stock SPL2 AArch64 code now provides a direct DCDC3 voltage-setting path. Whether the public UART's `DRAM_VCC` message originates in Boot0 or SPL2 remains unproven.
 
-## 11. Required next static work
+## 12. Required next static work
 
 1. Trace candidate routines at \`0x527d8\` and \`0x5287c\`, controller helper at \`0x50980\`, and the state that selects/advances the three-entry table; determine whether PH6/PH7/PH8/PH10 strap inputs influence it.
 2. Parse the TOC1 header/component table and validate embedded FDT blobs; identify BL31/U-Boot payload boundaries and the selected RG34XX-v1 FDT.
 3. Trace the DCDC enable/read-modify-write call path and exact PMU probe sequence; the voltage-setting calls and R-TWI0 backend are already statically identified.
 4. Establish whether the RG35XX-2024 SPL2 build label is a shared vendor target or board-specific, and verify its remaining DRAM/PMIC/power assumptions against RG34XX-v1 evidence.
-5. Trace BL31 PSCI platform operation hooks and PMIC power-off/reset path; target strap wiring is now DTB-confirmed, but no writes are authorized by this audit.
+5. Recover BL31 PSCI platform-ops initialization and prove whether System Off is exported; trace the reset routine's PMIC/RTC/WDT dependencies. No writes are authorized.
 
-## 12. Safety state
+## 13. Safety state
 
 This was read-only parsing, hashing, string extraction and static ARM/AArch64 disassembly only.
 
