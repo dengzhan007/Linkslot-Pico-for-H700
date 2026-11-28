@@ -114,3 +114,55 @@ Safety state remains:
 - `hardware_qualified=false`
 - No payload execution, DRAM destination copy, TF/Boot0/TOC1 writes, or firmware flashing.
 - DRAM source pages `0x40000000` and `0x60000000` remain excluded.
+
+
+## 7. Pinned U-Boot v2026.10 AXP717 SPL driver trace
+
+Pinned upstream source revision used by the project: `5508406582f6f7120dce0c4b3059819a41788db2`.
+
+Inspected:
+- `configs/anbernic_rg35xx_h700_defconfig`
+- `drivers/power/axp_spl.c`
+- `arch/arm/mach-sunxi/pmic_bus.c`
+- `board/sunxi/board.c`
+- `arch/arm/include/asm/arch-sunxi/i2c.h`
+- `drivers/power/Kconfig`
+
+The generic H700 defconfig is materially closer to the RG34XX runtime evidence than the earlier compatible-string comparison suggested:
+- `CONFIG_AXP717_POWER=y`
+- `CONFIG_AXP_DCDC2_VOLT=940`
+- `CONFIG_AXP_DCDC3_VOLT=1100`
+- `CONFIG_R_I2C_ENABLE=y`
+- `CONFIG_SPL_I2C=y`
+- `CONFIG_SPL_SYS_I2C_LEGACY=y`
+- `CONFIG_SYS_I2C_MVTWSI=y`
+- `CONFIG_SYS_I2C_SPEED=400000`
+- `CONFIG_AXP_I2C_ADDRESS` defaults to `0x34` for this configuration.
+
+These DCDC2/DCDC3 values match the project's read-only RG34XX captures (940 mV / 1,100 mV) and the public RG34XX Boot0 log's 1,100 mV DRAM_VCC report. This is a strong configuration-level match, but the defconfig is named for the RG35XX H700 family and is not, by itself, proof that the exact RG34XX stock boot stage used this source.
+
+The pinned AXP717 SPL driver maps DCDC3 as:
+- Voltage register: `0x85`
+- Voltage mask: `0x7f`
+- Enable register: `0x80`
+- Enable bit: `BIT(2)`
+- Range: 500–1840 mV, 10 mV steps, split encoding at 70 steps.
+
+The `axp_set_dcdc3(mV)` wrapper calls the common DCDC setter. For nonzero voltage it writes the encoded value to `0x85`, then calls `pmic_bus_setbits(0x80, BIT(2))`. The setbits helper performs a register read, returns without a write if the bit is already set, otherwise writes the read value OR the enable bit. The voltage write itself is not read back by this helper.
+
+The AXP717 SPL branch sets its chip-version register/mask/ID constants to zero; `axp_init()` therefore initializes the bus but does not identify the physical PMIC by reading a chip-ID register. This is a critical limitation: selecting `AXP717_POWER` is not itself proof that an attached device is AXP717-compatible.
+
+The H616 `board/sunxi/board.c` path under `CONFIG_R_I2C_ENABLE` enables TWI channel 5 and configures GPL0/GPL1 for the H616 R-TWI function. The architecture header maps the R-TWI controller as `SUNXI_R_TWI_BASE`. This aligns with the target DT's `twi5` node at `0x07081400` and KNULLI's `0x34` PMIC node.
+
+Remaining bus-path gap: `pmic_bus.c` ultimately calls legacy `i2c_read/i2c_write(CONFIG_AXP_I2C_ADDRESS,...)` when neither P2WI nor RSB is selected. We have not yet closed the full active-bus selection and SPL call ordering proving that these calls reach R-TWI0 on the target RG34XX in the exact build. That must be traced before treating the register sequence as the target's approved allowlist.
+
+### Updated disposition
+
+The previous broad statement that the target AXP2202 compatible versus upstream AXP717 support is a material incompatibility is now **too strong**. The evidence supports a plausible legacy vendor binding / upstream AXP717 driver relationship:
+- same target bus address 0x34;
+- same R-TWI0/twi5 controller candidate;
+- AXP717 SPL DCDC2/DCDC3 configuration values match the target's measured runtime rails;
+- RG34XX Boot0 log independently reports the corresponding DRAM voltage.
+
+Classify this as **strongly corroborated candidate; exact silicon identity and active bus call path still unproven**. Do not enable PMIC writes in the M1 preflight. Profile A remains a separate future DRAM-capable SPL audit.
+
