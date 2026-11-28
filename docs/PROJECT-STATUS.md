@@ -2379,3 +2379,12 @@ AArch64 反汇编窗口，验证：
 - The actual eGON entry is AArch32: initial branch to `0x400`; early code saves CPU state, checks CPSR/SCTLR, masks interrupts, sets SP `0x57000`, calls `0x4e0`, and later accepts selected return addresses `0x21000`/`0x31000` before indirect transfer through `0x494` (value `0x50000`). This still does not establish a reachable edge to the AArch64 registry.
 - Detailed evidence and caveats: [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md), commit [88d1410](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/88d1410e304783e199e7aa4fc9ce5506934656c4).
 - Next: trace the AArch32 entry's continuation and the AArch64 registry's code/data boundary; look for a real state-switch or separate execution context. Do not label this a BL31 loader or context-slot producer.
+
+
+### Boot0 AArch32 SRAM resume path traced
+
+- Traced the eGON AArch32 entry at `0x400` through helper `0x4e0`: validates image size/signature/checksum, performs peripheral read/write/readback checks, and returns only `0x21000` or `0x31000` on accepted paths; the entry then transfers through `0x494` (value `0x50000`).
+- The continuation at `0x768` copies a 68-byte AArch32 restore routine from `0x20840..0x20884` to SRAM `0x50000`, then copies 72 zero bytes from `0x20498..0x204e0` to `0x52000`.
+- The copied routine restores a caller-supplied memory range to `0x20000`, restores CPSR and general-register/SP/LR state from `0x52000`, and branches to `0x20000`. This is a concrete Boot0 SRAM resume/restore mechanism.
+- It is distinct from BL31 context slot `0x48014668`: this path uses SRAM `0x50000/0x52000`, explicitly zeroes its 72-byte context block, and no bridge to the BL31 context pointer is established. Full analysis: [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md), commit [fcfddba](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/fcfddba03f6b6c6897f27f1ff4e32521697ac61d).
+- Next: identify the peripheral handshake in `0x4e0`, locate any later population of `0x52000`, and determine whether any state-transfer path reaches BL31. Keep G2/G3/M1-S1 gates closed; no device interaction or payload execution.
