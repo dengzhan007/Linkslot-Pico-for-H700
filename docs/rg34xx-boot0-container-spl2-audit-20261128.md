@@ -169,7 +169,7 @@ A follow-up read of the SPL2 data table and AArch64 control flow reveals a secon
 
 - Candidate table VMA: \`0x5a7f4\`; component-relative offset: \`0xa7f4\`.
 - Candidate stride: \`0x30\` bytes.
-- The DRAM initialization loop at VMA \`0x53608\` initializes an index to zero, allows indices 0 through 2, computes \`base + index * 0x30\`, and calls the candidate DRAM initialization routine at \`0x538dc\`.
+- The DRAM initialization/test loop at VMA \`0x53608\` initializes an index to zero, allows indices 0 through 2, and computes \`base + index * 0x30\`. It calls \`0x538dc\` to save CPU registers/stack context, then calls candidate-specific routines at \`0x527d8\` and \`0x5287c\`.
 - The three embedded candidate records are all 672 MHz:
   - Candidate 0: LPDDR4 type 8; \`dram_tpr6=0x3e808080\` (matches the active Boot0 primary header block).
   - Candidate 1: LPDDR3 type 7; \`dram_tpr6=0x2fb08080\` (matches the RG34XX DTB's \`dram_para14\`).
@@ -178,7 +178,7 @@ A follow-up read of the SPL2 data table and AArch64 control flow reveals a secon
 
 This establishes that the stock SPL2 has a fixed three-entry candidate table and a bounded sequential candidate loop. It does **not** yet establish that the loop is selected by the DTB's \`dram_select_para\` GPIOs, nor that it implements SenkOS's "strap value 14 selects LPDDR3" rule. The GPIO configuration and the SPL2 candidate loop are separate pieces of evidence until the code path joining them is recovered.
 
-A regression test now pins all three candidate records and the key AArch64 loop/voltage instructions in the raw RG34XX Boot0 capture. The next analysis should trace the candidate-init routine at \`0x538dc\`, validation routine at \`0x50980\`, and the caller/global state to determine whether failed candidates are skipped, how success is accepted, and whether strap inputs influence candidate order or selection.
+A regression test now pins all three candidate records, loop/voltage instructions, controller-helper call sites and the \`0x40000000\` scratch address in the raw RG34XX Boot0 capture. \`0x538dc\` is a context-save helper, not the DRAM initializer. The next analysis should trace \`0x527d8\`, \`0x5287c\`, \`0x50980\`, and the outer caller/global state to determine candidate acceptance/failure semantics and whether strap inputs influence candidate order or selection.
 
 
 ## 10. Independent public UART sample remains separate
@@ -189,7 +189,7 @@ The public log remains useful independent RG34XX corroboration. The project's ow
 
 ## 11. Required next static work
 
-1. Trace SPL2 candidate-init at `0x538dc`, validation at `0x50980`, and the state that selects/advances the three-entry DRAM table; determine whether PH6/PH7/PH8/PH10 strap inputs influence it.
+1. Trace candidate routines at \`0x527d8\` and \`0x5287c\`, controller helper at \`0x50980\`, and the state that selects/advances the three-entry table; determine whether PH6/PH7/PH8/PH10 strap inputs influence it.
 2. Parse the TOC1 header/component table and validate embedded FDT blobs; identify BL31/U-Boot payload boundaries and the selected RG34XX-v1 FDT.
 3. Trace the DCDC enable/read-modify-write call path and exact PMU probe sequence; the voltage-setting calls and R-TWI0 backend are already statically identified.
 4. Establish whether the RG35XX-2024 SPL2 build label is a shared vendor target or board-specific, and verify its remaining DRAM/PMIC/power assumptions against RG34XX-v1 evidence.
