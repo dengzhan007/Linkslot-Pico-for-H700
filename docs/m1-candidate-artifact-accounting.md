@@ -83,3 +83,15 @@ This accounting is host-side analysis of a downloaded CI artifact. It performed 
 The feasibility workflow now runs `scripts/audit-m1-a32-artifact.py` on each of the three CI layout prototypes and emits JSON manifests under `m1-artifact-accounting/`. The auditor requires ELF32 little-endian ARM ET_EXEC, matching `_start`/entry at `0x4a000000`, a matching linker-map `_end`, the raw 32 KiB limit, zero vendor-header reservation, all eight in-range A32 vector branches, and byte-for-byte equality between the supplied raw file and `llvm-objcopy -O binary` output from the supplied ELF. It records ELF/raw/map SHA-256, PT_LOAD extents, runtime span and relevant stack/page-table symbols.
 
 The profile is explicit: `pi12-mmio-layout`, `stub-overlay`, or `a32-entry-stub`. Every output is hard-coded `host_only=true`, `not_installable=true`, `hardware_validated=false`, and `candidate_eligible=false`. The PI12 profile is visibly marked as physical-MMIO-enabled disposable layout work. This manifest joins the exact three files but does not certify the real vendor header, BaseOS firmware generation/FNV, SPL, Boot0 capsule, physical RAM ownership or hardware behavior. This is accounting infrastructure, not promotion of any prototype to an M1 candidate.
+
+## Feasibility #946 generated manifest values
+
+The workflow [#946](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46094599350) completed 86/86 recorded steps with zero failures. Artifact [15243336147](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46094599350/artifacts/15243336147) (ZIP SHA-256 `bb40941103f4167fd7933081d5e4b9dbf79e519b6590f59079215bbc538a0691`) contains the three JSON manifests. The archive was downloaded, extracted and parsed independently after CI.
+
+| Profile | Raw bytes | Raw SHA-256 | Runtime span | `_end` | Candidate eligible |
+|---|---:|---|---:|---|---|
+| PI12 MMIO layout | 7,940 | `98b4104a055efb84f2c6864e8ed309a487ecedefa8fd0198fd91f0fed9d21228` | 49,188 | `0x4a00c024` | false |
+| Stub overlay | 5,804 | `3ac441bffb03b2da61bb4489b026c935fe631e2ddb3551d779312625db8e2213` | 14,032 | `0x4a0036d0` | false |
+| A32 entry/vector stub | 5,148 | `6a63857beaabf637bd090d6f8a209405fd8c6300f4954321b0ef8ba23a43a7c2` | 13,372 | `0x4a00343c` | false |
+
+All three report three PT_LOAD segments, a linker-map `_end` matching the ELF symbol table, and raw bytes byte-identical to `llvm-objcopy -O binary` of that ELF. All are explicitly `not_installable=true`; the PI12 profile remains MMIO-enabled disposable layout work.
