@@ -48,14 +48,19 @@ def strings_index(data: bytes, base_offset: int = 0) -> list[dict[str, str]]:
 
 
 def disassemble_bytes(
-    data: bytes, output: Path, objdump: str, vma: int, arch: str = "arm"
+    data: bytes,
+    output: Path,
+    objdump: str,
+    vma: int,
+    arch: str = "arm",
+    thumb: bool = False,
 ) -> list[str]:
     with tempfile.TemporaryDirectory(prefix="rg34xx-boot-disasm-") as temporary:
         image = Path(temporary) / "component.bin"
         image.write_bytes(data)
         command = [objdump, "-D", "-b", "binary", "-m", arch]
         if arch == "arm":
-            command.extend(["-M", "reg-names-std"])
+            command.extend(["-M", "force-thumb,reg-names-std" if thumb else "reg-names-std"])
         command.extend([f"--adjust-vma=0x{vma:x}", str(image)])
         with output.open("w", encoding="utf-8") as stream:
             subprocess.run(command, check=True, stdout=stream, stderr=subprocess.PIPE, text=True)
@@ -100,6 +105,16 @@ def analyze_capture(binary: Path, outdir: Path, objdump: str, aarch64_objdump: s
             )
             component["aarch64_objdump_command"] = disassemble_bytes(
                 component_bytes, a64_output, aarch64_objdump, 0x20000, "aarch64"
+            )
+            thumb_output = outdir / f"{stem}.thumb.disasm"
+            component["thumb_disassembly"] = thumb_output.name
+            component["thumb_objdump_command"] = disassemble_bytes(
+                component_bytes, thumb_output, objdump, 0x20000, "arm", thumb=True
+            )
+            component["thumb_mode_note"] = (
+                "Whole inner Boot0 image forced to Thumb decoding as an additional static view. "
+                "The eGON header and ARM-state entry bytes are not valid Thumb code; use control-flow "
+                "and literal references to identify Thumb function boundaries."
             )
         elif component["component_kind"] == "SPL2 component":
                 output = outdir / "boot0-primary-spl2-rg35xx-2024.arm.disasm"
