@@ -2438,3 +2438,11 @@ AArch64 反汇编窗口，验证：
 - Record `0x48018ce8` contains qwords `0x4800a29c, 0x13f32, 0x480184e1, 0x4800a134`. The pointer `0x4800a134` is the fourth field (+0x18), not the dispatch target. Its consumer/meaning is still unknown.
 - This corrects the prior interpretation: the data reference at `0x48018d00` does not show that the exception dispatcher calls the callback installer. Runtime installation of `0x4803c048` remains unproven; G2 slot `0x48014668` still has no established writer. Full evidence: [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md).
 - Continue by finding a separate consumer for the fourth descriptor field and expanding G2 indirect-writer analysis. G2/G3/M1-S1 remain closed; no device interaction or payload execution.
+
+
+### G2 whole-image direct-store cross-check (2026-11-28)
+
+- Rechecked the exact 107,216-byte BL31 image (SHA-256 `676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31`) for the exact effective address `0x48014000 + 0x668 = 0x48014668`.
+- All identified static references to this operand are loads. No direct `STR/STP/STUR/STLR/STXR/STLXR [xN,#0x668]` store was found in the whole-image disassembly. The image qword at the slot is initially `2`; nearby structured data and indexed loads are not sufficient to identify its runtime owner.
+- This does not exclude computed aliases, helper/memcpy writes, register-indexed or stack-mediated stores, exception/secure-call setup outside BL31, or writes by another boot stage. G2 remains unresolved; runtime context pointer remains UNKNOWN. See [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md).
+- Continue with cross-stage writer provenance and alias/data-flow analysis. No hardware interaction or payload execution occurred.
