@@ -2100,3 +2100,12 @@ AArch64 反汇编窗口，验证：
 - Corrected the Python string literals to represent actual newline and tab characters, retaining the exact-one-match fail-closed guard and the temporary-checkout-only `select SPL_PRINTF` insertion. Code commit: `e030f96cbd3df58854d2ffd726ccf8393d63ce49`.
 - H700 boot audit [#1658](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46113215190) completed successfully; this is independent and does not validate the SPL build.
 - Next gate: #1055 must pass the Kconfig source patch and resolve `CONFIG_SPL_PRINTF=y` plus `CONFIG_SPL_SPRINTF=y`; only then can the SPL compile/link and linked SRAM BSS audit provide evidence. No device operations occurred; G2/G3/M1-S1 remain open, outputs remain non-installable, hardware-unvalidated, and candidate-ineligible.
+
+
+## 2026-11-28 M1 SPL printf/serial declaration conflict correction
+
+- Feasibility [#1055](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46113419377) passed the resolved Kconfig contract and began compiling the isolated U-Boot v2026.10 SPL, but failed in `lib/vsprintf.c`: `printf` and `vprintf` were redefined against inline stubs in `include/stdio.h`. This is a compile-time interface mismatch, not a linker or SRAM-layout result.
+- Root cause: upstream `include/stdio.h` places the real `printf/vprintf` prototypes in the same conditional branch as serial `putc/puts` providers. The M1 profile intentionally disables serial, so the header supplied inline no-op definitions even though `CONFIG_SPL_PRINTF=y` compiled the real formatter implementation.
+- Corrected `scripts/build-m1-spl-preflight.py` in commit `a9a7fe0ccde6097ad0ba78ae73e9729d1f112133`: the disposable U-Boot checkout now separates formatter declarations from console output providers. With serial disabled, `putc/puts/flush` remain silent inline stubs while `printf/vprintf` expose the real formatter declarations. The patch is guarded by an exact-one-match check and does not enable UART, add console I/O, or modify the upstream repository.
+- The separate H700 boot audit [#1659](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46113440168) succeeded; it does not validate the SPL build.
+- Next gate: fresh feasibility CI must pass the patched SPL compilation/link, then verify final ELF/map BSS, scratch/table bounds, allocator and stack separation, undefined symbols, and linked side-effect sites. No hardware operations occurred; G2/G3/M1-S1 remain open, and outputs remain host-only, non-installable, hardware-unvalidated, and candidate-ineligible.
