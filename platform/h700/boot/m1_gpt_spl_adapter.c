@@ -81,9 +81,9 @@ int h700_m1_spl_preflight_gpt(struct blk_desc *card,
  * The linker forces this symbol into the fixture; it is never called.
  */
 __attribute__((used, noinline))
-uintptr_t h700_m1_spl_geometry_anchor(void)
+unsigned long h700_m1_spl_geometry_anchor(void)
 {
-    return (uintptr_t)m1_package_scratch ^
-           (uintptr_t)m1_boot_partitions ^
+    return (unsigned long)m1_package_scratch ^
+           (unsigned long)m1_boot_partitions ^
            sizeof(m1_package_scratch) ^ sizeof(m1_boot_partitions);
 }
