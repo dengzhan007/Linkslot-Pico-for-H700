@@ -25,6 +25,8 @@ on:
       - "scripts/audit-lk-bl33-layout.py"
       - "scripts/audit-m1-a32-artifact.py"
       - "scripts/audit-m1-oneshot-baseos-source.py"
+      - "scripts/test-m1-native-attempt-state.py"
+      - "tests/test_m1_native_attempt_state.c"
       - "scripts/test-m1-oneshot-capsule-selection.py"
       - "scripts/test-m1-oneshot-capsule-a32.py"
       - "scripts/test-m1-firmware-readonly.py"
@@ -90,6 +92,8 @@ on:
       - "scripts/audit-linkslot-nostd.py"
       - "scripts/audit-lk-bl33-layout.py"
       - "scripts/audit-m1-oneshot-baseos-source.py"
+      - "scripts/test-m1-native-attempt-state.py"
+      - "tests/test_m1_native_attempt_state.c"
       - "scripts/test-m1-oneshot-capsule-selection.py"
       - "scripts/test-m1-oneshot-capsule-a32.py"
       - "tests/m1_oneshot_capsule_a32_fixture.c"
@@ -250,6 +254,9 @@ jobs:
 
       - name: Audit pinned BaseOS M1 one-shot source side effects
         run: python3 scripts/audit-m1-oneshot-baseos-source.py --baseos-root .ci/baseos-native
+
+      - name: Test pinned BaseOS RTC attempt-pair state with fake host registers
+        run: python3 scripts/test-m1-native-attempt-state.py --baseos-root .ci/baseos-native
 
       - name: Verify M1 firmware stream against pinned BaseOS builder and captured TOC1
         run: python3 scripts/test-m1-baseos-firmware-contract.py --baseos-root .ci/baseos-native
