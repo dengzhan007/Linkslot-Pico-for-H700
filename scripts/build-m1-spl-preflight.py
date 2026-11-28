@@ -401,7 +401,7 @@ static inline int vprintf(const char *fmt, va_list args)
             "CONFIG_SPL_SYS_MALLOC_SIZE=0x10000" in config_text,
             "M1 preflight requires a bounded 64KiB SRAM-C dlmalloc pool")
     map_file = out / "spl/u-boot-spl.map"
-    map_arg = f"-Map={map_file}"
+    # XPL archives are linked with --whole-archive so linker-list entries remain\n    # available. This profile also needs section GC: U-Boot compiles functions\n    # into separate .text.<symbol> sections, but without --gc-sections every\n    # unrelated board/image/command function is retained and drags in providers\n    # that the read-only M1 entry intentionally disables.\n    map_arg = f"-Map={map_file} --gc-sections"
     build_log = run([
         "make", f"O={out}", f"CROSS_COMPILE={cross}",
         f"LDFLAGS_u-boot-spl={map_arg}", f"-j{args.jobs}",
