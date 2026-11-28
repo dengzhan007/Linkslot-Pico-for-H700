@@ -36,7 +36,7 @@ void baseos_early_mmc(void)
         m1_preflight_halt();
 
     card = mmc_get_blk_desc(mmc);
-    if (card == NULL || card->blksz > UINT32_MAX)
+    if (card == NULL || card->blksz > 0xffffffffUL)
         m1_preflight_halt();
 
     /*
