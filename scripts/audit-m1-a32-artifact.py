@@ -147,7 +147,7 @@ def audit(elf_path: Path, raw_path: Path, map_path: Path, profile: str, objcopy:
         vectors.append(hex(target))
     if b"_end" not in map_data:
         raise ValueError("linker map does not mention _end")
-    if not any(re.search(rb"0x0*%x\s+_end" % end, line) for line in map_data.splitlines()):
+    if not any(re.search(rb"(?:0x)?0*%x\s+.*\b_end\s*=" % end, line) for line in map_data.splitlines()):
         raise ValueError("linker map _end address does not match ELF symbol table")
     with tempfile.TemporaryDirectory(prefix="m1-a32-audit-") as tmp:
         rebuilt = Path(tmp) / "from-elf.bin"
