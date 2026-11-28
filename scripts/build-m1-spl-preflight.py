@@ -166,7 +166,7 @@ def main() -> int:
     # architecture-wide selector in the disposable source checkout only.
     armv8_kconfig = uboot / "arch/arm/cpu/armv8/Kconfig"
     armv8_text = armv8_kconfig.read_text()
-    fit_selector = "\\tselect SPL_FIT\\n"
+    fit_selector = "\tselect SPL_FIT\n"
     require(armv8_text.count(fit_selector) == 1,
             "unexpected ARMv8 SPL_FIT selector count")
     armv8_kconfig.write_text(armv8_text.replace(fit_selector, "", 1))
