@@ -2091,3 +2091,12 @@ AArch64 反汇编窗口，验证：
 - Corrected the disposable-source patch: add an exact-match, fail-closed `select SPL_PRINTF` to the existing `SPL_LIBCOMMON_SUPPORT` Kconfig block in the temporary U-Boot checkout, then let Kconfig resolve `SPL_SPRINTF`. Removed the ineffective direct `scripts/config --enable SPL_PRINTF` request. This preserves the no-UART policy and leaves upstream source untouched.
 - Separate H700 boot audit [#1657](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46112872726) completed successfully; it does not validate SPL linking.
 - Next gate: verify the resolved config now contains both `CONFIG_SPL_PRINTF=y` and `CONFIG_SPL_SPRINTF=y`; only then proceed to actual SPL compile/link, final ELF/map and undefined-symbol/provider audit. No device operations occurred; G2/G3/M1-S1 remain open, and all outputs remain non-installable, hardware-unvalidated, and candidate-ineligible.
+
+
+## 2026-11-28 SPL printf Kconfig patch newline-literal correction
+
+- Feasibility [#1054](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46113193508) failed in the preflight script before U-Boot compilation. The exact-match guard reported `unexpected SPL_LIBCOMMON_SUPPORT Kconfig definition`.
+- Root cause was another patch-script escaping defect: the Python expected-block string contained literal backslash-plus-`n` / `t` characters instead of newline/tab escapes, so it could not match the pinned U-Boot Kconfig source. The upstream pinned source was checked directly: the definition is `config SPL_LIBCOMMON_SUPPORT` followed by `bool "Support common libraries"`.
+- Corrected the Python string literals to represent actual newline and tab characters, retaining the exact-one-match fail-closed guard and the temporary-checkout-only `select SPL_PRINTF` insertion. Code commit: `e030f96cbd3df58854d2ffd726ccf8393d63ce49`.
+- H700 boot audit [#1658](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46113215190) completed successfully; this is independent and does not validate the SPL build.
+- Next gate: #1055 must pass the Kconfig source patch and resolve `CONFIG_SPL_PRINTF=y` plus `CONFIG_SPL_SPRINTF=y`; only then can the SPL compile/link and linked SRAM BSS audit provide evidence. No device operations occurred; G2/G3/M1-S1 remain open, outputs remain non-installable, hardware-unvalidated, and candidate-ineligible.
