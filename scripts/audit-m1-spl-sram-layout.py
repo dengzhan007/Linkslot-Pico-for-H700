@@ -120,7 +120,7 @@ def main() -> int:
                    "SPL_BLK", "SPL_OF_CONTROL", "SPL_OF_REAL"):
         require(f'"--enable", "{option}"' in spl_builder,
                 f"M1 preflight builder no longer enables {option}")
-    for option in ("SPL_LIBCOMMON_SUPPORT", "SPL_FIT", "SPL_LOAD_FIT",
+    for option in ("SPL_LIBCOMMON_SUPPORT", "SPL_FIT_SIGNATURE", "SPL_FIT_IMAGE_TINY", "SPL_FIT_PRINT", "FIT_SIGNATURE", "FIT", "SPL_FIT", "SPL_LOAD_FIT",
                    "SPL_I2C", "SPL_POWER", "SPL_SUNXI_LED_STATUS",
                    "CMD_BOOTD", "VERSION_VARIABLE", "OF_REAL"):
         require(f'"--disable", "{option}"' in spl_builder,
