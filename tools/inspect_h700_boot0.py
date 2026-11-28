@@ -191,7 +191,7 @@ def scan_embedded_egon_images(data: bytes) -> list[dict[str, Any]]:
             continue
 
         component_data = data[offset:offset + declared_size]
-        is_standard_boot0 = header_tag == b"\0\0\0\0" and declared_size >= BOOT0_BYTES
+        is_standard_boot0 = header_tag == struct.pack("<I", 0x30) and declared_size >= BOOT0_BYTES
         checksum_valid: bool | None = None
         if is_standard_boot0:
             checksum_valid = allwinner_checksum(component_data) == stored_checksum
