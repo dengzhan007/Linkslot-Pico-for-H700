@@ -2727,3 +2727,20 @@ See [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md) for the detai
 
 Detailed evidence: \`docs/rg34xx-boot0-container-spl2-audit-20261128.md\`.
 
+
+
+## 2026-11-28 SPL2 DRAM candidate fallback cross-check
+
+- The raw RG34XX SPL2 image contains a three-entry DRAM candidate table at candidate VMA \`0x5a7f4\` / component offset \`0xa7f4\`, with a \`0x30\`-byte stride.
+- Candidate 0 is LPDDR4 type 8 at 672 MHz (\`dram_tpr6=0x3e808080\`), matching the active Boot0 primary header block.
+- Candidate 1 is LPDDR3 type 7 at 672 MHz (\`dram_tpr6=0x2fb08080\`), matching the RG34XX package DTB's \`dram_para14\`.
+- Candidate 2 is LPDDR4 type 8 at 672 MHz (\`dram_tpr6=0x40808080\`), matching the RG34XX package DTB's \`dram_para15\`.
+- AArch64 code at VMA \`0x53608\` loops candidate indices 0..2, advances by \`0x30\`, and calls candidate initialization at \`0x538dc\`. It then applies DCDC3 voltage policy by candidate DRAM type: LPDDR4 1100 mV, LPDDR3 1200 mV, other type 1500 mV.
+- This is a distinct stock SPL2 fallback mechanism. It is not yet proven to consume \`dram_select_para\` or the PH6/PH7/PH8/PH10 strap bits. Do not infer that SenkOS's strap-index algorithm is used by the stock RG34XX SPL2 merely because the DTB configures the same pins.
+- Regression assertions for all three candidate records and the key loop/voltage instructions were added to \`tools/test_rg34xx_stock_boot0_reports.py\`. H700 host audit run #1834 passed on Linux and Windows: [run #1834](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46148312059).
+- Linkslot feasibility run #1087 is still running; no result is claimed: [run #1087](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46148312066).
+- Next: trace candidate initialization at \`0x538dc\`, validation at \`0x50980\`, and global state/caller to establish candidate failure/success semantics and whether strap pins influence selection. Continue BL31 PSCI platform-ops and PMIC power-off/reset tracing.
+- No code execution on target, no PMIC/TWI writes, no DRAM content access, no media writes, and no hardware qualification. Safety gates unchanged.
+
+Detailed evidence: \`docs/rg34xx-boot0-container-spl2-audit-20261128.md\`.
+
