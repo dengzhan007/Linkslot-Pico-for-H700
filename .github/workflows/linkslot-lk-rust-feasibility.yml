@@ -31,6 +31,10 @@ on:
       - "platform/h700/boot/m1_firmware_readonly.c"
       - "platform/h700/boot/m1_firmware_readonly.h"
       - "tests/test_m1_firmware_readonly.c"
+      - "platform/h700/boot/m1_firmware_spl_adapter.c"
+      - "tests/fake_uboot/blk.h"
+      - "tests/test_m1_firmware_spl_adapter.c"
+      - "scripts/test-m1-spl-adapter.py"
       - "tests/m1_oneshot_capsule_a32_fixture.c"
       - "tests/test_m1_oneshot_selection_model.c"
       - "scripts/audit-h700-lk-timer-prerequisites.py"
@@ -219,6 +223,9 @@ jobs:
 
       - name: Test host-only M1 one-shot capsule pre-entry selection model
         run: python3 scripts/test-m1-oneshot-capsule-selection.py
+
+      - name: Test M1 SPL blk_dread adapter with fake block device
+        run: python3 scripts/test-m1-spl-adapter.py --cc cc --nm nm
 
       - name: Test M1 firmware package read-only preflight (fake MMC + AArch32)
         run: python3 scripts/test-m1-firmware-readonly.py --cc cc --clang clang --readelf readelf --nm nm
