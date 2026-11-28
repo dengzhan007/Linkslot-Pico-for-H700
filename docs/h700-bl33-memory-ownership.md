@@ -708,3 +708,30 @@ The successful host-only audit #145 artifact `15254429553` includes `TWI-SELECTO
 The context-pointer *address mapping and initial backing value* are therefore statically resolved for the copied standby image. This does **not** prove that the standby handler is selected on the physical device, that the context fields hold the expected live DRAM geometry, or that save/restore completes before Linux resumes. The active anonymous-mapped PFN at `0x40000000`, the second DRAM source window, CPU/DMA/cache quiescence, and the exact retention/resume lifecycle remain ownership blockers. Keep the candidate DRAM pages excluded; `H700_MEMORY_LAYOUT_APPROVED=false`.
 
 The legacy whole-image scan at `0x48014668` is retained only as a historical source-coordinate diagnostic. It must not be interpreted as a scan of the relocated runtime effective address. The scanner now emits the relocation-aware mapping and validates source qword `0x48014888 == 0x20000`. No device execution, live memory readback, SMC/MMIO/TWI transaction, suspend/wake, storage write, or firmware operation occurred.
+
+
+### 2026-11-28 SPL-to-BL31 DRAM parameter provenance and conditional midpoint derivation
+
+The relocation correction identifies the context base, and the pinned BaseOS SPL source identifies how its first 0x80 bytes are populated. This closes another static dataflow gap, but still does not establish the selected candidate or suspend execution on the captured unit.
+
+**Parameter handoff chain:**
+
+1. In pinned BaseOS source `experiments/h700-boot-speed/spl/dram-select.c`, `baseos_selected_vendor_params()` returns `trained_vendor_params[32]`. After a candidate has passed training, size detection, and the memory-hold check, `baseos_normalize_vendor_params()` copies the selected candidate's 32 words, then replaces word[6] with the detected rows/columns encoding and word[7] with the detected capacity/rank/bus encoding. Other candidate fields, including word[30], are preserved.
+2. In `experiments/h700-boot-speed/spl/native-boot.c`, `baseos_vendor_handoff()` obtains that pointer and copies exactly 128 bytes to `monitor + 0x30` (also to U-Boot +0x30). This is the source of the monitor's runtime-patched parameter block; the captured monitor file's ASCII bytes at +0x30 are only its unpatched placeholder, not the runtime parameter values.
+3. BL31 special power-entry routine `0x48001a04` copies the 0x9410-byte standby image to SRAM `0x20000`, then copies 0x80 bytes from monitor `0x48000030` over SRAM `0x20000..0x20080`. Therefore the context pointer resolved in the previous section points to this parameter block at SRAM `0x20000`.
+4. The retention worker reads context +0x18, +0x1c, +0x78 and halfword +0x7a. These map directly to vendor parameter words [6], [7], [30], and the high halfword of [30], respectively. Thus the DRAM geometry inputs are supplied by the SPL's trained parameter block, not by the placeholder bytes in the unpatched monitor dump.
+
+**Conditional 1-GiB calculation using the captured Boot0 primary candidate:**
+
+The read-only Boot0 report `reports/rg34xx-inventory-20261127-uart/boot0-primary.json` records candidate type 8 / LPDDR4, word[6] `0x000030fa`, word[7] `0x04000000`, and word[30] `0x02008c60`. The separately captured Linux DRAM window is 1 GiB. If this candidate is the one selected and the SPL normalization produces the matching 1-GiB geometry (15 rows, 10 columns, one rank, 32-bit bus), the matched helper `0x4800c730` computes:
+
+- `word[6] = 0x30fa`: extracted fields sum to 28; subtracting 18 gives shift count 10.
+- `word[30] >> 16 = 0x0200`; its low three bits are zero, so the helper takes the unscaled branch.
+- Helper result: `1 << 10 = 1024 (0x400)`.
+- Caller `0x48011938` places that result in context +0x1c bits 16..31 while preserving the low 16 bits: `0x04000000 | 0x0040 = 0x04000040`.
+- The copy worker computes `0x40000000 + (((0x04000040 >> 17) & 0x7fff) << 20) = 0x60000000` for the second 0x140-byte DRAM source window.
+- Context +0x78 bit27 is clear for `0x02008c60`; the fallback controller-configuration branch rejoins the normal copy path because context +0x1c bit0 is clear. The mode field at context +0x04 is candidate type 8, not 4, so the alternate strided-copy branch is not selected under this candidate assumption.
+
+This calculation is a source/binary consistency result, not a live value observation. The primary Boot0 block is explicitly documented as mutable training metadata; the active Boot0 copy, selected candidate, native SPL build, and final runtime parameter bytes have not been captured as one continuous execution. The captured 1-GiB Linux map and Boot0 candidate are consistent with the 0x60000000 midpoint, but they do not prove that BL31 used that address during a real suspend/resume.
+
+The next static/host task is to add a regression that joins the exact Boot0 primary report, pinned SPL normalization logic, monitor patch offsets, and BL31 helper arithmetic. Keep both DRAM windows excluded from LK allocations until a live save/restore lifecycle and CPU/DMA/cache ownership proof exists. No device access, DRAM readback, MMIO/SMC/TWI, suspend/wake, storage write, or payload execution occurred.
