@@ -562,3 +562,18 @@ The AArch64 disassembly around `0x1b694..0x1b73c` resolves a small registry mech
 - The single record's key field is `0x4d`; its callback pointer at `0x1c6a8` is `0x2984c`.
 
 This establishes a generic descriptor/callback dispatch in the AArch64 region. It does **not** identify that region as the monitor loader, nor show it is reached from the eGON Boot0 AArch32 entry. The nearby `0x1b7c8/0x1b7cc` size/base pair remains unconnected to a consumer. The next useful static task is to map the AArch64 region's caller/entry and inspect callback `0x2984c`, then separately locate references to the size/base descriptor. Do not claim BL31 is copied by this path until the transfer destination and source are observed in a validated reachable routine.
+
+
+### Boot0 callback pointer address-space reconciliation (2026-11-28)
+
+The primary eGON header reports `run_addr=0x20000` and public-header size `0x30`; the image's executable payload therefore begins at the natural candidate address `0x20030`. Reinterpreting the descriptor callback value `0x2984c` against that base gives:
+
+`0x2984c - 0x20030 = 0x981c`
+
+File offset `0x981c` is a coherent Thumb-2 function boundary in the primary Boot0 image. Its prologue saves r4-r11/lr, and its body consumes a structured context (including offsets `+0x20`, `+0x24`, `+0x28`, `+0x48`, `+0x104`), performs controller/register setup, and calls internal helpers. This is a stronger address correlation than treating `0x2984c` as a file offset. The adjacent descriptor callback `0x298b0` maps to file offset `0x9880`, which is inside the same Thumb function, not an independent entry point.
+
+Important unresolved ISA issue: the registry lookup/dispatch sequence at file offsets `0x1b694..0x1b73c` decodes coherently as AArch64 and ends with `br x16`, while the mapped callback target at `0x981c` decodes coherently as Thumb-2. A plain AArch64 `BR` cannot perform an AArch64-to-AArch32/Thumb state transition. The callback's low bit is also clear. Thus the address correlation does not yet prove that this AArch64 dispatcher invokes the Thumb routine; the table/dispatcher may be data or code for a separate execution context, the target may be transformed elsewhere, or the Boot0 image may contain multiple independently used code regions. No reachable cross-ISA edge has been established.
+
+The primary eGON entry itself is AArch32: its initial branch at file offset `0x0` targets `0x400`, where the first-stage code saves CPU state, checks CPSR mode and SCTLR bits, masks interrupts, sets SP to `0x57000`, and calls the routine at `0x4e0`. It then accepts selected return addresses (`0x21000` or `0x31000`) and transfers control through the value at `0x494` (currently `0x50000`). This validates the AArch32 entry path but does not connect it to the AArch64 registry at `0x1b694`.
+
+Next static task: map the AArch32 entry's actual continuation/return path and the code/data boundary around the AArch64 registry; determine whether the descriptor table is consumed in another processor/firmware context or whether a state-switch trampoline exists. Until then, classify `0x2984c` → `0x981c` as a high-confidence address correlation with unresolved execution semantics, not proof of a monitor loader or BL31 copy routine.
