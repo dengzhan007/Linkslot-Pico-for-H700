@@ -84,7 +84,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rg34xx-stock-boot0-spl2-toc1-disassembly
-          path: build/rg34xx-boot0-disassembly/
+          path: |
+            build/rg34xx-boot0-disassembly/
+            build/rg34xx-boot0-input/boot0-primary.bin
+            build/rg34xx-boot0-input/boot0-secondary.bin
           if-no-files-found: warn
           retention-days: 7
 
