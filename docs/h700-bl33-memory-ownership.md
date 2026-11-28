@@ -434,3 +434,15 @@ later runtime snapshot. This is not a memory allocation or BL33 access
 approval. Keep PI12 physical access disabled until a post-BL31/pre-BL33
 state proof, memory ownership review and secondary-core gate are complete.
 `H700_MEMORY_LAYOUT_APPROVED` remains unset.
+
+
+### 2026-11-28 decode of the fixed BL31 source-page PFN (read-only Linux metadata)
+
+The published [2026-11-27 PFN capture](https://github.com/dengzhan007/Linkslot-Pico-for-H700/blob/reports/reports/rg34xx-dram-pfn-20261127/dram-retention-pfn.txt) was retained as raw bytes pending verification of the Linux 4.9.170 KPF definitions. Decoding its two 8-byte little-endian values against the stable v4.9.170 UAPI/internal definitions used by `scripts/audit-rg34xx-dram-pfn-metadata.py` gives:
+
+- Target PFN `0x40000`, page `[0x40000000,0x40001000)`, containing the BL31 source window `[0x40000000,0x40000140)`.
+- `kpageflags=0x6858`: `KPF_UPTODATE`, `KPF_DIRTY`, `KPF_ACTIVE`, `KPF_MMAP`, `KPF_SWAPCACHE`, and `KPF_SWAPBACKED` are set. `KPF_ANON`, `KPF_LRU`, and `KPF_BUDDY` are not set.
+- `kpagecount=1`; `KPF_MMAP` agrees with the nonzero mapcount. The decoder classification is therefore `MAPPED_PAGE_TYPE_NOT_CONFIRMED`, gate `BLOCKED_LINUX_PAGE_MAPPING_PRESENT` — not an anonymous mapped page and not an observed free page.
+- `page_owner` is unavailable and the mapping/process identity is not captured. This is one post-boot Linux metadata sample, not proof of the page's owner at BL33 entry, the BL31 save/restore timing, or whether another CPU/device can access it.
+
+Operational consequence: keep the entire 4 KiB page excluded from LK scratch, stack, heap, page tables, DMA, and emulator allocations. The metadata is stronger evidence against treating the page as free, but it does not establish that the page is exclusively owned by BL31. The exact v4.9.170 KPF definitions are referenced by the decoder; the exact vendor kernel source/build identity is still not recovered. No DRAM contents were read, no SMC/MMIO was issued, and no suspend/resume was attempted. `H700_MEMORY_LAYOUT_APPROVED` remains false.
