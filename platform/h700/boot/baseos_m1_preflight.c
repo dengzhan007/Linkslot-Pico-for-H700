@@ -6,12 +6,17 @@
  * fingerprint is zero, which the read-only planner rejects before firmware
  * payload reads. This is not an installable or bootable Linkslot image.
  */
+#include <asm/global_data.h>
 #include <blk.h>
+#include <malloc.h>
 #include <mmc.h>
+#include <system-constants.h>
 
 #include "m1_gpt_spl_adapter.h"
 
 #define BASEOS_M1_PREFLIGHT_TEST_FNV1A 0u
+
+DECLARE_GLOBAL_DATA_PTR;
 
 static void m1_preflight_halt(void) __attribute__((noreturn));
 
@@ -21,12 +26,21 @@ static void m1_preflight_halt(void)
         asm volatile("wfi" ::: "memory");
 }
 
+static void m1_preflight_malloc_init(void)
+{
+    /* board_init_f runs before the normal board_init_r malloc setup. */
+    mem_malloc_init(SPL_SYS_MALLOC_START, SPL_SYS_MALLOC_SIZE);
+    gd->flags |= GD_FLG_FULL_MALLOC_INIT;
+}
+
 void baseos_early_mmc(void) __attribute__((noreturn));
 
 void baseos_early_mmc(void)
 {
     struct mmc *mmc;
     struct blk_desc *card;
+
+    m1_preflight_malloc_init();
 
     if (mmc_initialize(NULL))
         m1_preflight_halt();
