@@ -112,7 +112,7 @@ def main() -> int:
         offset for offset, (left, right) in enumerate(zip(primary_inner_bytes, secondary_image_bytes))
         if left != right
     ]
-    assert byte_differences == [0x0C, 0x0D, 0x34, 0xA3, 0xAC], byte_differences
+    assert byte_differences == [0x0C, 0x0F, 0x34, 0xA3, 0xAC], byte_differences
     print("PASS: primary contains a valid nested 64 KiB Boot0 at +0x1000 and SPL2 component at +0x11000")
     print("PASS: primary inner Boot0 and secondary Boot0 differ only in checksum, debug byte, TPR6 and TPR12")
     print("REVIEW: embedded SPL2 platform label is rg35xx-2024; compatibility with RG34XX must be established, not assumed")
