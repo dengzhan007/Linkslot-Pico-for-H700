@@ -144,6 +144,30 @@ def main() -> int:
     print("PASS: RG34XX SPL2 requests DCDC2=940 mV and DCDC3=1100 mV via PMIC I2C slave 0x34")
     print("PASS: regulator table maps DCDC2/DCDC3 to 0x84/0x85 and control masks 0x02/0x04")
     print("PASS: SPL2 controller-index 2 resolves to MMIO base 0x07081400 (R-TWI0); selected descriptor index remains externally initialized")
+    # Nine 0x48-byte I2C descriptors are indexed by the context field [x18 + 264].
+    descriptor_table = spl2[0xB6B0:0xB6B0 + 9 * 0x48]
+    assert len(descriptor_table) == 9 * 0x48
+    controller_indices = [
+        struct.unpack_from("<Q", descriptor_table, index * 0x48 + 56)[0]
+        for index in range(9)
+    ]
+    assert controller_indices == [2, 2, 0, 0, 0, 0, 0, 0, 0], controller_indices
+    assert struct.unpack_from("<Q", descriptor_table, 16)[0] == 0x27D30
+    assert struct.unpack_from("<Q", descriptor_table, 24)[0] == 0x27C20
+    # Transaction helper reads the selector from x18+264 and indexes the table.
+    assert struct.unpack_from("<I", spl2, 0x7738)[0] == 0xB9410A40
+    assert struct.unpack_from("<I", spl2, 0x7740)[0] == 0x97FFFFCC
+    # Table lookup computes nine entries and a 0x48-byte stride.
+    for offset, expected_word in (
+        (0x767C, 0x911BE042),
+        (0x7680, 0x911AC000),
+        (0x7688, 0xCB000042),
+        (0x7698, 0x9343FC42),
+        (0x76E4, 0x52800900),
+        (0x76E8, 0x9B204C33),
+    ):
+        assert struct.unpack_from("<I", spl2, offset)[0] == expected_word, hex(offset)
+    print("PASS: SPL2 I2C selector is an index into nine 0x48-byte descriptors; entries 0/1 map to R-TWI0")
     # The SPL2 DRAM init routine walks a fixed three-entry candidate table.
     # Candidate table VMA 0x5a7f4 maps to component offset 0xa7f4 at load VMA 0x50000.
     expected_candidates = (
