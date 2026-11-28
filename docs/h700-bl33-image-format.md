@@ -63,9 +63,11 @@ reference loader.
 The packager requires the reference loader to be exactly 32 KiB and match
 the audited SHA-256 above. It verifies the \`uboot\` magic, the raw LK first
 A32 non-link branch, all eight A32 vector branches, the reserved/zero raw
-header window, 512-byte output alignment, and the observed \`0xe0000\`
-upper size limit. This is incorrect: the standalone packager enforces the active 32 KiB loader extent; 0xe0000 is only a separate researched link/runtime arena bound, not the package file-size allowance. It copies only reference bytes \`[+4,+0x640)\`; it never
-copies the reference loader's first branch or code.
+header window, 512-byte output alignment, and the active 32 KiB loader
+extent. The \`0xe0000\` value is a separate researched link/runtime arena
+bound used by layout probes; it is not the package file-size allowance.
+It copies only reference bytes \`[+4,+0x640)\`; it never copies the reference
+loader's first branch or code.
 
 Example after performing the read-only firmware extraction locally:
 
