@@ -635,3 +635,19 @@ A raw little-endian word scan of the full 128 KiB image found no direct occurren
 The A64 tail's descriptor values `0x2984c` and `0x298b0` still point into the AArch32 Thumb routine at file offsets `0x984c` and `0x98b0`, with low bits clear. The A64 dispatcher's `br x16` does not change execution state, so this remains an unresolved mixed-ISA table relationship rather than a valid callback edge. Do not treat the A64 tail as the primary Boot0 entry path, a BL31 loader, or proof of BL31 context-slot initialization.
 
 Next static work should identify any independent loader/processor contract that consumes the A64 tail, or classify it as an embedded but unreferenced code/data region if stronger whole-image reachability evidence supports that. In parallel, continue BL31 indirect-writer tracing for `0x48014668`. No device execution, MMIO/SMC, payload execution, or firmware/TF write occurred; G2/G3/M1-S1 remain open.
+
+
+### 2026-11-28 BL31 startup callback slot 0x4803c048: installer identified, distinct from G2 context slot
+
+A fresh full-payload disassembly of the exact pinned monitor (107,216 bytes; SHA-256 `676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31`) resolves the previously open indirect callback load in `0x48007554`:
+
+- `0x480075cc..0x480075d8` loads qword `[0x4803c048]`, tests it for zero, and calls it with `BLR` if nonzero.
+- The exact writer is a three-instruction leaf at `0x480075e8`: `ADRP x1, 0x4803c000`; `STR x0, [x1,#0x48]`; `RET`. This is a direct store to `0x4803c048`.
+- A caller at `0x4800a134` (function extent at least `0x4800a134..0x4800a1b0`) reaches that writer at `0x4800a1a0`. Immediately before the call it computes `x0 = 0x4800a504`; therefore the value installed in `0x4803c048` on that branch is the code address `0x4800a504`.
+- The target `0x4800a504` is a valid AArch64 function prologue. Its body uses MPIDR_EL1, per-CPU indexing from `0x4803cff0`, TPIDR_EL3, and per-CPU state helpers. The callback is thus a BL31-internal AArch64 per-CPU/exception-context routine, not a Boot0 callback.
+
+This resolves the *writer* and value for the separate callback slot `0x4803c048`, but not yet the reachability/registration timing of its installer function `0x4800a134` from the cold-boot initialization path. The startup routine `0x48007554` invokes the slot after its setup helpers; the captured code alone does not prove that `0x4800a134` has run before that first invocation. The region containing `0x4803c048` is within the startup-cleared BSS interval `[0x4801b300,0x4803d8f8)`, so the nonzero callback must be installed after that clear or by an external mechanism. This is a useful example of why a zero-initialized indirect callback can have a real in-image writer that short scans miss.
+
+Do not conflate `0x4803c048` with G2 slot `0x48014668`: the former is a separate callback pointer; the latter is consumed as a DRAM-retention context pointer by the `0x48011938` path. No write to `0x48014668` is established by this finding. Next trace the callers/registration route into `0x4800a134`, then resume indirect writer analysis for `0x48014668` including full-payload stores and stack/helper propagation.
+
+No monitor execution, device access, MMIO/SMC, suspend/wake, or firmware write occurred. G2/G3/M1-S1 remain open.
