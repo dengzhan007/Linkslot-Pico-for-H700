@@ -193,7 +193,7 @@ class TestRG34XXStockTOC1(unittest.TestCase):
         # profile_ptr = DRAM.ext + 0x374 + (index - 1) * 0x80.
         self.assertEqual(
             inner[0x3482:0x3492],
-            bytes.fromhex("16ebc404611ec9016b18d3f87463"),
+            bytes.fromhex("16ebc4040bd0611ec9016b18d3f87463"),
         )
         self.assertEqual(struct.unpack_from("<I", inner, 0x3580)[0], 0x0300B010)
         self.assertEqual(struct.unpack_from("<I", inner, 0x3584)[0], 0x00020038)
