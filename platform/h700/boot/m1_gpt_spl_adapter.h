@@ -16,4 +16,11 @@ int h700_m1_spl_find_boot_partition(struct blk_desc *card,
                                     uint64_t *partition_first_lba,
                                     uint64_t *partition_block_count);
 
+/* Resolve p4 and preflight its p4+40MiB firmware stream using the adapter's
+ * named 4KiB SRAM/BSS scratch reservation. */
+int h700_m1_spl_preflight_gpt(struct blk_desc *card,
+                              uint64_t device_sector_count,
+                              uint32_t sector_size,
+                              uint32_t expected_firmware_fnv1a);
+
 #endif
