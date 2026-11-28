@@ -2,7 +2,7 @@
 #define H700_M1_FIRMWARE_READONLY_H
 
 #include <stddef.h>
-#if defined(CONFIG_XPL_BUILD)
+#if defined(CONFIG_XPL_BUILD) || defined(CONFIG_SPL_BUILD)
 #include <linux/types.h>
 #ifndef UINT32_C
 #define UINT32_C(value) value##U
