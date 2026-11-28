@@ -550,3 +550,15 @@ A second-pass disassembly with the correct AArch64 decoder invalidates the tenta
 Therefore the prior paragraph's claim that `0x1b7d4` is a monitor-loader helper and that `0x1b6d0` calls it is withdrawn. The reliable finding is narrower: Boot0 contains an AArch64 code/data region with a descriptor/dispatch function and an adjacent extent-like size/base pair. Its role and reachability from the Boot0 entry are not yet established. No monitor-copy semantics or context-slot writer can be inferred from it.
 
 Next work must first identify the ISA transition and control-flow reachability into this AArch64 region, decode the descriptor layout around `0x1b740..0x1b7f8`, and trace the actual data consumer of the `0x1a2d0/0x48000000` pair. Do not use the previous tentative interpretation as evidence.
+
+
+### Boot0 AArch64 tail: descriptor-dispatch structure recovered, no BL31 transfer proof
+
+The AArch64 disassembly around `0x1b694..0x1b73c` resolves a small registry mechanism:
+
+- `0x1b694` calculates the number of 0x28-byte records in a table beginning at `0x1c688` and ending at `0x1c6b0` (one record in this capture).
+- It compares the requested key against the record's 32-bit field at `+0x08`.
+- `0x1b6f4` saves the input and key, looks up the record, reads a callback pointer from `+0x20`, and tail-branches to it.
+- The single record's key field is `0x4d`; its callback pointer at `0x1c6a8` is `0x2984c`.
+
+This establishes a generic descriptor/callback dispatch in the AArch64 region. It does **not** identify that region as the monitor loader, nor show it is reached from the eGON Boot0 AArch32 entry. The nearby `0x1b7c8/0x1b7cc` size/base pair remains unconnected to a consumer. The next useful static task is to map the AArch64 region's caller/entry and inspect callback `0x2984c`, then separately locate references to the size/base descriptor. Do not claim BL31 is copied by this path until the transfer destination and source are observed in a validated reachable routine.
