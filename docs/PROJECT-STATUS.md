@@ -2238,3 +2238,13 @@ AArch64 反汇编窗口，验证：
 - Corrected the diagnostic truncation in [b3ce9c8](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/b3ce9c835ce5a7a4d0d008b9f5d52656fd4aa2de): the exception now preserves up to 200,000 trailing characters, enough to retain the diagnostic preceding the make summary. The next run must expose the first actionable error before any functional change is attempted.
 - Because step 22 failed, callgraph audit and geometry-only fixture steps 23–24 were skipped. The new geometry-only mode remains unverified. The next run should first reveal the failure cause; only then proceed to the independent geometry fixture.
 - Safety state unchanged: `H700_MEMORY_LAYOUT_APPROVED=false`, `hardware_applied=0`; no hardware execution, MMIO/SMC, TWI, physical MMC, SRAM/DRAM content access, media write, firmware flash, or payload execution occurred. Outputs remain non-installable, hardware-unvalidated, and candidate-ineligible.
+
+
+
+## 2026-11-28 Feasibility #1069: geometry anchor compile failure isolated and corrected
+
+- Feasibility [#1069](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46119388482) failed at step 22 while compiling the generated U-Boot copy of `m1_gpt_spl_adapter.c`. The preserved compiler diagnostic is exact: line 83, `error: expected ')' before '__attribute__'`, at `__attribute__((used, noinline))`; the following line also fails to parse. This is a compile-time attribute/macro collision in the new geometry anchor, not a linker-layout failure, runtime failure, or device boot failure.
+- Corrected in [0c96608](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/0c966086d3bd7f98094b2852d4e5e34fed8160ea) by removing the redundant `noinline` attribute and retaining `__attribute__((used))`. The linker explicitly forces the anchor with `--undefined=h700_m1_spl_geometry_anchor`, so `noinline` is unnecessary; the used attribute remains a defensive compiler-retention marker.
+- The larger failure log is now working: #1069 exposed the first actionable compiler diagnostic. A new full feasibility run is triggered by the correction; it must prove the original SPL build, callgraph audit, and separate geometry-only link before the geometry split is considered validated.
+- Companion H700 audit [#1675](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46119418972) passed on the prior docs commit, but does not validate the SPL correction.
+- Safety state unchanged: `H700_MEMORY_LAYOUT_APPROVED=false`, `hardware_applied=0`; no hardware execution or device I/O occurred. Artifacts remain non-installable, hardware-unvalidated, and candidate-ineligible.
