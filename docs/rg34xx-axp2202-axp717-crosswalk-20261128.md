@@ -65,7 +65,7 @@ These observations are mutually consistent with the AXP2202 BSP label referring 
 
 ## RG34XX Boot0 PMU-probe log clue
 
-The target Boot0 UART log shows two generic [pmu]: bus read error messages before PMU: AXP2202. The captured primary Boot0 binary contains these PMU-related strings (file offsets):
+An independent public RG34XX Boot0 UART sample (macromorgan's published capture; not the same file set as the reports-branch binary inventory) shows two generic [pmu]: bus read error messages before PMU: AXP2202. The captured primary Boot0 binary contains these PMU-related strings (file offsets):
 
 | Offset | String |
 |---:|---|
@@ -81,6 +81,8 @@ The target Boot0 UART log shows two generic [pmu]: bus read error messages befor
 | 0xE736 | PMU: AXP806 |
 
 This is consistent with a generic multi-PMU probe framework. In the inspected Tina v821 AXP2202 driver, a failed read at 0x34 logs one bus-read error and retries 0x35; if that second read also fails, the AXP2202 probe returns failure and cannot then print PMU: AXP2202. Therefore the two Boot0 errors followed by a successful AXP2202 identification are unlikely to be explained by that one AXP2202 address-fallback path alone; they may be failed probes of other PMU families. The exact Boot0 probe order is not recovered from strings.
+The reports-branch primary binary itself contains the format string HELLO! BOOT0 is starting! and BOOT0 commit : %s (offsets 0xe817 and 0xe832). The build identifier is supplied through a runtime format argument rather than embedded as a fixed literal in the scanned image. Therefore the public UART sample's displayed 749c1f9a-dirty identifier cannot be matched to the reports-branch binary from that string alone; treat the UART log as independent RG34XX corroboration, not proof of the exact captured binary's runtime PMU path.
+
 
 ### Stronger probe-order hypothesis from the generic dispatcher
 
@@ -99,7 +101,7 @@ Source references:
 
 The later RG34XX U-Boot stage in the same public log explicitly reports failed AXP152 and AXP1530 probes before PMU: AXP2202. That supports the existence of a multi-family probe sequence on this device, but it is a later boot stage and does not prove Boot0's exact probe order.
 
-The same Boot0 log places DRAM_VCC set to 1100 mv after chip-id check and before the DRAM DST training loop. The Allwinner AXP2202 SPL reference exposes set_ddr_voltage() -> axp2202_set_ddr_voltage() -> DCDC3, while the target's post-boot read-only runtime captures show DCDC3 at 1100 mV. This makes DCDC3 the strongest candidate for the logged DRAM_VCC rail. It remains a candidate until the exact RG34XX Boot0 call site and write sequence are recovered; do not infer a PMIC write from the log text alone.
+That independent public Boot0 log places DRAM_VCC set to 1100 mv after chip-id check and before the DRAM DST training loop. The Allwinner AXP2202 SPL reference exposes set_ddr_voltage() -> axp2202_set_ddr_voltage() -> DCDC3, while the target's post-boot read-only runtime captures show DCDC3 at 1100 mV. This makes DCDC3 the strongest candidate for the logged DRAM_VCC rail. It remains a candidate until the exact RG34XX Boot0 call site and write sequence are recovered; do not infer a PMIC write from the log text alone.
 
 ## Revised blocker classification
 
