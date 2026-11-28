@@ -735,3 +735,14 @@ The read-only Boot0 report `reports/rg34xx-inventory-20261127-uart/boot0-primary
 This calculation is a source/binary consistency result, not a live value observation. The primary Boot0 block is explicitly documented as mutable training metadata; the active Boot0 copy, selected candidate, native SPL build, and final runtime parameter bytes have not been captured as one continuous execution. The captured 1-GiB Linux map and Boot0 candidate are consistent with the 0x60000000 midpoint, but they do not prove that BL31 used that address during a real suspend/resume.
 
 The next static/host task is to add a regression that joins the exact Boot0 primary report, pinned SPL normalization logic, monitor patch offsets, and BL31 helper arithmetic. Keep both DRAM windows excluded from LK allocations until a live save/restore lifecycle and CPU/DMA/cache ownership proof exists. No device access, DRAM readback, MMIO/SMC/TWI, suspend/wake, storage write, or payload execution occurred.
+
+
+### 2026-11-28 parameter-flow regression completed (#150)
+
+Added `scripts/audit-rg34xx-bl31-dram-context.py` and `scripts/test-audit-rg34xx-bl31-dram-context.py`, integrated into `.github/workflows/h700-bl31-memory-audit.yml`. The audit pins the exact monitor identity and instruction words, checks the SPL producer/handoff source fragments, parses the captured Boot0 primary candidate, and reproduces BL31 helper arithmetic. Successful CI [#150](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46134616497) produced artifact [15259340938](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46134616497/artifacts/15259340938), including `BL31-DRAM-CONTEXT.json/.md`.
+
+The emitted conditional result is: LPDDR4 type 8, 672 MHz, 15 rows, 10 columns, 1,024 MiB; helper result `0x400`; rewritten context word[7] remains `0x04000000`; second save/restore source candidate is `[0x60000000,0x60000140)`. The regression deliberately records `live_parameter_block_captured=false`, `suspend_resume_execution_observed=false`, and `memory_layout_approved=false`.
+
+The first CI attempts (#147–#149) exposed two audit-fixture mistakes: an incorrect expected low 16-bit value for word[7], and one mistyped immediate in the pinned instruction list. Both were corrected; #150 passed the unit test and the full report-generation step. These were host-side audit failures, not hardware failures.
+
+This closes the static parameter-flow regression task, not G2's runtime ownership gate. The selected candidate, patched live parameter block, actual standby branch, save/restore completion, and CPU/DMA/cache quiescence remain unobserved. No device access or payload execution occurred.
