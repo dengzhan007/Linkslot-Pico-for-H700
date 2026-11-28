@@ -232,3 +232,12 @@ These reference sources establish that an implementation pattern exists; they do
 ### Corrected conclusion
 
 The SenkOS and upstream U-Boot findings narrow the search space and supply useful source-level hypotheses. They do **not** close the RG34XX PMIC/DRAM blockers. The project's target evidence remains the authority. No SenkOS strap values, voltage policy, DRAM timing table, or PMIC register writes are approved for RG34XX by this comparison.
+
+
+### 10. AXP2202 / AXP717 naming evidence strengthened by upstream and Allwinner sources
+
+The Linux upstream AXP717 support author states that Allwinner BSP code often calls the same chip AXP2202 and that a Boot0 AXP2202 driver successfully drove a chip labelled AXP717: https://lkml.iu.edu/2403.1/01550.html. Allwinner's Tina PMU guide explicitly says AXP717 uses the AXP2202 software framework name in kernel/DTS configuration: https://tina.100ask.net/SdkModule/Linux_PMU_DevelopmentGuide-02/.
+
+An Allwinner-authored Tina v821 AXP2202 SPL reference (sun50iw10p1 lineage, not the RG34XX/H700 target source) and the pinned U-Boot AXP717 SPL use the same DCDC3 voltage register 0x85, output-enable register 0x80 bit 2, mask 0x7f, and 500–1840 mV split-step encoding. The AXP2202 reference additionally probes CHIP_ID_EXT 0x0e (expected value 0x02), initializes a 400 kHz TWI bus, and supports address fallback 0x34 -> 0x35. Its generic dispatcher exposes set_ddr_voltage() -> axp2202_set_ddr_voltage() -> DCDC3. These findings make the AXP717 SPL driver a credible register-family reference, not an incompatible-chip substitute.
+
+The exact RG34XX Boot0 call site, PMIC read/write sequence, fallback selection, and DCDC3-before-DRAM ordering remain unproven. See [RG34XX AXP2202/AXP717 crosswalk](rg34xx-axp2202-axp717-crosswalk-20261128.md).
