@@ -61,7 +61,8 @@ static int zero_bytes(const uint8_t *bytes, uint32_t length)
 
 static int plan_valid(const struct h700_m1_package_plan *plan)
 {
-    return plan != 0 &&
+    return plan != 0 && plan->expected_fnv1a != 0 &&
+        UINT64_MAX - plan->first_lba >= plan->sectors &&
         plan->bytes == H700_M1_PACKAGE_BYTES &&
         plan->sectors == H700_M1_PACKAGE_SECTORS &&
         plan->monitor.offset == 0 && plan->monitor.payload_bytes == 0x1a2d0 &&
