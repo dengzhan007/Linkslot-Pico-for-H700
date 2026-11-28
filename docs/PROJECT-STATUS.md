@@ -1,5 +1,16 @@
 # 项目当前状态与续接记录
 
+## 2026-11-28 M1 manifest automation continuation
+
+- Code change: [`dcbf73d`](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/dcbf73d9ef6d0431f8bd282853366153f646adbc) adds `scripts/audit-m1-a32-artifact.py`. It binds one ELF, its raw objcopy output and linker map by SHA-256; validates ELF32 little-endian ARM ET_EXEC, entry/_start, _end/map agreement, PT_LOAD extents, zero vendor-header reservation, A32 entry/vector branches and the exact 32 KiB raw extent.
+- CI wiring: [`714f7e7`](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/714f7e7bceb0d5eba496a083cdcf1d8901d26c9f) adds a feasibility workflow step to emit separate manifests for PI12 early-layout, stub overlay and A32 entry stub. Each is permanently tagged host-only, not-installable, hardware-unvalidated and candidate-ineligible. PI12 is explicitly labeled physical-MMIO-enabled disposable layout work.
+- A map parser correction is in [`ec37e97`](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/ec37e97ab81d6c3a8b1898f6fca1674b1f363b4b), matching the actual LLD map format (hex address followed by symbol assignment).
+- Documentation correction: [`67fa2b2`](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/67fa2b26d5c318a391be1cdb64532ac9f5696fd5) distinguishes the active 32 KiB package extent from the separate `0xe0000` researched runtime/link bound. The new manifest contract is documented in `m1-candidate-artifact-accounting.md`.
+- H700 boot audit [#1608](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46094478292) passed Linux host-tools and Windows PowerShell on documentation HEAD `19e8f05616e334c6fa2540af444ed78aa8c9037f`.
+- Linkslot/LK feasibility [#945](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46094300447) is still running on code HEAD `ec37e97ab81d6c3a8b1898f6fca1674b1f363b4b`; the new manifest step is pending behind the earlier cross-build jobs. Do not count it as passed until the run completes.
+- No single prototype is promoted. The new manifests are accounting outputs only; no actual vendor header/native firmware/SPL/Boot0 capsule pairing or TF1 image has been generated. G2/G3/M1-S1/one-shot recovery gates remain open; `H700_MEMORY_LAYOUT_APPROVED=false`, `hardware_applied=0`.
+
+
 > **每次开启新的移植对话，先读本文。** 本文是当前工作状态的交接入口；详细设计仍以各专项文档为准。每完成一轮代码、测试或仓库审查，都应同步更新本文、路线图及对应专项文档。
 
 **最新 BL31 static memory audit：** [#136](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46039667955) 成功（artifact [15219895068](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46039667955/artifacts/15219895068)）。新增 selector parity regression 穷举 `VER_REG[2:0]` 0–7：native SPL 与 BL31 后续 CPU_ON helper 仅在 0/2 时选择相同 RVBAR bank，1/3/4/5/6/7 不同。设备 selector 尚未读回，因此状态是 `UNRESOLVED_UNTIL_SELECTOR_READBACK`，并非已证实设备处于 mismatch。#134 是此前 reset-bit / CPU_ON 静态审计基线。全部是静态/host 证据，没有设备 MMIO 写入或 payload 执行。
