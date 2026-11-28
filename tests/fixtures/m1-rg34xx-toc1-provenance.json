@@ -23,7 +23,8 @@
     "dtb": {
       "offset": 1161216,
       "bytes": 144384,
-      "sha256": "c28c87380ffab00148bf4dc457e70b8c6c576470dcfbc53df64addddf89603a1"
+      "sha256": "c28c87380ffab00148bf4dc457e70b8c6c576470dcfbc53df64addddf89603a1",
+      "fdt_totalsize": 139822
     }
   },
   "linkslot_loader_bytes": 32768,
@@ -35,30 +36,31 @@
       {
         "name": "monitor",
         "offset": 0,
-        "payload_bytes": 107216,
         "padded_bytes": 107520,
-        "destination": "0x48000000"
+        "destination": "0x48000000",
+        "component_bytes": 107216
       },
       {
         "name": "dtbo",
         "offset": 107520,
-        "payload_bytes": 2336,
         "padded_bytes": 2560,
-        "destination": "0x4a100000"
+        "destination": "0x4a100000",
+        "component_bytes": 2336
       },
       {
         "name": "dtb",
         "offset": 110080,
-        "payload_bytes": 144384,
         "padded_bytes": 144384,
-        "destination": "0x4a200000"
+        "destination": "0x4a200000",
+        "component_bytes": 144384,
+        "content_bytes": 139822
       },
       {
         "name": "loader",
         "offset": 254464,
-        "payload_bytes": 32768,
         "padded_bytes": 32768,
-        "destination": "0x4a000000"
+        "destination": "0x4a000000",
+        "component_bytes": 32768
       }
     ]
   },
