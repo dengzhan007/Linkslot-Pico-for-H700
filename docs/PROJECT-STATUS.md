@@ -2674,3 +2674,12 @@ See [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md) for the detai
 - RG34XX-specific evidence remains the authority: target-specific KNULLI RG34XX DTS, RG34XX Boot0 log, and this project's read-only RG34XX runtime captures. Even these do not alone prove physical PMIC silicon/register equivalence.
 - Corrected blocker status: SenkOS does not close RG34XX DRAM strap or PMIC provenance gates. No family-reference strap values, timing tables, voltage policy or PMIC writes are approved for RG34XX.
 - Detailed correction added to `docs/rg34xx-senkos-cross-audit-20261128.md`. M1 preflight remains PMIC/TWI-disabled; all safety gates unchanged.
+
+
+## 2026-11-28 Nested Boot0 parser and CI validation
+
+- \`tools/inspect_h700_boot0.py\` now enumerates aligned nested eGON-tagged components instead of treating the 128 KiB primary capture as one flat Boot0. It recognizes standard zero-tag Boot0 headers and reports the nonstandard \`SPL\\x02\` component separately without applying the wrong checksum rule.
+- Host audit CI run #1796 passed on Linux and Windows after this parser correction: [run #1796](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46144699538). The report-branch regression checks the nested 64 KiB Boot0 at +0x1000, the SPL2 component at +0x11000, the RG35XX-2024 platform label, and the five-byte primary/secondary Boot0 difference.
+- Linkslot feasibility run #1081 is still in progress on the same parser commit: [run #1081](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46144699555). No result is claimed yet.
+- A new H700 audit pass is being prepared to disassemble the primary outer Boot0, embedded inner Boot0, and SPL2 at candidate VMA \`0x50000\`, while scanning the TOC1 package and same-capture live FDT. This is static analysis only; the SPL2 handoff remains a candidate until the control-flow/copy path is recovered.
+
