@@ -6,6 +6,8 @@ on:
     paths:
       - "scripts/audit-rg34xx-bl31-memory.py"
       - "scripts/audit-rg34xx-bl31-context-slot.py"
+      - "scripts/audit-rg34xx-bl31-dram-context.py"
+      - "scripts/test-audit-rg34xx-bl31-dram-context.py"
       - "scripts/test-audit-rg34xx-bl31-memory.py"
       - "scripts/test-rg34xx-bl31-startup-contract.py"
       - "scripts/audit-rg34xx-boot0-cpu-reset.py"
@@ -166,6 +168,19 @@ jobs:
             --baseos-source .ci/baseos-native/experiments/h700-boot-speed/spl/native-boot.c \
             --out-dir build/rg34xx-bl31-static-audit
 
+      - name: Test BL31 DRAM context parameter-flow arithmetic
+        run: |
+          python3 scripts/test-audit-rg34xx-bl31-dram-context.py
+
+      - name: Audit SPL-to-BL31 DRAM context parameter flow (conditional, host-only)
+        run: |
+          python3 scripts/audit-rg34xx-bl31-dram-context.py \
+            --monitor .ci/reports/reports/rg34xx-inventory-20261126-timer/toc1-extracted/items/monitor.bin \
+            --boot0-primary-json .ci/reports/reports/rg34xx-inventory-20261127-uart/boot0-primary.json \
+            --native-boot-source .ci/baseos-native/experiments/h700-boot-speed/spl/native-boot.c \
+            --dram-select-source .ci/baseos-native/experiments/h700-boot-speed/spl/dram-select.c \
+            --out-dir build/rg34xx-bl31-static-audit
+
       - name: Publish audit report
         if: always()
         run: |
@@ -201,6 +216,9 @@ jobs:
           fi
           if [ -f build/rg34xx-bl31-static-audit/TWI-SELECTOR-RELOCATION.md ]; then
             cat build/rg34xx-bl31-static-audit/TWI-SELECTOR-RELOCATION.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f build/rg34xx-bl31-static-audit/BL31-DRAM-CONTEXT.md ]; then
+            cat build/rg34xx-bl31-static-audit/BL31-DRAM-CONTEXT.md >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Upload captured Boot0 binaries for read-only host CPU-start audit
