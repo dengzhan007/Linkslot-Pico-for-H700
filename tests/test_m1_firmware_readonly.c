@@ -66,7 +66,7 @@ int main(void)
     assert(!h700_m1_package_make_plan(UINT64_MAX - 10u, UINT64_MAX,
         H700_M1_PACKAGE_BYTES, plan.expected_fnv1a, &plan));
     assert(!h700_m1_package_make_plan(p4_lba, p4_blocks,
-        H700_M1_PACKAGE_BYTES - 1u, plan.expected_fnv1a, &plan));
+        H700_M1_STREAM_CHUNK_BYTES - 1u, plan.expected_fnv1a, &plan));
 
     assert(h700_m1_package_make_plan(p4_lba, p4_blocks,
         H700_M1_PACKAGE_BYTES, plan.expected_fnv1a, &plan));
