@@ -2641,7 +2641,7 @@ See [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md) for the detai
 - KNULLI's RG34XX boot-package DTS uses `x-powers,axp2202` at I2C 0x34 under `twi5` / R-TWI0 0x07081400. SenkOS's H700 U-Boot/Linux lineage uses AXP717 naming at I2C 0x34. Treat this as a vendor-binding/upstream-driver reconciliation candidate, not yet proof of silicon/register equivalence. No AXP717 path is enabled in the current M1 preflight.
 - Cross-check: the public RG34XX Boot0 log reports AXP2202, DRAM_VCC 1100 mV, 672 MHz LPDDR4, 1 GiB and successful training; the project's three read-only runtime captures report DCDC3 1,100 mV. This is consistent evidence, not proof of the exact PMIC write sequence or strap values.
 - **Linkslot feasibility #1075 is now verified complete/success** (run 46141495743, commit `807b3b2dc566b9fec1f11d4009b07afeea1ed0d7)). The cross-compile job and all 92 primary steps passed; the compact review artifact is 551,201 bytes. M1 actual SPL link, reachable-store report and fail-closed linked contract passed. This remains compile/link/static/host evidence only.
-- Next: compare Boot0 `dram_para`/`DRAM.ext` and target strap evidence; trace SenkOS `axp_set_dcdc3()` into the exact U-Boot AXP717 register/TWI operations; independently trace the RG34XX stock Boot0 PMIC writes and timing relative to DRAM training. Keep the M1 read-only preflight PMIC/TWI-disabled until a concrete dependency is proven.
+- Next: trace the handoff from Boot0's selected DRAM.ext profile into SPL2's separate three-candidate table; determine whether that table is secondary calibration/retry logic. Continue exact PMIC write ordering and BL31 power-hook analysis.
 - Safety gates unchanged: `H700_MEMORY_LAYOUT_APPROVED=false`, `hardware_applied=0`, `candidate_eligible=false`, `hardware_qualified=false`; no payload execution, physical register writes, device I/O, media writes, TF/Boot0/TOC1 writes or flashing. DRAM source pages `0x40000000` and `0x60000000` remain excluded.
 
 
@@ -2662,7 +2662,7 @@ See [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md) for the detai
 - In the generic H700 defconfig, R-TWI is the only registered MVTWSI adapter: logical bus 0 maps to adapter `twsi2` / hardware index 2 / `SUNXI_R_TWI_BASE`. H616 `i2c_init_board()` enables TWI channel 5 and configures GPL0/GPL1. The target DTS `twi5` at 0x07081400 matches that controller.
 - `board_init_f()` initializes the I2C board pins and bus before `sunxi_board_init()`. The latter initializes the PMIC, applies configured DCDC2/DCDC3 settings, then calls `sunxi_dram_init()`. Thus the upstream reference's PMIC writes are statically ordered before DRAM training.
 - The generic upstream source path is now traced end-to-end: logical I2C bus 0 → twsi2 hardware adapter → R-TWI0 → PMIC 0x34; DCDC3 register write 0x85 followed by read-modify-write of enable register 0x80 bit 2.
-- Revised blocker: upstream U-Boot PMIC/TWI selection and pre-DRAM ordering are no longer open. Remaining target blockers are the exact stock Boot0 PMIC source path, exact target Boot0 PMIC transaction sequence, bus/address fallback and DCDC3-before-DRAM ordering, and target-specific PH6/PH7/PH8/PH10 strap evidence. AXP717 SPL's lack of chip-ID read means this identity gate cannot be waived.
+- Revised blocker: target-specific PH6/PH7/PH8/PH10 wiring, GPIO sample order and one-based profile lookup are now confirmed by the stock Boot0 binary. Remaining blockers are exact stock Boot0 PMIC transaction sequence, PMIC silicon/register equivalence, DCDC3-before-DRAM ordering, SPL2 candidate-table handoff, and BL31 power-hook semantics.
 - No source code or Kconfig was changed; M1 preflight remains PMIC/TWI-disabled. No firmware execution, device register writes, media writes or hardware qualification.
 
 
@@ -2694,7 +2694,7 @@ See [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md) for the detai
 - The SPL2 regulator table at component offset \`0xaafc\` maps DCDC2 to control reg \`0x80\` mask \`0x02\`, voltage reg \`0x84\` mask \`0x7f\`; DCDC3 to control reg \`0x80\` mask \`0x04\`, voltage reg \`0x85\` mask \`0x7f\`. The setter uses 500 mV minimum and 10 mV steps; 940 mV maps to \`0x2c\`, 1100 mV to \`0x3c\`.
 - SPL2's PMIC read/write helpers pass I2C slave address \`0x34\` and one-byte register/data arguments through a bus callback table. This register layout matches the audited AXP717 DCDC2/DCDC3 map and the RG34XX AXP2202 FDT; it is strong evidence of an AXP717-compatible register path, not proof of physical silicon identity.
 - The callback table is selected via \`x18 + 264\`; its stored callback pointer values do not decode as AArch64 code at the corresponding addresses in the captured Boot0 image. Do not claim that they are Boot0 callbacks or that the bus is R-TWI0 yet. Exact callback relocation/descriptor semantics and the mapping to \`twi5\` / \`0x07081400\` remain open.
-- This target SPL2 voltage policy independently corroborates SenkOS's LPDDR4 1100 mV / LPDDR3 1200 mV values. It does not validate SenkOS's PH6/PH7/PH8/PH10 strap mapping for RG34XX.
+- This target SPL2 voltage policy independently corroborates SenkOS's LPDDR4 1100 mV / LPDDR3 1200 mV values. The separate Boot0 Thumb audit now confirms the same PH6/PH7/PH8/PH10 strap order and profile 14/15 mapping; it does not prove that SPL2's three-candidate loop itself is driven by those strap bits.
 - Linkslot feasibility run #1083 is still in progress; no result is claimed: [run #1083](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46145458855). All hardware safety gates remain unchanged.
 - Detailed report: \`docs/rg34xx-boot0-container-spl2-audit-20261128.md\`.
 
@@ -2716,12 +2716,12 @@ See [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md) for the detai
 - H700 audit run #1826 passed and produced the extracted U-Boot/monitor/DTB disassembly bundle: [run #1826](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46146478411). The latest Linkslot feasibility run #1086 also passed: [run #1086](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46146405481).
 - The RG34XX TOC1 package is 1,310,720 bytes, SHA-256 \`e6c20e3a54c51b9336c798e3a4fa1ca6c45b28c6f70456e2db9c252aa4ba4604\`. It has four components: \`u-boot\`, \`monitor\`, \`dtbo\`, \`dtb\`.
 - The embedded DTB payload contains the \`:rg34xx_v1\` marker and AXP2202/R-TWI0 data. Its validated FDT SHA-256 is \`7017a8f970234f7518e7f417fa9f86dd4ad3e46529bc5282c05a31e9f007dbc5\`.
-- **Important blocker closure:** \`/soc@03000000/dram_select_para/select_mode=1\` configures GPIO-based automatic DRAM selection. \`select_gpio0..3\` reference pinctrl phandle \`0x4b\` and encode port 7 pins 6, 7, 8, 10, GPIO-input mux 0 and pull-up 1. The referenced controller is \`allwinner,sun50iw9p1-pinctrl\`; Allwinner port index 7 is PH. This directly confirms **PH6, PH7, PH8, PH10** as the RG34XX package's DRAM strap inputs, matching SenkOS's pin list.
-- The same FDT carries \`dram_para14\` = LPDDR3 type 7 at 672 MHz and \`dram_para15\` = LPDDR4 type 8 at 672 MHz. This is target-specific evidence for both the pins and the two DRAM profiles. It does not yet prove SPL2's sample order, bit polarity, code-to-profile mapping or error fallback.
+- **Important blocker closure:** RG34XX's actual Boot0 \`DRAM.ext\` block has \`select_mode=1\` and four GPIO descriptors for PH6, PH7, PH8 and PH10. Stock Boot0 Thumb code reads the four pins in that order, packs them LSB-first into a 4-bit value, and uses that value as a one-based profile index. Profile 14 is LPDDR3 type 7 at 672 MHz; profile 15 is LPDDR4 type 8 at 672 MHz.
+- The FDT mirrors the same selection config and contains \`dram_para14\` = LPDDR3 type 7 at 672 MHz and \`dram_para15\` = LPDDR4 type 8 at 672 MHz. The actual Boot0 selector consumes its embedded \`DRAM.ext\` block, not the later FDT node.
 - U-Boot payload is AArch32 and identifies as \`U-Boot 2018.05 (May 26 2026 - 13:55:09 +0800) Allwinner Technology\`; strings include \`pmu_axp2202_probe\` and \`bmu_axp2202_probe\`.
 - AArch64 monitor payload contains BL31/TF-A platform paths for \`sun50iw9p1\`, PSCI CPU on/off/suspend code strings, and generic error strings for missing System Off/System Reset hooks. The strings do not alone prove whether the platform hooks are absent; inspect the actual PSCI platform-ops table and power call paths next.
 - New regression test \`tools/test_rg34xx_stock_toc1_dtb.py\` pins the package and component hashes, RG34XX DTB marker, AXP2202/TWI5 topology, PH6/7/8/10 GPIO tuples, LPDDR3/LPDDR4 profile IDs and regulator ranges. The H700 audit workflow now fetches the read-only \`reports\` branch before running Linux and Windows host tests.
-- This supersedes the earlier statement that SenkOS strap-pin mapping remained wholly unconfirmed on RG34XX. Pin mapping/configuration is now confirmed; runtime selector semantics remain open.
+- This supersedes earlier statements that the runtime selector semantics were open. The pin order, bit order and one-based profile mapping are now statically confirmed; only the physical electrical strap levels and the exact SPL2 handoff remain unverified.
 - Next: disassemble/trace SPL2 DRAM selector logic and exact profile selection; trace DCDC enable/read-modify-write and PMIC probe; then map BL31 PSCI platform ops and power-off/reset hooks. No firmware execution, PMIC/TWI writes, DRAM access, media writes or hardware qualification.
 - Safety gates unchanged: \`H700_MEMORY_LAYOUT_APPROVED=false\`, \`hardware_applied=0\`, \`candidate_eligible=false\`, \`hardware_qualified=false\`.
 
@@ -2736,10 +2736,10 @@ Detailed evidence: \`docs/rg34xx-boot0-container-spl2-audit-20261128.md\`.
 - Candidate 1 is LPDDR3 type 7 at 672 MHz (\`dram_tpr6=0x2fb08080\`), matching the RG34XX package DTB's \`dram_para14\`.
 - Candidate 2 is LPDDR4 type 8 at 672 MHz (\`dram_tpr6=0x40808080\`), matching the RG34XX package DTB's \`dram_para15\`.
 - AArch64 code at VMA \`0x53608\` loops candidate indices 0..2, advances by \`0x30\`, and calls candidate initialization at \`0x538dc\`. It then applies DCDC3 voltage policy by candidate DRAM type: LPDDR4 1100 mV, LPDDR3 1200 mV, other type 1500 mV.
-- This is a distinct stock SPL2 candidate-testing mechanism. The inspected code does not prove that it consumes \`dram_select_para\` or PH6/PH7/PH8/PH10. The \`0x5287c\` path copies a 64-byte scratch block to/from \`0x40000000\`; \`0x50980\` manipulates DRAM-controller MMIO beginning at \`0x03001540\`. These are disassembly findings only and must never be executed as part of this audit.
+- This is a distinct stock SPL2 candidate-testing mechanism. The Boot0 GPIO selector is confirmed separately; the inspected SPL2 code does not yet prove that its candidate table consumes the selected DRAM.ext index. The \`0x5287c\` path copies a 64-byte scratch block to/from \`0x40000000\`; \`0x50980\` manipulates DRAM-controller MMIO beginning at \`0x03001540\`. These are static findings only and must never be executed in this audit.
 - Regression assertions for all three candidate records and the key loop/voltage instructions were added to \`tools/test_rg34xx_stock_boot0_reports.py\`. H700 host audit run #1834 passed on Linux and Windows: [run #1834](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46148312059).
 - Linkslot feasibility run #1087 is still running; no result is claimed: [run #1087](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46148312066).
-- Next: trace candidate routines \`0x527d8\`/\`0x5287c\`, controller helper \`0x50980\`, and the outer caller/global state to establish candidate acceptance/failure semantics and whether strap pins influence selection. Continue BL31 PSCI platform-ops and PMIC power-off/reset tracing.
+- Next: trace the handoff from Boot0's selected DRAM.ext profile to SPL2's three-entry candidate table; establish candidate acceptance/failure semantics. Continue BL31 PSCI ops-table initialization and PMIC/RTC/WDT power sequencing.
 - No code execution on target, no PMIC/TWI writes, no DRAM content access, no media writes, and no hardware qualification. Safety gates unchanged.
 
 Detailed evidence: \`docs/rg34xx-boot0-container-spl2-audit-20261128.md\`.
@@ -2768,4 +2768,16 @@ Detailed evidence: \`docs/rg34xx-boot0-container-spl2-audit-20261128.md\`.
 - Safety gates unchanged: no target execution, no PMIC/TWI writes, no DRAM content access, no media writes, no hardware qualification.
 
 Detailed evidence: \`docs/rg34xx-boot0-container-spl2-audit-20261128.md\`.
+
+
+
+## 2026-11-28 Boot0 Thumb disassembly closes RG34XX DRAM strap algorithm
+
+- The raw primary Boot0 SHA-256 is \`bf886995745a0eb9b5030296f9f6163035e164b3a82183716e67ff876319289f\`. The inner Boot0 is Thumb code in the relevant selector region; a dedicated force-Thumb disassembly was added to the H700 audit artifact.
+- Boot0 validates the \`DRAM.ext\` signature at inner VMA \`0x20348\`, reads \`select_mode\` at \`+0x350\`, and enters the GPIO-only branch when the value is 1.
+- Its embedded descriptors are port+1=8 (PH bank), pins 6, 7, 8, 10, mux 0, pull 1. The sampler reads PIO data register base \`0x0300b010\` plus the port stride, tests each pin, packs the four samples LSB-first, and advances through the four descriptors.
+- The four-bit result is a one-based DRAM.ext profile index: profile 14 is LPDDR3 type 7 at 672 MHz; profile 15 is LPDDR4 type 8 at 672 MHz. Selector zero branches to a profile-table scan; an empty selected profile also takes the invalid-profile/fallback path.
+- SenkOS's 14 → LPDDR3 mapping is confirmed on RG34XX. Do not copy its simplified "14 else LPDDR4" policy unconditionally: the stock Boot0 table also contains DDR3 profiles 1–13. Validate allowed RG34XX values and fail closed on unexpected indices. The actual physical strap levels have not been measured.
+- The new \`tools/test_rg34xx_stock_toc1_dtb.py\` test pins the raw Boot0 hash, DRAM.ext descriptors, profile14/15 records and Thumb instruction bytes for the sampler and profile lookup.
+- Detailed evidence: \`docs/rg34xx-boot0-container-spl2-audit-20261128.md\`.
 
