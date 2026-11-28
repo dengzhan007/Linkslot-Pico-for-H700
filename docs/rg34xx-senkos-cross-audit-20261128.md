@@ -166,3 +166,36 @@ The previous broad statement that the target AXP2202 compatible versus upstream 
 
 Classify this as **strongly corroborated candidate; exact silicon identity and active bus call path still unproven**. Do not enable PMIC writes in the M1 preflight. Profile A remains a separate future DRAM-capable SPL audit.
 
+
+
+## 8. R-TWI logical-bus mapping and SPL ordering closure
+
+The remaining upstream I2C adapter ambiguity is resolved for the pinned H700 defconfig:
+
+1. The H700 defconfig enables `CONFIG_R_I2C_ENABLE=y` and `CONFIG_SYS_I2C_MVTWSI=y`, without enabling ordinary TWI0/TWI1 adapters.
+2. `arch/arm/include/asm/arch-sunxi/i2c.h` maps `CFG_I2C_MVTWSI_BASE2` to `SUNXI_R_TWI_BASE`.
+3. `drivers/i2c/mvtwsi.c` registers the adapter as `twsi2` with hardware adapter number 2. The adapter's linked-list position is the logical I2C bus index; because it is the only adapter in this configuration, logical bus 0 resolves to this hardware adapter 2.
+4. `drivers/i2c/i2c_core.c` routes `i2c_init()`, `i2c_read()` and `i2c_write()` through the current logical adapter. `i2c_init()` uses the default current bus index, 0.
+5. `arch/arm/mach-sunxi/board.c:board_init_f()` calls `i2c_init_board()` and `i2c_init(CONFIG_SYS_I2C_SPEED, CONFIG_SYS_I2C_SLAVE)` before calling `sunxi_board_init()`.
+6. The H616 `i2c_init_board()` branch enables TWI channel 5 and configures GPL0/GPL1 for R-TWI. The target DTS's `twi5` controller at `0x07081400` is the same R-TWI0 base.
+7. `sunxi_board_init()` calls `axp_init()`, then the configured DCDC2/DCDC3 setters, and only afterwards prints/executes `sunxi_dram_init()`. In this upstream SPL reference, the PMIC rail programming therefore precedes DRAM initialization.
+
+The PMIC access path for this configuration is consequently statically traceable as:
+
+`board_init_f → i2c_init_board → i2c_init(logical bus 0) → sunxi_board_init → axp_init → pmic_bus_init → i2c_read/write(0x34) → twsi2(hardware adapter 2) → SUNXI_R_TWI_BASE`
+
+The DCDC3 write path is:
+
+`axp_set_dcdc3(1100) → pmic_bus_write(0x85, encoded_voltage) → pmic_bus_setbits(0x80, BIT(2))`
+
+This closes the generic upstream U-Boot reference's controller-selection and pre-DRAM ordering. It does **not** prove that the target stock Boot0 binary used this exact source implementation or that the PMIC silicon behind the legacy `x-powers,axp2202` binding is identical to the AXP717 part assumed by upstream U-Boot. The AXP717 SPL driver's zero chip-ID mask makes that distinction especially important.
+
+### Revised blocker status
+
+- **Upstream U-Boot AXP717 → R-TWI0 → address 0x34 → DCDC3 register sequence:** statically traced.
+- **Upstream U-Boot PMIC-before-DRAM ordering:** statically traced.
+- **RG34XX target-specific physical PMIC identity and vendor AXP2202 register-map equivalence:** not yet proven.
+- **Exact stock Boot0 implementation and equivalence to the upstream sequence:** not yet proven.
+- **RG34XX DRAM strap values and Boot0 `DRAM.ext` selection:** not yet proven from target-specific strap evidence.
+
+This means the former broad "PMIC initialization path unknown" blocker is narrowed to a **stock Boot0 provenance / physical PMIC identity equivalence** blocker. No PMIC writes are enabled in M1 preflight.
