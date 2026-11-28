@@ -203,40 +203,14 @@ def main() -> int:
     # sinks while exposing the real formatter prototypes in this disposable tree.
     stdio_header = uboot / "include/stdio.h"
     stdio_text = stdio_header.read_text()
-    stdio_block = """#if !defined(CONFIG_XPL_BUILD) || CONFIG_IS_ENABLED(SERIAL)
-void putc(const char c);
-void puts(const char *s);
-#ifdef CONFIG_CONSOLE_FLUSH_SUPPORT
-void flush(void);
-#else
-static inline void flush(void) {}
-#endif
-int __printf(1, 2) printf(const char *fmt, ...);
-int vprintf(const char *fmt, va_list args);
-#else
-static inline void putc(const char c)
-{
-}
-
-static inline void puts(const char *s)
-{
-}
-
-static inline void flush(void)
-{
-}
-
-static inline int __printf(1, 2) printf(const char *fmt, ...)
-{
-    return 0;
-}
-
-static inline int vprintf(const char *fmt, va_list args)
-{
-    return 0;
-}
-#endif
-"""
+    # Match the whole stdout declaration section by stable surrounding markers;
+    # nested #ifdef blocks make a literal whole-block template brittle.
+    stdio_start = "#if !defined(CONFIG_XPL_BUILD) || CONFIG_IS_ENABLED(SERIAL)"
+    stdio_end = "/**\n * Format a string and place it in a buffer"
+    require(stdio_text.count(stdio_start) == 1 and stdio_text.count(stdio_end) == 1,
+            "unexpected U-Boot stdio.h stdout section markers")
+    stdio_prefix, stdio_tail = stdio_text.split(stdio_start, 1)
+    stdio_old_section, stdio_suffix = stdio_tail.split(stdio_end, 1)
     stdio_replacement = """#if !defined(CONFIG_XPL_BUILD) || CONFIG_IS_ENABLED(SERIAL)
 void putc(const char c);
 void puts(const char *s);
@@ -264,10 +238,9 @@ static inline int vprintf(const char *fmt, va_list args)
     return 0;
 }
 #endif
+
 """
-    require(stdio_text.count(stdio_block) == 1,
-            "unexpected U-Boot stdio.h stdout declaration block")
-    stdio_header.write_text(stdio_text.replace(stdio_block, stdio_replacement, 1))
+    stdio_header.write_text(stdio_prefix + stdio_replacement + stdio_end + stdio_suffix)
 
     # ARCH_SUNXI force-selects the tiny allocator/printf profile for SPL.
     # This preflight needs dlmalloc realloc and full snprintf for DM/FDT helpers.
