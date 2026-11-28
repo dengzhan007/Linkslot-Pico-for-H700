@@ -2,7 +2,7 @@
  * Read-only GPT-to-U-Boot SPL adapter for the M1 preflight path.
  * No U-Boot partition subsystem or write-capable block API is used.
  */
-#include <blk.h>
+#include <blk.h>\n#include <linux/types.h>
 
 #include "h700_gpt_readonly.h"
 #include "m1_firmware_readonly.h"
@@ -73,4 +73,17 @@ int h700_m1_spl_preflight_gpt(struct blk_desc *card,
     return h700_m1_spl_preflight(card, p4_first_lba, p4_block_count,
                                  expected_firmware_fnv1a, m1_package_scratch,
                                  sizeof(m1_package_scratch));
+}
+
+/*
+ * Link-only geometry anchor. The geometry fixture retains the real scratch
+ * and GPT table symbols without retaining or executing the MMC preflight path.
+ * The linker forces this symbol into the fixture; it is never called.
+ */
+__attribute__((used, noinline))
+uintptr_t h700_m1_spl_geometry_anchor(void)
+{
+    return (uintptr_t)m1_package_scratch ^
+           (uintptr_t)m1_boot_partitions ^
+           sizeof(m1_package_scratch) ^ sizeof(m1_boot_partitions);
 }
