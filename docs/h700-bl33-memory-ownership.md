@@ -691,3 +691,20 @@ The exact monitor image (107,216 bytes; SHA-256 `676bc0206e3c9a7f229d93ea7f32860
 - Accordingly, the strongest defensible statement is: **no direct static store to the exact page-base-plus-offset operand was found in this whole-image disassembly; runtime writer and live pointer value remain unknown.** Do not mark G2 resolved.
 
 This was a host-only inspection of the existing captured monitor. No device access, monitor execution, MMIO/SMC, DRAM inspection, suspend/wake test, media write, or firmware operation occurred.
+
+
+### 2026-11-28 relocation-aware correction: standby context pointer resolves to SRAM 0x20000
+
+**This section supersedes the earlier interpretation in this document that treated source-coordinate address `0x48014668` as the live runtime context slot and its file qword `2` as evidence of an unknown runtime writer.** That interpretation did not account for the standby image being copied and executed from SRAM.
+
+The successful host-only audit #145 artifact `15254429553` includes `TWI-SELECTOR-RELOCATION.md` and `twi-selector-relocation-report.json`. Rechecking those exact outputs establishes:
+
+- The standby image source interval is `[0x4800c220, 0x48015630)`, copied to SRAM starting at `0x20000` (0x9410 bytes).
+- The instruction pair at source PCs `0x4800c430/0x4800c434` is `ADRP x20, 0x48014000`; `LDR x19, [x20,#0x668]`. After relocation, the ADRP page is `0x28000`, and the load's runtime effective address is `0x28668`.
+- The source-equivalent backing address for runtime `0x28668` is `0x48014888`, not `0x48014668`. Its captured monitor qword is `0x0000000000020000`, so the relocated load obtains context base `0x20000` from the copied standby SRAM image.
+- The old source-coordinate qword at `0x48014668` is indeed `2`, but it is not the backing qword consumed by this relocated standby path. Searching for a writer to `0x48014668` therefore targeted the wrong coordinate for this execution path.
+- The same relocation audit maps the TWI lookup table to runtime `0x28628` / source-equivalent `0x48014848`. Original TOC1 FDT selector derivation yields `twi5`, selecting R-TWI0 base `0x07081400`. The selector at external context `0x4803cbb4` is staged to copied SRAM context field `0x200a4`. This is static selector provenance only; no PMIC transaction or suspend execution is claimed.
+
+The context-pointer *address mapping and initial backing value* are therefore statically resolved for the copied standby image. This does **not** prove that the standby handler is selected on the physical device, that the context fields hold the expected live DRAM geometry, or that save/restore completes before Linux resumes. The active anonymous-mapped PFN at `0x40000000`, the second DRAM source window, CPU/DMA/cache quiescence, and the exact retention/resume lifecycle remain ownership blockers. Keep the candidate DRAM pages excluded; `H700_MEMORY_LAYOUT_APPROVED=false`.
+
+The legacy whole-image scan at `0x48014668` is retained only as a historical source-coordinate diagnostic. It must not be interpreted as a scan of the relocated runtime effective address. The scanner now emits the relocation-aware mapping and validates source qword `0x48014888 == 0x20000`. No device execution, live memory readback, SMC/MMIO/TWI transaction, suspend/wake, storage write, or firmware operation occurred.
