@@ -187,12 +187,12 @@ def main() -> int:
     # This preflight needs dlmalloc realloc and full snprintf for DM/FDT helpers.
     arm_kconfig = uboot / "arch/arm/Kconfig"
     arm_text = arm_kconfig.read_text()
-    arch_start = arm_text.index("config ARCH_SUNXI\\n")
-    arch_end = arm_text.find("\\nconfig ", arch_start + 1)
+    arch_start = arm_text.index("config ARCH_SUNXI\n")
+    arch_end = arm_text.find("\nconfig ", arch_start + 1)
     require(arch_end > arch_start, "cannot isolate ARCH_SUNXI Kconfig block")
     arch_block = arm_text[arch_start:arch_end]
-    for selector in ("\\tselect SPL_SYS_MALLOC_SIMPLE if SPL\\n",
-                     "\\tselect SPL_USE_TINY_PRINTF if SPL\\n"):
+    for selector in ("\tselect SPL_SYS_MALLOC_SIMPLE if SPL\n",
+                     "\tselect SPL_USE_TINY_PRINTF if SPL\n"):
         require(arch_block.count(selector) == 1,
                 f"unexpected ARCH_SUNXI SPL allocator/printf selector: {selector.strip()}")
         arch_block = arch_block.replace(selector, "", 1)
