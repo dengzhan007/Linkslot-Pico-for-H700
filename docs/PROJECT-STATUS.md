@@ -21,7 +21,7 @@
 - Re-audited active call-site owners (`target/rg34xx_h700/init.c`, target rules, BL33 entry snapshot, timer and input scan). No call site to `h700_syscfg_ver_reg_low3` and no raw `0x03000024` read appears in startup, input, timer, or entry code. The probe remains dormant.
 - The BaseOS native-loader override validates the 32 KiB raw extent, reserved vendor header bytes, entry/vector address bounds, and fixed-size padding. It explicitly marks `loader_elf_matches_loader_bin=false`; this is a builder contract, not a paired deployable diagnostic image.
 - Next gate is a separately packaged, byte-accounted diagnostic candidate within the 32 KiB loader extent, including matched firmware/SPL metadata and memory-ownership/rollback review. Do not call the probe or modify TF media until those gates and pre-BL33 CPU reset/RVBAR evidence are satisfied.
-- Latest CI at this review: feasibility #941 passed 85/85; boot audit #1597 passed Linux and Windows; documentation-baseline feasibility #942 is still running.
+- Latest CI at this review: feasibility #941 passed 85/85; boot audit #1597 and #1598 passed Linux and Windows. Feasibility #942 was superseded/cancelled by the next documentation commit before completion; replacement feasibility #943 is running on the updated roadmap baseline. Boot audit #1599 has Linux passed and Windows job running.
 - Hardware remains fail-closed: `H700_MEMORY_LAYOUT_APPROVED=false`, `hardware_applied=0`; no device MMIO, module load, TF/Boot0/TOC1 write, firmware flash, or diagnostic execution.
 
 ## 2026-11-28 最新续接：活动启动链、TF 启动介质与 CI 对齐
