@@ -98,6 +98,12 @@ The Boot0 binary also contains PMU identification strings for AXP2202 and other 
 
 DRAM_VCC 1100 mV is retained as the exact log label/value. This audit does not map it to a particular DCDC output or equate it to the upstream U-Boot AXP717 DCDC3 setting.
 
+## AXP2202 / AXP717 naming reconciliation
+
+The Boot0 UART label PMU: AXP2202 is consistent with the AXP717-compatible PMIC family. Linux upstream AXP717 support author Andre Przywara states that Allwinner BSP often calls the same chip AXP2202 and that a Boot0 AXP2202 driver successfully drove a chip labelled AXP717: https://lkml.iu.edu/2403.1/01550.html. Allwinner's Tina PMU guide explicitly says AXP717 uses the AXP2202 software framework name in DTS/kernel configuration: https://tina.100ask.net/SdkModule/Linux_PMU_DevelopmentGuide-02/.
+
+An Allwinner-authored Tina v821 AXP2202 SPL reference (sun50iw10p1 lineage, not the exact RG34XX/H700 source) and pinned U-Boot AXP717 SPL use the same DCDC3 voltage register 0x85 and enable register 0x80 bit 2, with matching mask and split-step range. The Tina driver also exposes a DCDC3 DDR-voltage helper and a 0x34/0x35 PMIC address probe. This removes the assumption that AXP2202 and AXP717 are incompatible, but does not prove that the RG34XX Boot0 binary uses this exact source or sequence. See docs/rg34xx-axp2202-axp717-crosswalk-20261128.md.
+
 ## Consequences for the project
 
 1. The target-specific stock Boot0 captures now provide a better basis for the DRAM profile investigation than SenkOS's RG35XX-family strap patch.
