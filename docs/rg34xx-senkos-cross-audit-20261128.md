@@ -250,7 +250,7 @@ The project's later read-only analysis of the RG34XX TF-card SPL2 provides targe
 - RG34XX SPL2 code selects DCDC3 1100 mV for LPDDR4 type 8 and 1200 mV for LPDDR3 type 7; other types take a 1500 mV branch.
 - The SPL2 regulator table maps DCDC3 to voltage register \`0x85\`, control register \`0x80\`, enable mask \`0x04\`, I2C slave \`0x34\`; DCDC2 maps to voltage register \`0x84\`, control mask \`0x02\`.
 - This independently confirms the LPDDR4 1100 mV / LPDDR3 1200 mV voltage values on the RG34XX stock path, and shows an AXP717-compatible DCDC register layout for the AXP2202-labelled PMIC path.
-- It does **not** confirm SenkOS's PH6/PH7/PH8/PH10 strap wiring or profile index selection for RG34XX. Those remain reference-only until target-specific evidence is found.
+- The later RG34XX TOC1 DTB audit now directly confirms PH6/PH7/PH8/PH10 as the configured DRAM-selection GPIO inputs and carries LPDDR3 profile 14 plus LPDDR4 profile 15. What remains unconfirmed is the stock SPL2 runtime sampling order, polarity, profile-index mapping and read-failure fallback; the pin mapping itself is no longer reference-only.
 - The bus callback table's runtime resolution and exact R-TWI0 mapping remain open. No PMIC write or hardware action is authorized.
 
 Detailed target evidence: \`docs/rg34xx-boot0-container-spl2-audit-20261128.md\`.
@@ -268,4 +268,17 @@ The later dual-mode disassembly of the RG34XX stock SPL2 resolves the bus-contro
 - The global selector \`x18 + 264\` is read but its runtime value is not directly established; descriptor 0 versus 1 remains unresolved, although both observed valid descriptors route to controller index 2.
 
 This confirms the R-TWI0 backend at static-code level. It does not prove that SenkOS's PH6/PH7/PH8/PH10 strap mapping applies to RG34XX, nor does it prove physical PMIC silicon identity or authorize hardware writes.
+
+
+
+## 2026-11-28 SenkOS strap pin list confirmed by RG34XX stock TOC1 DTB
+
+The original concern about transferring SenkOS's strap pins from RG35XX-SP to RG34XX is now partly resolved by target-specific evidence:
+
+- The RG34XX stock TOC1 embedded DTB configures \`dram_select_para.select_mode = 1\` (GPIO automatic selection).
+- Its four \`select_gpio0..3\` entries point to the H700 pinctrl controller phandle \`0x4b\` and encode port index 7, pins 6, 7, 8, and 10, input mux 0, pull-up 1.
+- Port index 7 is PH; the four inputs are therefore PH6, PH7, PH8 and PH10, matching the SenkOS patch.
+- The same DTB carries \`dram_para14\` as LPDDR3 type 7 at 672 MHz and \`dram_para15\` as LPDDR4 type 8 at 672 MHz.
+
+Conclusion: SenkOS's **pin mapping** is now independently corroborated on RG34XX; this is not an assumption based only on the RG35XX-SP repository. The stock SPL2 selector's exact sampling order, strap bit interpretation, index mapping and failure fallback remain to be recovered before reusing SenkOS's selection logic. Detailed binary/FDT evidence and regression test: \`docs/rg34xx-boot0-container-spl2-audit-20261128.md\`.
 
