@@ -14,6 +14,8 @@
 #define H700_M1_PACKAGE_SECTORS      UINT32_C(0x231)
 #define H700_M1_PACKAGE_FNV1A        UINT32_C(0xaf0018cb)
 #define H700_M1_SECTOR_BYTES         UINT32_C(512)
+#define H700_M1_STREAM_CHUNK_SECTORS UINT32_C(8)
+#define H700_M1_STREAM_CHUNK_BYTES   (H700_M1_STREAM_CHUNK_SECTORS * H700_M1_SECTOR_BYTES)
 
 struct h700_m1_package_extent {
     uint32_t offset;
@@ -45,6 +47,10 @@ int h700_m1_package_make_plan(uint64_t p4_first_lba,
                               uint32_t expected_fnv1a,
                               struct h700_m1_package_plan *out);
 uint32_t h700_m1_package_fnv1a(const uint8_t *bytes, size_t length);
+int h700_m1_package_read_validate_streaming(
+    const struct h700_m1_readonly_block_device *device,
+    const struct h700_m1_package_plan *plan,
+    void *scratch, size_t scratch_capacity);
 int h700_m1_package_read_validate(
     const struct h700_m1_readonly_block_device *device,
     const struct h700_m1_package_plan *plan,
