@@ -76,11 +76,11 @@ def decode_optional_page(text, flags_section, count_section, pfn, start):
 
 
 def optional_kernel_section(text, name):
-    match = re.search(r"(?ms)^\\[" + re.escape(name) + r"\\]\\s*(.*?)(?=^\\[|\\Z)", text)
+    match = re.search(r"(?ms)^\[" + re.escape(name) + r"\]\s*(.*?)(?=^\[|\Z)", text)
     if not match:
         return {"present": False, "status": "NOT_CAPTURED"}
     body = match.group(1)
-    status = re.search(r"(?m)^status=(\\S+)", body)
+    status = re.search(r"(?m)^status=(\S+)", body)
     return {"present": True, "status": status.group(1) if status else "STATUS_MISSING",
             "captured_lines": max(0, len(body.splitlines()) - 1)}
 
@@ -141,7 +141,7 @@ def decode_report(text):
         },
         "secondary_page_0x60000000": (
             decode_optional_page(text, "kpageflags_pfn_60000", "kpagecount_pfn_60000", 0x60000, 0x60000000)
-            if re.search(r"(?m)^\\[kpageflags_pfn_60000\\]$", text) and re.search(r"(?m)^\\[kpagecount_pfn_60000\\]$", text)
+            if re.search(r"(?m)^\[kpageflags_pfn_60000\]$", text) and re.search(r"(?m)^\[kpagecount_pfn_60000\]$", text)
             else {"present": False, "gate": "BLOCKED_OWNERSHIP_NOT_PROVEN", "ownership_proven": False,
                   "free_scratch_eligible": False, "classification": "SECONDARY_PFN_METADATA_NOT_CAPTURED"}
         ),
