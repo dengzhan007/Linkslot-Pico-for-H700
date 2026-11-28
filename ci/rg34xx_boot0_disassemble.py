@@ -161,17 +161,17 @@ def scan_fdt_blobs(data: bytes, base_offset: int = 0) -> list[dict]:
             item for item in relevant
             if re.search(r"rg34|rg35|anbernic|sun50i-h700|x-powers,axp2202", item["text"], re.I)
         ]
-        if board_strings:
-            found.append(
-                {
-                    "offset": f"0x{base_offset + offset:x}",
-                    "total_size": total,
-                    "version": version,
-                    "last_comp_version": last_comp,
-                    "sha256": sha256(blob),
-                    "board_strings": board_strings,
-                }
-            )
+        found.append(
+            {
+                "offset": f"0x{base_offset + offset:x}",
+                "total_size": total,
+                "version": version,
+                "last_comp_version": last_comp,
+                "sha256": sha256(blob),
+                "has_board_markers": bool(board_strings),
+                "board_strings": board_strings,
+            }
+        )
     return found
 
 
@@ -201,7 +201,7 @@ def marker_offsets(data: bytes) -> dict[str, list[str]]:
 
 
 
-def parse_sunxi_package(data: bytes, outdir: Path) -> dict:
+def parse_sunxi_package(data: bytes, outdir: Path, objdump: str, aarch64_objdump: str) -> dict:
     if len(data) < 0x30 or not data.startswith(b"sunxi-package"):
         raise ValueError("boot-package does not have the sunxi-package signature")
     magic, checksum, serial, status, item_count, total_size, boot_media = struct.unpack_from(
@@ -237,15 +237,35 @@ def parse_sunxi_package(data: bytes, outdir: Path) -> dict:
         extracted = outdir / f"sunxi-package-{name}.bin"
         extracted.write_bytes(payload)
         role_hypotheses = {
-            "u-boot": "U-Boot payload; BL33 candidate (contains U-Boot.armv7 / U-Boot version strings)",
-            "monitor": "monitor payload; BL31 candidate (contains BL31 platform/source strings)",
+            "u-boot": "U-Boot payload; BL33 candidate",
+            "monitor": "monitor payload; BL31 candidate",
             "dtbo": "device-tree overlay",
             "dtb": "device-tree blob",
         }
+        architecture_hint = "not classified"
+        disassembly = None
+        if name == "u-boot":
+            first_word = struct.unpack_from("<I", payload, 0)[0]
+            architecture_hint = "AArch32 ARM-state entry branch; also contains U-Boot.armv7 string"
+            if first_word != 0xEA00018E:
+                raise ValueError(f"unexpected RG34XX U-Boot entry word: 0x{first_word:08x}")
+            output = outdir / "sunxi-package-u-boot.arm.disasm"
+            disassembly = output.name
+            disassemble_bytes(payload, output, objdump, 0, "arm")
+        elif name == "monitor":
+            first_word = struct.unpack_from("<I", payload, 0)[0]
+            architecture_hint = "AArch64 entry branch; contains BL31 platform/source strings"
+            if first_word != 0x1400003E:
+                raise ValueError(f"unexpected RG34XX monitor entry word: 0x{first_word:08x}")
+            output = outdir / "sunxi-package-monitor.aarch64.disasm"
+            disassembly = output.name
+            disassemble_bytes(payload, output, aarch64_objdump, 0, "aarch64")
         items.append(
             {
                 "index": index,
                 "role_hypothesis": role_hypotheses.get(name, "unclassified package item"),
+                "architecture_hint": architecture_hint,
+                "disassembly": disassembly,
                 "payload_header_preview_hex": payload[:64].hex(),
                 "header_offset": f"0x{item_start:x}",
                 "marker": marker,
@@ -324,7 +344,7 @@ def main() -> int:
 
     toc1_data = args.toc1.read_bytes()
     fdt_data = args.fdt.read_bytes()
-    sunxi_package = parse_sunxi_package(toc1_data, args.outdir)
+    sunxi_package = parse_sunxi_package(toc1_data, args.outdir, args.objdump, args.aarch64_objdump)
     toc1_fdt = {
         "sunxi_package": sunxi_package,
         "toc1": {
@@ -388,7 +408,8 @@ def main() -> int:
         "The primary capture contains nested eGON Boot0 and SPL2 components.\n"
         "Boot0 components are disassembled in ARM and AArch64 modes; SPL2 is disassembled in ARM mode and its candidate AArch64 region separately.\n"
         "The sunxi-package wrapper is parsed into u-boot, monitor, dtbo and dtb payloads; each payload is extracted, hashed and scanned for FDT/board/PMIC/BL31/U-Boot strings.\n"
-        "The u-boot item is an AArch32 U-Boot/BL33 candidate; the monitor item is a BL31 candidate, subject to binary-level verification.\n"
+        "The u-boot item begins with an AArch32 ARM branch and contains U-Boot.armv7; the monitor item begins with an AArch64 branch and contains BL31 source strings.\n"
+        "Both payloads are disassembled in their respective instruction sets; these are vendor-stage references, not bootable project outputs.\n"
         "Only static parsing, string extraction, hashing and disassembly were performed. No firmware was executed and no hardware was accessed.\n",
         encoding="utf-8",
     )
