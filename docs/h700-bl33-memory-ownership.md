@@ -476,3 +476,14 @@ Limits: the two Boot0 primary parameter blocks are captured candidate/training m
 
 
 The geometry decoder was exercised against the exact pinned reports in BL31 static memory audit [#141](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46122355821), which completed successfully. Artifact [15254247497](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46122355821/artifacts/15254247497) contains `BOOT0-DRAM-GEOMETRY.json` and `BOOT0-DRAM-GEOMETRY.md`; the emitted values are 15 rows, 10 columns, one rank, 32-bit bus, 1024 MiB, and midpoint candidate `0x60000000`. The first two audit attempts (#139/#140) stopped at a Python import-name error in the new test harness; #141 corrected that import and passed all audit steps. Do not treat the failed attempts as hardware or decoder failures.
+
+
+### Runtime BL31 context pointer: static producer remains unresolved
+
+A full host disassembly of the exact 107,216-byte matched monitor payload confirms that the resume path repeatedly loads a context pointer from the global slot at `0x48014668` (for example, `0x4800c434`, `0x4800c4e0`, `0x4800c63c`, and `0x48013480`). The save/restore helpers then consume fields from that pointed-to object. The retention worker at `0x48011938` receives the pointer in `x1`, preserves it in `x19`, and reads offsets `+0x18`, `+0x1c`, `+0x78`, and `+0x04`.
+
+The monitor file's bytes at file offset `0x14668` are `02 00 00 00 00 00 00 00`, not a usable pointer. The captured image therefore does not disclose the runtime pointer value. A full linear disassembly finds direct reads of the slot but no obvious direct store to the same slot; an indirect writer, external setup, runtime relocation, or changed mapping is not ruled out. Do not substitute the static file qword for live context.
+
+The second-window address calculation is now instruction-level clear: if the context field at `+0x1c` is not already marked with bit31, helper `0x4800c730` derives a selector from context `+0x18`, `+0x1c`, and halfword `+0x7a`; controller IDs `0x5c00` and `0x5d00` take a special branch. The caller may rewrite the upper half of `+0x1c` with the helper result. Later it calculates `0x40000000 + (((context[+0x1c] >> 17) & 0x7fff) << 20)`. Thus `0x60000000` corresponds to a final selector value of 512 MiB, but the context and selector result remain unavailable.
+
+The restore gate at `0x48011320` returns the result of the context helper at `0x480115c0` after clock-restore setup; for context mode `+0x04 == 4`, it also reads the first word at `0x40000000`. The caller at `0x48011974` skips the subsequent copy worker when the gate returns zero. No captured evidence supplies the pointer, field values, controller ID, or gate return. The next valid route is to locate the runtime context setup path in the matched image and any upstream resume stub; a new device probe is not justified.
