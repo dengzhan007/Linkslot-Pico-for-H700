@@ -166,7 +166,7 @@ class TestRG34XXStockTOC1(unittest.TestCase):
         pinctrl = self.fdt["/soc@03000000/pinctrl@0300b000"]
         self.assertEqual(be32(pinctrl["phandle"]), 0x4B)
         self.assertEqual(
-            pinctrl["compatible"].rstrip(b"\\0"),
+            pinctrl["compatible"].rstrip(b"\0"),
             b"allwinner,sun50iw9p1-pinctrl",
         )
         self.assertEqual(be32(pinctrl["#gpio-cells"]), 6)
