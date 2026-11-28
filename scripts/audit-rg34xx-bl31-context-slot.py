@@ -12,7 +12,14 @@ from capstone.arm64_const import ARM64_OP_IMM, ARM64_OP_MEM, ARM64_OP_REG
 
 BASE, SIZE = 0x48000000, 107216
 SHA = "676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31"
+# SLOT is the legacy unrelocated source-coordinate operand used by the
+# original whole-image scan. The standby code is copied to SRAM and ADRP is
+# rebased; its actual runtime slot is 0x28668, backed by source qword 0x48014888.
 SLOT, WINDOW_INSNS = 0x48014668, 16
+COPY_SOURCE_START, COPY_SOURCE_END, SRAM_DEST = 0x4800C220, 0x48015630, 0x20000
+CONTEXT_ADRP_PC, CONTEXT_LDR_PC = 0x4800C430, 0x4800C434
+CONTEXT_SOURCE_PAGE, CONTEXT_OFFSET = 0x48014000, 0x668
+EXPECTED_RELOCATED_SLOT, EXPECTED_BACKING_SLOT, EXPECTED_CONTEXT_BASE = 0x28668, 0x48014888, 0x20000
 
 def canon(name: str) -> str:
     return "x" + name[1:] if name.startswith("w") and name[1:].isdigit() else name
@@ -130,23 +137,59 @@ def main() -> int:
     digest = hashlib.sha256(raw).hexdigest()
     if len(raw) != SIZE or digest != SHA:
         raise RuntimeError("monitor identity mismatch; refusing context-slot scan")
+    # Reconstruct the standby-code relocation before interpreting the legacy
+    # source-coordinate hits. ADRP at C430 resolves to source page 0x48014000;
+    # after the copied image is rebased to SRAM, that page becomes 0x28000.
+    adrp_word = int.from_bytes(raw[CONTEXT_ADRP_PC - BASE:CONTEXT_ADRP_PC - BASE + 4], "little")
+    ldr_word = int.from_bytes(raw[CONTEXT_LDR_PC - BASE:CONTEXT_LDR_PC - BASE + 4], "little")
+    if (adrp_word, ldr_word) != (0x90000054, 0xF9433693):
+        raise RuntimeError("context-slot ADRP/LDR instruction identity changed")
+    runtime_pc = SRAM_DEST + CONTEXT_ADRP_PC - COPY_SOURCE_START
+    runtime_page = (runtime_pc & ~0xfff) + (CONTEXT_SOURCE_PAGE - (CONTEXT_ADRP_PC & ~0xfff))
+    runtime_slot = runtime_page + CONTEXT_OFFSET
+    backing_slot = COPY_SOURCE_START + runtime_slot - SRAM_DEST
+    if (runtime_slot, backing_slot) != (EXPECTED_RELOCATED_SLOT, EXPECTED_BACKING_SLOT):
+        raise RuntimeError("relocated context-slot address mapping changed")
+    backing_qword = int.from_bytes(raw[backing_slot - BASE:backing_slot - BASE + 8], "little")
+    legacy_qword = int.from_bytes(raw[SLOT - BASE:SLOT - BASE + 8], "little")
+    if backing_qword != EXPECTED_CONTEXT_BASE:
+        raise RuntimeError("relocated context-pointer backing qword changed")
+
     hits = scan(raw)
     writes = [x for x in hits if x["access"] == "possible-direct-write"]
     result = {
-        "schema": "rg34xx-bl31-context-slot-whole-payload-scan-v1",
+        "schema": "rg34xx-bl31-context-slot-whole-payload-scan-v2",
         "monitor_bytes": len(raw), "monitor_sha256": digest,
         "target_slot": "0x%08x" % SLOT,
+        "target_slot_coordinate_semantics": "legacy unrelocated source-coordinate operand; not the effective address used by the copied standby image",
+        "relocation_aware_context_pointer": {
+            "standby_copy_source": ["0x%08x" % COPY_SOURCE_START, "0x%08x" % COPY_SOURCE_END],
+            "standby_runtime_base": "0x%08x" % SRAM_DEST,
+            "adrp_instruction_source_pc": "0x%08x" % CONTEXT_ADRP_PC,
+            "adrp_instruction_runtime_pc": "0x%08x" % runtime_pc,
+            "source_adrp_page": "0x%08x" % CONTEXT_SOURCE_PAGE,
+            "runtime_adrp_page": "0x%08x" % runtime_page,
+            "runtime_slot": "0x%08x" % runtime_slot,
+            "source_equivalent_backing_slot": "0x%08x" % backing_slot,
+            "backing_qword": "0x%08x" % backing_qword,
+            "legacy_unrelocated_qword": "0x%08x" % legacy_qword,
+            "context_base": "0x%08x" % backing_qword,
+            "live_device_execution_observed": False,
+        },
+        "candidate_access_coordinate": "legacy unrelocated source-coordinate scan; candidate hits are not runtime effective addresses after standby relocation",
         "candidate_access_count": len(hits), "candidate_writes": writes,
         "candidate_reads_or_other": [x for x in hits if x["access"] != "possible-direct-write"],
         "candidate_call_arguments": [x for x in hits if x["access"].startswith("possible-call-argument")],
-        "runtime_context_pointer": "UNKNOWN",
+        "runtime_context_pointer": "0x00020000 (static relocation-aware backing; live device execution not observed)",
         "scope": "host-only overlapping decode; no hardware access or payload execution",
         "limitations": [
             "Overlapping decode can interpret data and literal pools as instructions.",
             "Register tracking is limited to ADR/ADRP, ADD/SUB immediate and MOV within each short window.",
             "Indirect pointer construction, stores through loaded pointers, exception paths and runtime relocation are not resolved.",
             "Candidate writes require validation against function boundaries and reachable control flow.",
-            "No candidate write does not prove no indirect or external initialization exists.",
+            "The original scan target 0x48014668 is an unrelocated source-coordinate alias; copied standby code accesses runtime SRAM 0x28668, backed by source qword 0x48014888.",
+            "Candidate hits in this legacy source-coordinate scan are not runtime effective addresses after ADRP relocation.",
+            "No candidate write does not prove no indirect or external initialization exists for other state.",
         ],
     }
     out = a.out_dir.resolve()
@@ -155,10 +198,12 @@ def main() -> int:
     lines = [
         "# BL31 context-slot whole-payload scan", "",
         "- Exact monitor identity verified: %d bytes, SHA-256 %s." % (len(raw), digest),
-        "- Target global slot: 0x%08x." % SLOT,
-        "- Candidate accesses/call arguments: %d; possible direct writes: %d." % (len(hits), len(writes)),
-        "- Results are overlapping-decode leads, not proven control-flow or live writes.",
-        "- Runtime context pointer remains UNKNOWN; no hardware state was read.",
+        "- Legacy unrelocated source-coordinate operand: 0x%08x (not the copied standby code's runtime effective address)." % SLOT,
+        "- Relocation-aware effective slot: 0x%08x; source-equivalent backing qword: 0x%08x = 0x%08x." % (runtime_slot, backing_slot, backing_qword),
+        "- The standby copy maps [%s,%s) to SRAM base 0x%08x; ADRP at 0x%08x is rebased to page 0x%08x." % ("0x%08x" % COPY_SOURCE_START, "0x%08x" % COPY_SOURCE_END, SRAM_DEST, CONTEXT_ADRP_PC, runtime_page),
+        "- Legacy source-coordinate candidate accesses/call arguments: %d; possible direct writes: %d." % (len(hits), len(writes)),
+        "- These overlapping-decode hits are not runtime effective addresses after relocation.",
+        "- Static context base resolves to 0x%08x; no live device execution or memory readback was performed." % backing_qword,
     ]
     for hit in hits:
         lines += ["", "## %s at %s" % (hit["access"], hit["pc"]), "",
