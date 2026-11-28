@@ -1,7 +1,7 @@
 /*
  * U-Boot SPL adapter for the M1 read-only package preflight.
  * It intentionally exposes only blk_dread; no blk_dwrite symbol is referenced.
- * The caller must supply a validated p4 extent and an SRAM staging buffer.
+ * The caller must supply a validated p4 extent and a bounded SRAM scratch buffer (4 KiB minimum).
  */
 #include <blk.h>
 #include "m1_firmware_readonly.h"
@@ -29,6 +29,6 @@ int h700_m1_spl_preflight(struct blk_desc *card,
         !h700_m1_package_make_plan(p4_first_lba, p4_block_count,
                                    staging_capacity, expected_fnv1a, &plan))
         return 0;
-    return h700_m1_package_read_validate(&device, &plan, sram_staging,
-                                         staging_capacity);
+    return h700_m1_package_read_validate_streaming(&device, &plan, sram_staging,
+                                                   staging_capacity);
 }
