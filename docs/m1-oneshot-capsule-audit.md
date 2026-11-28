@@ -55,6 +55,18 @@ MMIO sites. Keep the standard and raw-capsule-v2 paths unchanged.
  
 ## 1. Decision
 
+## 2026-11-28 M1 SPL read-only adapter and bounded streaming
+
+- Added `platform/h700/boot/m1_firmware_spl_adapter.c`: a narrow adapter to U-Boot's `blk_dread()` API. It contains no `blk_dwrite()` call or write-capable callback.
+- Important SRAM correction: the complete firmware package is 0x46200 bytes (287 KiB), larger than the H700 SRAM A1 window (32 KiB). The initial full-buffer approach therefore must not be used as an SPL SRAM staging design. The SPL adapter now streams the package through an 8-sector / 4 KiB scratch buffer, reading 561 sectors in 71 bounded calls, updating FNV-1a incrementally and checking both zero-padding ranges without retaining the full package in SRAM.
+- The adapter host fixture compiles the actual adapter C source against a minimal fake U-Boot `blk.h`; it verifies the 71-read sequence, maximum 8 sectors per read, partition-end rejection, read-error handling, insufficient scratch rejection, and zero writes. `scripts/test-m1-spl-adapter.py` also checks the linked test binary for absence of a `blk_dwrite` dependency.
+- The streaming routine is a preflight only. It does not load/copy the validated extents into DRAM or execute them. The current test uses a synthetic package and a host shim, not the pinned BaseOS SPL or a physical MMC controller.
+- CI feasibility [#959](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46099372148) is running at documentation time; the new adapter test and the full-buffer fake-card/AArch32 test have both completed successfully in that job. The AArch32/AArch64 compile check [#675](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46099368676) is also running; its freestanding compile/link job passed, storage host regression job still in progress.
+- Hardware boundary remains unchanged: no physical SPL integration, no DRAM writes/copies, no MMIO/SMC, no TWI, no TF/Boot0/TOC1 writes, no firmware flash or payload execution; `hardware_applied=0`.
+
+**Next gate:** port this adapter as a separate `BASEOS_M1_ONESHOT` overlay against the pinned U-Boot/BaseOS source, but do not invoke it until the exact p4 extent and a safe 4 KiB SRAM buffer placement are proven from the linked SPL map. After that, add host tests using the actual U-Boot MMC declarations/adapter and audit all transitive init calls plus final linked SPL ELF. DRAM destination writes remain blocked on G2 memory ownership approval.
+ 
+
 Neither existing BaseOS SPL path can be reused unchanged as an M1 one-shot path.
 
 - The ordinary non-persistent path writes a diagnostic result sector, copies the 64 KiB stock Boot0 to a mirror sector, and programs the hardware watchdog.
