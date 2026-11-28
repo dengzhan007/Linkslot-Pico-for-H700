@@ -96,7 +96,7 @@ This materially narrows the SPL2 naming discrepancy: the embedded SPL2 component
 
 The SPL2 string index also shows \`U-Boot SPL 2026.10 (Oct 02 2026)\`, \`spl_load_simple_fit\`, and DRAM failure/unsupported-configuration diagnostics. The SPL2 ARM-mode disassembly reveals AArch64-looking instruction encodings in the component. Therefore the ARM-only disassembly is not sufficient for the main SPL code; the next pass adds a separate AArch64 disassembly from candidate component offset \`0x188\`.
 
-The TOC1 string index does not yet identify exact component boundaries or prove which embedded FDT is selected. A follow-up scan validates FDT headers and reports component marker offsets.
+The TOC1 scan now validates one embedded FDT at file offset `0x11b800`, total size 139,822 bytes, with `:rg34xx_v1` and AXP2202 compatible strings. This establishes the presence of RG34XX-v1 board data in the package, but does not prove which FDT is selected at runtime or identify all component boundaries.
 
 
 ## 7. SPL2 AArch64 PMIC regulator path
@@ -121,7 +121,7 @@ The voltage setter computes the code from the table's minimum and step. Therefor
 
 This register table matches the AXP717 SPL driver's DCDC2/DCDC3 register layout audited earlier, while the same RG34XX inventory's live FDT and TOC1 identify the PMIC as \`x-powers,axp2202\`. This is strong evidence that the stock RG34XX SPL2 uses an AXP717-compatible DCDC register map for its AXP2202-labelled PMIC path. It does not prove the physical silicon identity or complete register-map equivalence.
 
-The bus helpers at \`0x5779c\` and \`0x57804\` dispatch through a bus descriptor selected from \`x18 + 264\`; the descriptor table begins at \`0x5b6b0\`. Its callback pointer values include \`0x27d30\` and \`0x27c20\`, which appear to lie in the Boot0 image address range. The next pass disassembles the inner Boot0 in AArch64 mode to determine whether these are Boot0-provided I2C callbacks and whether they map to the RG34XX R-TWI0 controller at \`0x07081400\`.
+The bus helpers at \`0x5779c\` and \`0x57804\` dispatch through a bus descriptor selected from \`x18 + 264\`; the descriptor table begins at \`0x5b6b0\`. Its callback pointer values include \`0x27d30\` and \`0x27c20\`, which appear to lie in the Boot0 image address range. The dual-mode Boot0 disassembly is available in the run #1808 artifact to determine whether these are Boot0-provided I2C callbacks and whether they map to the RG34XX R-TWI0 controller at \`0x07081400\`.
 
 This independently corroborates the LPDDR4 1100 mV / LPDDR3 1200 mV voltage policy seen in SenkOS, but it does **not** validate SenkOS's PH6/PH7/PH8/PH10 strap mapping for RG34XX. Voltage policy and strap wiring remain separate evidence questions.
 
