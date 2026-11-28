@@ -97,8 +97,9 @@ def is_plausible_h616_h700_profile(words: list[int]) -> bool:
 def scan_dram_ext_tables(data: bytes) -> list[dict[str, Any]]:
     """Find DRAM.ext markers and report contiguous plausible 32-word profiles.
 
-    The 44-byte marker-to-profile offset and 32-word profile layout follow the
-    H616/H700 parsing convention in apritzel/sunxi-fw. A marker can be a string
+    The 44-byte offset and 15-slot count follow the DRAM.ext constants in
+    apritzel/sunxi-fw main; the 32-word field layout follows its H616/H700
+    parser revision. A marker can be a string
     or embedded structure, so a table is reported only when its following
     records pass conservative field-shape checks. The result is evidence of
     embedded parameter data, not proof that Boot0 selected or consumed it.
