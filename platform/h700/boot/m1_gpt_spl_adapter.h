@@ -1,7 +1,11 @@
 #ifndef H700_M1_GPT_SPL_ADAPTER_H
 #define H700_M1_GPT_SPL_ADAPTER_H
 
+#if defined(CONFIG_XPL_BUILD)
+#include <linux/types.h>
+#else
 #include <stdint.h>
+#endif
 
 struct blk_desc;
 
