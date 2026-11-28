@@ -1,3 +1,9 @@
+## 2026-11-28 M1 candidate accounting update
+
+- Automated ELF/raw/map manifest generation is now wired into the Linkslot/LK feasibility workflow. The tool enforces the 32 KiB active loader file extent and records ELF PT_LOAD, runtime `_end`, map/raw/ELF hashes, entry/vector checks and header-reservation checks.
+- Three existing prototypes are audited separately, not merged: PI12 MMIO-enabled layout, stub-linked overlay, and stub-linked A32 entry/vector layout. All outputs remain host-only and non-installable.
+- Feasibility #945 is running; see [PROJECT-STATUS](PROJECT-STATUS.md) for exact CI state and commits. This is audit tooling progress, not hardware bring-up. G2/G3/M1-S1/one-shot recovery remain open.
+
 # 开发路线与阶段验收
 
 **续接入口：** 每次继续移植前先核对[项目当前状态与交接记录](PROJECT-STATUS.md)，再按本路线图推进；状态文档记录当前分支、HEAD、CI 和下一步任务。
