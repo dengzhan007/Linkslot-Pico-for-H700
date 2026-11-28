@@ -910,7 +910,7 @@ Hard size boundary: this first integration path is only for a small diagnostic p
 
 - [x] Review the latest `reports` branch kernel-module preflight (`2963c8c4`). The running Linux 4.9.170 image supports modules but contains no matching build tree, `Module.symvers`, or kernel headers; debugfs/regmap exposes no SYS_CFG instance. Do not retry userspace `/dev/mem` and do not build a module against an unverified generic BSP source tree.
 - [x] Cross-check the existing GammaOS LK H700 MMU hook: its 1 MiB identity-mapped Device section at `0x03000000` covers both SYS_CFG VER_REG `0x03000024` and RG34XX PIO `0x0300b000`. Add compile-time assertions and host regression checks for this coverage. This is mapping evidence only, not proof of bus/firewall access.
-- [ ] Design a single-word, read-only VER_REG probe with an explicit Data Abort recovery path and a minimal result channel. Do not issue a bare volatile read from a boot hook before the abort behavior is contained and reviewed.
+- [x] Implement the dormant single-word, read-only VER_REG probe with probe-scoped AArch32 Data Abort recovery and a RAM result channel; see [LK Data Abort recovery audit](h700-lk-data-abort-recovery-audit.md) §3. It is source/host/ELF validated only and remains uncalled by startup.
 - [ ] Keep the separate pre-BL33 CPU reset/RVBAR snapshot gate open. A later LK read of VER_REG cannot establish CPU state at the earlier BL31→BL33 handoff.
 - Hardware state remains unchanged: no module load, MMIO write, boot-argument or boot-media modification; `hardware_applied=0`.
 
@@ -919,10 +919,13 @@ Hard size boundary: this first integration path is only for a small diagnostic p
 
 - [x] Review the exact GammaOS LK pin: `arm_data_abort` saves the fault frame and branches to `arm_data_abort_handler`; the generic handler calls `exception_die(..., -8, ...)`, reaches `halt()`, and loops. It does not return from the exception.
 - [x] Record that the current H700 Device MMU mapping does not make an MMIO read safe from Data Abort or prove BL31/firewall access permission.
-- [ ] Design a probe-scoped AArch32 exception-return trampoline that matches only the exact diagnostic load PC, restores the saved frame/SPSR, and resumes at a known recovery label; retain fatal handling for all other aborts.
-- [ ] Choose a result channel that does not assume UART, panel, heap, Linux, or filesystem readiness.
-- [ ] Add host/source/disassembly guards for the exception frame, PC semantics, return path and fatal fallback before wiring any SYS_CFG or PIO read.
+- [x] Implement and link the probe-scoped AArch32 exception-return trampoline; exact PC/DFAR/DFSR/cookie/SVC/ARM matching, SPSR/GPR restore, and fatal fallback are covered by [LK Data Abort recovery audit](h700-lk-data-abort-recovery-audit.md) and current feasibility CI.
+- [x] Use a caller-provided ordinary-RAM result word and return status; no UART, panel, heap, Linux, or filesystem dependency.
+- [x] Add host/source/linked-disassembly guards for the 68-byte exception frame, LR_abt semantics, positive-only return path, and fatal fallback. This does not authorize calling the probe or probing PIO.
 
+
+
+- **Current disposition (2026-11-28):** The probe-scoped abort recovery and one-word VER_REG diagnostic are already implemented and host/ELF validated. The API remains dormant; no runtime call site is permitted yet. Next work is packaging-only analysis inside the 32 KiB loader budget plus a separate pre-BL33 reset/RVBAR evidence path. No hardware execution is authorized.
 
 ## 2026-11-26 final acceptance — probe-scoped Data Abort recovery
 
@@ -934,7 +937,7 @@ Hard size boundary: this first integration path is only for a small diagnostic p
 - [x] H700 boot-audit Linux + Windows checks passed: [#45834060935](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834060935).
 - [x] Full Linkslot/LK feasibility passed **81/81, 0 skipped**: [#45834208280](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280), artifact [15123653120](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280/artifacts/15123653120).
 - [x] Review actual linked A32 test ELF disassembly: A32→Thumb C `BLX`, Thumb→ARM probe `BLX`, probe LDR label/literal address, masked IRQ/FIQ vector entry and positive-only exception return are all visible and linked.
-- [ ] Review/build a separately packaged diagnostic within the actual vendor 32 KiB loader extent; prove header/package pairing, memory ownership, installation rollback and proof-of-life before considering device execution.
+- [ ] Build and inspect a separately packaged diagnostic within the actual vendor 32 KiB loader extent; prove header/package pairing, memory ownership, installation rollback and proof-of-life before considering device execution.
 - [ ] Obtain a trustworthy pre-BL33 CPU reset/RVBAR snapshot. A later Linux/LK VER_REG sample cannot substitute for the pre-BL33 CPU state.
 - Hardware remains unchanged: `hardware_applied=0`; no device MMIO read/write, module load, boot-argument or boot-media change, flash, or payload execution.
 
