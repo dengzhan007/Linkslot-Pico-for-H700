@@ -11,6 +11,16 @@
 此前 full monitor alias/CFG 审计 #128 的 79 ADRP seeds、38,676 CFG states、83 context-like slot load path hits，以及在其已建模范围内 zero selector/slot stores 仍是准确记录；它没有建模此处通过 FDT alias/parent property 生成 external context、再 staging 到 copied SRAM context 的完整跨区域数据流，不能用其零命中否定本次 producer 链。H700 boot audit #1480 对前次状态/路线图修改成功；本次 TWI 专项与状态更新已触发后续 boot-audit run。完整 Linkslot/LK feasibility **#892** 在较早文档 HEAD `59c7aa9d...` 上成功（[run #892](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45973668270)）；#891 后续已取消，不作为失败构建结论。
 
 独立硬件门槛不变：#94 静态 Boot0 分析显示 CPU1–CPU3 hold-off 仍未取得 H700 实机 reset/RVBAR readback；DRAM retention PFN `0x40000` 是 `LINUX_ACTIVE_ANON_MAPPED_PAGE`，不能视为自由 scratch；BL33 runtime/BSS/page-table/stack 所有权、APB1/PIO permission 与 timer/PPI continuity 仍未闭合。上述结果全是匹配二进制/原始 DTB 的 host/static 审计，不是实机 suspend/wake 或 TWI transaction。继续保持 `H700_MEMORY_LAYOUT_APPROVED=false`、`hardware_applied=0`；未执行设备 SMC/MMIO、TWI transaction、DRAM 内容读写、待机/唤醒、Boot0/TOC1 写入、刷写或 payload execution。
+## 2026-11-28 最新状态校准（本轮复核）
+
+- 当前工作分支 HEAD：`faeb797c6b13d46b3399bfdff700e540d446e20e`。
+- Linkslot/LK feasibility [#943](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46086258522)：`cross-compile` job **85/85 recorded steps success**，0 failures、0 skipped；artifact [15239048815](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46086258522/artifacts/15239048815)，387,984,278 bytes。该 run 覆盖 host/cross-build，不是 M1 设备 payload、native firmware/SPL/capsule 或 TF1 镜像的构建/启动证明。
+- H700 boot audit [#1601](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46086304755)：Linux `host-tools` 与 Windows PowerShell 两个 jobs 均成功，HEAD 与当前分支一致。
+- 当前唯一近期主线仍为 M1。已完成的 probe-scoped Data Abort trampoline、exact matcher、caller-RAM result channel、linked-ELF 检查均为 host/source 层成果；probe 仍 dormant，禁止为推进而提前调用。
+- 当前可推进的下一项是**host-only diagnostic candidate packaging/accounting**：将已验证的 A32 dummy/entry/exception 代码作为输入候选，明确区分 raw payload、32 KiB loader slot、BSS/stack/page-table runtime footprint、vendor header 注入及 firmware/FNV/SPL generation coupling；在未闭合 G2/G3、PI12 M1-S1 和 one-shot capsule 闸门前，只生成不可安装的审计报告/候选产物，不写 TF1、不生成可刷写/可启动发布包。
+- PI12 仍 default-off；UART0 不再是首发前置条件。M1 采用无拆机、独立 TF1 路线，但“可换卡恢复”不豁免 RTC/WDT、PMIC、PIO、DRAM ownership 或 CPU reset/RVBAR 风险。
+- 全局硬件闸保持：`H700_MEMORY_LAYOUT_APPROVED=false`、`hardware_applied=0`；未执行设备 MMIO/SMC、TWI transaction、DRAM 内容访问、TF/Boot0/TOC1 写入、固件刷写或 payload execution。
+
 **仓库：** `dengzhan007/Linkslot-Pico-for-H700`  
 **当前显示结论 / 下一门槛：** kernel #19 的 panel init、PLL bitfield、divider 来源与 TCON parent 继承已完成反向审计；UI/GAME presents、armGBA committed frames 与 LCD IRQ 分别实测约 60/s。live profile 为 `rg34xx_v1 + lcd_type=old`，只读回读匹配 60-Hz pair `0x88001703` / `0xf000000b`。60 Hz 是唯一合格模式。120 Hz 已移入 deferred：没有面板完整料号/Revision 与对应 datasheet 前不再投入主线，不做 PLL/TCON 写入、boot-package 写入或绕过 panel allowlist。当前唯一近期交付目标改为 M1：受控的 AArch32 BL33 诊断启动准备；详细门槛见下方“项目主线纠偏与验收门槛”。`hardware_applied=0`。
 **工作分支：** `porting/linkslot-1.0.45-feasibility`
