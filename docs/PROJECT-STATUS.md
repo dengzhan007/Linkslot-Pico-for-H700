@@ -2753,3 +2753,19 @@ Detailed evidence: \`docs/rg34xx-boot0-container-spl2-audit-20261128.md\`.
 - The new regression test pins these call sites and scratch/MMIO address materialization. This strengthens the no-execution safety boundary: candidate routines must remain static-analysis-only.
 - Detailed correction: \`docs/rg34xx-boot0-container-spl2-audit-20261128.md\`.
 
+
+
+## 2026-11-28 BL31 PSCI dispatch and reset path audit
+
+- The RG34XX TOC1 monitor is AArch64 TF-A for \`sun50iw9p1\` and contains generic PSCI CPU on/off/suspend code plus the platform PM path.
+- PSCI System Off dispatch checks the primary platform-ops pointer at global \`0x3c000 + 4032\`, callback offset \`+48\`; a null pointer takes the generic \`Platform has not exported a PSCI System Off hook\` error path. PSCI System Reset checks the same primary table at offset \`+56\`. A separate platform-action table at global \`0x3c000 + 4040\` is also checked at offsets \`+56\` (off) and \`+64\` (reset).
+- A platform reset routine exists at VMA \`0x2578\`: it logs \`Sunxi System Reset\`, calls reset sequence \`0x1ec8\`, then executes \`WFI\`; if the reset sequence returns, it logs \`operation not handled\` and enters the fatal path. This is strong evidence of a reset implementation.
+- No corresponding named \`sunxi_system_off\` function has been identified. However, the primary PSCI ops table initialization and actual callback pointer values remain unresolved. Do not claim System Off is absent or available; treat PSCI_SYSTEM_OFF as unproven until the table is recovered.
+- The reset sequence's PMU/RTC/WDT side effects remain unresolved. No code from this path has been executed.
+- Regression tests now pin the primary/secondary PSCI callback offsets and reset/WFI code. H700 audit run #1841 passed on Linux and Windows: [run #1841](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46148572664).
+- Linkslot feasibility run #1088 is still in progress at the isolated M1 preflight-only SPL SRAM/BSS audit step: [run #1088](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46148409464). No completion result is claimed.
+- Next: recover the PSCI platform-ops table initialization and values; trace the reset sequence and the PMU/RTC/WDT helper calls. Keep System Off unavailable as an assumed capability until proven.
+- Safety gates unchanged: no target execution, no PMIC/TWI writes, no DRAM content access, no media writes, no hardware qualification.
+
+Detailed evidence: \`docs/rg34xx-boot0-container-spl2-audit-20261128.md\`.
+
