@@ -2,7 +2,27 @@
 
 - Automated ELF/raw/map manifest generation is now wired into the Linkslot/LK feasibility workflow. The tool enforces the 32 KiB active loader file extent and records ELF PT_LOAD, runtime `_end`, map/raw/ELF hashes, entry/vector checks and header-reservation checks.
 - Three existing prototypes are audited separately, not merged: PI12 MMIO-enabled layout, stub-linked overlay, and stub-linked A32 entry/vector layout. All outputs remain host-only and non-installable.
-- Feasibility #945 is running; see [PROJECT-STATUS](PROJECT-STATUS.md) for exact CI state and commits. This is audit tooling progress, not hardware bring-up. G2/G3/M1-S1/one-shot recovery remain open.
+- Feasibility [#945](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46094300447) was cancelled by branch concurrency; [#946](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46094599350) and [#947](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46095436940) completed successfully. The newer full feasibility [#950](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46097505586) also passed 87/87 recorded steps. These are host/cross-build and audit results, not hardware bring-up. G2/G3/M1-S1/one-shot recovery remain open.
+
+## 2026-11-28 M1 read-only firmware package preflight
+
+The first reusable read-only package planner/validator is now implemented in
+`platform/h700/boot/m1_firmware_readonly.{h,c}`, with synthetic fake-card
+tests and a freestanding AArch32 link check. It models the captured active
+p4+40 MiB firmware package (0x46200 bytes / 561 sectors), checks partition and
+staging bounds, one read-only block request, supplied FNV-1a, zero padding and
+the fixed monitor/DTBO/DTB/BL33 extent/destination map.
+
+- Full feasibility [#950](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46097505586): **87/87 recorded steps passed, 0 failures, 0 skipped**; artifact [15243703880](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46097505586/artifacts/15243703880).
+- H700 AArch32/AArch64 compile [#670](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46097466062): success.
+- The fake-card image is synthetic; the model is not yet connected to BaseOS `blk_dread`, does not verify the actual device package, and does not copy to DRAM. No device I/O or media write occurred.
+
+**Next M1 slice:** create a separate patch overlay against the pinned BaseOS
+source that adds `BASEOS_M1_ONESHOT` without changing ordinary or raw-capsule-v2
+semantics. Integrate this preflight only after a fake-MMC adapter test exists;
+then audit the complete board-init/DRAM/MMC call graph and the final linked
+AArch64 SPL ELF for forbidden write, RTC/WDT, PMIC/TWI and unapproved MMIO
+sites. Keep all outputs host-only and candidate-ineligible.
 
 # 开发路线与阶段验收
 
