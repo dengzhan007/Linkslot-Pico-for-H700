@@ -1,0 +1,71 @@
+# Reproducible evidence for project-goal-alignment-review-20261128
+# Repository: dengzhan007/Linkslot-Pico-for-H700
+# Branch: porting/linkslot-1.0.45-feasibility
+# HEAD: 7877b838d5e73f07ed920a966524d5df8780bb61
+# Base of comparison: e87de1e6 (review of 2026-11-27 18:21)
+# Generated: 2026-11-28T09:57:07Z (UTC)
+# All commands are read-only (git log/diff/ls-files/wc/grep). No device access, no build.
+
+## A. Commit volume and composition
+$ git rev-list --count e87de1e6..HEAD
+421
+$ git diff --shortstat e87de1e6..HEAD
+ 66 files changed, 7872 insertions(+), 155 deletions(-)
+
+$ docs-only commits (commits whose changed paths are all under docs/)
+228 / 421
+
+$ platform+target+integration net line delta
++542 -0
+
+$ commits per day (total / platform+target)
+2026-11-27 total=267 platform+target=1
+2026-11-28 total=323 platform+target=29
+
+## B. Document growth and structure
+$ ls -l docs/PROJECT-STATUS.md ; wc -l
+435789 docs/PROJECT-STATUS.md
+2448 docs/PROJECT-STATUS.md
+$ H1 location: lines before '# 项目当前状态与续接记录'
+34
+$ duplicated commit subjects (>=2 occurrences), count and max
+19
+      4 feat(m1): add read-only firmware package preflight model
+      4 feat(m1): add host-tested SPL read-only MMC adapter
+      3 fix(m1): use U-Boot Linux integer types in SPL build
+      3 fix(m1): support both SPL and XPL type environments
+
+## C. Gate ledger and freeze rules present
+$ grep headings
+198:- 当前唯一近期主线仍为 M1。已完成的 probe-scoped Data Abort trampoline、exact matcher、caller-RAM result channel、linked-ELF 检查均为 host/source 层成果；probe 仍 dormant，禁止为推进而提前调用。
+273:### 当前验收门槛台账
+291:### 唯一近期主线：M1 — 小型 AArch32 BL33 诊断启动准备
+309:### 冻结项与审计停止规则
+$ gate IDs in ledger
+| G1 | G2 | G3 | G4 | G5 | G6 | G7 | G8 | G9 | G10 | G11 
+
+## D. M1 state (no payload yet)
+$ platform/h700/boot file list
+baseos_m1_preflight.c
+m1_firmware_readonly.c
+m1_firmware_readonly.h
+m1_firmware_spl_adapter.c
+m1_gpt_spl_adapter.c
+m1_gpt_spl_adapter.h
+m1_oneshot_selection_model.c
+m1_oneshot_selection_model.h
+$ payload entry search (empty = not implemented)
+$ M1 stage status line
+242:**策略调整不代表硬件 gate 已通过。** 当前实际状态：M1-S0 规格已建立；M1-S1 转为 PI12 首选资格化、仍 OPEN；UART0 降为备用；M1-S2/S3 尚未完成；尚无可写入测试卡的配对镜像或实机结果。
+
+## E. PMIC/TWI boundary contradiction
+$ M1 spec section 4
+224:- 不修改 SoC fuse/OTP，不访问 PMIC，不发起 I2C/TWI transaction，不改 CPU PLL/电压，不执行设备 SMC。M1 仅允许在 PI12 路径单独资格化后访问其精确 PIO 位域；不扫描其他外设。
+$ grep -n "AXP717/TWI" docs/m1-oneshot-capsule-audit.md
+294:that includes AXP717/TWI, DCDC voltage writes, DRAM training and CPU PLL
+$ undecided profile statement
+311:Until the project selects and reviews a profile, do not claim
+
+## F. CI run-number span (from status docs)
+891
+1070
