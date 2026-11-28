@@ -125,6 +125,10 @@ def main() -> int:
                    "CMD_BOOTD", "VERSION_VARIABLE", "OF_REAL"):
         require(f'"--disable", "{option}"' in spl_builder,
                 f"M1 preflight builder no longer disables unrelated {option}")
+    require("fit_selector =" in spl_builder and
+            "armv8_text.count(fit_selector) == 1" in spl_builder and
+            "armv8_kconfig.write_text(armv8_text.replace(fit_selector" in spl_builder,
+            "M1 preflight builder no longer removes the unused ARMv8 SPL_FIT selector")
     require('for obj in ("membuf.o", "abuf.o")' in spl_builder and
             "re.compile(rf" in spl_builder and
             "rule.sub" in spl_builder,
