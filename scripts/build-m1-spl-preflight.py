@@ -409,7 +409,7 @@ static inline int vprintf(const char *fmt, va_list args)
     map_arg = f"-Map={map_file} --gc-sections"
     build_log = run([
         "make", f"O={out}", f"CROSS_COMPILE={cross}",
-        f"LDFLAGS_u-boot-spl={map_arg}", f"-j{args.jobs}",
+        f"LDFLAGS_u-boot-spl={map_arg}", "V=1", f"-j{args.jobs}",
         "spl/u-boot-spl.bin",
     ], cwd=uboot)
     elf = out / "spl/u-boot-spl"
