@@ -301,6 +301,13 @@ read attempt at `0x03000024` failed with EFAULT. M1/LK must not call PSCI
 CPU_ON or release CPU1–CPU3. Keep the runtime CPU0-only until selector and
 reset/RVBAR state are established through a trusted read-only path and an
 SMP-capable runtime is independently qualified.
+
+### 4.4 Diagnostic artifact byte/runtime accounting (2026-11-28)
+
+The Linkslot/LK feasibility #943 artifact was downloaded and independently hashed. Three distinct A32 prototypes are present; none is a deployable M1 image. The PI12 early-MMU layout raw file is 7,940 bytes (24,828 bytes below the 32 KiB loader file limit), but its linked runtime span through `_end=0x4a00c024` is `0xC024` / 49,188 bytes, including an 8 KiB early stack, a 16 KiB translation table, and BSS. Its ELF explicitly opts into PI12 physical MMIO for disposable layout validation and is not authorized for execution. The other two raw prototypes are 5,804 and 5,148 bytes and are separately linked against stubs; their synthetic header companions are not vendor header material.
+
+The exact hashes, LOAD segment accounting, header-range checks, and promotion gates are recorded in [M1 candidate artifact accounting](m1-candidate-artifact-accounting.md). This closes artifact provenance/accounting only; it does not close BL33 memory ownership, PI12 access, CPU reset/RVBAR, or one-shot capsule gates.
+
 ## 5. Host-only verification required before producing an M1 artifact
 
 The M1 builder must emit a manifest with at least:
