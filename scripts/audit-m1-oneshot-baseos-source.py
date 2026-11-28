@@ -21,6 +21,7 @@ SPL_BUILDER = Path("experiments/h700-boot-speed/spl/build-early-mmc.py")
 NATIVE_BOOT = Path("experiments/h700-boot-speed/spl/native-boot.c")
 CAPSULE = Path("experiments/h700-boot-speed/native/capsule/capsule.c")
 CAPSULE_BUILDER = Path("experiments/h700-boot-speed/native/capsule/build.py")
+RELEASE_DRIVER = Path("experiments/h700-boot-speed/native/build-release.py")
 
 
 def git_head(root: Path) -> str:
@@ -57,6 +58,7 @@ def audit(root: Path) -> dict:
     native = source(root, NATIVE_BOOT)
     capsule = source(root, CAPSULE)
     capsule_builder = source(root, CAPSULE_BUILDER)
+    release_driver = source(root, RELEASE_DRIVER)
 
     if "#if defined(BASEOS_RAW_CAPSULE)" not in early or "#else" not in early:
         raise RuntimeError("early-mmc.c no longer has the audited raw/ordinary split")
@@ -118,6 +120,20 @@ def audit(root: Path) -> dict:
     ):
         require(native, token, label)
 
+    # The standard release driver deliberately wires the existing raw-capsule v2
+    # protocol through all three layers. Matching generation metadata does not
+    # make this a no-RTC/no-WDT M1 one-shot capsule.
+    for token, label in (
+        ('module("release_native", HERE / "build.py").build(target, inv, native, raw_capsule=True)',
+         "release driver raw-capsule native build"),
+        ('builder.main(output, inv / "boot0.bin", True, package, False, native, raw_capsule=True)',
+         "release driver raw-capsule SPL build"),
+        ('module("release_capsule", HERE / "capsule/build.py").build(inner, inv / "boot0.bin", native, out / "capsule")',
+         "release driver outer capsule build"),
+        ('c["generation"] == n["generation"]', "release driver generation-pair assertion"),
+    ):
+        require(release_driver, token, label)
+
     # The current pinned tree has no separate no-state M1 mode. Fail if a future
     # edit introduces one without updating this audit and its contract.
     m1_mode_sources = {
@@ -126,6 +142,7 @@ def audit(root: Path) -> dict:
         str(NATIVE_BOOT): native,
         str(CAPSULE): capsule,
         str(CAPSULE_BUILDER): capsule_builder,
+        str(RELEASE_DRIVER): release_driver,
     }
     unexpected = [path for path, body in m1_mode_sources.items() if "BASEOS_M1_ONESHOT" in body]
     if unexpected:
@@ -170,8 +187,16 @@ def audit(root: Path) -> dict:
             "el3_reset_handoff": True,
         },
         "m1_one_shot_mode_present": False,
+        "standard_release_driver": {
+            "native_builder_raw_capsule": True,
+            "spl_builder_raw_capsule": True,
+            "outer_capsule_builder": True,
+            "generation_pair_assertion": True,
+            "m1_one_shot_eligible": False,
+        },
         "disposition": "Do not reuse ordinary or raw-capsule v2 unchanged for M1. A separate outer/SPL/native-handoff implementation is required.",
         "limits": [
+            "The pinned build-release.py composes the raw-capsule v2 native/SPL/outer-capsule path; generation equality is not M1 protocol approval.",
             "Source contract audit only; not an instruction-level audit of a newly linked M1 ELF.",
             "Does not prove a given conditional branch executes on the target device.",
             "Does not approve MMIO, DRAM, RTC, watchdog, PMIC, SD writes, or hardware execution.",
