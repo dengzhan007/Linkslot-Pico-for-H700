@@ -6,6 +6,54 @@
 
 **Source pin:** BaseOS-MultiFrontend cbe253a43f46cf551cc9a6c79a84015bde3686cf.
 
+## 2026-11-28 M1 read-only firmware-package preflight (host-only)
+
+A first reusable SPL-side package contract now exists in
+`platform/h700/boot/m1_firmware_readonly.{h,c}`. It is deliberately a
+read-only planning/validation module, not yet connected to the pinned BaseOS
+SPL or to physical addresses.
+
+- The plan fixes the captured active firmware-package geometry: p4 + 40 MiB,
+  0x46200 bytes / 561 sectors; monitor at offset 0x00000 (payload 0x1a2d0,
+  padded 0x1a400, destination 0x48000000); DTBO at 0x1a400 (0x920 / 0xa00,
+  destination 0x4a100000); DTB at 0x1ae00 (0x23400, destination 0x4a200000);
+  A32 BL33 at 0x3e200 (0x8000, destination 0x4a000000).
+- The planner checks p4 boundary arithmetic and staging capacity. The reader
+  interface exposes only a `read_blocks` callback; the validation path issues
+  one bounded read, checks the supplied FNV-1a, validates zero padding for the
+  monitor/DTBO extents, and rejects changed extent/destination metadata.
+- Host fake-card tests cover successful read, exact LBA/count, read failure,
+  partition-end and integer-overflow rejection, undersized staging, bad
+  fingerprint, nonzero padding, and altered destination metadata. The same
+  production C module is compiled and linked as freestanding Cortex-A53
+  AArch32 ARM-state ELF32 with no undefined runtime symbols.
+- Full feasibility [#948](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46097505586)
+  completed successfully: 87/87 recorded steps, zero failures and zero skips.
+  Artifact [15243703880](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46097505586/artifacts/15243703880)
+  contains the build outputs and report. H700 AArch32/AArch64 compile check
+  [#?](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46097466062)
+  also completed successfully.
+- The test image is synthetic. The captured reference package fingerprint
+  0xaf0018cb is recorded for comparison, but this module does not yet pin the
+  device package to a cryptographic digest or establish that a newly built
+  generation matches the captured package. FNV-1a is an integrity regression
+  field, not authentication.
+
+**Boundary:** this is host/freestanding-compile evidence only. It does not
+connect the reader to BaseOS `blk_dread`, perform actual CMD17 reads, copy any
+extent to DRAM, establish memory ownership, or execute BL31/BL33. It has no
+write callback, but that does not prove the future SPL call graph is write-free.
+No device I/O, MMIO, SD write, firmware build, capsule build, or payload
+execution occurred; `hardware_applied=0`.
+
+**Next implementation cut:** prepare a separate patch overlay for the pinned
+BaseOS `BASEOS_M1_ONESHOT` early-MMC branch, wiring only the read-only
+package preflight behind a distinct build define. Before using it, add fake
+block-device integration tests against the actual SPL adapter, audit the
+transitive board-init/DRAM/MMC dependencies, and inspect the final linked
+AArch64 SPL ELF for block-write, RTC, watchdog, PMIC/TWI, and unapproved
+MMIO sites. Keep the standard and raw-capsule-v2 paths unchanged.
+ 
 ## 1. Decision
 
 Neither existing BaseOS SPL path can be reused unchanged as an M1 one-shot path.
