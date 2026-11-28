@@ -44,6 +44,8 @@ on:
       - "scripts/audit-m1-spl-sram-layout.py"
       - "scripts/build-m1-spl-preflight.py"
       - "scripts/audit-m1-spl-disassembly.py"
+      - "scripts/audit-m1-spl-linked-contract.py"
+      - "scripts/test-audit-m1-spl-linked-contract.py"
       - "platform/h700/boot/baseos_m1_preflight.c"
       - "tests/m1_oneshot_capsule_a32_fixture.c"
       - "tests/test_m1_oneshot_selection_model.c"
@@ -322,6 +324,13 @@ jobs:
           python3 scripts/audit-m1-spl-disassembly.py \
             --disassembly build/audit-work/linkslot-1.0.49/m1-spl-preflight/m1-spl-preflight.disasm.txt \
             --output build/audit-work/linkslot-1.0.49/m1-spl-preflight/m1-spl-reachable-callgraph.json
+      - name: Enforce linked M1 SPL artifact, SRAM geometry, and fail-closed contract
+        run: |
+          python3 scripts/test-audit-m1-spl-linked-contract.py
+          python3 scripts/audit-m1-spl-linked-contract.py \
+            --manifest build/audit-work/linkslot-1.0.49/m1-spl-preflight/m1-spl-preflight-manifest.json \
+            --callgraph build/audit-work/linkslot-1.0.49/m1-spl-preflight/m1-spl-reachable-callgraph.json \
+            --output build/audit-work/linkslot-1.0.49/m1-spl-preflight/M1-LINKED-CONTRACT.json
 
       - name: Link M1 SRAM/BSS geometry-only SPL fixture (no board initialization or device path)
         run: |
