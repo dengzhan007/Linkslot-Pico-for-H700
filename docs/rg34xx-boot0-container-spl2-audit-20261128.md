@@ -80,21 +80,40 @@ The live FDT from this same inventory capture contains:
 
 Thus the same TF-card inventory contains an RG34XX-v1 live FDT while its embedded SPL2 header advertises an RG35XX-2024 build path. This is a cross-component naming discrepancy on the target device, not a reason to relabel the hardware as RG35XX. The compatibility question is whether the SPL2 code's DRAM/PMIC/strap/power assumptions are shared by RG34XX v1.
 
-## 6. Independent public UART sample remains separate
+
+## 6. TOC1 package evidence: later stage is RG34XX-v1 labelled
+
+The same reports-branch inventory includes a 1,310,720-byte TOC1 package:
+
+- SHA-256: \`e6c20e3a54c51b9336c798e3a4fa1ca6c45b28c6f70456e2db9c252aa4ba4604\`
+- String index contains \`rg34xx_v1\` at offsets \`0xa40d0\` and \`0x12b52b\`; the filtered TOC1 string set contains no \`rg35xx\` label.
+- It contains \`U-Boot.armv7\` and \`U-Boot 2018.05 (May 26 2026 - 13:55:09 +0800) Allwinner Technology\`.
+- It contains BL31 source-path strings including \`plat/sun50iw9p1/bl31_sunxi_setup.c\`, \`bl31/bl31_main.c\`, and \`bl31/context_mgmt.c\`.
+- It contains PMU driver symbols/strings \`pmu_axp2202_probe\`, \`bmu_axp2202_probe\`, \`PMU: AXP2202\`, plus the AXP2202 regulator names.
+- Its FDT-related strings include \`x-powers,axp2202\`, \`axp2202-dcdc3\`, and the RG34XX-v1 marker. The live FDT has the same RG34XX-v1 and AXP2202/TWI identity.
+
+This materially narrows the SPL2 naming discrepancy: the embedded SPL2 component is labelled RG35XX-2024, but the later TOC1 package carries RG34XX-v1 board data and AXP2202 PMU support. That is consistent with an intentionally shared H700 SPL followed by a board-specific TOC1/U-Boot/BL31 package. It is not yet proof that the SPL itself is hardware-generic; its DRAM/PMIC/strap assumptions still need to be checked.
+
+The SPL2 string index also shows \`U-Boot SPL 2026.10 (Oct 02 2026)\`, \`spl_load_simple_fit\`, and DRAM failure/unsupported-configuration diagnostics. The SPL2 ARM-mode disassembly reveals AArch64-looking instruction encodings in the component. Therefore the ARM-only disassembly is not sufficient for the main SPL code; the next pass adds a separate AArch64 disassembly from candidate component offset \`0x188\`.
+
+The TOC1 string index does not yet identify exact component boundaries or prove which embedded FDT is selected. A follow-up scan validates FDT headers and reports component marker offsets.
+
+
+## 7. Independent public UART sample remains separate
 
 The published macromorgan RG34XX UART sample reports PMU AXP2202 and DRAM_VCC 1100 mV before DRAM training. That sample is not part of the reports-branch binary inventory, and the captured Boot0 image contains \`BOOT0 commit : %s\` rather than a fixed build hash. Do not match the public sample's displayed \`749c1f9a-dirty\` identifier to this binary or claim that the public log is this exact binary's runtime trace.
 
 The public log remains useful independent RG34XX corroboration. The project's own read-only runtime capture independently reports DCDC3 at 1100 mV. Together with the Allwinner AXP2202 \`set_ddr_voltage()\` reference path, this makes DCDC3 the strongest DRAM_VCC candidate, but the exact target Boot0 write/call site remains open.
 
-## 7. Required next static work
+## 8. Required next static work
 
 1. Disassemble the outer Boot0, embedded 64 KiB Boot0, and SPL2 component separately; map SPL2 at candidate VMA \`0x50000\`.
-2. Scan the TOC1 package for board labels, DTB identities, BL31/BL33 component metadata, and PMIC/DRAM strings.
-3. Compare the RG35XX-2024-labelled SPL2's DRAM/PMIC/strap/power code against RG34XX-v1 live FDT and target captures.
+2. Parse the TOC1 header/component table and validate embedded FDT blobs; identify BL31/U-Boot payload boundaries and the selected RG34XX-v1 FDT.
+3. Disassemble the SPL2 in both ARM and AArch64 modes; compare its DRAM/PMIC/strap/power assumptions against RG34XX-v1 evidence.
 4. Establish whether the SPL2 label is a shared vendor build target or a board-specific hardware configuration before any reuse in the project.
 5. Recover the exact target PMU probe and DCDC3 write call path; no writes are authorized by this audit.
 
-## Safety state
+## 9. Safety state
 
 This was read-only parsing, hashing, string extraction and static ARM disassembly only.
 
