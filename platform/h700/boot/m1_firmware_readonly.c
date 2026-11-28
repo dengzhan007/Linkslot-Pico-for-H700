@@ -1,6 +1,5 @@
 #include "m1_firmware_readonly.h"
 
-#define M1_LBA_PER_MIB UINT64_C(2048)
 #define M1_PACKAGE_OFFSET_SECTORS (H700_M1_PACKAGE_OFFSET_BYTES / H700_M1_SECTOR_BYTES)
 
 static int add_u64(uint64_t a, uint64_t b, uint64_t *out)
@@ -30,7 +29,7 @@ int h700_m1_package_make_plan(uint64_t p4_first_lba,
                               struct h700_m1_package_plan *out)
 {
     uint64_t package_lba, p4_end, package_end;
-    if (out == 0 || staging_capacity < H700_M1_PACKAGE_BYTES ||
+    if (out == 0 || staging_capacity < H700_M1_STREAM_CHUNK_BYTES ||
         expected_fnv1a == 0)
         return 0;
     if (!add_u64(p4_first_lba, p4_block_count, &p4_end) ||
@@ -60,31 +59,88 @@ static int zero_bytes(const uint8_t *bytes, uint32_t length)
     return 1;
 }
 
+static int plan_valid(const struct h700_m1_package_plan *plan)
+{
+    return plan != 0 &&
+        plan->bytes == H700_M1_PACKAGE_BYTES &&
+        plan->sectors == H700_M1_PACKAGE_SECTORS &&
+        plan->monitor.offset == 0 && plan->monitor.payload_bytes == 0x1a2d0 &&
+        plan->monitor.padded_bytes == 0x1a400 &&
+        plan->dtbo.offset == 0x1a400 && plan->dtbo.payload_bytes == 0x920 &&
+        plan->dtbo.padded_bytes == 0xa00 &&
+        plan->dtb.offset == 0x1ae00 && plan->dtb.payload_bytes == 0x23400 &&
+        plan->dtb.padded_bytes == 0x23400 &&
+        plan->bl33.offset == 0x3e200 && plan->bl33.payload_bytes == 0x8000 &&
+        plan->bl33.padded_bytes == 0x8000 &&
+        plan->monitor.destination == 0x48000000 &&
+        plan->dtbo.destination == 0x4a100000 &&
+        plan->dtb.destination == 0x4a200000 &&
+        plan->bl33.destination == 0x4a000000;
+}
+
+static uint32_t fnv1a_update(uint32_t hash, const uint8_t *bytes, size_t length)
+{
+    for (size_t i = 0; i < length; ++i) {
+        hash ^= bytes[i];
+        hash *= UINT32_C(16777619);
+    }
+    return hash;
+}
+
+static int zero_intersection(const uint8_t *bytes, uint32_t chunk_offset,
+                             uint32_t chunk_bytes, uint32_t range_start,
+                             uint32_t range_end)
+{
+    uint32_t start = chunk_offset > range_start ? chunk_offset : range_start;
+    uint32_t chunk_end = chunk_offset + chunk_bytes;
+    uint32_t end = chunk_end < range_end ? chunk_end : range_end;
+    if (start >= end)
+        return 1;
+    return zero_bytes(bytes + (start - chunk_offset), end - start);
+}
+
+int h700_m1_package_read_validate_streaming(
+    const struct h700_m1_readonly_block_device *device,
+    const struct h700_m1_package_plan *plan,
+    void *scratch, size_t scratch_capacity)
+{
+    uint8_t *buffer = (uint8_t *)scratch;
+    uint32_t hash = UINT32_C(2166136261);
+    uint32_t offset = 0;
+    if (device == 0 || device->read_blocks == 0 || !plan_valid(plan) ||
+        buffer == 0 || scratch_capacity < H700_M1_STREAM_CHUNK_BYTES)
+        return 0;
+
+    /* At most 4 KiB of SRAM is needed; 561 sectors are streamed in 8-sector reads. */
+    while (offset < plan->bytes) {
+        uint32_t remaining = plan->bytes - offset;
+        uint32_t count = remaining / H700_M1_SECTOR_BYTES;
+        if (remaining % H700_M1_SECTOR_BYTES)
+            return 0;
+        if (count > H700_M1_STREAM_CHUNK_SECTORS)
+            count = H700_M1_STREAM_CHUNK_SECTORS;
+        uint32_t bytes = count * H700_M1_SECTOR_BYTES;
+        uint64_t lba = plan->first_lba + offset / H700_M1_SECTOR_BYTES;
+        if (!device->read_blocks(device->context, lba, count, buffer))
+            return 0;
+        hash = fnv1a_update(hash, buffer, bytes);
+        if (!zero_intersection(buffer, offset, bytes, 0x1a2d0, 0x1a400) ||
+            !zero_intersection(buffer, offset, bytes, 0x1ad20, 0x1ae00))
+            return 0;
+        offset += bytes;
+    }
+    return offset == plan->bytes && hash == plan->expected_fnv1a;
+}
+
 int h700_m1_package_read_validate(
     const struct h700_m1_readonly_block_device *device,
     const struct h700_m1_package_plan *plan,
     void *staging, size_t staging_capacity)
 {
     uint8_t *bytes = (uint8_t *)staging;
-    if (device == 0 || device->read_blocks == 0 || plan == 0 ||
-        bytes == 0 || staging_capacity < H700_M1_PACKAGE_BYTES ||
-        plan->bytes != H700_M1_PACKAGE_BYTES ||
-        plan->sectors != H700_M1_PACKAGE_SECTORS ||
-        plan->monitor.offset != 0 || plan->monitor.payload_bytes != 0x1a2d0 ||
-        plan->monitor.padded_bytes != 0x1a400 ||
-        plan->dtbo.offset != 0x1a400 || plan->dtbo.payload_bytes != 0x920 ||
-        plan->dtbo.padded_bytes != 0xa00 ||
-        plan->dtb.offset != 0x1ae00 || plan->dtb.payload_bytes != 0x23400 ||
-        plan->dtb.padded_bytes != 0x23400 ||
-        plan->bl33.offset != 0x3e200 || plan->bl33.payload_bytes != 0x8000 ||
-        plan->bl33.padded_bytes != 0x8000 ||
-        plan->monitor.destination != 0x48000000 ||
-        plan->dtbo.destination != 0x4a100000 ||
-        plan->dtb.destination != 0x4a200000 ||
-        plan->bl33.destination != 0x4a000000)
+    if (device == 0 || device->read_blocks == 0 || !plan_valid(plan) ||
+        bytes == 0 || staging_capacity < H700_M1_PACKAGE_BYTES)
         return 0;
-
-    /* Exactly one bounded block read; no write operation exists in this ABI. */
     if (!device->read_blocks(device->context, plan->first_lba,
                              plan->sectors, bytes))
         return 0;
