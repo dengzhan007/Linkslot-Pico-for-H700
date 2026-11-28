@@ -37,8 +37,8 @@ int main(void)
     uint8_t *image = fixture();
     uint8_t *staging = malloc(H700_M1_STREAM_CHUNK_BYTES);
     assert(staging);
-    const uint64_t p4_lba = 32768;
-    const uint64_t p4_blocks = 200000;
+    const uint64_t p4_lba = 303104;
+    const uint64_t p4_blocks = 131072;
     const uint64_t package_lba = p4_lba + H700_M1_PACKAGE_OFFSET_BYTES / 512u;
     struct blk_desc card = {image, package_lba, H700_M1_PACKAGE_SECTORS, 0, 0, 0};
     const uint32_t digest = h700_m1_package_fnv1a(image, H700_M1_PACKAGE_BYTES);
