@@ -132,6 +132,8 @@ def main() -> int:
     require('"m1-spl-preflight-resolved.config"' in spl_builder and
             "relevant_config =" in spl_builder,
             "M1 preflight builder no longer preserves resolved Kconfig diagnostics")
+    require('"CONFIG_OF_REAL=y" in config_text' in spl_builder,
+            "M1 preflight builder incorrectly drops the OF_CONTROL-selected OF_REAL dependency")
     require('sunxi_kconfig = uboot / "arch/arm/mach-sunxi/Kconfig"' in spl_builder and
             'config SUN50I_GEN_H6' in spl_builder and
             'select SPL_LOAD_FIT if SPL' in spl_builder and
