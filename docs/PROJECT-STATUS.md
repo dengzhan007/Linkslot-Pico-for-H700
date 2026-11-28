@@ -1,3 +1,10 @@
+## 2026-11-28 Target PMIC identity mismatch found
+
+- Cross-checked the captured RG34XX live FDT against the public U-Boot v2026.10 H700 defconfig and PMIC driver. The target inventory identifies `x-powers,axp2202` on R-TWI0 `0x07081400`; the generic `anbernic_rg35xx_h700_defconfig` selects `AXP717_POWER`, and upstream `drivers/power/pmic/axp.c` has no `x-powers,axp2202` compatible entry.
+- This is a material board-specific compatibility gap. Do not import the generic AXP717 regulator voltages or enable its PMIC path as a substitute. Profile A remains the owner's approved policy, but its target-specific implementation is blocked until the exact RG34XX AXP2202 source/register map and pre-DRAM power sequence are located and audited.
+- The target FDT regulator ranges are declarations only, not measured register state or a safe initialization recipe. No PMIC writes may be inferred from them.
+- Detailed evidence and disposition appended to [`docs/m1-owner-policy-audit-20261128.md`](m1-owner-policy-audit-20261128.md). Current M1 preflight remains PMIC/TWI-disabled; that is intentional because it stops before the DRAM/board-init continuation.
+- The static source trace has therefore narrowed the next task: identify the exact vendor AXP2202 implementation for RG34XX, reconcile its R-TWI0 access with BL31's matched static path, and only then build a separate Profile A DRAM-capable SPL audit. Continue RTC/WDT host-state-machine design separately; do not reuse raw-capsule-v2.
 ## 2026-11-28 PMIC/TWI and RTC/WDT source-trace refinement
 
 - Extended [`docs/m1-owner-policy-audit-20261128.md`](m1-owner-policy-audit-20261128.md) after directly reviewing the pinned BaseOS files at `cbe253a43f46cf551cc9a6c79a84015bde3686cf`.
