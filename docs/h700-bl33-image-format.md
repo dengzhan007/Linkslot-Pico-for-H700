@@ -83,6 +83,9 @@ changing the pin.
 
 ## 4. Matched native SPL / firmware rebuild for a small LK diagnostic
 
+> **M1 safety warning:** the example `build-release.py` invocation below runs the pinned BaseOS raw-capsule v2 release path: native build, SPL build and outer capsule all use `raw_capsule=True`. That path still has RTC GP14/GP15 and watchdog side effects. It is suitable only for host-side reproduction/accounting of the existing release format; it does **not** produce an M1 one-shot capsule and its output must not be written to TF1. See [M1 one-shot capsule audit](m1-oneshot-capsule-audit.md#45-standard-release-driver-is-not-an-m1-one-shot-builder-2026-11-28).
+
+
 The deployed p4+40 MiB native firmware manifest on the reports branch records
 the loader extent as offset `0x3e200`, length `0x8000` (32 KiB), destination
 `0x4a000000`. This is a stricter limit than the current BL33 image packager's
