@@ -161,7 +161,7 @@ def main() -> int:
     for offset, expected_word in (
         (0x3658, 0x7100081F),  # cmp candidate_index, #2
         (0x3674, 0x52800600),  # mov candidate_stride, #0x30
-        (0x3694, 0x94000092),  # call candidate DRAM-init routine
+        (0x3694, 0x94000092),  # save CPU context before candidate DRAM tests
         (0x3728, 0x7100201F),  # compare DRAM type 8
         (0x3730, 0x71001C1F),  # compare DRAM type 7
         (0x3734, 0x52809601),  # LPDDR3 DCDC3 1200 mV
@@ -170,6 +170,16 @@ def main() -> int:
     ):
         assert struct.unpack_from("<I", spl2, offset)[0] == expected_word, hex(offset)
     print("PASS: SPL2 contains three 672 MHz DRAM candidates (LPDDR4, LPDDR3, LPDDR4 alternate)")
+    # Candidate-specific routines invoke DRAM-controller calibration and memory scratch tests.
+    for offset, expected_word in (
+        (0x36B8, 0x97FFFC48),  # BL 0x527d8, candidate-specific controller test/config
+        (0x36C4, 0x97FFFC6E),  # BL 0x5287c, candidate-specific scratch/test path
+        (0x0990, 0xF2A06014),  # MMIO base construction for 0x03001540
+        (0x28B0, 0xD2A80001),  # materialize DRAM scratch address 0x40000000
+        (0x28B8, 0x940010D4),  # copy/read 64-byte scratch block
+    ):
+        assert struct.unpack_from("<I", spl2, offset)[0] == expected_word, hex(offset)
+    print("PASS: candidate path calls DRAM controller test/config helpers and touches 0x40000000 scratch memory")
     print("PASS: SPL2 candidate loop uses indices 0..2 and 0x30-byte stride; DCDC3 policy is type-dependent")
 
     assert secondary_table["valid_entry_count"] == 15
