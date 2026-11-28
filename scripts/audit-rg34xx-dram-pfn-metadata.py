@@ -44,6 +44,48 @@ def section_hex(text, section):
     return raw.group(1).lower()
 
 
+
+def decode_optional_page(text, flags_section, count_section, pfn, start):
+    """Decode one optional PFN pair without granting physical-memory ownership."""
+    flags_hex = section_hex(text, flags_section)
+    count_hex = section_hex(text, count_section)
+    flags = int.from_bytes(bytes.fromhex(flags_hex), "little")
+    mapcount = int.from_bytes(bytes.fromhex(count_hex), "little")
+    present = {name: bool(flags & (1 << bit)) for name, bit in KPF.items()}
+    if present["MMAP"] and present["ANON"] and mapcount > 0:
+        classification = "LINUX_ACTIVE_ANON_MAPPED_PAGE" if present["ACTIVE"] and present["LRU"] else "LINUX_ANON_MAPPED_PAGE"
+    elif present["MMAP"] != (mapcount > 0):
+        classification = "INCONSISTENT_OR_RACY_KPAGE_METADATA"
+    elif mapcount > 0:
+        classification = "MAPPED_PAGE_TYPE_NOT_CONFIRMED"
+    elif present["RESERVED"]:
+        classification = "LINUX_RESERVED_FLAG_SET"
+    else:
+        classification = "NO_MAPPING_OR_RESERVED_FLAG_OBSERVED"
+    return {
+        "pfn": hex(pfn),
+        "page": {"start": hex(start), "end_exclusive": hex(start + 4096)},
+        "raw": {"kpageflags_bytes_hex": flags_hex, "kpageflags_u64_little_endian": hex(flags),
+                "kpagecount_bytes_hex": count_hex, "kpagecount_page_mapcount": mapcount},
+        "set_flags": [name for name, value in present.items() if value],
+        "classification": classification,
+        "gate": "BLOCKED_OWNERSHIP_NOT_PROVEN",
+        "ownership_proven": False,
+        "free_scratch_eligible": False,
+    }
+
+
+def optional_kernel_section(text, name):
+    match = re.search(r"(?ms)^\\[" + re.escape(name) + r"\\]\\s*(.*?)(?=^\\[|\\Z)", text)
+    if not match:
+        return {"present": False, "status": "NOT_CAPTURED"}
+    body = match.group(1)
+    status = re.search(r"(?m)^status=(\\S+)", body)
+    return {"present": True, "status": status.group(1) if status else "STATUS_MISSING",
+            "captured_lines": max(0, len(body.splitlines()) - 1)}
+
+
+
 def decode_report(text):
     kernel = scalar(text, r"^kernel_release=(\S+)$", "kernel_release")
     uid = int(scalar(text, r"^uid=(\d+)$", "uid"))
@@ -96,6 +138,16 @@ def decode_report(text):
             "kpageflags_u64_little_endian": hex(flags),
             "kpagecount_bytes_hex": count_hex,
             "kpagecount_page_mapcount": mapcount,
+        },
+        "secondary_page_0x60000000": (
+            decode_optional_page(text, "kpageflags_pfn_60000", "kpagecount_pfn_60000", 0x60000, 0x60000000)
+            if re.search(r"(?m)^\\[kpageflags_pfn_60000\\]$", text) and re.search(r"(?m)^\\[kpagecount_pfn_60000\\]$", text)
+            else {"present": False, "gate": "BLOCKED_OWNERSHIP_NOT_PROVEN", "ownership_proven": False,
+                  "free_scratch_eligible": False, "classification": "SECONDARY_PFN_METADATA_NOT_CAPTURED"}
+        ),
+        "kernel_memory_context": {
+            name: optional_kernel_section(text, "kernel_memory_" + name)
+            for name in ("iomem", "zoneinfo", "buddyinfo", "pagetypeinfo", "meminfo")
         },
         "kpf_flags": {k.lower(): v for k, v in present.items()},
         "set_flags": [k for k, v in present.items() if v],
