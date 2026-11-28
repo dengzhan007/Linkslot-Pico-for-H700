@@ -24,7 +24,7 @@ def run(command: list[str], cwd: Path | None = None) -> str:
     result = subprocess.run(command, cwd=cwd, stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, text=True)
     if result.returncode:
-        raise RuntimeError(f"command failed ({result.returncode}): {' '.join(command)}\n{result.stdout[-12000:]}")
+        raise RuntimeError(f"command failed ({result.returncode}): {' '.join(command)}\n{result.stdout[-200000:]}")
     return result.stdout
 
 
