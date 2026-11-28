@@ -29,7 +29,7 @@ The primary's inner Boot0 image (\`primary[0x1000:0x11000]\`) and the secondary 
 
 - Primary inner SHA-256: \`b6edbf39af0bf1f35a7e2fd991c8966b04d061e247c81985d2516f695464049b\`
 - Secondary declared-image SHA-256: \`4701a85e4db7e8339b91b92f691a83cc954ec63a09369087c2e41d80eafa9f5d\`
-- Exactly five bytes differ: offsets \`0x0c\`, \`0x0d\` (checksum), \`0x34\` (debug byte), \`0xa3\` (active \`dram_tpr6\` high byte), and \`0xac\` (active \`dram_tpr12\` low byte).
+- Exactly five bytes differ: offsets \`0x0c`, `0x0f\` (checksum), \`0x34\` (debug byte), \`0xa3\` (active \`dram_tpr6\` high byte), and \`0xac\` (active \`dram_tpr12\` low byte).
 
 | Field | Primary inner | Secondary |
 |---|---:|---:|
