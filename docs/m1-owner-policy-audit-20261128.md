@@ -142,7 +142,7 @@ The read-only RG34XX runtime captures `reports/rg34xx-inventory-20261125-163152/
 - AXP2202 DCDC3: **1,100,000 µV**, enabled;
 - AXP2202 DCDC1: approximately 1.15–1.16 V in these samples.
 
-The RG34XX DTS declares DCDC3 always-on. The Allwinner Tina AXP2202 SPL reference exposes `axp2202_set_ddr_voltage()` as a DCDC3 setter, which makes DCDC3 a plausible DRAM-related rail. However, no exact RG34XX/H700 call site or explicit target-DTS `memory-supply` link has been proven, so the rail role remains a candidate rather than a confirmed assignment.
+The RG34XX DTS declares DCDC3 always-on. The Allwinner Tina AXP2202 SPL reference exposes `axp2202_set_ddr_voltage()` as a DCDC3 setter; the stock RG34XX Boot0 log reports `DRAM_VCC set to 1100 mv` immediately before DRAM training, and the target's read-only runtime captures report DCDC3 at 1100 mV. DCDC3 is therefore the strongest candidate for DRAM_VCC. However, no exact RG34XX/H700 Boot0 call site or explicit target-DTS `memory-supply` link has been proven, so the rail role is not yet a confirmed assignment. See `docs/rg34xx-axp2202-axp717-crosswalk-20261128.md`.
 
 A separate RG SP U-Boot configuration comment reports DCDC3 at 1.2 V. That is a different device/profile and conflicts with the RG34XX runtime readback. **Do not copy the RG SP 1.2 V setting into RG34XX.** The post-boot 1.1 V readback is evidence of the running configuration, not proof that the same value is required or safe at every pre-DRAM initialization point.
 
