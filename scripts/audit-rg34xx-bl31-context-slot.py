@@ -101,6 +101,7 @@ def scan(raw: bytes) -> list[dict]:
                             "argument_register": arg_reg, "window": context,
                             "decode_scope": "overlapping aligned 16-instruction window; may include data/literal false positives",
                         }
+                access = None
             if access:
                 key = (ins.address, access)
                 lo = max(0, start + max(0, index - 3) * 4)
