@@ -198,6 +198,9 @@ This directly confirms SenkOS's **14 → LPDDR3** mapping on RG34XX, including t
 
 The public RG34XX Boot0 runtime log reporting LPDDR4 type 8 at 672 MHz is consistent with profile 15, but does not contain the raw GPIO sample. The actual electrical strap level on each pin is therefore not independently measured by this static audit.
 
+The Boot0 DRAM.ext/Thumb sampler regression is now green on both host platforms: H700 audit run #1852 passed Linux and Windows after correcting the profile-zero fallback branch assertion ([run #1852](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46149278892)); the follow-up documentation-state run #1853 also passed both jobs ([run #1853](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46149296929)).
+
+
 
 ### Extracted later-stage identities
 
