@@ -87,12 +87,9 @@ def analyze_capture(binary: Path, outdir: Path, objdump: str, aarch64_objdump: s
         size = component["declared_size"]
         component_bytes = declared[offset : offset + size]
         if component["component_kind"] == "eGON Boot0":
-            if offset == 0 and binary.name == "boot0-secondary.bin":
-                stem = "boot0-secondary"
-            elif offset == 0:
-                stem = "boot0-primary-outer-component"
-            else:
-                stem = "boot0-primary-inner"
+            if offset == 0:
+                continue  # The outer/standalone image was already disassembled above.
+            stem = "boot0-primary-inner"
             arm_output = outdir / f"{stem}.arm.disasm"
             a64_output = outdir / f"{stem}.aarch64.disasm"
             component["arm_disassembly"] = arm_output.name
