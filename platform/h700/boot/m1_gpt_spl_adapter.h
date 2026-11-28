@@ -1,7 +1,7 @@
 #ifndef H700_M1_GPT_SPL_ADAPTER_H
 #define H700_M1_GPT_SPL_ADAPTER_H
 
-#if defined(CONFIG_XPL_BUILD)
+#if defined(CONFIG_XPL_BUILD) || defined(CONFIG_SPL_BUILD)
 #include <linux/types.h>
 #else
 #include <stdint.h>
