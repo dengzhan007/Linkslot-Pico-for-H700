@@ -117,5 +117,54 @@ class Boot0InspectorTests(unittest.TestCase):
             MODULE.parse_boot0(bytes(1024))
 
 
+    def test_scans_relocated_dram_ext_tables_and_stops_at_invalid_record(self):
+        data = bytearray(make_boot0(0x20000))
+
+        def profile(clock, dram_type, dx_odt=0x08080808, dx_dri=0x0E0E0E0E):
+            words = [0] * 32
+            words[0] = clock
+            words[1] = dram_type
+            words[2] = dx_odt
+            words[3] = dx_dri
+            words[4] = 0x00000E0E
+            words[5] = 0x7887BBBB
+            words[6] = 0x000030FA
+            words[7] = 0
+            return words
+
+        # First marker contains one valid profile followed by code-like bytes.
+        data[0x348:0x350] = b"DRAM.ext"
+        struct.pack_into("<32I", data, 0x348 + 44, *profile(792, 3))
+        invalid = [0xE58F0090] * 32
+        invalid[0] = 792
+        invalid[1] = 3
+        struct.pack_into("<32I", data, 0x348 + 44 + 128, *invalid)
+
+        # A second marker at a relocated offset contains the full 15-profile table.
+        data[0x1348:0x1350] = b"DRAM.ext"
+        for index in range(15):
+            if index < 13:
+                words = profile(792, 3)
+            elif index == 13:
+                words = profile(672, 7, 0x06060606, 0x0D0D0D0D)
+            else:
+                words = profile(672, 8)
+            struct.pack_into("<32I", data, 0x1348 + 44 + index * 128, *words)
+
+        struct.pack_into("<I", data, MODULE.CHECKSUM_OFFSET, 0)
+        struct.pack_into(
+            "<I", data, MODULE.CHECKSUM_OFFSET, MODULE.allwinner_checksum(bytes(data))
+        )
+        report = MODULE.parse_boot0(bytes(data))
+        tables = report["dram_ext_tables"]
+        first = next(table for table in tables if table["marker_offset"] == "0x348")
+        relocated = next(table for table in tables if table["marker_offset"] == "0x1348")
+        self.assertEqual(first["valid_entry_count"], 1)
+        self.assertEqual(relocated["valid_entry_count"], 15)
+        self.assertEqual(relocated["entries"][13]["dram_type"], "LPDDR3")
+        self.assertEqual(relocated["entries"][14]["dram_type"], "LPDDR4")
+        self.assertEqual(relocated["entries"][14]["clock_mhz"], 672)
+
+
 if __name__ == "__main__":
     unittest.main()
