@@ -1,3 +1,12 @@
+## 2026-11-28 M1 source-audit boundary review (continuation)
+
+- Re-read the pinned BaseOS capsule implementation (`capsule.c`, `entry.S`, `capsule/build.py`) alongside `scripts/audit-m1-oneshot-baseos-source.py`. The ordinary raw-capsule v2 path is explicitly stateful: it reads RTC retention/GP14/GP15, evaluates the attempt pair, configures/arms the watchdog, commits the attempt pair, and then copies the saved CPU context plus selected image through the SRAM copy stub. This confirms the existing release route is not an M1 one-shot implementation; generation matching does not change that protocol.
+- The current source audit is a **source-contract regression**, not a complete transitive call-graph proof or final-linked-ELF instruction audit. Its own scope statement says it cannot replace final ELF auditing. A green result may establish that the pinned v2 call chain has not drifted; it must not be interpreted as proof that a future M1 implementation is free of RTC/WDT/PMIC/TWI/PIO/media-write side effects.
+- The outer capsule builder also enforces fixed 64 KiB stock + 48 KiB native payload extents, reserves the 0x400-byte vendor header, links the copy stub into a bounded prefix, and emits a 128 KiB eGON image. These are useful packaging invariants to reuse as test requirements, but the resulting image remains raw-capsule v2 and is not an M1 candidate.
+- CI status correction: the prior note says feasibility #947 was running. This review did not obtain an independently verifiable run/job result for #947, so its outcome is **unverified here**; do not mark it passed or failed based on the source review. The earlier #946 success remains host-only artifact-accounting evidence.
+- Next engineering gate: design a separate `BASEOS_M1_ONESHOT` capsule/SPL/native path rather than editing the semantics of `BASEOS_RAW_CAPSULE`; then add fake-MMC read-only tests, a transitive source/call-graph audit, and final linked-ELF MMIO/write-site audit. Keep all generated artifacts host-only and candidate-ineligible until G2/G3/M1-S1 and recovery gates are independently closed.
+- Hardware gate unchanged: `H700_MEMORY_LAYOUT_APPROVED=false`, `hardware_applied=0`. No device MMIO/SMC, TWI transaction, DRAM content access, TF/Boot0/TOC1 write, firmware flash, or payload execution was performed in this review.
+
 # 项目当前状态与续接记录
 
 ## 2026-11-28 M1 manifest automation continuation
