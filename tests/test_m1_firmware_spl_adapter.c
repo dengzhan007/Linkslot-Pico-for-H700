@@ -41,7 +41,7 @@ int main(void)
     const uint64_t p4_lba = 303104;
     const uint64_t p4_blocks = 131072;
     const uint64_t package_lba = p4_lba + H700_M1_PACKAGE_OFFSET_BYTES / 512u;
-    struct blk_desc card = {image, package_lba, H700_M1_PACKAGE_SECTORS, 0, 0, 0};
+    struct blk_desc card = {.image = image, .first_lba = package_lba,\n                            .sectors = H700_M1_PACKAGE_SECTORS};
     uint32_t digest = h700_m1_package_fnv1a(image, H700_M1_PACKAGE_BYTES);
 
     assert(h700_m1_spl_preflight(&card, p4_lba, p4_blocks, digest,
