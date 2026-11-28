@@ -933,6 +933,7 @@ Hard size boundary: this first integration path is only for a small diagnostic p
 - [x] Enforce exact matcher: active cookie, SVC/ARM origin, LR_abt = probe load + 8, DFAR = 0x03000024, short-descriptor synchronous read-side DFSR allowlist, and nonzero recovery label.
 - [x] Mask IRQ/FIQ before abort-frame save; preserve the original frame pointer in r4; align the temporary Abort C-call stack; restore SPSR/GPR/PC through the positive-match-only `LDM^` trampoline.
 - [x] Keep the single-register probe dormant: no startup, input, timer, scheduler, or default runtime call sites.
+- [x] Re-audit current H700 call-site owners (`target/rg34xx_h700/init.c`, target rules, BL33 entry snapshot, timer and input scan): no references to `h700_syscfg_ver_reg_low3`, `h700_data_abort_try_recover`, or a raw `0x03000024` probe were found outside the dormant implementation/assembly. This is source inspection, not a runtime proof.
 - [x] H700 AArch64/AArch32 ARM/Thumb-2 compile + host regressions passed: [#45834208274](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208274).
 - [x] H700 boot-audit Linux + Windows checks passed: [#45834060935](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834060935).
 - [x] Full Linkslot/LK feasibility passed **81/81, 0 skipped**: [#45834208280](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280), artifact [15123653120](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45834208280/artifacts/15123653120).
