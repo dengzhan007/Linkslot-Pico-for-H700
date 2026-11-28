@@ -2,7 +2,7 @@
  * Read-only GPT-to-U-Boot SPL adapter for the M1 preflight path.
  * No U-Boot partition subsystem or write-capable block API is used.
  */
-#include <blk.h>\n#include <linux/types.h>
+#include <blk.h>
 
 #include "h700_gpt_readonly.h"
 #include "m1_firmware_readonly.h"
