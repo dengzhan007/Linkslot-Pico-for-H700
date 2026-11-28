@@ -202,12 +202,12 @@ def main() -> int:
     # need LMB. The FDT support functions used by DM remain linked.
     boot_makefile = uboot / "boot/Makefile"
     boot_text = boot_makefile.read_text()
-    image_fdt_rule = "obj-$(CONFIG_$(PHASE_)OF_LIBFDT) += image-fdt.o\\n"
+    image_fdt_rule = "obj-$(CONFIG_$(PHASE_)OF_LIBFDT) += image-fdt.o\n"
     require(boot_text.count(image_fdt_rule) == 1,
             "unexpected U-Boot image-fdt object rule")
     boot_text = boot_text.replace(
         image_fdt_rule,
-        "ifneq ($(CONFIG_XPL_BUILD),y)\\n" + image_fdt_rule + "endif\\n",
+        "ifneq ($(CONFIG_XPL_BUILD),y)\n" + image_fdt_rule + "endif\n",
         1,
     )
     boot_makefile.write_text(boot_text)
@@ -216,12 +216,12 @@ def main() -> int:
     # version_string/sprintf; the M1 SPL path has no console/banner output.
     lib_makefile = uboot / "lib/Makefile"
     lib_text = lib_makefile.read_text()
-    display_rule = "obj-y += display_options.o\\n"
+    display_rule = "obj-y += display_options.o\n"
     require(lib_text.count(display_rule) == 1,
             "unexpected U-Boot display_options object rule")
     lib_text = lib_text.replace(
         display_rule,
-        "ifneq ($(CONFIG_XPL_BUILD),y)\\n" + display_rule + "endif\\n",
+        "ifneq ($(CONFIG_XPL_BUILD),y)\n" + display_rule + "endif\n",
         1,
     )
     lib_makefile.write_text(lib_text)
@@ -230,20 +230,20 @@ def main() -> int:
     # linker script does not currently publish them.
     spl_lds = uboot / "arch/arm/cpu/armv8/u-boot-spl.lds"
     lds_text = spl_lds.read_text()
-    rodata_rule = "\\t.rodata : {\\n\\t\\t. = ALIGN(8);\\n"
+    rodata_rule = "\t.rodata : {\n\t\t. = ALIGN(8);\n"
     require(lds_text.count(rodata_rule) == 1,
             "unexpected AArch64 SPL rodata section")
     lds_text = lds_text.replace(
         rodata_rule,
-        "\\t.rodata : {\\n\\t\\t__start_rodata = .;\\n\\t\\t. = ALIGN(8);\\n",
+        "\t.rodata : {\n\t\t__start_rodata = .;\n\t\t. = ALIGN(8);\n",
         1,
     )
-    rodata_end = "\\t\\t*(SORT_BY_ALIGNMENT(SORT_BY_NAME(.rodata*)))\\n\\t} >.sram"
+    rodata_end = "\t\t*(SORT_BY_ALIGNMENT(SORT_BY_NAME(.rodata*)))\n\t} >.sram"
     require(lds_text.count(rodata_end) == 1,
             "unexpected AArch64 SPL rodata end")
     lds_text = lds_text.replace(
         rodata_end,
-        "\\t\\t*(SORT_BY_ALIGNMENT(SORT_BY_NAME(.rodata*)))\\n\\t\\t__end_rodata = .;\\n\\t} >.sram",
+        "\t\t*(SORT_BY_ALIGNMENT(SORT_BY_NAME(.rodata*)))\n\t\t__end_rodata = .;\n\t} >.sram",
         1,
     )
     spl_lds.write_text(lds_text)
