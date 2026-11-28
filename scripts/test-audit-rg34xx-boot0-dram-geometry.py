@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """Unit tests for the captured H700 Boot0 DRAM geometry cross-check."""
 from __future__ import annotations
-import sys
+import importlib.util
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from audit_rg34xx_boot0_dram_geometry import build
+module_path = Path(__file__).resolve().with_name("audit-rg34xx-boot0-dram-geometry.py")
+spec = importlib.util.spec_from_file_location("boot0_dram_geometry_audit", module_path)
+if spec is None or spec.loader is None:
+    raise RuntimeError("cannot load Boot0 geometry audit module")
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+build = module.build
 
 def fixture(digest: str, size: int, debug: int) -> dict:
     return {
