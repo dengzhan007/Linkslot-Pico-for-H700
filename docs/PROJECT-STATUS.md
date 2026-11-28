@@ -2414,3 +2414,11 @@ AArch64 反汇编窗口，验证：
 - A full-image direct-word scan found no literal pointers to A64 candidate runtime addresses `0x3b548/0x3b580/0x3b640/0x3b694/0x3b6f4/0x3b728` or table `0x3c688`. Computed pointers, external consumers, and indirect loader paths remain unexcluded.
 - The A64 descriptor callback values still land inside Thumb code with low bits clear, and `br x16` does not change ISA state. Treat the A64 tail as an unresolved embedded region, not a proven Boot0 handoff or BL31 loader. Full analysis: [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md).
 - Continue BL31 indirect-writer tracing for `0x48014668`; G2/G3/M1-S1 remain closed. No hardware interaction or payload execution.
+
+
+### BL31 indirect callback writer found (2026-11-28): 0x4803c048 is not the G2 slot
+
+- The callback loaded and conditionally invoked by `0x48007554` is stored at `0x4803c048` (`0x480075cc..0x480075d8`). Its direct writer is `0x480075e8`: `ADRP x1,0x4803c000; STR x0,[x1,#0x48]; RET`.
+- Caller `0x4800a134` reaches the writer at `0x4800a1a0`, passing `x0=0x4800a504`. That target is an AArch64 per-CPU/exception-context routine using MPIDR_EL1 and TPIDR_EL3. The installer function's cold-boot reachability/timing still needs tracing; the slot is inside the startup-cleared BSS interval.
+- This resolves the separate callback slot `0x4803c048`, **not** the G2 DRAM-retention context slot `0x48014668`. No G2 writer is established. Full evidence and disassembly notes: [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md).
+- Continue by tracing the entry/callers of `0x4800a134` and expanding full-payload indirect writer analysis for `0x48014668`. G2/G3/M1-S1 remain closed; no device interaction or payload execution.
