@@ -622,3 +622,16 @@ The AArch64-looking registry code at file offset `0x1b694`, interpreted under th
 A cross-image comparison also rejects treating this as an unmodified copy of the live TOC1 monitor: Boot0 file window `0x1b694` is not byte-identical to monitor offset `0x13694` and has no matching 16-byte anchor in the monitor; the 0x80-byte Boot0 table window at `0x1c688` is not byte-identical to monitor offset `0x14688` (only 54/128 bytes match, largely zero fields). Therefore do not equate the Boot0 registry/table with BL31's `0x48014668` context slot or `0x48014688` table without a separate relocation/copy proof.
 
 This is a static correction only. No Boot0/TOC1 write, payload execution, MMIO/SMC, or device test occurred. G2/G3/M1-S1 remain open.
+
+
+### 2026-11-28 Boot0 mixed-ISA region: AArch32 resume path does not reach the AArch64 registry
+
+The primary Boot0 image was disassembled in both AArch32 ARM and AArch64 modes around the mixed-ISA tail. The AArch64 sequence is coherent from file offset `0x1b548`: it contains ordinary A64 prologues/returns, A64 register operations, and a descriptor lookup/dispatch routine at `0x1b694..0x1b73c`. Under the whole-image `0x20000` mapping, these offsets correspond to runtime addresses `0x3b548..`. The descriptor table at file offset `0x1c688` is likewise internally consistent with that A64 routine.
+
+The actual eGON primary entry is a separate AArch32 path. At file offset `0x400` it saves AArch32 state, checks CPSR mode and SCTLR bits, sets SP to `0x57000`, and calls the AArch32 helper at `0x4e0`. On its accepted resume path, it executes DSB/ISB and loads PC from the literal at `0x494`, whose captured value is `0x50000`. The 68-byte SRAM routine copied to `0x50000` is also AArch32: it copies the retained image to `0x20000`, restores CPSR and general-register/SP/LR context from `0x52000`, then branches to `0x20000`. This path contains no AArch64 exception return and no demonstrated state transition into the A64 tail.
+
+A raw little-endian word scan of the full 128 KiB image found no direct occurrences of the whole-image runtime addresses for the A64 code entry/candidate routines (`0x3b548`, `0x3b580`, `0x3b640`, `0x3b694`, `0x3b6f4`, `0x3b728`) or its table (`0x3c688`). The AArch32 resume path therefore does not expose a direct-literal reference to the A64 region. This is a narrowing result only: it does not rule out computed pointers, an external processor/firmware consumer, a loader not present in this image, or an indirect handoff through other memory.
+
+The A64 tail's descriptor values `0x2984c` and `0x298b0` still point into the AArch32 Thumb routine at file offsets `0x984c` and `0x98b0`, with low bits clear. The A64 dispatcher's `br x16` does not change execution state, so this remains an unresolved mixed-ISA table relationship rather than a valid callback edge. Do not treat the A64 tail as the primary Boot0 entry path, a BL31 loader, or proof of BL31 context-slot initialization.
+
+Next static work should identify any independent loader/processor contract that consumes the A64 tail, or classify it as an embedded but unreferenced code/data region if stronger whole-image reachability evidence supports that. In parallel, continue BL31 indirect-writer tracing for `0x48014668`. No device execution, MMIO/SMC, payload execution, or firmware/TF write occurred; G2/G3/M1-S1 remain open.
