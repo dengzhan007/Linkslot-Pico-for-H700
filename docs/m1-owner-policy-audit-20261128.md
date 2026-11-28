@@ -132,3 +132,17 @@ A later source search refined the PMIC identity finding:
 
 **Revised disposition:** target PMIC identity, R-TWI0 controller and I2C address are now independently corroborated. The unresolved items are the exact RG34XX vendor SPL/Boot0 PMIC transaction sequence, whether/when DCDC3 or another rail must be adjusted before DRAM training, the precise AXP2202 silicon revision/address fallback behavior, and which initialization writes are necessary. Keep Profile A implementation blocked until those are resolved against the actual target firmware lineage. Do not copy the Tina/SyterKit voltage or initialization writes directly.
 
+
+
+### E.5 Target runtime regulator readback — DCDC3 is 1.1 V, not the RG SP 1.2 V setting
+
+The read-only RG34XX runtime captures `reports/rg34xx-inventory-20261125-163152/cpu-power-runtime.txt`, `reports/rg34xx-inventory-20261126-timer/cpu-power-runtime.txt`, and `reports/rg34xx-inventory-20261127-uart/cpu-power-runtime.txt` consistently report:
+
+- AXP2202 DCDC2: **940,000 µV**;
+- AXP2202 DCDC3: **1,100,000 µV**, enabled;
+- AXP2202 DCDC1: approximately 1.15–1.16 V in these samples.
+
+The RG34XX DTS declares DCDC3 always-on. The Allwinner Tina AXP2202 SPL reference exposes `axp2202_set_ddr_voltage()` as a DCDC3 setter, which makes DCDC3 a plausible DRAM-related rail. However, no exact RG34XX/H700 call site or explicit target-DTS `memory-supply` link has been proven, so the rail role remains a candidate rather than a confirmed assignment.
+
+A separate RG SP U-Boot configuration comment reports DCDC3 at 1.2 V. That is a different device/profile and conflicts with the RG34XX runtime readback. **Do not copy the RG SP 1.2 V setting into RG34XX.** The post-boot 1.1 V readback is evidence of the running configuration, not proof that the same value is required or safe at every pre-DRAM initialization point.
+
