@@ -144,6 +144,33 @@ def main() -> int:
     print("PASS: RG34XX SPL2 requests DCDC2=940 mV and DCDC3=1100 mV via PMIC I2C slave 0x34")
     print("PASS: regulator table maps DCDC2/DCDC3 to 0x84/0x85 and control masks 0x02/0x04")
     print("PASS: SPL2 controller-index 2 resolves to MMIO base 0x07081400 (R-TWI0); selected descriptor index remains externally initialized")
+    # The SPL2 DRAM init routine walks a fixed three-entry candidate table.
+    # Candidate table VMA 0x5a7f4 maps to component offset 0xa7f4 at load VMA 0x50000.
+    expected_candidates = (
+        (672, 8, 0x08080808, 0x0E0E0E0E, 0x00000E0E, 0x7887BBBB,
+         0x00000000, 0x00000001, 0x3E808080, 0x402F6633, 0x24272824, 0x06070706),
+        (672, 7, 0x06060606, 0x0D0D0D0D, 0x00001919, 0x9988EEEE,
+         0x00000000, 0x00000001, 0x2FB08080, 0x402F4489, 0x0E0E0F0E, 0x0F10110F),
+        (672, 8, 0x08080808, 0x0E0E0E0E, 0x00000E0E, 0x7887BBBB,
+         0x00000000, 0x00000001, 0x40808080, 0x402F6633, 0x1B1F1E1C, 0x06060606),
+    )
+    for index, expected in enumerate(expected_candidates):
+        actual = struct.unpack_from("<12I", spl2, 0xA7F4 + index * 0x30)
+        assert actual == expected, (index, actual, expected)
+    # AArch64 SPL2 loop: indices 0..2, 0x30-byte stride, then per-type DCDC3 policy.
+    for offset, expected_word in (
+        (0x3658, 0x7100081F),  # cmp candidate_index, #2
+        (0x3674, 0x52800600),  # mov candidate_stride, #0x30
+        (0x3694, 0x94000092),  # call candidate DRAM-init routine
+        (0x3728, 0x7100201F),  # compare DRAM type 8
+        (0x3730, 0x71001C1F),  # compare DRAM type 7
+        (0x3734, 0x52809601),  # LPDDR3 DCDC3 1200 mV
+        (0x3738, 0x5280BB80),  # other DRAM types DCDC3 1500 mV
+        (0x3740, 0x94001AF9),  # DCDC3 setter
+    ):
+        assert struct.unpack_from("<I", spl2, offset)[0] == expected_word, hex(offset)
+    print("PASS: SPL2 contains three 672 MHz DRAM candidates (LPDDR4, LPDDR3, LPDDR4 alternate)")
+    print("PASS: SPL2 candidate loop uses indices 0..2 and 0x30-byte stride; DCDC3 policy is type-dependent")
 
     assert secondary_table["valid_entry_count"] == 15
     for name, table in (
