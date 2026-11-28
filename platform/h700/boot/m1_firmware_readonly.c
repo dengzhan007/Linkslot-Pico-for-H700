@@ -45,7 +45,7 @@ int h700_m1_package_make_plan(uint64_t p4_first_lba,
     out->expected_fnv1a = expected_fnv1a;
     out->monitor = (struct h700_m1_package_extent){0x00000, 0x1a2d0, 0x1a400, 0x48000000};
     out->dtbo    = (struct h700_m1_package_extent){0x1a400, 0x00920, 0x00a00, 0x4a100000};
-    out->dtb     = (struct h700_m1_package_extent){0x1ae00, 0x23400, 0x23400, 0x4a200000};
+    out->dtb     = (struct h700_m1_package_extent){0x1ae00, 0x2222e, 0x23400, 0x4a200000};
     out->bl33    = (struct h700_m1_package_extent){0x3e200, 0x08000, 0x08000, 0x4a000000};
     return 1;
 }
