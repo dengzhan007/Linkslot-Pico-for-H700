@@ -185,7 +185,7 @@ Therefore the bit mapping is exact and LSB-first:
 | 2 | PH8 | 2 |
 | 3 | PH10 | 3 |
 
-The four-bit result is then used as a **one-based profile number**. The Thumb code at VMA \`0x23482\` computes the selected index; at \`0x23486\` it subtracts one; at \`0x23488\` it shifts by seven (128-byte profile stride); at \`0x2348a\` it adds the DRAM.ext base; and at \`0x2348c\` it checks the first word at profile-table base offset \`0x374\`. The selected 128-byte profile is copied to the active DRAM parameter block at inner VMA \`0x20038\` (literal at inner offset \`0x3584\`).
+The four-bit result is then used as a **one-based profile number**. The Thumb code at VMA \`0x23482\` computes the selected index. If it is zero, it branches to \`0x234a0\` and scans the profile table; if nonzero, it subtracts one at \`0x23488\`, shifts by seven (128-byte profile stride) at \`0x2348a\`, adds the DRAM.ext base at \`0x2348c\`, and checks the first word at profile-table base offset \`0x374\` at \`0x2348e\`. If the selected entry is empty, it logs the invalid-profile path and falls back to the table scan. A valid selected 128-byte profile is copied to the active DRAM parameter block at inner VMA \`0x20038\` (literal at inner offset \`0x3584\`).
 
 The Boot0 DRAM.ext table has 15 profiles. Profiles 1–13 are DDR3 type 3 at 792 MHz. The two RG34XX-relevant entries are:
 
