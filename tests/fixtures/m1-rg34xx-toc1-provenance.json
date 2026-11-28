@@ -1,0 +1,71 @@
+{
+  "source_repository": "dengzhan007/BaseOS-MultiFrontend",
+  "source_commit": "cbe253a43f46cf551cc9a6c79a84015bde3686cf",
+  "capture": "reports/rg34xx-inventory-20261127-uart/toc1-extracted/manifest.json",
+  "toc1_package_bytes": 1310720,
+  "toc1_package_sha256": "e6c20e3a54c51b9336c798e3a4fa1ca6c45b28c6f70456e2db9c252aa4ba4604",
+  "items": {
+    "u-boot": {
+      "offset": 2048,
+      "bytes": 1048576,
+      "sha256": "4d60a22ff13eac00dba89e0ee7df52a49852c0d9d856bec545ce40126191d127"
+    },
+    "monitor": {
+      "offset": 1050624,
+      "bytes": 107216,
+      "sha256": "676bc0206e3c9a7f229d93ea7f3286095f669940ad91f3c4f3d37bdb18696c31"
+    },
+    "dtbo": {
+      "offset": 1158144,
+      "bytes": 2336,
+      "sha256": "4bee281701610f96dcbdd1d38cb8df28386224d8c68b668b9a7a7a9df8e73ec2"
+    },
+    "dtb": {
+      "offset": 1161216,
+      "bytes": 144384,
+      "sha256": "c28c87380ffab00148bf4dc457e70b8c6c576470dcfbc53df64addddf89603a1"
+    }
+  },
+  "linkslot_loader_bytes": 32768,
+  "expected_firmware": {
+    "bytes": 287232,
+    "hex_bytes": "0x46200",
+    "sectors": 561,
+    "regions": [
+      {
+        "name": "monitor",
+        "offset": 0,
+        "payload_bytes": 107216,
+        "padded_bytes": 107520,
+        "destination": "0x48000000"
+      },
+      {
+        "name": "dtbo",
+        "offset": 107520,
+        "payload_bytes": 2336,
+        "padded_bytes": 2560,
+        "destination": "0x4a100000"
+      },
+      {
+        "name": "dtb",
+        "offset": 110080,
+        "payload_bytes": 144384,
+        "padded_bytes": 144384,
+        "destination": "0x4a200000"
+      },
+      {
+        "name": "loader",
+        "offset": 254464,
+        "payload_bytes": 32768,
+        "padded_bytes": 32768,
+        "destination": "0x4a000000"
+      }
+    ]
+  },
+  "notes": [
+    "The 1,310,720-byte TOC1 is the source container, not the p4+40MiB runtime firmware.bin.",
+    "BaseOS extracts monitor/dtbo/dtb from TOC1 and appends the generated 32KiB Linkslot A32 BL33 loader in firmware.bin.",
+    "Each component is zero-padded to a 512-byte boundary; the generated firmware.bin is 0x46200 bytes.",
+    "The firmware FNV is generated from the actual build output; the preflight must receive that build-matched value, not trust an arbitrary runtime caller."
+  ]
+}
