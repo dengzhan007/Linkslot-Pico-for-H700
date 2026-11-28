@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,20 +38,23 @@ def disassemble(binary: Path, output: Path, objdump: str) -> dict:
     if run_address == 0 or run_address > 0xFFFFFFFF:
         raise ValueError(f"invalid Boot0 run address 0x{run_address:x}")
 
-    command = [
-        objdump,
-        "-D",
-        "-b",
-        "binary",
-        "-m",
-        "arm",
-        "-M",
-        "reg-names-std",
-        f"--adjust-vma=0x{run_address:x}",
-        str(binary),
-    ]
-    with output.open("w", encoding="utf-8") as stream:
-        subprocess.run(command, check=True, stdout=stream, stderr=subprocess.PIPE, text=True)
+    with tempfile.TemporaryDirectory(prefix="rg34xx-boot0-") as temporary:
+        declared_image = Path(temporary) / "boot0-declared-image.bin"
+        declared_image.write_bytes(data[:image_size])
+        command = [
+            objdump,
+            "-D",
+            "-b",
+            "binary",
+            "-m",
+            "arm",
+            "-M",
+            "reg-names-std",
+            f"--adjust-vma=0x{run_address:x}",
+            str(declared_image),
+        ]
+        with output.open("w", encoding="utf-8") as stream:
+            subprocess.run(command, check=True, stdout=stream, stderr=subprocess.PIPE, text=True)
 
     return {
         "file": binary.name,
