@@ -591,3 +591,17 @@ The primary Boot0 AArch32 entry path is now traced through its first helper and 
 This is a real Boot0 SRAM resume/restore mechanism and a useful upstream handoff lead, but it is not the BL31 context at `0x48014668`: it uses SRAM `0x50000/0x52000`, its 72-byte context is explicitly zeroed by this path, and no dataflow from this block to the BL31 slot has been found. It also does not prove that the AArch64 descriptor dispatcher at `0x1b694` is reachable from this AArch32 path. Treat it as a separate Boot0 resume mechanism unless a concrete bridge is discovered.
 
 Next static step: identify the meaning of the peripheral handshake in `0x4e0` and search the Boot0 image for code that populates `0x52000` after the zeroing copy, then determine whether any path transfers the restored state or pointer into BL31. Keep the BL31 context producer unresolved.
+
+
+### Boot0 resume gate detail: retained-image checksums and mailbox handshake
+
+A closer read of helper `0x4e0` narrows the accepted resume path further:
+
+- It validates the primary eGON header at `0x20000): the declared size at `0x20010` must be `0x20000`, and the eight-byte signature must match the embedded `eGON.BT0` signature at `0x20838`.
+- It reads status at `0x070001f8` and branches according to bit `0x10000`.
+- The normal branch reads the two words at `0x07000138`/`0x0700013c`, then calculates checksums over candidate retained regions `[0x21000,0x31000)` (64 KiB; expected `0x8fb6d562`) and `[0x31000,0x3d000)` (48 KiB; expected `0xa53ccffb`). It subsequently performs ordered write/readback operations at addresses derived from `0x030090b4`, including offsets `-4`, `0`, and `+4`; the peripheral identity and protocol meaning remain unassigned.
+- The accepted result chooses `0x21000` or `0x31000`; the copied restore trampoline then copies the selected region back to `0x20000`, restores the context from `0x52000`, and branches to the Boot0 image base.
+
+This is consistent with a retained-image/resume validation protocol, but it does not identify the peripheral as an RTC, PMIC, mailbox, or PSCI interface. A raw scan finds the `0x50000`, `0x20840`, `0x20498`, `0x070001f8`, and `0x030090b4` literals, but no direct `0x52000`, `0x07000138`, `0x0700013c`, or `0x48014668` literal. The two 0x07000138/13c register addresses are formed by the helper at runtime from a base plus a small offset; the 0x52000 destination is formed as an immediate in the copy loop. These literal-scan absences do not rule out computed aliases or writes from other code.
+
+This path therefore strengthens the existence of a Boot0 retained-image resume protocol, not the claim that it initializes BL31's context slot. The runtime producer for `0x48014668` remains unknown.
