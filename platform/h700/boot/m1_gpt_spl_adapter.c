@@ -80,7 +80,7 @@ int h700_m1_spl_preflight_gpt(struct blk_desc *card,
  * and GPT table symbols without retaining or executing the MMC preflight path.
  * The linker forces this symbol into the fixture; it is never called.
  */
-__attribute__((used, noinline))
+__attribute__((used))
 unsigned long h700_m1_spl_geometry_anchor(void)
 {
     return (unsigned long)m1_package_scratch ^
