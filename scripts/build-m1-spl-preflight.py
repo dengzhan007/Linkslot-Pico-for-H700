@@ -298,7 +298,7 @@ def main() -> int:
         "# CONFIG_SPL_USE_TINY_PRINTF is not set",
         "CONFIG_SPL_SYS_MALLOC=y",
         "CONFIG_SPL_SYS_MALLOC_SIZE=0x10000",
-        "# CONFIG_SPL_SYS_MALLOC_F is not set",
+        "CONFIG_SPL_SYS_MALLOC_F=y",
         "CONFIG_SPL_SYS_MALLOC_F_LEN=0x2000",
         "# CONFIG_SPL_POWER is not set",
         "# CONFIG_SPL_DM_I2C is not set",
