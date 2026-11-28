@@ -70,7 +70,7 @@ int main(void)
 
     assert(!h700_m1_spl_preflight(&card, p4_lba, p4_blocks, digest,
                                   staging, H700_M1_STREAM_CHUNK_BYTES - 1u));
-    assert(card.reads == 72 && card.writes == 0);
+    assert(card.reads == 1 && card.writes == 0);
 
     free(staging);
     free(image);
