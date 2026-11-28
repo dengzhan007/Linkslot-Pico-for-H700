@@ -728,8 +728,8 @@ The read-only Boot0 report `reports/rg34xx-inventory-20261127-uart/boot0-primary
 - `word[6] = 0x30fa`: extracted fields sum to 28; subtracting 18 gives shift count 10.
 - `word[30] >> 16 = 0x0200`; its low three bits are zero, so the helper takes the unscaled branch.
 - Helper result: `1 << 10 = 1024 (0x400)`.
-- Caller `0x48011938` places that result in context +0x1c bits 16..31 while preserving the low 16 bits: `0x04000000 | 0x0040 = 0x04000040`.
-- The copy worker computes `0x40000000 + (((0x04000040 >> 17) & 0x7fff) << 20) = 0x60000000` for the second 0x140-byte DRAM source window.
+- Caller `0x48011938` places that result in context +0x1c bits 16..31 while preserving the low 16 bits: `0x04000000 | 0x0040 = 0x04000000`.
+- The copy worker computes `0x40000000 + (((0x04000000 >> 17) & 0x7fff) << 20) = 0x60000000` for the second 0x140-byte DRAM source window.
 - Context +0x78 bit27 is clear for `0x02008c60`; the fallback controller-configuration branch rejoins the normal copy path because context +0x1c bit0 is clear. The mode field at context +0x04 is candidate type 8, not 4, so the alternate strided-copy branch is not selected under this candidate assumption.
 
 This calculation is a source/binary consistency result, not a live value observation. The primary Boot0 block is explicitly documented as mutable training metadata; the active Boot0 copy, selected candidate, native SPL build, and final runtime parameter bytes have not been captured as one continuous execution. The captured 1-GiB Linux map and Boot0 candidate are consistent with the 0x60000000 midpoint, but they do not prove that BL31 used that address during a real suspend/resume.
