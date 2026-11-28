@@ -28,6 +28,8 @@ on:
       - "scripts/test-m1-oneshot-capsule-selection.py"
       - "scripts/test-m1-oneshot-capsule-a32.py"
       - "scripts/test-m1-firmware-readonly.py"
+      - "scripts/test-m1-baseos-firmware-contract.py"
+      - "tests/fixtures/m1-rg34xx-toc1-provenance.json"
       - "platform/h700/boot/m1_firmware_readonly.c"
       - "platform/h700/boot/m1_firmware_readonly.h"
       - "tests/test_m1_firmware_readonly.c"
@@ -220,6 +222,9 @@ jobs:
 
       - name: Audit pinned BaseOS M1 one-shot source side effects
         run: python3 scripts/audit-m1-oneshot-baseos-source.py --baseos-root .ci/baseos-native
+
+      - name: Verify M1 firmware stream against pinned BaseOS builder and captured TOC1
+        run: python3 scripts/test-m1-baseos-firmware-contract.py --baseos-root .ci/baseos-native
 
       - name: Test host-only M1 one-shot capsule pre-entry selection model
         run: python3 scripts/test-m1-oneshot-capsule-selection.py
