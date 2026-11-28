@@ -35,6 +35,7 @@ static uint8_t *make_image(void)
         image[i] = (uint8_t)(i * 3u + 11u);
     for (uint32_t i = 0x1ae00; i < 0x3e200; ++i)
         image[i] = (uint8_t)(i * 5u + 19u);
+    memset(image + 0x3d02e, 0, 0x3e200 - 0x3d02e);
     for (uint32_t i = 0x3e200; i < H700_M1_PACKAGE_BYTES; ++i)
         image[i] = (uint8_t)(i * 7u + 23u);
     return image;
@@ -84,7 +85,13 @@ int main(void)
     assert(!h700_m1_package_read_validate(&dev, &plan, staging, H700_M1_PACKAGE_BYTES));
     image[0x1a2d0] = 0u;
 
+    image[0x3d02e] = 1u; /* DTB FDT totalsize padding must also be zero */
+    plan.expected_fnv1a = h700_m1_package_fnv1a(image, H700_M1_PACKAGE_BYTES);
+    assert(!h700_m1_package_read_validate(&dev, &plan, staging, H700_M1_PACKAGE_BYTES));
+    image[0x3d02e] = 0u;
+
     card.image = image;
+    plan.expected_fnv1a = h700_m1_package_fnv1a(image, H700_M1_PACKAGE_BYTES);
     plan.expected_fnv1a = h700_m1_package_fnv1a(image, H700_M1_PACKAGE_BYTES);
     plan.bl33.destination ^= 4u;
     assert(!h700_m1_package_read_validate(&dev, &plan, staging, H700_M1_PACKAGE_BYTES));
