@@ -131,19 +131,19 @@ This independently corroborates the LPDDR4 1100 mV / LPDDR3 1200 mV voltage poli
 
 The published macromorgan RG34XX UART sample reports PMU AXP2202 and DRAM_VCC 1100 mV before DRAM training. That sample is not part of the reports-branch binary inventory, and the captured Boot0 image contains \`BOOT0 commit : %s\` rather than a fixed build hash. Do not match the public sample's displayed \`749c1f9a-dirty\` identifier to this binary or claim that the public log is this exact binary's runtime trace.
 
-The public log remains useful independent RG34XX corroboration. The project's own read-only runtime capture independently reports DCDC3 at 1100 mV. Together with the Allwinner AXP2202 \`set_ddr_voltage()\` reference path, this makes DCDC3 the strongest DRAM_VCC candidate, but the exact target Boot0 write/call site remains open.
+The public log remains useful independent RG34XX corroboration. The project's own read-only runtime capture reports DCDC3 at 1100 mV, and the stock SPL2 AArch64 code now provides a direct DCDC3 voltage-setting path. Whether the public UART's `DRAM_VCC` message originates in Boot0 or SPL2 remains unproven.
 
 ## 9. Required next static work
 
-1. Disassemble the outer Boot0, embedded 64 KiB Boot0, and SPL2 component separately; map SPL2 at candidate VMA \`0x50000\`.
+1. Resolve the global bus-descriptor selector `x18 + 264` and prove whether the PMIC path selects descriptor 0 or 1; both observed descriptors route to controller index 2 / R-TWI0.
 2. Parse the TOC1 header/component table and validate embedded FDT blobs; identify BL31/U-Boot payload boundaries and the selected RG34XX-v1 FDT.
-3. Disassemble the SPL2 in both ARM and AArch64 modes; compare its DRAM/PMIC/strap/power assumptions against RG34XX-v1 evidence.
-4. Establish whether the SPL2 label is a shared vendor build target or a board-specific hardware configuration before any reuse in the project.
-5. Recover the complete DCDC enable/read-modify-write path and exact target PMU probe; no writes are authorized by this audit.
+3. Trace the DCDC enable/read-modify-write call path and exact PMU probe sequence; the voltage-setting calls and R-TWI0 backend are already statically identified.
+4. Establish whether the RG35XX-2024 SPL2 build label is a shared vendor target or board-specific, and verify its DRAM strap assumptions against RG34XX-v1 evidence.
+5. Find target-specific evidence for the physical PMIC identity and PH6/PH7/PH8/PH10 strap wiring; no writes are authorized by this audit.
 
 ## 10. Safety state
 
-This was read-only parsing, hashing, string extraction and static ARM disassembly only.
+This was read-only parsing, hashing, string extraction and static ARM/AArch64 disassembly only.
 
 - No Boot0/TOC1/TF write.
 - No PMIC/TWI transaction.
