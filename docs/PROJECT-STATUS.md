@@ -2698,3 +2698,14 @@ See [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md) for the detai
 - Linkslot feasibility run #1083 is still in progress; no result is claimed: [run #1083](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46145458855). All hardware safety gates remain unchanged.
 - Detailed report: \`docs/rg34xx-boot0-container-spl2-audit-20261128.md\`.
 
+
+
+## 2026-11-28 SPL2 I2C callback relocation and R-TWI0 mapping
+
+- The SPL2 callback table at candidate VMA \`0x5b6b0\` stores link-time callback addresses \`0x27d30\` (read) and \`0x27c20\` (write). The SPL2 is linked at \`0x20000\` and loaded at candidate runtime VMA \`0x50000\`, giving relocation delta \`+0x30000\`; the callbacks resolve to valid AArch64 functions at \`0x57d30\` and \`0x57c20\`.
+- Both first bus descriptors carry controller index 2 at descriptor offset \`+56\`. Their read/write callbacks call the controller lookup \`0x57ae0\`; index 2 returns base \`0x07081400\`. This matches the RG34XX live FDT's \`twi5\` and KNULLI's RG34XX DTS.
+- The PMIC read/write helpers pass I2C slave address \`0x34\`; the path therefore resolves to the R-TWI0 MMIO backend for either of the first two valid descriptors. The global descriptor selector \`x18 + 264\` is read but no explicit assignment was found in the SPL2 code; exact selection of descriptor 0 versus 1 remains open.
+- A regression test now pins the SPL2 regulator table, DCDC2/DCDC3 setpoints, PMIC slave address, controller-index mapping, and callback descriptor values in the raw RG34XX Boot0 capture.
+- This closes the R-TWI0 base-address identification blocker at static-code level. It does not authorize execution or I/O, and it does not prove the physical PMIC silicon identity.
+- Detailed evidence: \`docs/rg34xx-boot0-container-spl2-audit-20261128.md\`.
+
