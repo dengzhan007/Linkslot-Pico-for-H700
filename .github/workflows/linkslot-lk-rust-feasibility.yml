@@ -729,6 +729,5 @@ jobs:
           path: |
             build/audit-work/linkslot-1.0.49/
             !build/audit-work/linkslot-1.0.49/**/CMakeFiles/Progress/**
-            build/h700-objects/
           if-no-files-found: warn
           retention-days: 30
