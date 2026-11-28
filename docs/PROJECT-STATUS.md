@@ -1,3 +1,10 @@
+## 2026-11-28 AXP2202 bus identity refined
+
+- The RG34XX-specific Knulli boot-package DTS (commit `57afa662009641d181f57241bcc480119b131530`) independently confirms `twi5` at `0x07081400`, PMU compatible `x-powers,axp2202`, and I2C address `0x34`; this matches the captured RG34XX live-FDT inventory and BL31 selector path.
+- Found an Allwinner-authored AXP2202 SPL driver/register map in Tina v821 source (commit `34809037526678ccda1720cb4b4ec7ee32272c38`). It uses a 400 kHz TWI path and runtime address `0x34` (fallback `0x35`), and exposes DCDC3 as its DDR-voltage helper. However, it is a different Allwinner platform; no call site proving its DDR-voltage helper is required for RG34XX/H700 DRAM training has been found. Its initialization writes are candidates for comparison, not an approved sequence.
+- The generic U-Boot `AXP717_POWER` versus target AXP2202 DTS difference is now classified as a binding/configuration reconciliation issue; do not overstate it as a silicon mismatch, but do not assume compatibility either.
+- Full source evidence and limits are in [`docs/m1-owner-policy-audit-20261128.md`](m1-owner-policy-audit-20261128.md). Next task is to locate the exact RG34XX vendor Boot0/SPL power sequence and prove whether any AXP2202 regulator write is needed before DRAM training. Profile A remains approved as a policy, but implementation remains blocked pending that proof.
+
 ## 2026-11-28 Target PMIC identity mismatch found
 
 - Cross-checked the captured RG34XX live FDT against the public U-Boot v2026.10 H700 defconfig and PMIC driver. The target inventory identifies `x-powers,axp2202` on R-TWI0 `0x07081400`; the generic `anbernic_rg35xx_h700_defconfig` selects `AXP717_POWER`, and upstream `drivers/power/pmic/axp.c` has no `x-powers,axp2202` compatible entry.
