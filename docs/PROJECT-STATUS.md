@@ -11,6 +11,17 @@
 此前 full monitor alias/CFG 审计 #128 的 79 ADRP seeds、38,676 CFG states、83 context-like slot load path hits，以及在其已建模范围内 zero selector/slot stores 仍是准确记录；它没有建模此处通过 FDT alias/parent property 生成 external context、再 staging 到 copied SRAM context 的完整跨区域数据流，不能用其零命中否定本次 producer 链。H700 boot audit #1480 对前次状态/路线图修改成功；本次 TWI 专项与状态更新已触发后续 boot-audit run。完整 Linkslot/LK feasibility **#892** 在较早文档 HEAD `59c7aa9d...` 上成功（[run #892](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/45973668270)）；#891 后续已取消，不作为失败构建结论。
 
 独立硬件门槛不变：#94 静态 Boot0 分析显示 CPU1–CPU3 hold-off 仍未取得 H700 实机 reset/RVBAR readback；DRAM retention PFN `0x40000` 是 `LINUX_ACTIVE_ANON_MAPPED_PAGE`，不能视为自由 scratch；BL33 runtime/BSS/page-table/stack 所有权、APB1/PIO permission 与 timer/PPI continuity 仍未闭合。上述结果全是匹配二进制/原始 DTB 的 host/static 审计，不是实机 suspend/wake 或 TWI transaction。继续保持 `H700_MEMORY_LAYOUT_APPROVED=false`、`hardware_applied=0`；未执行设备 SMC/MMIO、TWI transaction、DRAM 内容读写、待机/唤醒、Boot0/TOC1 写入、刷写或 payload execution。
+## 2026-11-28 M1 artifact accounting continuation
+
+- Current branch HEAD before this documentation update: `4b2de492e1749e27697a351af13a753a5422e831` (M1 capsule audit now links the new artifact accounting report).
+- H700 boot audit [#1602](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46092843983) completed successfully on predecessor HEAD `0469a6e17a3fc88b979ad82621122143f35630dc`: Linux host-tools 7/7 and Windows PowerShell 8/8 steps passed.
+- Downloaded and independently inspected Linkslot/LK feasibility [#943](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46086258522), artifact [15239048815](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46086258522/artifacts/15239048815), ZIP SHA-256 `43bee56b2238fc484284eb9ee0677bfe7a9ec9e8f5279dbc07d5358c8a351f89`.
+- Three separate A32 prototypes are now byte-accounted: 7,940-byte PI12 early-MMU layout raw, 5,804-byte CRT0/exception overlay raw, and 5,148-byte A32 entry/vector/snapshot raw. The 7,940-byte raw has runtime `_end=0x4a00c024`, span `0xC024` / 49,188 bytes, with 8 KiB stack and 16 KiB translation table; raw file size is not runtime memory footprint.
+- The PI12 early-layout ELF explicitly enabled physical PI12 MMIO for disposable link validation. It is not an M1 deployment candidate. The other two are stub-linked prototypes; synthetic header overlays are not the actual vendor header. No firmware/SPL/Boot0-primary capsule/TF1 pair was generated.
+- Exact file hashes, LOAD segment values, linker-map intervals, and packaging promotion gates: [M1 candidate artifact accounting](m1-candidate-artifact-accounting.md). M1 capsule audit links the same report.
+- Current next action: create a unified, machine-readable audit/manifest for one selected minimal composition only after separating the dormant/physical PI12 path; bind ELF/map/raw hashes and runtime intervals, then pair the exact vendor header and same-generation firmware/SPL/capsule. Do not package the three prototypes together or treat a raw-size pass as memory approval.
+- Hardware gates unchanged: `H700_MEMORY_LAYOUT_APPROVED=false`, `hardware_applied=0`; no device MMIO/SMC, TWI transaction, DRAM content access, TF/Boot0/TOC1 write, firmware flash, or payload execution.
+
 ## 2026-11-28 最新状态校准（本轮复核）
 
 - 当前工作分支 HEAD：`faeb797c6b13d46b3399bfdff700e540d446e20e`。
