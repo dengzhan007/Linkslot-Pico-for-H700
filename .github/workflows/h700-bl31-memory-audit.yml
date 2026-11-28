@@ -5,6 +5,7 @@ on:
     branches: [porting/linkslot-1.0.45-feasibility]
     paths:
       - "scripts/audit-rg34xx-bl31-memory.py"
+      - "scripts/audit-rg34xx-bl31-context-slot.py"
       - "scripts/test-audit-rg34xx-bl31-memory.py"
       - "scripts/test-rg34xx-bl31-startup-contract.py"
       - "scripts/audit-rg34xx-boot0-cpu-reset.py"
@@ -70,6 +71,12 @@ jobs:
           python3 scripts/audit-rg34xx-bl31-memory.py \
             --reports-root .ci/reports/reports \
             --out build/rg34xx-bl31-static-audit
+
+      - name: Scan matched BL31 for context-slot reads and possible writers
+        run: |
+          python3 scripts/audit-rg34xx-bl31-context-slot.py \
+            --monitor .ci/reports/reports/rg34xx-inventory-20261126-timer/toc1-extracted/items/monitor.bin \
+            --out-dir build/rg34xx-bl31-static-audit
 
       - name: Test Boot0 DRAM geometry decoder
         run: |
@@ -185,6 +192,9 @@ jobs:
           fi
           if [ -f build/rg34xx-bl31-static-audit/BOOT0-DRAM-GEOMETRY.md ]; then
             cat build/rg34xx-bl31-static-audit/BOOT0-DRAM-GEOMETRY.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f build/rg34xx-bl31-static-audit/BL31-CONTEXT-SLOT-SCAN.md ]; then
+            cat build/rg34xx-bl31-static-audit/BL31-CONTEXT-SLOT-SCAN.md >> "$GITHUB_STEP_SUMMARY"
           fi
           if [ -f build/rg34xx-bl31-static-audit/TWI-DESCRIPTOR.md ]; then
             cat build/rg34xx-bl31-static-audit/TWI-DESCRIPTOR.md >> "$GITHUB_STEP_SUMMARY"
