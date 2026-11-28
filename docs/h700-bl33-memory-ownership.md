@@ -527,3 +527,12 @@ A host-only raw-byte review of the exact Boot0 captures from BL31 audit #145 (ar
 - The pinned BaseOS native SPL contract independently verifies that its explicit monitor patches are limited to `+0x24..+0x2b`, `+0x30..+0xaf`, and `+0xb0..+0xb3`; it has no direct patch to `+0x14668`.
 
 This rules out only an obvious direct-literal Boot0/SPL patch to the context slot. It does not rule out computed addresses, generic relocation/copy side effects, code outside the logical Boot0 extent, or runtime/indirect initialization inside BL31. It is not proof that Boot0 never writes the slot. The context value's producer remains unresolved.
+
+
+### 2026-11-28 Boot0 disassembly: monitor-loader handoff routine identified, copy semantics still under review
+
+The exact primary Boot0 capture was wrapped as a temporary ARM ELF and disassembled offline with LLVM; no device interaction occurred. The eGON entry branch at file offset `0x0` targets code at offset `0x400`. That early path saves CPU state, checks the current execution mode, validates the Boot0 image extent/signature, and then selects a later stage. The initial branch is not itself the DRAM-training or monitor-copy routine.
+
+A later reachable-looking helper at file offset `0x1b7d4` is called from `0x1b6d0`; a nearby literal at `0x1b7cc` is `0x48000000`, with the preceding word `0x0001a2d0`. The latter matches the exact BL31 payload size and the former its load base. This is materially stronger than the earlier raw literal-only check: the address/size pair sits directly beside a function call in the Boot0 code tail and likely participates in a monitor load/copy operation. However, the helper's full control flow and its callers/arguments must be reconstructed before assigning semantics or claiming which source buffer is copied. The literal pair alone does not show a write to `0x48014668`; it indicates the BL31 extent transfer path is now the next concrete reverse-engineering target.
+
+The full disassembly is not committed as a generated dump. The source capture and hashes remain the evidence source. Next inspect the routine at `0x1b7d4`, its caller at `0x1b6d0`, and the code that prepares its arguments; classify every destination write and any relocation/zero-fill performed over the monitor extent. Do not infer the runtime context pointer from the copy operation.
