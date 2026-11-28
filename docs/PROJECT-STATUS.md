@@ -2040,3 +2040,11 @@ AArch64 反汇编窗口，验证：
 - This supersedes the immediately preceding note's provisional recording of Kconfig-default simple malloc/tiny printf. The final acceptance criterion is the resolved profile above, not a forced guess about upstream defaults.
 
 **Next gate:** fresh CI must prove the resolved Kconfig profile, link the actual H616 SPL ELF, and verify BSS/scratch/GPT-table/heap/stack intervals from the final map and symbols. The 64 KiB pool must remain candidate-ineligible until stack and allocator usage are measured or conservatively bounded. No installable output or hardware operation is authorized.
+
+
+## 2026-11-28 M1 early SPL allocator initialization
+
+- The M1 hook is deliberately invoked from `board_init_f`, before normal `board_init_r`; pinned U-Boot source shows the standard `CONFIG_SPL_SYS_MALLOC` pool is initialized in `spl_init()` / `board_init_r`, which this non-returning preflight harness never reaches.
+- Updated `baseos_m1_preflight.c` to initialize the configured SRAM-C dlmalloc pool explicitly at `SPL_SYS_MALLOC_START` / `SPL_SYS_MALLOC_SIZE` and set `GD_FLG_FULL_MALLOC_INIT` **before** `mmc_initialize()`. This prevents MMC/DM discovery from silently relying on the 8 KiB early malloc-F fallback while claiming a 64 KiB full pool.
+- The pool remains `0x34000..0x44000`; the reserved BSS window is `0x30000..0x34000`; configured stack is `0x52a00`. This is a static non-overlap design only. It does not prove allocator high-water, stack high-water, actual SRAM availability at BL33 entry, or BL31/Boot0 ownership.
+- CI must now verify this initialization order in the linked SPL call path and validate the final map/ELF. The zero FNV sentinel still rejects the firmware package; this harness cannot hand off to BL33 and remains non-installable.
