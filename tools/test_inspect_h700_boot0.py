@@ -41,6 +41,8 @@ class Boot0InspectorTests(unittest.TestCase):
         self.assertEqual(report["bytes"], 65536)
         self.assertTrue(report["checksum_valid"])
         self.assertEqual(report["debug_byte"], 3)
+        self.assertEqual(len(report["embedded_egon_components"]), 1)
+        self.assertTrue(report["embedded_egon_components"][0]["checksum_valid_standard_egon"])
         self.assertEqual(
             [entry["dram_type"] for entry in report["dram_candidates"]],
             ["LPDDR4", "LPDDR3", "LPDDR4"],
@@ -165,6 +167,59 @@ class Boot0InspectorTests(unittest.TestCase):
         self.assertEqual(relocated["entries"][14]["dram_type"], "LPDDR4")
         self.assertEqual(relocated["entries"][14]["clock_mhz"], 672)
 
+
+
+    def test_detects_nested_boot0_and_nonstandard_spl2_component(self):
+        outer = bytearray(make_boot0(0x20000))
+        inner = bytearray(make_boot0(0x10000))
+
+        def profile(clock, dram_type):
+            words = [0] * 32
+            words[0] = clock
+            words[1] = dram_type
+            words[2] = 0x08080808
+            words[3] = 0x0E0E0E0E
+            words[4] = 0x00000E0E
+            words[5] = 0x7887BBBB
+            words[6] = 0x000030FA
+            return words
+
+        inner[0x348:0x350] = b"DRAM.ext"
+        for index in range(15):
+            dram_type = 7 if index == 13 else 8 if index == 14 else 3
+            clock = 672 if index >= 13 else 792
+            struct.pack_into("<32I", inner, 0x348 + 44 + index * 128, *profile(clock, dram_type))
+        struct.pack_into("<I", inner, MODULE.CHECKSUM_OFFSET, 0)
+        struct.pack_into(
+            "<I", inner, MODULE.CHECKSUM_OFFSET, MODULE.allwinner_checksum(bytes(inner))
+        )
+
+        outer[0x1000:0x11000] = inner
+        spl_offset = 0x11000
+        outer[spl_offset + 4:spl_offset + 12] = b"eGON.BT0"
+        struct.pack_into("<I", outer, spl_offset + 0x10, 0xC000)
+        outer[spl_offset + 0x14:spl_offset + 0x18] = b"SPL\x02"
+        struct.pack_into("<I", outer, spl_offset + 0x20, 0x2C)
+        platform = b"allwinner/sun50i-h700-anbernic-rg35xx-2024\0"
+        outer[spl_offset + 0x2C:spl_offset + 0x2C + len(platform)] = platform
+
+        struct.pack_into("<I", outer, MODULE.CHECKSUM_OFFSET, 0)
+        struct.pack_into(
+            "<I", outer, MODULE.CHECKSUM_OFFSET, MODULE.allwinner_checksum(bytes(outer))
+        )
+        report = MODULE.parse_boot0(bytes(outer))
+        components = {item["offset"]: item for item in report["embedded_egon_components"]}
+
+        self.assertEqual(set(components), {"0x0", "0x1000", "0x11000"})
+        self.assertTrue(components["0x0"]["checksum_valid_standard_egon"])
+        self.assertTrue(components["0x1000"]["checksum_valid_standard_egon"])
+        self.assertEqual(components["0x1000"]["declared_size"], 0x10000)
+        self.assertEqual(components["0x1000"]["dram_ext_tables"][0]["marker_offset"], "0x348")
+        self.assertEqual(components["0x1000"]["dram_ext_tables"][0]["valid_entry_count"], 15)
+        spl = components["0x11000"]
+        self.assertEqual(spl["component_kind"], "SPL2 component")
+        self.assertIsNone(spl["checksum_valid_standard_egon"])
+        self.assertEqual(spl["platform_string"], "allwinner/sun50i-h700-anbernic-rg35xx-2024")
 
 if __name__ == "__main__":
     unittest.main()
