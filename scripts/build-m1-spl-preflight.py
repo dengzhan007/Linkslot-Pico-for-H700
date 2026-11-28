@@ -165,7 +165,7 @@ def main() -> int:
          "--disable", "AXP717_POWER",
          "--disable", "CMD_BOOTD",
          "--disable", "VERSION_VARIABLE",
-         "--disable", "OF_REAL"], cwd=uboot)
+         ], cwd=uboot)
     # ARMv8 Kconfig force-selects SPL_FIT even for this read-only preflight.
     # The harness neither loads nor parses FIT images, so remove that one
     # architecture-wide selector in the disposable source checkout only.
@@ -243,8 +243,8 @@ def main() -> int:
             "CONFIG_SPL_LOAD_FIT=y" not in config_text,
             "resolved M1 preflight profile unexpectedly enables FIT loading")
 
-    require("CONFIG_OF_REAL=y" not in config_text,
-            "resolved M1 preflight profile unexpectedly enables full-U-Boot OF_REAL")
+    require("CONFIG_OF_REAL=y" in config_text,
+            "SPL_OF_CONTROL must retain its OF_CONTROL-selected OF_REAL dependency")
 
     map_file = out / "spl/u-boot-spl.map"
     map_arg = f"-Map={map_file}"
