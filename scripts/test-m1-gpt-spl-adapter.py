@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -42,16 +43,20 @@ def main() -> int:
         ])
         output = run([str(exe)])
         undefined = run([args.nm, "-u", str(exe)])
-        symbols = run([args.nm, str(exe)])
+        symbols = run([args.nm, "-S", str(exe)])
         if "blk_dwrite" in undefined or "blk_dwrite" in symbols:
             raise RuntimeError("forbidden block-write symbol present")
         if "blk_dread" not in symbols:
             raise RuntimeError("expected read-only blk_dread symbol missing")
         if "m1_boot_partitions" not in symbols:
             raise RuntimeError("bounded eight-entry GPT table is not present in the linked adapter")
+        scratch = re.search(r"^[0-9a-fA-F]+\\s+([0-9a-fA-F]+)\\s+[bB]\\s+m1_package_scratch$", symbols, re.M)
+        if not scratch or int(scratch.group(1), 16) != 4096:
+            raise RuntimeError("expected aligned 4KiB static M1 package scratch symbol missing")
         print(output, end="")
         print("PASS adapter link has blk_dread only; no blk_dwrite")
         print("PASS bounded eight-slot GPT table is a linked static object")
+        print("PASS named 4KiB static package scratch symbol is linked")
     return 0
 
 
