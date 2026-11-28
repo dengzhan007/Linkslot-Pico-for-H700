@@ -28,7 +28,7 @@ static uint8_t *make_image(void)
 {
     uint8_t *image = (uint8_t *)calloc(1, H700_M1_PACKAGE_BYTES);
     assert(image != 0);
-    /* Deterministic nonzero payload bytes; both alignment tails stay zero. */
+    /* Deterministic payload bytes; monitor, DTBO and DTB tails stay zero. */
     for (uint32_t i = 0; i < 0x1a2d0; ++i)
         image[i] = (uint8_t)(i * 13u + 7u);
     for (uint32_t i = 0x1a400; i < 0x1a400 + 0x920; ++i)
@@ -91,7 +91,6 @@ int main(void)
     image[0x3d02e] = 0u;
 
     card.image = image;
-    plan.expected_fnv1a = h700_m1_package_fnv1a(image, H700_M1_PACKAGE_BYTES);
     plan.expected_fnv1a = h700_m1_package_fnv1a(image, H700_M1_PACKAGE_BYTES);
     plan.bl33.destination ^= 4u;
     assert(!h700_m1_package_read_validate(&dev, &plan, staging, H700_M1_PACKAGE_BYTES));
