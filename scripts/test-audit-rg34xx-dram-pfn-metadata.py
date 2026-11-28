@@ -31,11 +31,11 @@ def main():
     current = module.decode_report(fixture())
     assert current["raw"]["kpageflags_u64_little_endian"] == "0x5868"
     assert current["interpretation"]["page_mapcount"] == 1
-    assert current["classification"] == "MAPPED_PAGE_TYPE_NOT_CONFIRMED"
-    assert current["gate"] == "BLOCKED_LINUX_PAGE_MAPPING_PRESENT"
-    for name in ("uptodate", "dirty", "active", "mmap", "swapcache", "swapbacked"):
+    assert current["classification"] == "LINUX_ACTIVE_ANON_MAPPED_PAGE"
+    assert current["gate"] == "BLOCKED_LIVE_LINUX_PAGE_REQUIRES_EXACT_PRESERVE_RESTORE"
+    for name in ("uptodate", "lru", "active", "mmap", "anon", "swapbacked"):
         assert current["kpf_flags"][name]
-    for name in ("lru", "anon", "buddy", "compound_head", "compound_tail", "huge", "reserved", "hwpoison"):
+    for name in ("buddy", "compound_head", "compound_tail", "huge", "reserved", "hwpoison"):
         assert not current["kpf_flags"][name]
     assert current["H700_MEMORY_LAYOUT_APPROVED"] is False
 
