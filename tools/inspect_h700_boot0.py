@@ -142,6 +142,98 @@ def scan_dram_ext_tables(data: bytes) -> list[dict[str, Any]]:
     return tables
 
 
+
+def _read_c_string(data: bytes, offset: int, limit: int = 256) -> str | None:
+    if offset < 0 or offset >= len(data):
+        return None
+    end = data.find(b"\0", offset, min(len(data), offset + limit))
+    if end < 0:
+        end = min(len(data), offset + limit)
+    raw = data[offset:end]
+    if not raw:
+        return None
+    return raw.decode("ascii", errors="replace")
+
+
+def scan_embedded_egon_images(data: bytes) -> list[dict[str, Any]]:
+    """Describe aligned nested eGON headers without assuming every header is Boot0.
+
+    The RG34XX primary capture contains an outer 128 KiB eGON image, an inner
+    64 KiB eGON Boot0 image at +0x1000, and a nonstandard SPL2 component at
+    +0x11000. The SPL2 component reuses the eGON.BT0 magic but has a distinct
+    header marker and platform string, so the standard Boot0 checksum rule is
+    deliberately not applied to it.
+    """
+    components: list[dict[str, Any]] = []
+    cursor = 0
+    while True:
+        marker = data.find(b"eGON.BT0", cursor)
+        if marker < 4:
+            break
+        cursor = marker + 1
+        offset = marker - 4
+        if offset % 4:
+            continue
+        if offset + 0x30 > len(data):
+            continue
+
+        declared_size = struct.unpack_from("<I", data, offset + IMAGE_SIZE_OFFSET)[0]
+        header_tag = data[offset + 0x14:offset + 0x18]
+        stored_checksum = struct.unpack_from("<I", data, offset + CHECKSUM_OFFSET)[0]
+        word_7 = struct.unpack_from("<I", data, offset + 0x1C)[0]
+        word_8 = struct.unpack_from("<I", data, offset + 0x20)[0]
+        in_bounds = (
+            declared_size >= 0x30
+            and declared_size % 4 == 0
+            and offset + declared_size <= len(data)
+        )
+        if not in_bounds:
+            continue
+
+        component_data = data[offset:offset + declared_size]
+        is_standard_boot0 = header_tag == struct.pack("<I", 0x30) and declared_size >= BOOT0_BYTES
+        checksum_valid: bool | None = None
+        if is_standard_boot0:
+            checksum_valid = allwinner_checksum(component_data) == stored_checksum
+
+        active_profile = None
+        if is_standard_boot0 and 0x38 + PARAMETER_WORDS * 4 <= declared_size:
+            words = list(struct.unpack_from("<32I", component_data, 0x38))
+            if is_plausible_h616_h700_profile(words):
+                active_profile = decode_h616_h700_profile(words, 0x38)
+
+        tables = scan_dram_ext_tables(component_data)
+        for table in tables:
+            table["marker_offset_absolute"] = f"0x{offset + int(table['marker_offset'], 16):x}"
+            table["parameter_offset_absolute"] = f"0x{offset + int(table['parameter_offset'], 16):x}"
+            for entry in table["entries"]:
+                entry["offset_absolute"] = f"0x{offset + int(entry['offset'], 16):x}"
+
+        is_spl2 = header_tag.startswith(b"SPL")
+        platform_string = _read_c_string(data, offset + word_8) if is_spl2 and word_8 < declared_size else None
+        component: dict[str, Any] = {
+            "offset": f"0x{offset:x}",
+            "magic": "eGON.BT0",
+            "header_tag_hex": header_tag.hex(),
+            "header_tag_ascii": header_tag.decode("ascii", errors="replace"),
+            "declared_size": declared_size,
+            "stored_checksum": f"0x{stored_checksum:08x}",
+            "checksum_valid_standard_egon": checksum_valid,
+            "sha256_declared_component": sha256(component_data),
+            "component_kind": "eGON Boot0" if is_standard_boot0 else ("SPL2 component" if is_spl2 else "nonstandard eGON-tagged component"),
+            "word_7": f"0x{word_7:08x}",
+            "word_8": f"0x{word_8:08x}",
+            "platform_string": platform_string,
+            "active_dram_profile": active_profile,
+            "dram_ext_tables": tables,
+        }
+        if is_spl2:
+            component["checksum_note"] = "Nonstandard SPL2 header; standard eGON Boot0 checksum is not asserted."
+            component["platform_string_note"] = "Build/platform label only; it does not by itself prove hardware incompatibility or runtime use."
+        components.append(component)
+    return components
+
+
 def parse_boot0(data: bytes) -> dict[str, Any]:
     captured_bytes = len(data)
     if captured_bytes < BOOT0_BYTES:
@@ -206,12 +298,15 @@ def parse_boot0(data: bytes) -> dict[str, Any]:
         "sha256_body_after_first_sector": sha256(data[512:]),
         "dram_candidates": candidates,
         "dram_ext_tables": scan_dram_ext_tables(data),
+        "embedded_egon_components": scan_embedded_egon_images(data),
         "interpretation_notes": [
             "The primary parameter block at 0x38 lies in the first 512-byte sector and may be rewritten by Boot0 during DRAM training.",
             "The body hash intentionally excludes that mutable first sector; it is not a substitute for validating the live checksum.",
             "Legacy fixed-offset candidates are retained for compatibility but are not exhaustive across Boot0 layouts.",
             "DRAM.ext markers are scanned across the declared image; only contiguous records passing conservative H616/H700 structural checks are reported.",
             "DRAM.ext profile extraction does not prove which profile Boot0 selected, whether a marker is consumed on this boot path, or the physical DRAM map.",
+            "Aligned nested eGON headers are reported as separate components; nonstandard SPL2 headers are not validated with the standard Boot0 checksum rule.",
+            "An embedded platform string such as rg35xx-2024 is a build label and is not, by itself, proof that the component is incompatible with an RG34XX board.",
         ],
     }
 
