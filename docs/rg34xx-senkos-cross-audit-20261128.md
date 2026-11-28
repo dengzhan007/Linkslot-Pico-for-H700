@@ -282,3 +282,6 @@ The original concern about transferring SenkOS's strap pins from RG35XX-SP to RG
 
 Conclusion: SenkOS's **pin mapping and 14 → LPDDR3 profile mapping** are now independently corroborated by the RG34XX stock Boot0 Thumb code, not assumed from RG35XX-SP. Boot0 reads PH6/PH7/PH8/PH10 in that order, packs them LSB-first, and uses the resulting four-bit value as a one-based DRAM.ext profile index. Profile 14 is LPDDR3 type 7 at 672 MHz; profile 15 is LPDDR4 type 8 at 672 MHz. The stock code's generic lookup also contains DDR3 profiles 1–13, so do not copy SenkOS's simplified '14 else LPDDR4' rule without restricting/validating the accepted RG34XX codes. Actual electrical strap levels have not been measured. Detailed binary/FDT evidence and regression test: \`docs/rg34xx-boot0-container-spl2-audit-20261128.md\`.
 
+
+
+The raw Boot0 code additionally confirms the bit significance: PH6 contributes bit 0, PH7 bit 1, PH8 bit 2, and PH10 bit 3. The 4-bit result is looked up as a one-based profile ID. Profile 14 is LPDDR3 and profile 15 is LPDDR4. This is more precise than the SenkOS patch's simplified "14 else LPDDR4" branch; the stock table also contains DDR3 profiles 1–13. RG34XX implementation should preserve the one-based lookup and reject unsupported indices rather than silently treating every non-14 value as LPDDR4.
