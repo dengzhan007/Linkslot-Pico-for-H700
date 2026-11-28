@@ -8,6 +8,8 @@ on:
       - "scripts/test-audit-rg34xx-bl31-memory.py"
       - "scripts/test-rg34xx-bl31-startup-contract.py"
       - "scripts/audit-rg34xx-boot0-cpu-reset.py"
+      - "scripts/audit-rg34xx-boot0-dram-geometry.py"
+      - "scripts/test-audit-rg34xx-boot0-dram-geometry.py"
       - "scripts/test-audit-rg34xx-boot0-cpu-reset.py"
       - "scripts/audit-rg34xx-bl31-full-image-cpu-mmio.py"
       - "scripts/test-audit-rg34xx-bl31-full-image-cpu-mmio.py"
@@ -68,6 +70,18 @@ jobs:
           python3 scripts/audit-rg34xx-bl31-memory.py \
             --reports-root .ci/reports/reports \
             --out build/rg34xx-bl31-static-audit
+
+      - name: Test Boot0 DRAM geometry decoder
+        run: |
+          python3 scripts/test-audit-rg34xx-boot0-dram-geometry.py
+
+      - name: Cross-check Boot0 DRAM geometry against Linux runtime memblock
+        run: |
+          python3 scripts/audit-rg34xx-boot0-dram-geometry.py \\
+            --primary .ci/reports/reports/rg34xx-inventory-20261127-uart/boot0-primary.json \\
+            --secondary .ci/reports/reports/rg34xx-inventory-20261127-uart/boot0-secondary.json \\
+            --memory-map .ci/reports/reports/rg34xx-inventory-20261127-uart/memory-map-report.json \\
+            --out-dir build/rg34xx-bl31-static-audit
 
       - name: Test Boot0 CPU reset-bit interpretation (H616 reference only)
         run: |
@@ -168,6 +182,9 @@ jobs:
           fi
           if [ -f build/rg34xx-bl31-static-audit/DRAM-PFN-METADATA.md ]; then
             cat build/rg34xx-bl31-static-audit/DRAM-PFN-METADATA.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f build/rg34xx-bl31-static-audit/BOOT0-DRAM-GEOMETRY.md ]; then
+            cat build/rg34xx-bl31-static-audit/BOOT0-DRAM-GEOMETRY.md >> "$GITHUB_STEP_SUMMARY"
           fi
           if [ -f build/rg34xx-bl31-static-audit/TWI-DESCRIPTOR.md ]; then
             cat build/rg34xx-bl31-static-audit/TWI-DESCRIPTOR.md >> "$GITHUB_STEP_SUMMARY"
