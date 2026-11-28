@@ -2430,3 +2430,11 @@ AArch64 反汇编窗口，验证：
 - A raw qword at `0x48018d00` equals `0x4800a134`, but it is not yet tied to a live consumer. Known MIDR lookup `0x48015cd0` scans `[0x48018d10,0x48018d70)`, excluding that qword; known exception dispatch based at `0x48018ca8` indexes 0x20-byte records and likewise does not calculate `0x48018d00`.
 - Therefore the callback writer/value remain confirmed, but installer reachability is unresolved. This does not establish a G2 writer for `0x48014668`. Full detail: [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md).
 - Next investigate the owner/consumer of the data record at `0x48018d00`, then resume G2 indirect writer tracing. G2/G3/M1-S1 remain closed; no device interaction or payload execution.
+
+
+### BL31 exception-descriptor table clarified: 0x4800a134 is not the dispatched handler
+
+- The exception entry at `0x48015884` indexes 0x20-byte records rooted at `0x48018ca8`, but loads and calls only each record's first qword (`LDR x15,[x11,w10,uxtw]`; `BLR x15`).
+- Record `0x48018ce8` contains qwords `0x4800a29c, 0x13f32, 0x480184e1, 0x4800a134`. The pointer `0x4800a134` is the fourth field (+0x18), not the dispatch target. Its consumer/meaning is still unknown.
+- This corrects the prior interpretation: the data reference at `0x48018d00` does not show that the exception dispatcher calls the callback installer. Runtime installation of `0x4803c048` remains unproven; G2 slot `0x48014668` still has no established writer. Full evidence: [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md).
+- Continue by finding a separate consumer for the fourth descriptor field and expanding G2 indirect-writer analysis. G2/G3/M1-S1 remain closed; no device interaction or payload execution.
