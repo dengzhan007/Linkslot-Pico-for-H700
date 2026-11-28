@@ -98,7 +98,7 @@ def main() -> int:
     for actual, declared in zip(computed, expected["regions"], strict=True):
         name, offset, payload, padded, destination = actual
         if (name, offset, payload, padded, destination) != (
-            declared["name"], declared["offset"], declared["payload_bytes"],
+            declared["name"], declared["offset"], declared["component_bytes"],
             declared["padded_bytes"], declared["destination"]
         ):
             raise SystemExit(f"FAIL extent mismatch for {name}: {actual!r} != {declared!r}")
@@ -107,11 +107,14 @@ def main() -> int:
     assert items["monitor"]["bytes"] == 0x1A2D0
     assert items["dtbo"]["bytes"] == 0x920
     assert items["dtb"]["bytes"] == 0x23400
+    assert items["dtb"]["fdt_totalsize"] == 139822
+    assert 0x1ae00 + items["dtb"]["fdt_totalsize"] == 0x3d02e
     assert fixture["linkslot_loader_bytes"] == 0x8000
     print("PASS captured TOC1 source item sizes/hashes pinned")
     print("PASS pinned BaseOS builder TOC1 -> firmware.bin packing contract")
     print("PASS p4+40MiB generated firmware length/FNV binding and native consumer")
     print("PASS 512-byte alignment: 0x1a400 + 0xa00 + 0x23400 + 0x8000 = 0x46200")
+    print("PASS DTB FDT totalsize 139822; zero tail to 144384-byte copied component")
     print("LIMIT: source/layout proof only; firmware bytes/FNV must be generated and bound per build")
     print("LIMIT: no real card read, DRAM copy, SPL execution, or hardware qualification")
     return 0
