@@ -124,12 +124,46 @@ def main() -> int:
     run(["make", f"O={out}", f"CROSS_COMPILE={cross}",
          "anbernic_rg35xx_h700_defconfig"], cwd=uboot)
     config = out / ".config"
-    run([str(uboot / "scripts/config"), "--file", str(config),
+    scripts_config = str(uboot / "scripts/config")
+    # The stock board defconfig is a full-featured vendor SPL. This isolated
+    # preflight only needs DM-backed read-only MMC + the FDT needed to bind the
+    # controller. Drop unrelated command/FIT/PMIC paths so their full-U-Boot
+    # objects cannot leak into this SPL link.
+    run([scripts_config, "--file", str(config),
          "--set-val", "SPL_BSS_START_ADDR", hex(BSS_START),
          "--set-val", "SPL_BSS_MAX_SIZE", hex(BSS_LIMIT),
+         "--enable", "SPL_DM",
+         "--enable", "DM_MMC",
+         "--enable", "SPL_DM_MMC",
+         "--enable", "BLK",
+         "--enable", "SPL_BLK",
+         "--enable", "SPL_OF_CONTROL",
+         "--enable", "SPL_OF_REAL",
          "--disable", "SPL_MMC_WRITE",
          "--disable", "SPL_EFI_PARTITION",
-         "--disable", "EFI_PARTITION"], cwd=uboot)
+         "--disable", "EFI_PARTITION",
+         "--disable", "SPL_LIBCOMMON_SUPPORT",
+         "--disable", "SPL_FIT",
+         "--disable", "SPL_LOAD_FIT",
+         "--disable", "SPL_SERIAL",
+         "--disable", "SPL_I2C",
+         "--disable", "SPL_POWER",
+         "--disable", "SPL_SUNXI_LED_STATUS",
+         "--disable", "R_I2C_ENABLE",
+         "--disable", "REGULATOR_AXP",
+         "--disable", "AXP717_POWER",
+         "--disable", "CMD_BOOTD",
+         "--disable", "VERSION_VARIABLE",
+         "--disable", "OF_REAL"], cwd=uboot)
+    # U-Boot v2026.10 unconditionally lists these general-purpose dynamic
+    # buffer helpers in lib/Makefile. They are unrelated to read-only MMC/GPT
+    # preflight and pull realloc()/vsnprintf() into a tiny SRAM-only SPL.
+    lib_makefile = uboot / "lib/Makefile"
+    lib_text = lib_makefile.read_text()
+    for line in ("obj-y += membuf.o\\n", "obj-y += abuf.o\\n"):
+        require(line in lib_text, f"unexpected U-Boot lib object rule: {line.strip()}")
+        lib_text = lib_text.replace(line, "")
+    lib_makefile.write_text(lib_text)
     run(["make", f"O={out}", f"CROSS_COMPILE={cross}", "olddefconfig"], cwd=uboot)
     config_text = config.read_text()
     for token in (
@@ -138,8 +172,21 @@ def main() -> int:
         "CONFIG_SPL_SEPARATE_BSS=y",
         "CONFIG_SPL_BSS_START_ADDR=0x30000",
         "CONFIG_SPL_BSS_MAX_SIZE=0x4000",
+        "CONFIG_SPL_DM=y",
+        "CONFIG_DM_MMC=y",
+        "CONFIG_SPL_DM_MMC=y",
+        "CONFIG_BLK=y",
+        "CONFIG_SPL_BLK=y",
+        "CONFIG_SPL_OF_CONTROL=y",
+        "CONFIG_SPL_OF_REAL=y",
         "# CONFIG_SPL_MMC_WRITE is not set",
         "# CONFIG_SPL_EFI_PARTITION is not set",
+        "# CONFIG_SPL_LIBCOMMON_SUPPORT is not set",
+        "# CONFIG_SPL_FIT is not set",
+        "# CONFIG_SPL_I2C is not set",
+        "# CONFIG_SPL_POWER is not set",
+        "# CONFIG_CMD_BOOTD is not set",
+        "# CONFIG_OF_REAL is not set",
     ):
         require(token in config_text, f"resolved SPL config missing contract: {token}")
 
