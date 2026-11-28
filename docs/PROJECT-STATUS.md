@@ -2515,3 +2515,12 @@ See [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md) for the detai
 3. For G2, extend the read-only collector/report to capture the relevant memory-map/zone/page allocator evidence for both candidate pages, while keeping the report non-authorizing and avoiding reads of DRAM contents.
 4. Do not advance to M2 until M0 and M1 gates are explicitly closed by evidence review.
 
+### 2026-11-28 implementation update: post-link gate and dual-page G2 collector
+
+- Added `scripts/audit-m1-spl-linked-contract.py` and `scripts/test-audit-m1-spl-linked-contract.py`. The post-link gate checks the real (non-geometry-only) M1 ELF/BIN/MAP/NM/disassembly artifacts; exact linked BSS usage and 16 KiB ceiling; aligned 4 KiB scratch and bounded eight-entry GPT table inside BSS; BSS/stack and heap/stack separation; fail-closed manifest flags and sentinel; and non-authorizing callgraph metadata.
+- Wired the gate immediately after the actual SPL link and reachable-callgraph audit in `.github/workflows/linkslot-lk-rust-feasibility.yml`. CI run [#1071](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46136315563) has completed the actual M1 SPL link, callgraph audit, and new post-link contract step successfully (step 24). The full workflow remains in progress; this is not yet an overall CI pass.
+- Extended `scripts/collect-rg34xx-dram-pfn-readonly.sh` to capture kpageflags/kpagecount for the second source page at 0x60000000 / PFN 0x60000, plus read-only `/proc/iomem`, `/proc/zoneinfo`, `/proc/buddyinfo`, `/proc/pagetypeinfo`, and `/proc/meminfo`. It still does not read DRAM page contents or perform SMC/MMIO/suspend operations.
+- Added shell syntax validation for this collector to `.github/workflows/h700-boot-audit-tools.yml`. CI run [#1733](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46136466831) passed the Linux host-tools job including the new shell syntax check; the Windows job was still running at the last check.
+- Implementation commits: linked contract `e47be20`, contract tests `a732f9d` / fixture correction `976a4e4`, workflow integration `48b6ce0`; dual-page collector `46175ab`, host workflow integration `3fc2ff8`.
+- The M1 gate is now exercised by CI but remains an audit-only build. `candidate_eligible=false`, `hardware_qualified=false`, `payload_executed=false`, `media_write_performed=false`; no hardware action or media write was performed. G2 remains blocked pending new on-device metadata capture and timing/ownership proof.
+
