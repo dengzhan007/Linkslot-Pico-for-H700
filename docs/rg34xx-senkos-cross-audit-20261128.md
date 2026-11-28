@@ -226,7 +226,7 @@ These reference sources establish that an implementation pattern exists; they do
 1. Identify the exact RG34XX PCB/board revision and match its stock Boot0/boot-package lineage.
 2. Establish RG34XX PH6/PH7/PH8/PH10 strap values from target-specific evidence; do not import SenkOS's index mapping by assumption.
 3. Match the exact RG34XX DRAM package/type/geometry and stock Boot0 `dram_para`/`DRAM.ext` data before considering any timing-table reuse.
-4. Prove the physical PMIC identity and RG34XX register map from target-specific Boot0 behavior or authoritative silicon evidence. The legacy `x-powers,axp2202` DT compatible and a shared I2C address are not sufficient to prove AXP717 equivalence.
+4. Use the upstream Linux maintainer and Allwinner Tina guide evidence that AXP2202 is the legacy BSP name/framework for AXP717-compatible silicon. Then recover the exact RG34XX Boot0 PMU ID probe, bus/address fallback, register writes and DRAM-init ordering. The DT compatible and shared address alone do not prove the target call path.
 5. Trace the RG34XX-specific boot package / stock Boot0 PMIC access path independently. The RG35XX H700 defconfig's TWI and DCDC sequence remains a comparison reference only.
 
 ### Corrected conclusion
