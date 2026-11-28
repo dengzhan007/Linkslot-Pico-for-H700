@@ -18,6 +18,7 @@ def make_boot0(size=MODULE.BOOT0_BYTES):
     image = bytearray(size)
     image[4:12] = b"eGON.BT0"
     struct.pack_into("<I", image, MODULE.IMAGE_SIZE_OFFSET, size)
+    struct.pack_into("<I", image, 0x14, 0x30)  # eGON public header size
     image[MODULE.DEBUG_OFFSET] = 3
     primary = [0x2A0, 8] + [0x100 + i for i in range(30)]
     lpddr3 = [0x2A0, 7] + [0x200 + i for i in range(30)]
