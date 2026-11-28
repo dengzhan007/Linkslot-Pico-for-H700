@@ -199,3 +199,36 @@ This closes the generic upstream U-Boot reference's controller-selection and pre
 - **RG34XX DRAM strap values and Boot0 `DRAM.ext` selection:** not yet proven from target-specific strap evidence.
 
 This means the former broad "PMIC initialization path unknown" blocker is narrowed to a **stock Boot0 provenance / physical PMIC identity equivalence** blocker. No PMIC writes are enabled in M1 preflight.
+
+
+## 9. Target-device applicability correction (RG34XX, not RG35XX)
+
+The project target is **Anbernic RG34XX**. SenkOS's H700 implementation and the inspected generic H700 defconfig are reference implementations from the RG35XX/H700 family, not target-specific RG34XX evidence. The prior sections must be read with this distinction.
+
+### Evidence classification
+
+**RG34XX-specific evidence**
+- KNULLI's RG34XX boot-package DTS path and RG34XX-specific `sun50i-h700-anbernic-rg34xx.dts` are target-specific software descriptions.
+- The public RG34XX Boot0 log identifies the target's reported PMU/DRAM operating point.
+- The project's own read-only RG34XX runtime captures are target-specific observations.
+- RG34XX-specific DTB selection is distinct from RG35XX H / RG35XX 2024 DTBs.
+
+**H700-family reference evidence only**
+- SenkOS SPL strap-selection patch and its PH6/PH7/PH8/PH10 mapping.
+- SenkOS's DRAM parameter tables and LPDDR3 branch.
+- The inspected `anbernic_rg35xx_h700_defconfig` values and AXP717 selection.
+- The generic upstream H700 board initialization sequence and its PMIC-before-DRAM ordering.
+
+These reference sources establish that an implementation pattern exists; they do not prove that RG34XX has the same PCB strap wiring, DRAM package, PMIC silicon/register map, voltage requirements, or Boot0 call sequence.
+
+### Required RG34XX-only proof before using family references
+
+1. Identify the exact RG34XX PCB/board revision and match its stock Boot0/boot-package lineage.
+2. Establish RG34XX PH6/PH7/PH8/PH10 strap values from target-specific evidence; do not import SenkOS's index mapping by assumption.
+3. Match the exact RG34XX DRAM package/type/geometry and stock Boot0 `dram_para`/`DRAM.ext` data before considering any timing-table reuse.
+4. Prove the physical PMIC identity and RG34XX register map from target-specific Boot0 behavior or authoritative silicon evidence. The legacy `x-powers,axp2202` DT compatible and a shared I2C address are not sufficient to prove AXP717 equivalence.
+5. Trace the RG34XX-specific boot package / stock Boot0 PMIC access path independently. The RG35XX H700 defconfig's TWI and DCDC sequence remains a comparison reference only.
+
+### Corrected conclusion
+
+The SenkOS and upstream U-Boot findings narrow the search space and supply useful source-level hypotheses. They do **not** close the RG34XX PMIC/DRAM blockers. The project's target evidence remains the authority. No SenkOS strap values, voltage policy, DRAM timing table, or PMIC register writes are approved for RG34XX by this comparison.
