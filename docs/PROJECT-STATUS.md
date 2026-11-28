@@ -2361,3 +2361,11 @@ AArch64 反汇编窗口，验证：
 - The AArch64 function at `0x1b6f4` dispatches through a function pointer stored at descriptor offset `+0x20`. The data pair at `0x1b7c8/0x1b7cc` remains `0x1a2d0/0x48000000`, matching BL31 size/base, but no consumer or copy semantics have yet been established.
 - The prior tentative claim that Boot0 calls a monitor-loader helper at `0x1b7d4` is explicitly withdrawn. Full correction and evidence are in [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md), commit [8fe153f](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/8fe153f4f8b69712938a4850f18b95901a145394).
 - Next: identify how/if Boot0 reaches the AArch64 region, decode descriptor layout `0x1b740..0x1b7f8`, and find the actual consumer of the size/base pair. No execution or device access. G2/G3/M1-S1 remain open; `H700_MEMORY_LAYOUT_APPROVED=false`.
+
+
+### Boot0 AArch64 descriptor-dispatch structure
+
+- Correct AArch64 decoding identifies a generic registry at `0x1b694..0x1b73c`: it walks 0x28-byte records from `0x1c688` to `0x1c6b0`, compares the requested key with the record field at `+0x08`, and dispatches through the callback pointer at `+0x20`.
+- The captured single record has key `0x4d` and callback pointer `0x2984c`. This is a concrete descriptor-dispatch mechanism, but not yet a BL31 loader. No validated control-flow link from the eGON AArch32 entry into this AArch64 region has been established.
+- The `0x1a2d0/0x48000000` size/base pair remains an unconnected data candidate. Next: inspect callback `0x2984c`, locate the AArch64 region's entry/caller, and find actual code references to the size/base descriptor. Do not infer a monitor copy or context-slot writer.
+- Full notes are in [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md), commit [6d42e46](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/6d42e46618bef158b5d235019919285675ac7d6d). Hardware safety gates remain unchanged.
