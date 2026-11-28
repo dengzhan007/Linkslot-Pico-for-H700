@@ -49,7 +49,7 @@ WORDS = {
     0x480119C4: 0x2A0A4000,  # orr w0, w0, w10, lsl #16
     0x480119C8: 0xB9001E60,  # str w0, [x19, #0x1c]
     0x480119D0: 0x36D80880,  # tbz w0, #27, 0x48011ae0
-    0x480119E8: 0x52800001,  # mov w1, #0x40000000
+    0x480119E8: 0x52A80001,  # mov w1, #0x40000000
     0x480119EC: 0x53117C00,  # lsr w0, w0, #17
     0x480119F8: 0x0B005020,  # add w0, w1, w0, lsl #20
     0x48011AE0: 0x97FFEB32,  # fallback controller configuration helper
