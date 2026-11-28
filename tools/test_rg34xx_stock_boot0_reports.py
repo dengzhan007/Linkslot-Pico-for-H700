@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import subprocess
+import struct
 import sys
 
 from inspect_h700_boot0 import parse_boot0
