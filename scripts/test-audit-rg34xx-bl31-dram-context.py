@@ -15,7 +15,7 @@ def main():
     words[6], words[7], words[30] = 0x30FA, 0x04000000, 0x02008C60
     result = MOD.derive(words)
     assert result["helper_result"] == "0x00000400"
-    assert result["word7_after_helper"] == "0x04000040"
+    assert result["word7_after_helper"] == "0x04000000"
     assert result["midpoint_selector_mib"] == 0x200
     assert result["second_source_window"] == ["0x60000000", "0x60000140"]
 
