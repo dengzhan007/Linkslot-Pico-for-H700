@@ -51,6 +51,7 @@ def main() -> int:
     args = parser.parse_args()
 
     reports = {}
+    raw_captures = {}
     for filename, expected in EXPECTED.items():
         path = f"{REPORT_PATH}/{filename}"
         data = read_git_blob(args.reports_ref, path)
@@ -67,6 +68,7 @@ def main() -> int:
                 f"{expected['image_sha']}"
             )
         reports[filename] = report
+        raw_captures[filename] = data
 
     primary = reports["boot0-primary.bin"]
     secondary = reports["boot0-secondary.bin"]
@@ -81,6 +83,40 @@ def main() -> int:
     primary_relocated = find_table(primary, "0x1348")
     secondary_table = find_table(secondary, "0x348")
     assert primary_relocated["valid_entry_count"] == 15
+    # The 128 KiB primary container embeds a separate 64 KiB eGON Boot0
+    # at +0x1000 and a nonstandard SPL2 component at +0x11000.
+    primary_components = {item["offset"]: item for item in primary["embedded_egon_components"]}
+    secondary_components = {item["offset"]: item for item in secondary["embedded_egon_components"]}
+    assert set(primary_components) == {"0x0", "0x1000", "0x11000"}, primary_components
+    assert set(secondary_components) == {"0x0"}, secondary_components
+    assert primary_components["0x0"]["checksum_valid_standard_egon"] is True
+    assert primary_components["0x1000"]["checksum_valid_standard_egon"] is True
+    inner = primary_components["0x1000"]
+    assert inner["declared_size"] == 0x10000
+    assert inner["sha256_declared_component"] == "b6edbf39af0bf1f35a7e2fd991c8966b04d061e247c81985d2516f695464049b"
+    assert inner["dram_ext_tables"][0]["marker_offset"] == "0x348"
+    assert inner["dram_ext_tables"][0]["valid_entry_count"] == 15
+    assert inner["active_dram_profile"]["words"] == primary_components["0x0"]["active_dram_profile"]["words"]
+
+    spl = primary_components["0x11000"]
+    assert spl["component_kind"] == "SPL2 component"
+    assert spl["declared_size"] == 0xC000
+    assert spl["checksum_valid_standard_egon"] is None
+    assert spl["platform_string"] == "allwinner/sun50i-h700-anbernic-rg35xx-2024"
+
+    primary_inner_bytes = raw_captures["boot0-primary.bin"][0x1000:0x11000]
+    secondary_image_bytes = raw_captures["boot0-secondary.bin"][:0x10000]
+    assert hashlib.sha256(primary_inner_bytes).hexdigest() == inner["sha256_declared_component"]
+    assert hashlib.sha256(secondary_image_bytes).hexdigest() == "4701a85e4db7e8339b91b92f691a83cc954ec63a09369087c2e41d80eafa9f5d"
+    byte_differences = [
+        offset for offset, (left, right) in enumerate(zip(primary_inner_bytes, secondary_image_bytes))
+        if left != right
+    ]
+    assert byte_differences == [0x0C, 0x0D, 0x34, 0xA3, 0xAC], byte_differences
+    print("PASS: primary contains a valid nested 64 KiB Boot0 at +0x1000 and SPL2 component at +0x11000")
+    print("PASS: primary inner Boot0 and secondary Boot0 differ only in checksum, debug byte, TPR6 and TPR12")
+    print("REVIEW: embedded SPL2 platform label is rg35xx-2024; compatibility with RG34XX must be established, not assumed")
+
     assert secondary_table["valid_entry_count"] == 15
     for name, table in (
         ("primary relocated DRAM.ext", primary_relocated),
