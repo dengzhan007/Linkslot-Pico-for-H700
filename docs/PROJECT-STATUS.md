@@ -2030,3 +2030,13 @@ AArch64 反汇编窗口，验证：
 - Current source remains host-only and non-installable. No hardware access, SD/Boot0/TOC1 writes, firmware flash, MMIO/SMC, TWI, DRAM access, or payload execution occurred. G2/G3/M1-S1 remain open; `hardware_applied=0`.
 
 **Next gate:** rerun the isolated SPL build with the corrected Kconfig contract. If linking succeeds, inspect actual `__bss_start/__bss_end`, scratch/table symbols, allocator placement and high-water evidence, stack separation, provider set, and linked-ELF side effects. Do not treat source Kconfig resolution as a completed memory-safety proof.
+
+
+## 2026-11-28 M1 SPL allocator memory contract refinement
+
+- Follow-up review of pinned U-Boot v2026.10 `include/system-constants.h`, `common/spl/Kconfig`, `drivers/core/Kconfig`, and `common/spl/spl.c` showed that merely removing ARCH_SUNXI's simple-malloc selector is insufficient: driver model requires a suitable allocator, and the full SPL malloc pool is placed at `CONFIG_SPL_BSS_START_ADDR + CONFIG_SPL_BSS_MAX_SIZE` unless a custom start is configured.
+- Updated the isolated harness to use full SPL dlmalloc with an explicit **64 KiB** pool at `0x34000..0x44000`, immediately after the reserved BSS window `0x30000..0x34000`. This ends below the configured initial stack pointer `0x52a00`, leaving a static 60,928-byte gap. `SPL_SYS_MALLOC_F` remains enabled with a 8 KiB early pool; simple malloc and tiny printf are explicitly disabled after the disposable ARCH_SUNXI selector patch. The nonexistent `SPL_CMDLINE` symbol remains excluded from assertions.
+- The manifest now records the full allocator profile, heap start/size/end and stack gap. It explicitly leaves allocator high-water usage unmeasured. This is a static reservation proposal for host-side link audit only; actual heap use and all hardware access remain untested.
+- This supersedes the immediately preceding note's provisional recording of Kconfig-default simple malloc/tiny printf. The final acceptance criterion is the resolved profile above, not a forced guess about upstream defaults.
+
+**Next gate:** fresh CI must prove the resolved Kconfig profile, link the actual H616 SPL ELF, and verify BSS/scratch/GPT-table/heap/stack intervals from the final map and symbols. The 64 KiB pool must remain candidate-ineligible until stack and allocator usage are measured or conservatively bounded. No installable output or hardware operation is authorized.
