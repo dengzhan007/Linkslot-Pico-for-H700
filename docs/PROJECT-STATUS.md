@@ -2388,3 +2388,12 @@ AArch64 反汇编窗口，验证：
 - The copied routine restores a caller-supplied memory range to `0x20000`, restores CPSR and general-register/SP/LR state from `0x52000`, and branches to `0x20000`. This is a concrete Boot0 SRAM resume/restore mechanism.
 - It is distinct from BL31 context slot `0x48014668`: this path uses SRAM `0x50000/0x52000`, explicitly zeroes its 72-byte context block, and no bridge to the BL31 context pointer is established. Full analysis: [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md), commit [fcfddba](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/fcfddba03f6b6c6897f27f1ff4e32521697ac61d).
 - Next: identify the peripheral handshake in `0x4e0`, locate any later population of `0x52000`, and determine whether any state-transfer path reaches BL31. Keep G2/G3/M1-S1 gates closed; no device interaction or payload execution.
+
+
+### Boot0 retained-image resume gate narrowed
+
+- Helper `0x4e0` validates the eGON image size/signature, reads status `0x070001f8`, reads registers formed from `0x07000138/0x0700013c`, and checks checksums over `[0x21000,0x31000)` (64 KiB, expected `0x8fb6d562`) and `[0x31000,0x3d000)` (48 KiB, expected `0xa53ccffb`).
+- It performs ordered write/readback operations through addresses derived from `0x030090b4`, then selects a retained image at `0x21000` or `0x31000`. The SRAM restore trampoline copies that image to `0x20000`, restores the separate 72-byte context at `0x52000`, and jumps to the Boot0 base.
+- The peripheral protocol is not identified; do not label it RTC/PMIC/mailbox/PSCI. Literal scans find no direct `0x48014668` or `0x52000` literal; computed address formation and other writers remain possible.
+- This is evidence for a Boot0 retained-image resume protocol, not evidence that it initializes BL31's context slot. Full notes: [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md), commit [69e23bb](https://github.com/dengzhan007/Linkslot-Pico-for-H700/commit/69e23bb757f9a4fec3ded02310999b917801517e).
+- The latest preceding CI #1709 passed for commit `03adbe0`; this new documentation commit will trigger another audit. G2/G3/M1-S1 remain open; no device interaction or payload execution.
