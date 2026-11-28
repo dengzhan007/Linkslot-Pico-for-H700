@@ -2670,9 +2670,9 @@ See [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md) for the detai
 
 - Explicitly reaffirmed: the project target is **RG34XX**. SenkOS and `anbernic_rg35xx_h700_defconfig` are H700-family reference sources, not RG34XX hardware proof.
 - ROCKNIX publishes separate RG34XX, RG35XX 2024 and RG35XX H DTBs; therefore shared H700 SoC does not justify reusing board-specific GPIO, strap, DRAM, PMIC, panel or power-sequencing assumptions.
-- Reclassified SenkOS PH6/PH7/PH8/PH10 strap mapping, DRAM timing tables, LPDDR3 branch, AXP717 configuration and generic H700 PMIC-before-DRAM ordering as **reference-only hypotheses** until independently matched to RG34XX board revision and stock Boot0 lineage.
+- Initially reclassified SenkOS PH6/PH7/PH8/PH10 strap mapping as reference-only; this has now been superseded by direct RG34XX stock TOC1 DTB evidence confirming those four GPIO inputs. SenkOS's exact strap-index interpretation still requires SPL2 code-path confirmation. DRAM timing tables, LPDDR3 branch details, AXP717 configuration and generic PMIC ordering remain hypotheses until target-specific code evidence matches.
 - RG34XX-specific evidence remains the authority: target-specific KNULLI RG34XX DTS, RG34XX Boot0 log, and this project's read-only RG34XX runtime captures. Even these do not alone prove physical PMIC silicon/register equivalence.
-- Corrected blocker status: SenkOS does not close RG34XX DRAM strap or PMIC provenance gates. No family-reference strap values, timing tables, voltage policy or PMIC writes are approved for RG34XX.
+- Corrected blocker status after TOC1 analysis: RG34XX DRAM strap pin identity and GPIO input configuration are now directly confirmed by the stock package DTB; the exact runtime selection algorithm remains open. PMIC physical identity/register provenance and power sequencing remain gated. No PMIC writes or family-reference timing changes are approved.
 - Detailed correction added to `docs/rg34xx-senkos-cross-audit-20261128.md`. M1 preflight remains PMIC/TWI-disabled; all safety gates unchanged.
 
 
@@ -2708,4 +2708,22 @@ See [h700-bl33-memory-ownership.md](h700-bl33-memory-ownership.md) for the detai
 - A regression test now pins the SPL2 regulator table, DCDC2/DCDC3 setpoints, PMIC slave address, controller-index mapping, and callback descriptor values in the raw RG34XX Boot0 capture.
 - This closes the R-TWI0 base-address identification blocker at static-code level. It does not authorize execution or I/O, and it does not prove the physical PMIC silicon identity.
 - Detailed evidence: \`docs/rg34xx-boot0-container-spl2-audit-20261128.md\`.
+
+
+
+## 2026-11-28 RG34XX TOC1 confirms DRAM strap pins and later-stage boot components
+
+- H700 audit run #1826 passed and produced the extracted U-Boot/monitor/DTB disassembly bundle: [run #1826](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46146478411). The latest Linkslot feasibility run #1086 also passed: [run #1086](https://github.com/dengzhan007/Linkslot-Pico-for-H700/actions/runs/46146405481).
+- The RG34XX TOC1 package is 1,310,720 bytes, SHA-256 \`e6c20e3a54c51b9336c798e3a4fa1ca6c45b28c6f70456e2db9c252aa4ba4604\`. It has four components: \`u-boot\`, \`monitor\`, \`dtbo\`, \`dtb\`.
+- The embedded DTB payload contains the \`:rg34xx_v1\` marker and AXP2202/R-TWI0 data. Its validated FDT SHA-256 is \`7017a8f970234f7518e7f417fa9f86dd4ad3e46529bc5282c05a31e9f007dbc5\`.
+- **Important blocker closure:** \`/soc@03000000/dram_select_para/select_mode=1\` configures GPIO-based automatic DRAM selection. \`select_gpio0..3\` reference pinctrl phandle \`0x4b\` and encode port 7 pins 6, 7, 8, 10, GPIO-input mux 0 and pull-up 1. The referenced controller is \`allwinner,sun50iw9p1-pinctrl\`; Allwinner port index 7 is PH. This directly confirms **PH6, PH7, PH8, PH10** as the RG34XX package's DRAM strap inputs, matching SenkOS's pin list.
+- The same FDT carries \`dram_para14\` = LPDDR3 type 7 at 672 MHz and \`dram_para15\` = LPDDR4 type 8 at 672 MHz. This is target-specific evidence for both the pins and the two DRAM profiles. It does not yet prove SPL2's sample order, bit polarity, code-to-profile mapping or error fallback.
+- U-Boot payload is AArch32 and identifies as \`U-Boot 2018.05 (May 26 2026 - 13:55:09 +0800) Allwinner Technology\`; strings include \`pmu_axp2202_probe\` and \`bmu_axp2202_probe\`.
+- AArch64 monitor payload contains BL31/TF-A platform paths for \`sun50iw9p1\`, PSCI CPU on/off/suspend code strings, and generic error strings for missing System Off/System Reset hooks. The strings do not alone prove whether the platform hooks are absent; inspect the actual PSCI platform-ops table and power call paths next.
+- New regression test \`tools/test_rg34xx_stock_toc1_dtb.py\` pins the package and component hashes, RG34XX DTB marker, AXP2202/TWI5 topology, PH6/7/8/10 GPIO tuples, LPDDR3/LPDDR4 profile IDs and regulator ranges. The H700 audit workflow now fetches the read-only \`reports\` branch before running Linux and Windows host tests.
+- This supersedes the earlier statement that SenkOS strap-pin mapping remained wholly unconfirmed on RG34XX. Pin mapping/configuration is now confirmed; runtime selector semantics remain open.
+- Next: disassemble/trace SPL2 DRAM selector logic and exact profile selection; trace DCDC enable/read-modify-write and PMIC probe; then map BL31 PSCI platform ops and power-off/reset hooks. No firmware execution, PMIC/TWI writes, DRAM access, media writes or hardware qualification.
+- Safety gates unchanged: \`H700_MEMORY_LAYOUT_APPROVED=false\`, \`hardware_applied=0\`, \`candidate_eligible=false\`, \`hardware_qualified=false\`.
+
+Detailed evidence: \`docs/rg34xx-boot0-container-spl2-audit-20261128.md\`.
 
