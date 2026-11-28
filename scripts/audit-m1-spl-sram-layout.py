@@ -141,7 +141,7 @@ def main() -> int:
             "M1 preflight builder no longer removes H616 FIT selectors")
     require('for obj in ("membuf.o", "abuf.o")' in spl_builder and
             "re.compile(rf" in spl_builder and
-            "rule.sub" in spl_builder,
+            "rule.sub" in spl_builder and "ifneq ($(CONFIG_XPL_BUILD),y)" in spl_builder,
             "M1 preflight builder no longer isolates generic dynamic-buffer helpers")
 
     # Geometry derived from pinned Kconfig, linker script and H616 SRAM node.
